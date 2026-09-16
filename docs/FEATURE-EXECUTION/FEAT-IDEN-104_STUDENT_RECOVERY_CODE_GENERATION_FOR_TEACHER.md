@@ -1,21 +1,23 @@
 # FEAT-IDEN-104: Student Recovery Code Generation for Teacher
-**[NEW - Compliant with DOM-IDEN Authority]**
+**[Participant scope reconciled; other execution requirements require separate review]**
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| FEAT-IDEN-104 | 1.0 | 2026-08-09 | N/A (new) | Normative | NEW |
+| FEAT-IDEN-104 | 1.1 | 2026-09-15 | 1.0 | Normative | ACTIVE |
 
 ---
 
 ## I. Purpose
 
-This FEAT allows a student to generate a recovery code that helps verify their teacher's identity during account recovery. Per DOM-IDEN-003 §IV:
-> "Teachers can recover their accounts by having all students verify identity through the class roster. Each student generates a unique recovery code that proves their affiliation with the class."
+This FEAT allows a student to generate a recovery code that helps verify their teacher's identity during account recovery. Per DOM-IDEN-003 §IX:
+> "One pair is required per active class."
 
-This FEAT creates a `student_recovery_code` record linked to an active `recovery_request`, allowing the student to participate in teacher identity verification.
+The selected student Seat for each class participates; the entire roster does not.
+
+This FEAT operates on the selected participant row provisioned by FEAT-IDEN-103. An unselected student cannot join the request merely by belonging to a roster.
 
 **Governing Authority:**
-- DOM-IDEN-003 §IV (Teacher Recovery - Student-Verified Mechanism)
+- DOM-IDEN-003 §IX (Teacher Recovery - Student-Verified Mechanism)
 - DOM-IDEN-002 §VIII.IV (Student Identity and Claim Flow — students are known by roster)
 - DOM-IDEN-005 §VIII (Identity Binding)
 - FEAT-CORE-000 (Feature Execution Constitutional Directive)
@@ -41,7 +43,7 @@ Before mutation, the FEAT MUST resolve:
 * Verify that `User.id == Seat.user_id` (seat is bound to this user).
 * Verify that `Seat.role = 'student'` and `Seat.claimed_at IS NOT NULL` (student is claimed).
 * Verify that `Seat.class_id == class_id` (seat is in the correct class).
-* Verify that `RecoveryRequest.class_id == class_id` (recovery is for the same class).
+* Verify that this request has a selected `StudentRecoveryCode` row for this `seat_id` and `class_id`; the User-owned request has no single class.
 
 ---
 
@@ -70,11 +72,11 @@ Before mutation, the FEAT MUST resolve:
 
 #### Step 4: Check Existing Recovery Code
 1. Query `student_recovery_codes` where `student_recovery_codes.recovery_request_id = recovery_request_id` and `student_recovery_codes.seat_id = seat_id`.
-2. If a code already exists for this recovery request and student, return `CODE_ALREADY_GENERATED` (idempotent success).
+2. Require the preselected row. A non-NULL code hash means a code was already generated; a NULL hash permits generation or regeneration under the domain recovery rules.
 3. **Failure Behavior**: Do not allow duplicate codes from the same student for the same recovery request.
 
 #### Step 5: Verify Class Affiliation
-1. Verify that `RecoveryRequest.class_id == Seat.class_id` (student is in the same class as recovery request).
+1. Verify the selected `StudentRecoveryCode` row belongs to this request and `Seat.class_id`, and that the class belongs to `RecoveryRequest.user_id`.
 2. **Failure Behavior**: Abort with `CLASS_MISMATCH` if student is not in the recovery class.
 
 ---
@@ -93,9 +95,9 @@ Perform code generation outside the transaction:
 
 **Note:** The unencrypted code is displayed to the student ONLY ONCE. Only the hash is stored.
 
-#### Step 2: Create StudentRecoveryCode Record
+#### Step 2: Populate the Selected StudentRecoveryCode Record
 
-Insert into `student_recovery_codes` table:
+Update the row provisioned by FEAT-IDEN-103; do not add participants:
 1. `recovery_request_id`: The active recovery request.
 2. `seat_id`: The student's seat.
 3. `class_id`: The class context (denormalized for scoping).
@@ -106,13 +108,13 @@ Insert into `student_recovery_codes` table:
 
 **Authoritative One-Time-Use State**: `verified_at` is the authoritative field. A code with `verified_at IS NOT NULL` has been consumed and cannot be reused. A code with `verified_at IS NULL` has not been used (regardless of dismissed state).
 
-Per DOM-IDEN-003 §IV:
+Per DOM-IDEN-003 §IX:
 > "`student_recovery_codes` table stores one recovery code per student per recovery request."
 
 #### Step 3: RecoveryRequest Status Remains Pending
 
 1. Do NOT update `recovery_requests.status` during code generation.
-2. Status remains "pending" until all eligible student codes are received and validated in FEAT-IDEN-105.
+2. Status remains "pending" until all selected student codes are received and validated in FEAT-IDEN-105.
 3. Only FEAT-IDEN-105 transitions the status to "verified".
 
 #### Step 4: Audit Trace
@@ -137,8 +139,8 @@ Per FEAT-CORE-000 §III.4:
 ## IV. Invariants & Constraints
 
 ### 1. Student-Verified Recovery (MANDATORY)
-Per DOM-IDEN-003 §IV:
-> "Each student in the class must provide a recovery code to verify the teacher's identity."
+Per DOM-IDEN-003 §IX:
+DOM-IDEN-003 §IX requires one selected student per class; every selected participant must provide a code.
 
 This FEAT creates one code per student per recovery request.
 
@@ -307,8 +309,8 @@ Revisions to this document SHALL:
 
 1. Increment the version.
 2. Update the effective date.
-3. Maintain consistency with DOM-IDEN-003 §IV.
+3. Maintain consistency with DOM-IDEN-003 §IX.
 4. Maintain consistency with FEAT-CORE-000.
 5. Maintain consistency with FEAT-IDEN-103 and FEAT-IDEN-105.
 
-**This is version 1.0 of FEAT-IDEN-104 (new specification, 2026-08-09).**
+**Version 1.1 (2026-09-15): selected-participant scope under DOM-IDEN-003 §IX.**

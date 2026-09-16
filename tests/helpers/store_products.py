@@ -67,7 +67,6 @@ def publish_store_product(
     class_id: str,
     entitlement_type: str,
     created_by_seat_id: Optional[int] = None,
-    user_id: Optional[int] = None,
     name: Optional[str] = None,
     price: str | None = "0.00",
     availability_state: str = store_service.IN_USE,
@@ -76,9 +75,7 @@ def publish_store_product(
 ) -> PublishedProduct:
     """Publish one live product version and return a snapshot of it.
 
-    ``user_id`` is derived from ``created_by_seat_id`` when omitted, because
-    every caller already has the acting seat and the owning user is a property
-    of that seat rather than an independent fact a test should restate.
+    The author is a class-scoped teacher seat.
     """
     try:
         item_type = ENTITLEMENT_TYPE_TO_ITEM_TYPE[entitlement_type]
@@ -88,11 +85,9 @@ def publish_store_product(
             f"expected one of {sorted(ENTITLEMENT_TYPE_TO_ITEM_TYPE)}"
         ) from None
 
-    if user_id is None:
-        if created_by_seat_id is None:
-            raise ValueError("publish_store_product needs user_id or created_by_seat_id")
-        seat = db_seat(created_by_seat_id)
-        user_id = seat.user_id
+    if created_by_seat_id is None:
+        from app.services.identity_service import resolve_teacher_seat_for_class
+        created_by_seat_id = resolve_teacher_seat_for_class(class_id).id
 
     definition.setdefault('economic_role', 'necessity')
 
@@ -101,7 +96,6 @@ def publish_store_product(
         definition.setdefault('auto_expiry_days', 30)
 
     product = store_service.publish_product(
-        user_id=user_id,
         class_id=class_id,
         definition={
             "name": name or f"Test {item_type} item",

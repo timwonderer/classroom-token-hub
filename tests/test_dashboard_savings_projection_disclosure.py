@@ -49,7 +49,6 @@ def _classroom_with_interest_and_unsettled_savings(client, app):
                 idempotency_key=key,
                 seat_id=student.seat.id,
                 class_id=classroom.class_id,
-                user_id=student.user.id,
                 amount=Decimal("50.00"),
                 account_type="savings",
                 type="payroll",

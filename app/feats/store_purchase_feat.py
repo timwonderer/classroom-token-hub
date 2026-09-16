@@ -365,7 +365,6 @@ def _execute_store_purchase_impl(
     intended_plan = build_intended_ledger_plan(
         seat_id=canonical_context.seat_id,
         class_id=canonical_context.class_id,
-        user_id=canonical_context.user_id,
         debit_amount=debit_amount,
         # Human-facing only. The void path used to parse the item name and the
         # (xN) back out of this string, which tied reversal correctness to

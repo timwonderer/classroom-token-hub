@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 
 from app.extensions import db
-from app.models import PolicyTransition, PolicyVersion
+from app.models import PolicyTransition, PolicyVersion, Seat
 from app.utils.canonical_temporal_resolver import ensure_utc, utc_now
 
 
@@ -100,7 +100,7 @@ def _next_version_number(class_id: str) -> int:
 def create_policy_version(
     *,
     class_id: str,
-    actor_user_id: int | None,
+    actor_seat_id: int | None,
     payload: dict,
     source_version: PolicyVersion | None = None,
     is_active: bool = True,
@@ -108,6 +108,10 @@ def create_policy_version(
     status: str = "applied",
     correlation_id: str | None = None,
 ) -> PolicyVersion:
+    if actor_seat_id is not None and not Seat.query.filter_by(
+        id=actor_seat_id, class_id=class_id, role="teacher"
+    ).first():
+        raise ValueError("Policy author must be a teacher seat in this class.")
     now = utc_now()
     version = PolicyVersion(
         class_id=class_id,
@@ -129,7 +133,7 @@ def create_policy_version(
         activation_mode=activation_mode,
         status=status,
         created_at=now,
-        created_by=actor_user_id,
+        created_by_seat_id=actor_seat_id,
         applied_at=now if status == "applied" else None,
         correlation_id=correlation_id,
     )
@@ -142,7 +146,7 @@ def create_policy_version(
 def schedule_policy_deletion(
     *,
     class_id: str,
-    actor_user_id: int | None,
+    actor_seat_id: int | None,
     source_version: PolicyVersion,
     deletion_at: datetime,
 ) -> PolicyVersion:
@@ -152,7 +156,7 @@ def schedule_policy_deletion(
     payload["is_active"] = False
     return create_policy_version(
         class_id=class_id,
-        actor_user_id=actor_user_id,
+        actor_seat_id=actor_seat_id,
         payload=payload,
         source_version=source_version,
         is_active=False,

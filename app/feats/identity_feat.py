@@ -24,7 +24,8 @@ from typing import Optional
 from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
-from app.models import Seat, User
+from app.hash_utils import hash_claim_name, hash_roster_fingerprint, normalize_lookup_text
+from app.models import Seat, User, ClassEconomy
 from app.services.class_configuration_query_service import get_class_economy
 from app.services.classroom_setup import create_student_seat_with_profile, delete_seat_with_profile
 from app.services.context_resolver import CanonicalContext
@@ -79,6 +80,7 @@ class SeatClaimResult:
     """Result of FEAT-IDEN-001 seat claim verification."""
     success: bool
     seat_id: Optional[int] = None
+    claim_generation: Optional[int] = None
     error_code: Optional[str] = None
     error_message: Optional[str] = None
 
@@ -191,7 +193,6 @@ def resolve_seat_claim(
     Per DOM-IDEN-005 §VII: unauthenticated claim SHALL NOT search for or
     infer existing User identities.
     """
-    from app.hash_utils import hash_username_lookup
     from app.services.class_configuration_query_service import get_class_economy_by_join_code
 
     # Step 1: Resolve class
@@ -219,8 +220,8 @@ def resolve_seat_claim(
         )
 
     # Step 3: Match by name hashes
-    claim_first_hash = hash_username_lookup(first_name.lower())
-    claim_last_hash = hash_username_lookup(last_name.lower())
+    claim_first_hash = hash_claim_name(first_name, class_id=class_row.class_id, field="first")
+    claim_last_hash = hash_claim_name(last_name, class_id=class_row.class_id, field="last")
 
     matched_seats = [
         s for s in unclaimed_seats
@@ -241,7 +242,7 @@ def resolve_seat_claim(
 
     # Step 4: Deduplication
     if len(matched_seats) == 1:
-        return SeatClaimResult(success=True, seat_id=matched_seats[0].id)
+        return SeatClaimResult(success=True, seat_id=matched_seats[0].id, claim_generation=matched_seats[0].claim_generation)
 
     if not dedupe_code:
         return SeatClaimResult(
@@ -258,7 +259,7 @@ def resolve_seat_claim(
             error_message="Invalid deduplication code. Check with your teacher.",
         )
 
-    return SeatClaimResult(success=True, seat_id=dedupe_matches[0].id)
+    return SeatClaimResult(success=True, seat_id=dedupe_matches[0].id, claim_generation=dedupe_matches[0].claim_generation)
 
 
 # ---------------------------------------------------------------------------
@@ -292,6 +293,7 @@ def activate_student_credentials(
     correlation_id: str,
     idempotency_key: str,
     recovery_authorization: Optional[str] = None,
+    claim_generation: Optional[int] = None,
 ) -> CredentialSetupResult:
     """
     FEAT-IDEN-002: Activate login credentials on a student User.
@@ -304,7 +306,6 @@ def activate_student_credentials(
     without consuming recovery-session authority.
     """
     from app.hash_utils import hash_password
-    from app.hash_utils import hash_username_lookup
     from app.services.classroom_setup import create_student_user_for_seat
 
     if user_id is not None:
@@ -322,8 +323,8 @@ def activate_student_credentials(
         # credential replacement, and revoking old sessions commit together.
         savepoint = db.session.begin_nested()
         try:
-            user.username_lookup_hash = hash_username_lookup(username)
-            user.username_hash = hash_username_lookup(username)
+            from app.utils.auth_username import build_hashed_username_fields
+            _, user.username_hash, user.username_lookup_hash = build_hashed_username_fields(username)
             user.pin_hash = pin_hash
             user.passphrase_hash = passphrase_hash
             user.reset_code = None
@@ -343,7 +344,11 @@ def activate_student_credentials(
 
     else:
         seat = db.session.get(Seat, seat_id) if seat_id is not None else None
-        if not seat or seat.user_id is not None or seat.claimed_at is not None:
+        if seat:
+            ClassEconomy.query.filter_by(class_id=seat.class_id).with_for_update().one()
+            seat = Seat.query.filter_by(id=seat_id).populate_existing().with_for_update().one_or_none()
+        if (not seat or seat.user_id is not None or seat.claimed_at is not None
+                or type(claim_generation) is not int or seat.claim_generation != claim_generation):
             return CredentialSetupResult(
                 success=False, error_code="INVALID_SEAT_STATE",
                 error_message="Invalid setup state. Please start over.",
@@ -488,7 +493,6 @@ def bind_authenticated_student_to_class(
     (already authenticated) to a new unclaimed Seat in a different class.
     No new User creation — reuses the authenticated principal.
     """
-    from app.hash_utils import hash_username_lookup
     from app.services.class_configuration_query_service import get_class_economy_by_join_code
 
     # Step 1: Resolve class
@@ -501,6 +505,11 @@ def bind_authenticated_student_to_class(
         )
 
     class_id = class_row.class_id
+    ClassEconomy.query.filter_by(class_id=class_id).with_for_update().one()
+    principal = User.query.filter_by(id=user_id, user_role="student").populate_existing().with_for_update().one_or_none()
+    if principal is None:
+        return ClassBindingResult(False, error_code="INVALID_PRINCIPAL", error_message="Sign in again before joining a class.")
+
 
     # Step 2: Find unclaimed seats (both user_id and claimed_at must be NULL)
     unclaimed_seats = (
@@ -510,7 +519,7 @@ def bind_authenticated_student_to_class(
             Seat.claimed_at.is_(None),
             Seat.user_id.is_(None),
         )
-        .all()
+        .populate_existing().with_for_update().all()
     )
     if not unclaimed_seats:
         return ClassBindingResult(
@@ -520,8 +529,8 @@ def bind_authenticated_student_to_class(
         )
 
     # Step 3: Match by name hashes
-    claim_first_hash = hash_username_lookup(first_name.lower())
-    claim_last_hash = hash_username_lookup(last_name.lower())
+    claim_first_hash = hash_claim_name(first_name, class_id=class_row.class_id, field="first")
+    claim_last_hash = hash_claim_name(last_name, class_id=class_row.class_id, field="last")
 
     matched_seats = [
         s for s in unclaimed_seats
@@ -579,7 +588,6 @@ def bind_authenticated_student_to_class(
 @requires_feat_context("FEAT-IDEN-006")
 def import_student_seats(*, canonical_context, rows, correlation_id, idempotency_key):
     """Atomically provision a new seat per row; never infer identity from names."""
-    from app.hash_utils import hash_username_lookup
     from app.services.classroom_setup import create_roster_student_seat
 
     ctx = canonical_context
@@ -610,7 +618,7 @@ def import_student_seats(*, canonical_context, rows, correlation_id, idempotency
         if not isinstance(code, str) or len(code.strip()) > 8:
             raise ValueError("Distinguishing codes must be at most eight characters.")
         first, last, code = first.strip(), last.strip(), code.strip().upper()
-        key = (first.lower(), last.lower())
+        key = (normalize_lookup_text(first, kind="name"), normalize_lookup_text(last, kind="name"))
         names.setdefault(key, []).append(code)
         prepared.append((first, last, notes, code))
     for codes in names.values():
@@ -623,8 +631,65 @@ def import_student_seats(*, canonical_context, rows, correlation_id, idempotency
         create_roster_student_seat(
             class_id=ctx.class_id, first_name=first, last_name=last, notes=notes,
             dedupe_code=code or None,
-            claim_first_name_hash=hash_username_lookup(first.lower()),
-            claim_last_name_hash=hash_username_lookup(last.lower()),
-            roster_fingerprint=hash_username_lookup(f"{ctx.class_id}|{first.lower()}|{last.lower()}|{code}"),
+            claim_first_name_hash=hash_claim_name(first, class_id=ctx.class_id, field="first"),
+            claim_last_name_hash=hash_claim_name(last, class_id=ctx.class_id, field="last"),
+            roster_fingerprint=hash_roster_fingerprint(class_id=ctx.class_id, first_name=first, last_name=last, dedupe_code=code),
         )
     return len(prepared)
+
+
+@requires_feat_context("FEAT-IDEN-006")
+def unclaim_student_seat(*, canonical_context, seat_id, expected_generation,
+                         first_name, last_name, dedupe_code="",
+                         correlation_id, idempotency_key):
+    """Detach a principal; the class-owned Seat and its records survive."""
+    from app.utils.student_deletion import delete_user_if_orphaned
+    from app.services.recovery_service import invalidate_recovery_participation_for_seat
+    ctx = canonical_context
+    if not ctx or ctx.actor_role != "teacher" or not ctx.class_id or not ctx.seat_id:
+        raise ValueError("A class-scoped teacher is required.")
+    if (not isinstance(first_name, str) or not first_name.strip()
+            or not isinstance(last_name, str) or not last_name.strip()
+            or len(first_name.strip()) > 100 or len(last_name.strip()) > 100):
+        raise ValueError("Enter a first and last name, each at most 100 characters.")
+    if not isinstance(dedupe_code, str) or len(dedupe_code.strip()) > 8:
+        raise ValueError("The distinguishing code must be at most eight characters.")
+    first, last, code = first_name.strip(), last_name.strip(), dedupe_code.strip().upper()
+    User.query.filter_by(id=ctx.user_id).with_for_update().one()
+    class_row = ClassEconomy.query.filter_by(class_id=ctx.class_id).with_for_update().one_or_none()
+    teacher = Seat.query.filter_by(id=ctx.seat_id, class_id=ctx.class_id,
+                                  user_id=ctx.user_id, role="teacher").first()
+    if not class_row or class_row.teacher_user_id != ctx.user_id or not teacher:
+        raise ValueError("The teacher does not own this class.")
+    seat = Seat.query.filter_by(id=seat_id, class_id=ctx.class_id, role="student").first()
+    if seat is None:
+        raise LookupError("Student seat not found in this class.")
+    old_user_id = seat.user_id
+    if old_user_id is None:
+        raise ValueError("This seat is already unclaimed. Refresh the roster.")
+    user = User.query.filter_by(id=old_user_id).populate_existing().with_for_update().one()
+    seat = Seat.query.filter_by(id=seat_id).populate_existing().with_for_update().one()
+    if (seat.user_id != old_user_id or type(expected_generation) is not int
+            or seat.claim_generation != expected_generation):
+        raise ValueError("The seat's claim has changed. Refresh the roster before unclaiming it.")
+    first_hash, last_hash = hash_claim_name(first, class_id=ctx.class_id, field="first"), hash_claim_name(last, class_id=ctx.class_id, field="last")
+    matches = Seat.query.filter(Seat.class_id == ctx.class_id, Seat.role == "student",
+        Seat.user_id.is_(None), Seat.claim_first_name_hash == first_hash,
+        Seat.claim_last_name_hash == last_hash).all()
+    if matches and (not code or any(not other.dedupe_code or other.dedupe_code == code for other in matches)):
+        raise ValueError("Another unclaimed seat uses this name. Use a distinct claim name, or give both seats different distinguishing codes.")
+    seat.user_id = None
+    seat.claimed_at = None
+    seat.claim_generation += 1
+    seat.claim_first_name_hash, seat.claim_last_name_hash = first_hash, last_hash
+    seat.dedupe_code = code or None
+    seat.roster_fingerprint = hash_roster_fingerprint(class_id=ctx.class_id, first_name=first, last_name=last, dedupe_code=code)
+    # A previous claimant's teacher-recovery confirmation must not transfer.
+    invalidate_recovery_participation_for_seat(seat.id)
+    if user.last_active_seat_id == seat.id or user.last_active_class_id == ctx.class_id:
+        user.last_active_seat_id = None
+        user.last_active_class_id = None
+    db.session.flush()
+    deleted_user = delete_user_if_orphaned(old_user_id)
+    return {"status": "success", "account_deleted": deleted_user,
+            "message": "Seat unclaimed. Its records are preserved and it is ready to claim again."}

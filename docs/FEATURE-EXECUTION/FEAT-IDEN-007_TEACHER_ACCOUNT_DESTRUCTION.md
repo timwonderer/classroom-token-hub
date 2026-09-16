@@ -13,9 +13,11 @@ immutable economic history, which is lawful only under the terminal-destruction
 lifecycle exception (INV-CORE-000 §III.5). The class-scope teardown sets
 `cth.class_universe_destroying` for exactly that reason.
 
-The command requires a canonical context and explicit `correlation_id` /
+Manual destruction requires a canonical context and explicit `correlation_id` /
 `idempotency_key` metadata. The principal destroyed is `canonical_context.user_id`
-and nothing else.
+and nothing else. The scheduled lifecycle entry derives a principal-only target
+from the locked retention-policy check below; it does not fabricate a logged-in
+teacher session.
 
 ## Authority resolution
 
@@ -63,3 +65,19 @@ actor; a destroyed principal has no pointers left to clear.
 
 Authority: INV-CORE-000 §III.4, §III.5; INV-ARC-012 §V; INV-ARC-021 §V.2;
 DOM-IDEN-001.
+
+
+## Automatic and roster-terminal entry points
+
+The same plain account-destruction domain command is composed by the final-student
+roster deletion FEAT and the scheduled retention entry, never through nested FEATs.
+Manual routes retain their confirmation gate. Final-student deletion must warn
+about class destruction and, when applicable, teacher-account destruction; it
+must require the corresponding stronger confirmation before executing.
+
+The scheduled entry locks/reloads the teacher User and requires either 180 days
+since the last successful sign-in or 30 days since creation if never signed in.
+Its authority derives directly from INV-CORE-000 §III.5 / DOM-IDEN-003, so it does
+not require a browser confirmation or sysadmin approval. Recheck after acquiring
+the same lock used by successful sign-in. One atomic account transaction performs
+all owned-class teardown, orphan handling, and principal destruction.

@@ -30,3 +30,40 @@ supplies distinct claim deduplication codes. Validate the whole batch before
 writing; all accepted rows commit in one FEAT transaction. This additive import
 is distinct from actor_public_id-based modification of an exported roster under
 FEAT-CLASS-002. Notes are passed to the encrypted profile field.
+
+
+## Roster removal and terminal consequences (2026-09-15)
+
+Teacher-authorized deletion uses the active canonical class and explicit student
+Seat IDs; cross-class, teacher-seat, missing, or malformed selections fail closed.
+One transaction locks the teacher and class, verifies the current roster, and
+composes Identity removal or class/account destruction as appropriate. The
+confirmation phrase must match the current consequence, including deletion of
+the class and teacher account when their final student/class is removed.
+Delete physically destroys the Seat; it is not an implicit Unclaim operation.
+
+## Explicit Unclaim (2026-09-15)
+
+Under INV-ARC-019 and DOM-IDEN-005, a teacher may explicitly Unclaim one claimed
+student Seat in the active owned class. This is separate from Delete. Require
+fresh first/last claim names, explicit confirmation, and the Seat's displayed
+claim generation. Reject malformed input, stale generation, already-unclaimed
+Seats, teacher Seats, and foreign-class Seats without mutation. Duplicate unclaimed
+names must remain independently claimable using distinct nonempty codes; otherwise
+reject the change and ask the teacher to distinguish the names/codes.
+
+One FEAT transaction validates/locks teacher ownership, class, detached principal,
+and Seat; writes only Identity state; clears the binding and claimed_at; increments
+claim_generation; preserves profile names and notes; uses the entered names only to regenerate
+normal seat claim hashes/fingerprint/code; and clears that principal's active context
+when it points at the detached Seat. Cancel unfinished teacher-recovery requests
+whose student confirmation depended on this Seat, and erase its old confirmation.
+Delete the old User only if no surviving Seat/class ownership remains. Preserve
+Seat/public_id/class_id, profile, balances, transactions, attendance, items, support
+records, and other Seat-owned facts. Unclaim does not invoke last-student deletion.
+
+Initial claim verification must capture the server-stored claim_generation in the
+signed onboarding session. Credential completion rechecks it under the class/Seat
+lock; missing/stale generations fail closed. Authenticated binding revalidates the
+live principal and claim material under the same class lock. A new claimant uses
+the ordinary claim flow; an existing account uses authenticated class binding.

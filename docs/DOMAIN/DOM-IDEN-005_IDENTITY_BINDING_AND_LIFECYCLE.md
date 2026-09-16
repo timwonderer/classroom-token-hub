@@ -1,7 +1,7 @@
 # DOM-IDEN-005: Identity Binding and Lifecycle
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-IDEN-005   | 2.0     | 2026-06-29    | 1.1 | Constitutional   |
+| DOM-IDEN-005   | 2.1     | 2026-09-15    | 2.0 | Constitutional   |
 
 ---
 ## I. Purpose
@@ -129,7 +129,7 @@ Binding SHALL satisfy the following invariants:
 - One `User` SHALL own at most one `Seat` within the same `Class`.
 - Binding SHALL occur atomically.
 - Binding SHALL preserve referential integrity.
-- Binding SHALL NOT migrate between Users.
+- An existing binding SHALL NOT migrate directly between Users. Teacher-authorized Unclaim first ends that binding. A later claimant must prove fresh claim entitlement before a new binding is created.
 
 Successful binding establishes lawful classroom participation.
 
@@ -183,3 +183,11 @@ Revisions to this document SHALL:
 3. Maintain consistency with INV-CORE-000.
 4. Maintain consistency with DOM-IDEN-001.
 5. Maintain consistency with DOM-IDEN-006.
+## Explicit Unclaim
+
+A teacher may detach a claimed student User from a Seat without destroying the Seat
+or its class-owned records. Require freshly entered names solely to regenerate claim hashes; preserve existing
+profile display names, encrypted notes, and economic/productivity/support facts. Delete an orphaned User only after
+detachment. Unclaim increments a server-stored `claim_generation`; earlier verified
+claim sessions and stale Unclaim forms cannot act on the new generation. This
+Identity-only transition is executed by FEAT-IDEN-006 and does not delete the class.

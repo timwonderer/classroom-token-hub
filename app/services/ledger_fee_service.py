@@ -20,7 +20,6 @@ def apply_overdraft_fee_if_needed(
     intended_plan = build_intended_ledger_plan(
         seat_id=seat.id,
         class_id=seat.class_id,
-        user_id=seat.user_id,
         debit_amount=Decimal("0.00"),
         description="Overdraft fee",
         # Declared even though the debit is zero and nothing is posted under

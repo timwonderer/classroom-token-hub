@@ -293,7 +293,6 @@ def _record_attendance_session_impl(
         actor_seat = db.session.get(Seat, resolved_actor_seat_id)
         if actor_seat is None or actor_seat.class_id != ctx.class_id:
             raise ValueError("Attendance actor seat must belong to the canonical class.")
-    target_user_id = target_seat.user_id
 
     if status == "active":
         day_bounds = canonical_temporal_resolver(
@@ -305,7 +304,7 @@ def _record_attendance_session_impl(
 
         # Reject if student already has done_for_day for this class today
         done_today = AttendanceSession.query.filter(
-            AttendanceSession.target_user_id == target_user_id,
+            AttendanceSession.target_seat_id == resolved_target_seat_id,
             AttendanceSession.class_id == ctx.class_id,
             AttendanceSession.reason_code == AttendanceReasonCode.DONE_FOR_DAY.value,
             AttendanceSession.timestamp >= day_bounds.boundary_start_utc,
@@ -335,7 +334,6 @@ def _record_attendance_session_impl(
                 target_seat_id=existing_active.target_seat_id,
                 actor_seat_id=resolved_actor_seat_id,
                 class_id=existing_active.class_id,
-                target_user_id=target_user_id,
                 status="inactive",
                 reason_code=AttendanceReasonCode.DONE_FOR_DAY.value,
                 timestamp=closing_timestamp,
@@ -355,7 +353,6 @@ def _record_attendance_session_impl(
         target_seat_id=resolved_target_seat_id,
         actor_seat_id=resolved_actor_seat_id,
         class_id=ctx.class_id,
-        target_user_id=target_user_id,
         status=status,
         reason_code=resolved_reason_code,
         timestamp=event_time,
@@ -594,17 +591,15 @@ def _record_payroll_event_impl(
                 raise LookupError("Unable to establish original ledger transaction for reversal.")
             amount = -(Decimal(linked.amount or Decimal("0.00")))
 
-    # Look up target_seat to get user_id (required by schema for traceability)
-    target_seat = Seat.query.filter_by(id=target_seat_id).first()
+    # Validate the target seat within the class boundary.
+    target_seat = Seat.query.filter_by(id=target_seat_id, class_id=ctx.class_id).first()
     if target_seat is None:
         raise LookupError(f"Seat {target_seat_id} not found.")
-    target_user_id = target_seat.user_id
 
     event = PayrollEvent(
         class_id=ctx.class_id,
         actor_seat_id=ctx.seat_id,
         target_seat_id=target_seat_id,
-        target_user_id=target_user_id,
         correlation_id=correlation_id,
         idempotency_key=idempotency_key,
         policy_version_id=policy_version_id,
@@ -625,7 +620,6 @@ def _record_payroll_event_impl(
             target_seat_id=target_seat_id,
             actor_seat_id=ctx.seat_id,
             mechanism=mechanism.lower(),
-            user_id=ctx.user_id,
             amount=amount,
             account_type="checking",
             type="payroll" if payroll_event_type != "manual_credit" else "manual_payment",

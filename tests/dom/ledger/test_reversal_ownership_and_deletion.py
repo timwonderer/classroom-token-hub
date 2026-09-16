@@ -40,7 +40,6 @@ def _funded_transaction(classroom, student, *, key):
             idempotency_key=key,
             seat_id=student.seat.id,
             class_id=classroom.class_id,
-            user_id=student.user.id,
             amount=Decimal("40.00"),
             account_type="checking",
             type="payroll",

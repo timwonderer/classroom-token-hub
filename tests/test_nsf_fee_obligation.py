@@ -30,7 +30,7 @@ def _post_nsf_fee_debit(classroom, seat):
         idempotency_key=f"nsf-fee:{seat.id}",
         seat_id=seat.id,
         class_id=classroom.class_id,
-        user_id=None,  # internal economic action anchors on class_id + seat_id
+          # internal economic action anchors on class_id + seat_id
         amount=Decimal("-5.00"),
         account_type="checking",
         type="overdraft_fee",

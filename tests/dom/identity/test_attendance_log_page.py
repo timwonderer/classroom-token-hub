@@ -22,9 +22,9 @@ def admin_with_data(client):
     seat2 = classroom.students[1].seat
 
     with FEATContext("FEAT-IDEN-001", idempotency_key="attendance_log_page:admin_data"):
-        tap1 = AttendanceSession(target_seat_id=seat1.id, class_id=classroom.class_id, target_user_id=seat1.user_id, actor_seat_id=teacher_seat.id, reason_code="tap_in", timestamp=datetime.now(timezone.utc))
-        tap2 = AttendanceSession(target_seat_id=seat1.id, class_id=classroom.class_id, target_user_id=seat1.user_id, actor_seat_id=teacher_seat.id, reason_code="tap_out", status="completed", timestamp=datetime.now(timezone.utc))
-        tap3 = AttendanceSession(target_seat_id=seat2.id, class_id=classroom.class_id, target_user_id=seat2.user_id, actor_seat_id=teacher_seat.id, reason_code="tap_in", timestamp=datetime.now(timezone.utc))
+        tap1 = AttendanceSession(target_seat_id=seat1.id, class_id=classroom.class_id,  actor_seat_id=teacher_seat.id, reason_code="tap_in", timestamp=datetime.now(timezone.utc))
+        tap2 = AttendanceSession(target_seat_id=seat1.id, class_id=classroom.class_id,  actor_seat_id=teacher_seat.id, reason_code="tap_out", status="completed", timestamp=datetime.now(timezone.utc))
+        tap3 = AttendanceSession(target_seat_id=seat2.id, class_id=classroom.class_id,  actor_seat_id=teacher_seat.id, reason_code="tap_in", timestamp=datetime.now(timezone.utc))
         db.session.add_all([tap1, tap2, tap3])
         db.session.flush()
 
@@ -80,8 +80,8 @@ def test_DOM_IDEN_006__attendance_log_tenant_scoping(client):
 
     teacher_seat1 = Seat.query.filter_by(class_id=class1.class_id, role="teacher").first()
     with FEATContext("FEAT-IDEN-001", idempotency_key="attendance_log_page:tenant_scoping"):
-        tap1 = AttendanceSession(target_seat_id=seat1.id, class_id=class1.class_id, target_user_id=seat1.user_id, actor_seat_id=teacher_seat1.id, reason_code="tap_in", timestamp=datetime.now(timezone.utc))
-        tap2 = AttendanceSession(target_seat_id=seat2.id, class_id=class2.class_id, target_user_id=seat2.user_id, actor_seat_id=seat2.id, reason_code="tap_in", timestamp=datetime.now(timezone.utc))
+        tap1 = AttendanceSession(target_seat_id=seat1.id, class_id=class1.class_id,  actor_seat_id=teacher_seat1.id, reason_code="tap_in", timestamp=datetime.now(timezone.utc))
+        tap2 = AttendanceSession(target_seat_id=seat2.id, class_id=class2.class_id,  actor_seat_id=seat2.id, reason_code="tap_in", timestamp=datetime.now(timezone.utc))
         db.session.add_all([tap1, tap2])
         db.session.flush()
 

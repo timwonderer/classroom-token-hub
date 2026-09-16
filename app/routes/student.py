@@ -55,8 +55,6 @@ from app.utils.helpers import is_safe_url, format_utc_iso, render_template_with_
 from app.utils.constants import THEME_PROMPTS
 from app.utils.turnstile import verify_turnstile_token
 from app.utils.ip_handler import get_real_ip
-from app.utils.claim_credentials import compute_primary_claim_hash, match_claim_hash
-from app.utils.name_utils import hash_last_name_parts
 from app.utils.help_content import HELP_ARTICLES
 from app.utils.economy_policy import (
     get_class_feature_settings,
@@ -64,7 +62,7 @@ from app.utils.economy_policy import (
     resolve_feature_class,
     resolve_feature_class_for_class,
 )
-from app.hash_utils import hash_username_lookup
+from app.hash_utils import hash_hmac
 from app.access import (
     AccessScopeDenied,
     resolve_scope,
@@ -385,7 +383,8 @@ def _get_credential_setup_state():
             return None, None
         return None, user
     seat = db.session.get(Seat, seat_ref) if seat_ref is not None else None
-    if not seat or seat.user_id is not None or seat.claimed_at is not None:
+    if (not seat or seat.user_id is not None or seat.claimed_at is not None
+            or session.get('onboarding_claim_generation') != seat.claim_generation):
         return None, None
     return seat, None
 
@@ -566,6 +565,7 @@ def claim_account():
         # User creation and seat binding happen atomically at the end of the setup flow
         # (DOM-IDEN-002 §VIII, seat.user_id stays NULL until claim is fully complete).
         session['onboarding_seat_ref'] = result.seat_id
+        session['onboarding_claim_generation'] = result.claim_generation
         session.pop('onboarding_user_ref', None)
         session.pop('recovery_setup_authorization', None)
         session.pop('generated_username', None)
@@ -638,6 +638,7 @@ def setup_pin_passphrase():
         # FEAT-IDEN-002: Activate credentials (handles both new claim and recovery paths).
         result = activate_student_credentials(
             seat_id=seat.id if seat else None,
+            claim_generation=session.get("onboarding_claim_generation") if seat else None,
             recovery_authorization=session.get("recovery_setup_authorization") if user else None,
             user_id=user.id if user else None,
             username=username,
@@ -659,6 +660,7 @@ def setup_pin_passphrase():
 
         # Clear session onboarding keys
         session.pop('onboarding_seat_ref', None)
+        session.pop('onboarding_claim_generation', None)
         session.pop('onboarding_user_ref', None)
         session.pop('recovery_setup_authorization', None)
         session.pop('generated_username', None)
@@ -3145,6 +3147,7 @@ def login():
         # Clear old student-specific session keys without wiping the CSRF token.
         _reset_student_login_session()
         session.pop('onboarding_seat_ref', None)
+        session.pop('onboarding_claim_generation', None)
         session.pop('onboarding_user_ref', None)
         session.pop('recovery_setup_authorization', None)
         session.pop('generated_username', None)

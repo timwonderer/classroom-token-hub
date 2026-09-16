@@ -159,7 +159,6 @@ def unused_store_purchase(classroom, student, *, key: str, price: str = "30.00")
             idempotency_key=f"{key}-fund",
             seat_id=student.seat.id,
             class_id=classroom.class_id,
-            user_id=student.user.id,
             amount=Decimal("100.00"),
             account_type="checking",
             type="payroll",
@@ -169,7 +168,6 @@ def unused_store_purchase(classroom, student, *, key: str, price: str = "30.00")
         product = publish_store_product(
             class_id=classroom.class_id,
             entitlement_type="DELAYED_USE",
-            user_id=classroom.teacher_user.id,
             name=f"Issue item {key}",
             price=price,
         )
@@ -251,7 +249,6 @@ def issue_reverse_scope_mismatch_state(client, app):
     with FEATContext("FEAT-LED-001", idempotency_key="issue_reverse_mismatch:posted_tx"):
         # Transaction is owned by other_student's seat, NOT the submitter's.
         tx = Transaction(
-            user_id=other_student.user.id,
             class_id=classroom.class_id,
             seat_id=other_student.seat.id,
             target_seat_id=other_student.seat.id,

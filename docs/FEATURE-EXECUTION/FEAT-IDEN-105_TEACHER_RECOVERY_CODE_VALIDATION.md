@@ -1,21 +1,24 @@
 # FEAT-IDEN-105: Teacher Recovery Code Validation
-**[NEW - Compliant with DOM-IDEN Authority]**
+**[Participant scope reconciled; other execution requirements require separate review]**
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| FEAT-IDEN-105 | 1.0 | 2026-08-09 | N/A (new) | Normative | NEW |
+| FEAT-IDEN-105 | 1.1 | 2026-09-15 | 1.0 | Normative | ACTIVE |
 
 ---
 
 ## I. Purpose
 
-This FEAT validates all recovery codes provided by students and restores teacher account access upon successful verification. Per DOM-IDEN-003 §IV:
-> "Teachers recover accounts by submitting all recovery codes provided by students. Once all codes are verified, the recovery request is marked verified and the teacher can reset credentials."
+This FEAT validates all recovery codes provided by students and restores teacher account access upon successful verification. Per DOM-IDEN-003 §IX:
+> "Teacher enters all recovery codes collected from students."
+
+The expected participants are the selected class representatives enrolled by
+FEAT-IDEN-103, not all students on every roster.
 
 This FEAT performs all-or-nothing validation: all recovery codes must be present and correct, or the entire recovery fails.
 
 **Governing Authority:**
-- DOM-IDEN-003 §IV (Teacher Recovery - All-or-Nothing Student Code Validation)
+- DOM-IDEN-003 §IX (Teacher Recovery - All-or-Nothing Student Code Validation)
 - DOM-IDEN-005 §VIII (Identity Binding)
 - FEAT-CORE-000 (Feature Execution Constitutional Directive)
 
@@ -27,7 +30,6 @@ This FEAT performs all-or-nothing validation: all recovery codes must be present
 
 * `recovery_request_id`: The active recovery request from FEAT-IDEN-103.
 * `user_id`: The teacher `User` recovering account (from context or recovery request).
-* `class_id`: The class context (from session or context).
 * `submitted_codes`: Array of recovery codes provided by the teacher (from form/input).
   - Format: Array of strings, each code as typed/provided by student.
 * `idempotency_key`: Client-provided unique request ID for retry safety.
@@ -38,7 +40,7 @@ Before mutation, the FEAT MUST resolve:
 * The `RecoveryRequest` record matching `recovery_request_id`.
 * The `User` record matching `user_id`.
 * Verify that `User.id == RecoveryRequest.user_id` (recovery is for this teacher).
-* Verify that `RecoveryRequest.class_id == class_id` (recovery is for this class).
+* Resolve the selected seat/class participant set for this user-owned request. No single request-level class applies.
 
 ---
 
@@ -59,19 +61,16 @@ Before mutation, the FEAT MUST resolve:
 4. Verify that `recovery_requests.user_id = user_id` (recovery belongs to this teacher).
 5. **Failure Behavior**: Abort with `RECOVERY_NOT_ACTIVE` if recovery is closed or expired.
 
-#### Step 2: Fetch Expected Recovery Codes and Eligible Seat Snapshot
-1. Read `RecoveryRequest.eligible_seat_ids` (immutable snapshot set at T-004 / FEAT-IDEN-103 initiation time).
-2. Read `RecoveryRequest.eligible_seat_count` — this is the authoritative expected count.
-3. Derive the expected code set: one submitted code required per seat in `eligible_seat_ids`.
-4. Query all `student_recovery_codes` where `student_recovery_codes.recovery_request_id = recovery_request_id`.
-5. Build a mapping of `seat_id -> code_hash` for verification.
+#### Step 2: Fetch the Selected Class Representatives
+1. Read the selected `StudentRecoveryCode` seat/class rows provisioned at initiation.
+2. Require one selected participant for each required class under the teacher User.
+3. Read each selected participant's code hash; NULL is an unmet confirmation, not permission to shrink the quorum.
+4. Do not substitute all students on the current rosters or invent request-level `eligible_seat_ids` / `eligible_seat_count` fields.
 
-**Note:** The expected count comes from the snapshotted seat roster, NOT from the current number of `student_recovery_codes` rows. This prevents a missing student from silently reducing the required quorum.
-
-#### Step 3: Validate Code Count
-1. If `submitted_codes` array length != `RecoveryRequest.eligible_seat_count`, abort with `INCOMPLETE_SUBMISSION`.
-   - This is all-or-nothing: every snapshotted eligible student's code is required.
-2. **Failure Behavior**: Return count of codes provided vs. `eligible_seat_count` (generic, no PII leaks).
+#### Step 3: Validate Code Coverage
+Require one submitted code for each selected class representative. All selected
+participants must have generated a code. Missing participants or codes fail the
+entire submission generically; do not reveal which class or student failed.
 
 #### Step 4: Verify Each Code
 1. For each code in `submitted_codes`:
@@ -108,7 +107,7 @@ Update all verified `student_recovery_codes`:
 Update the `recovery_requests` record:
 1. Set `status = 'verified'` (recovery codes validated successfully).
 
-Per DOM-IDEN-003 §IV:
+Per DOM-IDEN-003 §IX:
 > "`recovery_requests` status transitions: pending → verified"
 
 #### Step 5: Store Idempotency Record
@@ -131,7 +130,6 @@ Per FEAT-CORE-000 §III.4:
 2. **Required fields**:
    - `feat_id`: "FEAT-IDEN-105"
    - `user_id`: The teacher `user_id`
-   - `class_id`: The classroom context
    - `recovery_request_id`: The recovery request ID
    - `idempotency_key`: The provided key
    - `code_count`: Number of codes verified
@@ -156,7 +154,7 @@ After successful verification:
 ## IV. Invariants & Constraints
 
 ### 1. All-or-Nothing Validation (MANDATORY)
-Per DOM-IDEN-003 §IV:
+Per DOM-IDEN-003 §IX:
 > "ALL recovery codes must be provided and valid. A single missing or incorrect code fails the entire recovery."
 
 This is not a majority-vote or threshold mechanism — all codes are required.
@@ -215,7 +213,7 @@ When the FEAT fails, the system SHALL:
 |----------|-----------|-------------|---------|
 | Recovery not active | `RECOVERY_NOT_ACTIVE` | 409 | "Recovery is not active. Please contact support." |
 | Recovery expired | `RECOVERY_EXPIRED` | 410 | "Recovery request has expired. Please start a new recovery request." |
-| Incomplete submission | `INCOMPLETE_SUBMISSION` | 400 | "You must provide all recovery codes. Check that you have one code per student." |
+| Incomplete submission | `INCOMPLETE_SUBMISSION` | 400 | "You must provide all recovery codes. Check that you have one code per selected class representative." |
 | Invalid code | `INVALID_CODE` | 400 | "One or more recovery codes are invalid. Please check and try again." |
 | Codes expired | `CODES_EXPIRED` | 410 | "Recovery codes have expired. Please start a new recovery request." |
 | Database error | `INTERNAL_ERROR` | 500 | "An error occurred. Please try again." |
@@ -230,7 +228,6 @@ The `DOM-OPS` audit log **MUST** contain:
 |-------|------|----------|-----------|
 | `feat_id` | String | ✓ | Identifies the FEAT (always "FEAT-IDEN-105") |
 | `user_id` | Integer | ✓ | The teacher user |
-| `class_id` | UUID | ✓ | The classroom context |
 | `recovery_request_id` | Integer | ✓ | The recovery request being validated |
 | `idempotency_key` | String | ✓ | Replay detection |
 | `code_count` | Integer | ✓ | Number of codes verified |
@@ -324,8 +321,8 @@ Revisions to this document SHALL:
 
 1. Increment the version.
 2. Update the effective date.
-3. Maintain consistency with DOM-IDEN-003 §IV.
+3. Maintain consistency with DOM-IDEN-003 §IX.
 4. Maintain consistency with FEAT-CORE-000.
 5. Maintain consistency with FEAT-IDEN-103, FEAT-IDEN-104, and FEAT-IDEN-106.
 
-**This is version 1.0 of FEAT-IDEN-105 (new specification, 2026-08-09).**
+**Version 1.1 (2026-09-15): selected-participant scope under DOM-IDEN-003 §IX.**

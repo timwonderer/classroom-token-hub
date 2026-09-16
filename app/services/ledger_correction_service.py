@@ -192,7 +192,7 @@ def reverse_transaction(
         target_seat_id=transaction.target_seat_id,
         actor_seat_id=actor_seat_id or transaction.actor_seat_id,
         mechanism=transaction.mechanism,
-        user_id=transaction.user_id, amount=compensation_amount,
+        amount=compensation_amount,
         account_type=transaction.account_type or "checking",
         # The ledger vocabulary records what this row is; compensation_subtype
         # records why it was raised. Persisting the reason in `type` left the

@@ -1,21 +1,27 @@
 # FEAT-IDEN-103: Teacher Recovery Initiation
-**[NEW - Compliant with DOM-IDEN Authority]**
+**[Initiation scope reconciled with DOM-IDEN-003 §IX]**
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| FEAT-IDEN-103 | 1.0 | 2026-08-09 | N/A (new) | Normative | NEW |
+| FEAT-IDEN-103 | 1.1 | 2026-09-15 | 1.0 | Normative | ACTIVE |
 
 ---
 
 ## I. Purpose
 
-This FEAT initiates a recovery request for a teacher who has lost access to their account (e.g., lost TOTP authenticator, forgotten passkey). Per DOM-IDEN-003 §IV:
-> "Teachers can initiate account recovery by requesting verification from their students. Recovery requests are 5-day TTL and require all students in the class to provide recovery codes."
+This FEAT initiates a recovery request for a teacher who has lost access to their account (e.g., lost TOTP authenticator, forgotten passkey). Per DOM-IDEN-003 §IX:
+> "One pair is required per active class."
+
+The teacher submits one selected student per `class_id` under the teacher
+`user_id`. Recovery creates one user-owned request with a five-day lifetime;
+class names and period labels do not define the quorum. Here the domain's term
+"active classes" means the existing owned class set; it does not introduce an
+active/inactive lifecycle flag (INV-CORE-000 §III.6).
 
 This FEAT creates a `recovery_request` record with status `pending`, allowing students to assist in teacher identity verification via FEAT-IDEN-104.
 
 **Governing Authority:**
-- DOM-IDEN-003 §IV (Teacher Recovery - Student-Verified Mechanism)
+- DOM-IDEN-003 §IX (Teacher Recovery - Student-Verified Mechanism)
 - DOM-IDEN-005 §VIII (Identity Binding)
 - FEAT-CORE-000 (Feature Execution Constitutional Directive)
 
@@ -25,15 +31,16 @@ This FEAT creates a `recovery_request` record with status `pending`, allowing st
 
 ### 1. Required Inputs
 
-* `user_id`: The teacher `User` requesting recovery (from session or context, unauthenticated request).
-* `class_id`: The class context (from session or context).
+* `pairs`: One (`join_code`, `student_username`) pair for every active class owned by the teacher. This is an unauthenticated identity challenge; the teacher User is resolved from the first join code, not trusted from client input.
 * `idempotency_key`: Client-provided unique request ID for retry safety.
 
 ### 2. Resolved Context (MANDATORY)
 
 Before mutation, the FEAT MUST resolve:
-* The `User` record matching `user_id` in the `users` table.
-* The `ClassEconomy` record matching `class_id`.
+* Resolve the first `join_code` to `class_id` and its owning teacher `user_id`.
+* Resolve the definitive set of that teacher's active classes from the backend.
+* Resolve exactly one selected claimed student Seat within each submitted class.
+* Require exact class-set coverage: no missing, extra, or duplicate class IDs.
 * Verify that `User.user_role = 'teacher'` (requestor is a teacher).
 
 ---
@@ -42,34 +49,27 @@ Before mutation, the FEAT MUST resolve:
 
 ### A. Verification Phase (Read-Only)
 
-#### Step 1: Validate Teacher User State
-1. Query `User` record where `id = user_id`.
-2. Verify that `user_role = 'teacher'`.
-3. Verify that `totp_secret_encrypted IS NOT NULL` (TOTP was enrolled).
-   - Recovery only makes sense if TOTP was enrolled (otherwise account is already accessible).
-4. **Failure Behavior**: Abort with `INVALID_USER_ROLE` if user is not a teacher.
+#### Step 1: Resolve the Teacher and Required Class Set
+1. Resolve the first submitted join code to its ClassEconomy and teacher User.
+2. Verify `user_role = 'teacher'`.
+3. Retrieve all active classes owned by this User; identifiers, not labels, define scope.
+4. Reject invalid identity/class submissions with a generic failure message.
 
-#### Step 2: Check Existing Recovery Requests
-1. Query `recovery_requests` where `recovery_requests.user_id = user_id` AND `recovery_requests.class_id = class_id` AND `recovery_requests.status = 'pending'` AND `recovery_requests.expires_at > NOW()`.
-2. If an active recovery request exists for this user **and class**, return `RECOVERY_IN_PROGRESS` (idempotent success within that class scope).
-3. If multiple pending requests exist for the same user+class, this indicates a data integrity issue — abort with `DATA_INTEGRITY_ERROR`.
+#### Step 2: Verify Exact Class Coverage
+1. Resolve each submitted join code within the teacher's definitive class set.
+2. Require the submitted `class_id` set to equal the backend set exactly.
+3. Reject missing, extra, or duplicate class submissions. Do not accept partial coverage.
 
-**Note:** A teacher may have separate active recovery requests for different classes. Scope all checks to `class_id`.
+#### Step 3: Resolve One Selected Student per Class
+1. Within each resolved class, match the submitted username to a claimed student Seat.
+2. Require exactly one selected student Seat for every required class.
+3. An empty class or invalid selected student prevents initiation; it does not reduce quorum.
+4. Validate all pairs before accepting any. Do not reveal which pair failed.
 
-#### Step 3: Validate Class Context
-1. Query `ClassEconomy` record where `ClassEconomy.class_id = class_id`.
-2. Verify `ClassEconomy.class_id` exists and is active.
-3. **Failure Behavior**: Abort with `INVALID_CLASS_CONTEXT` if class does not exist.
-
-#### Step 4: Verify Teacher Affiliation
-1. Query `Seat` where `Seat.user_id = user_id` and `Seat.class_id = class_id` and `Seat.role = 'teacher'`.
-2. Verify at least one teacher seat exists for this teacher in the class.
-3. **Failure Behavior**: Abort with `NO_TEACHER_SEAT` if teacher has no teacher seat in this class.
-
-#### Step 5: Check Student Population
-1. Query `Seat` where `Seat.class_id = class_id` and `Seat.role = 'student'` and `Seat.claimed_at IS NOT NULL`.
-2. Get count of claimed student seats.
-3. If count == 0, abort with `NO_ELIGIBLE_STUDENTS`. Recovery cannot proceed without at least one eligible student to provide a verification code. An empty-class recovery would bypass the quorum requirement entirely.
+#### Step 4: Check Existing Recovery Requests
+1. Query active, unexpired recovery requests by teacher `user_id`, not by class.
+2. If one exists, present that request's status rather than creating a duplicate.
+3. Multiple active requests for one User indicate an integrity error; do not choose a class-specific request.
 
 ---
 
@@ -87,13 +87,14 @@ Perform time calculation outside the transaction:
 
 Insert into `recovery_requests` table:
 1. `user_id`: The teacher user.
-2. `class_id`: The class context (for scoping).
-3. `status`: "pending" (awaiting student code generation).
-4. `expires_at`: Calculated 5-day expiration (NOW() + 5 DAYS).
-5. `created_at`: ISO 8601 UTC timestamp (set by database default).
+2. `status`: "pending" (awaiting student code generation).
+3. `expires_at`: Calculated 5-day expiration (NOW() + 5 DAYS).
+4. `created_at`: ISO 8601 UTC timestamp (set by database default).
 
-Per DOM-IDEN-003 §IV:
-> "`recovery_requests` table stores teacher recovery requests with 5-day TTL."
+In the same transaction, provision one `StudentRecoveryCode` row per selected
+student Seat, containing the request ID, `seat_id`, `class_id`, and NULL code hash.
+The parent request is User-owned and has no single `class_id`. The selected
+seat/class rows define the participants; the rest of each roster is not enrolled.
 
 #### Step 3: Audit Trace
 
@@ -103,7 +104,6 @@ Per FEAT-CORE-000 §III.4:
 2. **Required fields**:
    - `feat_id`: "FEAT-IDEN-103"
    - `user_id`: The teacher `user_id`
-   - `class_id`: The classroom context
    - `recovery_request_id`: The created `recovery_requests.id`
    - `idempotency_key`: The provided key
    - `outcome`: `"RECOVERY_INITIATED"` (only possible outcome for new request)
@@ -117,10 +117,10 @@ Per FEAT-CORE-000 §III.4:
 ## IV. Invariants & Constraints
 
 ### 1. Student-Verified Recovery (MANDATORY)
-Per DOM-IDEN-003 §IV:
-> "Teacher recovery requires verification from students. All students must provide recovery codes."
+Per DOM-IDEN-003 §IX:
+> "All classes must be represented. One student per active class period must participate. Partial coverage is rejected."
 
-This FEAT creates the recovery request; students provide verification through FEAT-IDEN-104.
+This FEAT creates one request for the teacher and selects one student Seat per class. Every selected participant provides a code through FEAT-IDEN-104; every student on each roster is not required.
 
 ### 2. 5-Day TTL (MANDATORY)
 Recovery requests expire after 5 days. After expiration, the recovery request is discarded and must be re-initiated.
@@ -128,14 +128,14 @@ Recovery requests expire after 5 days. After expiration, the recovery request is
 ### 3. Single Active Recovery Request (MANDATORY)
 A teacher may have only ONE active (`pending` or `in_progress`) recovery request at a time. Initiating recovery while one is already in progress returns idempotent success (no duplicate).
 
-### 4. TOTP-Only Recovery (MANDATORY)
-Recovery makes sense only if TOTP was already enrolled. If TOTP is not enrolled, the account is already accessible via alternate means.
+### 4. Credential Restoration Only (MANDATORY)
+Recovery restores access to the existing teacher User. Lost TOTP/passkey access does not authorize changes to participation, ownership, or economic state.
 
 ### 5. Atomic Transaction (MANDATORY)
 All mutations SHALL occur in a single transaction. If any step fails, complete rollback occurs.
 
-### 6. Class-Scoped Recovery (MANDATORY)
-Recovery is scoped to a single class. A teacher with multiple classes must initiate separate recovery requests per class.
+### 6. User-Owned Request, Class-Scoped Participants (MANDATORY)
+One request covers all active classes under the teacher User. Each selected student is resolved within their own class. Do not create separate requests per class or resolve students through a global roster search.
 
 ---
 
@@ -170,12 +170,11 @@ When the FEAT fails, the system SHALL:
 
 | Scenario | Error Code | HTTP Status | Message |
 |----------|-----------|-------------|---------|
-| User not a teacher | `INVALID_USER_ROLE` | 403 | "Only teachers can initiate recovery." |
-| TOTP not enrolled | `TOTP_NOT_ENROLLED` | 409 | "Recovery is only available if TOTP is enrolled." |
-| No admin seat | `NO_ADMIN_SEAT` | 409 | "You don't have an admin seat in this class." |
+| User not a teacher | `INVALID_USER_ROLE` | 403 | "Unable to verify identity. Please check your entries and try again." |
+| No admin seat | `NO_ADMIN_SEAT` | 409 | "Unable to verify identity. Please check your entries and try again." |
 | Recovery already in progress | `RECOVERY_IN_PROGRESS` | 200 | "Recovery is already in progress for this account." |
-| Invalid class | `INVALID_CLASS_CONTEXT` | 400 | "Invalid class context." |
-| No students | `NO_ELIGIBLE_STUDENTS` | 409 | "Recovery cannot proceed: no eligible students in this class." |
+| Invalid class | `INVALID_CLASS_CONTEXT` | 400 | "Unable to verify identity. Please check your entries and try again." |
+| No students | `NO_ELIGIBLE_STUDENTS` | 409 | "Unable to verify identity. Please check your entries and try again." |
 | Database error | `INTERNAL_ERROR` | 500 | "An error occurred during recovery initiation. Please try again." |
 
 ---
@@ -188,7 +187,6 @@ The `DOM-OPS` audit log **MUST** contain:
 |-------|------|----------|-----------|
 | `feat_id` | String | ✓ | Identifies the FEAT (always "FEAT-IDEN-103") |
 | `user_id` | Integer | ✓ | The teacher user requesting recovery |
-| `class_id` | UUID | ✓ | The classroom context |
 | `recovery_request_id` | Integer | ✓ | The created recovery request |
 | `idempotency_key` | String | ✓ | Replay detection |
 | `outcome` | Enum | ✓ | Must be: `RECOVERY_INITIATED` or `RECOVERY_IN_PROGRESS` |
@@ -219,8 +217,8 @@ After successful recovery initiation, the route handler SHALL display to the tea
    - Show "Awaiting codes from X students" or similar.
    - Refresh on completion.
 
-4. **Next Steps**: Instructions for what happens after all students provide codes.
-   - "Once all students provide codes, your account will be restored."
+4. **Next Steps**: Instructions for what happens after all selected students provide codes.
+   - "Once one selected student from every class provides a code, your account will be restored."
 
 ---
 
@@ -235,10 +233,10 @@ FEAT-IDEN-103: Teacher Initiates Recovery
 
 FEAT-IDEN-104: Students Generate Recovery Codes
 ├─ Students verify teacher identity through class roster
-└─ Create student_recovery_code records (one per student)
+└─ Create student_recovery_code records (one per selected student Seat/class)
 
 FEAT-IDEN-105: Teacher Validates Recovery & Restores Access
-├─ Check that all students provided codes
+├─ Check that all selected students provided codes
 ├─ Verify codes are correct
 └─ Update recovery_request.status to verified
 └─ Reset TOTP secret (allow FEAT-IDEN-101 or FEAT-IDEN-106)
@@ -264,10 +262,10 @@ All three FEATs operate on the same `recovery_requests` record.
 Before code review, verify:
 
 - [ ] User role validation ensures only teachers can initiate recovery
-- [ ] TOTP enrollment verification (recovery assumes TOTP exists)
+- [ ] Exact class-set coverage with one selected student Seat per class
 - [ ] Class context validation (verify class exists)
 - [ ] Teacher affiliation verification (verify teacher has admin seat in class)
-- [ ] Student population check (warn if no students)
+- [ ] Missing or ineligible selected students cause generic rejection
 - [ ] Existing recovery request check (idempotent on active request)
 - [ ] Expiration calculation is correct (NOW() + 5 DAYS)
 - [ ] RecoveryRequest status is set to "pending"
@@ -277,7 +275,7 @@ Before code review, verify:
 - [ ] Credentials are NOT logged in audit
 - [ ] Idempotency check prevents duplicate recovery requests
 - [ ] Tests cover successful initiation and idempotent retry
-- [ ] Tests cover no-students warning scenario
+- [ ] Tests cover missing, extra, duplicate, empty-class, and invalid-student submissions
 
 ---
 
@@ -287,8 +285,8 @@ Revisions to this document SHALL:
 
 1. Increment the version.
 2. Update the effective date.
-3. Maintain consistency with DOM-IDEN-003 §IV.
+3. Maintain consistency with DOM-IDEN-003 §IX.
 4. Maintain consistency with FEAT-CORE-000.
 5. Maintain consistency with FEAT-IDEN-104 and FEAT-IDEN-105.
 
-**This is version 1.0 of FEAT-IDEN-103 (new specification, 2026-08-09).**
+**Version 1.1 (2026-09-15): reconcile one user-owned request and one selected student per class with DOM-IDEN-003 §IX.**

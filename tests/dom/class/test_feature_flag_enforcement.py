@@ -38,7 +38,6 @@ def setup_student_with_disabled_banking(client):
             idempotency_key="feature_flag_enforcement:disabled_banking:seed",
             seat_id=student_seat.id,
             class_id=classroom.class_id,
-            user_id=user.id,
             amount="100.00",
             account_type="checking",
             type="purchase",
@@ -70,7 +69,6 @@ def setup_student_with_enabled_banking(client):
             idempotency_key="feature_flag_enforcement:enabled_banking:seed",
             seat_id=student_seat.id,
             class_id=classroom.class_id,
-            user_id=user.id,
             amount="100.00",
             account_type="checking",
             type="purchase",
@@ -252,7 +250,6 @@ def test_DOM_CLASS_001__admin_store_delete_rejects_disabled_class_scope(client):
         product = publish_store_product(
             class_id=classroom_b.class_id,
             entitlement_type="IMMEDIATE_USE",
-            user_id=classroom_b.teacher_user.id,
             name="Pencil",
             description="Simple item",
             price="1.00",

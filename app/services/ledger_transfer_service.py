@@ -15,7 +15,7 @@ from app.models import _quantize_currency
 
 
 def create_transfer_pair(
-    *, seat_id: int, class_id: str, user_id: int | None = None, amount,
+    *, seat_id: int, class_id: str, amount,
     from_account: str, to_account: str, withdraw_description: str,
     deposit_description: str, idempotency_key: str | None = None,
 ) -> tuple[Transaction, Transaction]:
@@ -61,13 +61,13 @@ def create_transfer_pair(
     db.session.flush()
     withdraw_tx = create_pending_transaction(
         seat_id=seat_id, class_id=class_id, target_seat_id=seat_id,
-        actor_seat_id=seat_id, mechanism="self", user_id=user_id,
+        actor_seat_id=seat_id, mechanism="self",
         amount=-quantized_amount, account_type=from_account, type="Withdrawal",
         description=withdraw_description, command_reservation=reservation,
     )
     deposit_tx = create_pending_transaction(
         seat_id=seat_id, class_id=class_id, target_seat_id=seat_id,
-        actor_seat_id=seat_id, mechanism="self", user_id=user_id,
+        actor_seat_id=seat_id, mechanism="self",
         amount=quantized_amount, account_type=to_account, type="Deposit",
         description=deposit_description, command_reservation=reservation,
     )

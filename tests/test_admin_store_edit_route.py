@@ -43,7 +43,6 @@ def _make_store_item(classroom, name="Homework Pass"):
         return publish_store_product(
             class_id=classroom.class_id,
             entitlement_type="IMMEDIATE_USE",
-            user_id=classroom.teacher_user.id,
             name=name,
             description="Skip one homework assignment",
             price="25.00",
@@ -214,7 +213,6 @@ def test_edit_to_grant_only_accepts_the_browser_payload(app, client):
         item = publish_store_product(
             class_id=classroom.class_id,
             entitlement_type="DELAYED_USE",
-            user_id=classroom.teacher_user.id,
             name="Soon Grant Only",
             price="25.00",
         )
@@ -255,7 +253,6 @@ def test_edit_keeps_the_delist_date(app, client):
         item = publish_store_product(
             class_id=classroom.class_id,
             entitlement_type="IMMEDIATE_USE",
-            user_id=classroom.teacher_user.id,
             name="Seasonal Pass",
             price="25.00",
             auto_delist_date=delist,
@@ -329,7 +326,6 @@ def test_admin_store_renders_a_grant_only_product(app, client):
         publish_store_product(
             class_id=classroom.class_id,
             entitlement_type="DELAYED_USE",
-            user_id=classroom.teacher_user.id,
             name="Rent Only Perk",
             price=None,
             direct_purchase_allowed=False,

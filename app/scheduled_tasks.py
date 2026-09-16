@@ -852,7 +852,19 @@ class ScheduledJobSpec(NamedTuple):
 # balances only. Registration order alone does not enforce that at runtime —
 # run_savings_interest_job discharges the dependency itself — but declaring it
 # here keeps the relationship visible and assertable.
+def purge_stale_teacher_accounts_job():
+    from app.services.teacher_lifecycle import purge_stale_teacher_accounts
+    return purge_stale_teacher_accounts()
+
+
 SCHEDULED_JOB_SPECS: tuple[ScheduledJobSpec, ...] = (
+    ScheduledJobSpec(
+        id='stale_teacher_accounts',
+        name='Delete stale teacher accounts',
+        func=purge_stale_teacher_accounts_job,
+        trigger='interval',
+        trigger_kwargs={'hours': 1},
+    ),
     ScheduledJobSpec(
         id='enforce_daily_limits',
         name='Enforce daily attendance limits',

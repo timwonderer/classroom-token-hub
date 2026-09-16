@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| INV-ARC-019      | 1.4     | 2026-09-15     | 1.3 | Constitutional |
+| INV-ARC-019      | 1.5     | 2026-09-15     | 1.4 | Constitutional |
 
 ---
 
@@ -74,6 +74,30 @@ No identifier answers more than its assigned question.
 
 Passkey metadata is stored in the unified `passkey_credentials` table for both teacher and sysadmin, and the owning
 principal is always `users.id`.
+
+### Principal reference allowlist
+
+Outside `users`, persisted references to `users.id` are restricted to:
+
+- `seats.user_id`: optional authenticated-principal binding to a class actor;
+- `classes.teacher_user_id`: teacher principal ownership of a class;
+- `passkey_credentials.user_id`: authentication credential ownership;
+- `recovery_requests.user_id`: authentication recovery ownership.
+
+No classroom record, author field, reviewer field, economic effect, or command
+fingerprint may store an authentication principal reference. Classroom attribution
+uses a seat under an explicit `class_id`. Operator review records its role and
+review metadata without attaching an authentication principal to a class record.
+Authentication and Identity may resolve a principal to its permitted seats or owned
+classes; downstream domain records and selectors use that established class/seat.
+
+Unclaim removes only the principal binding and recreates temporary claim material
+from teacher-entered names. The seat, profile, and class-scoped records survive.
+Delete destroys the seat. A bound seat restricts principal deletion until Identity
+explicitly detaches or destroys that seat; no User-to-Seat delete cascade is permitted.
+Deleting an orphaned principal must neither delete nor
+rewrite surviving seat-owned facts. No compatibility principal columns or aliases
+may remain in the shipping schema.
 
 ### Incorporation of SPEC-SEC-001
 
@@ -269,14 +293,14 @@ student-authenticated principal.
 When a teacher uploads a roster:
 
 1. A class exists or is created.
-2. A `users` row is provisioned as an inactive authentication shell.
-3. A `seats` row is provisioned and bound to the class.
-4. An `identity_profiles` row is provisioned and bound one-to-one to the seat.
-5. Claim artifacts are stored on the seat.
-6. No credentials are activated yet.
+2. A `seats` row is provisioned and bound to the class, with no User binding.
+3. An `identity_profiles` row is provisioned and bound one-to-one to the seat.
+4. Claim artifacts are stored on the seat.
+5. No authentication principal or credentials are provisioned by roster import.
 
-Claim/setup later proves entitlement to the seat and activates credentials on
-`users`.
+Claim/setup later proves entitlement to the seat and creates/binds the authentication
+principal under Identity authority. Authenticated class binding attaches an existing
+principal. An unclaimed seat does not depend on a User row.
 
 ## XIII. Runtime Context
 

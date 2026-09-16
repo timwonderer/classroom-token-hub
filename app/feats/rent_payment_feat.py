@@ -333,7 +333,6 @@ def pay_rent(
         target_seat_id=authority_seat_id,
         actor_seat_id=seat_id,
         mechanism="self",
-        user_id=seat.user_id,
         amount=-this_payment,
         account_type="checking",
         type="rent_payment",

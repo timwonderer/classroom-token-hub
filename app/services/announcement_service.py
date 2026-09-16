@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from app.extensions import db
-from app.models import Announcement
+from app.models import Announcement, Seat
 from app.utils.canonical_temporal_resolver import utc_now
 
 
 def create_class_announcement(
     *,
-    user_id: int,
+    created_by_seat_id: int,
     class_id: str,
     title: str,
     message: str,
@@ -15,8 +15,10 @@ def create_class_announcement(
     is_active: bool,
     expires_at,
 ) -> Announcement:
+    if not Seat.query.filter_by(id=created_by_seat_id, class_id=class_id, role="teacher").first():
+        raise ValueError("Announcement author must be a teacher seat in this class.")
     announcement = Announcement(
-        user_id=user_id,
+        created_by_seat_id=created_by_seat_id,
         class_id=class_id,
         title=title,
         message=message,

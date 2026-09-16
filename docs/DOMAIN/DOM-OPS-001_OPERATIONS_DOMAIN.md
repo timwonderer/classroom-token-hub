@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-OPS-001      | 2.3     | 2026-08-31     | 2.2        | Normative       |
+| DOM-OPS-001      | 2.4     | 2026-09-15     | 2.3        | Normative       |
 
 ## 0. Authority Level and Dependencies
 
@@ -154,8 +154,8 @@ This channel exists only to preserve useful public communication during canonica
 *   **Prohibited Action**: A background job "cleaning up" data without logging the specific records changed and the rationale.
 
 ### INV-OPS-012: Class/Seat/User Trace Boundaries
-*   **Statement**: Operational records MUST preserve the distinction between `user_id` (human), `seat_id` (economic actor), and `class_id` (universe).
-*   **Prohibited Action**: Logging only a `user_id` for a seat-scoped transaction.
+*   **Statement**: Classroom operational records MUST use `seat_id` (economic actor) under `class_id` (universe). Authentication principal IDs belong only to the Identity references allowed by INV-ARC-019.
+*   **Prohibited Action**: Persisting or logging a `user_id` as a classroom actor, including under an actor or teacher alias.
 
 ---
 
@@ -290,7 +290,7 @@ This channel exists only to preserve useful public communication during canonica
 
 ## 7. Identity & Trace Model Alignment
 
-*   `user_id`, `seat_id`, `class_id`, `correlation_id` must all be preserved in operational records and never collapsed.
+*   `seat_id`, `class_id`, and `correlation_id` preserve classroom attribution. When no class/seat context is established, omit actor identity rather than substitute an authentication principal.
 
 ---
 

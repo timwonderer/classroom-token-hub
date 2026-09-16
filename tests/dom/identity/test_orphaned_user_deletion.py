@@ -94,10 +94,8 @@ def test_B3__detaching_a_students_only_seat_deletes_the_principal(client):
     db.session.expire_all()
 
     assert db.session.get(User, user_id) is None
-    # The seat survives as an unclaimed roster slot owned by the class.
-    surviving = db.session.get(Seat, seat_id)
-    assert surviving is not None
-    assert surviving.user_id is None
+    # Delete destroys the seat. Unclaim is a distinct explicit command.
+    assert db.session.get(Seat, seat_id) is None
 
 
 def test_B3__class_destruction_deletes_principals_it_orphans(client, app):

@@ -3,7 +3,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| FEAT-IDEN-002 | 1.3 | 2026-09-15 | 1.2 | Normative | ACTIVE |
+| FEAT-IDEN-002 | 1.4 | 2026-09-15 | 1.3 | Normative | ACTIVE |
 
 ---
 
@@ -376,3 +376,8 @@ Revisions to this document SHALL:
 5. Maintain consistency with FEAT-IDEN-001.
 
 **Version 1.3 (2026-09-15): server-validated recovery nonce consumed atomically with credential replacement.**
+
+
+## Claim verification lifetime
+
+For initial claim only, lock the resolved class and Seat and recheck that the Seat remains unclaimed and the signed onboarding session contains the current integer `claim_generation`. Missing or stale generations fail closed without provisioning a User or changing credentials. Recovery continues to use only its server-validated User authorization nonce.

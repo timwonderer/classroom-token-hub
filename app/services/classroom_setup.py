@@ -285,10 +285,10 @@ def create_student_seat_with_profile(
 
 def _set_claim_hashes(seat: Seat, first_name: str, last_name: str) -> None:
     """Set claim lookup hashes on a seat so the claim flow can match by name."""
-    from app.hash_utils import hash_username_lookup
+    from app.hash_utils import hash_claim_name
 
-    seat.claim_first_name_hash = hash_username_lookup(first_name.strip().lower())
-    seat.claim_last_name_hash = hash_username_lookup(last_name.strip().lower())
+    seat.claim_first_name_hash = hash_claim_name(first_name, class_id=seat.class_id, field="first")
+    seat.claim_last_name_hash = hash_claim_name(last_name, class_id=seat.class_id, field="last")
 
 
 def update_or_create_roster_seat(

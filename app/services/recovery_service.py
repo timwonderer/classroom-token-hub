@@ -296,3 +296,13 @@ def delete_recovery_rows_for_user(user_id: int) -> None:
 def delete_recovery_codes_for_seat(seat_id: int) -> None:
     _requests, codes = _tables()
     db.session.execute(sa.delete(codes).where(codes.c.seat_id == seat_id))
+
+
+def invalidate_recovery_participation_for_seat(seat_id: int) -> None:
+    """Unclaim revokes the previous claimant's unfinished teacher confirmation."""
+    requests, codes = _tables()
+    affected = sa.select(codes.c.recovery_request_id).where(codes.c.seat_id == seat_id)
+    db.session.execute(sa.update(requests).where(requests.c.id.in_(affected),
+        requests.c.status == "pending").values(status="cancelled", partial_codes=None,
+        resume_pin_hash=None, resume_new_username=None))
+    delete_recovery_codes_for_seat(seat_id)

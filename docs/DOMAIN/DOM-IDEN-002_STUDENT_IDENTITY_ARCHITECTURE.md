@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-IDEN-002 | 2.5 | 2026-09-15 | 2.4 | Constitutional |
+| DOM-IDEN-002 | 2.6 | 2026-09-15 | 2.5 | Constitutional |
 
 ---
 
@@ -180,9 +180,9 @@ Roster provisioning rules are defined by DOM-IDEN-005 §VII. This section define
 
 `roster_fingerprint` is derived from minimal claim identity after normalization:
 
-`HMAC(server_secret, normalized_first_name | normalized_last_name | optional_dedupe_code)`
+`HMAC-SHA-256(PEPPER_KEY, framed purpose + class_id + normalized names + optional dedupe code)`
 
-The exact normalization routine is an implementation detail, but the result must be stable for claim lookup inside a class.
+The canonical normalization, purpose labels and unambiguous field framing are defined in incorporated SPEC-SEC-001 §V.2. First/last-name digests use distinct labels and include the resolved class_id.
 
 ### Duplicate-On-Paper-Only (DOPO) Handling
 

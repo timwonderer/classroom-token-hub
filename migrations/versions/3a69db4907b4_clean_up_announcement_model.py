@@ -50,12 +50,10 @@ def foreign_key_exists(table_name, fk_name):
 
 
 def upgrade():
-    # Backfill: delete legacy system announcements that lack a class_id or user_id
-    op.execute('DELETE FROM announcements WHERE class_id IS NULL OR user_id IS NULL')
-
-    op.alter_column('announcements', 'user_id',
-               existing_type=sa.INTEGER(),
-               nullable=False)
+    # Current-metadata bootstrap already has a seat author instead of user_id.
+    if column_exists('announcements', 'user_id'):
+        op.execute('DELETE FROM announcements WHERE class_id IS NULL OR user_id IS NULL')
+        op.alter_column('announcements', 'user_id', existing_type=sa.INTEGER(), nullable=False)
     op.alter_column('announcements', 'class_id',
                existing_type=sa.VARCHAR(length=36),
                nullable=False)

@@ -36,8 +36,10 @@ MAX_IDEMPOTENCY_KEY_LENGTH = 128
 # SPEC-LED-002 §4.1 requires values that legitimately change across retries to
 # be excluded. §4.2 makes that serializer change a new version, and a
 # reservation accepted under version 1 is still compared under version 1.
-FINGERPRINT_VERSION = 2
-SUPPORTED_FINGERPRINT_VERSIONS = frozenset({1, 2})
+# Version 3 removes authentication principal material from multi-effect commands.
+# Single-effect and transfer serializers are unchanged.
+FINGERPRINT_VERSION = 3
+SUPPORTED_FINGERPRINT_VERSIONS = frozenset({1, 2, 3})
 _AMOUNT_EXCLUDED_FROM_FINGERPRINT_TYPES = frozenset({"Interest"})
 
 
@@ -149,7 +151,6 @@ def create_idempotent_transaction(
     target_seat_id,
     actor_seat_id,
     mechanism,
-    user_id=None,
     amount,
     account_type,
     type,
@@ -222,7 +223,6 @@ def create_idempotent_transaction(
         actor_seat_id=actor_seat_id,
         mechanism=mechanism,
         class_id=class_id,
-        user_id=user_id,
         amount=amount,
         account_type=account_type,
         status=TransactionStatus.PENDING,

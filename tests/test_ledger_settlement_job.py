@@ -42,7 +42,6 @@ def _seed(seat_id, class_id, user_id, *, amount, account_type, key):
             idempotency_key=key,
             seat_id=seat_id,
             class_id=class_id,
-            user_id=user_id,
             amount=amount,
             account_type=account_type,
             type="payroll",

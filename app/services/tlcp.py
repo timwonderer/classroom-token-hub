@@ -161,14 +161,12 @@ def resolve_actor_context(context: CanonicalContext | None) -> dict | None:
         return None
 
     actor_type = seat.role
-    actor_id = context.user_id
     class_id = context.class_id
     actor_public_id = seat.public_id
 
     endpoint = request.url_rule.rule if request.url_rule and request.url_rule.rule else request.path
     return {
         "actor_type": actor_type,
-        "actor_id": actor_id,
         "actor_public_id": actor_public_id,
         "class_id": class_id,
         "endpoint": endpoint,
@@ -189,10 +187,18 @@ def persist_request_trace(
     default request-scoped ``db.session``.  The caller is responsible for
     committing (or rolling back) the provided session.
     """
-    if not context or not context.get("actor_public_id"):
+    if not context or not context.get("actor_public_id") or not context.get("class_id"):
         return
 
     sess = _session if _session is not None else db.session
+    # after_request may run after this request destroyed its own class/seat.
+    # Never recreate a trace from the pre-deletion cached request context.
+    actor_exists = sess.query(Seat.id).filter_by(
+        public_id=context["actor_public_id"], class_id=context["class_id"],
+        role=context.get("actor_type"),
+    ).first()
+    if actor_exists is None:
+        return
 
     trace_limit = _int_env("TLCP_TRACE_LIMIT", DEFAULT_TRACE_LIMIT)
     ttl_days = _int_env("TLCP_TRACE_TTL_DAYS", DEFAULT_TRACE_TTL_DAYS)
