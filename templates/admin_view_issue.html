@@ -504,11 +504,36 @@
                         </small>
                     </div>
 
+                    <fieldset class="mb-3">
+                        <legend class="fs-6 fw-bold">Optional information for system support</legend>
+                        <p class="text-muted">Route diagnostics, the correlation pack, IP address, and browser details are included. Choose each additional category separately for this ticket. These choices share the saved report information, not ongoing access to your class.</p>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" name="share_balances" id="share_balances" aria-describedby="share_balances_help">
+                            <label class="form-check-label" for="share_balances">I give permission to include balances</label>
+                            <small id="share_balances_help" class="d-block text-muted">Checking, savings, and total at the time of the report.</small>
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" name="share_transaction" id="share_transaction" aria-describedby="share_transaction_help">
+                            <label class="form-check-label" for="share_transaction">I give permission to include the reported transaction</label>
+                            <small id="share_transaction_help" class="d-block text-muted">The selected transaction, including its amount and description.</small>
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" name="share_recent_transactions" id="share_recent_transactions" aria-describedby="share_recent_transactions_help">
+                            <label class="form-check-label" for="share_recent_transactions">I give permission to include recent transactions</label>
+                            <small id="share_recent_transactions_help" class="d-block text-muted">Up to ten transactions saved with this report, including amounts and descriptions.</small>
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" name="share_student_report" id="share_student_report" aria-describedby="share_student_report_help">
+                            <label class="form-check-label" for="share_student_report">I give permission to include the student’s report</label>
+                            <small id="share_student_report_help" class="d-block text-muted">The student’s explanation and expected outcome.</small>
+                        </div>
+                    </fieldset>
+
                     <div class="mb-3">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" name="share_class_name" id="share_class_name">
                             <label class="form-check-label" for="share_class_name">
-                                Share class name/identifier with developer
+                                I give permission to include the class name
                             </label>
                             <small class="d-block text-muted mt-1">
                                 By default, only an opaque reference is shared. Check this if the developer needs the class name for investigation.

@@ -139,8 +139,6 @@ from app.services.classroom_setup import (
     create_teacher,
     create_pending_student_seat,
     delete_seat_with_profile,
-    create_roster_student_seat,
-    update_or_create_roster_seat,
 )
 from app.services.payroll_settings_service import upsert_payroll_settings
 from app.services import store_service
@@ -4432,7 +4430,7 @@ def edit_student():
         flash("Student display profile is missing.", "error")
         return redirect(url_for('admin.students'))
 
-    # Check if name changed (keep seat identity fields in sync).
+    # Detect profile changes without changing seat identity or claim material.
     current_first_name = student_profile.first_name or ""
     current_last_name = student_profile.last_name or ""
     current_notes = student_profile.notes or ""
@@ -4445,8 +4443,6 @@ def edit_student():
     student_profile.first_name = new_first_name
     student_profile.last_name = last_name_input
     student_profile.notes = notes_input or None
-    student.claim_first_name_hash = hash_username_lookup(new_first_name.lower())
-    student.claim_last_name_hash = hash_username_lookup(last_name_input.lower())
 
     # Handle account reset — generate recovery code per DOM-IDEN-002 §IX
     reset_login = request.form.get('reset_login') == 'on'
@@ -8457,7 +8453,7 @@ def upload_students():
     Creates Seat entries (unclaimed accounts) in the current class.
     """
     data = request.get_json(silent=True)
-    if not data or not isinstance(data.get("students"), list):
+    if not isinstance(data, dict) or not isinstance(data.get("students"), list):
         return jsonify(status="error", message="Invalid request."), 400
 
     rows = data["students"]
@@ -8475,114 +8471,19 @@ def upload_students():
 
     join_code = get_display_join_code(class_id)
 
-    from app.models import Seat, IdentityProfile
-    from app.hash_utils import hash_username_lookup
-    import random
-    import string
+    from app.feats.identity_feat import import_student_seats
 
-    idempotency_hash = hashlib.sha256(
-        "|".join(f"{r.get('first_name','')},{r.get('last_name','')}" for r in rows).encode()
-    ).hexdigest()[:16]
-    idempotency_key = f"feat:iden:upload-students:{user_id}:{idempotency_hash}"
-
-    added_count = 0
-    errors = []
-    duplicated = 0
-    matched_seats = set()
-    name_counts_in_run = {}
-
-    # This top-level FEAT owns the transaction boundary. FEATContext.__enter__
-    # discards any incidental read-only autobegin left by the before_request
-    # context resolver, so its commit persists (no manual rollback needed here).
-    with FEATContext("FEAT-IDEN-001", idempotency_key=idempotency_key):
-        for i, row in enumerate(rows):
-            try:
-                first_name = (row.get("first_name") or "").strip()
-                last_name = (row.get("last_name") or "").strip()
-
-                if not first_name and not last_name:
-                    continue
-                if not first_name or not last_name:
-                    errors.append(f"Row {i+1}: Missing first or last name.")
-                    continue
-
-                claim_first_name_hash = hash_username_lookup(first_name.lower())
-                claim_last_name_hash = hash_username_lookup(last_name.lower())
-                name_key = (first_name.lower(), last_name.lower())
-
-                db_seats = (
-                    Seat.query
-                    .join(IdentityProfile, IdentityProfile.seat_id == Seat.id)
-                    .filter(
-                        Seat.class_id == class_id,
-                        Seat.claim_first_name_hash == claim_first_name_hash,
-                        Seat.claim_last_name_hash == claim_last_name_hash,
-                    )
-                    .all()
-                )
-
-                matched_seat = None
-                for s in db_seats:
-                    if s.id not in matched_seats:
-                        matched_seat = s
-                        matched_seats.add(s.id)
-                        break
-
-                if matched_seat:
-                    duplicated += 1
-                    continue
-
-                total_existing = len(db_seats) + name_counts_in_run.get((class_id, name_key), 0)
-                is_collision = total_existing > 0
-
-                dedupe_code = None
-                if is_collision:
-                    alphabet = string.ascii_uppercase + string.digits
-                    dedupe_code = "".join(random.choices(alphabet, k=4))
-
-                    for s in db_seats:
-                        if s.dedupe_code is None:
-                            backfill_code = "".join(random.choices(alphabet, k=4))
-                            s.dedupe_code = backfill_code
-                            s.roster_fingerprint = hash_username_lookup(
-                                f"{class_id}|{first_name.lower()}|{last_name.lower()}|{backfill_code}"
-                            )
-
-                name_counts_in_run[(class_id, name_key)] = name_counts_in_run.get((class_id, name_key), 0) + 1
-
-                if dedupe_code:
-                    roster_fingerprint = hash_username_lookup(
-                        f"{class_id}|{first_name.lower()}|{last_name.lower()}|{dedupe_code}"
-                    )
-                else:
-                    roster_fingerprint = hash_username_lookup(
-                        f"{class_id}|{first_name.lower()}|{last_name.lower()}"
-                    )
-
-                create_roster_student_seat(
-                    class_id=class_id,
-                    first_name=first_name,
-                    last_name=last_name,
-                    dedupe_code=dedupe_code,
-                    claim_first_name_hash=claim_first_name_hash,
-                    claim_last_name_hash=claim_last_name_hash,
-                    roster_fingerprint=roster_fingerprint,
-                )
-                added_count += 1
-            except Exception:
-                # Detail stays server-side: row exceptions can carry SQL text and
-                # roster names, neither of which belongs in an HTTP response.
-                current_app.logger.exception("Error processing roster row %d", i + 1)
-                errors.append(f"Row {i+1}: Could not be processed.")
-
-    status = "success" if not errors else "partial"
-    return jsonify(
-        status=status,
-        created=added_count,
-        duplicated=duplicated,
-        join_code=join_code,
-        errors=errors,
-    )
+    request_key = uuid.uuid4().hex
+    try:
+        created = import_student_seats(
+            canonical_context=g.canonical_context,
+            rows=rows,
+            correlation_id=f"roster-import:{request_key}",
+            idempotency_key=f"roster-import:{class_id}:{request_key}",
+        )
+    except ValueError as exc:
+        return jsonify(status="error", message=str(exc), created=0), 400
+    return jsonify(status="success", created=created, join_code=join_code, errors=[])
 
 
 @admin_bp.route('/export-class-roster')
@@ -9460,12 +9361,7 @@ def help_support():
     user_id = canonical_context.user_id
     selected_class_id = canonical_context.class_id
 
-    # Class isolation (INV-ARC-004 V.1): resolve ONLY the single active class.
-    # This support surface previously enumerated every class the teacher owned to
-    # render a per-feature class selector — an illegal in-feature class switcher.
-    # The POST already refuses any form-supplied class id (scope is a binary
-    # active-class vs account choice), so the active class is the only reachable
-    # scope; the option list is capped at that one class.
+    # Every ticket belongs to the active teacher seat and therefore its class.
     active_class_row = (
         verify_teacher_owns_class(selected_class_id, user_id) if selected_class_id else None
     )
@@ -9498,72 +9394,25 @@ def help_support():
     actor_public_id = teacher_seat.public_id if teacher_seat else None
 
     def _support_report_views(issues):
-        """Build view-model dicts for the My Tickets list."""
-        views = []
-        for issue in issues:
-            explanation = issue.student_explanation or ''
-            first_line = explanation.split('\n', 1)[0] if explanation else ''
-            clean = explanation
-            if first_line.startswith('SUPPORT_SCOPE|'):
-                clean = explanation.split('\n', 1)[1].strip() if '\n' in explanation else explanation
-
-            scope_jc = selected_join_code or 'Unknown'
-            class_label = selected_class_label or 'Unknown Class'
-
-            if issue.class_public_id:
-                from app.services.class_configuration_query_service import get_class_by_public_id
-                ce = get_class_by_public_id(issue.class_public_id)
-                if ce:
-                    scope_jc = ce.join_code
-                    class_label = ce.display_name or ce.join_code
-
-            views.append({
-                'report': {
-                    'title': issue.title or 'Support Ticket',
-                    'status': issue.status,
-                    'submitted_at': issue.submitted_at,
-                    'report_type': issue.issue_type,
-                },
-                'class_label': class_label,
-                'scope_join_code': scope_jc,
-                'scope_class_id': issue.class_public_id,
-                'issue_category': issue.category.name if issue.category else 'Unknown',
-                'clean_description': clean,
-            })
-        return views
+        """Display captured ticket context without refreshing its class metadata."""
+        return [{
+            'report': {
+                'title': issue.title or 'Support Ticket',
+                'status': issue.status,
+                'submitted_at': issue.submitted_at,
+                'report_type': issue.issue_type,
+            },
+            'class_label': issue.class_label,
+            'scope_class_id': issue.class_public_id,
+            'issue_category': issue.category.name if issue.category else 'Unknown',
+            'clean_description': issue.student_explanation or '',
+        } for issue in issues]
 
     category_to_report_type = {
         'general': 'comment',
         'bug': 'bug',
         'feature': 'suggestion',
     }
-
-    def _build_scope_metadata(class_id_value, class_label_value, category_value):
-        return (
-            f"SUPPORT_SCOPE|class_id={class_id_value}|class_label={class_label_value}|category={category_value}"
-        )
-
-    def _parse_scope_metadata(raw_description):
-        if not raw_description:
-            return None, None, None, raw_description
-
-        first_line, _, body = raw_description.partition("\n")
-        if not first_line.startswith("SUPPORT_SCOPE|"):
-            return None, None, None, raw_description
-
-        metadata = {}
-        for token in first_line.split("|")[1:]:
-            key, _, value = token.partition("=")
-            if key and value:
-                metadata[key] = value
-
-        cleaned_body = body.strip() if body else raw_description
-        return (
-            metadata.get('class_id'),
-            metadata.get('class_label'),
-            metadata.get('category'),
-            cleaned_body,
-        )
 
     if not selected_class_id and request.method == 'GET':
         flash(
@@ -9572,6 +9421,8 @@ def help_support():
         )
 
     if request.method == 'POST':
+        if selected_class_id and (not active_class_row or not teacher_seat or teacher_seat.class_id != selected_class_id):
+            abort(403)
         if not selected_class_id:
             flash(
                 "You cannot submit a support ticket until you have at least one class. "
@@ -9588,23 +9439,15 @@ def help_support():
             flash("Please select one of your classes before submitting a support ticket.", "error")
             return redirect(url_for('admin.help_support'))
 
-        # Scope is a BINARY choice, never an arbitrary class selection: the issue
-        # is either about the active class (canonical_context.class_id) or about
-        # the teacher's own account (no class). We only read whether the form
-        # asked for 'account' — we NEVER trust a class id from the form, so the
-        # single-active-context invariant holds (no other class is reachable here).
-        is_account_scope = request.form.get('class_id', '').strip() == 'account'
-        ticket_class_public_id = None if is_account_scope else selected_class_id
-        class_label = 'My account' if is_account_scope else (
-            selected_class_label or selected_join_code or 'Unknown'
-        )
+        # Submission topic never changes scope. Form data cannot select or remove it.
+        ticket_class_public_id = active_class_row.class_public_id
 
         if issue_category not in category_to_report_type:
             flash("Please select a valid support ticket category.", "error")
             my_reports = _support_report_views(
                 Issue.query.filter(
-                    Issue.actor_public_id == generate_anonymous_code(f"admin:{user_id}"),
-                    Issue.class_public_id == selected_class_id,
+                    Issue.actor_public_id == actor_public_id,
+                    Issue.class_public_id == active_class_row.class_public_id,
                     Issue.issue_type == 'general',
                 ).order_by(Issue.submitted_at.desc()).limit(20).all()
             )
@@ -9630,8 +9473,8 @@ def help_support():
             flash("Please provide a category, title, and description for your support ticket.", "error")
             my_reports = _support_report_views(
                 Issue.query.filter(
-                    Issue.actor_public_id == generate_anonymous_code(f"admin:{user_id}"),
-                    Issue.class_public_id == selected_class_id,
+                    Issue.actor_public_id == actor_public_id,
+                    Issue.class_public_id == active_class_row.class_public_id,
                     Issue.issue_type == 'general',
                 ).order_by(Issue.submitted_at.desc()).limit(20).all()
             )
@@ -9652,13 +9495,9 @@ def help_support():
                 form_expected_behavior=expected_behavior,
                 form_page_url=page_url,
             )
-        anonymous_code = generate_anonymous_code(f"admin:{user_id}")
-        metadata_header = _build_scope_metadata(
-            'account' if is_account_scope else selected_class_id,
-            class_label or 'Unknown',
-            issue_category,
-        )
-        scoped_description = f"{metadata_header}\n\n{description}"
+        anonymous_code = actor_public_id
+        # Submitted text is intentional; do not prepend private class metadata.
+        scoped_description = description
 
         # Derive the key from the submitted payload, as every other mutation in
         # this module does. A random key would make each POST a distinct command,
@@ -9672,6 +9511,7 @@ def help_support():
                     "description": description,
                     "expected_behavior": expected_behavior,
                     "page_url": page_url,
+                    "share_class_name": request.form.get("share_class_name") == "on",
                 },
                 sort_keys=True,
                 default=str,
@@ -9694,6 +9534,7 @@ def help_support():
                     category_id=category.id,
                     title=title,
                     scoped_description=scoped_description,
+                    share_class_name=(request.form.get("share_class_name") == "on"),
                     expected_behavior=expected_behavior,
                     page_url=page_url,
                 )
@@ -9706,14 +9547,14 @@ def help_support():
             flash("An error occurred while submitting your ticket. Please try again.", "error")
             return redirect(url_for('admin.help_support'))
 
-    anonymous_code = generate_anonymous_code(f"admin:{user_id}")
+    anonymous_code = actor_public_id
     reports = Issue.query.filter(
         Issue.actor_public_id == anonymous_code,
         Issue.issue_type == 'general',
     ).order_by(Issue.submitted_at.desc()).limit(50).all()
     filtered_reports = [
         r for r in reports
-        if not selected_class_id or not r.class_public_id or r.class_public_id == selected_class_id
+        if active_class_row and r.class_public_id == active_class_row.class_public_id
     ][:20]
     my_reports = _support_report_views(filtered_reports)
 
@@ -11274,12 +11115,12 @@ def escalate_issue(issue_ref):
     if issue_id is None:
         abort(404)
 
-    issue_query = Issue.query.filter_by(id=issue_id)
-    if class_id:
-        class_row = get_class_economy(class_id)
-        if class_row:
-            issue_query = issue_query.filter_by(class_public_id=class_row.class_public_id)
-    issue = issue_query.first_or_404()
+    class_row = verify_teacher_owns_class(class_id, user_id) if class_id else None
+    if not class_row or not teacher_public_id:
+        abort(403)
+    issue = Issue.query.filter_by(
+        id=issue_id, class_public_id=class_row.class_public_id,
+    ).first_or_404()
 
     escalation_reason = request.form.get('escalation_reason', '').strip()
     diagnostic_note = request.form.get('diagnostic_note', '').strip()
@@ -11303,6 +11144,8 @@ def escalate_issue(issue_ref):
         # Update issue with escalation details
         issue.escalation_reason = escalation_reason
         issue.teacher_diagnostic_note = diagnostic_note
+        from app.services.support_disclosure import permissions_from_form
+        issue.support_permissions = permissions_from_form(request.form)
         issue.share_class_name_with_sysadmin = share_class_name
         issue.escalated_at = utc_now()
         # Record who escalated. `reviewer_public_id` had no writer anywhere in the

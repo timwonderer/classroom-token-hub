@@ -241,6 +241,10 @@ def create_student_user_for_seat(
 
     seat.user_id = student.id
     seat.claimed_at = seat.claimed_at or utc_now()
+    seat.claim_first_name_hash = None
+    seat.claim_last_name_hash = None
+    seat.roster_fingerprint = None
+    seat.dedupe_code = None
     student.last_active_class_id = seat.class_id
     student.last_active_seat_id = seat.id
     db.session.flush()
@@ -312,7 +316,6 @@ def update_or_create_roster_seat(
                 notes=notes,
             )
             db.session.add(profile)
-        _set_claim_hashes(existing_seat, first_name, last_name)
         db.session.flush()
         return existing_seat
 

@@ -17,7 +17,6 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.extensions import db, limiter
 from app.models import User, UserRole
-from app.hash_utils import hash_username_lookup
 from app.utils.helpers import render_template_with_fallback as render_template, safe_redirect_target
 from app.utils.canonical_temporal_resolver import CLASS_LEVEL_EVALUATION, canonical_temporal_resolver
 
@@ -164,7 +163,10 @@ def _normalize_last_name(value):
 @limiter.limit("60 per minute")
 def verify_hall_pass(teacher_public_token):
     """
-    Public hall pass verification for office staff.
+    External, capability-authorized hall-pass verification for office staff.
+
+    Name comparison finds same-day entries within a resolved class; it does not
+    resolve an economic actor or establish application authority.
 
     GET:  Show a form with class dropdown, first name, last name fields.
     POST: Verify whether a specific student has a valid hall pass for today.
@@ -176,8 +178,9 @@ def verify_hall_pass(teacher_public_token):
     - Non-enumerable (token-based)
     - Rotatable
     """
-    from app.models import AttendanceReasonCode, AttendanceSession, ClassEconomy, HallPassLog, IdentityProfile, Seat
-    from app.services.class_configuration_query_service import get_all_classes_by_teacher, verify_teacher_owns_class
+    from app.models import AttendanceReasonCode, AttendanceSession, HallPassLog
+    from app.services.class_configuration_query_service import get_all_classes_by_teacher, get_class_economy_by_join_code
+    from app.services.identity_service import match_hall_pass_profiles
 
     _GENERIC_UNAVAILABLE = "Verification page not available."
 
@@ -192,17 +195,17 @@ def verify_hall_pass(teacher_public_token):
 
     # SANCTIONED cross-class exception (INV-ARC-004 V.3): the hall-pass
     # verification page is the ONLY runtime surface allowed to span a teacher's
-    # classes. It is token-authorized and read-only; the POST below still
-    # resolves the selected class directly by class_id.
+    # classes. It is token-authorized and read-only; the POST resolves the supplied join code to class_id
+    # before reading profiles or activity in that class.
     classes_rows = sorted(get_all_classes_by_teacher(teacher_user.id), key=lambda c: (c.display_name or ""))
     def _class_display_label(class_row):
         label_parts = [part for part in (class_row.section, class_row.display_name) if part]
-        return " - ".join(label_parts) if label_parts else class_row.class_id
+        return " - ".join(label_parts) if label_parts else class_row.join_code
 
     classes = []
     for c in classes_rows:
         classes.append({
-            "class_id": c.class_id,
+            "join_code": c.join_code,
             "label": _class_display_label(c),
         })
 
@@ -218,13 +221,13 @@ def verify_hall_pass(teacher_public_token):
     # ---- POST: verification attempt ----
     raw_first_name = request.form.get('first_name', '')
     raw_last_name = request.form.get('last_name', '')
-    selected_class_id = request.form.get('class_id', '')
+    selected_join_code = request.form.get('join_code', '').strip().upper()
 
     first_name_norm = _normalize_first_name(raw_first_name)
     last_name_norm = _normalize_last_name(raw_last_name)
 
     # Reject malformed input uniformly
-    if not first_name_norm or not last_name_norm or not selected_class_id:
+    if not first_name_norm or not last_name_norm or not selected_join_code:
         return render_template(
             'hall_pass_verify.html',
             unavailable=False,
@@ -233,19 +236,22 @@ def verify_hall_pass(teacher_public_token):
             result={'outcome': 'no_match'}
         )
 
-    first_name_hash = hash_username_lookup(first_name_norm)
-    last_name_hash = hash_username_lookup(last_name_norm)
-
-    # Validate selected class directly under the teacher's ownership boundary.
-    selected_class_row = verify_teacher_owns_class(selected_class_id, teacher_user.id)
-    if not selected_class_row:
+    selected_class_row = get_class_economy_by_join_code(selected_join_code)
+    if not selected_class_row or selected_class_row.teacher_user_id != teacher_user.id:
         return render_template(
-            'hall_pass_verify.html',
-            unavailable=False,
-            token=teacher_public_token,
-            classes=classes,
-            result={'outcome': 'no_match'}
+            'hall_pass_verify.html', unavailable=False, token=teacher_public_token,
+            classes=classes, result={'outcome': 'no_match'},
         )
+    selected_class_id = selected_class_row.class_id
+    profiles = match_hall_pass_profiles(
+        class_id=selected_class_id, first_name=raw_first_name, last_name=raw_last_name,
+    )
+    if len(profiles) != 1:
+        return render_template(
+            'hall_pass_verify.html', unavailable=False, token=teacher_public_token,
+            classes=classes, result={'outcome': 'ambiguous' if profiles else 'no_match'},
+        )
+    matched_profile = profiles[0]
 
     public_temporal_context = SimpleNamespace(class_id=selected_class_id)
     day_bounds = canonical_temporal_resolver(
@@ -266,25 +272,9 @@ def verify_hall_pass(teacher_public_token):
         HallPassLog.timestamp < day_bounds.boundary_end_utc,
     ).order_by(HallPassLog.timestamp.desc(), HallPassLog.id.desc())
 
-    # Filter via canonical seat claim hashes. IdentityProfile is display-only.
-    # Stop at 2 matches: enough to distinguish unique vs ambiguous.
-    matched = []
-    for entry in passes_query.yield_per(100):
-        seat = Seat.query.filter_by(
-            id=entry.requested_by_seat_id,
-            class_id=entry.class_id,
-            role="student",
-        ).first()
-        if not seat:
-            continue
-        if (
-            seat.claim_first_name_hash == first_name_hash
-            and seat.claim_last_name_hash == last_name_hash
-        ):
-            matched.append(entry)
-        if len(matched) >= 2:
-            # Ambiguous — stop early
-            break
+    matched = passes_query.filter(
+        HallPassLog.requested_by_seat_id == matched_profile["seat_id"]
+    ).limit(2).all()
 
     if len(matched) == 0:
         result = {'outcome': 'no_match'}
@@ -293,15 +283,15 @@ def verify_hall_pass(teacher_public_token):
     else:
         entry = matched[0]
         class_label = _class_display_label(selected_class_row)
-        profile = IdentityProfile.query.filter_by(
-            seat_id=entry.requested_by_seat_id,
-            class_id=entry.class_id,
-        ).first()
         attendance_rows = (
             AttendanceSession.query.filter_by(
                 class_id=entry.class_id,
                 target_seat_id=entry.requested_by_seat_id,
                 hall_pass_id=entry.hall_pass_id,
+            )
+            .filter(
+                AttendanceSession.timestamp >= day_bounds.boundary_start_utc,
+                AttendanceSession.timestamp < day_bounds.boundary_end_utc,
             )
             .order_by(AttendanceSession.timestamp.asc(), AttendanceSession.id.asc())
             .all()
@@ -344,12 +334,7 @@ def verify_hall_pass(teacher_public_token):
 
         result = {
             'outcome': 'match',
-            'student_display': " ".join(
-                part for part in [
-                    getattr(profile, "first_name", None),
-                    getattr(profile, "last_name", None),
-                ] if part
-            ).strip(),
+            'student_display': matched_profile['display_name'],
             'class_label': class_label,
             'destination': entry.destination,
             'time_out': time_out_value,

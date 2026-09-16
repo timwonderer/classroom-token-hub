@@ -3,7 +3,7 @@ title: Support Tickets
 category: features
 subcategory: teacher-settings
 roles: [teacher]
-description: Submit a support ticket to the Classroom Token Hub team, choose whether it is about your class or your account, and read the My Tickets list.
+description: Submit a support ticket to the Classroom Token Hub team, use your active class seat, and read the My Tickets list.
 keywords: [support, ticket, help, bug, feature request, my tickets, escalate, report a problem, contact support]
 related:
   - user-guides/features/teacher/classroom/student-issues
@@ -28,30 +28,23 @@ You need at least one class. Without one the page tells you so and refuses to su
 ### Filling in the form
 
 1. In the teacher sidebar, select **Support**.
-2. **This issue applies to** — two choices only:
-
-   | Choice | Use it when |
-   | --- | --- |
-   | *(your active class)* | The problem is with a class: its payroll, store, rent, roster, attendance |
-   | My account (not class-specific) | Sign-in, your profile, billing, anything not tied to one class |
-
-   Only the class you are currently in is offered. If the problem is in a different class, switch to it first using **Switch Class**, then come back.
-
-3. Underneath, a grey line reads **We will know you as** and, for a class-scoped ticket, **We will know your class as**, each followed by a code. Those codes are how support identifies you. Quote them if you follow up by any other channel.
+2. The form shows your active class. Every ticket belongs to your seat in that class, including reports about a problem you encountered as a teacher. Switch class before opening the form if needed.
+3. Your seat and class references identify the ticket to support. The class name is shared only if you select its checkbox.
 4. **Issue Type** (required) — *General Support*, *Bug / Error*, or *Feature Request*.
 5. **Title** (required, 200 characters).
 6. **What happened?** (required, 2000 characters). The useful version names the page, what you did, and what appeared.
 7. **What did you expect to happen?** (optional, 1000 characters). Worth filling in for anything ambiguous — it is the difference between a bug report and a feature request.
 8. **Page URL** (optional). The path where it happened, like `/admin/students`.
-9. Select the submit button. It disables itself and shows *Submitting…* so a slow connection cannot send the ticket twice.
+9. Optionally select **I give permission to include the class name**. It starts unchecked. Your written report, page URL, IP address, and browser details are sent to support; this form does not automatically attach balances, transactions, or roster notes.
+10. Select the submit button. It disables itself and shows *Submitting…* so a slow connection cannot send the ticket twice.
 
 You get a confirmation that the ticket went to system administration, and the page reloads with it in the list.
 
 ### Reading My Tickets
 
-**My Tickets** shows your most recent 20, newest first, filtered to your active class — plus every account-scoped ticket regardless of which class you are in. Switching classes changes the list.
+**My Tickets** shows your most recent 20, newest first, filtered to your active class seat. Switching classes changes the list.
 
-Each entry shows the class label and join code it was filed under, the submitted date, the category, the first 220 characters of your description, and a status badge.
+Each entry shows the saved class label and class reference, the submitted date, the category, the first 220 characters of your description, and a status badge.
 
 The statuses a ticket moves through are **Open**, **Teacher review**, **Escalated to dev**, **Dev resolved**, **Teacher final review**, and **Closed**. See the caution below about how they are displayed.
 

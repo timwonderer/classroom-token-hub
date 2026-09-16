@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-IDEN-001 | 2.2 | 2026-07-10 | 2.1 | Constitutional |
+| DOM-IDEN-001 | 2.3 | 2026-09-15 | 2.2 | Constitutional |
 
 ---
 
@@ -74,7 +74,7 @@ A `Class` defines an isolated classroom universe. Every runtime actor, policy, o
 A `Seat` is the canonical runtime actor within a defined `Class`. It represents the entity that can engage in the classroom economy within the `Class`. A `Seat` represents a single member within the `Class` that is bound to exactly one authenticated `User`.
 
 ### `IdentityProfile`
-An `IdentityProfile` represents the human-facing display data associated with a `Seat` within a `Class`. Its primary function is ease of use and user experience. `IdentityProfile` SHALL NOT participate in authentication, authorization, ownership determination, canonical context construction, or business logic.
+An `IdentityProfile` represents the human-facing display data associated with a `Seat` within a `Class`. Its primary function is ease of use and user experience. `IdentityProfile` SHALL NOT participate in authentication, authorization, ownership determination, canonical context construction, or business logic. External hall-pass verification uses the display names to check for a same-day entry within a capability-authorized class scope. This does not resolve an economic actor or establish authority (INV-ARC-019 §X).
 
 Collectively, these four objects constitute the canonical identity model of Classroom Token Hub. No other object, legacy table, or compatibility bridge may originate identity or classroom participation.
 

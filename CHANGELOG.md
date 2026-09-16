@@ -8,6 +8,14 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Support
+
+- **Teacher-controlled diagnostic disclosure (2026-09-15)** — Added separate, unchecked permissions for balances, the reported transaction, recent transactions, the student's report, and the class name. Server-side projections enforce these choices on operator list and detail pages. Technical route diagnostics, IP address, and browser details remain available. Correlation packs are now persisted with ticket creation instead of discarded. Every ticket belongs to its originating seat and class; there is no account-level ticket scope. Captured values stay frozen, and database cascades remove the ticket and attached support rows when that seat is deleted. Roster notes are documented as encrypted, class-scoped teacher-entered context without assertions about their contents.
+
+### Identity
+
+- **Claim lifecycle and external hall-pass verification (2026-09-15)** — Clear temporary name hashes, roster fingerprints, and distinguishing codes when a student claims a seat. Recovery and name edits do not recreate them. Hall-pass verification uses capability-authorized, class-scoped profile names and same-day records. Additive roster imports always create new seats and resolve duplicate names only within the upload batch. A data migration clears older retained claim material. Targeted identity, recovery, deletion, and hall-pass tests passed, including rendered form accessibility checks.
+
 ### Documentation
 
 - **Public policy wording (2026-09-15)** — Removed internal audit narration and claims about unfinished controls from the district and privacy pages. The internal audit retains the findings for follow-up; the public pages describe account use, data handling, and support.

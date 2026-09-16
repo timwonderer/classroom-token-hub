@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-OPS-004 | 1.1 | 2026-09-06 | SPEC-OPS-003 v1.0 | Normative |
+| SPEC-OPS-004 | 1.2 | 2026-09-15 | SPEC-OPS-004 v1.1 | Normative |
 
 > [!NOTE]
 > Renumbered from `SPEC-OPS-003` on 2026-09-06. This document and
@@ -81,6 +81,10 @@ Two tabs over the single `Issue` record type:
 Issues are addressed by opaque reference, never by primary key, in both URLs and templates. Detail, start-review, and resolve actions operate on a single issue resolved from that reference.
 
 Issue records carry `actor_public_id` and `class_public_id`. The console reads across tenants by design — it is the one surface exempt from class scoping — and therefore MUST NOT surface identifying student or teacher data beyond those opaque references.
+
+Support views MUST apply DOM-SUP-001 §X per-category teacher permissions before
+constructing any operator-facing payload. Technical correlation diagnostics remain
+available; consent to disclose a frozen snapshot grants no live class authority.
 
 ### 6.4 Logs
 

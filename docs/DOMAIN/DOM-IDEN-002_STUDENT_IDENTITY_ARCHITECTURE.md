@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-IDEN-002 | 2.3 | 2026-07-10 | 2.2 | Constitutional |
+| DOM-IDEN-002 | 2.4 | 2026-09-15 | 2.3 | Constitutional |
 
 ---
 
@@ -199,7 +199,7 @@ When two or more students in the same class roster share the same name during a 
 4. Backend looks up the matching seat in that class.
 5. If exactly one seat matches, claim proceeds.
 6. If duplicate-name seats exist, dedupe code is required to disambiguate.
-7. On successful claim, the seat is bound to `user_id` and marked with `claimed_at`.
+7. On successful claim, the seat is bound to `user_id` and marked with `claimed_at`; clear claim first/last-name hashes, `roster_fingerprint`, and `dedupe_code` in the same transaction. The same cleanup applies to authenticated class binding. Recovery and display-name edits SHALL NOT regenerate claim artifacts.
 8. Credential setup activates login on `users`.
 9. Initialize `last_active_class_id` and `last_active_seat_id` to the newly bound class and seat context (per DOM-IDEN-006 §XIII, identity lifecycle documents define how these pointers are initialized).
 

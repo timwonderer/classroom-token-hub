@@ -125,37 +125,79 @@ the absence of names.
 
 ### 1. Claim retention and verification representation
 
-**Observed mismatch / disclosure correction:** credential activation and
-`classroom_setup.create_student_user_for_seat` retain roster-name hashes. The old
-public promise of erasing all claim material on completion is inaccurate.
+**Original observed mismatch / disclosure correction:** credential activation
+retained roster-name hashes despite the claim-completion deletion contract.
+Hall-pass verification and additive roster import also reused those hashes.
 
-**Normative conflict/ambiguity:** `FEAT-IDEN-001` §III.B.3 and §IV.3 require clearing
-claim hashes and the distinguishing code. `main.verify_hall_pass` currently uses
-the same hash columns. These are two uses of one representation in the current
-code, not evidence that hall-pass verification must inherently retain claim
-artifacts. A separately authorized verification representation might have a
-different lifecycle. This audit does not choose that design or declare one use
-intrinsically privacy-violating. Resolve the claim/lookup requirements under
-Identity authority before changing the code.
+**Disposition: remedied in prelaunch branch (user decision, 2026-09-15).** Successful claim clears both
+name hashes, the roster fingerprint, and the distinguishing code. Recovery uses
+the recovery-code flow, not a second claim. Additive imports create a new student
+for every accepted row; existing names are never a matching/deduplication source.
+Only duplicate names within the submitted batch require teacher resolution.
+Teacher and student name edits write IdentityProfile only.
 
-### 2. Roster notes, support payloads, and identity categories
+Hall-pass verification resolves join_code to class_id, validates the external
+capability for that class, and compares names in class-scoped IdentityProfiles.
+This is **not an exception to INV-ARC-019**: external verification of a same-day
+entry is not economic actor resolution. Disclosure remains scoped to supplied-name
+presence and same-day hall-pass metadata; no roster or historical disclosure.
 
-**Observed behavior / disclosure correction:** `IdentityProfile.notes` is an
-encrypted field accepted by roster provisioning. `issue_helpers.create_context_snapshot`
-records URL, IP address, user-agent, balances, and transaction context.
-`system_admin._issue_to_view` includes snapshot and submission content.
+Implementation is isolated on `codex/claim-identity-remediation`. A data migration
+clears retained material on already-bound student seats in existing development
+or test databases. This is prelaunch implementation work; no live-production
+remediation is involved.
 
-**Normative inventory question:** `INV-ARC-018` §VI does not list the encrypted
-notes field, and §VII prohibits PII in ungoverned/free-text columns. This needs a
-field-purpose/inventory reconciliation. The presence of the field does not prove
-that actual notes contain prohibited PII; no production content was inspected.
+**Validation:** 44 targeted tests passed across claim lifecycle, hall-pass
+verification, PII deletion, and student recovery. A final run passed 9 tests
+covering the migration, repeated same-name imports, profile-only name edits,
+same-day filtering, foreign-capability rejection, and rendered form accessibility.
+The migration test uses an isolated database fixture: running upgrade twice and
+downgrade retains the cleanup while preserving unclaimed and teacher rows.
+Compilation and `git diff --check` also passed. No full suite was run.
+Evidence: `pytest_result/20260916_pytest_test_claim_lifecycle_summary.md` and
+`pytest_result/20260916_pytest_test_claim_artifact_migration_summary.md`.
 
-**Disclosure conclusion:** classify names, technical identifiers, free text, and
-pseudonymous economic records separately. Opaque actor references do not sanitize
-free text, but seat-linked amounts do not become direct identifiers solely
-because the application can associate them with a student. The previous blanket
-PII/security-problem framing is withdrawn. A violation for a particular payload
-requires its field content, storage rule, and disclosure boundary to be established.
+### 2. Roster notes and teacher-authorized support disclosure
+
+**Disposition (2026-09-15): notes retained and governed; support disclosure and lifecycle remedied on the prelaunch branch.**
+`IdentityProfile.notes` is encrypted teacher-entered, class-scoped contextual
+information about a seat. It is free text. CTH does not inspect or classify its
+contents, and makes no claim about what it contains. The permitted-field inventory
+now expressly governs this existing field. It is not attached to support snapshots.
+
+Preserve the correlation pack, route information, IP address, and browser details.
+Require independent, unchecked teacher permissions to disclose balances, the
+reported transaction, recent transactions, the student's report, and the class
+name. Grants apply to one ticket's saved context, not live classroom authority.
+Server-side projections withhold unselected and unknown data from all operator
+surfaces. The original immutable student snapshot remains available to its teacher.
+Direct teacher submissions share the text the teacher submits; they no longer
+silently embed the class name and canonical class ID in that text. The existing
+correlation builder returned data without persisting it; submission now attaches
+that pack in the same transaction for both student and teacher tickets.
+
+**Lifecycle clarification:** captured values are frozen at submission and never
+refreshed during escalation or operator reads. All tickets, including teacher-submitted tickets, now reference their originating seat using its canonical
+public ID with database cascading deletion. Removing the seat/account removes
+the support issue and its pack/history/resolution rows; immutability does not
+exempt the snapshot from deletion. All tickets are seat-scoped and
+therefore class-scoped, including a teacher reporting a problem about themselves.
+The account-level scope selector has been removed; submission topic cannot remove
+or change canonical class scope.
+
+**Validation:** 25 targeted tests passed for disclosure, rendered consent controls,
+correlation persistence, seat/account deletion, and migration upgrade/downgrade.
+Three final checks passed for the teacher form and frozen class metadata after a
+class rename. Earlier targeted support/recovery-context tests also passed. The PII
+storage allowlist, compilation, and `git diff --check` passed. No full suite was run.
+Evidence: `pytest_result/20260916_pytest_test_support_permissions_summary_6.md`
+and `pytest_result/20260916_pytest_test_support_permissions_summary_7.md`.
+The originating-seat migration validates existing references; it does not guess
+identity, silently re-scope tickets, or delete rows to make constraints pass.
+
+This separates technical diagnostics, pseudonymous economic records, and
+unclassified free text. It does not classify all support data as direct PII or
+assert that diagnostic observation grants economic mutation authority.
 
 ### 3. Student recovery: separate representation, context, and consumption
 

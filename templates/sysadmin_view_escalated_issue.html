@@ -88,7 +88,7 @@
                     <div class="mb-3">
                         <h6 class="text-muted mb-2">Student's Original Report</h6>
                         <div class="bg-light p-3 rounded">
-                            <p class="mb-0">{{ issue.student_explanation }}</p>
+                            <p class="mb-0">{{ issue.student_explanation or 'The teacher has not shared the student’s report.' }}</p>
                         </div>
                     </div>
 
@@ -145,6 +145,11 @@
                     </h5>
                 </div>
                 <div class="card-body">
+                    <dl>
+                        <dt>Page URL</dt><dd>{{ issue.context_snapshot.page_url or 'Unavailable' }}</dd>
+                        <dt>IP address</dt><dd>{{ issue.context_snapshot.ip_address or 'Unavailable' }}</dd>
+                        <dt>Browser details</dt><dd>{{ issue.context_snapshot.user_agent or 'Unavailable' }}</dd>
+                    </dl>
                     {% if issue.context_snapshot.balances %}
                     <h6 class="text-muted mb-2">Balances at Time of Report</h6>
                     <div class="row mb-3">
@@ -184,6 +189,21 @@
                     </div>
                     {% endif %}
                     {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if issue.context_snapshot.recent_transactions %}
+            <div class="card shadow-sm mb-4">
+                <div class="card-header"><h5 class="mb-0">Recent Transactions Shared by the Teacher</h5></div>
+                <div class="card-body table-responsive">
+                    <table class="table table-sm">
+                        <caption>Transactions saved at the time of the report</caption>
+                        <thead><tr><th scope="col">ID</th><th scope="col">Amount</th><th scope="col">Description</th><th scope="col">Timestamp</th></tr></thead>
+                        <tbody>{% for transaction in issue.context_snapshot.recent_transactions %}
+                            <tr><td>{{ transaction.id }}</td><td>{{ transaction.amount }}</td><td>{{ transaction.description }}</td><td>{{ transaction.timestamp }}</td></tr>
+                        {% endfor %}</tbody>
+                    </table>
                 </div>
             </div>
             {% endif %}

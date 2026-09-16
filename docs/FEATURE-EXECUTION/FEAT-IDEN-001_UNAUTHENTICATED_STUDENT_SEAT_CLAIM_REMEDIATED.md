@@ -3,7 +3,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| FEAT-IDEN-001 | 2.0 | 2026-08-09 | 1.0 (non-compliant) | Normative | REMEDIATED |
+| FEAT-IDEN-001 | 2.1 | 2026-09-15 | 2.0 | Normative | REMEDIATED |
 
 ---
 
@@ -128,6 +128,7 @@ Per FEAT-IDEN-001 §IV (Invariants), PII on the roster seat SHALL be scrubbed:
    - Set `claim_first_name_hash = NULL`
    - Set `claim_last_name_hash = NULL`
    - Set `dedupe_code = NULL` (if used)
+   - Set `roster_fingerprint = NULL`
 
 **Rationale**: Once a seat is claimed, these hashes are no longer needed for lookup. Leaving them creates a PII liability. If a future password reset or recovery flow were to leak the roster, the hashes would still identify the student.
 
@@ -329,4 +330,4 @@ Revisions to this document SHALL:
 4. Maintain consistency with FEAT-CORE-000.
 5. Maintain consistency with INV-CORE-000.
 
-**This is version 2.0 of FEAT-IDEN-001. Version 1.0 (2026-04-23) is superseded and withdrawn due to constitutional non-compliance.**
+**This is version 2.1 of FEAT-IDEN-001. Version 1.0 (2026-04-23) is superseded and withdrawn due to constitutional non-compliance.**

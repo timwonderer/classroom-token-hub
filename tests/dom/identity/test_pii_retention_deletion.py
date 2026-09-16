@@ -34,8 +34,6 @@ def _assert_pii_is_present(seat: Seat) -> IdentityProfile:
     profile = IdentityProfile.query.filter_by(seat_id=seat.id).one()
     assert profile.first_name, "fixture seat has no display PII to retain or delete"
     assert profile.last_name
-    assert seat.claim_first_name_hash, "fixture seat has no claim hashes"
-    assert seat.claim_last_name_hash
     return profile
 
 
@@ -65,9 +63,13 @@ def test_seat_deletion_removes_the_identity_profile_in_the_same_transaction(clie
 def test_seat_deletion_removes_the_claim_verification_hashes(client):
     """The hashes live on `seats`, so their deletion is the row's deletion."""
     classroom = initialize("chemistry_p1", db)
-    seat = classroom.students[0].seat
+    from app.hash_utils import hash_username_lookup
+    from app.services.classroom_setup import create_roster_student_seat
+    with FEATContext("FEAT-IDEN-006", idempotency_key="arc018:unclaimed"):
+        seat = create_roster_student_seat(class_id=classroom.class_id, first_name="Pending", last_name="Student", claim_first_name_hash=hash_username_lookup("pending"), claim_last_name_hash=hash_username_lookup("student"))
     seat_id = seat.id
     _assert_pii_is_present(seat)
+    assert seat.claim_first_name_hash and seat.claim_last_name_hash
 
     with FEATContext("FEAT-IDEN-007", idempotency_key="arc018:claim-hash-delete"):
         delete_seat_with_profile(seat)
