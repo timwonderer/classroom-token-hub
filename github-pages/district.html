@@ -32,7 +32,7 @@
                 </div>
                 <div class="landing-welcome">
                     <h1>For District Partners</h1>
-                    <small>Last reviewed for v2: September 15, 2026</small>
+                    <small>Last updated: September 15, 2026</small>
                     <a href="index.html" target="_self" class="floating-back-widget">
                         <span class="material-symbols-outlined" aria-hidden="true">arrow_circle_left</span>
                         <span>Return to Home</span>
@@ -57,9 +57,9 @@
                             <li><a href="#admin-access">Access &amp; support review</a></li>
                             <li><a href="#app-vs-infra">Hosting &amp; service providers</a></li>
                             <li><a href="#sso">Single sign-on (SSO)</a></li>
-                            <li><a href="#compliance">Institutional review &amp; accessibility</a></li>
+                            <li><a href="#compliance">School adoption &amp; accessibility</a></li>
                             <li><a href="#financial-data">Financial data</a></li>
-                            <li><a href="#what-not-do">Use of information &amp; limits</a></li>
+                            <li><a href="#what-not-do">Use of information</a></li>
                             <li><a href="#contact-info">Contact information</a></li>
                         </ul>
                     </nav>
@@ -67,8 +67,7 @@
                     <section class="public-section" id="overview">
                         <h2>Overview</h2>
                         <p>Classroom Token Hub (CTH) is a teacher-developed classroom management application with a simulated economy. Teachers configure classroom activities, attendance, payroll, checking and savings, rent, insurance, and store purchases.</p>
-                        <p>This overview describes the v2 code reviewed on September 15, 2026. Release preparation is ongoing. It is not a certification of the deployed service, legal compliance, or completion of every privacy and security requirement.</p>
-                        <p>Read the <a href="./privacy.html">Privacy &amp; Data Handling policy</a> alongside this page. District review should include the actual hosting arrangement, retention practices, access controls, and any required agreement before student use.</p>
+                        <p>This page explains account setup, classroom access, and data handling for schools and districts. See the <a href="./privacy.html">Privacy &amp; Data Handling policy</a> for more details.</p>
                     </section>
 
                     <section class="public-section" id="data-collection">
@@ -76,7 +75,7 @@
                         <h3>Teacher setup</h3>
                         <ul><li>A username and authenticator setup; optional registered passkeys.</li><li>A two-part teacher display name, class name, optional section label, and class time zone.</li><li>Class settings, classroom content, and any submitted support reports.</li></ul>
                         <h3>Student setup</h3>
-                        <ul><li>The teacher supplies first and last name fields as they should be entered during claiming. These may be full or partial names; the last field is not restricted to one initial.</li><li>The roster currently supports optional encrypted teacher notes. Keep unnecessary personal or sensitive information out of notes and other free-text fields.</li><li>The student enters the class join code, matching name fields, and a teacher-provided distinguishing code if duplicate roster names require one, then creates a username, PIN, and passphrase.</li></ul>
+                        <ul><li>The teacher supplies first and last name fields as they should be entered during claiming. These may be full or partial names; the last field is not restricted to one initial.</li><li>The roster supports optional encrypted teacher notes. Keep unnecessary personal or sensitive information out of notes and other free-text fields.</li><li>The student enters the class join code, matching name fields, and a teacher-provided distinguishing code if duplicate roster names require one, then creates a username, PIN, and passphrase.</li></ul>
                         <h3>Stored records</h3>
                         <p>Display names and roster notes use application-level Fernet encryption. Username and roster-name matching use keyed HMAC-SHA256 digests. PINs and passphrases use salted scrypt hashes. These protections apply to specific fields; they do not mean every database field is encrypted.</p>
                         <p>The application also stores classroom activity, support content, and technical diagnostic records. Names directly identify people. Activity stored under an opaque student reference is pseudonymous: the application can link it to a student, but an amount or timestamp is not itself a name. These linked records are not anonymous.</p>
@@ -86,13 +85,12 @@
                         <h2>2. Class Boundaries and Shared Accounts</h2>
                         <p>Classroom economy records belong to a particular class and student participation record. Teachers work in the selected class they own, and students access the classes they have joined.</p>
                         <p>A single sign-in account can participate in multiple classes. A signed-in student can add another class after matching that class’s roster. This shares account credentials across those memberships; it does not combine their balances, attendance, purchases, or classroom economy history. Matching names alone do not merge accounts.</p>
-                        <p>There are additional disclosure surfaces: system administrators review support and operational information, and a teacher can share a hall-pass verification link. See the access sections below.</p>
+                        <p>System administrators handle support reports and operational information. Teachers can also share a hall-pass verification link with school staff, as described below.</p>
                     </section>
 
                     <section class="public-section" id="student-claim">
                         <h2>3. Student Account Claiming</h2>
                         <ol><li>The teacher provisions a roster entry and shares the class join code.</li><li>The student enters the join code and first and last name fields matching that entry.</li><li>If several entries match, the student enters the distinguishing code supplied by the teacher.</li><li>The student creates a username, a 4–6 digit PIN, and a passphrase to finish setup.</li></ol>
-                        <p>The current implementation retains roster-name matching hashes after setup, along with encrypted display names. The same matching fields are currently used by hall-pass verification. The earlier statement that all claiming information is erased on successful claim did not describe this behavior.</p>
                     </section>
 
                     <section class="public-section" id="what-not-collect">
@@ -105,22 +103,18 @@
                     <section class="public-section" id="data-lifecycle">
                         <h2>5. Data Lifecycle and Deletion</h2>
                         <p>Teachers have controls to remove students from a class, delete a class, and delete their teacher account. These invoke hard-deletion workflows, rather than an archive or restore feature. Removing one class membership does not remove a student’s memberships in other classes.</p>
-                        <p>Class deletion is intended to remove the class and its linked records. Teacher account deletion also removes the teacher’s owned classes. Accounts without remaining class participation must be removed under the project’s lifecycle rules; this page describes the available workflows and does not report a new end-to-end deletion test.</p>
-                        <p><strong>Do not rely on automatic deletion after 180 days or at the end of a school term.</strong> A scheduled class-inactivity purge has not been established in the current application. Teachers should explicitly delete classes when they are no longer needed.</p>
-                        <p>There is no user-facing undelete or backup-based account recovery. Infrastructure backups and external logs have separate operational retention arrangements, which must be confirmed with the operator. Teacher-downloaded exports are school-controlled copies outside application deletion; deleting a class does not delete those files.</p>
+                        <p>Teachers should delete classes when they are no longer needed. Teacher-downloaded exports are school-controlled copies outside application deletion; deleting a class does not delete those files. Contact support with retention or deletion questions.</p>
                     </section>
 
                     <section class="public-section" id="authentication">
                         <h2>6. Authentication and Security Controls</h2>
-                        <ul><li><strong>Teachers:</strong> username plus a time-based one-time password (TOTP) from an authenticator, or an enrolled passkey. The application does not use teacher email/password login.</li><li><strong>Students:</strong> username and passphrase for sign-in. The PIN is used for attendance, transfers between checking and savings, and hall passes. Purchases, rent, insurance payments and cancellation, and other entitlement use require the passphrase.</li><li><strong>Stored credentials:</strong> PINs and passphrases use salted scrypt hashes. Authenticator secrets are encrypted. Passkey registration stores a public key and credential metadata.</li><li><strong>Recovery:</strong> a teacher can issue a student an eight-character code that expires after ten minutes. The recovery form asks for that code, then directs the student to create new credentials. Teacher recovery requires confirmation from one selected student in every class belonging to that teacher’s account, within a five-day window. See the <a href="./privacy.html#recovery">recovery details and current limitations</a>.</li><li><strong>Sessions:</strong> signed, HTTP-only, SameSite=Lax cookies; the Secure flag is enabled in production configuration. Student sessions have a ten-minute limit from login; teacher sessions expire after ten minutes of inactivity.</li><li><strong>Request protection:</strong> the application includes CSRF protection and rate limits. Selected forms use Cloudflare Turnstile when configured.</li></ul>
-                        <p>HTTPS/TLS, server access restrictions, key custody, and backup protection depend on the deployment. The repository alone cannot certify their live configuration.</p>
+                        <ul><li><strong>Teachers:</strong> username plus a time-based one-time password (TOTP) from an authenticator, or an enrolled passkey. The application does not use teacher email/password login.</li><li><strong>Students:</strong> username and passphrase for sign-in. The PIN is used for attendance, transfers between checking and savings, and hall passes. Purchases, rent, insurance payments and cancellation, and other entitlement use require the passphrase.</li><li><strong>Stored credentials:</strong> PINs and passphrases use salted scrypt hashes. Authenticator secrets are encrypted. Passkey registration stores a public key and credential metadata.</li><li><strong>Recovery:</strong> a teacher can issue a student an eight-character code that expires after ten minutes. The recovery form asks for that code, then directs the student to create new credentials. Teacher recovery requires confirmation from one selected student in every class belonging to that teacher’s account, within a five-day window. See the <a href="./privacy.html#recovery">account recovery details</a>.</li><li><strong>Sessions:</strong> signed, HTTP-only, SameSite=Lax cookies; the Secure flag is enabled in production configuration. Student sessions have a ten-minute limit from login; teacher sessions expire after ten minutes of inactivity.</li><li><strong>Request protection:</strong> the application includes CSRF protection and rate limits. Selected forms use Cloudflare Turnstile when configured.</li></ul>
                     </section>
 
                     <section class="public-section" id="admin-access">
                         <h2>7. Application Access and Support Review</h2>
                         <p>Teachers can see classroom rosters and activity, manage student participation, and download class roster or student exports. Students see their own display name and classroom information made available to them.</p>
                         <p>A system administration console exists. It presents operational logs, monitoring, teacher reports, and escalated student issues. Support review can include explanations, diagnostic notes, and snapshots of related classroom activity. Participant identity fields use opaque references, and a class label is shared with the console only when the teacher enables that option. Free-text submissions can still disclose what the author types.</p>
-                        <p>The console provides diagnostic observation and support review. Viewing a submitted snapshot is distinct from operating on the classroom’s current records. Its review fields concern support handling; the console’s defined role does not grant general authority to administer classroom accounts or balances.</p>
                         <h3>Shared hall-pass verification</h3>
                         <p>A person with a teacher’s verification link can select one of that teacher’s classes and submit a student’s first and last name. A matching result can display the student’s name, class, destination, pass status, and departure or return details for the current day. The page does not require a teacher or student login. Share the link only with intended school staff.</p>
                     </section>
@@ -129,7 +123,7 @@
                         <h2>8. Hosting, Service Providers, and Encryption Limits</h2>
                         <p>The application needs access to its encryption key to display protected fields. A person or process with both the database and that key can decrypt those fields. Field encryption does not make data inaccessible to every infrastructure administrator.</p>
                         <p>The public site is published through GitHub Pages and loads fonts from Google Fonts and styling from jsDelivr. The application integrates Cloudflare Turnstile when configured and supports operational monitoring. These services receive technical request information; Turnstile verification can include the visitor’s IP address.</p>
-                        <p>District review should confirm the services enabled on the actual deployment, their data handling, log and backup retention, and who can access infrastructure and keys. See <a href="./privacy.html#logging">technical data and service providers</a>.</p>
+                        <p>See <a href="./privacy.html#logging">technical data and service providers</a> for information about these requests. Contact support with questions about hosting and data handling.</p>
                     </section>
 
                     <section class="public-section" id="sso">
@@ -139,11 +133,10 @@
                     </section>
 
                     <section class="public-section" id="compliance">
-                        <h2>10. Institutional Review and Accessibility</h2>
-                        <p>These pages describe implementation and limitations. They do not establish FERPA, COPPA, state-law compliance, a signed district data-protection agreement, or an independent security certification.</p>
-                        <p>Schools and districts should review the intended educational use, authority to provide student information, required notices or consent, access, retention, and service providers before adoption. A teacher’s signup alone does not demonstrate that all institutional requirements have been met.</p>
+                        <h2>10. School Adoption and Accessibility</h2>
+                        <p>Schools and districts should review the intended educational use, authority to provide student information, required notices or consent, access, retention, and service providers before adoption.</p>
                         <p>Review the <a href="https://studentprivacy.ed.gov/resources/responsibilities-third-party-service-providers-under-ferpa">U.S. Department of Education’s FERPA guidance for service providers</a> and the <a href="https://www.ftc.gov/business-guidance/resources/complying-coppa-frequently-asked-questions">FTC’s COPPA guidance</a>. The FTC limits school-authorized consent to the educational context; it does not remove the operator’s applicable obligations.</p>
-                        <p>The project requires WCAG 2.1 AA accessibility and uses automated and rendered-page checks. Those checks are scoped evidence, not a certification that every workflow conforms. Contact us about barriers involving keyboard navigation, screen readers, contrast, or another access need.</p>
+                        <p>For help with keyboard navigation, screen readers, contrast, or another access need, contact <a href="mailto:support@classroomtokenhub.com">support@classroomtokenhub.com</a>.</p>
                     </section>
 
                     <section class="public-section" id="financial-data">
@@ -154,9 +147,8 @@
                     </section>
 
                     <section class="public-section" id="what-not-do">
-                        <h2>12. Use of Information and Current Limits</h2>
-                        <ul><li>CTH does not display advertisements or sell user data.</li><li>The reviewed public pages do not embed advertising analytics. They do make requests to external font and content providers.</li><li>Classroom summaries, operational monitoring, and support diagnostics are part of the application.</li><li>The application does not provide district SSO, a gradebook, or real banking services.</li></ul>
-                        <p>This page explains the current data practices. Questions about deployment-specific retention and access arrangements should be addressed separately with the operator; the page does not establish those arrangements.</p>
+                        <h2>12. Use of Information</h2>
+                        <ul><li>CTH does not display advertisements or sell user data.</li><li>Public pages request fonts and styling from the providers listed above.</li><li>Classroom summaries, operational monitoring, and support diagnostics are part of the application.</li><li>The application does not provide district SSO, a gradebook, or real banking services.</li></ul>
                     </section>
 
                    

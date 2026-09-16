@@ -345,3 +345,23 @@ No backend code, deployment configuration, or authoritative specification change
   initial revision only; no new desktop/mobile screenshot claim is made here.
 - Runtime code and canonical specifications remain unchanged. The stale
   teacher-recovery FEAT is identified for reconciliation, not silently amended.
+
+### Public-copy scope correction
+
+At the user's direction, removed internal-review narration, prior-copy comparisons,
+release/test/certification commentary, and discussions of unfinished controls from
+both public pages. No replacement claim promises automatic inactivity purge,
+post-claim erasure, complete deletion closure, recovery-code protection, or
+verified infrastructure retention. Add such claims only after the corresponding
+behavior is corrected and verified. The findings and their classifications above
+remain internal evidence; omitting a public claim does not resolve a finding.
+Current collection and access disclosures (including support diagnostics, external
+providers, cookies, and school-controlled exports) remain factual public content.
+Earlier screenshots reflect previous copy, not this revision.
+
+Validation for this public-copy correction: targeted structural checks returned
+4 passed and 1 browser skip in sandbox; local Chromium retry of
+`tests/test_axe_compliance.py` returned 2 passed in 5.81s. All 37 relative links
+and fragment targets resolved; `git diff --check` passed. Results are recorded
+in `pytest_result/20260916_pytest_test_accessibility_summary.md` and
+`pytest_result/20260916_pytest_test_axe_compliance_summary.md` (UTC artifact date).

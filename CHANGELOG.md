@@ -10,6 +10,8 @@ and this project follows semantic versioning principles.
 
 ### Documentation
 
+- **Public policy wording (2026-09-15)** — Removed internal audit narration and claims about unfinished controls from the district and privacy pages. The internal audit retains the findings for follow-up; the public pages describe account use, data handling, and support.
+
 - **Public district and privacy descriptions reconciled with v2 code (2026-09-15)** — Corrected authentication, hashing, shared accounts, claim retention, recovery, deletion, administrative access, exports, hall-pass disclosure, cookies, and external-service claims. Both pages distinguish direct identifiers, pseudonymous records, support observation, and separate application/infrastructure retention. Review corrected the teacher-recovery finding: one student per class matches DOM-IDEN-003; the all-students FEAT wording is stale. The audit separates disclosure corrections, normative ambiguity, source-level control mismatches, and operational unknowns instead of treating them as equivalent defects. The evidence and launch review findings are recorded in `docs/TRACKING/PUBLIC_PRIVACY_DISTRICT_AUDIT_20260915.md`. Existing section links and layout are preserved; structural checks passed for both pages, and the rendered public-page axe audit passed. No new accessibility violations were found.
 
 ### Security
