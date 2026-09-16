@@ -32,7 +32,7 @@
                 </div>
                 <div class="landing-welcome">
                     <h1>Terms of Service</h1>
-                    <small>Last Updated: September 9, 2026</small>
+                    <small>Last Updated: September 16, 2026</small>
                     <a href="index.html" target="_self" class="floating-back-widget">
                         <span class="material-symbols-outlined" aria-hidden="true">arrow_circle_left</span>
                         <span>Return to Home</span>
@@ -66,7 +66,7 @@
                     <section class="public-section" id="summary">
                         <h2>Quick Summary</h2>
                         <p>By using Classroom Token Hub, you agree to use the app responsibly for educational purposes. This means keeping your login information safe, being respectful to others, and following your school’s rules. The app is provided as-is for educational use and for free, and we cannot make any guarantee that it will always be available. If we believe your account is being used improperly, we may suspend or terminate it without notice to protect other users on the platform.</p>
-                        <p><strong>For students:</strong> Your teacher chose this app for your class. If you have questions, please discuss it with your teacher. Because there are laws on protecting students' information, we cannot directly answer your questions.</p>
+                        <p><strong>For students:</strong> Your teacher chose this app for your class. If you have questions, please discuss it with your teacher. Your teacher or school is the first contact for classroom records, corrections, or removal.</p>
                         <p><strong>For teachers:</strong> By using this app, you confirm that you are allowed to use Classroom Token Hub under all applicable laws and district/school policies that have jurisdiction over your classroom.</p>
                     </section>
 
@@ -83,12 +83,12 @@
 
                     <section class="public-section" id="account-responsibilities">
                         <h2>3. Your Account Responsibilities</h2>
-                        <p>We worked hard to design this app to provide a good experience while protecting your privacy. Maintenance access is limited to system upkeep, and sensitive fields such as names and notes remain encrypted so maintainers cannot read them.</p>
-                        <p>Depending on your account type, you may need a password, PIN, passphrase, or two-factor authentication to sign in and protect important account actions. Keep these credentials private.</p>
-                        <p>If you lose access to your account, your teacher can issue a recovery code. Account recovery uses only your class join code and the recovery code; no personal information such as your name is required during recovery.</p>
+                        <p>Display names and roster notes are encrypted in storage and decrypted for authorized application views. Support reports and separately authorized classroom snapshots can be reviewed by support staff. See the <a href="privacy.html">Privacy &amp; Data Handling policy</a> for access and encryption details.</p>
+                        <p>Students sign in with a username and passphrase; a PIN is used for selected classroom actions. Teachers sign in with a username and authenticator code (TOTP), or an enrolled passkey. Keep your credentials private.</p>
+                        <p>Students can ask their teacher for a recovery code. Entering that code starts a time-limited reset session; no name or join code is required. Teacher recovery instead requires student confirmation from every owned class. See <a href="privacy.html#recovery">account recovery details</a>.</p>
                         <p>You can protect yourself by:</p>
                         <ul>
-                            <li><strong>Keep your credentials private:</strong> Do not share your PIN, passphrase, password, or authentication codes with anyone.</li>
+                            <li><strong>Keep your credentials private:</strong> Do not share sign-in credentials. Give a teacher-recovery confirmation code only to your teacher in person during the requested recovery process.</li>
                             <li><strong>You are responsible for your account:</strong> Any activity on your account is your responsibility, so keep your login information secure.</li>
                             <li><strong>Report security issues immediately:</strong> If someone else accesses your account or you notice suspicious activity, let your teacher know right away.</li>
                         </ul>
@@ -103,37 +103,18 @@
                             <li>Try to hack, disrupt, or interfere with the app or other users' accounts</li>
                             <li>Attempt to access parts of the system you're not supposed to see</li>
                         </ul>
-                        <p>Even though the people working on this app can't see your personal information, they can still block your account from accessing the app if they believe your actions are harmful to everyone else.</p>
+                        <p>Do not include unnecessary personal information in classroom content or support reports. Follow your school’s rules when exporting or sharing records.</p>
                     </section>
 
                     <section class="public-section" id="ownership">
                         <h2>5. Ownership and How You Can Use It</h2>
-                        <p><strong>Timothy Chang</strong> created and owns Classroom Token Hub. The app, its code, and all its features are protected by copyright and trademark laws in the United States and other countries.</p>
-                        <div class="alert alert-warning">
-                            <p>This app and its codebase are licensed under the <strong>PolyForm Noncommercial License 1.0.0</strong>.</p>
-                            <p><strong>What you can do:</strong></p>
-                            <ul>
-                                <li>You can use it free for educational purposes</li>
-                                <li>You can look at the source code and learn from it</li>
-                                <li>You can modify it for your own classroom</li>
-                            </ul>
-                            <p><strong>What you can't do:</strong></p>
-                            <ul>
-                                <li>You cannot use this app or its code for commercial purposes directly or use any part of it in a package or product meant for commercial use.</li>
-                                <li>You cannot change the license or try to re-license the app or its code under a different license.</li>
-                                <li>You cannot use this app or any part of its code for purposes that may financially benefit you or others.</li>
-                            </ul>
-                            <p><strong>In addition, if you are a school district or educational service agency:</strong></p>
-                            <ul>
-                                <li>You may not use this app or any part of its code to provide services to other schools or districts for a fee.</li>
-                                <li>You may not incorporate this app or any part of its code into a larger system or platform that is sold or licensed to other schools or districts.</li>
-                                <li>You may not misrepresent the app as your own work or claim ownership of it.</li>
-                            </ul>
-                        </div>
+                        <p>Classroom Token Hub is created by Timothy Chang. Its source code is available under the <a href="https://github.com/timwonderer/classroom-economy/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">PolyForm Noncommercial License 1.0.0 <span class="visually-hidden">(opens in a new tab)</span></a>.</p>
+                        <p>The license governs permitted use, modification, and distribution, including its provisions for educational institutions. Keep the required license and notices when distributing copies. Read the full license before modifying, redistributing, or operating your own deployment.</p>
                     </section>
 
                     <section class="public-section" id="suspension">
                         <h2>6. Account Termination</h2>
+                        <p>Teachers can delete their accounts or classes. Deleting the last student in a class also deletes that class; deleting the teacher’s final class deletes the teacher account. Inactive teacher accounts are deleted after 180 days without sign-in, or 30 days after creation if never signed in. These application deletions have no undelete option. Unclaim is a separate action that preserves the class participation record. See <a href="privacy.html#data-minimization">retention and deletion details</a>.</p>
                         <p>In very rare cases, we may need to terminate any accounts that could disrupt the normal operation of Classroom Token Hub. These actions may be taken without prior notice and are irreversible. Here are some potential reasons that could result in account termination:</p>
                         <ul>
                             <li>Violate these Terms of Service</li>
@@ -188,7 +169,7 @@
             </div>
             <div class="landing-footer-meta">
                 <p>&copy; <span id="current-year"></span> Classroom Token Hub. Licensed under PolyForm Noncommercial v1.0.0</p>
-                <p><em>This app is developed, operated, maintained, and self-funded by a full-time high school teacher. As such, we do not display advertisements, use third-party tracking tools, or collect information about you unless it is necessary for the operation of the platform.</em></p>
+                <p><em>Classroom Token Hub is developed and maintained by a classroom teacher. We do not display advertisements or sell user data. Hosting, security, and content-delivery services process technical request data; see the Privacy &amp; Data Handling policy for details.</em></p>
                 <p><a class="text-decoration-none text-white" href="mailto:support@classroomtokenhub.com">Need help? Reach us at support@classroomtokenhub.com</a></p>
             </div>
         </div>
