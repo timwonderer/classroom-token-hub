@@ -32,11 +32,11 @@
                 </div>
                 <div class="landing-welcome">
                     <h1>For District Partners</h1>
-                    <small>Last updated: September 15, 2026</small>
+                    <small>Last updated: September 16, 2026</small>
                     <a href="index.html" target="_self" class="floating-back-widget">
                         <span class="material-symbols-outlined" aria-hidden="true">arrow_circle_left</span>
                         <span>Return to Home</span>
-                    </a> 
+                    </a>
                 </div>
             </div>
         </section>
@@ -75,12 +75,12 @@
                         <h3>Teacher setup</h3>
                         <ul><li>A username and authenticator setup; optional registered passkeys.</li><li>A two-part teacher display name, class name, optional section label, and class time zone.</li><li>Class settings, classroom content, and any submitted support reports.</li></ul>
                         <h3>Student setup</h3>
-                        <ul><li>The teacher supplies first and last name fields as they should be entered during claiming. These may be full or partial names; the last field is not restricted to one initial.</li>
-                        <div class="card card-header text-white fw-semibold mt-2" style="background-color:var(--primary);border-radius:10px 10px 0px 0px"><p class="mb-0 mt-0"><span class="material-symbols-outlined" style="vertical-align: middle; margin-right: 0.5rem;">privacy_tip</span>Use non-identifying names for greater privacy</p></div>
+                        <ul><li>The teacher supplies first and last name fields as they should be entered during claiming. These may be full or partial names; the last field is not restricted to one initial.
+                        <div class="card card-header text-white fw-semibold mt-2" style="background-color:var(--primary);border-radius:10px 10px 0px 0px"><p class="mb-0 mt-0"><span aria-hidden="true" class="material-symbols-outlined" style="vertical-align: middle; margin-right: 0.5rem;">privacy_tip</span>Choose classroom names with privacy in mind</p></div>
                         <div class="card card-body mb-2" style="border-radius:0px 0px 10px 10px" >
-                            While these fields are labeled as first name and last name, teachers can choose to use any identifier, such as nicknames, to further preserve student privacy. 
+                            While these fields are labeled as first name and last name, teachers can use agreed classroom names or nicknames. Students must enter the values the teacher supplied; a nickname does not make linked classroom records anonymous.
                         </div>
-                            <li>The roster supports optional encrypted teacher notes. Keep unnecessary personal or sensitive information out of notes and other free-text fields.</li><li>The student enters the class join code, matching name fields, and a teacher-provided distinguishing code if duplicate roster names require one, then creates a username, PIN, and passphrase.</li></ul>
+                        </li><li>The roster supports optional encrypted teacher notes. Keep unnecessary personal or sensitive information out of notes and other free-text fields.</li><li>The student enters the class join code, matching name fields, and a teacher-provided distinguishing code if duplicate roster names require one, then creates a username, PIN, and passphrase.</li></ul>
                         <h3>Stored records</h3>
                         <p>Display names and roster notes use application-level Fernet encryption. Username and roster-name matching use keyed HMAC-SHA256 digests. PINs and passphrases use salted scrypt hashes. These protections apply to specific fields; they do not mean every database field is encrypted.</p>
                         <p>The application also stores classroom activity, support content, and technical diagnostic records. Names directly identify people. Activity stored under an opaque student reference is pseudonymous: the application can link it to a student, but an amount or timestamp is not itself a name. These linked records are not anonymous.</p>
@@ -95,6 +95,7 @@
 
                     <section class="public-section" id="student-claim">
                         <h2>3. Student Account Claiming</h2>
+                        <p>Claim-matching hashes and distinguishing codes are cleared after a successful claim. Display names remain encrypted for classroom use. Importing a roster creates new entries; matching an already-claimed student’s name does not merge or update their entry.</p>
                         <ol><li>The teacher provisions a roster entry and shares the class join code.</li><li>The student enters the join code and first and last name fields matching that entry.</li><li>If several entries match, the student enters the distinguishing code supplied by the teacher.</li><li>The student creates a username, a 4–6 digit PIN, and a passphrase to finish setup.</li></ol>
                     </section>
 
@@ -107,19 +108,22 @@
 
                     <section class="public-section" id="data-lifecycle">
                         <h2>5. Data Lifecycle and Deletion</h2>
-                        <p>Teachers have controls to remove students from a class, delete a class, and delete their teacher account. These invoke hard-deletion workflows, rather than an archive or restore feature. Removing one class membership does not remove a student’s memberships in other classes.</p>
-                        <p>Teachers should delete classes when they are no longer needed. Teacher-downloaded exports are school-controlled copies outside application deletion; deleting a class does not delete those files. Contact support with retention or deletion questions.</p>
+                        <p><strong>Delete a student:</strong> permanently removes that class participation record and its related application data. Other class memberships remain. Deleting the last student in a class also deletes the class; if it was the teacher’s last class, the teacher account is deleted too. The deletion dialog warns about these consequences.</p>
+                        <p><strong>Unclaim a student:</strong> disconnects the sign-in account while preserving the class participation record, balance, activity, and items for the next claimant. The teacher re-enters the names to use for claiming. Use this when the wrong account claimed a roster entry or a student needs to consolidate accounts. A detached student account is deleted if it has no other class memberships.</p>
+                        <p><strong>Delete a class or teacher account:</strong> deleting a class removes its related application records; deleting a teacher account deletes all of its classes. These actions have no archive or undelete option.</p>
+                        <p><strong>Inactive teacher accounts:</strong> accounts are automatically deleted after 180 days without a successful sign-in, or after 30 days from creation if they have never signed in. Their classes are deleted through the same account-deletion process. Class activity does not reset this sign-in clock.</p>
+                        <p>Downloaded exports remain under the school’s control and are not removed by application deletion. Contact support about retention of infrastructure backups or logs.</p>
                     </section>
 
                     <section class="public-section" id="authentication">
                         <h2>6. Authentication and Security Controls</h2>
-                        <ul><li><strong>Teachers:</strong> username plus a time-based one-time password (TOTP) from an authenticator, or an enrolled passkey. The application does not use teacher email/password login.</li><li><strong>Students:</strong> username and passphrase for sign-in. The PIN is used for attendance, transfers between checking and savings, and hall passes. Purchases, rent, insurance payments and cancellation, and other entitlement use require the passphrase.</li><li><strong>Stored credentials:</strong> PINs and passphrases use salted scrypt hashes. Authenticator secrets are encrypted. Passkey registration stores a public key and credential metadata.</li><li><strong>Recovery:</strong> a teacher can issue a student an eight-character code that expires after ten minutes. The recovery form asks for that code, then directs the student to create new credentials. Teacher recovery requires confirmation from one selected student in every class belonging to that teacher’s account, within a five-day window. See the <a href="./privacy.html#recovery">account recovery details</a>.</li><li><strong>Sessions:</strong> signed, HTTP-only, SameSite=Lax cookies; the Secure flag is enabled in production configuration. Student sessions have a ten-minute limit from login; teacher sessions expire after ten minutes of inactivity.</li><li><strong>Request protection:</strong> the application includes CSRF protection and rate limits. Selected forms use Cloudflare Turnstile when configured.</li></ul>
+                        <ul><li><strong>Teachers:</strong> username plus a time-based one-time password (TOTP) from an authenticator, or an enrolled passkey. The application does not use teacher email/password login.</li><li><strong>Students:</strong> username and passphrase for sign-in. The PIN is used for attendance, transfers between checking and savings, and hall passes. Purchases, rent, insurance payments and cancellation, and other entitlement use require the passphrase.</li><li><strong>Stored credentials:</strong> PINs and passphrases use salted scrypt hashes. Authenticator secrets are encrypted. Passkey registration stores a public key and credential metadata.</li><li><strong>Recovery:</strong> a teacher can issue a student an eight-character code that expires after ten minutes. The recovery form asks for that code, then directs the student to create new credentials. Teacher recovery requires one valid student confirmation per class. CTH selects up to two students in each class and keeps their identities hidden from the teacher; recipients stay fixed for the five-day attempt, and each code lasts 30 minutes. See the <a href="./privacy.html#recovery">account recovery details</a>.</li><li><strong>Sessions:</strong> signed, HTTP-only, SameSite=Lax cookies; the Secure flag is enabled in production configuration. Student sessions have a ten-minute limit from login; teacher sessions expire after ten minutes of inactivity.</li><li><strong>Request protection:</strong> the application includes CSRF protection and rate limits. Selected forms use Cloudflare Turnstile when configured.</li></ul>
                     </section>
 
                     <section class="public-section" id="admin-access">
                         <h2>7. Application Access and Support Review</h2>
                         <p>Teachers can see classroom rosters and activity, manage student participation, and download class roster or student exports. Students see their own display name and classroom information made available to them.</p>
-                        <p>A system administration console exists. It presents operational logs, monitoring, teacher reports, and escalated student issues. Support review can include explanations, diagnostic notes, and snapshots of related classroom activity. Participant identity fields use opaque references, and a class label is shared with the console only when the teacher enables that option. Free-text submissions can still disclose what the author types.</p>
+                        <p>Support staff can review submitted teacher reports and escalated student issues. Reports include technical diagnostics such as the page URL, route and request correlation information, IP address, and browser details. Teachers choose separately whether to include balances, the reported transaction, recent transactions, student report text, and the class label. These options are not selected by default. The submitted snapshot is fixed: support does not refresh it from live classroom records. Every ticket belongs to a class participation record, including a teacher’s own ticket, and deletion of that record removes the associated ticket. Free-text submissions contain what the author types; omit unnecessary personal details.</p>
                         <h3>Shared hall-pass verification</h3>
                         <p>A person with a teacher’s verification link can select one of that teacher’s classes and submit a student’s first and last name. A matching result can display the student’s name, class, destination, pass status, and departure or return details for the current day. The page does not require a teacher or student login. Share the link only with intended school staff.</p>
                     </section>
@@ -156,7 +160,7 @@
                         <ul><li>CTH does not display advertisements or sell user data.</li><li>Public pages request fonts and styling from the providers listed above.</li><li>Classroom summaries, operational monitoring, and support diagnostics are part of the application.</li><li>The application does not provide district SSO, a gradebook, or real banking services.</li></ul>
                     </section>
 
-                   
+
 
                     <section class="public-section" id="contact-info">
                         <h2>Contact Information</h2>
@@ -199,7 +203,7 @@
             }
         })();
     </script>
-    
+
 
 </body>
 </html>

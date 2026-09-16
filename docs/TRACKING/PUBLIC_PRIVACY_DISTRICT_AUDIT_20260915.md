@@ -714,3 +714,45 @@ The separate district.html edit remains untouched. No full suite, interactive
 browser assessment, commit, deployment or production migration was performed.
 This closes initial signup staging only; it does not certify all other cookie
 contents, authenticated credential changes or hosting configuration.
+
+## All published public pages refreshed (2026-09-16)
+
+Scope: every HTML page currently shipped in github-pages/: index, district,
+privacy and terms. The unmerged launch/v2-landing-pages branch is not a published
+artifact and was not edited. The prior district nickname edit was committed
+separately as effd7a208 before this refresh.
+
+Reconciled public copy with the implemented claim cleanup, Seat-owned lifecycle,
+Unclaim, 180-day teacher sign-in retention/30-day never-signed-in retention,
+single-use student reset sessions, fixed hidden teacher recovery recipients and
+30-minute codes, encrypted signup staging, and immutable support snapshots with
+independent unchecked disclosure permissions. Public pages describe user behavior;
+internal audit conclusions remain here.
+
+Terms no longer promises maintainers cannot decrypt names or that student
+recovery uses a join code, calls TOTP two-factor authentication, or claims laws
+prevent answering students. Its source-license section links to the repository's
+actual LICENSE rather than inventing blanket financial-benefit and institution
+restrictions beyond that text. Existing governing-law, warranty and liability
+clauses were not substantively revised; this is not legal certification.
+
+The home page stays prelaunch. Removed an unverified physical-database-erasure
+claim, updated account-transition wording, and aligned provider/advertising
+footer disclosures across all pages. Preserved the nickname callout while
+correcting its list markup and distinguishing nicknames from anonymity.
+
+Authority/evidence: INV-ARC-018/019/020; DOM-IDEN-002/003/005 and DOM-SUP-001;
+FEAT-IDEN-006/007/101/103–106; teacher_lifecycle, teacher_signup_feat,
+teacher_recovery_feat, support_disclosure, main.verify_hall_pass, session_lifetime,
+auth, and LICENSE. No production infrastructure state was inferred.
+
+Verification: existing public-page inventory and axe checks passed (2 tests,
+5.94 seconds; pytest_result/20260916_pytest_test_axe_compliance_summary_1.md).
+Additional installed-Playwright rendering checked all four pages at 1440 and
+390 pixels: zero WCAG 2 A/AA axe violations and no horizontal overflow in all
+eight renders. District desktop and Terms mobile screenshots were visually
+inspected. Local links/fragments, unique IDs and git diff whitespace checks passed.
+The CLI wrapper could not reach npm, so the installed Python Playwright browser
+was used. Local screenshots/results are in /tmp/cth-public-refresh-20260916 and
+are not added to the PR. No full suite, deployment or whole-site accessibility
+certification was performed.
