@@ -152,25 +152,20 @@ def test_unclaim_page_exposes_distinct_action_and_blank_required_names(client, a
 
 
 def test_unclaim_revokes_previous_teacher_recovery_confirmation(client, app):
-    from datetime import timedelta
-    from app.utils.canonical_temporal_resolver import utc_now
-    from app.services.recovery_service import (
-        create_recovery_request_with_seats, get_recovery_request_by_id,
-        list_recovery_codes_for_request,
-    )
-    sibling = initialize('ap_csp_p3', app)
+    from app.feats.teacher_recovery_feat import begin_attempt, prove_class, select_class_recipients
+    from app.services.recovery_service import get_recovery_request_by_id, list_recovery_codes_for_request
     classroom = initialize_as_teacher('chemistry_p1', client, app)
-    seat = classroom.students[0].seat
-    with FEATContext('FEAT-TEST-SETUP', idempotency_key='unclaim:recovery'):
-        affected = create_recovery_request_with_seats(classroom.teacher_user.id,
-            [(seat.id, classroom.class_id)], utc_now() + timedelta(hours=1))
-        untouched = create_recovery_request_with_seats(sibling.teacher_user.id,
-            [(sibling.students[0].seat.id, sibling.class_id)], utc_now() + timedelta(hours=1))
+    common = dict(correlation_id='unclaim-recovery', idempotency_key='unclaim:recovery')
+    attempt = begin_attempt(join_code=classroom.join_code, **common)
+    assert prove_class(request_id=attempt['id'], attempt_nonce=attempt['nonce'],
+        join_code=classroom.join_code, username=classroom.students[0].username, **common)
+    assert select_class_recipients(request_id=attempt['id'], attempt_nonce=attempt['nonce'], class_id=classroom.class_id, **common)
+    selected = list_recovery_codes_for_request(attempt['id'])
+    seat = db.session.get(Seat, selected[0].seat_id)
     assert _unclaim(client, seat).status_code == 200
-    assert get_recovery_request_by_id(affected.id).status == 'cancelled'
-    assert list_recovery_codes_for_request(affected.id) == []
-    assert get_recovery_request_by_id(untouched.id).status == 'pending'
-    assert len(list_recovery_codes_for_request(untouched.id)) == 1
+    assert get_recovery_request_by_id(attempt['id']).status == 'pending'
+    remaining = list_recovery_codes_for_request(attempt['id'])
+    assert len(remaining) == 1 and remaining[0].seat_id == selected[1].seat_id
 
 
 def test_unclaim_route_claim_stores_new_generation_and_rejects_stale_session(client, app):

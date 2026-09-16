@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import sqlalchemy as sa
 
 from app.extensions import db
+from app.utils.encryption import decrypt_totp
 
 
 @dataclass
@@ -49,9 +50,9 @@ def _request_row_to_view(row: sa.Row) -> RecoveryRequestView:
         created_at=row.created_at,
         expires_at=row.expires_at,
         completed_at=row.completed_at,
-        partial_codes=row.partial_codes,
+        partial_codes=[decrypt_totp(value) for value in row.partial_codes] if row.partial_codes else None,
         resume_pin_hash=row.resume_pin_hash,
-        resume_new_username=row.resume_new_username,
+        resume_new_username=decrypt_totp(row.resume_new_username) if row.resume_new_username else None,
     )
 
 
@@ -69,7 +70,7 @@ def _code_row_to_view(row: sa.Row) -> RecoveryCodeView:
     )
 
 
-def get_pending_recovery_code_for_seat(seat_id: int, now_utc: datetime) -> RecoveryCodeView | None:
+def get_pending_recovery_code_for_seat(seat_id: int, now_utc: datetime, *, class_id: str) -> RecoveryCodeView | None:
     requests, codes = _tables()
     stmt = (
         sa.select(
@@ -86,10 +87,13 @@ def get_pending_recovery_code_for_seat(seat_id: int, now_utc: datetime) -> Recov
         .select_from(codes.join(requests, requests.c.id == codes.c.recovery_request_id))
         .where(
             codes.c.seat_id == seat_id,
-            codes.c.dismissed.is_(False),
-            codes.c.code_hash.is_(None),
+            codes.c.class_id == class_id,
             requests.c.status == "pending",
             requests.c.expires_at > now_utc,
+            ~sa.exists(sa.select(1).select_from(db.metadata.tables['recovery_class_challenges']).where(
+                db.metadata.tables['recovery_class_challenges'].c.recovery_request_id == requests.c.id,
+                db.metadata.tables['recovery_class_challenges'].c.class_id == codes.c.class_id,
+                db.metadata.tables['recovery_class_challenges'].c.satisfied_round == requests.c.submission_round)),
         )
         .order_by(codes.c.id.asc())
         .limit(1)
@@ -98,7 +102,7 @@ def get_pending_recovery_code_for_seat(seat_id: int, now_utc: datetime) -> Recov
     return _code_row_to_view(row) if row else None
 
 
-def get_recovery_code_for_seat(code_id: int, seat_id: int) -> RecoveryCodeView | None:
+def get_recovery_code_for_seat(code_id: int, seat_id: int, *, class_id: str) -> RecoveryCodeView | None:
     requests, codes = _tables()
     stmt = (
         sa.select(
@@ -116,24 +120,12 @@ def get_recovery_code_for_seat(code_id: int, seat_id: int) -> RecoveryCodeView |
         .where(
             codes.c.id == code_id,
             codes.c.seat_id == seat_id,
+            codes.c.class_id == class_id,
         )
         .limit(1)
     )
     row = db.session.execute(stmt).first()
     return _code_row_to_view(row) if row else None
-
-
-def set_recovery_code_verified(code_id: int, code_hash: str, verified_at: datetime) -> None:
-    _requests, codes = _tables()
-    stmt = (
-        sa.update(codes)
-        .where(codes.c.id == code_id)
-        .values(
-            code_hash=code_hash,
-            verified_at=verified_at,
-        )
-    )
-    db.session.execute(stmt)
 
 
 def dismiss_recovery_code(code_id: int) -> None:
@@ -156,40 +148,6 @@ def get_active_recovery_request_for_user(user_id: int, now_utc: datetime) -> Rec
     )
     row = db.session.execute(stmt).first()
     return _request_row_to_view(row) if row else None
-
-
-def create_recovery_request_with_seats(
-    user_id: int,
-    seat_class_pairs: list[tuple[int, str]],
-    expires_at: datetime,
-) -> RecoveryRequestView:
-    requests, codes = _tables()
-    insert_stmt = (
-        sa.insert(requests)
-        .values(
-            user_id=user_id,
-            status="pending",
-            expires_at=expires_at,
-        )
-        .returning(requests.c.id)
-    )
-    request_id = db.session.execute(insert_stmt).scalar_one()
-    if seat_class_pairs:
-        db.session.execute(
-            sa.insert(codes),
-            [
-                {
-                    "recovery_request_id": request_id,
-                    "seat_id": seat_id,
-                    "class_id": class_id,
-                }
-                for seat_id, class_id in seat_class_pairs
-            ],
-        )
-    created = get_recovery_request_by_id(request_id)
-    if created is None:
-        raise RuntimeError("Failed to create recovery request row")
-    return created
 
 
 def get_recovery_request_by_id(recovery_request_id: int) -> RecoveryRequestView | None:
@@ -234,38 +192,6 @@ def invalidate_recovery_codes(recovery_request_id: int) -> int:
     return result.rowcount or 0
 
 
-def mark_recovery_request_verified(recovery_request_id: int, completed_at: datetime) -> None:
-    requests, _codes = _tables()
-    stmt = (
-        sa.update(requests)
-        .where(requests.c.id == recovery_request_id)
-        .values(
-            status="verified",
-            completed_at=completed_at,
-        )
-    )
-    db.session.execute(stmt)
-
-
-def save_recovery_progress(
-    recovery_request_id: int,
-    partial_codes: list[str],
-    resume_pin_hash: str,
-    resume_new_username: str,
-) -> None:
-    requests, _codes = _tables()
-    stmt = (
-        sa.update(requests)
-        .where(requests.c.id == recovery_request_id)
-        .values(
-            partial_codes=partial_codes,
-            resume_pin_hash=resume_pin_hash,
-            resume_new_username=resume_new_username,
-        )
-    )
-    db.session.execute(stmt)
-
-
 def find_recovery_request_by_resume_pin(resume_pin_hash: str, now_utc: datetime) -> RecoveryRequestView | None:
     requests, _codes = _tables()
     stmt = (
@@ -276,10 +202,10 @@ def find_recovery_request_by_resume_pin(resume_pin_hash: str, now_utc: datetime)
             requests.c.expires_at > now_utc,
         )
         .order_by(requests.c.id.desc())
-        .limit(1)
+        .limit(2)
     )
-    row = db.session.execute(stmt).first()
-    return _request_row_to_view(row) if row else None
+    rows = db.session.execute(stmt).all()
+    return _request_row_to_view(rows[0]) if len(rows) == 1 else None
 
 
 def delete_recovery_rows_for_user(user_id: int) -> None:
@@ -299,10 +225,5 @@ def delete_recovery_codes_for_seat(seat_id: int) -> None:
 
 
 def invalidate_recovery_participation_for_seat(seat_id: int) -> None:
-    """Unclaim revokes the previous claimant's unfinished teacher confirmation."""
-    requests, codes = _tables()
-    affected = sa.select(codes.c.recovery_request_id).where(codes.c.seat_id == seat_id)
-    db.session.execute(sa.update(requests).where(requests.c.id.in_(affected),
-        requests.c.status == "pending").values(status="cancelled", partial_codes=None,
-        resume_pin_hash=None, resume_new_username=None))
+    """Revoke this recipient only. Never reroll; accepted class proof survives."""
     delete_recovery_codes_for_seat(seat_id)

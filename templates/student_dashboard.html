@@ -82,8 +82,7 @@
         <span class="material-symbols-outlined fs-3 text-info me-3" aria-hidden="true">security</span>
         <div class="flex-grow-1">
             <h3 class="alert-heading h5 fw-bold mb-2">Account Recovery Request</h3>
-            <p class="mb-2">Your teacher is trying to recover their account and needs your help to verify their
-                identity.</p>
+            <p class="mb-2">CTH randomly selected you to help with teacher account recovery. Give a code in person only if your teacher is currently with your class.</p>
             <p class="mb-3 small text-muted">
                 <span class="material-symbols-outlined fs-6 align-text-bottom" aria-hidden="true">schedule</span>
                 Expires on {{ pending_recovery_code.recovery_request.expires_at.strftime('%B %d, %Y at %I:%M %p') }}
@@ -94,10 +93,7 @@
                     <span class="material-symbols-outlined fs-6 align-bottom me-1" aria-hidden="true">verified_user</span>
                     Help Verify Identity
                 </a>
-                <form method="POST" action="{{ url_for('student.dismiss_recovery', code_id=pending_recovery_code.id) }}" class="d-inline">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="btn btn-outline-secondary btn-sm">Dismiss for now</button>
-                </form>
+
             </div>
         </div>
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>

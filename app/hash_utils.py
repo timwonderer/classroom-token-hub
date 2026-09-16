@@ -107,8 +107,8 @@ def hash_password(value: str) -> str:
     converting it into a credential-invalidating one; INV-ARC-019 §VI records
     that reasoning as settled.
 
-    Used for `User.pin_hash`, `User.passphrase_hash`, and
-    `StudentRecoveryCode.code_hash`.
+    Used for `User.pin_hash` and `User.passphrase_hash`. Teacher-recovery
+    confirmation codes use their separate capability-verifier contract.
     """
 
     return generate_password_hash(value, method=PASSWORD_KDF)

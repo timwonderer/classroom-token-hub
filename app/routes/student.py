@@ -62,7 +62,6 @@ from app.utils.economy_policy import (
     resolve_feature_class,
     resolve_feature_class_for_class,
 )
-from app.hash_utils import hash_hmac
 from app.access import (
     AccessScopeDenied,
     resolve_scope,
@@ -112,7 +111,6 @@ from app.services.recovery_service import (
     dismiss_recovery_code as dismiss_recovery_code_row,
     get_pending_recovery_code_for_seat,
     get_recovery_code_for_seat,
-    set_recovery_code_verified,
 )
 from app.services.classroom_setup import create_student_user_for_seat
 from app.feats.base import requires_feat_context, FEATContext
@@ -1034,7 +1032,7 @@ def dashboard():
     feature_settings = get_feature_settings_for_student()
 
     # --- Check for pending recovery request ---
-    pending_recovery_code = get_pending_recovery_code_for_seat(student.id, sle_now)
+    pending_recovery_code = get_pending_recovery_code_for_seat(student.id, sle_now, class_id=student.class_id)
 
     # --- Calculate weekly/monthly analytics ---
     from app.models import AttendanceSession as _AttSession
@@ -3626,14 +3624,9 @@ def verify_recovery(code_id):
     student = db.session.get(Seat, context.seat_id) if context and getattr(context, "seat_id", None) else None
 
     # Get the recovery code request
-    recovery_code = get_recovery_code_for_seat(code_id, student.id)
+    recovery_code = get_recovery_code_for_seat(code_id, student.id, class_id=context.class_id) if student else None
     if recovery_code is None:
         flash("Invalid recovery request.", "error")
-        return redirect(url_for('student.dashboard'))
-
-    # Check if already verified
-    if recovery_code.code_hash:
-        flash("You have already verified this recovery request.", "info")
         return redirect(url_for('student.dashboard'))
 
     # Check if expired
@@ -3662,20 +3655,15 @@ def verify_recovery(code_id):
                                  recovery_code=recovery_code,
                                  student=student)
 
-        # Generate 6-digit recovery code using cryptographically secure randomness
-        code = ''.join([str(secrets.randbelow(10)) for _ in range(6)])
-
-        # Hash and store the code. FEAT-IDEN-002 is HIGH blast radius and requires an
-        # idempotency_key, so it cannot ride the bare @requires_feat_context route
-        # decorator (which passes no key and fails fatally on entry). Open the FEAT inline
-        # with a deterministic key.
-        verified_at = utc_now()
-        with FEATContext("FEAT-IDEN-002", idempotency_key=f"feat:iden-002:verify-recovery:{code_id}"):
-            set_recovery_code_verified(code_id, hash_hmac(code.encode(), b''), verified_at)
-            recovery_code.code_hash = "verified"
-            recovery_code.verified_at = verified_at
-
-        current_app.logger.info(f"Student {student.id} verified recovery request {recovery_code.recovery_request_id}")
+        from app.feats.teacher_recovery_feat import issue_confirmation
+        code = issue_confirmation(request_id=recovery_code.recovery_request_id,
+            code_id=code_id, class_id=context.class_id, seat_id=student.id, principal_id=user.id, passphrase=passphrase,
+            correlation_id=f"teacher-recovery-confirmation:{code_id}",
+            idempotency_key=f"teacher-recovery:issue:{code_id}")
+        if code is None:
+            flash("Recovery confirmation is no longer available.", "error")
+            return redirect(url_for('student.dashboard'))
+        recovery_code.code_hash = "generated"
 
         return render_template('student_verify_recovery.html',
                              recovery_code=recovery_code,
@@ -3698,7 +3686,7 @@ def dismiss_recovery(code_id):
     student = db.session.get(Seat, context.seat_id) if context and getattr(context, "seat_id", None) else None
 
     # Get the recovery code request
-    recovery_code = get_recovery_code_for_seat(code_id, student.id)
+    recovery_code = get_recovery_code_for_seat(code_id, student.id, class_id=context.class_id) if student else None
     if recovery_code is None:
         flash("Invalid recovery request.", "error")
         return redirect(url_for('student.dashboard'))
