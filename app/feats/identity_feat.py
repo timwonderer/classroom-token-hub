@@ -338,6 +338,10 @@ def activate_student_credentials(
                 error_message="That username is already taken. Please go back and choose another word.",
             )
 
+    seat.claim_first_name_hash = None
+    seat.claim_last_name_hash = None
+    seat.roster_fingerprint = None
+    seat.dedupe_code = None
     db.session.flush()
     return CredentialSetupResult(success=True, user_id=user.id)
 
@@ -589,7 +593,65 @@ def bind_authenticated_student_to_class(
     # Step 6: Bind seat to authenticated user
     matched_seat.user_id = user_id
     matched_seat.claimed_at = utc_now()
+    matched_seat.claim_first_name_hash = None
+    matched_seat.claim_last_name_hash = None
+    matched_seat.roster_fingerprint = None
+    matched_seat.dedupe_code = None
 
     db.session.flush()
 
     return ClassBindingResult(success=True, seat_id=matched_seat.id)
+
+
+@requires_feat_context("FEAT-IDEN-006")
+def import_student_seats(*, canonical_context, rows, correlation_id, idempotency_key):
+    """Atomically provision a new seat per row; never infer identity from names."""
+    from app.hash_utils import hash_username_lookup
+    from app.services.classroom_setup import create_roster_student_seat
+
+    ctx = canonical_context
+    if not ctx or ctx.actor_role != "teacher" or not ctx.class_id or not ctx.seat_id:
+        raise ValueError("Select a class before importing students.")
+    teacher = Seat.query.filter_by(
+        id=ctx.seat_id, user_id=ctx.user_id, class_id=ctx.class_id, role="teacher"
+    ).first()
+    classroom = get_class_economy(ctx.class_id)
+    if not teacher or not classroom or classroom.teacher_user_id != ctx.user_id:
+        raise ValueError("You cannot import students into this class.")
+    if not isinstance(rows, list) or not rows:
+        raise ValueError("Provide at least one student row.")
+    prepared = []
+    names = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            raise ValueError("Each student row must contain first and last names.")
+        first, last = row.get("first_name"), row.get("last_name")
+        notes, code = row.get("notes"), row.get("dedupe_code", "")
+        if (
+            not isinstance(first, str) or not first.strip()
+            or not isinstance(last, str) or not last.strip()
+        ):
+            raise ValueError("Every row needs a first and last name.")
+        if notes is not None and not isinstance(notes, str):
+            raise ValueError("Notes must be text.")
+        if not isinstance(code, str) or len(code.strip()) > 8:
+            raise ValueError("Distinguishing codes must be at most eight characters.")
+        first, last, code = first.strip(), last.strip(), code.strip().upper()
+        key = (first.lower(), last.lower())
+        names.setdefault(key, []).append(code)
+        prepared.append((first, last, notes, code))
+    for codes in names.values():
+        if len(codes) > 1 and (not all(codes) or len(set(codes)) != len(codes)):
+            raise ValueError(
+                "Duplicate names in this upload need distinct names or distinguishing codes. "
+                "No students were imported."
+            )
+    for first, last, notes, code in prepared:
+        create_roster_student_seat(
+            class_id=ctx.class_id, first_name=first, last_name=last, notes=notes,
+            dedupe_code=code or None,
+            claim_first_name_hash=hash_username_lookup(first.lower()),
+            claim_last_name_hash=hash_username_lookup(last.lower()),
+            roster_fingerprint=hash_username_lookup(f"{ctx.class_id}|{first.lower()}|{last.lower()}|{code}"),
+        )
+    return len(prepared)

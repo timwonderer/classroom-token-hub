@@ -69,6 +69,9 @@
                         </span>
                     </div>
 
+                    {% if report.class_label %}
+                    <div class="mb-3"><strong>Class name shared by teacher:</strong> {{ report.class_label }}</div>
+                    {% endif %}
                     {% if report.page_url %}
                     <div class="mb-3">
                         <strong>Page URL:</strong>
@@ -195,9 +198,8 @@
                     <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">bar_chart</span>Reporter Stats</h5>
                 </div>
                 <div class="card-body">
-                    {% set user_reports = report.__class__.query.filter_by(anonymous_code=report.anonymous_code).all() %}
                     <div class="mb-2">
-                        <strong>Total Reports:</strong> {{ user_reports|length }}
+                        <strong>Total Reports:</strong> {{ reporter_ticket_count }}
                     </div>
                 </div>
             </div>

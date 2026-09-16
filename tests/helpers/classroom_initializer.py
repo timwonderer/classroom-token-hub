@@ -194,9 +194,11 @@ def _assert_db_invariants(classroom: ProvisionedClassroom) -> None:
             f"{prefix} Seat.class_id {seat.class_id} != {classroom.class_id}",
         )
         _check(seat.claimed_at is not None, f"{prefix} Seat.claimed_at is None — seat is unclaimed")
-        _check(seat.claim_first_name_hash is not None, f"{prefix} Seat.claim_first_name_hash is None")
-        _check(seat.claim_last_name_hash is not None, f"{prefix} Seat.claim_last_name_hash is None")
-        _check(seat.roster_fingerprint is not None, f"{prefix} Seat.roster_fingerprint is None")
+        _check(seat.claim_first_name_hash is None, f"{prefix} Seat.claim_first_name_hash survived claim")
+        _check(seat.claim_last_name_hash is None, f"{prefix} Seat.claim_last_name_hash survived claim")
+        _check(seat.roster_fingerprint is None, f"{prefix} Seat.roster_fingerprint survived claim")
+
+        _check(seat.dedupe_code is None, f"{prefix} Seat.dedupe_code survived claim")
 
         profile = IdentityProfile.query.filter_by(seat_id=seat.id).first()
         _check(profile is not None, f"{prefix} IdentityProfile not found for seat_id={seat.id}")

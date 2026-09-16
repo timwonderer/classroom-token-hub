@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| INV-ARC-019      | 1.3     | 2026-09-06     | 1.2 | Constitutional |
+| INV-ARC-019      | 1.4     | 2026-09-15     | 1.3 | Constitutional |
 
 ---
 
@@ -209,7 +209,29 @@ Named cleanup debt:
 visible identity attributes.
 
 Display identity does not participate in authentication, authority, ownership
-resolution, or actor lookup.
+resolution, or actor lookup. Actor lookup here means resolving a participant
+in the classroom economy; it does not mean an external capability holder checking
+for a same-day hall-pass entry within an already established class scope.
+
+Hall-pass verification SHALL first resolve a supplied `join_code` to `class_id`
+and validate the teacher verification capability for that class. Only then may
+Identity read `identity_profiles` rows scoped to that exact `class_id` and compare
+normalized first and last names in memory. The verifier acts as an external
+entity under the verification capability, not as an economic actor. The response
+is limited to the supplied name's presence in that class and same-day hall-pass
+metadata; it exposes neither the roster nor multi-day history or internal
+identifiers. Profile names select a verification subject; they never establish
+class scope, authenticate a user, grant a capability,
+or authorize mutation. Multiple matching student profiles are ambiguous even if
+only one has a pass. No global name search or retained claim hash is permitted
+for this verification. The approved encrypted name fields are sufficient; do not
+create a second persistent name-lookup representation for hall-pass verification.
+
+Student claim hashes, roster fingerprints, and deduplication codes are temporary
+claim artifacts. Successful initial claim or authenticated class binding MUST
+clear them atomically. Credential recovery does not recreate them. Teacher and
+student name edits update `IdentityProfile` only; they do not alter seat identity
+or regenerate claim material.
 
 Do not store claim artifacts, credential artifacts, or class authority in
 `identity_profiles`.

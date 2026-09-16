@@ -3,7 +3,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| FEAT-IDEN-002 | 1.0 | 2026-08-09 | N/A (new) | Normative | NEW |
+| FEAT-IDEN-002 | 1.1 | 2026-09-15 | 1.0 | Normative | ACTIVE |
 
 ---
 
@@ -125,7 +125,7 @@ Per DOM-IDEN-002 §VI:
 
 Update the `Seat` record to mark setup complete:
 1. Verify (but do not modify) `claimed_at` is not NULL.
-2. No additional seat mutations needed; claiming already set all required fields.
+2. Clear `claim_first_name_hash`, `claim_last_name_hash`, `roster_fingerprint`, and `dedupe_code` in the same transaction as credential activation/binding (INV-ARC-019 §X). Recovery must not regenerate claim material.
 
 #### Step 4: Clear Onboarding State (Session)
 

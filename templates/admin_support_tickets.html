@@ -40,28 +40,12 @@
 
                     <form method="POST" action="{{ url_for('admin.help_support') }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        {# Single-context invariant: a class-scoped surface must reference ONLY the
-                           active class. The switcher in the nav is the one sanctioned place to change
-                           class; this scoped body must not expose (or appear to select) other classes.
-                           The issue can be about EITHER the active class OR the teacher's own account,
-                           so this offers exactly two options — the active class and "My account".
-                           No other class is reachable, so the single-active-context invariant holds. #}
-                        {% set active_class = (class_scope_options | selectattr('class_id', 'equalto', selected_class_id) | first) %}
+                        {% set active_class = class_scope_options | first %}
                         <div class="mb-3">
-                            <label for="class_id" class="form-label">This issue applies to:</label>
-                            <select class="form-select" id="class_id" name="class_id"
-                                    onchange="updateTicketScope()">
-                                <option value="{{ selected_class_id }}"
-                                        data-class-public-id="{{ active_class.class_public_id if active_class else '' }}" selected>
-                                    {{ active_class.label if active_class else 'Your active class' }}
-                                </option>
-                                <option value="account">My account (not class-specific)</option>
-                            </select>
-                        </div>
-                        <div id="ticket-scope-info" class="mb-3">
-                            <small class="text-muted" id="ticket-scope-text">
-                                We will know you as: {{ actor_public_id }}<br>
-                                We will know your class as: {{ active_class.class_public_id if active_class else '' }}
+                            <p>Submitted from <strong>{{ active_class.label if active_class else 'your active class' }}</strong>.</p>
+                            <small class="text-muted">
+                                Your seat reference: {{ actor_public_id }}<br>
+                                Your class reference: {{ active_class.class_public_id if active_class else '' }}
                             </small>
                         </div>
 
@@ -94,6 +78,11 @@
                             <input type="text" class="form-control" id="page_url" name="page_url" maxlength="500" placeholder="/admin/students">
                         </div>
 
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" name="share_class_name" id="share_class_name">
+                            <label class="form-check-label" for="share_class_name">I give permission to include the class name</label>
+                        </div>
+                        <p class="text-muted">Your written report, page URL, IP address, and browser details are sent to system support. No balances, transactions, or roster notes are attached by this form.</p>
                         <button type="submit" class="btn btn-primary" id="submitTicketBtn">
                             <span class="material-symbols-outlined me-2" aria-hidden="true">send</span>Submit Ticket
                         </button>
@@ -118,7 +107,7 @@
                                 <div>
                                     <h6 class="mb-1">{{ report.title }}</h6>
                                     <div class="small text-muted">
-                                {{ entry.class_label or 'Unknown Class' }} • Scope Join Code: {{ entry.scope_join_code or 'Unknown' }}
+                                {{ entry.class_label or 'Unknown Class' }} • Class reference: {{ entry.scope_class_id }}
                                     </div>
                                 </div>
                                 <span class="badge {% if report.status == 'OPEN' %}bg-primary{% elif report.status in ['TEACHER_REVIEW', 'TEACHER_FINAL_REVIEW'] %}bg-info{% elif report.status == 'CLOSED' %}bg-secondary{% elif report.status in ['ESCALATED_TO_DEV', 'DEV_RESOLVED'] %}bg-warning text-dark{% else %}bg-light text-dark{% endif %}">{{ report.status|replace('_', ' ')|title }}</span>
@@ -180,29 +169,5 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-function updateTicketScope() {
-    const select = document.getElementById('class_id');
-    const infoEl = document.getElementById('ticket-scope-text');
-    // Scope is now fixed to the active class and rendered server-side. If the
-    // control is no longer a <select> (read-only single-context), leave the
-    // server-rendered text untouched.
-    if (!select || !select.options || !infoEl) return;
-    const selected = select.options[select.selectedIndex];
-    if (!selected) { infoEl.textContent = ''; return; }
-    const actorPublicId = {{ actor_public_id | tojson }};
-
-    if (selected.value === 'account') {
-        infoEl.textContent = 'We will know you as: ' + actorPublicId;
-    } else {
-        const classPublicId = selected.getAttribute('data-class-public-id') || '';
-        infoEl.replaceChildren(
-            document.createTextNode('We will know you as: ' + actorPublicId),
-            document.createElement('br'),
-            document.createTextNode('We will know your class as: ' + classPublicId)
-        );
-    }
-}
-// Run on page load
-updateTicketScope();
 </script>
 {% endblock %}

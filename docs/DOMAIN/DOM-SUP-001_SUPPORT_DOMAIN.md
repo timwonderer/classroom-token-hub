@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-SUP-001 | 1.2 | 2026-07-10 | 1.1 | Normative |
+| DOM-SUP-001 | 1.3 | 2026-09-15 | 1.2 | Normative |
 
 ## I. Purpose
 
@@ -128,8 +128,8 @@ Key fields:
 - Display-safe cached identity fields (written at submission; never updated):
   - `student_first_name` — encrypted
   - `student_last_initial`
-  - `actor_public_id` — UUID-encoded `seat.public_id`, used in sysadmin views instead
-    of the raw seat FK
+  - `actor_public_id` — FK to UUID-encoded `seats.public_id` with ON DELETE CASCADE,
+    used in sysadmin views instead of a raw integer seat FK
 - Class context cache:
   - `class_label` — frozen display name at submission time
 - Related record context:
@@ -144,6 +144,7 @@ Key fields:
   - `reviewer_notes`
   - `resolution`
   - `resolved_at`
+  - `support_permissions` — per-ticket boolean grants for individual diagnostic categories (§X)
   - `share_class_name_with_sysadmin` — explicit teacher consent for escalation context
   - `eligible_for_reward`
   - `escalated_at`
@@ -362,7 +363,55 @@ Constraints:
   issue-submission time. After pack creation, the Support domain is self-contained;
   it does not re-query observability tables for existing packs.
 
-## X. Amendment
+## X. Teacher-authorized diagnostic disclosure
+
+The correlation pack (including route information), IP address, browser details,
+page URL, and capture timestamp remain technical support context. They are not
+removed by the optional class-data permissions.
+
+`issues.support_permissions` is a JSON object of independently selected boolean
+permissions: `balances`, `transaction` (the reported transaction),
+`recent_transactions` (up to ten frozen transactions), and `student_report`
+(the student's explanation and expected outcome). Each permission defaults to
+false, is specific to one ticket, and is set only by its class-owning teacher on
+escalation. Class-name disclosure keeps its separate existing checkbox.
+No blanket permission, inferred consent, or student-supplied grant is accepted.
+Escalation records the teacher's public actor reference and time atomically with
+the selections. Missing permissions on older tickets grant no access.
+
+The student submission snapshot remains immutable context for its teacher.
+System-support projections include only selected categories from that frozen
+snapshot. The gate is server-side and applies to every operator list/detail
+surface, including alternate report URLs. Unknown snapshot fields are withheld.
+This is disclosure of a teacher-authorized diagnostic copy, not authority to
+query or mutate live class instances. Permission in one category grants no
+permission in another, and does not authorize future data capture.
+
+### Frozen capture and deletion closure
+
+Capture snapshot values and correlation rows once at submission. Never refresh,
+recompute, or overwrite them when permissions, review status, profile names,
+balances, or other source facts change. Escalation selects from saved values only;
+operator reads do not return to teacher or student seats for context. Ticket
+workflow and disclosure-permission fields are distinct from the immutable capture.
+
+There is no account-level or unscoped ticket category. Every ticket is seat-scoped
+and therefore class-scoped; a teacher reporting a problem about themselves still
+uses their active seat and class. `issues.class_public_id` is required.
+
+Every student and teacher ticket, regardless of the problem being reported, references
+its originating seat by canonical public ID. Seat deletion cascades through the
+issue to the correlation pack, history, and resolution records. Account deletion
+removes its seats and therefore these support rows; class deletion likewise
+removes its owned seats and tickets. Immutable means unchanged while retained,
+not exempt from identity deletion. Do not preserve a detached sysadmin copy.
+
+A teacher's directly submitted report is an explicit submission of that text;
+class names must not be silently embedded in metadata headers. Such a form does
+not automatically attach balances, transactions, or roster notes. No assertion
+is made about the contents of user-entered free text.
+
+## XI. Amendment
 
 Revisions require version increment, effective-date update, and continued consistency
 with higher-order invariants.

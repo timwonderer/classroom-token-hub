@@ -736,6 +736,8 @@ def _issue_to_view(issue):
        consent-gated value must not travel to the view layer and rely on markup
        to hide it.
     """
+    from app.services.support_disclosure import disclosed_snapshot, disclosed_report
+    report_text, expected_outcome = disclosed_report(issue)
     class_name_consented = bool(issue.share_class_name_with_sysadmin)
     return {
         'id': issue.id,
@@ -748,14 +750,14 @@ def _issue_to_view(issue):
         'issue_type': issue.issue_type,
         'escalation_reason': issue.escalation_reason,
         'teacher_diagnostic_note': issue.teacher_diagnostic_note,
-        'student_explanation': issue.student_explanation,
-        'student_expected_outcome': issue.student_expected_outcome,
+        'student_explanation': report_text,
+        'student_expected_outcome': expected_outcome,
         'escalated_at': issue.escalated_at,
         'sysadmin_reviewed_at': issue.sysadmin_reviewed_at,
         'sysadmin_resolved_at': issue.sysadmin_resolved_at,
         'sysadmin_notes': issue.sysadmin_notes,
         'eligible_for_reward': issue.eligible_for_reward,
-        'context_snapshot': issue.context_snapshot,
+        'context_snapshot': disclosed_snapshot(issue),
     }
 
 
@@ -805,8 +807,8 @@ def support_tickets():
             status=issue.status,
             report_type=issue.category.name if issue.category else "unknown",
             submitted_at=issue.submitted_at,
-            title=issue.student_expected_outcome or "Support issue",
-            description=issue.student_explanation,
+            title=_issue_to_view(issue)["student_expected_outcome"] or "Support issue",
+            description=_issue_to_view(issue)["student_explanation"],
             anonymous_code=issue.actor_public_id,
             class_id=issue.class_public_id,
         )
@@ -885,8 +887,8 @@ def user_reports():
             status=issue.status,
             report_type=issue.category.name if issue.category else "unknown",
             submitted_at=issue.submitted_at,
-            title=issue.student_expected_outcome or "Support issue",
-            description=issue.student_explanation,
+            title=_issue_to_view(issue)["student_expected_outcome"] or "Support issue",
+            description=_issue_to_view(issue)["student_explanation"],
             anonymous_code=issue.actor_public_id,
             class_id=issue.class_public_id,
         )
@@ -932,7 +934,21 @@ def view_user_report(report_ref):
         'sysadmin_user_report_detail.html',
         current_page='user_reports',
         page_title=f'Report #{report_id}',
-        report=report,
+        report=SimpleNamespace(
+            title=report.title or 'Support issue', status=report.status,
+            class_label=_issue_to_view(report)['class_label'],
+            description=_issue_to_view(report)['student_explanation'],
+            expected_behavior=_issue_to_view(report)['student_expected_outcome'],
+            anonymous_code=report.actor_public_id,
+            report_type=report.category.name if report.category else 'general',
+            submitted_at=report.submitted_at, sysadmin_notes=report.sysadmin_notes,
+            admin_notes=report.sysadmin_notes, reviewed_at=report.sysadmin_reviewed_at,
+            page_url=(report.context_snapshot or {}).get('page_url'),
+            ip_address=(report.context_snapshot or {}).get('ip_address'),
+            user_agent=(report.context_snapshot or {}).get('user_agent'),
+            error_code=None, steps_to_reproduce=None,
+        ),
+        reporter_ticket_count=Issue.query.filter_by(actor_public_id=report.actor_public_id).count(),
         report_ref=make_opaque_ref('report', report.id),
     )
 

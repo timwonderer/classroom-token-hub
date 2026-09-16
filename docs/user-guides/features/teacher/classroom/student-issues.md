@@ -69,7 +69,9 @@ If it is a platform bug rather than a classroom dispute, select **Escalate to De
 
 1. Choose an **Escalation Reason**: Suspected Bug, Data Integrity Issue, Cannot Resolve with Available Tools, System Error, Feature Request, or Other.
 2. Add **Diagnostic Notes** — what you tried, what you saw. Students cannot talk to developers, so your description is the only account anyone gets.
-3. Optionally tick **Share class name/identifier with developer**. By default only an opaque reference is sent.
+3. Choose each optional category separately: **balances**, **the reported transaction**, **recent transactions**, **the student’s report**, and **the class name**. All boxes start unchecked. Each choice applies only to this ticket's saved information; it does not grant ongoing access to your class.
+
+   Route diagnostics, the correlation pack, IP address, and browser details accompany the ticket without these optional selections.
 4. Select **Escalate Issue**.
 
 When a developer has finished, the ticket comes back marked **Developer Fix Applied — Teacher Review Required**. Confirm things look right in your classroom, then close it.
@@ -86,7 +88,7 @@ When a developer has finished, the ticket comes back marked **Developer Fix Appl
 > **Escalation is a last resort.** Escalate when you suspect a system bug or data integrity problem, or when you genuinely cannot fix it with the tools you have — not as a way to hand off a judgement call.
 
 > [!IMPORTANT]
-> **Developers never see student names.** Escalated tickets carry a non-identifying reference and your notes. Do not put a student's name in the diagnostic note.
+> **Written content is shared as provided.** Support receives your diagnostic note and any report or transaction text you explicitly choose to include. Student profile names and roster notes are not automatically attached.
 
 > [!NOTE]
 > **This is not a chat system.** The student files once; you respond by resolving, denying, or escalating. Your denial reason and closure summary are what they read. If you need a conversation, have it in class.

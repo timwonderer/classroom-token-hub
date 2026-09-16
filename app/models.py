@@ -2005,13 +2005,17 @@ class Issue(db.Model):
     id = db.Column(db.Integer, primary_key=True)
 
     # Public actor identifier (submitter) — resolves to seats.public_id for internal lookups
-    actor_public_id = db.Column(db.String(64), nullable=False, index=True)
+    actor_public_id = db.Column(
+        db.String(64), db.ForeignKey("seats.public_id", ondelete="CASCADE",
+                                     name="fk_issues_actor_public_id_seats"),
+        nullable=False, index=True,
+    )
 
     # Public reviewer identifier (teacher) — resolves to seats.public_id in the same class
     reviewer_public_id = db.Column(db.String(64), nullable=True, index=True)
 
     # External-facing class context — resolves to classes.class_public_id
-    class_public_id = db.Column(db.String(36), nullable=True, index=True)
+    class_public_id = db.Column(db.String(36), nullable=False, index=True)
 
     # Class context cache (DOM-SUP-001 §VI). The class display name frozen at
     # submission time. It is deliberately NOT re-fetched live from ClassEconomy:
@@ -2055,6 +2059,7 @@ class Issue(db.Model):
     escalated_at = db.Column(db.DateTime(timezone=True), nullable=True)
     escalation_reason = db.Column(db.String(200), nullable=True)
     teacher_diagnostic_note = db.Column(db.Text, nullable=True)  # Diagnostic note for sysadmin
+    support_permissions = db.Column(db.JSON, nullable=False, default=dict, server_default='{}')
     share_class_name_with_sysadmin = db.Column(db.Boolean, default=False, nullable=False)  # Consent for class disclosure
     eligible_for_reward = db.Column(db.Boolean, default=False, nullable=False)  # Marks if student may receive reward for a legitimate bug
 
