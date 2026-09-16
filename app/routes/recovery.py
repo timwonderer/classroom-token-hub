@@ -69,7 +69,7 @@ def account_lookup():
     """
     Step 2 — Student Submits Reset Code (DOM-IDEN-002 §IX).
 
-    Delegates to FEAT-IDEN-004 for recovery code validation and credential clearing.
+    Delegates to FEAT-IDEN-004 for single-use recovery code acceptance.
     """
     if request.method == 'POST':
         reset_code = request.form.get('reset_code', '').strip().upper()
@@ -94,13 +94,20 @@ def account_lookup():
         )
 
         if not result.success:
+            session.pop('onboarding_user_ref', None)
+            session.pop('recovery_setup_authorization', None)
             session.pop('recovery_student_ref', None)
             flash(result.error_message, "error")
             return redirect(url_for('recovery.account_lookup'))
 
         # Set session for credential setup flow.
-        session['onboarding_seat_ref'] = result.seat_id
+        session.pop('onboarding_seat_ref', None)
+        session.pop('generated_username', None)
+        session.pop('theme_prompt', None)
+        session.pop('theme_slug', None)
         session['onboarding_user_ref'] = result.user_id
+        session['recovery_setup_authorization'] = result.setup_authorization
+        session.permanent = False
         session.pop('recovery_student_ref', None)
 
         flash("Recovery code verified. Please set up your new username and credentials.", "success")

@@ -128,6 +128,8 @@ class User(db.Model):
     reset_code = db.Column(db.String(8), nullable=True)
     reset_code_generated_at = db.Column(db.DateTime(timezone=True), nullable=True)
     reset_code_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    recovery_setup_nonce_hash = db.Column(db.String(64), nullable=True)
+    recovery_setup_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
     last_active_seat_id = db.Column(
         db.Integer,
         db.ForeignKey('seats.id', ondelete='SET NULL', use_alter=True, name='fk_users_last_active_seat_id_seats'),

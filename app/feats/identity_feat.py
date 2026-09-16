@@ -4,7 +4,7 @@ Identity Domain FEAT Implementations
 FEAT-IDEN-001: Unauthenticated Student Seat Claim (verification + binding)
 FEAT-IDEN-002: Student Credential Setup (activate credentials on pre-provisioned user)
 FEAT-IDEN-003: Teacher Reset Code Generation
-FEAT-IDEN-004: Student Recovery Code Validation (clear credentials, redirect to setup)
+FEAT-IDEN-004: Student Recovery Code Validation (consume code and authorize this session)
 FEAT-IDEN-005: Authenticated Class Binding (logged-in student adds a new class)
 FEAT-IDEN-006: Provision Student Seat in Existing Class
 
@@ -14,10 +14,11 @@ instead of performing inline domain operations.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import logging
 import secrets
 from dataclasses import dataclass
-from datetime import timedelta
 from typing import Optional
 
 from sqlalchemy.exc import IntegrityError
@@ -67,7 +68,6 @@ def remove_pending_student_seat(
     db.session.flush()
     return "REMOVED"
 
-RESET_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
 
 # ---------------------------------------------------------------------------
@@ -106,8 +106,8 @@ class ResetCodeResult:
 class RecoveryLookupResult:
     """Result of FEAT-IDEN-004 recovery code validation."""
     success: bool
-    seat_id: Optional[int] = None
     user_id: Optional[int] = None
+    setup_authorization: Optional[str] = None
     error_code: Optional[str] = None
     error_message: Optional[str] = None
 
@@ -265,16 +265,33 @@ def resolve_seat_claim(
 # FEAT-IDEN-002: Student Credential Setup
 # ---------------------------------------------------------------------------
 
+def _recovery_nonce_hash(nonce: str) -> str:
+    """Verifier for a 256-bit random session capability (SPEC-SEC-001 V.4)."""
+    return hashlib.sha256(b"student-recovery-session:v1\0" + nonce.encode()).hexdigest()
+
+
+def recovery_setup_is_valid(user: Optional[User], authorization: Optional[str]) -> bool:
+    from app.utils.canonical_temporal_resolver import ensure_utc
+
+    if (not user or user.user_role != "student"
+            or not isinstance(authorization, str) or len(authorization) != 43
+            or not user.recovery_setup_nonce_hash or not user.recovery_setup_expires_at
+            or ensure_utc(user.recovery_setup_expires_at) <= utc_now()):
+        return False
+    return hmac.compare_digest(user.recovery_setup_nonce_hash, _recovery_nonce_hash(authorization))
+
+
 @requires_feat_context("FEAT-IDEN-002")
 def activate_student_credentials(
     *,
-    seat_id: int,
+    seat_id: Optional[int],
     user_id: Optional[int],
     username: str,
     pin: str,
     passphrase: str,
     correlation_id: str,
     idempotency_key: str,
+    recovery_authorization: Optional[str] = None,
 ) -> CredentialSetupResult:
     """
     FEAT-IDEN-002: Activate login credentials on a student User.
@@ -283,45 +300,54 @@ def activate_student_credentials(
     1. New claim: user_id is None → creates User via create_student_user_for_seat()
     2. Recovery: user_id is set → updates existing User credentials in place
 
-    All mutations are atomic. On IntegrityError (duplicate username),
-    returns error result instead of raising.
+    All mutations are atomic. A duplicate username returns an error result
+    without consuming recovery-session authority.
     """
     from app.hash_utils import hash_password
     from app.hash_utils import hash_username_lookup
     from app.services.classroom_setup import create_student_user_for_seat
 
-    seat = db.session.get(Seat, seat_id)
-    if not seat:
-        return CredentialSetupResult(
-            success=False,
-            error_code="INVALID_SEAT_STATE",
-            error_message="Invalid setup state. Please start over.",
-        )
-
-    now = utc_now()
-
-    if user_id:
-        # Recovery path: User already exists, update credentials in place.
-        user = db.session.get(User, user_id)
-        if not user:
+    if user_id is not None:
+        # Hash before holding the principal lock. Recheck TTL after acquiring it.
+        pin_hash = hash_password(pin)
+        passphrase_hash = hash_password(passphrase)
+        user = (User.query.filter_by(id=user_id).populate_existing()
+                .with_for_update().one_or_none())
+        if seat_id is not None or not recovery_setup_is_valid(user, recovery_authorization):
             return CredentialSetupResult(
-                success=False,
-                error_code="INVALID_USER_STATE",
+                success=False, error_code="INVALID_RECOVERY_STATE",
+                error_message="Invalid or expired recovery code.",
+            )
+        # The row lock serializes completion and code reissuance. Consumption,
+        # credential replacement, and revoking old sessions commit together.
+        savepoint = db.session.begin_nested()
+        try:
+            user.username_lookup_hash = hash_username_lookup(username)
+            user.username_hash = hash_username_lookup(username)
+            user.pin_hash = pin_hash
+            user.passphrase_hash = passphrase_hash
+            user.reset_code = None
+            user.reset_code_generated_at = None
+            user.reset_code_expires_at = None
+            user.recovery_setup_nonce_hash = None
+            user.recovery_setup_expires_at = None
+            user.current_session_nonce = secrets.token_hex(32)
+            db.session.flush()
+            savepoint.commit()
+        except IntegrityError:
+            savepoint.rollback()
+            return CredentialSetupResult(
+                success=False, error_code="USERNAME_TAKEN",
+                error_message="That username is already taken. Please go back and choose another word.",
+            )
+
+    else:
+        seat = db.session.get(Seat, seat_id) if seat_id is not None else None
+        if not seat or seat.user_id is not None or seat.claimed_at is not None:
+            return CredentialSetupResult(
+                success=False, error_code="INVALID_SEAT_STATE",
                 error_message="Invalid setup state. Please start over.",
             )
-        user.username_lookup_hash = hash_username_lookup(username)
-        user.username_hash = hash_username_lookup(username)
-        user.pin_hash = hash_password(pin)
-        user.passphrase_hash = hash_password(passphrase)
-        user.reset_code = None
-        user.reset_code_generated_at = None
-        user.reset_code_expires_at = None
-
-        # Ensure seat binding
-        if seat.user_id is None:
-            seat.user_id = user.id
-            seat.claimed_at = seat.claimed_at or now
-    else:
         # New claim path: create User and bind seat atomically.
         # Use savepoint so IntegrityError doesn't poison the FEATContext transaction.
         savepoint = db.session.begin_nested()
@@ -338,10 +364,6 @@ def activate_student_credentials(
                 error_message="That username is already taken. Please go back and choose another word.",
             )
 
-    seat.claim_first_name_hash = None
-    seat.claim_last_name_hash = None
-    seat.roster_fingerprint = None
-    seat.dedupe_code = None
     db.session.flush()
     return CredentialSetupResult(success=True, user_id=user.id)
 
@@ -384,26 +406,17 @@ def generate_teacher_reset_code(
             error_message="You are not authorized to reset credentials for this student.",
         )
 
-    linked_user = db.session.get(User, seat.user_id) if seat.user_id else None
-    if not linked_user:
+    from app.services.student_recovery import issue_student_recovery_code
+    code = issue_student_recovery_code(seat.user_id) if seat.user_id else None
+    if code is None:
         return ResetCodeResult(
-            success=False,
-            error_code="NO_LINKED_USER",
+            success=False, error_code="NO_LINKED_USER",
             error_message="Student has no linked account.",
         )
 
-    # Generate and overwrite any existing code (DOM-IDEN-002 §IX invariant 4).
-    code = "".join(secrets.choice(RESET_CODE_ALPHABET) for _ in range(8))
-    now = utc_now()
-    linked_user.reset_code = code
-    linked_user.reset_code_generated_at = now
-    linked_user.reset_code_expires_at = now + timedelta(minutes=10)
-
-    db.session.flush()
-
     logger.info(
         "Reset code generated for seat %s (user %s) by user %s",
-        seat.id, linked_user.id, teacher_user_id,
+        seat.id, seat.user_id, teacher_user_id,
     )
 
     display_name = (
@@ -428,68 +441,28 @@ def validate_recovery_code(
     correlation_id: str,
     idempotency_key: str,
 ) -> RecoveryLookupResult:
-    """
-    FEAT-IDEN-004: Student submits reset code to recover account.
-
-    Finds the matching User by reset_code, validates expiration, clears
-    credentials (forcing fresh credential setup), and returns the seat/user
-    references for the route to establish the onboarding session.
-    """
+    """Consume the code once and bind reset authority to the accepting session."""
     from app.utils.canonical_temporal_resolver import ensure_utc
 
-    linked_user = User.query.filter_by(reset_code=reset_code).first()
-
-    valid = (
-        linked_user is not None
-        and linked_user.reset_code_expires_at is not None
-        and ensure_utc(linked_user.reset_code_expires_at) >= utc_now()
-    )
-
-    if not valid:
+    matches = (User.query.filter_by(reset_code=reset_code, user_role="student")
+               .populate_existing().limit(2).with_for_update().all())
+    user = matches[0] if len(matches) == 1 else None
+    if (not reset_code or not user or not user.reset_code_expires_at
+            or ensure_utc(user.reset_code_expires_at) <= utc_now()):
         return RecoveryLookupResult(
-            success=False,
-            error_code="INVALID_OR_EXPIRED",
+            success=False, error_code="INVALID_OR_EXPIRED",
             error_message="Invalid or expired recovery code.",
         )
-
-    # Find the seat to anchor the setup session.
-    seat = (
-        Seat.query
-        .filter_by(user_id=linked_user.id)
-        .order_by(Seat.id.asc())
-        .first()
-    )
-
-    if not seat:
-        return RecoveryLookupResult(
-            success=False,
-            error_code="NO_SEAT",
-            error_message="No class seat found for this account. Contact your teacher.",
-        )
-
-    # Clear credentials — forces fresh credential setup.
-    linked_user.username_lookup_hash = None
-    linked_user.pin_hash = None
-    linked_user.passphrase_hash = None
-    # Clear the recovery code so it cannot be reused.
-    linked_user.reset_code = None
-    linked_user.reset_code_generated_at = None
-    linked_user.reset_code_expires_at = None
-
-    if seat.claimed_at is None:
-        seat.claimed_at = utc_now()
-
+    nonce = secrets.token_urlsafe(32)
+    user.recovery_setup_nonce_hash = _recovery_nonce_hash(nonce)
+    # Carry the original ten-minute deadline forward; validation cannot extend it.
+    user.recovery_setup_expires_at = user.reset_code_expires_at
+    user.reset_code = None
+    user.reset_code_generated_at = None
+    user.reset_code_expires_at = None
     db.session.flush()
-
-    logger.info(
-        "Recovery lookup succeeded for user %s (seat %s); credentials cleared.",
-        linked_user.id, seat.id,
-    )
-
     return RecoveryLookupResult(
-        success=True,
-        seat_id=seat.id,
-        user_id=linked_user.id,
+        success=True, user_id=user.id, setup_authorization=nonce,
     )
 
 

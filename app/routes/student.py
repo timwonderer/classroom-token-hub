@@ -372,28 +372,22 @@ def _get_total_earnings_for_seat(seat_id: int | None, *, class_id: str | None = 
 
 
 
-def _get_claimed_setup_state():
-    """
-    Returns (seat, user) for the active setup or recovery flow.
-
-    During new claim: seat is the unclaimed Seat, user is None (no User created yet).
-    During recovery: seat is already bound; user is the existing User with cleared credentials.
-    """
-    seat_id = session.get('onboarding_seat_ref')
-    seat = db.session.get(Seat, seat_id) if seat_id else None
-
-    # For recovery the User exists on the seat; for new claim seat.user_id is NULL.
-    user = None
-    if seat and seat.user_id:
-        user_ref = session.get('onboarding_user_ref')
-        if user_ref:
-            user = db.session.get(User, user_ref)
-        if not user:
-            user = db.session.get(User, seat.user_id)
-
-    return seat, user
-
-
+def _get_credential_setup_state():
+    """Resolve either an unclaimed seat or a recovery principal, never both."""
+    user_ref = session.get('onboarding_user_ref')
+    seat_ref = session.get('onboarding_seat_ref')
+    if user_ref is not None:
+        if seat_ref is not None:
+            return None, None
+        user = db.session.get(User, user_ref, populate_existing=True)
+        from app.feats.identity_feat import recovery_setup_is_valid
+        if not recovery_setup_is_valid(user, session.get('recovery_setup_authorization')):
+            return None, None
+        return None, user
+    seat = db.session.get(Seat, seat_ref) if seat_ref is not None else None
+    if not seat or seat.user_id is not None or seat.claimed_at is not None:
+        return None, None
+    return seat, None
 
 
 def _prime_seat_teacher_display_name_cache(student_user_id: int) -> None:
@@ -573,6 +567,7 @@ def claim_account():
         # (DOM-IDEN-002 §VIII, seat.user_id stays NULL until claim is fully complete).
         session['onboarding_seat_ref'] = result.seat_id
         session.pop('onboarding_user_ref', None)
+        session.pop('recovery_setup_authorization', None)
         session.pop('generated_username', None)
         session.pop('theme_prompt', None)
         session.pop('theme_slug', None)
@@ -585,14 +580,16 @@ def claim_account():
 @student_bp.route('/create-username', methods=['GET', 'POST'])
 def create_username():
     """PAGE 2: Create Username - Generate themed username."""
-    # Only allow if claimed
-    seat, user = _get_claimed_setup_state()
-    if not seat:
+    # Require initial-claim or recovery authorization.
+    seat, user = _get_credential_setup_state()
+    if not seat and not user:
+        if session.get('onboarding_user_ref') is not None:
+            session.pop('onboarding_user_ref', None)
+            session.pop('recovery_setup_authorization', None)
+            flash("Recovery session expired or invalid. Ask your teacher for a new code.", "setup")
+            return redirect(url_for('recovery.account_lookup'))
         flash("Please claim your account first.", "setup")
         return redirect(url_for('student.claim_account'))
-    if user and user.pin_hash is not None and (user.reset_code is None or not user.reset_code_expires_at or ensure_utc(user.reset_code_expires_at) < utc_now()):
-        flash("Invalid or already setup account.", "setup")
-        return redirect(url_for('student.login'))
     # Assign a random theme prompt if not yet in session
     if 'theme_prompt' not in session:
         selected_theme = random.choice(THEME_PROMPTS)
@@ -605,7 +602,7 @@ def create_username():
         if not validate_chosen_word(chosen_word):
             flash("Please enter a valid word (3-12 letters, no numbers or spaces).", "setup")
             return redirect(url_for('student.create_username'))
-        username = build_username(chosen_word, seat.roster_fingerprint or "")
+        username = build_username(chosen_word, (seat.roster_fingerprint or "") if seat else "")
         # Store username in session only — no DB writes until setup_pin_passphrase.
         session['generated_username'] = username
         session.pop('theme_prompt', None)
@@ -617,15 +614,17 @@ def create_username():
 @student_bp.route('/setup-pin-passphrase', methods=['GET', 'POST'])
 def setup_pin_passphrase():
     """PAGE 3: Setup PIN & Passphrase - Secure the account."""
-    # Only allow if claimed and username generated
-    seat, user = _get_claimed_setup_state()
+    # Require setup authorization and a generated username
+    seat, user = _get_credential_setup_state()
     username = session.get('generated_username')
-    if not seat or not username:
+    if (not seat and not user) or not username:
+        if session.get('onboarding_user_ref') is not None and not user:
+            session.pop('onboarding_user_ref', None)
+            session.pop('recovery_setup_authorization', None)
+            flash("Recovery session expired or invalid. Ask your teacher for a new code.", "setup")
+            return redirect(url_for('recovery.account_lookup'))
         flash("Please complete previous steps.", "setup")
         return redirect(url_for('student.claim_account'))
-    if user and user.pin_hash is not None and (user.reset_code is None or not user.reset_code_expires_at or ensure_utc(user.reset_code_expires_at) < utc_now()):
-        flash("Invalid or already setup account.", "setup")
-        return redirect(url_for('student.login'))
     from app.feats.identity_feat import activate_student_credentials
 
     form = StudentPinPassphraseForm()
@@ -638,17 +637,22 @@ def setup_pin_passphrase():
 
         # FEAT-IDEN-002: Activate credentials (handles both new claim and recovery paths).
         result = activate_student_credentials(
-            seat_id=seat.id,
+            seat_id=seat.id if seat else None,
+            recovery_authorization=session.get("recovery_setup_authorization") if user else None,
             user_id=user.id if user else None,
             username=username,
             pin=pin,
             passphrase=passphrase,
-            correlation_id=f"corr_iden_credentials_{seat.id}_{uuid.uuid4().hex}",
-            idempotency_key=f"feat:iden:credentials:{seat.id}:{username}",
+            correlation_id=f"corr_iden_credentials_{uuid.uuid4().hex}",
+            idempotency_key=f"feat:iden:credentials:{'user' if user else 'seat'}:{user.id if user else seat.id}:{username}",
         )
 
         if not result.success:
             flash(result.error_message, "setup")
+            if result.error_code == "INVALID_RECOVERY_STATE":
+                session.pop("onboarding_user_ref", None)
+                session.pop("recovery_setup_authorization", None)
+                return redirect(url_for("recovery.account_lookup"))
             if result.error_code == "USERNAME_TAKEN":
                 return redirect(url_for('student.create_username'))
             return redirect(url_for('student.setup_pin_passphrase'))
@@ -656,6 +660,7 @@ def setup_pin_passphrase():
         # Clear session onboarding keys
         session.pop('onboarding_seat_ref', None)
         session.pop('onboarding_user_ref', None)
+        session.pop('recovery_setup_authorization', None)
         session.pop('generated_username', None)
         # Sign-in takes the passphrase (FEAT-IDEN-002 §Credential boundary);
         # the PIN is for transfers, attendance, and hall passes.
@@ -3141,6 +3146,7 @@ def login():
         _reset_student_login_session()
         session.pop('onboarding_seat_ref', None)
         session.pop('onboarding_user_ref', None)
+        session.pop('recovery_setup_authorization', None)
         session.pop('generated_username', None)
         clear_teacher_display_name_cache()
 

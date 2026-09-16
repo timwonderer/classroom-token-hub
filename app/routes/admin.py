@@ -4447,22 +4447,13 @@ def edit_student():
     # Handle account reset — generate recovery code per DOM-IDEN-002 §IX
     reset_login = request.form.get('reset_login') == 'on'
     if reset_login:
-        import secrets as _secrets
-        _ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-        code = ''.join(_secrets.choice(_ALPHABET) for _ in range(8))
-        _reset_user = db.session.get(User, student.user_id) if student.user_id else None
-        if _reset_user:
-            _now = utc_now()
-            _reset_user.reset_code = code
-            _reset_user.reset_code_generated_at = _now
-            _reset_user.reset_code_expires_at = _now + timedelta(minutes=10)
-
-            current_app.logger.info(
-                f"Reset code generated for seat {student.id} (user {_reset_user.id}) by admin {user_id}"
-            )
-
+        from app.services.student_recovery import issue_student_recovery_code
+        code = issue_student_recovery_code(student.user_id) if student.user_id else None
+        if code:
             flash(f"Reset code generated for {student_profile.full_name}: {code} — Expires in 10 minutes. "
                   f"Give this code to the student.", "warning")
+        else:
+            flash("Student has no linked account.", "error")
 
     try:
         if name_changed:

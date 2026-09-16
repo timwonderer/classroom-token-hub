@@ -201,23 +201,53 @@ assert that diagnostic observation grants economic mutation authority.
 
 ### 3. Student recovery: separate representation, context, and consumption
 
-- **Observed behavior / disclosure correction:** `User.reset_code` stores a raw
-  eight-character code; the public form accepts that code without join code or
-  name. Expiry and credential replacement are implemented in the inspected path.
-- **Normative representation question:** `SPEC-SEC-001` §V.4 requires a
-  non-reversible verifier unless recoverability is explicitly required;
-  `DOM-IDEN-002` describes a user-owned stored reset code. Reconcile that exception
-  and storage representation. Raw storage is observed, not a demonstrated leak.
-- **Observed context-selection mismatch / security candidate:**
-  `validate_recovery_code` selects the first seat by ID after identifying the user.
-  User-owned credential recovery and class-local operational authority are
-  distinct. Determine whether this seat selection violates the intended setup
-  context and can affect another class; do not equate account-wide credential
-  replacement with unauthorized classroom mutation.
-- **Source-level security control mismatch:** the read-then-clear sequence lacks
-  the locked, conditional single-winner consumption required by
-  `FEAT-IDEN-004` §III.A. A concurrent replay regression should establish impact.
-  This audit did not execute concurrent redemption or demonstrate a takeover.
+- **Intentional representation / retained:** `User.reset_code` stores a readable
+  eight-character code. DOM-IDEN-002 §IX explicitly permits plaintext for this
+  ten-minute teacher-to-student handoff and permits teacher redisplay. This
+  satisfies SPEC-SEC-001 §V.4's explicit recoverability exception. The earlier
+  representation question is withdrawn; raw storage alone is not a defect.
+- **Observed scope mismatch / remedied:** teacher issuance resolves the selected
+  student Seat to its bound User, where the code is stored. Student redemption
+  and credential replacement now resolve only that User, with no Seat, class,
+  or IdentityProfile lookup. Removed first-seat selection and recovery writes to
+  `claimed_at`/claim artifacts. Recovery clears stale initial-claim session state;
+  setup rejects mixed seat/user references. Authority: INV-ARC-019 §VI and
+  DOM-IDEN-002 §IX's explicit prohibition of additional recovery lookup.
+  FEAT-IDEN-004 and FEAT-IDEN-002 now distinguish these paths.
+- **Consumption/session lifecycle / remedied under the owner's revised decision:**
+  accepting the recovery code consumes it immediately and atomically creates a
+  unique session capability. The User row holds its nonce verifier and original
+  ten-minute deadline. Every setup request checks that server record; possession
+  of a User reference or a signed session cookie alone does not authorize setup.
+  A new session cannot reuse the consumed code. Lost/expired recovery requires a
+  newly issued teacher code. Both teacher issuance routes revoke any outstanding
+  recovery-session authority.
+- **Credential transaction / remedied:** accepting a code preserves all existing
+  credentials. Completion locks and reloads the User, rechecks nonce/expiry,
+  replaces all credential fields, rotates the authentication-session nonce, and
+  clears the recovery nonce verifier/deadline in one transaction. Concurrent
+  completion has one winner. A username conflict rolls back replacement without
+  discarding the authorized session. Recovery never reads or mutates participation.
+- **Authority reconciliation:** DOM-IDEN-002 §IX, FEAT-IDEN-002/003/004, and
+  SPEC-SEC-001/SOP-SEC-001 now describe the same two-stage lifecycle. This explicitly
+  supersedes both the old validation-time credential clearing and the prior
+  completion-time code consumption. Readable teacher handoff codes remain an
+  intentional permitted representation; server nonce verifiers are separate.
+
+**Verification:** 34 targeted tests passed across student recovery and claim
+lifecycle, including separate PostgreSQL connections racing code acceptance and
+credential completion (one winner each), cross-session code rejection, expiry,
+reissuance, duplicate-code rejection, username collision rollback, and no
+participation SQL during the end-to-end flow. The additive migration is
+`f4d4e5f6a7b8`. Follow-up checks passed for server-side revocation on both
+setup pages, injected credential-transaction rollback, migration upgrade/downgrade
+preserving an existing User, and PII storage validation (17 checks). A separate
+7-test issuance rerun passed after correcting the teacher-edit path to compose
+the shared Identity domain command instead of nesting FEAT execution. Compilation
+and `git diff --check` on the recovery changes passed. An unrelated concurrent
+edit to `github-pages/district.html` was left untouched. This is scoped local evidence, not an assertion that every recovery
+control or production infrastructure has been assessed. No full suite or
+production execution.
 
 ### 4. Teacher recovery: initial conclusion withdrawn
 
