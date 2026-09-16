@@ -3,7 +3,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| FEAT-IDEN-003 | 1.0 | 2026-08-09 | N/A (new) | Normative | NEW |
+| FEAT-IDEN-003 | 1.1 | 2026-09-15 | 1.0 | Normative | ACTIVE |
 
 ---
 
@@ -96,6 +96,9 @@ Update the `User` record:
 1. Set `reset_code = generated_code` (overwrites any existing code).
 2. Set `reset_code_generated_at = NOW()` (UTC).
 3. Set `reset_code_expires_at = NOW() + 10 minutes`.
+4. Clear `recovery_setup_nonce_hash` and `recovery_setup_expires_at` to invalidate
+   any previously accepted recovery session. Lock the User row while issuing so
+   issuance serializes with acceptance and credential completion.
 
 Per DOM-IDEN-002 §IX:
 > "Reset codes are short-lived (10-minute TTL), teacher-visible, and communicated in person. Plaintext storage is acceptable for this handoff artifact."
@@ -302,4 +305,4 @@ Revisions to this document SHALL:
 4. Maintain consistency with FEAT-CORE-000.
 5. Maintain consistency with FEAT-IDEN-004.
 
-**This is version 1.0 of FEAT-IDEN-003 (new specification, 2026-08-09).**
+**Version 1.1 (2026-09-15): serialize issuance on User and invalidate outstanding recovery-session authority.**

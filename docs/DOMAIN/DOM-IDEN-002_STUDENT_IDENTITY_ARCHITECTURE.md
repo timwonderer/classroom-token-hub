@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-IDEN-002 | 2.4 | 2026-09-15 | 2.3 | Constitutional |
+| DOM-IDEN-002 | 2.5 | 2026-09-15 | 2.4 | Constitutional |
 
 ---
 
@@ -64,7 +64,7 @@ This document does not own any tables exclusively but rather defines how student
 
 ### Schema Contract
 
-Student-specific fields on `users`: `pin_hash`, `passphrase_hash`, `reset_code`, `reset_code_generated_at`, and `reset_code_expires_at`.
+Student-specific fields on `users`: `pin_hash`, `passphrase_hash`, `reset_code`, `reset_code_generated_at`, `reset_code_expires_at`, `recovery_setup_nonce_hash`, and `recovery_setup_expires_at`.
 
 Student-specific fields on `seats`: `roster_fingerprint`, `dedupe_code`, claim first-name/last-name lookup hashes, `claimed_at`.
 
@@ -97,10 +97,12 @@ A student `User` is a `users` row with `user_role = 'student'`. Common `users` f
 
 Student-specific fields:
 
-- `pin_hash` — hashed PIN used for login. NULL until credential activation, then immutable until recovery clears it.
-- `passphrase_hash` — hashed passphrase used to gate financial actions. NULL until credential activation, then immutable until recovery clears it.
-- `username_hash` — Full username hash (shared field). Set during credential activation (M-002), immutable until recovery (M-004), cleared during credential reset, then immutable again after re-setup.
-- `username_lookup_hash` — Class-scoped username lookup hash (shared field). Set during credential activation, cleared during recovery.
+- `pin_hash` — PIN verifier governed by the credential matrix in FEAT-IDEN-002. Preserved during recovery acceptance and replaced atomically at completion.
+- `passphrase_hash` — passphrase verifier governed by the credential matrix in FEAT-IDEN-002. Preserved during recovery acceptance and replaced atomically at completion.
+- `username_hash` — full username hash (shared field). Set during activation and replaced atomically at successful recovery completion.
+- `username_lookup_hash` — principal username lookup hash (shared field). Set during activation and replaced atomically at successful recovery completion.
+- `recovery_setup_nonce_hash` - server-side verifier of the accepting recovery session nonce; cleared on credential completion or teacher reissuance.
+- `recovery_setup_expires_at` - original code deadline carried forward; every setup request checks it.
 - `reset_code` - 8-digit alphanumeric code randomly generated and stored on the corresponding student user row for student to reclaim their account
 - `reset_code_generated_at` - timestamp of when the reset code was generated. Stored as UTC but rendered to canonical class timezone.
 - `reset_code_expires_at` - set to 10 minutes after `reset_code_generated_at`. Stored as UTC but rendered to canonical class timezone.
@@ -111,7 +113,7 @@ Teacher-specific fields (`totp_secret_encrypted`) SHALL be `NULL` for student ro
 Student-specific rules:
 
 - A `users` row may be provisioned before claim; credentials are activated when a student claims a seat and completes setup.
-- Recovery capability belongs to `users` and is implemented by `reset_code`, `reset_code_generated_at`, and `reset_code_expires_at` fields (per INV-ARC-019 §XI), not by `seats`, `classes`, or display profiles.
+- Recovery capability belongs to `users` and is implemented by `reset_code`, `reset_code_generated_at`, `reset_code_expires_at`, `recovery_setup_nonce_hash`, and `recovery_setup_expires_at` fields (per INV-ARC-019 §XI), not by `seats`, `classes`, or display profiles.
 
 ### Student `Seat` Fields
 
@@ -257,12 +259,13 @@ A teacher with an active administrative seat in the student's class initiates a 
 
 - Resolve the selected student Seat to its bound User, then issue a new recovery capability on the corresponding users row.
 - Generates a new 8-character random alphanumeric reset code
+- Clear any outstanding recovery-session nonce verifier and expiry, invalidating that session.
 - Fill in `reset_code` field with generated code. Overwrites any existing reset code
 - Sets `reset_code_generated_at = now`
 - Sets `reset_code_expires_at = reset_code_generated_at + 10 minutes`
 
 
-The code is displayed to the teacher and communicated verbally to the student. The teacher may redisplay the code until it expires or recovery completes.
+The code is displayed to the teacher and communicated verbally to the student. The teacher may redisplay the code until it expires or the student accepts it.
 
 > [!NOTE]
 >
@@ -279,6 +282,18 @@ Student submits reset code. Backend validates:
 
 On failure: return a generic failure message. Do not reveal whether a specific identity exists.
 
+On acceptance, atomically consume the code and all its timestamps and create a
+unique recovery-session nonce. Store only its verifier and expiry on the same
+User; place the nonce and User reference in the accepting browser session. The
+server record is the source of truth: every setup step must validate the session
+nonce against it. The nonce inherits the code's original ten-minute deadline;
+acceptance does not extend it. Existing credentials remain unchanged.
+
+A new session cannot reuse the consumed code. Losing or abandoning the authorized
+session, expiration, or teacher reissuance requires a new teacher-issued code.
+No Seat, class, or IdentityProfile lookup is permitted during student recovery.
+
+
 **Step 3 — Credential re-establishment**
 
 Student proceeds through the standard credential setup flow:
@@ -293,16 +308,22 @@ No identity verification fields (name, DOB, or any PII) are re-entered. All thre
 
 On successful credential setup:
 
-- Clear reset code and expiration
+- Validate and consume the server-held recovery-session nonce verifier and expiry
 - Regenerate `current_session_nonce`
 - Replace `users.username_hash`, `users.username_lookup_hash`, `users.pin_hash`, and `users.passphrase_hash` atomically
-- Log successful reclaim event
+- Log successful reclaim event without code, nonce, or verifier material
+
+The nonce consumption, replacement of all credential fields, and session-nonce
+rotation commit in one transaction. Concurrent completion has exactly one winner.
+Failure rolls back all changes; the same authorized session may retry within its
+original deadline. The original recovery code remains consumed.
 
 
 ### Recovery Security Constraints
 
 - Reset codes must be random and non-sequential.
-- Reset codes are single-use — cleared on successful use or expiry.
+- Reset codes are single-use — consumed when accepted, before credential setup.
+- Recovery-session nonces are single-use and server-validated; cleared on completion or teacher reissuance, unusable after expiry.
 - Hard TTL: 10 minutes.
 - Rate-limit reset code generation and submission.
 - Lock recovery flow after repeated failed submission attempts per identity.

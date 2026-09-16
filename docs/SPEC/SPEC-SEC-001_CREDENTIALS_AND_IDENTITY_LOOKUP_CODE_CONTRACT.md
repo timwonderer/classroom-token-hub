@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-SEC-001 | 1.1 | 2026-09-05 | 1.0 | Technical Specification |
+| SPEC-SEC-001 | 1.2 | 2026-09-15 | 1.1 | Technical Specification |
 
 ## I. Purpose
 
@@ -80,6 +80,18 @@ The application MUST refuse to start in any non-test environment when a required
 2. Code MUST bind artifact use to its owner and canonical scope before consuming it.
 3. Successful consumption MUST be atomic with the state change it authorizes; replay, mismatch, expired use, and cross-class use MUST fail closed.
 4. Responses for failed authentication, lookup, claim, and recovery attempts MUST be generic enough not to reveal account existence, roster membership, credential validity, or class membership.
+
+#### Student recovery-session nonce representation
+
+Under DOM-IDEN-002 §IX, generate 32 random bytes and encode with unpadded URL-safe
+Base64. The accepting signed, non-permanent session holds that nonce. Persist on
+User only SHA-256 of `b"student-recovery-session:v1\0" + nonce.encode()` and the
+original code expiry. This is a high-entropy bearer capability, not a password or
+name lookup digest. Compare verifiers in constant time. Check server state on
+every setup step and under a User row lock at completion; clear it atomically with
+credential replacement. Never log or export the nonce or verifier. Reissuing the
+teacher code invalidates the stored nonce. Account deletion removes these fields
+with their User row. Cookie signing does not replace the server-side check.
 
 ### V.5 Observability and retention
 
