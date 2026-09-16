@@ -109,11 +109,7 @@ from app.utils.economy_rebalance import (
     prepare_scheduled_rebalance_changes,
     queue_scheduled_policy_transitions,
 )
-from app.utils.claim_credentials import (
-    compute_primary_claim_hash,
-    match_claim_hash,
-    normalize_claim_hash,
-)
+
 from app.services.announcement_service import (
     create_class_announcement,
     delete_class_announcement,
@@ -181,7 +177,6 @@ from app.services.admin_settings_service import (
 from app.services.issue_service import create_support_ticket
 from app.utils.ip_handler import get_real_ip
 from app.utils.turnstile import verify_turnstile_token
-from app.utils.name_utils import hash_last_name_parts, verify_last_name_parts
 from app.utils.help_content import HELP_ARTICLES
 from app.utils.encryption import encrypt_totp, decrypt_totp
 from app.utils.passwordless_client import (
@@ -220,7 +215,7 @@ from app.feats.transaction_void_feat import (
     execute_void_transaction,
     execute_void_transactions,
 )
-from app.hash_utils import get_random_salt, hash_hmac, hash_username, hash_username_lookup
+from app.hash_utils import hash_hmac, hash_username_lookup
 from app.attendance import (
     get_last_payroll_time,
     calculate_unpaid_attendance_seconds,
@@ -804,16 +799,10 @@ def _parse_dob_date(dob_str):
     raise ValueError("Invalid date format. Please use the date picker.")
 
 
-def _normalize_full_name_for_dedupe(first_name: str, last_name: str) -> str:
-    """Return lowercase letters-only full name for dedupe key input."""
-    return re.sub(r"[^a-z]", "", f"{first_name}{last_name}".lower())
-
-
 def _build_teacher_block_dedupe_key(class_id: str, first_name: str, last_name: str) -> str:
-    """Build deterministic dedupe key: class_id|normalized_full_name."""
-    normalized_full_name = _normalize_full_name_for_dedupe(first_name, last_name)
-    dedupe_input = f"{class_id}|{normalized_full_name}".encode()
-    return hash_hmac(dedupe_input, b"")[:8]
+    from app.hash_utils import hash_roster_fingerprint
+    return hash_roster_fingerprint(class_id=class_id, first_name=first_name,
+                                   last_name=last_name)[:8]
 
 
 def _find_admin_by_auth_username(username: str):
@@ -4536,6 +4525,33 @@ def _dispatch_student_deletion(seat_ids, data, *, require_gate, form_response=Fa
     return jsonify(result)
 
 
+@admin_bp.route('/student/unclaim', methods=['POST'])
+@admin_required
+def unclaim_student():
+    from app.feats.identity_feat import unclaim_student_seat
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict) or data.get('confirmation') != 'UNCLAIM':
+        return jsonify(status='error', message='Confirm Unclaim before continuing.'), 400
+    if type(data.get('seat_id')) is not int:
+        return jsonify(status='error', message='Select a valid seat.'), 400
+    try:
+        seat_id = data['seat_id']
+        generation = data.get('claim_generation')
+        if type(generation) is not int:
+            raise ValueError('Refresh the roster before unclaiming this seat.')
+        result = unclaim_student_seat(canonical_context=g.canonical_context,
+            seat_id=seat_id, expected_generation=generation,
+            first_name=data.get('first_name'), last_name=data.get('last_name'),
+            dedupe_code=data.get('dedupe_code', ''),
+            correlation_id=generate_correlation_id(),
+            idempotency_key=f"identity:unclaim:{seat_id}:{generation}")
+    except (ValueError, TypeError) as error:
+        return jsonify(status='error', message=str(error) if isinstance(error, ValueError) else 'Select a valid seat.'), 400
+    except LookupError:
+        return jsonify(status='error', message='Student seat not found in this class.'), 404
+    return jsonify(result)
+
+
 @admin_bp.route('/student/archive', methods=['GET', 'POST'])
 @admin_bp.route('/student/delete', methods=['GET', 'POST'])
 @admin_required
@@ -4695,22 +4711,6 @@ def add_individual_student():
         if len(section) > 10:
             flash("Class section name must be 10 characters or fewer.", "error")
             return redirect(url_for('admin.students'))
-
-        # Generate initials
-        first_initial = first_name[0].upper()
-        last_initial = last_name[0].upper()
-
-        # Generate salt
-        salt = get_random_salt()
-
-        # v2: eliminate DOB-based credential material.
-        claim_seed = int.from_bytes(salt[:2], "big") % 10000
-        first_half_hash = compute_primary_claim_hash(first_initial, claim_seed, salt)
-        second_half_hash = hash_hmac(str(claim_seed).encode(), salt)
-        seed_hash = hash_hmac(str(claim_seed).encode(), salt)
-
-        # Compute last_name_hash_by_part for fuzzy matching
-        last_name_parts = hash_last_name_parts(last_name, salt)
 
         user_id = g.canonical_context.user_id
         class_context = _resolve_student_add_class_context(

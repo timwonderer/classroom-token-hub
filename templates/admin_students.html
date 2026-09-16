@@ -417,6 +417,12 @@
                             <span class="material-symbols-outlined icon-middle" aria-hidden="true">edit</span>
                             <span class="visually-hidden">Edit {{ student_display_name }}</span>
                           </button>
+                        <button type="button" class="btn btn-sm btn-outline-warning me-1"
+                            data-bs-toggle="modal" data-bs-target="#unclaimStudentModal"
+                            data-seat-id="{{ student.id }}" data-claim-generation="{{ student.claim_generation }}"
+                            data-student-name="{{ student_display_name }}">
+                            Unclaim<span class="visually-hidden"> {{ student_display_name }}</span>
+                          </button>
                         <button type="button" class="btn btn-sm btn-outline-danger quick-action-btn delete-student"
                             data-student-id="{{ student.id }}"
                             data-student-name="{{ student_display_name }}">
@@ -764,6 +770,37 @@
   </script>
 
 
+</div>
+
+<!-- Unclaim is distinct from destroying the Seat. Names are intentionally blank. -->
+<div class="modal fade" id="unclaimStudentModal" tabindex="-1" aria-labelledby="unclaimStudentTitle" aria-describedby="unclaimStudentExplanation" aria-hidden="true">
+  <div class="modal-dialog">
+    <form id="unclaimStudentForm" class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title h5" id="unclaimStudentTitle">Unclaim student seat</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>Unclaim <strong id="unclaimStudentName"></strong>?</p>
+        <p id="unclaimStudentExplanation">The seat stays in this class. Its balance, transactions, attendance, items, and teacher notes stay with it for the next claimant. The current account loses access to this seat. If it has no other classes, that sign-in account is deleted.</p>
+        <p>Re-enter the names the student should use to claim this seat again. These rebuild claim verification; the saved display name and teacher notes stay unchanged. To consolidate accounts, the student should sign in to the account they want to keep and join this class.</p>
+        <div class="mb-3"><label for="unclaimFirstName" class="form-label">First name for claiming</label>
+          <input id="unclaimFirstName" class="form-control" name="first_name" required maxlength="100" autocomplete="off"></div>
+        <div class="mb-3"><label for="unclaimLastName" class="form-label">Last name for claiming</label>
+          <input id="unclaimLastName" class="form-control" name="last_name" required maxlength="100" autocomplete="off"></div>
+        <div class="mb-3"><label for="unclaimDedupeCode" class="form-label">Distinguishing code (optional)</label>
+          <input id="unclaimDedupeCode" class="form-control" name="dedupe_code" maxlength="8" autocomplete="off" aria-describedby="unclaimCodeHelp">
+          <div id="unclaimCodeHelp" class="form-text">For matching names, each unclaimed seat needs a different code. Give this code to the student.</div></div>
+        <div class="form-check"><input type="checkbox" id="unclaimAcknowledged" class="form-check-input" required>
+          <label for="unclaimAcknowledged" class="form-check-label">I understand that the current account will be detached and the next claimant will receive this seat's records.</label></div>
+        <div id="unclaimStudentError" class="alert alert-danger mt-3 d-none" role="alert" tabindex="-1"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-warning">Unclaim seat</button>
+      </div>
+    </form>
+  </div>
 </div>
 
 <!-- Edit Student Modal -->
@@ -1177,6 +1214,41 @@
     table.querySelector('.select-all-checkbox').checked = false;
     updateBulkToolbar();
   }
+
+  const unclaimModal = document.getElementById('unclaimStudentModal');
+  const unclaimForm = document.getElementById('unclaimStudentForm');
+  const unclaimError = document.getElementById('unclaimStudentError');
+  let unclaimTarget = null;
+  unclaimModal.addEventListener('show.bs.modal', event => {
+    const button = event.relatedTarget;
+    unclaimForm.reset();
+    unclaimError.classList.add('d-none');
+    unclaimTarget = {seat_id: Number(button.dataset.seatId), claim_generation: Number(button.dataset.claimGeneration)};
+    document.getElementById('unclaimStudentName').textContent = button.dataset.studentName;
+  });
+  unclaimModal.addEventListener('shown.bs.modal', () => document.getElementById('unclaimFirstName').focus());
+  unclaimForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (!unclaimForm.reportValidity() || !unclaimTarget) return;
+    const submit = unclaimForm.querySelector('[type="submit"]');
+    submit.disabled = true;
+    try {
+      const response = await fetch('/admin/student/unclaim', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content},
+        body: JSON.stringify({...unclaimTarget, ...Object.fromEntries(new FormData(unclaimForm)), confirmation: 'UNCLAIM'})
+      });
+      const result = await response.json();
+      if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Unable to unclaim this seat.');
+      window.location.reload();
+    } catch (error) {
+      unclaimError.textContent = error.message || 'Unable to unclaim this seat.';
+      unclaimError.classList.remove('d-none');
+      unclaimError.focus();
+    } finally {
+      submit.disabled = false;
+    }
+  });
 
   async function deleteStudentsWithPreview(studentIds) {
     if (!studentIds.length) return;

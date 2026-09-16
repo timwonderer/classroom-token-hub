@@ -264,7 +264,7 @@ selected student seat. The user's clarified canonical decision is one selected
 student confirmation per **class_id** under the teacher's **user_id**. Class/period
 labels do not define scope.
 
-**Exact conflicting FEAT wording:** `FEAT-IDEN-103` §IV.1 says:
+**Prior conflicting FEAT wording (corrected in the reconciliation below):** `FEAT-IDEN-103` §IV.1 says:
 
 > Teacher recovery requires verification from students. All students must provide recovery codes.
 
@@ -282,14 +282,54 @@ that it failed a stronger all-students quorum was wrong. This finding makes no
 claim that every other stage of teacher recovery has passed end-to-end testing.
 No change to the quorum or runtime is authorized by this audit correction.
 
+**Disposition: remedy the specification.** FEAT-IDEN-103 now requires one
+User-owned request and exact coverage of existing teacher-owned class IDs, with
+one selected student Seat per class. It no longer requires all roster students
+or a separate request for each class. FEAT-IDEN-104/105 participant references
+now use those selected seat/class rows, not a nonexistent request-level class or
+whole-roster quorum. INV-CORE-000 §III.6 prohibits interpreting "active" as an
+extra class lifecycle state. No runtime or public-page edits are part of this
+correction; no new runtime tests were necessary for these documentation changes.
+
+**Remaining separate review:** the downstream FEATs also contain older code
+format/hashing, consumed-state, and credential-completion language. This quorum
+reconciliation does not certify those other contracts or their runtime. They
+must be checked against DOM-IDEN-003 §IX and incorporated SPEC-SEC-001 before any
+implementation changes; do not use the stale FEAT text to infer another quorum
+or a demonstrated security defect.
+
+
 ### 5. Deletion: four independent verdicts
 
 | Boundary | Evidence | Verdict |
 |---|---|---|
 | Authoritative application class data | Hard-delete commands and membership/orphan handling exist. Prior tests were inspected; no deletion was executed in this audit. | Implemented paths observed; complete runtime deletion NOT_EVALUATED here. Backup uncertainty is not evidence these paths fail. |
-| Ancillary application artifacts | `ActorRequestTrace.class_id` has `ON DELETE SET NULL`; deletion command does not explicitly remove traces; `tlcp` prunes by count/probabilistic TTL. | Concrete deletion-closure candidate. Test whether references survive before declaring a confirmed closure defect. |
+| Ancillary application artifacts | Regression tests confirmed request traces survived both class and seat deletion. Seat and class FKs now cascade; class ownership is required; the trace writer rejects deleted or mismatched context. | Confirmed application deletion defect, remedied for `ActorRequestTrace`; this is not a claim about every ancillary artifact. |
 | Automatic stale-class purge | `INV-CORE-000` §III.5 requires purge; no corresponding job or 180-day mechanism was located in the inspected application. | Observed implementation-evidence gap; remove the public 180-day guarantee. No conclusion about an uninspected external scheduler. |
 | Infrastructure backups and external logs | No live retention configuration inspected. | Operational UNKNOWN, separate from application hard deletion. |
+
+**Request-trace remediation:** authority is INV-CORE-000 §III.5, INV-ARC-012,
+Identity seat/User lifetime, and DOM-SUP-001's deletion closure. The existing
+class/account destruction paths inherit the database cascades; they need no
+separate ad hoc trace sweep. Source traces remain useful during their owning
+seat/class lifetime, subject to existing count/TTL pruning. Frozen ticket packs
+remain governed by their own seat-scoped deletion cascade.
+
+Migration `a5e5f6a7b8c9` removes traces whose seat or class is already gone, rather
+than retaining detached records. It rejects mismatched references to live
+seat/class owners for explicit reconciliation; it never guesses a new owner.
+The request writer checks that the original seat/class/role still exists before
+capturing a trace. Foreign keys prevent a late insert from retaining a deleted
+owner if deletion races the writer.
+
+**Verification:** the two original class/seat deletion regressions failed before
+the fix. After the fix, 12 focused checks passed for class/seat deletion, sibling
+isolation, valid trace capture, stale/wrong-class rejection, and canonical actor
+resolution. Four further checks passed for User-to-seat-to-trace deletion, database
+rejection of late inserts, migration cleanup/cascades/downgrade, and rejection of
+mismatched live owners. Compilation and scoped `git diff --check` passed.
+This is local application evidence; no production system or infrastructure backup
+retention was examined. Automatic stale-class purge remains a separate open item.
 
 **Teacher exports:** `export_class_roster` and `export_students` provide downloads.
 This corrects the old “no export tools” implication. A downloaded CSV is a
@@ -337,8 +377,19 @@ do not infer a security violation solely from the existence of support snapshots
 values. This is a concrete control mismatch for focused security verification;
 no resulting collision, identity disclosure, or exploit was demonstrated here.
 
-**Disclosure correction:** remove the old per-record-salt assertion. Any digest
-migration must follow the Identity authority; it is not part of this copy task.
+**Disclosure correction:** remove the old per-record-salt assertion.
+
+**Subsequent disposition: remedied by pre-launch replacement.** The user confirmed
+there is no existing data to preserve. Username lookup, salted username representation,
+claim first/last-name matching, and roster fingerprints now use distinct purpose
+labels and structured HMAC input. Claim digests include canonical class_id.
+Normalization is centralized (NFKC and edge trimming; names lowercase, usernames
+case-sensitive), including import duplicate checks and class-scoped in-memory
+hall-pass comparison. Writers/readers/fixtures changed together; no migration,
+old-hash fallback or compatibility bridge was added. Display profiles remain
+unchanged. SPEC-SEC-001 §V.2 records the exact encoding under INV-ARC-018/019.
+Teacher-recovery code/resume-capability representation remains the separate
+finding #4 follow-up; this lookup change does not certify those contracts.
 
 ### 8. Authentication and cookies
 
@@ -437,3 +488,106 @@ Validation for this public-copy correction: targeted structural checks returned
 and fragment targets resolved; `git diff --check` passed. Results are recorded
 in `pytest_result/20260916_pytest_test_accessibility_summary.md` and
 `pytest_result/20260916_pytest_test_axe_compliance_summary.md` (UTC artifact date).
+
+### Release blocker: principal references in classroom records
+
+Owner decision: authentication principal references are permitted only on Seat
+bindings, class ownership, passkey credentials, and authentication recovery requests.
+This is a runtime/schema mismatch under INV-ARC-019, not an infrastructure finding.
+
+Removed from the shipping model and migration head:
+
+| Record | Removed reference | Canonical replacement |
+| --- | --- | --- |
+| Ledger transaction | `user_id` | Existing class, target/actor Seat anchors |
+| Attendance session | `target_user_id` | Existing class and target Seat |
+| Payroll event | `target_user_id` | Existing class and target/actor Seats |
+| Store product | `user_id` | Existing class and `created_by_seat_id` |
+| Announcement | `user_id` | Class-scoped `created_by_seat_id` |
+| Policy transition | `created_by` User FK | Class-scoped `created_by_seat_id` |
+| Support issue | `sysadmin_id` | External reviewer role and review metadata; no principal/participant binding |
+| Audit event | `teacher_id` User alias | Existing class/Seat metadata; signed inputs unchanged |
+
+Writers, selectors, fixture interfaces, Ledger plans, and bulk-command fingerprints
+now follow these anchors. No ignored compatibility User arguments remain on the
+Ledger or Store publishing interfaces. Operational event logging uses a scoped Seat,
+and TLCP actor context carries only its existing public actor reference.
+
+The optional Seat→User binding now uses RESTRICT, and the User ORM relationship
+no longer cascades Seat destruction. Identity must explicitly detach or destroy
+Seats before deleting a principal. Orphan cleanup removes authentication-owned
+artifacts only; it neither deletes attendance nor rewrites surviving Ledger rows.
+Class destruction uses one database class cascade for Seats and policy lineage.
+
+Migration `c7a7b8c9d0e1` maps old authors only when the exact teacher Seat can be
+established within the stored class. Invalid mappings fail closed. It removes all
+eight references and rebuilds the Ledger immutability guard without weakening any
+other protected field. Two historical migrations were made tolerant of this
+repository's current-metadata bootstrap; existing upgrade behavior remains intact.
+
+Fingerprint version 3 removes User material from bulk effect plans. Accepted digests
+are never rewritten. Existing single-command and verified internal-transfer replay
+remain usable. An old bulk-effect reservation requiring the removed principal
+material blocks migration until an explicit pre-launch data-disposition decision;
+no database reset or history deletion has been performed. Downgrade cannot recreate
+removed principal bindings and is deliberately unsupported.
+
+Validation includes the physical PostgreSQL schema allowlist, detached-principal
+record survival, rebinding, cross-class author rejection, exact migration author
+mapping, incompatible bulk-history rejection, unchanged transfer digests, unchanged
+audit signatures, Ledger immutability, teacher/class destruction and retention,
+attendance/payroll, support review, and transfers. Final verification covered 94 distinct targeted tests; each has a passing
+latest result across the focused runs (initial failures were corrected and rerun). No full suite or deployment was run.
+
+At this checkpoint, the distinct teacher-facing Unclaim command and UI remained
+the next implementation step. Those checks verified its Seat-lifetime prerequisite;
+see the subsequent Unclaim implementation entry below. Public disclosures remain separate from this internal release record.
+
+Principal-reference cleanup verification artifacts:
+
+- `pytest_result/20260916_pytest_test_seat_owned_records_summary.md`
+- `pytest_result/20260916_pytest_test_seat_owned_records_summary_1.md`
+- `pytest_result/20260916_pytest_specific_summary_3.md`
+- `pytest_result/20260916_pytest_test_seat_owned_records_summary_5.md`
+- `pytest_result/20260916_pytest_test_tlcp_actor_context_resolution_summary.md`
+
+Python compilation and scoped `git diff --check` passed.
+
+
+## Explicit Unclaim implementation (2026-09-15)
+
+FEAT-IDEN-006 now owns a separate teacher Unclaim command and roster modal.
+Re-entered first/last names regenerate temporary claim hashes only; existing
+IdentityProfile display names and encrypted notes remain unchanged. Detach the
+User, preserve the Seat and its class-owned records, and delete the principal only
+when no remaining Seat or class ownership references it. Unclaiming the last
+student does not delete the class or teacher.
+
+Migration d8b8c9d0e1f2 adds a server-stored Seat claim generation. Unclaim increments
+it; initial credential setup and Unclaim forms reject stale generations. Both
+ordinary claim and authenticated binding can reclaim the preserved Seat. Unclaim
+also cancels unfinished teacher-recovery requests dependent on that Seat and
+removes the previous claimant's confirmation material. This is an Identity
+lifecycle change under INV-ARC-019, DOM-IDEN-005/007 and FEAT-IDEN-001/002/006.
+
+Validation: 48 distinct targeted tests have passing latest results: 17 Unclaim
+cases and 31 existing student-recovery cases. A recovery test's classroom setup
+was corrected and rerun. Artifacts: `pytest_result/20260916_pytest_test_student_unclaim_summary_1.md`
+(first 14 passing cases; includes the superseded fixture failure) and
+`pytest_result/20260916_pytest_specific_summary_4.md` (remaining 34 passing cases).
+Python compilation, Unclaim JavaScript syntax, and scoped diff checks passed.
+UI verification covers server-rendered controls; interactive browser behavior
+has not been tested. No full suite, commit, deployment, or production migration.
+
+## Lookup encoding verification (2026-09-15)
+
+37 focused tests passed for purpose/class separation, structured-field ambiguity,
+Unicode normalization, duplicate-name batch rejection, initial/authenticated claim,
+Unclaim, principal sign-in, student recovery completion and hall-pass normalization.
+The added fixed HMAC encoding vector also passed on rerun (one of those 37 tests).
+Artifacts: `pytest_result/20260916_pytest_test_lookup_hash_contract_summary.md`
+and `pytest_result/20260916_pytest_test_lookup_hash_contract_summary_1.md`.
+Python compilation and scoped diff checks passed. No full suite, data migration,
+old-digest fallback, commit or deployment was performed. Unused obsolete claim/name
+calculations were removed from the manual-add route; teacher-recovery capability
+hashing/lifecycle remains a distinct follow-up, not certified by these checks.

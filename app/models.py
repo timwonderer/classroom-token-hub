@@ -236,6 +236,8 @@ class Seat(db.Model):
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
     role = db.Column(db.String(20), nullable=False, default='student')
 
+    claim_generation = db.Column(db.Integer, nullable=False, default=0, server_default="0")
+
     # Canonical seat-local metadata for the identity overhaul target.
     roster_fingerprint = db.Column(db.String(128), nullable=True, index=True)
     dedupe_code = db.Column(db.String(8), nullable=True)

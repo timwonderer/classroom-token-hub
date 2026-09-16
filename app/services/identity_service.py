@@ -81,14 +81,14 @@ def get_enrolled_student_seat_ids(class_id: str) -> list[int]:
 
 def match_hall_pass_profiles(*, class_id: str, first_name: str, last_name: str):
     """Read-only name matching after the caller establishes class/capability scope."""
-    import unicodedata
+    from app.hash_utils import normalize_lookup_text
     from app.models import IdentityProfile
 
     if not class_id:
         raise ValueError("class_id is required for hall-pass verification")
 
     def normalize(value):
-        return unicodedata.normalize("NFKC", value or "").strip().lower()
+        return normalize_lookup_text(value or "", kind="name")
 
     first, last = normalize(first_name), normalize(last_name)
     if not first or not last:

@@ -24,7 +24,7 @@ from app.models import Seat, IdentityProfile, User, UserRole, Transaction
 from app.utils.money_guard import check_financial_cooldown
 from app.utils.canonical_temporal_resolver import ensure_utc, utc_now
 from app.feats.base import FEATContext
-from app.hash_utils import hash_username_lookup
+from app.hash_utils import hash_username_lookup, hash_claim_name
 from tests.helpers.canonical_session import set_canonical_context
 from tests.helpers.classroom_initializer import initialize
 from tests.dom.identity.helpers import (
@@ -226,7 +226,6 @@ def test_DOM_IDEN_002__recovery_preserves_balance_and_transactions(client, recov
     join_code = recovery_data["join_code"]
 
     tx = Transaction(
-        user_id=user.id,
         seat_id=seat.id,
         class_id=recovery_data["class_id"],
         target_seat_id=seat.id,
@@ -382,8 +381,8 @@ def test_DOM_IDEN_006__claim_account_resolves_join_code_to_class_id(client):
             class_id=class_row.class_id,
             role="student",
             claimed_at=None,
-            claim_first_name_hash=hash_username_lookup("First".lower()),
-            claim_last_name_hash=hash_username_lookup("Last".lower()),
+            claim_first_name_hash=hash_claim_name("First".lower(), class_id=class_row.class_id, field="first"),
+            claim_last_name_hash=hash_claim_name("Last".lower(), class_id=class_row.class_id, field="last"),
         )
         db.session.add(seat)
         db.session.flush()

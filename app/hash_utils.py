@@ -1,4 +1,6 @@
 import hmac
+import json
+import unicodedata
 import os
 import secrets
 from hashlib import sha256
@@ -22,20 +24,53 @@ def hash_hmac(value: bytes, salt: bytes) -> str:
     return hmac.new(pepper, salt + value, sha256).hexdigest()
 
 
+def normalize_lookup_text(value: str, *, kind: str) -> str:
+    """SPEC-SEC-001 V.2: NFKC, trim edges; names additionally lowercase.
+
+    Internal whitespace and punctuation remain significant. Usernames retain
+    case sensitivity. Scope IDs and opaque codes never use name normalization.
+    """
+    if not isinstance(value, str):
+        raise TypeError("Lookup text must be a string")
+    if kind not in {"username", "name"}:
+        raise ValueError("Unknown lookup normalization kind")
+    normalized = unicodedata.normalize("NFKC", value).strip()
+    return normalized.lower() if kind == "name" else normalized
+
+
+def _lookup_digest(label: str, *parts: str) -> str:
+    # Structured framing keeps user-controlled delimiters out of field boundaries.
+    payload = json.dumps(["cth.identity.lookup.v1", label, *parts],
+                         ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    return hmac.new(_get_pepper(), payload, sha256).hexdigest()
+
+
 def hash_username(username: str, salt: bytes) -> str:
-    return hash_hmac(username.encode(), salt)
+    return _lookup_digest("username-verifier", salt.hex(),
+                          normalize_lookup_text(username, kind="username"))
 
 
 def hash_username_lookup(username: str) -> str:
-    """Return a deterministic HMAC hash for username lookups.
+    """Global principal lookup; deliberately independent of class authority."""
+    return _lookup_digest("username", normalize_lookup_text(username, kind="username"))
 
-    This intentionally omits the per-user salt so we can query by username
-    without scanning all stored salts. It still relies on the global pepper
-    for secrecy.
-    """
 
-    pepper = _get_pepper()
-    return hmac.new(pepper, username.encode(), sha256).hexdigest()
+def hash_claim_name(value: str, *, class_id: str, field: str) -> str:
+    if not isinstance(class_id, str) or not class_id.strip():
+        raise ValueError("Canonical class_id is required")
+    if field not in {"first", "last"}:
+        raise ValueError("Unknown claim name field")
+    return _lookup_digest("claim-" + field + "-name", class_id,
+                          normalize_lookup_text(value, kind="name"))
+
+
+def hash_roster_fingerprint(*, class_id: str, first_name: str,
+                            last_name: str, dedupe_code: str = "") -> str:
+    if not isinstance(class_id, str) or not class_id.strip():
+        raise ValueError("Canonical class_id is required")
+    return _lookup_digest("roster-fingerprint", class_id,
+        normalize_lookup_text(first_name, kind="name"),
+        normalize_lookup_text(last_name, kind="name"), dedupe_code.strip().upper())
 
 
 def get_random_salt() -> bytes:

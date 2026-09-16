@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-SEC-001 | 1.2 | 2026-09-15 | 1.1 | Technical Specification |
+| SPEC-SEC-001 | 1.3 | 2026-09-15 | 1.2 | Technical Specification |
 
 ## I. Purpose
 
@@ -66,6 +66,39 @@ The application MUST refuse to start in any non-test environment when a required
 3. Recoverable display PII MUST use the application’s approved symmetric encryption facility. Hash and encrypted display representations MUST be separate fields when both purposes exist.
 4. `users.id`, `seats.id`, and `class_id` MUST retain their distinct meanings. `public_id` MUST be resolved under canonical class scope and MUST never grant authority.
 5. Lookup responses MUST return the minimum result needed by the owning contract. They MUST NOT expose credential material, lookup digests, encryption keys, internal identifiers, or unrelated class membership.
+
+#### Canonical lookup encoding (pre-launch cutover)
+
+`app.hash_utils.normalize_lookup_text` is the single text normalization primitive:
+Unicode NFKC, then strip leading/trailing whitespace; names additionally use
+Unicode lowercase. Username case, internal whitespace, punctuation, and accents
+remain significant. Display values are not rewritten. Class IDs are canonical
+opaque IDs and are not normalized as names. Claim distinguishing codes retain
+their owning contract's trim/uppercase rule.
+
+Compute HMAC-SHA-256 under `PEPPER_KEY` over UTF-8 JSON arrays, serialized with
+`ensure_ascii=False` and separators `(',', ':')`. First two elements are
+`"cth.identity.lookup.v1"` and the fixed purpose label. Remaining elements:
+
+| Label | Ordered elements |
+|---|---|
+| `username` | Normalized username |
+| `username-verifier` | Lowercase hex salt, normalized username |
+| `claim-first-name` | Canonical class ID, normalized first name |
+| `claim-last-name` | Canonical class ID, normalized last name |
+| `roster-fingerprint` | Canonical class ID, normalized first name, normalized last name, distinguishing code (empty if absent) |
+
+Structured encoding prevents delimiter ambiguity. Missing class scope and unknown
+name fields fail closed. Principal lookup remains global; claim lookup first
+resolves class scope and includes that scope in its digest. Hall-pass verification
+uses the name normalization primitive for in-memory profile comparison, with no
+persistent lookup digest or claim-artifact dependency.
+
+This is a pre-launch replacement with no existing data to migrate. All current
+readers, writers and fixtures use this format; do not attempt old-digest lookup,
+dual writes, compatibility fallback, or inference from display names to repair a
+credential. Password hashing and teacher-recovery capability formats are separate
+contracts and are not changed by this lookup encoding.
 
 ### V.3 Authentication, capability, and context
 

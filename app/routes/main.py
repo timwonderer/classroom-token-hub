@@ -5,7 +5,7 @@ Contains public-facing utility routes including health checks, legal pages,
 debug endpoints, and public hall pass verification.
 """
 
-import unicodedata
+from app.hash_utils import normalize_lookup_text
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from flask import (
@@ -149,14 +149,14 @@ def _normalize_first_name(value):
     """Normalize first name: strip, NFKC, lowercase."""
     if not value:
         return ''
-    return unicodedata.normalize('NFKC', value.strip().lower())
+    return normalize_lookup_text(value, kind="name")
 
 
 def _normalize_last_name(value):
     """Normalize last name: strip, NFKC, lowercase."""
     if not value:
         return ''
-    return unicodedata.normalize('NFKC', value.strip().lower())
+    return normalize_lookup_text(value, kind="name")
 
 
 @main_bp.route('/verify/hallpass/<teacher_public_token>', methods=['GET', 'POST'])
