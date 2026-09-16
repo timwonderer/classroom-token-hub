@@ -406,6 +406,16 @@ removes its seats and therefore these support rows; class deletion likewise
 removes its owned seats and tickets. Immutable means unchanged while retained,
 not exempt from identity deletion. Do not preserve a detached sysadmin copy.
 
+The source `actor_request_trace` rows obey the same ownership lifetime. Each
+trace requires an existing canonical Seat public ID and class ID. Deleting
+that Seat, its User, or its class deletes its traces through database cascades;
+nulling the class reference is not deletion. TTL/count pruning is supplemental
+retention management, never a substitute for deletion closure. A request that
+finishes after destroying its own seat or class must not recreate a trace from
+cached context. The writer validates the live seat/class pair, and foreign keys
+prevent insertion if its owner is deleted concurrently.
+
+
 A teacher's directly submitted report is an explicit submission of that text;
 class names must not be silently embedded in metadata headers. Such a form does
 not automatically attach balances, transactions, or roster notes. No assertion

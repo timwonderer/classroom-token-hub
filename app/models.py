@@ -121,6 +121,7 @@ class User(db.Model):
     totp_secret_encrypted = db.Column(db.String(200), nullable=True)
     pin_hash = db.Column(db.Text, nullable=True)
     passphrase_hash = db.Column(db.Text, nullable=True)
+    last_signed_in_at = db.Column(db.DateTime(timezone=True), nullable=True, index=True)
     current_session_started_at = db.Column(db.DateTime(timezone=True), nullable=True)
     current_session_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
     current_session_nonce = db.Column(db.String(128), nullable=True, index=True)
@@ -1943,8 +1944,8 @@ class ActorRequestTrace(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     actor_type = db.Column(db.String(20), nullable=False, index=True)
-    actor_public_id = db.Column(db.String(64), nullable=False, index=True)
-    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='SET NULL'), nullable=True, index=True)
+    actor_public_id = db.Column(db.String(64), db.ForeignKey('seats.public_id', name='fk_actor_request_trace_seat', ondelete='CASCADE'), nullable=False, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
     request_id = db.Column(db.String(128), nullable=False, index=True)
     method = db.Column(db.String(10), nullable=False)
     endpoint = db.Column(db.String(500), nullable=False)

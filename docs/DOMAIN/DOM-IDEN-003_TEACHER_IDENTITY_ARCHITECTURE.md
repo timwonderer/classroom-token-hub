@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-IDEN-003 | 2.3 | 2026-07-10 | 2.2 | Constitutional |
+| DOM-IDEN-003 | 2.4 | 2026-09-15 | 2.3 | Constitutional |
 
 ---
 
@@ -332,6 +332,22 @@ The teacher recovery system SHALL NOT:
 - Log student PII in recovery audit records
 
 ---
+
+## IX.A. Account Retention and Automatic Destruction
+
+`User.last_signed_in_at` records successful teacher authentication (TOTP or passkey),
+not requests, class activity, recovery initiation, or session refresh. If present,
+eligibility begins at that instant plus 180 days; if absent, eligibility begins
+at `User.created_at` plus 30 days. An hourly lifecycle sweep rechecks eligibility
+under a User row lock and executes FEAT-IDEN-007, with the same lock used when
+recording a successful sign-in. Candidate discovery alone is not authorization.
+
+The scheduled lifecycle authority names the teacher principal directly after this
+policy check. It is not a sysadmin session, impersonation, or inferred class
+activity. Account destruction composes the same domain command as manual deletion
+and removes every owned class, seat, support artifact, and orphaned student User.
+A failed account transaction rolls back; a later sweep can retry.
+
 
 ## X. Credential Summary
 

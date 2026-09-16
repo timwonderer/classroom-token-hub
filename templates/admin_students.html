@@ -417,8 +417,8 @@
                             <span class="material-symbols-outlined icon-middle" aria-hidden="true">edit</span>
                             <span class="visually-hidden">Edit {{ student_display_name }}</span>
                           </button>
-                        <button type="button" class="btn btn-sm btn-outline-danger quick-action-btn" data-bs-toggle="modal"
-                            data-bs-target="#deleteStudentModal" data-student-id="{{ student.id }}"
+                        <button type="button" class="btn btn-sm btn-outline-danger quick-action-btn delete-student"
+                            data-student-id="{{ student.id }}"
                             data-student-name="{{ student_display_name }}">
                             <span class="material-symbols-outlined icon-middle" aria-hidden="true">delete</span>
                             <span class="visually-hidden">Delete {{ student_display_name }}</span>
@@ -832,46 +832,6 @@
   </div>
 </div>
 
-<!-- Delete Student Modal -->
-<div class="modal fade" id="deleteStudentModal" tabindex="-1" aria-labelledby="deleteStudentModalLabel"
-  aria-hidden="true">
-  <div class="modal-dialog">
-    <form action="{{ url_for('admin.delete_student') }}" method="post">
-      <div class="modal-content">
-        <div class="modal-header bg-danger text-white">
-          <h2 class="modal-title h5" id="deleteStudentModalLabel">
-            <span class="material-symbols-outlined me-2 icon-middle" aria-hidden="true">warning</span>Delete Student
-          </h2>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <input type="hidden" id="delete_student_id" name="seat_id">
-
-          <div class="alert alert-danger">
-            <h3 class="h6"><span class="material-symbols-outlined me-2 icon-middle" aria-hidden="true">warning</span>Warning</h3>
-            <p>You are about to delete <strong id="delete_student_name"></strong>.</p>
-            <p class="mb-0">This action will permanently delete:</p>
-            <ul class="mb-0">
-              <li>All transaction history</li>
-              <li>All attendance records</li>
-              <li>All purchased items</li>
-              <li>All other student data</li>
-            </ul>
-          </div>
-
-          <p class="mb-3">Type <strong class="text-danger">DELETE</strong> to confirm:</p>
-          <input type="text" class="form-control" id="delete_confirmation" name="confirmation" required aria-label="Type DELETE to confirm">
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-danger">Delete Permanently</button>
-        </div>
-      </div>
-    </form>
-  </div>
-</div>
-
 <!-- Timed Delete Gate Modal -->
 <div class="modal fade" id="timedDeleteGateModal" tabindex="-1" aria-labelledby="timedDeleteGateModalLabel"
   aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
@@ -990,58 +950,6 @@
         });
       }
 
-    }
-
-    // Delete Student Modal
-    const deleteModal = document.getElementById('deleteStudentModal');
-    console.log('Delete modal element:', deleteModal);
-
-    if (deleteModal) {
-      console.log('Delete modal found, attaching event listeners');
-      deleteModal.addEventListener('show.bs.modal', event => {
-        const button = event.relatedTarget;
-        const studentId = button.getAttribute('data-student-id');
-        const studentName = button.getAttribute('data-student-name');
-
-        console.log('Delete modal opening:', { studentId, studentName });
-
-        const studentIdField = deleteModal.querySelector('#delete_student_id');
-        const studentNameField = deleteModal.querySelector('#delete_student_name');
-        const confirmationField = deleteModal.querySelector('#delete_confirmation');
-
-        if (studentIdField) {
-          studentIdField.value = studentId;
-          console.log('Set student_id field to:', studentIdField.value);
-        } else {
-          console.error('Could not find #delete_student_id field');
-        }
-
-        if (studentNameField) {
-          studentNameField.textContent = studentName;
-        } else {
-          console.error('Could not find #delete_student_name field');
-        }
-
-        if (confirmationField) {
-          confirmationField.value = '';
-        } else {
-          console.error('Could not find #delete_confirmation field');
-        }
-      });
-
-      // Add form submit debugging
-      const deleteForm = deleteModal.querySelector('form');
-      if (deleteForm) {
-        deleteForm.addEventListener('submit', function (e) {
-          const formData = new FormData(deleteForm);
-          console.log('Delete form submitting with data:');
-          for (let [key, value] of formData.entries()) {
-            console.log(`  ${key}: ${value}`);
-          }
-        });
-      }
-    } else {
-      console.error('Delete modal not found in DOM');
     }
 
     console.log('All student management scripts initialized');
@@ -1270,52 +1178,47 @@
     updateBulkToolbar();
   }
 
-  function bulkDeleteStudents() {
-    const table = currentClassStudentTable();
-    const checkboxes = table.querySelectorAll('.student-checkbox:checked');
-    const studentIds = Array.from(checkboxes).map(cb => cb.value);
-
-    if (studentIds.length === 0) {
-      announceStudentManagement('Select at least one student to delete.', 'warning');
-      return;
+  async function deleteStudentsWithPreview(studentIds) {
+    if (!studentIds.length) return;
+    const headers = {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+    };
+    try {
+      const previewResponse = await fetch('/admin/students/deletion-preview', {
+        method: 'POST', headers, body: JSON.stringify({student_ids: studentIds})
+      });
+      if (!previewResponse.ok) throw new Error('Unable to verify the current roster. Refresh and try again.');
+      const preview = await previewResponse.json();
+      const gate = await showTimedDeleteGate({
+        title: preview.account_deleted ? 'Delete Class and Teacher Account' :
+               preview.class_deleted ? 'Delete Last Students and Class' : 'Delete Students',
+        warning: preview.warning, expectedPhrase: preview.expected_phrase,
+      });
+      if (!gate) return;
+      const response = await fetch('/admin/students/bulk-delete', {
+        method: 'POST', headers, body: JSON.stringify({student_ids: studentIds, ...gate})
+      });
+      const result = await response.json();
+      if (!response.ok || result.status !== 'success') {
+        announceStudentManagement(result.message || 'The roster changed. Review the deletion again.', 'danger');
+        return;
+      }
+      window.location.assign(result.redirect);
+    } catch (error) {
+      announceStudentManagement(error.message || 'Unable to delete students.', 'danger');
     }
-
-    const count = studentIds.length;
-    const warning = `DANGER! YOU ARE ABOUT TO PERMANENTLY AND IRREVERSIBLY DELETE ${count} STUDENT(S) AND DATA ASSOCIATED WITH THEM.`;
-
-    showTimedDeleteGate({
-      title: 'Confirm Student Deletion',
-      warning,
-      expectedPhrase: 'DELETE STUDENTS',
-    }).then(gatePayload => {
-      if (!gatePayload) return;
-
-      fetch('/admin/students/bulk-delete', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-        },
-        body: JSON.stringify({
-          student_ids: studentIds,
-          ...gatePayload
-        })
-      })
-        .then(response => response.json())
-        .then(data => {
-          if (data.status === 'success') {
-            announceStudentManagement(data.message, 'success');
-            location.reload();
-          } else {
-            announceStudentManagement('Error: ' + data.message, 'danger');
-          }
-        })
-        .catch(error => {
-          console.error('Error:', error);
-          announceStudentManagement('Network error occurred while deleting students. Please try again.', 'danger');
-        });
-    });
   }
+
+  function bulkDeleteStudents() {
+    const selected = currentClassStudentTable().querySelectorAll('.student-checkbox:checked');
+    deleteStudentsWithPreview(Array.from(selected).map(cb => cb.value));
+  }
+
+  document.addEventListener('click', event => {
+    const button = event.target.closest('.delete-student');
+    if (button) deleteStudentsWithPreview([button.dataset.studentId]);
+  });
 
   function bulkTapIn() {
     const table = currentClassStudentTable();
@@ -1483,36 +1386,7 @@
   }
 
   function deletePendingStudent(seatId, studentName) {
-    const confirmation = confirm(
-      `Are you sure you want to delete the pending roster entry for ${studentName}?\n\n` +
-      `This student has not yet claimed their account. This action will remove them from your roster.\n\n` +
-      `This action CANNOT be undone!`
-    );
-
-    if (!confirmation) return;
-
-    // Send delete request
-    fetch('/admin/pending-students/delete', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-      },
-      body: JSON.stringify({ seat_id: seatId })
-    })
-      .then(response => response.json())
-      .then(data => {
-        if (data.status === 'success') {
-          announceStudentManagement(data.message, 'success');
-          location.reload();
-        } else {
-          announceStudentManagement('Error: ' + data.message, 'danger');
-        }
-      })
-      .catch(error => {
-        console.error('Error:', error);
-        announceStudentManagement('Network error occurred while deleting the pending student. Please try again.', 'danger');
-      });
+    deleteStudentsWithPreview([seatId]);
   }
 
   // Event listener for delete pending student buttons using data attributes

@@ -30,3 +30,14 @@ supplies distinct claim deduplication codes. Validate the whole batch before
 writing; all accepted rows commit in one FEAT transaction. This additive import
 is distinct from actor_public_id-based modification of an exported roster under
 FEAT-CLASS-002. Notes are passed to the encrypted profile field.
+
+
+## Roster removal and terminal consequences (2026-09-15)
+
+Teacher-authorized deletion uses the active canonical class and explicit student
+Seat IDs; cross-class, teacher-seat, missing, or malformed selections fail closed.
+One transaction locks the teacher and class, verifies the current roster, and
+composes Identity removal or class/account destruction as appropriate. The
+confirmation phrase must match the current consequence, including deletion of
+the class and teacher account when their final student/class is removed.
+Delete physically destroys the Seat; it is not an implicit Unclaim operation.

@@ -288,52 +288,17 @@ def remove_student_from_teacher_scope(seat_id, user_id):
     """
     Remove a student's seat from a specific teacher's roster and hard-delete if orphaned.
     """
-    # Detach the seat that belongs to this teacher's classes.
-    from app.models import ClassEconomy
     seat = db.session.get(Seat, seat_id)
-    if not seat:
+    if not seat or seat.role != "student":
         return False
-
+    owner = db.session.get(ClassEconomy, seat.class_id)
+    if not owner or owner.teacher_user_id != user_id:
+        raise ValueError("Student seat is outside teacher ownership")
     student_user_id = seat.user_id
-    scoped_entitlement_ids, scoped_issue_ids, scoped_tx_ids, scoped_seat_ids = (
-        _collect_related_ids_for_seats([seat_id])
-    )
-    teacher_class_ids = sa.select(ClassEconomy.class_id).where(ClassEconomy.teacher_user_id == user_id)
-    Seat.query.filter(
-        Seat.id == seat_id,
-        Seat.class_id.in_(teacher_class_ids),
-    ).update(
-        {
-            Seat.claimed_at: None,
-            Seat.user_id: None,
-        },
-        synchronize_session=False,
-    )
-    remaining_links = db.session.query(Seat.id).filter(Seat.user_id == student_user_id).all()
-    if remaining_links:
-        _clear_support_transaction_refs(scoped_tx_ids)
-        _delete_student_scoped_rows(
-            student_user_id,
-            scoped_entitlement_ids,
-            scoped_issue_ids,
-            scoped_tx_ids,
-            scoped_seat_ids,
-            scoped_class_id=seat.class_id,
-        )
-        return False
-
-    entitlement_ids, issue_ids, tx_ids, seat_ids = _collect_related_ids_for_seats(scoped_seat_ids)
+    entitlement_ids, issue_ids, tx_ids, seat_ids = _collect_related_ids_for_seats([seat_id])
     _clear_support_transaction_refs(tx_ids)
-    _delete_student_scoped_rows(
-        student_user_id,
-        entitlement_ids,
-        issue_ids,
-        tx_ids,
-        seat_ids,
-    )
-    Seat.query.filter(Seat.user_id == student_user_id).delete(synchronize_session=False)
-    # The detached seat was the student's last one anywhere; the principal goes
-    # with it. The seat row itself survives as an unclaimed roster slot owned by
-    # the class, which is why the delete above is a no-op on the unclaimed seat.
-    delete_user_if_orphaned(student_user_id)
-    return True
+    _delete_student_scoped_rows(student_user_id, entitlement_ids, issue_ids, tx_ids,
+                               seat_ids, seat_ids_for_student=[seat_id], scoped_class_id=seat.class_id)
+    db.session.delete(seat)
+    db.session.flush()
+    return delete_user_if_orphaned(student_user_id) if student_user_id else False
