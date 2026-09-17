@@ -431,45 +431,46 @@
             border: 1px solid color-mix(in srgb, var(--info) 30%, transparent);
         }
 
-        /* Alerts */
-        .alert {
-            padding: 0.85rem 1rem;
-            border-radius: var(--radius-sm);
-            font-size: 0.875rem;
-            display: flex;
-            align-items: flex-start;
-            gap: 0.5rem;
+        /* Alert cards
+           This page is standalone (no Bootstrap, no style.css), so these rules
+           stand in for the Bootstrap utilities the production alert-card markup
+           relies on (border-*, bg-*, text-white/text-dark, d-flex, me-2, h5,
+           fw-bold, mb-0). Markup matches templates/macros/cards.html alert_card. */
+        .alert-card {
             margin-bottom: 0.75rem;
         }
 
-        .alert .material-symbols-outlined {
+        .alert-card.border-success { border-color: var(--success); }
+        .alert-card.border-danger { border-color: var(--danger); }
+        .alert-card.border-warning { border-color: var(--warning); }
+        .alert-card.border-info { border-color: var(--info); }
+
+        .alert-card > .card-header {
+            display: flex;
+            align-items: center;
+            border-bottom: 0;
+        }
+
+        .alert-card > .card-header.bg-success { background: var(--success); }
+        .alert-card > .card-header.bg-danger { background: var(--danger); }
+        .alert-card > .card-header.bg-warning { background: var(--warning); }
+        .alert-card > .card-header.bg-info { background: var(--info); }
+        .alert-card .text-white { color: #fff; }
+        .alert-card .text-dark { color: var(--neutral-900); }
+
+        .alert-card > .card-header .material-symbols-outlined {
             font-size: 20px;
-            flex-shrink: 0;
-            margin-top: 1px;
+            margin-right: 0.5rem;
         }
 
-        .alert-success {
-            background: var(--success-subtle);
-            color: var(--success);
-            border: 1px solid color-mix(in srgb, var(--success) 20%, transparent);
+        .alert-card > .card-header h3 {
+            font-size: 1rem;
+            font-weight: 700;
+            margin: 0;
         }
 
-        .alert-danger {
-            background: var(--danger-subtle);
-            color: var(--danger);
-            border: 1px solid color-mix(in srgb, var(--danger) 20%, transparent);
-        }
-
-        .alert-warning {
-            background: var(--warning-subtle);
-            color: var(--warning);
-            border: 1px solid color-mix(in srgb, var(--warning) 20%, transparent);
-        }
-
-        .alert-info {
-            background: var(--info-subtle);
-            color: var(--info);
-            border: 1px solid color-mix(in srgb, var(--info) 20%, transparent);
+        .alert-card > .card-body > :last-child {
+            margin-bottom: 0;
         }
 
         /* Forms */
@@ -911,14 +912,34 @@
         <!-- ═══════ ALERTS ═══════ -->
         <div class="section">
             <div class="section-title">Alerts</div>
-            <div class="alert alert-success"><span class="material-symbols-outlined">check_circle</span> Payroll
-                processed successfully for 24 students.</div>
-            <div class="alert alert-danger"><span class="material-symbols-outlined">error</span> Insufficient balance to
-                complete this transaction.</div>
-            <div class="alert alert-warning"><span class="material-symbols-outlined">warning</span> Rent is due in 3
-                days. Review your itemization settings.</div>
-            <div class="alert alert-info"><span class="material-symbols-outlined">info</span> You can preview rent bills
-                before the due date.</div>
+            <div class="card alert-card border-success">
+                <div class="card-header bg-success text-white d-flex align-items-center">
+                    <span class="material-symbols-outlined me-2" aria-hidden="true">check_circle</span>
+                    <h3 class="h5 fw-bold mb-0 text-white">Payroll processed</h3>
+                </div>
+                <div class="card-body"><p class="mb-0">Payroll processed successfully for 24 students.</p></div>
+            </div>
+            <div class="card alert-card border-danger">
+                <div class="card-header bg-danger text-white d-flex align-items-center">
+                    <span class="material-symbols-outlined me-2" aria-hidden="true">error</span>
+                    <h3 class="h5 fw-bold mb-0 text-white">Transfer could not be completed</h3>
+                </div>
+                <div class="card-body"><p class="mb-0">Insufficient balance to complete this transaction.</p></div>
+            </div>
+            <div class="card alert-card border-warning">
+                <div class="card-header bg-warning text-dark d-flex align-items-center">
+                    <span class="material-symbols-outlined me-2" aria-hidden="true">schedule</span>
+                    <h3 class="h5 fw-bold mb-0 text-dark">Rent is due in 3 days</h3>
+                </div>
+                <div class="card-body"><p class="mb-0">Review your itemization settings before the due date.</p></div>
+            </div>
+            <div class="card alert-card border-info">
+                <div class="card-header bg-info text-white d-flex align-items-center">
+                    <span class="material-symbols-outlined me-2" aria-hidden="true">visibility</span>
+                    <h3 class="h5 fw-bold mb-0 text-white">Rent bills can be previewed</h3>
+                </div>
+                <div class="card-body"><p class="mb-0">You can preview rent bills before the due date.</p></div>
+            </div>
         </div>
 
         <!-- ═══════ FORMS ═══════ -->
@@ -1079,10 +1100,15 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="alert alert-info" style="margin:0">
-                            <span class="material-symbols-outlined">lightbulb</span>
-                            3 students have rent due this week. <a href="#"
-                                style="color:var(--info);font-weight:600;text-decoration:underline">Review</a>
+                        <div class="card alert-card border-info" style="margin:0">
+                            <div class="card-header bg-info text-white d-flex align-items-center">
+                                <span class="material-symbols-outlined me-2" aria-hidden="true">home</span>
+                                <h3 class="h5 fw-bold mb-0 text-white">Rent due this week</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="mb-0">3 students have rent due this week. <a href="#"
+                                        style="color:var(--info);font-weight:600;text-decoration:underline">Review</a></p>
+                            </div>
                         </div>
                     </div>
                 </div>

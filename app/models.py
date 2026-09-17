@@ -2881,14 +2881,15 @@ class Announcement(db.Model):
     def should_display(self):
         return self.is_active and not self.is_expired()
 
-    def get_priority_class(self):
-        priority_classes = {
-            'low': 'alert-secondary',
-            'normal': 'alert-info',
-            'high': 'alert-warning',
-            'urgent': 'alert-danger'
+    def get_priority_level(self):
+        """Semantic alert-card level (success/warning/danger/info) for this priority."""
+        priority_levels = {
+            'low': 'info',
+            'normal': 'info',
+            'high': 'warning',
+            'urgent': 'danger'
         }
-        return priority_classes.get(self.priority, 'alert-info')
+        return priority_levels.get(self.priority, 'info')
 
     def get_priority_icon(self):
         priority_icons = {

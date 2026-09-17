@@ -1,4 +1,5 @@
 {% extends "layout_student.html" %}
+{% import 'macros/cards.html' as cards %}
 
 {% block page_icon %}support_agent{% endblock %}
 
@@ -56,11 +57,8 @@
                 <div class="card-body">
                     <!-- Transaction Info (if applicable) -->
                     {% if issue_type == 'transaction' and transaction %}
-                    <div class="alert alert-info lh-lg ">
-                        <h5 class="alert-heading">
-                            <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span> You are creating support ticket for this transaction:
-                        </h5>
-                            <ul class="mb-0">
+                    {% call cards.alert_card('info', 'You are creating a support ticket for this transaction', icon='receipt_long', body_class='mb-3', heading_tag='h2') %}
+                            <ul class="mb-0 lh-lg">
                                 <li><strong>Amount:</strong> ${{ "%.2f"|format(transaction.amount) }}</li>          
                                 <li><strong>Account:</strong> {{ transaction.account_type|title }}</li>
                                 <li><strong>Description:</strong> {{ transaction.description }}</li>
@@ -72,7 +70,7 @@
                                 {% endif %}
                                 </li>
                             </ul>
-                    </div>
+                    {% endcall %}
                     {% endif %}
 
                     <!-- Instructions -->
@@ -143,11 +141,9 @@
                         </div>
                         {% endif %}
 
-                         <div class="alert alert-warning" role="alert">
-                        <h5 class="alert-heading">
-                        <strong>WARNING</strong></h5>
-                        <p class="mb-0">Once you submit this form, you will not be able to edit or delete this issue. Be sure to double-check the information you are providing is accurate before submitting your ticket.</p>
-                                </div>
+                        {% call cards.alert_card('warning', 'Tickets cannot be edited after you submit', icon='lock', role='alert', body_class='mb-3') %}
+                            <p class="mb-0">Once you submit this form, you will not be able to edit or delete this issue. Be sure to double-check the information you are providing is accurate before submitting your ticket.</p>
+                        {% endcall %}
                         <!-- Submit Button -->
                         <div class="d-grid gap-2">
                             {{ form.submit(class="btn btn-primary btn-lg") }}

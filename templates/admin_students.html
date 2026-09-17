@@ -1,4 +1,5 @@
 {% extends "layout_admin.html" %}
+{% import 'macros/cards.html' as cards %}
 {% set page_title = "Student Management" %}
 {% block title %}Student Management{% endblock %}
 {% block page_icon %}school{% endblock %}
@@ -78,17 +79,16 @@
   <li>Student creates a <strong>long passphrase</strong> (for security)</li>
 </ol>
 
-<div class="alert alert-danger mb-3">
-  <strong><span class="material-symbols-outlined me-1" aria-hidden="true">warning</span>Critical:</strong> The username is shown
-  <strong>only once</strong> during setup. Students must record it. If forgotten, you'll need to reset
-  their account.
-</div>
+{% call cards.alert_card('danger', 'The username is shown only once', icon='warning', body_class='mb-3') %}
+  <p class="mb-0">The username is shown <strong>only once</strong> during setup. Students must record it. If
+    forgotten, you'll need to reset their account.</p>
+{% endcall %}
 
-<div class="alert alert-info mb-0">
-  <strong><span class="material-symbols-outlined me-1" aria-hidden="true">lightbulb</span>Teacher Tip:</strong> Have students complete account
-  setup in class so you can help if they have issues. Although not recommended for security reasons,
-  consider keeping a secure record of usernames for your class so you can assist with forgotten usernames.
-</div>
+{% call cards.alert_card('info', 'Set up accounts in class', icon='lightbulb', body_class='mb-0') %}
+  <p class="mb-0">Have students complete account setup in class so you can help if they have issues. Although not
+    recommended for security reasons, consider keeping a secure record of usernames for your class so you can
+    assist with forgotten usernames.</p>
+{% endcall %}
 {% endcall %}
 
 {% call help.topic('stu-edit', 'person_text', 'How to update student info') %}
@@ -102,37 +102,36 @@
   <li>Click <strong>Save</strong>. The changes take effect immediately</li>
 </ol>
 
-<div class="alert alert-info mb-0">
-  <strong><span class="material-symbols-outlined me-1" aria-hidden="true">info</span>Important:</strong> Changing a name only changes
-  how it is displayed. It does not change the student's login or the name used to claim a seat.
-</div>
+{% call cards.alert_card('info', 'Name changes are display-only', icon='info', body_class='mb-0') %}
+  <p class="mb-0">Changing a name only changes how it is displayed. It does not change the student's login or the
+    name used to claim a seat.</p>
+{% endcall %}
 {% endcall %}
 
 {% call help.topic('stu-reset', 'restart_alt', 'How to reset student login') %}
 <p>Use reset when a student forgets credentials or cannot log in. Resetting preserves account data and
   issues a recovery code.</p>
-<div class="alert alert-warning">
-  <strong>The recovery code expires in ten minutes:</strong> Give it to the student right away. A new
-  code replaces any earlier one.
-</div>
+{% call cards.alert_card('warning', 'The recovery code expires in ten minutes', icon='schedule', body_class='mb-3') %}
+  <p class="mb-0">Give it to the student right away. A new code replaces any earlier one.</p>
+{% endcall %}
 <p class="mb-0">The student enters the code from account recovery on the student login page, then chooses a
   new username, PIN, and passphrase.</p>
 {% endcall %}
 
 {% call help.topic('stu-remove', 'person_remove', 'How to remove students') %}
 <p>To remove a student, use the <strong>Delete</strong> action next to their name in the Class Roster.</p>
-<div class="alert alert-danger mb-0">
-  <strong>Important:</strong> Removing a student is permanent and deletes their access to the class.
-</div>
+{% call cards.alert_card('danger', 'Removing a student is permanent', icon='person_remove', body_class='mb-0') %}
+  <p class="mb-0">Removing a student is permanent and deletes their access to the class.</p>
+{% endcall %}
 {% endcall %}
 
 {% call help.topic('stu-export', 'download', 'How to export class roster') %}
 <p>Use the <strong>Export All</strong> button in the Class Roster header to download a CSV of your
   students.</p>
-<div class="alert alert-info mb-0">
-  <strong>Tip:</strong> Exports are helpful for reviewing roster data, keeping offline backups, or
-  preparing a clean bulk upload.
-</div>
+{% call cards.alert_card('info', 'Uses for a roster export', icon='lightbulb', body_class='mb-0') %}
+  <p class="mb-0">Exports are helpful for reviewing roster data, keeping offline backups, or preparing a clean
+    bulk upload.</p>
+{% endcall %}
 {% endcall %}
 {% endblock %}
 
@@ -141,17 +140,11 @@
 
 {% macro recovery_readiness_warning() %}
 {% if claimed_students|length < recovery_min_students %}
-            <div class="card border-danger mb-3" role="note" id="recovery-readiness-warning">
-              <div class="card-header bg-danger text-white d-flex align-items-center">
-                <span class="material-symbols-outlined me-2" aria-hidden="true">shield_lock</span>
-                <h3 class="h5 fw-bold mb-0">Your account may be at risk of being unrecoverable</h3>
-              </div>
-              <div class="card-body">
+            {% call cards.alert_card('danger', 'Your account may be at risk of being unrecoverable', icon='shield_lock', role='note', id='recovery-readiness-warning', body_class='mb-3') %}
                 <p class="mb-0">Classroom Token Hub uses student-assisted teacher account recovery. Recovery requires enough claimed students across the classes you own, including at least {{ recovery_min_students }} claimed students in each class.
                   <strong>You currently have {{ claimed_students|length }} claimed students in this class.</strong>
                   Until this class reaches {{ recovery_min_students }}, teacher account recovery will not be available if you lose access.</p>
-              </div>
-            </div>
+            {% endcall %}
 {% endif %}
 {% endmacro %}
 
@@ -231,15 +224,13 @@
                     </div>
                   </div>
                   <div class="col-md-4">
-                    <div class="alert alert-info mb-0 small">
-                      <span class="material-symbols-outlined me-1 align-middle fs-6" aria-hidden="true">info</span>
-                      <strong>Student Instructions:</strong>
-                      <ol class="mb-0 mt-1 ps-3">
+                    {% call cards.alert_card('info', 'How students join this class', icon='info', body_class='mb-0') %}
+                      <ol class="mb-0 ps-3">
                         <li>Go to student sign-in page</li>
                         <li>Click "First Time? Set Up Account"</li>
                         <li>Enter this join code, then provide the first and last name from your roster</li>
                       </ol>
-                    </div>
+                    {% endcall %}
                   </div>
                 </div>
               </div>
@@ -467,10 +458,9 @@
             </div>
             {% else %}
             {{ recovery_readiness_warning() }}
-            <div class="alert alert-info">
-              <span class="material-symbols-outlined me-2 icon-middle" aria-hidden="true">info</span>No students have
-              claimed accounts in {{ class_display_label }} yet.
-            </div>
+            {% call cards.alert_card('info', 'No claimed accounts yet', icon='group', body_class='mb-3') %}
+              <p class="mb-0">No students have claimed accounts in {{ class_display_label }} yet.</p>
+            {% endcall %}
             {% endif %}
           </div>
         </div>
@@ -596,12 +586,6 @@
       actionTd.appendChild(removeBtn);
       tr.appendChild(actionTd);
       return tr;
-    }
-
-    function escapeHtml(str) {
-      const div = document.createElement('div');
-      div.textContent = str;
-      return div.innerHTML;
     }
 
     function getValidRows() {
@@ -754,14 +738,27 @@
       .then(r => r.json())
       .then(data => {
         if (data.status === 'success' || data.status === 'partial') {
-          let msg = data.created + ' student' + (data.created !== 1 ? 's' : '') + ' added successfully.';
+          const msgEl = document.createElement('p');
+          msgEl.className = 'mb-0';
+          msgEl.textContent = data.created + ' student' + (data.created !== 1 ? 's' : '') + ' added successfully.';
           if (data.join_code) {
-            msg += ' Join Code: <strong>' + escapeHtml(data.join_code) + '</strong>';
+            const codeEl = document.createElement('strong');
+            codeEl.textContent = data.join_code;
+            msgEl.append(' Join Code: ', codeEl);
           }
+          const bodyParts = [msgEl];
           if (data.errors && data.errors.length > 0) {
-            msg += '<br><small class="text-danger">' + data.errors.length + ' row(s) had errors.</small>';
+            const errEl = document.createElement('p');
+            errEl.className = 'mb-0 small text-danger';
+            errEl.textContent = data.errors.length + ' row(s) had errors.';
+            bodyParts.push(errEl);
           }
-          resultEl.innerHTML = '<div class="alert alert-success">' + msg + '</div>';
+          resultEl.replaceChildren(AppCore.buildAlertCard({
+            level: 'success',
+            title: data.status === 'partial' ? 'Some students added' : 'Students added',
+            icon: 'group_add',
+            body: bodyParts,
+          }));
           resultEl.classList.remove('d-none');
           resultEl.focus();
 
@@ -778,13 +775,23 @@
           // re-renders with the new unclaimed seats.
           setTimeout(function () { window.location.reload(); }, 1500);
         } else {
-          resultEl.innerHTML = '<div class="alert alert-danger">' + escapeHtml(data.message || 'Failed to add students.') + '</div>';
+          resultEl.replaceChildren(AppCore.buildAlertCard({
+            level: 'danger',
+            title: 'Students not added',
+            icon: 'error',
+            body: data.message || 'Failed to add students.',
+          }));
           resultEl.classList.remove('d-none');
           resultEl.focus();
         }
       })
       .catch(() => {
-        resultEl.innerHTML = '<div class="alert alert-danger">Network error. Please try again.</div>';
+        resultEl.replaceChildren(AppCore.buildAlertCard({
+          level: 'danger',
+          title: 'Could not reach the server',
+          icon: 'wifi_off',
+          body: 'Network error. Please try again.',
+        }));
         resultEl.classList.remove('d-none');
         resultEl.focus();
       })
@@ -821,7 +828,9 @@
           code. Find it in the Unclaimed Seats list and give it to the student.</p>
         <div class="form-check"><input type="checkbox" id="unclaimAcknowledged" class="form-check-input" required>
           <label for="unclaimAcknowledged" class="form-check-label">I understand that the current account will be detached and the next claimant will receive this seat's records.</label></div>
-        <div id="unclaimStudentError" class="alert alert-danger mt-3 d-none" role="alert" tabindex="-1"></div>
+        {% call cards.alert_card('danger', 'Seat not unclaimed', icon='error', role='alert', id='unclaimStudentError', body_class='mt-3 d-none', attrs='tabindex="-1"') %}
+          <p class="mb-0" id="unclaimStudentErrorMessage"></p>
+        {% endcall %}
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -878,15 +887,15 @@
               <label class="form-check-label" for="edit_reset_login">Reset</label>
             </div>
           </div>
-          <div class="alert alert-warning mt-3 mb-0" id="reset_login_warning" hidden>
-            <small><span class="material-symbols-outlined me-2 icon-middle" aria-hidden="true">warning</span>Student will need to re-claim their account using
-                their join code, first name, and last name.</small>
-          </div>
+          {% call cards.alert_card('warning', 'Student will need to re-claim their account', icon='warning', id='reset_login_warning', body_class='mt-3 mb-0', attrs='hidden') %}
+            <p class="mb-0">Student will need to re-claim their account using their join code, first name, and last
+              name.</p>
+          {% endcall %}
 
-          <div class="alert alert-info mt-3 mb-0">
-            <small><span class="material-symbols-outlined me-2 icon-middle" aria-hidden="true">info</span><strong>Note:</strong> Changing the name will update what the
-              student needs to enter during the account claim process.</small>
-          </div>
+          {% call cards.alert_card('info', 'Name changes affect account claim', icon='info', body_class='mt-3 mb-0') %}
+            <p class="mb-0">Changing the name will update what the student needs to enter during the account claim
+              process.</p>
+          {% endcall %}
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -1270,7 +1279,7 @@
       if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Unable to unclaim this seat.');
       window.location.reload();
     } catch (error) {
-      unclaimError.textContent = error.message || 'Unable to unclaim this seat.';
+      document.getElementById('unclaimStudentErrorMessage').textContent = error.message || 'Unable to unclaim this seat.';
       unclaimError.classList.remove('d-none');
       unclaimError.focus();
     } finally {

@@ -1,5 +1,6 @@
 {% from "macros/auth_brand.html" import auth_brand %}
 {% from "macros/turnstile.html" import turnstile %}
+{% import "macros/cards.html" as cards %}
 <!DOCTYPE html>
 <html lang="en">
 
@@ -29,13 +30,15 @@
 
             {% with messages = get_flashed_messages() %}
             {% if messages %}
-            <div class="alert alert-warning border-0 shadow-sm mb-4">
-                {{ messages[0] }}
-            </div>
+            {% call cards.alert_card('warning', 'Sign-in needs attention', icon='warning', body_class='mb-4') %}
+                <p class="mb-0">{{ messages[0] }}</p>
+            {% endcall %}
             {% endif %}
             {% endwith %}
 
-            <div id="loginError" class="alert alert-danger border-0 shadow-sm mb-4 d-none" role="alert"></div>
+            {% call cards.alert_card('danger', 'Sign-in failed', icon='error', body_class='mb-4 d-none', role='alert', id='loginError') %}
+                <p class="mb-0" id="loginError-message"></p>
+            {% endcall %}
 
             <form method="POST" id="loginForm">
                 {{ form.hidden_tag() }}

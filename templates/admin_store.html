@@ -1,4 +1,5 @@
 {% extends "layout_admin.html" %}
+{% import 'macros/cards.html' as cards %}
 {% set page_title = "Store Management" %}
 {% block title %}Store Management{% endblock %}
 {% block page_icon %}storefront{% endblock %}
@@ -21,9 +22,9 @@
   <li><strong>Inventory:</strong> Caps total redemptions available.</li>
   <li><strong>Limit per student:</strong> Restricts how many times each student can redeem.</li>
 </ul>
-<div class="alert alert-info mb-0">
-  <strong>Tip:</strong> Keep prices aligned to your CWI so rewards feel achievable.
-</div>
+{% call cards.alert_card('info', 'Price items against your CWI', icon='lightbulb', body_class='mb-0') %}
+  <p class="mb-0">Keep prices aligned to your CWI so rewards feel achievable.</p>
+{% endcall %}
 {% endcall %}
 
 {% call help.topic('store-advanced', 'tune', 'Advanced Options') %}
@@ -34,9 +35,9 @@
   <li><strong>Auto delist/expiry:</strong> Remove items after a date or number of days.</li>
   <li><strong>Redemption prompt:</strong> Collect details from students at checkout.</li>
 </ul>
-<div class="alert alert-info mb-0">
-  <strong>Side effects:</strong> Deactivating or delisting items hides them immediately; inventory limits can block redemptions once exhausted.
-</div>
+{% call cards.alert_card('info', 'Delisting and inventory limits apply immediately', icon='inventory_2', body_class='mb-0') %}
+  <p class="mb-0">Deactivating or delisting items hides them immediately; inventory limits can block redemptions once exhausted.</p>
+{% endcall %}
 {% endcall %}
 
 {% call help.topic('store-redemptions', 'hourglass_bottom', 'Pending Redemptions') %}
@@ -371,9 +372,9 @@
         {% endfor %}
       {% else %}
         <div class="col">
-          <div class="alert alert-info mb-0">
-            <span class="material-symbols-outlined me-2" aria-hidden="true">info</span>No store items yet. Use the Add New Item tab to get started.
-          </div>
+          {% call cards.alert_card('info', 'No store items yet', icon='storefront', body_class='mb-0') %}
+            <p class="mb-0">Use the Add New Item tab to get started.</p>
+          {% endcall %}
         </div>
       {% endif %}
     </div>
@@ -393,14 +394,13 @@
               {% if form.errors %}
               {# Also lists errors on fields this catalog does not render (CSRF, submit),
                  which would otherwise make a rejected save look like nothing happened. #}
-              <div class="alert alert-danger" role="alert">
-                  <strong>This item could not be saved.</strong>
-                  <ul class="mb-0 mt-2">
+              {% call cards.alert_card('danger', 'This item could not be saved', icon='error', role='alert', body_class='mb-3') %}
+                  <ul class="mb-0">
                       {% for field_name, field_errors in form.errors.items() %}
                       {% for error in field_errors %}<li>{{ form[field_name].label.text }}: {{ error }}</li>{% endfor %}
                       {% endfor %}
                   </ul>
-              </div>
+              {% endcall %}
               {% endif %}
               <div id="economy-data" data-expected-weekly-hours="{{ view.economic.display_context.get('expected_weekly_hours', 5.0) | float }}" class="visually-hidden"></div>
 
@@ -610,9 +610,9 @@
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
-        <div class="alert alert-danger">
-          <span class="material-symbols-outlined me-2" aria-hidden="true">warning</span><strong>Warning!</strong> This action cannot be undone.
-        </div>
+        {% call cards.alert_card('danger', 'Permanent deletion', icon='warning', body_class='mb-3') %}
+          <p class="mb-0">This action cannot be undone.</p>
+        {% endcall %}
         <p>Are you sure you want to permanently delete <strong id="modalDeleteItemName"></strong>?</p>
         <p class="text-muted small">This will completely remove the item from the database and delete related purchase records. Transaction history will remain in the ledger.</p>
       </div>

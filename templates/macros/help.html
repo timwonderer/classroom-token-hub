@@ -5,6 +5,8 @@
   directing users to relevant documentation without losing their session.
 #}
 
+{% import 'macros/cards.html' as cards %}
+
 {# Whitespace is trimmed because the output is used directly as an href. #}
 {%- macro doc_url(doc_path) -%}
   {%- set base_path = doc_path.split('#', 1)[0] -%}
@@ -120,19 +122,15 @@
       doc_path: Documentation path
       description: Optional description
   #}
-  <div class="help-section alert alert-info d-flex align-items-start mb-3">
-    <span class="material-symbols-outlined icon-lg me-2" aria-hidden="true">info</span>
-    <div class="flex-grow-1">
-      <h6 class="mb-1">{{ title }}</h6>
-      {% if description %}
-        <p class="mb-2 small">{{ description }}</p>
-      {% endif %}
-      <a href="{{ doc_url(doc_path) }}" class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener">
-        <span class="material-symbols-outlined icon-xs icon-middle" aria-hidden="true">menu_book</span>
-        View Guide <span class="visually-hidden">(opens in a new tab)</span>
-      </a>
-    </div>
-  </div>
+  {% call cards.alert_card('info', title, icon='menu_book', body_class='help-section mb-3') %}
+    {% if description %}
+      <p class="mb-2">{{ description }}</p>
+    {% endif %}
+    <a href="{{ doc_url(doc_path) }}" class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener">
+      <span class="material-symbols-outlined icon-xs icon-middle" aria-hidden="true">menu_book</span>
+      View Guide <span class="visually-hidden">(opens in a new tab)</span>
+    </a>
+  {% endcall %}
 {% endmacro %}
 
 {% macro feature_help_card(title, description, doc_path, icon="help") %}

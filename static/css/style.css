@@ -28,7 +28,8 @@ h6 {
  * stays legible on colored backgrounds. Font-size and font-weight are
  * NOT normalized here — templates control them per level:
  *   - Top-level cards use <h5 class="fw-bold"> (larger, more prominent)
- *   - Nested / alert cards use <h6 class="fw-semibold"> (calmer)
+ *   - Nested cards use <h6 class="fw-semibold"> (calmer)
+ *   - Alert cards (macros/cards.html alert_card) use <h3 class="h5 fw-bold">
  * Both classes are supplied at the template layer so the visual
  * hierarchy is explicit in each site rather than hidden in CSS. */
 .card-header h1,
@@ -147,12 +148,6 @@ a:hover {
 }
 
 /* ─── WCAG Contrast Overrides ─── */
-.alert-warning {
-    color: color-mix(in srgb, var(--warning) 60%, #000) !important;
-    background-color: var(--warning-subtle) !important;
-    border-color: color-mix(in srgb, var(--warning) 20%, transparent) !important;
-}
-
 .btn-outline-secondary {
     color: var(--neutral-700) !important;
     border-color: var(--neutral-400) !important;
@@ -414,6 +409,13 @@ a:hover {
     background: var(--info) !important;
 }
 
+/* Alert-as-card (macros/cards.html `alert_card`, AppCore.buildAlertCard).
+ * The body holds explanatory prose; trim the trailing margin so a lone
+ * paragraph or list sits flush with the card padding. */
+.alert-card > .card-body > :last-child {
+    margin-bottom: 0;
+}
+
 .card-body {
     padding: 1.25rem;
     color: var(--text-primary);
@@ -566,37 +568,6 @@ a:hover {
 
 .badge.bg-secondary {
     border: 1px solid color-mix(in srgb, var(--secondary) 80%, black);
-}
-
-.alert {
-    border-radius: var(--radius-sm);
-    border: 1px solid transparent;
-    padding: 1rem;
-    margin-bottom: 1.5rem;
-}
-
-.alert-success {
-    background-color: var(--success-subtle);
-    color: var(--success);
-    border-color: color-mix(in srgb, var(--success) 30%, transparent);
-}
-
-.alert-danger {
-    background-color: var(--danger-subtle);
-    color: var(--danger);
-    border-color: color-mix(in srgb, var(--danger) 30%, transparent);
-}
-
-.alert-warning {
-    background-color: var(--warning-subtle);
-    color: var(--warning);
-    border-color: color-mix(in srgb, var(--warning) 30%, transparent);
-}
-
-.alert-info {
-    background-color: var(--info-subtle);
-    color: var(--info);
-    border-color: color-mix(in srgb, var(--info) 30%, transparent);
 }
 
 /* ─── Navigation (Sidebar) ─── */
@@ -826,12 +797,6 @@ a:hover {
     color: #000;
 }
 
-.sidebar-switcher .alert {
-    background: rgba(255, 193, 7, 0.15);
-    border: 1px solid rgba(255, 193, 7, 0.4);
-    color: var(--text-inverse);
-}
-
 .sidebar-switcher-add {
     width: 26px;
     height: 26px;
@@ -979,18 +944,6 @@ a:hover {
 .student-content .badge.bg-secondary,
 .student-content .badge.bg-secondary.text-muted {
     color: var(--text-inverse) !important;
-}
-
-.student-content .alert-warning {
-    color: var(--alert-warning-text);
-}
-
-.student-content .alert-danger {
-    color: var(--alert-danger-text);
-}
-
-.student-content .alert-info {
-    color: var(--alert-info-text);
 }
 
 .student-shell .sidebar a.active,
@@ -2351,7 +2304,7 @@ body.maintenance-active .sidebar {
    body.error-page so none of it reaches another surface; page-specific
    panels (login links, request URL, status box) stay in their own template.
    The reset is wrapped in :where() so it keeps the zero specificity of the
-   bare `*` it replaced and still yields to .alert, .btn, and element rules. */
+   bare `*` it replaced and still yields to .card, .btn, and element rules. */
 :where(body.error-page) * {
     margin: 0;
     padding: 0;

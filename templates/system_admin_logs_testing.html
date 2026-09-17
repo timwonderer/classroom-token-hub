@@ -1,4 +1,5 @@
 {% extends "layout_system_admin.html" %}
+{% import "macros/cards.html" as cards %}
 {% set page_title = "Logs & Testing" %}
 {% set page_subtitle = "View error logs and test error pages" %}
 {% set current_page = "logs" %}
@@ -110,12 +111,9 @@
                         </div>
                     </div>
 
-                    <div class="alert alert-dark mt-3 mb-0">
-                        <small>
-                            <span class="material-symbols-outlined icon-middle icon-xs" aria-hidden="true">info</span>
-                            <strong>Tip:</strong> Test buttons open in a new tab. After viewing the error page, close the tab and check the error logs above.
-                        </small>
-                    </div>
+                    {% call cards.alert_card('info', 'Test pages open in a new tab', icon='open_in_new', body_class='mt-3 mb-0') %}
+                        <p class="mb-0">Test buttons open in a new tab. After viewing the error page, close the tab and check the error logs above.</p>
+                    {% endcall %}
                 </div>
             </div>
         </div>
@@ -132,12 +130,9 @@
                         <span class="material-symbols-outlined icon-middle icon-xs" aria-hidden="true">folder_open</span> Open System Log File <span class="visually-hidden">(opens in a new tab)</span>
                     </a>
 
-                    <div class="alert alert-dark mb-0">
-                        <small>
-                            <span class="material-symbols-outlined icon-middle icon-xs" aria-hidden="true">info</span>
-                            These are server-level logs showing application activity, requests, and system events.
-                        </small>
-                    </div>
+                    {% call cards.alert_card('info', 'Server-level logs', icon='dns', body_class='mb-0') %}
+                        <p class="mb-0">These are server-level logs showing application activity, requests, and system events.</p>
+                    {% endcall %}
                 </div>
             </div>
         </div>

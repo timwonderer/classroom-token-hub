@@ -980,8 +980,23 @@ def format_warnings_for_display(warnings: List[BalanceWarning]) -> str:
     Returns:
         HTML string
     """
+    def _alert_card_open(level: str, icon: str, title: str) -> str:
+        # Mirrors the `alert_card` macro in templates/macros/cards.html.
+        text_class = 'text-dark' if level == 'warning' else 'text-white'
+        return (
+            f'<div class="card alert-card border-{level} mb-3">'
+            f'<div class="card-header bg-{level} {text_class} d-flex align-items-center">'
+            f'<span class="material-symbols-outlined me-2" aria-hidden="true">{icon}</span>'
+            f'<h3 class="h5 fw-bold mb-0 {text_class}">{title}</h3>'
+            '</div>'
+            '<div class="card-body">'
+        )
+
     if not warnings:
-        return '<div class="alert alert-success"><i class="bi bi-check-circle-fill me-1"></i>Economy is balanced!</div>'
+        return (
+            _alert_card_open('success', 'check_circle', 'Economy is balanced')
+            + '<p class="mb-0">No balance warnings for the current settings.</p></div></div>'
+        )
 
     # Group by level
     critical = [w for w in warnings if w.level == WarningLevel.CRITICAL]
@@ -991,21 +1006,21 @@ def format_warnings_for_display(warnings: List[BalanceWarning]) -> str:
     html_parts = []
 
     if critical:
-        html_parts.append('<div class="alert alert-danger"><strong><i class="bi bi-exclamation-octagon-fill me-1"></i>Critical Issues:</strong><ul>')
+        html_parts.append(_alert_card_open('danger', 'error', 'Critical economy issues') + '<ul class="mb-0">')
         for w in critical:
             html_parts.append(f'<li>{w.message}</li>')
-        html_parts.append('</ul></div>')
+        html_parts.append('</ul></div></div>')
 
     if warning:
-        html_parts.append('<div class="alert alert-warning"><strong><i class="bi bi-exclamation-triangle-fill me-1"></i>Warnings:</strong><ul>')
+        html_parts.append(_alert_card_open('warning', 'warning', 'Economy warnings') + '<ul class="mb-0">')
         for w in warning:
             html_parts.append(f'<li>{w.message}</li>')
-        html_parts.append('</ul></div>')
+        html_parts.append('</ul></div></div>')
 
     if info and not (critical or warning):  # Only show info if no problems
-        html_parts.append('<div class="alert alert-info"><strong><i class="bi bi-info-circle-fill me-1"></i>Balance Info:</strong><ul>')
+        html_parts.append(_alert_card_open('info', 'info', 'Balance details') + '<ul class="mb-0">')
         for w in info[:5]:  # Limit to 5 info messages
             html_parts.append(f'<li>{w.message}</li>')
-        html_parts.append('</ul></div>')
+        html_parts.append('</ul></div></div>')
 
     return '\n'.join(html_parts)

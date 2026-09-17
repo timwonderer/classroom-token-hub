@@ -1,4 +1,5 @@
 {% from "macros/auth_brand.html" import auth_brand %}
+{% import "macros/cards.html" as cards %}
 <!DOCTYPE html>
 <html lang="en">
 
@@ -82,10 +83,10 @@
             {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
             {% for category, message in messages %}
-            <div class="alert {% if category == 'success' %}alert-success{% elif category == 'error' %}alert-danger{% else %}alert-info{% endif %} border-0 shadow-sm d-flex align-items-center" role="alert">
-                <span class="material-symbols-outlined fs-5 me-2" aria-hidden="true">{% if category == 'success' %}check_circle{% elif category == 'error' %}error{% else %}info{% endif %}</span>
-                <div>{{ message }}</div>
-            </div>
+            {%- set _flash_level = 'success' if category == 'success' else ('danger' if category in ['danger', 'error'] else ('warning' if category == 'warning' else 'info')) -%}
+            {% call cards.alert_card(_flash_level, 'Done' if _flash_level == 'success' else ('Something went wrong' if _flash_level == 'danger' else ('Heads up' if _flash_level == 'warning' else 'For your information')), icon='check_circle' if _flash_level == 'success' else ('error' if _flash_level == 'danger' else ('warning' if _flash_level == 'warning' else 'info')), body_class='mb-3', role='alert') %}
+              <p class="mb-0">{{ message }}</p>
+            {% endcall %}
             {% endfor %}
             {% endif %}
             {% endwith %}

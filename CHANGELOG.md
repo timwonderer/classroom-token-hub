@@ -8,6 +8,10 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Interface
+
+- **Every inline alert is a card (2026-09-16)** — Rounded Bootstrap `.alert` boxes are retired across teacher, student, sysadmin, auth, error, docs, and help pages. Each alert now renders as a card with a semantic border, a colored header carrying an icon and a contextual title, and the explanation in the body, matching the recovery-readiness warning on Student Management. Templates use the `alert_card` macro in `templates/macros/cards.html` (now with `role`, `id`, `dismissible`, and heading options); scripts use its DOM twin `AppCore.buildAlertCard` in `static/js/app-core.js`, which sets body text without parsing HTML. Flash messages outside toasts become dismissible cards titled by category, and docs `> [!NOTE]`-style callouts render as cards. Announcement priority maps to a card level through `Announcement.get_priority_level()`, replacing `get_priority_class()`. The legacy `.alert` CSS overrides are removed. Toasts are unchanged.
+
 ### Support
 
 - **Teacher-controlled diagnostic disclosure (2026-09-15)** — Added separate, unchecked permissions for balances, the reported transaction, recent transactions, the student's report, and the class name. Server-side projections enforce these choices on operator list and detail pages. Technical route diagnostics, IP address, and browser details remain available. Correlation packs are now persisted with ticket creation instead of discarded. Every ticket belongs to its originating seat and class; there is no account-level ticket scope. Captured values stay frozen, and database cascades remove the ticket and attached support rows when that seat is deleted. Roster notes are documented as encrypted, class-scoped teacher-entered context without assertions about their contents.

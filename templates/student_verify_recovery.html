@@ -1,4 +1,5 @@
 {% extends "layout_student.html" %}
+{% import 'macros/cards.html' as cards %}
 {% set page_title = "Verify Teacher Recovery" %}
 {% set current_page = "verify-recovery" %}
 {% block title %}Verify Teacher Recovery{% endblock %}
@@ -51,12 +52,9 @@
                 Verification Successful
             </div>
             <div class="card-body text-center p-4">
-                <div class="alert alert-success mb-4">
-                    <h4 class="alert-heading">
-                        <span class="material-symbols-outlined icon-2xl icon-middle" aria-hidden="true">lock</span>
-                    </h4>
+                {% call cards.alert_card('success', 'Recovery request verified', icon='lock', body_class='mb-4 text-start') %}
                     <p class="mb-0">You have successfully verified your teacher's account recovery request.</p>
-                </div>
+                {% endcall %}
 
                 <h3 class="mb-3">Your Recovery Code:</h3>
                 <div class="p-4 mb-4 recovery-code-panel">
@@ -65,11 +63,10 @@
                     </h1>
                 </div>
 
-                <div class="alert alert-warning">
-                    <span class="material-symbols-outlined icon-middle" aria-hidden="true">warning</span>
-                    <strong>Important:</strong> Give this code to your teacher in person only if your teacher is currently with your class. It expires in 30 minutes, or when the attempt ends if sooner.
-                    <br><strong>A new code replaces your previous code.</strong> Make sure to write it down or remember it.
-                </div>
+                {% call cards.alert_card('warning', 'Share this code only in person', icon='warning', body_class='mb-3 text-start') %}
+                    <p class="mb-0">Give this code to your teacher in person only if your teacher is currently with your class. It expires in 30 minutes, or when the attempt ends if sooner.
+                    <br><strong>A new code replaces your previous code.</strong> Make sure to write it down or remember it.</p>
+                {% endcall %}
 
                 <a href="{{ url_for('student.dashboard') }}" class="btn btn-primary mt-3">
                     <span class="material-symbols-outlined icon-middle" aria-hidden="true">home</span>
@@ -85,14 +82,10 @@
                 Verify Teacher Account Recovery
             </div>
             <div class="card-body">
-                <div class="alert alert-info mb-4">
-                    <h5 class="alert-heading">
-                        <span class="material-symbols-outlined icon-middle" aria-hidden="true">info</span>
-                        Why are we asking for this?
-                    </h5>
+                {% call cards.alert_card('info', 'Why are we asking for this?', icon='info', body_class='mb-4') %}
                     <p>CTH randomly selected you to help with account recovery. Give a code only to your teacher, in person, while your teacher is with your class.</p>
                     <p class="mb-0">To protect everyone's account security, we need you to confirm this is really you by entering your passphrase.</p>
-                </div>
+                {% endcall %}
 
                 <div class="mb-3 p-3 recovery-expiry-panel">
                     <h6><span class="material-symbols-outlined icon-middle" aria-hidden="true">schedule</span> This request expires on:</h6>
@@ -129,15 +122,14 @@
                     </div>
                 </form>
 
-                <div class="alert alert-secondary mt-4">
-                    <h6><span class="material-symbols-outlined icon-middle" aria-hidden="true">help</span> What happens next?</h6>
+                {% call cards.alert_card('info', 'What happens next?', icon='help', body_class='mt-4') %}
                     <ol class="mb-0 ps-3">
                         <li>You enter your passphrase to confirm it's really you</li>
                         <li>We generate a unique 6-digit code for you</li>
                         <li>You give this code to your teacher (in person)</li>
                         <li>Your teacher uses the code to recover their account</li>
                     </ol>
-                </div>
+                {% endcall %}
             </div>
         </div>
         {% endif %}

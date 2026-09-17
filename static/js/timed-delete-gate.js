@@ -11,8 +11,13 @@ function showTimedDeleteGate(options) {
         const modalEl = document.getElementById('timedDeleteGateModal');
         if (!modalEl || !window.bootstrap) {
             if (feedbackEl) {
-                feedbackEl.textContent = 'The delete safety dialog is unavailable. Please refresh and try again.';
-                feedbackEl.className = 'alert alert-danger';
+                feedbackEl.replaceChildren(window.AppCore.buildAlertCard({
+                    level: 'danger',
+                    title: 'Safety dialog unavailable',
+                    icon: 'error',
+                    body: 'The delete safety dialog is unavailable. Please refresh and try again.',
+                    className: 'mb-3',
+                }));
                 feedbackEl.classList.remove('visually-hidden');
                 feedbackEl.focus();
             }

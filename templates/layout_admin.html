@@ -1,4 +1,5 @@
 {% import "macros/help.html" as help %}
+{% import "macros/cards.html" as cards %}
 <!DOCTYPE html>
 <html lang="en">
 
@@ -211,10 +212,9 @@
                     </option>
                     {% endfor %}
                 </select>
-                <div id="admin-class-switch-error" class="alert alert-warning small py-2 px-3 mt-2 d-none" role="alert" aria-live="assertive" aria-atomic="true" tabindex="-1">
-                    <span class="material-symbols-outlined icon-sm align-middle me-1" aria-hidden="true">error</span>
-                    <span class="admin-class-switch-error-text"></span>
-                </div>
+                {% call cards.alert_card('warning', 'Class not switched', icon='error', body_class='mt-2 d-none', role='alert', id='admin-class-switch-error', attrs='aria-live="assertive" aria-atomic="true" tabindex="-1"') %}
+                    <p class="mb-0 admin-class-switch-error-text"></p>
+                {% endcall %}
             </div>
             {% endif %}
             <div class="sidebar-switcher">

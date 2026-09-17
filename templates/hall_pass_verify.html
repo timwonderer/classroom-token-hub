@@ -1,4 +1,5 @@
 <!-- Pulsetic monitoring key (monitor: hall-pass-verification). Do not remove. -->
+{% import 'macros/cards.html' as cards %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -27,23 +28,21 @@
 
         {% if unavailable %}
         {# Generic response for invalid/expired tokens — spec §8: uniform, no timing difference #}
-        <div class="alert alert-secondary text-center" role="alert">
-            {{ message }}
-        </div>
+        {% call cards.alert_card('info', 'Verification unavailable', icon='link_off', role='alert', heading_tag='h2', body_class='mb-4') %}
+            <p class="mb-0">{{ message }}</p>
+        {% endcall %}
 
         {% elif result is not none %}
         {# ---- Result display ---- #}
         {% if result.outcome == 'no_match' %}
-        <div class="alert alert-warning text-center" role="alert">
-            <strong>No hall pass record found for today.</strong><br>
-            Please contact the teacher.
-        </div>
+        {% call cards.alert_card('warning', 'No hall pass record found for today', icon='search_off', role='alert', heading_tag='h2', body_class='mb-4') %}
+            <p class="mb-0">Please contact the teacher.</p>
+        {% endcall %}
 
         {% elif result.outcome == 'ambiguous' %}
-        <div class="alert alert-warning text-center" role="alert">
-            <strong>Unable to uniquely verify.</strong><br>
-            Please contact the teacher.
-        </div>
+        {% call cards.alert_card('warning', 'Unable to uniquely verify', icon='help', role='alert', heading_tag='h2', body_class='mb-4') %}
+            <p class="mb-0">Please contact the teacher.</p>
+        {% endcall %}
 
         {% elif result.outcome == 'match' %}
         <div class="card shadow-sm mb-4">

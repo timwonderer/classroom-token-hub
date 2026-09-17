@@ -203,26 +203,24 @@ class EconomyBalanceChecker {
         // than the recommended minimum of $Y..."). Backends that emit
         // only `message` (no `title`) fall back to a generic level title.
         const genericTitle = {
-            danger: 'Critical Issue',
-            warning: 'Warning',
-            success: 'Looks Good',
-            info: 'Recommendations',
+            danger: 'Critical economy issue',
+            warning: 'Economy balance warning',
+            success: 'Setting looks balanced',
+            info: 'Pricing recommendations',
         };
         const iconForLevel = {
             danger: 'error',
-            warning: 'info',
+            warning: 'warning',
             success: 'check_circle',
             info: 'lightbulb',
         };
         const alertCard = (level, title, icon, bodyHtml) => {
             const textClass = level === 'warning' ? 'text-dark' : 'text-white';
             return (
-                `<div class="card shadow-sm mb-3">` +
-                    `<div class="card-header bg-${level} ${textClass} py-3">` +
-                        `<h6 class="mb-0 fw-semibold ${textClass}">` +
-                            `<span class="material-symbols-outlined me-2" style="vertical-align: text-bottom;">${icon}</span>` +
-                            title +
-                        `</h6>` +
+                `<div class="card alert-card border-${level} mb-3">` +
+                    `<div class="card-header bg-${level} ${textClass} d-flex align-items-center">` +
+                        `<span class="material-symbols-outlined me-2" aria-hidden="true">${icon}</span>` +
+                        `<h3 class="h5 fw-bold mb-0 ${textClass}">${title}</h3>` +
                     `</div>` +
                     `<div class="card-body">${bodyHtml}</div>` +
                 `</div>`
@@ -233,7 +231,7 @@ class EconomyBalanceChecker {
             items.forEach(w => {
                 const title = w.title || genericTitle[level] || 'Notice';
                 const icon = w.icon || iconForLevel[level] || 'info';
-                html += alertCard(level, title, icon, `<div>${w.message}</div>`);
+                html += alertCard(level, title, icon, `<p class="mb-0">${w.message}</p>`);
             });
         };
 
@@ -287,7 +285,7 @@ class EconomyBalanceChecker {
             }
 
             if (bodyHtml.trim()) {
-                html += alertCard('info', 'Recommendations', 'lightbulb', bodyHtml);
+                html += alertCard('info', 'Pricing recommendations', 'lightbulb', bodyHtml);
             }
         }
 
@@ -533,26 +531,6 @@ style.textContent = `
 
     .economy-balance-feedback {
         margin-top: 1rem;
-    }
-
-    .economy-balance-feedback .alert {
-        border-left: 4px solid;
-    }
-
-    .economy-balance-feedback .alert-danger {
-        border-left-color: #dc3545;
-    }
-
-    .economy-balance-feedback .alert-warning {
-        border-left-color: #ffc107;
-    }
-
-    .economy-balance-feedback .alert-success {
-        border-left-color: #28a745;
-    }
-
-    .economy-balance-feedback .alert-info {
-        border-left-color: #17a2b8;
     }
 
     .cwi-info-box {

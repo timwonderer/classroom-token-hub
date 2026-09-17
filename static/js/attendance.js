@@ -278,10 +278,14 @@ function renderBreakDestinationError(message) {
   const list = document.getElementById('hallPassDestinationList');
   if (!list) return;
   list.textContent = '';
-  const alert = document.createElement('div');
-  alert.className = 'alert alert-danger mb-0';
-  alert.textContent = message;
-  list.appendChild(alert);
+  list.appendChild(window.AppCore.buildAlertCard({
+    level: 'danger',
+    icon: 'error',
+    title: 'Destinations unavailable',
+    body: message,
+    role: 'alert',
+    className: 'mb-0',
+  }));
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -309,73 +313,46 @@ function updateHallPassOverlay(hallPass) {
     passInfoDisplay.hidden = false;
     passInfoDisplay.textContent = ''; // Clear existing content
 
-    const buildStatusLabel = (iconClass, text) => {
-      const strong = document.createElement('strong');
-      const icon = document.createElement('i');
-      icon.className = `bi ${iconClass} me-1`;
-      icon.setAttribute('aria-hidden', 'true');
-      strong.appendChild(icon);
-      strong.appendChild(document.createTextNode(text));
-      return strong;
+    const buildDetail = (text) => {
+      const small = document.createElement('p');
+      small.className = 'small mb-0';
+      small.textContent = text;
+      return small;
+    };
+
+    const showStatusCard = (level, icon, title, bodyParts) => {
+      passInfoDisplay.appendChild(window.AppCore.buildAlertCard({
+        level,
+        icon,
+        title,
+        body: bodyParts,
+        className: 'mb-2',
+      }));
     };
 
     if (hallPass.status === 'pending') {
-      const alertDiv = document.createElement('div');
-      alertDiv.className = 'alert alert-warning mb-2';
-
-      alertDiv.appendChild(buildStatusLabel('bi-hourglass-split', 'Hall Pass: Pending Approval'));
-      alertDiv.appendChild(document.createElement('br'));
-
-      const small = document.createElement('small');
-      small.textContent = 'Destination: ' + (hallPass.reason || 'N/A');
-      alertDiv.appendChild(small);
-      alertDiv.appendChild(document.createElement('br'));
-
       const button = document.createElement('button');
-      button.className = 'btn btn-sm btn-danger mt-1';
+      button.type = 'button';
+      button.className = 'btn btn-sm btn-danger mt-2';
       button.textContent = 'Cancel';
       button.onclick = function () { cancelHallPass(hallPass.id); };
-      alertDiv.appendChild(button);
 
-      passInfoDisplay.appendChild(alertDiv);
+      showStatusCard('warning', 'hourglass_top', 'Hall pass pending approval', [
+        buildDetail('Destination: ' + (hallPass.reason || 'N/A')),
+        button,
+      ]);
     } else if (hallPass.status === 'approved') {
-      const alertDiv = document.createElement('div');
-      alertDiv.className = 'alert alert-success mb-2';
-
-      alertDiv.appendChild(buildStatusLabel('bi-check-circle-fill', 'Hall Pass Approved!'));
-      alertDiv.appendChild(document.createElement('br'));
-
-      const small = document.createElement('small');
-      small.textContent = 'Destination: ' + (hallPass.reason || 'N/A');
-      alertDiv.appendChild(small);
-      alertDiv.appendChild(document.createElement('br'));
-
-      passInfoDisplay.appendChild(alertDiv);
+      showStatusCard('success', 'check_circle', 'Hall pass approved', [
+        buildDetail('Destination: ' + (hallPass.reason || 'N/A')),
+      ]);
     } else if (hallPass.status === 'left') {
-      const alertDiv = document.createElement('div');
-      alertDiv.className = 'alert alert-info mb-2';
-
-      alertDiv.appendChild(buildStatusLabel('bi-geo-alt-fill', 'Currently Out'));
-      alertDiv.appendChild(document.createElement('br'));
-
-      const small = document.createElement('small');
-      small.textContent = 'Destination: ' + (hallPass.reason || 'N/A');
-      alertDiv.appendChild(small);
-      alertDiv.appendChild(document.createElement('br'));
-
-      passInfoDisplay.appendChild(alertDiv);
+      showStatusCard('info', 'directions_walk', 'Currently out', [
+        buildDetail('Destination: ' + (hallPass.reason || 'N/A')),
+      ]);
     } else if (hallPass.status === 'rejected') {
-      const alertDiv = document.createElement('div');
-      alertDiv.className = 'alert alert-danger mb-2';
-
-      alertDiv.appendChild(buildStatusLabel('bi-x-circle-fill', 'Hall Pass Denied'));
-      alertDiv.appendChild(document.createElement('br'));
-
-      const small = document.createElement('small');
-      small.textContent = 'Reason: ' + (hallPass.reason || 'N/A');
-      alertDiv.appendChild(small);
-
-      passInfoDisplay.appendChild(alertDiv);
+      showStatusCard('danger', 'cancel', 'Hall pass denied', [
+        buildDetail('Reason: ' + (hallPass.reason || 'N/A')),
+      ]);
     } else {
       passInfoDisplay.hidden = true;
     }

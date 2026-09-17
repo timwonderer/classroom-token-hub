@@ -1,4 +1,5 @@
 {% extends "layout_admin.html" %}
+{% import 'macros/cards.html' as cards %}
 {% set page_title = "Hall Pass Management" %}
 {% block title %}Hall Pass Management{% endblock %}
 
@@ -8,9 +9,9 @@
 
 {% call help.topic('hp-limits', 'settings', 'Hall Pass Limits') %}
 <p>Turn granting on or off and set how many students may be out at once.</p>
-<div class="alert alert-info mb-0">
-    <strong>Tip:</strong> When granting is disabled, no new hall passes may be issued.
-</div>
+{% call cards.alert_card('info', 'Disabling granting stops new passes', icon='block', body_class='mb-0') %}
+    <p class="mb-0">When granting is disabled, no new hall passes may be issued.</p>
+{% endcall %}
 {% endcall %}
 
 {% call help.topic('hp-settings', 'tune', 'Settings Breakdown') %}
@@ -20,9 +21,9 @@
     <li><strong>Terminal:</strong> student-facing kiosk to request passes.</li>
     <li><strong>Verification display:</strong> screen showing currently issued and active passes.</li>
 </ul>
-<div class="alert alert-warning mt-3 mb-0">
-    <strong>Side effects:</strong> Lowering the limit can block new approvals until slots open.
-</div>
+{% call cards.alert_card('warning', 'A lower limit can block approvals', icon='warning', body_class='mt-3 mb-0') %}
+    <p class="mb-0">Lowering the limit can block new approvals until slots open.</p>
+{% endcall %}
 {% endcall %}
 
 {% call help.topic('hp-issue', 'check_circle', 'Issue and Track Passes') %}
@@ -31,9 +32,9 @@
 
 {% call help.topic('hp-track', 'logout', 'Track Students Out') %}
 <p>Use the Issued and Out tabs to track who is waiting and who has left the room.</p>
-<div class="alert alert-warning mb-0">
-    <strong>Reminder:</strong> Mark students as returned to keep active pass state accurate.
-</div>
+{% call cards.alert_card('warning', 'Mark students as returned', icon='assignment_return', body_class='mb-0') %}
+    <p class="mb-0">Mark students as returned to keep active pass state accurate.</p>
+{% endcall %}
 {% endcall %}
 
 {% call help.topic('hp-verify', 'tv', 'Hall Pass Verification') %}
@@ -52,7 +53,7 @@
 {% block content %}
 
 <div class="container-fluid">
-    <div id="hall-pass-feedback" class="alert d-none" role="alert" aria-live="assertive" aria-atomic="true" tabindex="-1"></div>
+    <div id="hall-pass-feedback" role="alert" aria-live="assertive" aria-atomic="true" tabindex="-1"></div>
     <div class="d-flex justify-content-end align-items-center mb-4">
         <div>
             {% if verify_url %}
@@ -296,18 +297,23 @@
 </div>
 
 <script>
-function announceHallPass(message, kind = 'danger') {
+function announceHallPass(title, message, kind = 'danger') {
     const feedback = document.getElementById('hall-pass-feedback');
     if (!feedback) return;
-    feedback.className = `alert alert-${kind}`;
-    feedback.textContent = message;
+    feedback.replaceChildren(AppCore.buildAlertCard({
+        level: kind,
+        title,
+        icon: kind === 'success' ? 'check_circle' : 'error',
+        body: message,
+        className: 'mb-3',
+    }));
     feedback.focus();
 }
 
 function handlePassAction(passId, action) {
     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
     if (!['leave', 'return'].includes(action)) {
-        announceHallPass('This hall pass action is not available.');
+        announceHallPass('Hall pass not updated', 'This hall pass action is not available.');
         return;
     }
 
@@ -324,19 +330,19 @@ function handlePassAction(passId, action) {
             // A simple reload is the easiest way to update the state
             window.location.reload();
         } else {
-            announceHallPass(data.message || 'The hall pass could not be updated. Please try again.');
+            announceHallPass('Hall pass not updated', data.message || 'The hall pass could not be updated. Please try again.');
         }
     })
     .catch(error => {
         console.error('Hall pass action error:', error);
-        announceHallPass('The hall pass could not be updated. Please try again.');
+        announceHallPass('Hall pass not updated', 'The hall pass could not be updated. Please try again.');
     });
 }
 
 function handlePendingPassAction(requestId, action) {
     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
     if (!['approve', 'reject'].includes(action)) {
-        announceHallPass('This pending hall pass action is not available.');
+        announceHallPass('Pending hall pass not updated', 'This pending hall pass action is not available.');
         return;
     }
 
@@ -352,12 +358,12 @@ function handlePendingPassAction(requestId, action) {
         if (data.status === 'success') {
             window.location.reload();
         } else {
-            announceHallPass(data.message || 'The pending hall pass could not be updated. Please try again.');
+            announceHallPass('Pending hall pass not updated', data.message || 'The pending hall pass could not be updated. Please try again.');
         }
     })
     .catch(error => {
         console.error('Pending hall pass action error:', error);
-        announceHallPass('The pending hall pass could not be updated. Please try again.');
+        announceHallPass('Pending hall pass not updated', 'The pending hall pass could not be updated. Please try again.');
     });
 }
 
@@ -380,12 +386,12 @@ function loadQueueSettings() {
             queueLimitInput.value = data.settings.max_queue_limit;
             queueLimitInput.disabled = false;
         } else {
-            announceHallPass(data.message || 'The Out Limit could not be loaded. Reload the page to try again.');
+            announceHallPass('Out Limit not loaded', data.message || 'The Out Limit could not be loaded. Reload the page to try again.');
         }
     })
     .catch(error => {
         console.error('Error loading queue settings:', error);
-        announceHallPass('The Out Limit could not be loaded. Reload the page to try again.');
+        announceHallPass('Out Limit not loaded', 'The Out Limit could not be loaded. Reload the page to try again.');
     });
 }
 
@@ -396,7 +402,7 @@ function saveQueueSettings() {
 
     // Validate queue limit
     if (!Number.isInteger(queueLimit) || queueLimit < 1 || queueLimit > 50) {
-        announceHallPass('Out Limit must be a whole number between 1 and 50.');
+        announceHallPass('Out Limit is out of range', 'Out Limit must be a whole number between 1 and 50.');
         loadQueueSettings(); // Reset to previous value
         return;
     }
@@ -421,13 +427,13 @@ function saveQueueSettings() {
                 settingsSavedIndicator.hidden = true;
             }, 2000);
         } else {
-            announceHallPass(data.message || 'The hall pass settings could not be saved. Please try again.');
+            announceHallPass('Settings not saved', data.message || 'The hall pass settings could not be saved. Please try again.');
             loadQueueSettings(); // Reset to previous values
         }
     })
     .catch(error => {
         console.error('Error saving queue settings:', error);
-        announceHallPass('The hall pass settings could not be saved. Please try again.');
+        announceHallPass('Settings not saved', 'The hall pass settings could not be saved. Please try again.');
         loadQueueSettings(); // Reset to previous values
     });
 }
@@ -615,12 +621,12 @@ function rotateVerifyToken() {
                 const newUrl = window.location.origin + '/verify/hallpass/' + data.token;
                 const btnLink = document.querySelector('a[href*="/verify/hallpass/"]');
                 if (btnLink) { btnLink.href = newUrl; }
-                announceHallPass('Verification link regenerated. The current link is no longer valid. The new link is available in the Office Verification button.', 'success');
+                announceHallPass('Verification link regenerated', 'Verification link regenerated. The current link is no longer valid. The new link is available in the Office Verification button.', 'success');
             } else {
-                announceHallPass(data.message || 'Could not regenerate the verification link. Please try again.');
+                announceHallPass('Verification link not regenerated', data.message || 'Could not regenerate the verification link. Please try again.');
             }
         })
-        .catch(() => announceHallPass('Failed to contact the server. Please try again.'));
+        .catch(() => announceHallPass('Verification link not regenerated', 'Failed to contact the server. Please try again.'));
 }
 </script>
 {% endblock %}

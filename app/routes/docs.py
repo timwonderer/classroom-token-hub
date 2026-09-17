@@ -71,7 +71,7 @@ DOCS_ALLOWED_ATTRIBUTES = {
     'img': ['src', 'alt', 'title', 'width', 'height'],
     'code': ['class'],
     'pre': ['class'],
-    'span': ['class'],
+    'span': ['class', 'aria-hidden'],
     'div': ['class'],
     'table': ['class'],
     'thead': ['class'],
@@ -92,13 +92,17 @@ DOCS_ALLOWED_ATTRIBUTES = {
 DOCS_ALLOWED_PROTOCOLS = ['http', 'https', 'mailto']
 
 # Configuration for GitHub-style alert callouts.  Keyed by the alert type
-# keyword (upper-case) as it appears between [! … ] in the source.
+# keyword (upper-case) as it appears between [! … ] in the source.  Each
+# callout renders as an alert card: ``level`` picks the semantic border and
+# header colour, ``icon`` the Material Symbols glyph, and ``label`` the card
+# title.  GitHub callouts carry no title of their own, so the author-written
+# type keyword is the heading.
 _ALERT_CONFIG = {
-    'NOTE':      {'icon': 'info',          'label': 'Note'},
-    'TIP':       {'icon': 'lightbulb',     'label': 'Tip'},
-    'IMPORTANT': {'icon': 'priority_high', 'label': 'Important'},
-    'WARNING':   {'icon': 'warning',       'label': 'Warning'},
-    'CAUTION':   {'icon': 'dangerous',     'label': 'Caution'},
+    'NOTE':      {'level': 'info',    'icon': 'info',          'label': 'Note'},
+    'TIP':       {'level': 'success', 'icon': 'lightbulb',     'label': 'Tip'},
+    'IMPORTANT': {'level': 'info',    'icon': 'priority_high', 'label': 'Important'},
+    'WARNING':   {'level': 'warning', 'icon': 'warning',       'label': 'Warning'},
+    'CAUTION':   {'level': 'danger',  'icon': 'error',         'label': 'Caution'},
 }
 
 # Compiled regex that matches the opening line of a GitHub-style alert
@@ -182,7 +186,7 @@ def parse_front_matter(content):
 def preprocess_github_alerts(content):
     """
     Pre-process markdown source to convert GitHub-style blockquote alerts
-    into styled HTML callout blocks before the main markdown renderer runs.
+    into alert-card HTML blocks before the main markdown renderer runs.
 
     This avoids a Python markdown library limitation where adjacent blockquotes
     separated by a blank line are merged into a single ``<blockquote>`` element.
@@ -259,14 +263,18 @@ def preprocess_github_alerts(content):
             # Emit a self-contained HTML block.  The main renderer treats
             # block-level HTML elements (divs starting at column 0) as raw
             # blocks and passes them through unchanged.
+            level = config['level']
+            text_class = 'text-dark' if level == 'warning' else 'text-white'
             alert_html = (
-                f'<div class="md-alert md-alert-{alert_type.lower()}">'
-                f'<div class="md-alert-header">'
-                f'<span class="material-symbols-outlined md-alert-icon">'
+                f'<div class="card alert-card border-{level} '
+                f'md-alert md-alert-{alert_type.lower()}">'
+                f'<div class="card-header bg-{level} {text_class} '
+                f'd-flex align-items-center">'
+                f'<span class="material-symbols-outlined me-2" aria-hidden="true">'
                 f'{config["icon"]}</span>'
-                f'<span class="md-alert-label">{config["label"]}</span>'
+                f'<h3 class="h5 fw-bold mb-0 {text_class}">{config["label"]}</h3>'
                 f'</div>'
-                f'<div class="md-alert-body">{body_html}</div>'
+                f'<div class="card-body">{body_html}</div>'
                 f'</div>'
             )
             out.append(alert_html)
