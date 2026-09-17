@@ -74,26 +74,6 @@
                         </div>
                     </form>
 
-                    {#
-                       Only operators get an audience switch. This site is the
-                       in-app help centre; offering teachers and students
-                       "Tech" just drops them into invariants and domain specs.
-                    #}
-                    {% if session.get('is_system_admin') %}
-                    <div class="mb-4">
-                        <div class="btn-group w-100" role="group">
-                            <a href="{{ url_for('docs.set_audience', aud='user', next=request.path) }}"
-                                class="btn btn-sm {% if audience == 'user' %}btn-primary active fw-bold{% else %}btn-outline-secondary{% endif %}">
-                                <span class="material-symbols-outlined icon-small" aria-hidden="true">group</span> User
-                            </a>
-                            <a href="{{ url_for('docs.set_audience', aud='devops', next=request.path) }}"
-                                class="btn btn-sm {% if audience == 'devops' %}btn-primary active fw-bold{% else %}btn-outline-secondary{% endif %}">
-                                <span class="material-symbols-outlined icon-small" aria-hidden="true">terminal</span> Tech
-                            </a>
-                        </div>
-                    </div>
-                    {% endif %}
-
                     <!-- Navigation Accordion -->
                     <div class="accordion accordion-flush" id="docsAccordion">
                         {% if audience == 'user' %}

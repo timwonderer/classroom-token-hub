@@ -36,6 +36,21 @@ DOCS_ROOT = Path(__file__).parent.parent.parent / 'docs'
 # Directories excluded from ALL search audiences (internal documentation only)
 EXCLUDED_DIRECTORIES = {'security'}
 
+# ---- Serving boundary ----
+#
+# The application serves ONE documentation tree: docs/user-guides, the in-app
+# help centre for teachers and students. Every other directory under docs/ —
+# INVARIANT, DOMAIN, FEATURE-EXECUTION, SPEC, STANDARD_OPERATING_PROCEDURES,
+# MAP, PRINCIPLES, REFERENCE, TRACKING — is developer-facing and is published
+# by the separate technical site, alongside the four public marketing pages.
+#
+# This is an ownership split, not an access control: the repository is public
+# and so are the docs. Serving them from both places means two renderers, two
+# navigations and two sets of stale links for the same file.
+# The boundary itself lives in app/utils/helpers.py, with the URL builders that
+# have to agree with it.
+from app.utils.helpers import USER_GUIDES_DIR, is_user_guide_doc_path
+
 # Friendly category names for search results
 CATEGORY_MAP = {
     'ARCHITECTURE': 'Architecture',
@@ -120,9 +135,11 @@ def _redirect_to_public_docs(doc_path=None):
         abort(404)
 
     if normalized_doc_path:
-        if normalized_doc_path not in EXTERNAL_DOCS_ROUTE_MAP:
-            abort(404)
-        external_target = EXTERNAL_DOCS_ROUTE_MAP[normalized_doc_path].strip("/")
+        # A mapped path keeps its pretty destination; anything else lands on the
+        # technical site's root. Before the split an unmapped path 404ed here,
+        # which is wrong once every technical document lives there.
+        mapped = EXTERNAL_DOCS_ROUTE_MAP.get(normalized_doc_path)
+        external_target = mapped.strip("/") if mapped else ""
     else:
         external_target = ""
 
@@ -371,42 +388,14 @@ def build_breadcrumbs(doc_path, docs_root):
 # -------------------- ROUTES --------------------
 
 def get_docs_audience():
-    """Determine the documentation audience ('user' or 'devops') for the current request.
+    """The in-app site serves one audience.
 
-    Only operators may reach 'devops'. This site is the in-app help centre, and
-    the technical docs ship separately; letting a stale cookie select them would
-    hand teachers and students a set of specs written for maintainers.
+    Operators used to be able to flip a cookie to 'devops' and browse the
+    technical tree in here. That tree is published by the technical site now, so
+    the toggle would only produce a second, staler rendering of the same files.
     """
-    from app.auth import get_current_user
-
-    user = get_current_user()
-    if user and getattr(getattr(user, 'user_role', None), 'value', getattr(user, 'user_role', None)) == 'sysadmin':
-        audience = request.cookies.get('docs_audience')
-        return audience if audience in ['user', 'devops'] else 'devops'
-
     return 'user'
 
-@docs_bp.route('/set-audience')
-def set_audience():
-    """Toggle between 'user' and 'devops' documentation."""
-    allowed_audiences = {'user', 'devops'}
-    audience_arg = (request.args.get('aud') or '').strip().lower()
-    audience = audience_arg if audience_arg in allowed_audiences else 'user'
-
-    # Always redirect to docs index after toggle to avoid any untrusted redirect target.
-    next_url = url_for('docs.index')
-
-    resp = make_response(redirect(next_url))
-    resp.set_cookie(
-        'docs_audience',
-        audience,
-        max_age=31536000,  # 1 year
-        httponly=True,
-        samesite='Lax',
-        secure=request.is_secure,
-    )
-    return resp
-    
 
 @docs_bp.route('/')
 def index():
@@ -441,6 +430,12 @@ def view_doc(doc_path):
         doc_path: Path to the documentation file (without .md extension)
     """
     if should_redirect_public_docs(doc_path):
+        return _redirect_to_public_docs(doc_path)
+
+    # Developer-facing documentation is not served here (see USER_GUIDES_DIR).
+    # With a technical site configured the request is forwarded to it; without
+    # one there is nothing to serve, so the path is simply absent.
+    if not is_user_guide_doc_path(doc_path):
         return _redirect_to_public_docs(doc_path)
 
     # Security: Validate input and prevent directory traversal
@@ -702,14 +697,9 @@ def search():
                 if 'ai' in rel_path.parts:
                     continue
                     
-                # Strict audience isolation
-                is_user_guide = top_dir == 'user-guides'
-                if audience == 'user':
-                    if not is_user_guide:
-                        continue
-                else:
-                    if is_user_guide:
-                        continue
+                # The app indexes only what it serves: the help centre.
+                if top_dir != USER_GUIDES_DIR:
+                    continue
 
                 content = doc_file.read_text(encoding='utf-8')
                 metadata, body = parse_front_matter(content)

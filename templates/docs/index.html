@@ -32,25 +32,6 @@
         </div>
     </form>
 
-    {#
-       Only operators get an audience switch. This site is the in-app help
-       centre for teachers and students; offering them "Technical Docs" just
-       drops them into invariants and domain specs they have no use for.
-    #}
-    {% if session.get('is_system_admin') %}
-    <div class="btn-group docs-hero-toggle" role="group" aria-label="Documentation Audience Toggle">
-        <a href="{{ url_for('docs.set_audience', aud='user') }}"
-            class="btn {% if audience == 'user' %}btn-secondary active fw-bold{% else %}btn-outline-light{% endif %} px-4">
-            <span class="material-symbols-outlined icon-sm icon-text-bottom" aria-hidden="true">group</span>
-            User Guides
-        </a>
-        <a href="{{ url_for('docs.set_audience', aud='devops') }}"
-            class="btn {% if audience == 'devops' %}btn-secondary active fw-bold{% else %}btn-outline-light{% endif %} px-4">
-            <span class="material-symbols-outlined icon-sm icon-text-bottom" aria-hidden="true">terminal</span>
-            Technical Docs
-        </a>
-    </div>
-    {% endif %}
 {% endcall %}
 
 <div class="container mt-5 mb-5">
