@@ -30,7 +30,7 @@ def destroy_stale_teacher(*, user_id, correlation_id, idempotency_key):
     user = User.query.filter_by(id=user_id, user_role="teacher").populate_existing().with_for_update().one_or_none()
     if not teacher_account_is_stale(user, utc_now()):
         return False
-    from app.routes.admin import _destroy_teacher_account_rows
+    from app.services.teacher_destruction import _destroy_teacher_account_rows
     _destroy_teacher_account_rows(
         canonical_context=BoundaryContext(user_id=user.id, actor_role="teacher"),
         admin_user=user,
