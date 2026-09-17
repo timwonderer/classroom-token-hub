@@ -204,7 +204,7 @@ class ClassObligationSummary:
     status_breakdown: dict  # {up_to_date, outstanding, past_due_grace, past_due_overdue}
 
     # Per-student summary
-    student_rows: list  # [{seat_id, student_name, status, due_date, amount_due, amount_paid, balance, days_overdue, is_waived}]
+    student_rows: list  # [{seat_id, public_id, student_name, status, due_date, amount_due, amount_paid, balance, days_overdue, is_waived}]
 
     # Phase 1 display formatting (audit violations: admin_rent_settings.html lines 178, 191)
     display_total_paid: str = "$0.00"  # Pre-formatted sum of all payments
@@ -748,6 +748,7 @@ def build_class_obligation_summary(
 
         student_rows.append({
             'seat_id': seat.id,
+            'public_id': seat.public_id,
             'student_name': student_name,
             'status': status,
             'due_date': current.get('due_date'),
@@ -814,6 +815,7 @@ def get_outstanding_rent_by_seat(class_id: str) -> list[dict]:
 
         {
             'seat_id': int,
+            'public_id': str,
             'student_name': str,
             'outstanding_count': int,
             'outstanding_total': Decimal,        # sum of remaining amounts
@@ -857,6 +859,7 @@ def get_outstanding_rent_by_seat(class_id: str) -> list[dict]:
         )
         rows.append({
             'seat_id': seat.id,
+            'public_id': seat.public_id,
             'student_name': student_name,
             'outstanding_count': len(outstanding),
             'outstanding_total': sum(

@@ -207,6 +207,12 @@
                                 <td>{{ identity_view.full_name }}</td>
                             </tr>
                             <tr>
+                                <td class="fw-bold">Teacher Notes:</td>
+                                <td class="text-break">
+                                    {% if identity_view.notes %}{{ identity_view.notes }}{% else %}<span class="text-muted">None</span>{% endif %}
+                                </td>
+                            </tr>
+                            <tr>
                                 <td class="fw-bold">Setup Status:</td>
                                 <td>
                                     {% if student_has_completed_setup %}

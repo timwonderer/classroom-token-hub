@@ -260,7 +260,7 @@
               <tbody>
                 {% for row in current_students %}
                 <tr>
-                  <td><strong>{{ row.student_name }}</strong></td>
+                  <td><a href="{{ student_detail_url(row.public_id) }}" class="fw-bold text-decoration-none">{{ row.student_name }}</a></td>
                   <td><span class="badge bg-success">Current</span></td>
                 </tr>
                 {% endfor %}
@@ -289,7 +289,7 @@
               <tbody>
                 {% for row in behind_students %}
                 <tr>
-                  <td><strong>{{ row.student_name }}</strong></td>
+                  <td><a href="{{ student_detail_url(row.public_id) }}" class="fw-bold text-decoration-none">{{ row.student_name }}</a></td>
                   <td>
                     {% set cycles_behind = ((row.days_overdue or 0) / cycle_days)|int + 1 %}
                     <span class="badge bg-danger">Behind by {{ cycles_behind }} cycle{{ 's' if cycles_behind != 1 else '' }}</span>
@@ -710,6 +710,7 @@
                          aria-labelledby="heading-{{ student_slug }}"
                          data-bs-parent="#outstandingRentAccordion">
                       <div class="accordion-body">
+                        <p class="mb-3"><a href="{{ student_detail_url(student.public_id) }}">View details for {{ student.student_name }}</a></p>
                         <form method="POST" action="{{ url_for('admin.add_rent_waiver') }}">
                           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
                           <div class="table-responsive mb-3">

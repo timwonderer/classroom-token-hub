@@ -719,11 +719,13 @@
                   {% for student in all_students %}
                   <tr class="student-row" data-class-id="{{ student.class_id }}" data-student-id="{{ student.public_id }}">
                     <td>
-                      <input class="form-check-input student-checkbox" type="checkbox" aria-label="Select {{ student.display_name }}" value="{{ student.public_id }}"
+                      <input class="form-check-input student-checkbox" type="checkbox" aria-label="Select {{ student.full_name }}" value="{{ student.public_id }}"
                         data-class-id="{{ student.class_id }}">
                     </td>
                     <td>
-                      <strong>{{ student.full_name }}</strong>
+                      {# New tab: keeps the selection and payment details on this form. #}
+                      <a href="{{ student_detail_url(student.public_id) }}" class="fw-bold text-decoration-none"
+                        target="_blank" rel="noopener">{{ student.full_name }}<span class="visually-hidden"> details (opens in a new tab)</span></a>
                     </td>
                     <td class="text-end">{{ student.display_checking_balance }}</td>
                     <td class="text-end">{{ student.display_savings_balance }}</td>
