@@ -110,7 +110,7 @@ def test_DOM_CLASS_001__store_edit_surface_does_not_mount_rent_cwi_panel(client)
         item = publish_store_product(
             class_id=classroom.class_id,
             entitlement_type="IMMEDIATE_USE",
-            user_id=classroom.teacher_user.id,
+            created_by_seat_id=classroom.teacher_seat.id,
             name="Homework Pass",
             description="Skip one homework assignment",
             price="25.00",

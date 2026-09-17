@@ -50,7 +50,8 @@ def test_DOM_CLASS_001__apply_savings_interest_with_naive_datetimes(client, app)
 
     interest_tx = (
         Transaction.query.filter_by(
-            user_id=test_student.user_id,
+            seat_id=test_student.id,
+            class_id=test_student.class_id,
             description="Monthly Savings Interest",
             account_type='savings',
         )

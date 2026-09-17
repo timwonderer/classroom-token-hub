@@ -196,7 +196,9 @@ def test_store_products_consolidation_is_idempotent(migrated_db):
     assert "store_products" in inspector.get_table_names()
     assert "store_items" not in inspector.get_table_names()
     columns = [col["name"] for col in inspector.get_columns("store_products")]
-    assert "user_id" in columns
+    # Products are authored by a class-local teacher seat, not a principal (INV-ARC-019).
+    assert "created_by_seat_id" in columns
+    assert "user_id" not in columns
     assert "teacher_id" not in columns
     assert "product_lineage_uuid" in columns
 
@@ -376,7 +378,6 @@ def test_unauthorized_table_purge_reapplied_over_head_keeps_insurance(app, migra
             idempotency_key="reapply-7c3d4e5f6a7b:fund",
             seat_id=student.seat_id,
             class_id=classroom.class_id,
-            user_id=student.user_id,
             amount=Decimal("100.00"),
             account_type="checking",
             type="payroll",
@@ -398,7 +399,6 @@ def test_unauthorized_table_purge_reapplied_over_head_keeps_insurance(app, migra
             idempotency_key="reapply-7c3d4e5f6a7b:loss",
             seat_id=student.seat_id,
             class_id=classroom.class_id,
-            user_id=student.user_id,
             amount=Decimal("-12.34"),
             account_type="checking",
             type="purchase",
