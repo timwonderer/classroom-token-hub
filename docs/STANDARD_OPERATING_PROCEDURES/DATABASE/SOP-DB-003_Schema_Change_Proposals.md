@@ -1,8 +1,8 @@
-# SOP-DB-015: Schema Change Gate
+# SOP-DB-003: Schema Change Gate
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-|SOP-DB-015| 1.1 | 2026-03-08 | 1.0 |Normative|
+| SOP-DB-003 | 1.2 | 2026-09-17 | 1.1 (issued as SOP-DB-015) | Normative |
 
 ## I. Purpose
 
@@ -19,7 +19,7 @@ Normative (SOP Tier). Subordinate to INV-CORE-000.
 ## IV. Dependencies
 
 - `INV-CORE-000_CORE_INVARIANTS.md`
-- `SOP-DB-011_Migration_Specifications.md`
+- `SOP-DB-001_Migration_Specifications.md`
 
 ## V. When This Gate Applies
 

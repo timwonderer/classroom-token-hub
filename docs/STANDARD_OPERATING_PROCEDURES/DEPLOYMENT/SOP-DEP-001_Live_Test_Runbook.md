@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-022      | 2.0     | 2026-09-17     | 1.2        | Normative       |
+| SOP-DEP-001      | 2.0     | 2026-09-17     | 1.2 (issued as SOP-DEP-022) | Normative |
 
 ## I. Purpose
 
@@ -18,7 +18,7 @@ control. A successful boot, or a passing subset of routes, is not certification.
 
 Test deployments of the repository `main` branch onto the deployment host, from
 release gate through go/no-go decision. Production transition after a successful
-live test is governed by SOP-DEP-023.
+live test is governed by SOP-DEP-002.
 
 Version 2.0 is a rewrite. Version 1.2 described the pre-v2 identity model
 (`ClassMembership`, `TeacherBlock`), a fixed 664-test baseline, a `join_code`
@@ -37,7 +37,7 @@ Normative (SOP Tier). Subordinate to INV-CORE-000.
 - `INV-CORE-000_CORE_INVARIANTS.md`
 - `DOM-IDEN-002_STUDENT_IDENTITY_ARCHITECTURE.md` (seat state; §VIII participation and visibility)
 - `SOP-DB-009_Migration_Compliance_Review.md`
-- `SOP-DB-011_Migration_Specifications.md`
+- `SOP-DB-001_Migration_Specifications.md`
 - `SOP-TEST-001_Validation_Execution_And_Reporting.md`
 
 ## V. Environment Truth

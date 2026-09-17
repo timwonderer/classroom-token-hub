@@ -189,7 +189,7 @@ Executed:
 - Deleted `docs/user-guides/features/sysadmin/` (5 files) and `docs/user-guides/sysadmin_manual.md`. Roughly two-thirds of their content described screens that do not exist — "Manage Teachers", "Manage Admins", "Reset TOTP", "Global Announcements", "Sysadmin Registration Phrase" — so none of it was worth carrying forward verbatim.
 - Wrote `docs/SPEC/SPEC-OPS-004_SYSTEM_ADMINISTRATION_CONSOLE.md` against the real blueprint: the four-destination nav (Dashboard, Support, Logs, Passkeys), the access-control model, the mutation boundary (the console may not touch classroom domain truth), and the known non-conformances.
 - Removed the sysadmin card from `templates/docs/index.html` and the sysadmin accordion from `templates/docs/view.html`; added the new spec under the devops **Operations** card.
-- Updated `docs/user-guides/README.md`, `docs/user-guides/features/index.md`, and `SOP-DOC-002`.
+- Updated `docs/user-guides/README.md`, `docs/user-guides/features/index.md`, and `SOP-DOC-001`.
 
 `docs/self-hosting/` remains unbuilt — `docs/README.md:66` lists it and `docs.py:56` already maps it to a friendly category name. That destination is still declared but empty, and is separate from this decision.
 

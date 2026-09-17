@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DB-011       | 1.1     | 2026-09-14     | 1.0        | Normative                 |
+| SOP-DB-001       | 1.2     | 2026-09-17     | 1.1 (issued as SOP-DB-011) | Normative |
 
 > [!NOTE]
 > v1.1 (2026-09-14) adds §V.A, a single named exception to Golden Rule 3. Rule 3 is not weakened:
@@ -28,7 +28,7 @@ Normative (SOP Tier). Subordinate to INV-CORE-000.
 - `INV-CORE-000_CORE_INVARIANTS.md`
 - `INV-CORE-001_CAPABILITY_BASED_ARCHITECTURE_AND_AUTHORITY_MODEL.md`
 - `INV-ARC-017_GENERAL_TESTING_INVARIANTS.md`
-- `SOP-DB-015_Schema_Change_Proposals.md`
+- `SOP-DB-003_Schema_Change_Proposals.md`
 
 ## V. The Golden Rules
 
@@ -66,7 +66,7 @@ less destructive on replay. It qualifies only when **all** of the following are 
 5. **The destructive replay is gone.** Replay and re-upgrade prove the destructive behavior has been
    eliminated.
 6. **The exception is acknowledged.** The exception and its production risk are explicitly recorded
-   under `SOP-DB-015` §IX.
+   under `SOP-DB-003` §IX.
 
 This exception MUST NOT be used to change a historical migration's intended schema, introduce new
 application behavior, correct ordinary forward migration defects that can be repaired by a
@@ -89,7 +89,7 @@ scope (`INV-ARC-017` §V). At minimum:
 
 - The corrected migration carries a comment naming this section and the date of the correction.
 - The PR description and `CHANGELOG.md` cite the protecting clause, the evidence for each condition,
-  and the production-risk acknowledgment required by `SOP-DB-015` §IX.
+  and the production-risk acknowledgment required by `SOP-DB-003` §IX.
 
 #### Independent Evaluation
 
@@ -328,7 +328,7 @@ for fk in inspector.get_foreign_keys('students'):
 
 ## X. Deprecation Standards
 
-**Registry:** `docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-014_Deprecated_Symbols_Registry.md`
+**Registry:** `docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-002_Deprecated_Symbols_Registry.md`
 
 **Deprecated Patterns:**
 

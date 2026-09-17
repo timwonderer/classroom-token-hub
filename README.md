@@ -172,7 +172,7 @@ All migrations must include idempotency helpers and pass the linter before commi
 python scripts/lint_migrations.py --baseline migrations/lint_baseline.txt
 ```
 
-`migrations/lint_baseline.txt` freezes pre-gate debt and only ever shrinks — a new migration does not belong in it. The normative specification is [SOP-DB-011](docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-011_Migration_Specifications.md); [.claude/rules/database-migrations.md](.claude/rules/database-migrations.md) is a non-authoritative working summary of it.
+`migrations/lint_baseline.txt` freezes pre-gate debt and only ever shrinks — a new migration does not belong in it. The normative specification is [SOP-DB-001](docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-001_Migration_Specifications.md); [.claude/rules/database-migrations.md](.claude/rules/database-migrations.md) is a non-authoritative working summary of it.
 
 ---
 
@@ -188,7 +188,7 @@ The repository includes the v2 bounded domains, canonical FEAT mutation boundari
 
 Known unproven surfaces, stated plainly rather than left to inference: daylight-saving and midnight-boundary transitions have not been exercised live; full-corpus template accessibility, keyboard, focus and contrast behavior needs a real browser; concurrent settlement, payroll batch runs and scheduled jobs have not been tested under load; and the production host itself has only been rehearsed against a local PostgreSQL cluster. Executed evidence is not the same as inferred coverage (`INV-ARC-017`).
 
-Before launch, use the [v2 production transition runbook](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-023_V2_Production_Transition_Runbook.md), the [production readiness tracker](docs/TRACKING/PRODUCTION_READINESS_2026-09.md), and the [changelog](CHANGELOG.md) as the current source for release evidence. Do not infer application availability from the GitHub Pages holding page: verify application maintenance mode, login routes, deployment health, and the exact release SHA independently.
+Before launch, use the [v2 production transition runbook](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md), the [production readiness tracker](docs/TRACKING/PRODUCTION_READINESS_2026-09.md), and the [changelog](CHANGELOG.md) as the current source for release evidence. Do not infer application availability from the GitHub Pages holding page: verify application maintenance mode, login routes, deployment health, and the exact release SHA independently.
 
 ---
 
@@ -250,7 +250,7 @@ curl http://localhost:5000/health/status
 gunicorn wsgi:app --workers 4 --bind 0.0.0.0:8000
 ```
 
-See [SOP-DEP-023](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-023_V2_Production_Transition_Runbook.md) for the full runbook.
+See [SOP-DEP-002](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md) for the full runbook.
 
 The static public site is published separately from `github-pages/`. Until launch, `github-pages/index.html` is the holding page; the launch branch supplies the public landing pages. The application does not serve the marketing site as a Flask route.
 

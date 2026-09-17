@@ -10,9 +10,9 @@
 - **[Production Readiness 2026-09](docs/TRACKING/PRODUCTION_READINESS_2026-09.md)** - The tracker of record: launch blockers, open defects, and readiness status
 - **[Core Invariants](docs/INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS.md)** - Non-negotiable system laws
 - **[Capability-Based Architecture and Authority Model](docs/INVARIANT/CORE/INV-CORE-001_CAPABILITY_BASED_ARCHITECTURE_AND_AUTHORITY_MODEL.md)** - System design, the `INV → DOM → FEAT` hierarchy, and where authority lives
-- **[Documentation Index](docs/STANDARD_OPERATING_PROCEDURES/SOP-DOC-002_DOCUMENTATION_INDEX.md)** - Full map of every live document by namespace
+- **[Documentation Index](docs/STANDARD_OPERATING_PROCEDURES/SOP-DOC-001_DOCUMENTATION_INDEX.md)** - Full map of every live document by namespace
 - **[Class Scope Normalization Target](docs/MAP/MAP-CLASS-002_CLASS_SCOPE_NORMALIZATION_TARGET.md)** - Deferred post-port target for `class_id`-first internal scoping
-- **[v2 Live-Test Runbook](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-022_V2_Live_Test_Runbook.md)** - Internal validation workflow before live testing
+- **[v2 Live-Test Runbook](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-001_Live_Test_Runbook.md)** - Internal validation workflow before live testing
 - **[Design Principles & Project History](docs/PRINCIPLES/PROJECT_PHILOSOPHY/PRN-PHL-001_Design_Principles_And_Project_History.md)** - Why the system is shaped the way it is
 
 > [!NOTE]

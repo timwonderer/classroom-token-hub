@@ -1,8 +1,8 @@
-# SOP-DOC-002: Documentation Index
+# SOP-DOC-001: Documentation Index
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-002      | 3.2     | 2026-09-06     | 3.1        | Normative       |
+| SOP-DOC-001      | 3.3     | 2026-09-17     | 3.2 (issued as SOP-DOC-002) | Normative |
 
 ---
 
@@ -39,7 +39,7 @@ These documents conform to the V2 capability-based architecture and domain autho
 
 ### Standards & Procedures (SOP)
 - [SOP-DOC-000_DOCUMENTATION_STANDARD.md](SOP-DOC-000_DOCUMENTATION_STANDARD.md) — Unified writing standard
-- [SOP-DOC-002_DOCUMENTATION_INDEX.md](SOP-DOC-002_DOCUMENTATION_INDEX.md) — Master documentation index
+- [SOP-DOC-001_DOCUMENTATION_INDEX.md](SOP-DOC-001_DOCUMENTATION_INDEX.md) — Master documentation index
 - [DEVOPS/SOP-DEV-001_REFACTOR_BEST_PRACTICES.md](DEVOPS/SOP-DEV-001_REFACTOR_BEST_PRACTICES.md)
 - [DEVOPS/SOP-DEV-002_CANONICAL_DOMAIN_RECONSTRUCTION_WORKFLOW.md](DEVOPS/SOP-DEV-002_CANONICAL_DOMAIN_RECONSTRUCTION_WORKFLOW.md)
 - [OPERATIONS/SOP-OPS-001_SERVICE_STATUS_AND_INCIDENT_COMMUNICATION.md](OPERATIONS/SOP-OPS-001_SERVICE_STATUS_AND_INCIDENT_COMMUNICATION.md) — External status infrastructure and operational communication

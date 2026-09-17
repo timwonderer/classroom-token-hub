@@ -4,7 +4,7 @@ Migration Linter - Enforce Idempotency and Safety Best Practices
 
 This script validates that database migrations follow the project's standards
 as documented in:
-  - docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-011_Migration_Specifications.md
+  - docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-001_Migration_Specifications.md
   - .claude/rules/database-migrations.md
 
 Usage:
@@ -230,7 +230,7 @@ Examples:
   %(prog)s --report                           # Show summary report
 
 For more information, see:
-  - docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-011_Migration_Specifications.md
+  - docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-001_Migration_Specifications.md
   - docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-009_Migration_Compliance_Review.md
         """
     )

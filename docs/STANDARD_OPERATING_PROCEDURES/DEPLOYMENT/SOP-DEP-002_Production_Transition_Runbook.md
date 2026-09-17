@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-023 | 1.3 | 2026-03-30 | 1.2 | Normative |
+| SOP-DEP-002 | 1.4 | 2026-09-17 | 1.3 (issued as SOP-DEP-023) | Normative |
 
 ## I. Purpose
 
@@ -20,7 +20,7 @@ Normative (SOP Tier). Subordinate to `INV-CORE-000`.
 
 - `INV-CORE-000_CORE_INVARIANTS.md`
 - `SOP-DB-009_Migration_Compliance_Review.md`
-- `SOP-DEP-022_V2_Live_Test_Runbook.md`
+- `SOP-DEP-001_Live_Test_Runbook.md`
 - `SOP-DEP-016_Rollback_Procedures.md`
 
 ## V. Preconditions

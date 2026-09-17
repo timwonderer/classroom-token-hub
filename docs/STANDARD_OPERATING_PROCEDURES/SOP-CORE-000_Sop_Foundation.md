@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level  |
 |------------------|---------|----------------|------------|------------------|
-|SOP-CORE-000| 1.1 | 2026-03-08 | 1.0 |Constitutional|
+| SOP-CORE-000 | 1.2 | 2026-09-17 | 1.1 | Constitutional |
 
 ---
 
@@ -28,12 +28,41 @@ Constitutional (Tier 1) within the context of human procedure, but explicitly su
 
 The `STANDARD_OPERATING_PROCEDURES` namespace is organized into the following subdivisions:
 
-- `DOCUMENTATION/` (SOP-DOC-*): Rules for writing, structuring, and maintaining documentation.
-- `DEPLOYMENT/` (SOP-DEP-*): Procedures for releasing code, scaling environments, and managing hosting.
-- `DATABASE/` (SOP-DB-*): Procedures for running migrations, backfilling data, and managing state.
-- `OPERATIONS/` (SOP-OPS-*): Procedures for operating systems that carry out the Operations domain's purpose, including status publication and incident communication.
-- `DEVOPS/` (SOP-DEV-*): Development and domain-reconstruction procedures retained during the v2 SOP migration.
-- `WORKFLOW/` (SOP-WORK-*): CI/CD procedures, Git discipline, and PR guidelines.
+- `DATABASE/` (SOP-DB-*): Migrations, backfills, schema-change gating, and state management.
+- `DEPLOYMENT/` (SOP-DEP-*): Live-test and production-transition procedures for releasing code.
+- `DEVOPS/` (SOP-DEV-*): Refactor and domain-reconstruction procedures.
+- `OPERATIONS/` (SOP-OPS-*): Operating the systems that carry out the Operations domain's purpose, including status publication and incident communication.
+- `SECURITY/` (SOP-SEC-*): Credential, key-custody, and identity-lookup operations.
+- `TESTING/` (SOP-TEST-*): Validation execution, test creation, and PR gates.
+
+`SOP-CORE-000`, `SOP-DOC-000` and `SOP-DOC-001` sit at the namespace root rather
+than in a subdivision: they govern the namespace itself. There is no
+`DOCUMENTATION/` or `WORKFLOW/` subdivision — earlier revisions of this section
+listed both, and neither has ever existed in the v2 tree.
+
+### Numbering
+
+Each subdivision numbers from `001` upward with no gaps, in the order documents
+were issued. A retired document's number is not reissued within the same
+subdivision. Numbers used by archived v1 documents under `docs/archive/` are
+available for reuse: those identifiers are retired with the v1 line and carry
+no authority, so a bare v1 identifier must be read with its archive path.
+
+On 2026-09-17 the surviving namespace was renumbered to close the gaps left by
+quarantining superseded documents. The mapping, for resolving older citations:
+
+| Former | Current |
+|--------|---------|
+| SOP-DB-011 | SOP-DB-001 |
+| SOP-DB-014 | SOP-DB-002 |
+| SOP-DB-015 | SOP-DB-003 |
+| SOP-DEP-022 | SOP-DEP-001 |
+| SOP-DEP-023 | SOP-DEP-002 |
+| SOP-DOC-002 | SOP-DOC-001 |
+
+Citations in merged migration files and in `CHANGELOG.md` are left at their
+former identifiers: both are historical records of what was cited when the
+entry was written, and this table resolves them.
 
 ## VI. Standard Document Template
 

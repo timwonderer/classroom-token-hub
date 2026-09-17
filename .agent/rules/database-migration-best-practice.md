@@ -12,7 +12,7 @@ trigger: always_on
 
 1. **NEVER modify `app/models.py` without creating a migration**
 2. **ALWAYS test migrations before committing** (upgrade AND downgrade)
-3. **NEVER edit old migrations after they're merged to main** — sole exception: a Replay-Safety Correction under `SOP-DB-011` §V.A, which requires all six of its conditions to be proven and recorded. It is not a license to improve an old migration; read §V.A before relying on it.
+3. **NEVER edit old migrations after they're merged to main** — sole exception: a Replay-Safety Correction under `SOP-DB-001` §V.A, which requires all six of its conditions to be proven and recorded. It is not a license to improve an old migration; read §V.A before relying on it.
 4. **ALWAYS review auto-generated migrations** before committing
 5. **NEVER skip migrations** - each schema change needs its own migration
 

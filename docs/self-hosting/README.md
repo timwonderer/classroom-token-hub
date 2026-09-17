@@ -14,8 +14,8 @@ documents linked below.
 
 ## Before you deploy
 
-- Read the [v2 production transition runbook](../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-023_V2_Production_Transition_Runbook.md).
-- Use the [live-test runbook](../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-022_V2_Live_Test_Runbook.md) for controlled verification.
+- Read the [v2 production transition runbook](../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md).
+- Use the [live-test runbook](../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-001_Live_Test_Runbook.md) for controlled verification.
 - Review [SOP-SEC-001](../STANDARD_OPERATING_PROCEDURES/SECURITY/SOP-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_OPERATIONS.md) and the canonical environment/key requirements before supplying secrets.
 - Confirm the target database, service identity, revision, and backup plan before any migration or reset.
 
