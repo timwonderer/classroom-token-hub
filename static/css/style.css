@@ -168,6 +168,24 @@ a:hover {
     border-color: var(--info) !important;
 }
 
+/* Gold is a fill, not a text colour (tokens.css): raw --warning text is 2.2:1 on
+   white. Outline warning buttons use the gold accent text token (6.7:1 on white,
+   5.5:1 on striped rows) and dark text on the gold fill when pressed (7.9:1). */
+.btn-outline-warning {
+    color: var(--accent-text-on-light) !important;
+    border-color: var(--accent-text-on-light) !important;
+    background: transparent;
+}
+
+.btn-outline-warning:hover,
+.btn-outline-warning:focus-visible,
+.btn-outline-warning:active,
+.btn-outline-warning.active {
+    background-color: var(--warning) !important;
+    border-color: var(--warning) !important;
+    color: var(--secondary-text) !important;
+}
+
 .btn-outline-info:hover {
     background-color: var(--info) !important;
     color: var(--text-inverse) !important;
