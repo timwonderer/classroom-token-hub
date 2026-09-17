@@ -8,13 +8,52 @@ branch_labels = None
 depends_on = None
 
 
+def table_exists(table_name):
+    """Check if a table exists."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    return table_name in inspector.get_table_names()
+
+
+def column_exists(table_name, column_name):
+    """Check if a column exists in a table."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    try:
+        columns = [col['name'] for col in inspector.get_columns(table_name)]
+        return column_name in columns
+    except Exception:
+        return False
+
+
+def index_exists(table_name, index_name):
+    """Check if an index exists on a table."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    try:
+        indexes = [idx['name'] for idx in inspector.get_indexes(table_name)]
+        return index_name in indexes
+    except Exception:
+        return False
+
+
+def foreign_key_exists(table_name, fk_name):
+    """Check if a foreign key exists on a table."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    try:
+        fks = [fk['name'] for fk in inspector.get_foreign_keys(table_name)]
+        return fk_name in fks
+    except Exception:
+        return False
+
+
 def upgrade():
-    inspector = sa.inspect(op.get_bind())
-    if inspector.has_table('issues') and 'support_permissions' not in {c['name'] for c in inspector.get_columns('issues')}:
-        op.add_column('issues', sa.Column('support_permissions', sa.JSON(), nullable=False, server_default='{}'))
+    if table_exists('issues'):
+        if not column_exists('issues', 'support_permissions'):
+            op.add_column('issues', sa.Column('support_permissions', sa.JSON(), nullable=False, server_default='{}'))
 
 
 def downgrade():
-    inspector = sa.inspect(op.get_bind())
-    if inspector.has_table('issues') and 'support_permissions' in {c['name'] for c in inspector.get_columns('issues')}:
+    if column_exists('issues', 'support_permissions'):
         op.drop_column('issues', 'support_permissions')

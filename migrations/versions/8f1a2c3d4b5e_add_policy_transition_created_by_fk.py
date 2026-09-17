@@ -32,14 +32,22 @@ def foreign_key_exists(table_name, fk_name):
         return False
 
 
+def column_exists(table_name, column_name):
+    """Check if a column exists in a table."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    try:
+        columns = [col['name'] for col in inspector.get_columns(table_name)]
+        return column_name in columns
+    except Exception:
+        return False
+
+
 def upgrade():
     # Fresh bootstrap creates current ORM metadata, which has no legacy author column.
-    if table_exists("policy_transitions") and "created_by" in {
-        c["name"] for c in sa.inspect(op.get_bind()).get_columns("policy_transitions")
-    } and not foreign_key_exists(
-        "policy_transitions",
-        "fk_policy_transitions_created_by",
-    ):
+    if not column_exists("policy_transitions", "created_by"):
+        return
+    if not foreign_key_exists("policy_transitions", "fk_policy_transitions_created_by"):
         with op.batch_alter_table("policy_transitions", schema=None) as batch_op:
             batch_op.create_foreign_key(
                 "fk_policy_transitions_created_by",

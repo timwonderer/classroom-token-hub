@@ -29,6 +29,46 @@ def _columns(conn, table):
     return {c['name'] for c in sa.inspect(conn).get_columns(table)}
 
 
+def table_exists(table_name):
+    """Check if a table exists."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    return table_name in inspector.get_table_names()
+
+
+def column_exists(table_name, column_name):
+    """Check if a column exists in a table."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    try:
+        columns = [col['name'] for col in inspector.get_columns(table_name)]
+        return column_name in columns
+    except Exception:
+        return False
+
+
+def index_exists(table_name, index_name):
+    """Check if an index exists on a table."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    try:
+        indexes = [idx['name'] for idx in inspector.get_indexes(table_name)]
+        return index_name in indexes
+    except Exception:
+        return False
+
+
+def foreign_key_exists(table_name, fk_name):
+    """Check if a foreign key exists on a table."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    try:
+        fks = [fk['name'] for fk in inspector.get_foreign_keys(table_name)]
+        return fk_name in fks
+    except Exception:
+        return False
+
+
 def _assert_replay_history_supported(conn):
     unsupported = conn.execute(sa.text(
         "SELECT id FROM ledger_command_reservation WHERE fingerprint_version NOT IN (1,2,3) "
@@ -73,8 +113,9 @@ def _assert_replay_history_supported(conn):
 
 def _replace_author(conn, table, old, new, *, nullable):
     columns = _columns(conn, table)
-    if new not in columns:
+    if not column_exists(table, new):
         op.add_column(table, sa.Column(new, sa.Integer(), nullable=True))
+    if new not in columns and not foreign_key_exists(table, f'fk_{table}_{new}_seats'):
         op.create_foreign_key(f'fk_{table}_{new}_seats', table, 'seats', [new], ['id'], ondelete='CASCADE')
     if old in columns:
         # A unique teacher binding is the only lawful mapping; never guess.
@@ -102,9 +143,10 @@ def upgrade():
     conn = op.get_bind()
     _assert_replay_history_supported(conn)
     for fk in sa.inspect(conn).get_foreign_keys('seats'):
-        if fk['constrained_columns'] == ['user_id']:
+        if fk['constrained_columns'] == ['user_id'] and fk['name'] != 'fk_seats_user_id_users':
             op.drop_constraint(fk['name'], 'seats', type_='foreignkey')
-    op.create_foreign_key('fk_seats_user_id_users', 'seats', 'users', ['user_id'], ['id'], ondelete='RESTRICT')
+    if not foreign_key_exists('seats', 'fk_seats_user_id_users'):
+        op.create_foreign_key('fk_seats_user_id_users', 'seats', 'users', ['user_id'], ['id'], ondelete='RESTRICT')
     _replace_author(conn, 'announcements', 'user_id', 'created_by_seat_id', nullable=False)
     _replace_author(conn, 'policy_transitions', 'created_by', 'created_by_seat_id', nullable=True)
     _replace_author(conn, 'store_products', 'user_id', 'created_by_seat_id', nullable=True)
