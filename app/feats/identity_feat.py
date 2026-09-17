@@ -585,9 +585,26 @@ def bind_authenticated_student_to_class(
     return ClassBindingResult(success=True, seat_id=matched_seat.id)
 
 
+CLAIM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+CLAIM_CODE_LENGTH = 4
+
+
+def _generate_claim_code(used: set[str]) -> str:
+    while True:
+        code = "".join(secrets.choice(CLAIM_CODE_ALPHABET) for _ in range(CLAIM_CODE_LENGTH))
+        if code not in used:
+            used.add(code)
+            return code
+
+
 @requires_feat_context("FEAT-IDEN-006")
 def import_student_seats(*, canonical_context, rows, correlation_id, idempotency_key):
-    """Atomically provision a new seat per row; never infer identity from names."""
+    """Atomically provision a new seat per row; never infer identity from names.
+
+    Every unclaimed seat sharing a claim name must stay independently claimable,
+    so the system (never the teacher) assigns distinct claim codes across the
+    batch and any existing unclaimed namesakes that lack one.
+    """
     from app.services.classroom_setup import create_roster_student_seat
 
     ctx = canonical_context
@@ -602,12 +619,10 @@ def import_student_seats(*, canonical_context, rows, correlation_id, idempotency
     if not isinstance(rows, list) or not rows:
         raise ValueError("Provide at least one student row.")
     prepared = []
-    names = {}
     for row in rows:
         if not isinstance(row, dict):
             raise ValueError("Each student row must contain first and last names.")
-        first, last = row.get("first_name"), row.get("last_name")
-        notes, code = row.get("notes"), row.get("dedupe_code", "")
+        first, last, notes = row.get("first_name"), row.get("last_name"), row.get("notes")
         if (
             not isinstance(first, str) or not first.strip()
             or not isinstance(last, str) or not last.strip()
@@ -615,25 +630,53 @@ def import_student_seats(*, canonical_context, rows, correlation_id, idempotency
             raise ValueError("Every row needs a first and last name.")
         if notes is not None and not isinstance(notes, str):
             raise ValueError("Notes must be text.")
-        if not isinstance(code, str) or len(code.strip()) > 8:
-            raise ValueError("Distinguishing codes must be at most eight characters.")
-        first, last, code = first.strip(), last.strip(), code.strip().upper()
-        key = (normalize_lookup_text(first, kind="name"), normalize_lookup_text(last, kind="name"))
-        names.setdefault(key, []).append(code)
-        prepared.append((first, last, notes, code))
-    for codes in names.values():
-        if len(codes) > 1 and (not all(codes) or len(set(codes)) != len(codes)):
-            raise ValueError(
-                "Duplicate names in this upload need distinct names or distinguishing codes. "
-                "No students were imported."
+        first, last = first.strip(), last.strip()
+        prepared.append({
+            "first": first, "last": last, "notes": notes, "code": None,
+            "first_hash": hash_claim_name(first, class_id=ctx.class_id, field="first"),
+            "last_hash": hash_claim_name(last, class_id=ctx.class_id, field="last"),
+        })
+
+    # Serialize with claims, unclaims, and concurrent imports touching the same names.
+    ClassEconomy.query.filter_by(class_id=ctx.class_id).with_for_update().one()
+    groups = {}
+    for entry in prepared:
+        groups.setdefault((entry["first_hash"], entry["last_hash"]), []).append(entry)
+    for (first_hash, last_hash), entries in groups.items():
+        existing = (
+            Seat.query.filter(
+                Seat.class_id == ctx.class_id, Seat.role == "student", Seat.user_id.is_(None),
+                Seat.claim_first_name_hash == first_hash, Seat.claim_last_name_hash == last_hash,
+            ).order_by(Seat.id).populate_existing().with_for_update().all()
+        )
+        if len(entries) + len(existing) < 2:
+            continue
+        used = {seat.dedupe_code for seat in existing if seat.dedupe_code}
+        seen = set()
+        for seat in existing:
+            if seat.dedupe_code and seat.dedupe_code not in seen:
+                seen.add(seat.dedupe_code)
+                continue
+            # Missing or colliding code: assign a fresh one so the seat stays claimable.
+            seat.dedupe_code = _generate_claim_code(used)
+            seen.add(seat.dedupe_code)
+            seat.roster_fingerprint = hash_roster_fingerprint(
+                class_id=ctx.class_id, first_name=entries[0]["first"],
+                last_name=entries[0]["last"], dedupe_code=seat.dedupe_code,
             )
-    for first, last, notes, code in prepared:
+        for entry in entries:
+            entry["code"] = _generate_claim_code(used)
+
+    for entry in prepared:
         create_roster_student_seat(
-            class_id=ctx.class_id, first_name=first, last_name=last, notes=notes,
-            dedupe_code=code or None,
-            claim_first_name_hash=hash_claim_name(first, class_id=ctx.class_id, field="first"),
-            claim_last_name_hash=hash_claim_name(last, class_id=ctx.class_id, field="last"),
-            roster_fingerprint=hash_roster_fingerprint(class_id=ctx.class_id, first_name=first, last_name=last, dedupe_code=code),
+            class_id=ctx.class_id, first_name=entry["first"], last_name=entry["last"],
+            notes=entry["notes"], dedupe_code=entry["code"],
+            claim_first_name_hash=entry["first_hash"],
+            claim_last_name_hash=entry["last_hash"],
+            roster_fingerprint=hash_roster_fingerprint(
+                class_id=ctx.class_id, first_name=entry["first"], last_name=entry["last"],
+                dedupe_code=entry["code"] or "",
+            ),
         )
     return len(prepared)
 

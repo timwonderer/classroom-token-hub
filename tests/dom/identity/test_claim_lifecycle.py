@@ -2,7 +2,7 @@
 import pytest
 
 from app.extensions import db
-from app.feats.identity_feat import bind_authenticated_student_to_class
+from app.feats.identity_feat import bind_authenticated_student_to_class, resolve_seat_claim
 from app.models import Seat, IdentityProfile
 from tests.helpers.classroom_initializer import initialize, initialize_as_teacher
 
@@ -42,11 +42,20 @@ def test_import_matching_claimed_name_creates_new_seat(client):
     ]})
     assert repeated.status_code == 200 and repeated.json['created'] == 1
     assert Seat.query.filter_by(class_id=classroom.class_id).count() == before + 2
+    # Both unclaimed namesakes receive distinct system codes and stay claimable.
+    db.session.expire_all()
+    namesakes = Seat.query.filter_by(class_id=classroom.class_id, role='student', user_id=None).all()
+    codes = {seat.dedupe_code for seat in namesakes}
+    assert len(namesakes) == 2 and None not in codes and len(codes) == 2
+    for seat in namesakes:
+        claim = resolve_seat_claim(join_code=classroom.join_code, first_name=original.first_name,
+                                   last_name=original.last_name, dedupe_code=seat.dedupe_code)
+        assert claim.success and claim.seat_id == seat.id
 
 
 @pytest.mark.parametrize('rows', [
     [{'first_name': 'New', 'last_name': 'Student'}, {'first_name': '', 'last_name': 'Invalid'}],
-    [{'first_name': 'New', 'last_name': 'Student'}, {'first_name': 'new', 'last_name': 'student'}],
+    [{'first_name': 'New', 'last_name': 'Student'}, {'first_name': 'Other', 'last_name': 'Student', 'notes': 7}],
 ])
 def test_invalid_batch_is_atomic(client, rows):
     classroom = initialize_as_teacher('chemistry_p1', client, client.application)
@@ -57,22 +66,28 @@ def test_invalid_batch_is_atomic(client, rows):
     assert Seat.query.filter_by(class_id=classroom.class_id).count() == before
 
 
-def test_explicit_batch_codes_and_authenticated_binding(client):
+def test_batch_namesakes_get_system_codes_and_bind(client):
     source = initialize('chemistry_p1', client.application)
     target = initialize_as_teacher('duplicate_names', client, client.application)
     response = client.post('/admin/upload-students', json={'students': [
-        {'first_name': 'New', 'last_name': 'Student', 'dedupe_code': code} for code in ['ONE', 'TWO']
+        {'first_name': 'New', 'last_name': 'Student', 'dedupe_code': 'ONE'} for _ in range(2)
     ]})
     assert response.status_code == 200, response.json
     assert response.json['created'] == 2
+    codes = [seat.dedupe_code for seat in Seat.query.filter(
+        Seat.class_id == target.class_id, Seat.user_id.is_(None),
+        Seat.claim_first_name_hash.isnot(None), Seat.dedupe_code.isnot(None),
+    ).order_by(Seat.id)]
+    # Client-supplied codes are ignored; the system assigns distinct ones.
+    assert len(codes) >= 2 and len(set(codes)) == len(codes) and 'ONE' not in codes
     result = bind_authenticated_student_to_class(
         user_id=source.students[0].user.id, join_code=target.join_code,
-        first_name='New', last_name='Student', dedupe_code='ONE',
+        first_name='New', last_name='Student', dedupe_code=codes[-2],
         correlation_id='corr_claim_lifecycle', idempotency_key='claim-lifecycle:bind',
     )
     assert result.success
     assert_claim_cleared(db.session.get(Seat, result.seat_id))
-    pending = Seat.query.filter_by(class_id=target.class_id, dedupe_code='TWO').one()
+    pending = Seat.query.filter_by(class_id=target.class_id, dedupe_code=codes[-1]).one()
     assert pending.claim_first_name_hash is not None
 
 

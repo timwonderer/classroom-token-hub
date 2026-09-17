@@ -22,12 +22,14 @@ Authority: DOM-IDEN-007, DOM-CLASS-001, SOP-DEV-002.
 ## Additive roster import (2026-09-15)
 
 Each accepted upload row provisions a NEW unclaimed Seat and IdentityProfile.
-Do not match, skip, update, or deduplicate against existing seats by name,
-regardless of claim status. In particular, names matching a claimed student are
-new provisioning requests. Duplicate-name resolution applies only within the
-submitted batch: reject the batch until the teacher distinguishes the names or
-supplies distinct claim deduplication codes. Validate the whole batch before
-writing; all accepted rows commit in one FEAT transaction. This additive import
+Do not match, skip, or merge rows into existing seats by name, regardless of
+claim status. In particular, names matching a claimed student are new
+provisioning requests. Every unclaimed Seat sharing a claim name must remain
+independently claimable: under the class lock, the system (never the teacher)
+assigns distinct claim deduplication codes to each new row in such a group and
+to any existing unclaimed namesake that lacks a unique code. Import changes no
+field of an existing Seat other than that code and its derived roster fingerprint. Validate the whole batch before writing; all
+accepted rows and code assignments commit in one FEAT transaction. This additive import
 is distinct from actor_public_id-based modification of an exported roster under
 FEAT-CLASS-002. Notes are passed to the encrypted profile field.
 

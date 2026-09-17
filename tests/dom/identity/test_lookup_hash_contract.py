@@ -57,11 +57,16 @@ def test_import_and_claim_share_normalization_and_reject_wrong_digest_scope(clie
     assert not resolve_seat_claim(join_code=classroom.join_code, first_name='Ada', last_name='Lovelace').success
 
 
-def test_unicode_equivalent_batch_names_require_disambiguation(client, app):
+def test_unicode_equivalent_batch_names_get_distinct_claim_codes(client, app):
     classroom = initialize_as_teacher('chemistry_p1', client, app)
     before = Seat.query.filter_by(class_id=classroom.class_id).count()
     response = client.post('/admin/upload-students', json={'students': [
         {'first_name': 'Ａda', 'last_name': 'Lovelace'},
         {'first_name': 'ada', 'last_name': 'lovelace'}]})
-    assert response.status_code == 400
-    assert Seat.query.filter_by(class_id=classroom.class_id).count() == before
+    assert response.status_code == 200, response.json
+    assert Seat.query.filter_by(class_id=classroom.class_id).count() == before + 2
+    codes = {seat.dedupe_code for seat in Seat.query.filter_by(
+        class_id=classroom.class_id, role='student', user_id=None)}
+    assert None not in codes and len(codes) == 2
+    # Equivalent names are one claim group, so a code is required.
+    assert not resolve_seat_claim(join_code=classroom.join_code, first_name='Ada', last_name='Lovelace').success

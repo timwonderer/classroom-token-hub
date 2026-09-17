@@ -238,13 +238,15 @@
               </div>
               <div class="card-body">
                 <p class="text-muted mb-3">These students are in your roster but haven't set up their username yet.
-                  Share the join code above with them.</p>
+                  Share the join code above with them. Students who share a name also need the claim code
+                  shown beside their name.</p>
                 <div class="table-responsive">
                   <table class="table table-sm table-striped js-sortable">
                     <caption class="visually-hidden">Unclaimed student seats</caption>
                     <thead class="table-light">
                       <tr>
                         <th scope="col">Name</th>
+                        <th scope="col">Claim code</th>
                         <th scope="col">Added</th>
                         <th scope="col">Status</th>
                         <th scope="col">Actions</th>
@@ -257,6 +259,13 @@
                           <span class="fw-bold">{{ seat.full_name }}</span>
                           {% if seat.is_teacher %}
                           <div><small class="text-muted">Claim credential: managed by system</small></div>
+                          {% endif %}
+                        </td>
+                        <td>
+                          {% if seat.claim_code %}
+                          <span class="font-monospace fw-bold">{{ seat.claim_code }}</span>
+                          {% else %}
+                          <span class="text-muted small">Not needed</span>
                           {% endif %}
                         </td>
                         <td>
@@ -473,11 +482,11 @@
             <p class="mb-2">
               We highlighted students in your roster who share the same name. If this is correct,
               you can submit the roster as is. Classroom Token Hub will give each student a unique
-              code to use when claiming their account.
+              claim code, shown in the Unclaimed Seats list, to use when claiming their account.
             </p>
             <p class="mb-0">
-              You can review the highlighted rows before submitting. Duplicate names are allowed and create separate
-              roster seats in the current class.
+              Duplicate names are allowed and create separate roster seats in the current class. An unclaimed
+              student already on the roster with the same name also receives a claim code.
             </p>
           </div>
         </div>

@@ -3609,6 +3609,7 @@ def students():
             'is_teacher': getattr(seat, 'is_teacher', False),
             'created_at': seat.created_at,
             'full_name': seat.identity_profile.full_name if seat.identity_profile else 'Unknown',
+            'claim_code': seat.dedupe_code,
         }
         for seat in unclaimed_seats_raw
     ]

@@ -14,7 +14,7 @@ and this project follows semantic versioning principles.
 
 ### Identity
 
-- **Claim lifecycle and external hall-pass verification (2026-09-15)** — Clear temporary name hashes, roster fingerprints, and distinguishing codes when a student claims a seat. Recovery and name edits do not recreate them. Hall-pass verification uses capability-authorized, class-scoped profile names and same-day records. Additive roster imports always create new seats and resolve duplicate names only within the upload batch. A data migration clears older retained claim material. Targeted identity, recovery, deletion, and hall-pass tests passed, including rendered form accessibility checks.
+- **Claim lifecycle and external hall-pass verification (2026-09-15)** — Clear temporary name hashes, roster fingerprints, and distinguishing codes when a student claims a seat. Recovery and name edits do not recreate them. Hall-pass verification uses capability-authorized, class-scoped profile names and same-day records. Additive roster imports always create new seats. The system assigns distinct claim codes to every unclaimed seat that shares a name, including existing unclaimed namesakes, and the Unclaimed Seats list shows them. Removing a student deletes only that seat's pending actions, not the whole class's. A data migration clears older retained claim material. Targeted identity, recovery, deletion, and hall-pass tests passed, including rendered form accessibility checks.
 
 ### Documentation
 

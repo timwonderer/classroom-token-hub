@@ -3,7 +3,7 @@ from datetime import timedelta
 
 from app import db
 from app.feats.base import FEATContext, generate_correlation_id
-from app.models import ClassEconomy, Seat, User
+from app.models import ClassEconomy, PendingAction, Seat, User
 from app.services.teacher_lifecycle import destroy_stale_teacher, teacher_account_is_stale
 from app.utils.canonical_temporal_resolver import utc_now
 from tests.dom.identity.helpers import valid_destruction_gate
@@ -60,6 +60,23 @@ def test_regular_student_delete_removes_seat_without_destroying_class(client, ap
     db.session.expire_all()
     assert db.session.get(Seat, seat_id) is None
     assert db.session.get(ClassEconomy, classroom.class_id) is not None
+
+
+def test_student_delete_keeps_classmates_pending_actions(client, app):
+    classroom = initialize_as_teacher('chemistry_p1', client, app)
+    removed_id, classmate_id = _students(classroom.class_id)[:2]
+    with FEATContext('FEAT-TEST-SETUP', idempotency_key='delete:pending-actions'):
+        for seat_id in (removed_id, classmate_id):
+            db.session.add(PendingAction(
+                class_id=classroom.class_id, seat_id=seat_id, entitlement_id=f'ent-{seat_id}',
+                correlation_id=f'pending-delete-{seat_id}', authoritative_feat='FEAT-STOR-002',
+                payload={'details': 'queued'},
+            ))
+    result = client.post('/admin/student/delete', data={'seat_id': removed_id, 'confirmation': 'DELETE'})
+    assert result.status_code == 302
+    db.session.expire_all()
+    remaining = {row.seat_id for row in PendingAction.query.filter_by(class_id=classroom.class_id)}
+    assert remaining == {classmate_id}
 
 
 def test_student_delete_rejects_sibling_class_ids(client, app):

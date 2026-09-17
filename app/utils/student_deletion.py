@@ -145,10 +145,6 @@ def _delete_student_scoped_rows(
         EntitlementEvent.query.filter(
             EntitlementEvent.entitlement_id.in_(entitlement_ids)
         ).delete(synchronize_session=False)
-    if scoped_class_id:
-        PendingAction.query.filter(
-            PendingAction.class_id == scoped_class_id
-        ).delete(synchronize_session=False)
     if issue_ids:
         IssueResolutionAction.query.filter(
             IssueResolutionAction.issue_id.in_(issue_ids)
@@ -167,6 +163,11 @@ def _delete_student_scoped_rows(
             )
         ]
     if seat_ids_for_student:
+        # Only the removed seats' queued actions; classmates' actions survive.
+        pending_query = PendingAction.query.filter(PendingAction.seat_id.in_(seat_ids_for_student))
+        if scoped_class_id:
+            pending_query = pending_query.filter(PendingAction.class_id == scoped_class_id)
+        pending_query.delete(synchronize_session=False)
         seat_pub_ids = [
             pub_id for (pub_id,) in
             db.session.query(Seat.public_id).filter(Seat.id.in_(seat_ids_for_student)).all()
