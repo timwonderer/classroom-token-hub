@@ -289,6 +289,11 @@ def _record_attendance_session_impl(
     target_seat = db.session.get(Seat, resolved_target_seat_id)
     if target_seat is None or target_seat.class_id != ctx.class_id:
         raise ValueError("Attendance target seat must belong to the canonical class.")
+    # Attendance is paid time, so recording it against an unclaimed seat is what
+    # made that seat payroll-eligible. An unclaimed seat has no activated runtime
+    # participation to record (DOM-IDEN-005 §VII).
+    if target_seat.claimed_at is None or target_seat.user_id is None:
+        raise ValueError("Attendance target seat must be claimed.")
     if resolved_actor_seat_id:
         actor_seat = db.session.get(Seat, resolved_actor_seat_id)
         if actor_seat is None or actor_seat.class_id != ctx.class_id:
@@ -604,6 +609,15 @@ def _record_payroll_event_impl(
     target_seat = Seat.query.filter_by(id=target_seat_id, class_id=ctx.class_id).first()
     if target_seat is None:
         raise LookupError(f"Seat {target_seat_id} not found.")
+    # Roster provisioning creates a participation opportunity and "SHALL NOT
+    # activate runtime participation"; participation becomes lawful only on
+    # Seat-to-User binding (DOM-IDEN-005 §VII-VIII). An unclaimed seat is a
+    # teacher-provisioned placeholder (INV-CORE-000 §Constraints), so it can
+    # receive no payroll or manual credit. Enforced at the single chokepoint
+    # every payroll effect passes through, rather than trusting each caller's
+    # roster query to have filtered correctly.
+    if target_seat.claimed_at is None or target_seat.user_id is None:
+        raise ValueError("A payroll event target seat must be claimed.")
 
     event = PayrollEvent(
         class_id=ctx.class_id,

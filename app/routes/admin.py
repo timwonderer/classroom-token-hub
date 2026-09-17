@@ -2300,7 +2300,17 @@ def dashboard():
     # the read to other classes the teacher owns.
     active_class_id = current_class_id
 
-    seats = Seat.query.filter(Seat.class_id == active_class_id, Seat.role == 'student').all()
+    # Claimed seats only. An unclaimed seat is a teacher-provisioned placeholder
+    # whose runtime participation is not activated (DOM-IDEN-005 §VII,
+    # INV-CORE-000 §Constraints); unclaim keeps its economic facts but restores
+    # that placeholder state. Counting it here reported a student body and an
+    # economy value that Banking and Payroll — both scoped to claimed seats —
+    # contradicted for the same class.
+    seats = Seat.query.filter(
+        Seat.class_id == active_class_id,
+        Seat.role == 'student',
+        Seat.claimed_at.isnot(None),
+    ).all()
     total_students = len(seats)
 
     # Seat-based name lookup for templates (keyed by seat_id)
@@ -2425,9 +2435,13 @@ def dashboard():
     recent_redemptions = pending_redemptions[:5]
 
     # Recent transactions (limited to 5 for display)
+    # Claimed seats only, like every other figure on this page. `seats` above is
+    # already the claimed roster for this class.
+    claimed_seat_ids = [seat.id for seat in seats]
     recent_transactions = (
         Transaction.query
         .filter(Transaction.class_id == active_class_id)
+        .filter(Transaction.seat_id.in_(claimed_seat_ids) if claimed_seat_ids else sa.false())
         .filter(Transaction.status != TransactionStatus.VOID)
         .order_by(Transaction.timestamp.desc())
         .limit(5)
@@ -2440,6 +2454,7 @@ def dashboard():
     total_transactions_today = (
         Transaction.query
         .filter(Transaction.class_id == active_class_id)
+        .filter(Transaction.seat_id.in_(claimed_seat_ids) if claimed_seat_ids else sa.false())
         .filter(
             Transaction.timestamp >= today_start_db,
             Transaction.status != TransactionStatus.VOID,
@@ -2459,7 +2474,13 @@ def dashboard():
             ),
         )
         .join(ClassEconomy, AttendanceSession.class_id == ClassEconomy.class_id)
-        .filter(AttendanceSession.class_id == ctx.class_id)
+        .filter(
+            AttendanceSession.class_id == ctx.class_id,
+            # Attendance kept from before an unclaim stays on the seat but is no
+            # longer displayed (DOM-IDEN-002 §VIII).
+            Seat.role == "student",
+            Seat.claimed_at.isnot(None),
+        )
         .order_by(AttendanceSession.timestamp.desc(), AttendanceSession.id.desc())
         .limit(5)
         .all()
@@ -2543,8 +2564,17 @@ def give_bonus_all():
     tx_type = request.form.get('type')
 
     ctx = g.canonical_context
-    class_ids_subq = [ctx.class_id]
-    seats = Seat.query.filter(Seat.class_id.in_(sa.select(class_ids_subq)), Seat.role == 'student').all()
+    # One canonical class, compared directly. This read used to wrap a Python
+    # list of one class_id in `sa.select(...)`, which SQLAlchemy 2.0 rejects
+    # outright, so every class-wide bonus raised before reaching the ledger.
+    #
+    # Unclaimed seats hold no principal and no activated participation
+    # (DOM-IDEN-005 §VII-VIII), so a class-wide bonus skips them.
+    seats = Seat.query.filter(
+        Seat.class_id == ctx.class_id,
+        Seat.role == 'student',
+        Seat.claimed_at.isnot(None),
+    ).all()
     user_id = ctx.user_id
 
     adjustments = []
@@ -6616,11 +6646,16 @@ def _build_payroll_event_display_rows(*, ctx, payroll_events, class_label=None):
         if class_row and class_row.display_name
         else (class_row.join_code if class_row else ctx.class_id)
     )
+    # Claimed student seats only (DOM-IDEN-002 §VIII). Events recorded before a
+    # seat was unclaimed survive on that seat; rendering them here listed payroll
+    # history for a seat that is no longer an economic participant.
     seat_lookup = {
         seat.id: seat
         for seat in Seat.query.filter(
             Seat.class_id == ctx.class_id,
             Seat.id.in_(target_seat_ids),
+            Seat.role == "student",
+            Seat.claimed_at.isnot(None),
         ).all()
     } if target_seat_ids else {}
     ledger_rows = (
@@ -6649,6 +6684,10 @@ def _build_payroll_event_display_rows(*, ctx, payroll_events, class_label=None):
     payroll_records = []
     for event in payroll_events:
         seat = seat_lookup.get(event.target_seat_id)
+        if seat is None:
+            # Not a claimed participant, so the event is not displayed. Rendering
+            # it as "Unknown" would show a row the teacher cannot act on.
+            continue
         summary = event.summary_json or {}
         ledger_amount = _ledger_amount_for_event(event)
         payroll_records.append({
@@ -7555,6 +7594,10 @@ def payroll_manual_payment():
                 student = _resolve_student_detail_seat(str(actor_public_id))
                 if student is None or student.class_id != selected_class_id:
                     continue
+                # The picker lists claimed seats only; a submitted unclaimed seat
+                # takes part in no economic activity, so it receives nothing.
+                if student.claimed_at is None or student.user_id is None:
+                    continue
 
                 record_payroll_event(
                     ctx=g.canonical_context,
@@ -7737,7 +7780,14 @@ def export_students():
     ])
 
     # Write student data
-    seats = Seat.query.filter(Seat.class_id == selected_class_id, Seat.role == 'student').all()
+    # This export reports balances, earnings and insurance — an economic
+    # surface, unlike the re-import roster export, so it lists claimed
+    # participants only (DOM-IDEN-002 §VIII).
+    seats = Seat.query.filter(
+        Seat.class_id == selected_class_id,
+        Seat.role == 'student',
+        Seat.claimed_at.isnot(None),
+    ).all()
     seats.sort(key=lambda seat: (
         (seat.identity_profile.first_name if seat.identity_profile else "").lower(),
         (seat.identity_profile.last_name if seat.identity_profile else "").lower(),
@@ -7887,7 +7937,7 @@ def tap_out_students():
             student_seats = Seat.query.filter_by(
                 class_id=class_id,
                 role="student",
-            ).all()
+            ).filter(Seat.claimed_at.isnot(None)).all()
             latest_by_seat_id = _latest_attendance_events_for_class(class_id)
             seat_ids = [
                 seat.id for seat in student_seats
@@ -7898,7 +7948,9 @@ def tap_out_students():
             latest_by_seat_id = _latest_attendance_events_for_class(class_id, seat_ids)
 
         for seat_id in seat_ids:
-            seat = Seat.query.filter_by(id=seat_id, class_id=class_id, role="student").first()
+            seat = Seat.query.filter_by(
+                id=seat_id, class_id=class_id, role="student",
+            ).filter(Seat.claimed_at.isnot(None)).first()
             if seat is None:
                 errors.append(f"Seat {seat_id} not found in the current class")
                 continue
@@ -7976,8 +8028,12 @@ def tap_in_students():
         latest_by_seat_id = _latest_attendance_events_for_class(class_id, seat_ids)
 
         for seat_id in seat_ids:
-            seat = Seat.query.filter_by(id=seat_id, class_id=class_id, role="student").first()
+            seat = Seat.query.filter_by(
+                id=seat_id, class_id=class_id, role="student",
+            ).filter(Seat.claimed_at.isnot(None)).first()
             if not seat:
+                # Unclaimed seats are not attendance subjects, so they are not
+                # found here either — attendance is paid time (DOM-PROD-001).
                 errors.append(f"Seat {seat_id} not found in the current class")
                 continue
 
@@ -8058,7 +8114,17 @@ def bulk_adjust_hall_pass_entitlements():
     try:
         # Process each student ID
         for seat_id in student_ids:
-            student = db.session.get(Seat, int(seat_id))
+            # Entitlements are economic state, so an unclaimed seat is not a
+            # subject of one and resolves as not found (DOM-IDEN-002 §VIII).
+            student = (
+                Seat.query
+                .filter(
+                    Seat.id == int(seat_id),
+                    Seat.role == "student",
+                    Seat.claimed_at.isnot(None),
+                )
+                .first()
+            )
 
             if not student:
                 errors.append(f"Student {seat_id} not found")
@@ -8193,17 +8259,27 @@ def banking():
         page = 1
     per_page = 50
 
+    # Claimed seats only, matching the statistics above and every other economic
+    # surface. An unclaimed seat keeps its rows, but listing them here showed the
+    # teacher activity for a seat no student holds — under a profile name a
+    # claimed classmate may share, which is unreadable rather than informative.
     query = (
         db.session.query(Transaction, Seat)
         .join(Seat, Transaction.seat_id == Seat.id)
-        .filter(Transaction.class_id == selected_class_id)
+        .filter(
+            Transaction.class_id == selected_class_id,
+            Seat.claimed_at.isnot(None),
+        )
     )
 
     if student_q:
         matching_seat_ids = []
         if student_q.isdigit():
             matching_seat_ids.append(int(student_q))
-        for seat in Seat.query.filter(Seat.class_id == selected_class_id).all():
+        for seat in Seat.query.filter(
+            Seat.class_id == selected_class_id,
+            Seat.claimed_at.isnot(None),
+        ).all():
             _ip = seat.identity_profile
             if student_q.lower() in (_ip.full_name if _ip else "").lower():
                 matching_seat_ids.append(seat.id)

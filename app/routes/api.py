@@ -1478,8 +1478,17 @@ def attendance_history():
         if not current_class_id:
             return jsonify({"status": "error", "message": "Class context required"}), 400
 
-        query = AttendanceSession.query.filter(
-            AttendanceSession.class_id == current_class_id
+        # Claimed student seats only. Unclaim preserves a seat's attendance
+        # facts, but an unclaimed seat is no economic participant and appears in
+        # no teacher-facing log or history (DOM-IDEN-002 §VIII).
+        query = (
+            AttendanceSession.query
+            .join(Seat, AttendanceSession.target_seat_id == Seat.id)
+            .filter(
+                AttendanceSession.class_id == current_class_id,
+                Seat.role == "student",
+                Seat.claimed_at.isnot(None),
+            )
         )
 
         if status:

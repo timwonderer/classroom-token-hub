@@ -601,6 +601,10 @@ def create_product_block(*, product_lineage_uuid: str, class_id: str, block: str
                 ClassEconomy.class_id == class_id,
                 ClassEconomy.section.isnot(None),
                 ClassEconomy.section == normalized_block,
+                # Claimed student seats only: visibility is economic state, and
+                # an unclaimed seat is no participant (DOM-IDEN-002 §VIII).
+                Seat.role == "student",
+                Seat.claimed_at.isnot(None),
             )
             .distinct()
             .all()
