@@ -36,22 +36,6 @@ logger = logging.getLogger(__name__)
 
 
 @requires_feat_context("FEAT-IDEN-006")
-def remove_student_from_teacher_scope(
-    *,
-    canonical_context: CanonicalContext,
-    seat_id: int,
-    teacher_user_id: int,
-    correlation_id: str,
-    idempotency_key: str,
-) -> bool:
-    """Detach one student seat from a teacher's class-owned identity scope."""
-    if not canonical_context or canonical_context.user_id != teacher_user_id:
-        raise ValueError("canonical teacher context is required for student detachment")
-    from app.utils.student_deletion import remove_student_from_teacher_scope as _remove
-    return _remove(seat_id, teacher_user_id)
-
-
-@requires_feat_context("FEAT-IDEN-006")
 def remove_pending_student_seat(
     *,
     canonical_context: CanonicalContext,
