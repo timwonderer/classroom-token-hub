@@ -1,4 +1,5 @@
 {% extends "layout_admin.html" %}
+{% import 'macros/cards.html' as cards %}
 {% set page_title = "Payroll Management" %}
 {% set current_page = "payroll" %}
 {% block title %}Payroll Management - Classroom Token Hub{% endblock %}
@@ -11,9 +12,9 @@
 </p>
 <p class="mb-2">Example: If your last run was Friday, a Monday run will pay students for Monday attendance
   only.</p>
-<div class="alert alert-warning mb-0">
-  <strong>Reminder:</strong> This action creates transactions for all eligible students.
-</div>
+{% call cards.alert_card('warning', 'Running payroll pays every eligible student', icon='payments', body_class='mb-0') %}
+  <p class="mb-0">This action creates transactions for all eligible students.</p>
+{% endcall %}
 {% endcall %}
 
 {% call help.topic('pay-settings', 'settings', 'Payroll Settings') %}
@@ -62,15 +63,15 @@
   <li><strong>Attendance:</strong> Worked time comes from the canonical attendance sessions recorded for each student.</li>
 </ul>
 
-<div class="alert alert-warning mt-3 mb-3">
-  <strong><span class="material-symbols-outlined me-1" aria-hidden="true">warning</span>Side effects:</strong> Rate or schedule
-  changes only affect future payroll runs. Past payments remain unchanged.
-</div>
+{% call cards.alert_card('warning', 'Changes only affect future payroll runs', icon='warning', body_class='mt-3 mb-3') %}
+  <p class="mb-0">Rate or schedule
+  changes only affect future payroll runs. Past payments remain unchanged.</p>
+{% endcall %}
 
-<div class="alert alert-info mb-0">
-  <strong><span class="material-symbols-outlined me-1" aria-hidden="true">lightbulb</span>Recommended Start:</strong> $10/hour, weekly schedule, 5
-  expected hours/week. This creates a $50 weekly CWI that is easy for students to work with.
-</div>
+{% call cards.alert_card('info', 'Recommended starting settings', icon='lightbulb', body_class='mb-0') %}
+  <p class="mb-0">$10/hour, weekly schedule, 5
+  expected hours/week. This creates a $50 weekly CWI that is easy for students to work with.</p>
+{% endcall %}
 {% endcall %}
 
 {% call help.topic('pay-manual', 'payments', 'Manual Payments') %}
@@ -305,23 +306,19 @@
       <!-- Setup/Update Banner -->
       {% if show_setup_banner %}
       <div class="col-12 mb-3">
-        <div class="alert alert-warning alert-dismissible fade show" role="alert">
-          <h5 class="alert-heading"><span class="material-symbols-outlined me-2" aria-hidden="true">warning</span>No Payroll Settings</h5>
+        {% call cards.alert_card('warning', 'No payroll settings yet', icon='warning', role='alert', dismissible=True) %}
           <p class="mb-2">No Payroll Setting has been created yet. Do you want to use preset amounts?</p>
           <button type="button" class="btn btn-sm btn-warning" id="usePresetBtn">
             <span class="material-symbols-outlined me-1" aria-hidden="true">check_circle</span>Yes, Use Preset Values
           </button>
-          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
+        {% endcall %}
       </div>
       {% elif block_settings %}
       <div class="col-12 mb-3">
-        <div class="alert alert-info alert-dismissible fade show" role="alert">
-          <span class="material-symbols-outlined me-2" aria-hidden="true">info</span>
-          Payroll settings have been set on <strong>{{ display_settings_created_at_list[0] if display_settings_created_at_list and display_settings_created_at_list[0] else 'unknown date' }}</strong>. Any changes here will override the previous
-          settings.
-          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
+        {% call cards.alert_card('info', 'Saving overrides existing payroll settings', icon='info', role='alert', dismissible=True) %}
+          <p class="mb-0">Payroll settings have been set on <strong>{{ display_settings_created_at_list[0] if display_settings_created_at_list and display_settings_created_at_list[0] else 'unknown date' }}</strong>. Any changes here will override the previous
+          settings.</p>
+        {% endcall %}
       </div>
       {% endif %}
 
@@ -340,8 +337,7 @@
           <div class="card-body">
             <!-- Current Settings Display -->
             {% if block_settings %}
-            <div class="alert alert-secondary mb-3">
-              <h6 class="fw-bold mb-2"><span class="material-symbols-outlined me-2" aria-hidden="true">info</span>Current Settings:</h6>
+            {% call cards.alert_card('info', 'Current payroll settings', icon='info', body_class='mb-3') %}
               {% if default_setting %}
               <div class="mb-2">
                 <strong>Global Default:</strong>
@@ -355,7 +351,7 @@
                 {% endif %}
               </div>
               {% endif %}
-            </div>
+            {% endcall %}
             {% endif %}
 
             <form method="POST" action="{{ url_for('admin.payroll_settings') }}" id="payrollSettingsForm">
@@ -366,10 +362,9 @@
               <!-- SIMPLE MODE -->
               <div id="simpleModeFields" {% if default_setting and default_setting.settings_mode=='advanced'
                 %}style="display:none;" {% endif %}>
-                <div class="alert alert-info">
-                  <span class="material-symbols-outlined me-2" aria-hidden="true">info</span>
-                  <strong>Simple Mode:</strong> Easy-to-use settings for basic payroll configuration.
-                </div>
+                {% call cards.alert_card('info', 'Simple mode', icon='info', body_class='mb-3') %}
+                  <p class="mb-0">Easy-to-use settings for basic payroll configuration.</p>
+                {% endcall %}
 
                 <!-- Pay Rate (per hour) -->
                 <div class="mb-3">
@@ -445,10 +440,9 @@
               <!-- ADVANCED MODE (hidden by default) -->
               <div id="advancedModeFields" {% if default_setting and default_setting.settings_mode=='advanced'
                 %}style="display:block;" {% else %}style="display:none;" {% endif %}>
-                <div class="alert alert-warning">
-                  <span class="material-symbols-outlined me-2" aria-hidden="true">warning</span>
-                  <strong>Advanced Mode:</strong> Full control over payroll calculations with detailed options.
-                </div>
+                {% call cards.alert_card('warning', 'Advanced mode', icon='tune', body_class='mb-3') %}
+                  <p class="mb-0">Full control over payroll calculations with detailed options.</p>
+                {% endcall %}
 
                 <!-- Pay Amount & Time Increment -->
                 <div class="row mb-3">
@@ -614,10 +608,9 @@
               </div>
 
               <!-- Validation Errors Display -->
-              <div id="validationErrors" class="alert alert-danger" hidden>
-                <strong><span class="material-symbols-outlined me-2" aria-hidden="true">error</span>Conflicting Settings:</strong>
+              {% call cards.alert_card('danger', 'Conflicting settings', icon='error', id='validationErrors', role='alert', body_class='mb-3', attrs='hidden') %}
                 <ul id="validationErrorList" class="mb-0"></ul>
-              </div>
+              {% endcall %}
 
               <!-- Save Button -->
               <div class="text-end">
@@ -656,8 +649,7 @@
 
             <!-- Results -->
             <div id="simulatorResults" hidden>
-              <div class="alert alert-success mb-0">
-                <h6 class="fw-bold">Estimated Earnings:</h6>
+              {% call cards.alert_card('success', 'Estimated earnings', icon='calculate', body_class='mb-0') %}
                 <table class="table table-sm table-borderless mb-0">
                   <caption class="visually-hidden">Estimated payroll earnings</caption>
                   <tr>
@@ -673,7 +665,7 @@
                     <td class="text-end fw-bold">$<span id="simSemester">0.00</span></td>
                   </tr>
                 </table>
-              </div>
+              {% endcall %}
             </div>
 
             <!-- Settings Summary (Plain English) -->
@@ -740,10 +732,9 @@
               </table>
             </div>
 
-            <div class="alert alert-info mt-3 mb-0">
-              <span class="material-symbols-outlined me-2" aria-hidden="true">info</span>
-              <strong>Selected:</strong> <span id="selectedCount">0</span> student(s)
-            </div>
+            {% call cards.alert_card('info', 'Students selected for payment', icon='group', body_class='mt-3 mb-0') %}
+              <p class="mb-0"><strong>Selected:</strong> <span id="selectedCount">0</span> student(s)</p>
+            {% endcall %}
           </div>
         </div>
       </div>
@@ -767,10 +758,9 @@
               <!-- Payroll owns positive compensation only. Manual debits/fines belong to Obligations. -->
               <div class="mb-3">
                 <label class="form-label fw-bold">Action:</label>
-                <div class="alert alert-success d-flex align-items-center mb-0">
-                  <span class="material-symbols-outlined me-2" aria-hidden="true">add_circle</span>
-                  Manual Credit
-                </div>
+                {% call cards.alert_card('success', 'Manual credit', icon='add_circle', body_class='mb-0') %}
+                  <p class="mb-0">Payroll issues positive compensation only; this payment is deposited to checking.</p>
+                {% endcall %}
                 <input type="hidden" name="payment_type" value="deposit">
                 <input type="hidden" name="account_type" value="checking">
               </div>
@@ -1014,7 +1004,7 @@
       if (simpleApplyAll) simpleApplyAll.checked = true;
 
       // Dismiss the alert
-      this.closest('.alert').remove();
+      this.closest('.alert-card').remove();
 
       // Update settings summary
       updateSettingsSummary();

@@ -8,6 +8,10 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Interface
+
+- **Every inline alert is a card (2026-09-16)** — Rounded Bootstrap `.alert` boxes are retired across teacher, student, sysadmin, auth, error, docs, and help pages. Each alert now renders as a card with a semantic border, a colored header carrying an icon and a contextual title, and the explanation in the body, matching the recovery-readiness warning on Student Management. Templates use the `alert_card` macro in `templates/macros/cards.html` (now with `role`, `id`, `dismissible`, and heading options); scripts use its DOM twin `AppCore.buildAlertCard` in `static/js/app-core.js`, which sets body text without parsing HTML. Flash messages outside toasts become dismissible cards titled by category, and docs `> [!NOTE]`-style callouts render as cards. Announcement priority maps to a card level through `Announcement.get_priority_level()`, replacing `get_priority_class()`. The legacy `.alert` CSS overrides are removed. Toasts are unchanged.
+
 ### Support
 
 - **Teacher announcements save again (2026-09-17)** — The announcement list, edit, delete and toggle pages filtered on the removed `Announcement.user_id` and returned a server error. They now scope by the teacher's verified class only. Behind that error, every announcement write flushed outside a FEAT and was rolled back, so creating, editing, toggling or deleting an announcement silently failed. The writes now run in the new FEAT-SUP-002, which requires the acting seat to teach the announcement's own class on every write, not only on create. DOM-SUP-001 v1.7 names that FEAT, and FEAT-SUP-001 now describes deletion by public ID rather than a seat foreign-key cascade.

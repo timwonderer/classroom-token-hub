@@ -1,4 +1,5 @@
 {% import "macros/help.html" as help %}
+{% import "macros/cards.html" as cards %}
 <!DOCTYPE html>
 <html lang="en">
 
@@ -135,10 +136,9 @@
                             {% endfor %}
                         </select>
 
-                        <div id="class-switch-error" class="alert alert-warning small py-2 px-3 mt-2 d-none" role="alert" aria-live="assertive" aria-atomic="true" tabindex="-1">
-                            <span class="material-symbols-outlined icon-sm align-middle me-1" aria-hidden="true">error</span>
-                            <span class="class-switch-error-text"></span>
-                        </div>
+                        {% call cards.alert_card('warning', "Couldn't switch classes", icon='error', id='class-switch-error', body_class='mt-2 d-none', role='alert', attrs='aria-live="assertive" aria-atomic="true" tabindex="-1"') %}
+                            <p class="mb-0 class-switch-error-text"></p>
+                        {% endcall %}
                     </div>
                     {% endif %}
 
@@ -288,11 +288,18 @@
                     {% if messages %}
                     {% for category, message in messages %}
                     {% if category not in ['transfer_success', 'transfer_error'] %}
-                    <div class="alert alert-{{ category if category != 'error' else 'danger' }} alert-dismissible fade show shadow-sm border-0 mb-4"
-                        role="alert">
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                    </div>
+                    {% if category == 'success' %}
+                        {% set flash_level, flash_title, flash_icon = 'success', 'Done', 'check_circle' %}
+                    {% elif category in ['danger', 'error'] %}
+                        {% set flash_level, flash_title, flash_icon = 'danger', 'Something went wrong', 'error' %}
+                    {% elif category == 'warning' %}
+                        {% set flash_level, flash_title, flash_icon = 'warning', 'Heads up', 'warning' %}
+                    {% else %}
+                        {% set flash_level, flash_title, flash_icon = 'info', 'For your information', 'info' %}
+                    {% endif %}
+                    {% call cards.alert_card(flash_level, flash_title, icon=flash_icon, body_class='mb-4', role='alert', dismissible=True) %}
+                        <p class="mb-0">{{ message }}</p>
+                    {% endcall %}
                     {% endif %}
                     {% endfor %}
                     {% endif %}
@@ -354,7 +361,8 @@
 
             const classSwitcher = document.getElementById('class-switcher-select');
             const errorBox = document.getElementById('class-switch-error');
-            const errorText = document.querySelector('.class-switch-error-text');
+            // The message goes into the card body; the header title stays put.
+            const errorText = errorBox ? errorBox.querySelector('.class-switch-error-text') : null;
 
             if (classSwitcher) {
                 classSwitcher.addEventListener('change', function () {

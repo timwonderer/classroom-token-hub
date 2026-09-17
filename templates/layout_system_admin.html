@@ -1,3 +1,4 @@
+{% import "macros/cards.html" as cards %}
 <!DOCTYPE html>
 <html lang="en">
 
@@ -128,11 +129,10 @@
                     {% with messages = get_flashed_messages(with_categories=true) %}
                     {% if messages %}
                     {% for category, message in messages %}
-                    <div class="alert alert-{{ category if category != 'error' else 'danger' }} alert-dismissible fade show shadow-sm border-0 mb-4"
-                        role="alert">
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                    </div>
+                    {%- set _flash_level = 'success' if category == 'success' else ('danger' if category in ['danger', 'error'] else ('warning' if category == 'warning' else 'info')) -%}
+                    {% call cards.alert_card(_flash_level, 'Done' if _flash_level == 'success' else ('Something went wrong' if _flash_level == 'danger' else ('Heads up' if _flash_level == 'warning' else 'For your information')), icon='check_circle' if _flash_level == 'success' else ('error' if _flash_level == 'danger' else ('warning' if _flash_level == 'warning' else 'info')), body_class='mb-4', role='alert', dismissible=True) %}
+                      <p class="mb-0">{{ message }}</p>
+                    {% endcall %}
                     {% endfor %}
                     {% endif %}
                     {% endwith %}

@@ -1,5 +1,6 @@
 {% extends "layout_admin.html" %}
 {% import "components/timed_delete_gate.html" as gate %}
+{% import 'macros/cards.html' as cards %}
 {% set page_title = "Delete Class" %}
 {% set current_page = "class_delete" %}
 {% block title %}Delete Class{% endblock %}
@@ -58,19 +59,18 @@
                         <li>This action is permanent, irreversible, and unrecoverable.</li>
                     </ul>
                     {% if deletes_account %}
-                    <p class="alert alert-danger">
-                        <strong>This is your only class, so your teacher account is deleted too.</strong>
-                        Your account exists through the seat this class gives you; with the class
+                    {% call cards.alert_card('danger', 'This is your only class, so your teacher account is deleted too', icon='person_remove', body_class='mb-3') %}
+                        <p class="mb-0">Your account exists through the seat this class gives you; with the class
                         gone there is no seat left to hold it. Your login, credentials, and recovery
                         material are destroyed with it, and you will be signed out. If you meant to
-                        keep teaching, create another class first.
-                    </p>
+                        keep teaching, create another class first.</p>
+                    {% endcall %}
                     {% else %}
-                    <p class="alert alert-warning">
-                        <strong>Your teacher account is not deleted by this.</strong>
+                    {% call cards.alert_card('warning', 'Your teacher account survives', icon='account_circle', body_class='mb-3') %}
+                        <p class="mb-0">Your teacher account is not deleted by this.
                         You own other classes, and each one gives you a seat. To delete your
-                        account, use Settings &rsaquo; Account Deletion.
-                    </p>
+                        account, use Settings &rsaquo; Account Deletion.</p>
+                    {% endcall %}
                     {% endif %}
                   
 
@@ -108,8 +108,13 @@ document.addEventListener('DOMContentLoaded', function() {
         const feedback = document.getElementById('delete-gate-feedback');
 
         const reportFailure = (message) => {
-            feedback.textContent = message;
-            feedback.className = 'alert alert-danger';
+            feedback.replaceChildren(AppCore.buildAlertCard({
+                level: 'danger',
+                title: 'Class not deleted',
+                icon: 'error',
+                body: message,
+                className: 'mb-3',
+            }));
             feedback.classList.remove('visually-hidden');
             feedback.focus();
         };

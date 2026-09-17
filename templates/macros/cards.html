@@ -84,30 +84,51 @@
 
 
 {#
-  Alert-as-card. Semantic-colored header with title, body content in
-  card-body. Replaces raw <div class="alert alert-*"> usage.
+  Alert-as-card. The ONLY sanctioned inline alert surface: a card with a
+  semantic border, a semantic-colored header carrying an icon and a
+  short contextual title, and the explanatory text in the card body.
+  Raw `<div class="alert alert-*">` boxes are retired; toasts are the
+  only other feedback surface.
 
-  Levels: 'success', 'warning', 'danger', 'info'. Warning renders with
-  dark text (per CSS `.card-header.bg-warning` rule); others render
-  white text.
+  Reference rendering: the recovery-readiness warning on the Student
+  Management roster (templates/admin_students.html).
+
+  Levels: 'success', 'warning', 'danger', 'info'. Warning
+  renders dark header text; the others render white header text.
 
   Usage:
-    {% call cards.alert_card('warning', 'Payroll not configured', icon='warning') %}
-      Set expected weekly hours on the Economic Engine page to unlock
-      pricing recommendations.
+    {% import 'macros/cards.html' as cards %}
+    {% call cards.alert_card('warning', 'Set up payroll to calculate CWI', icon='warning') %}
+      <p class="mb-0">We need a pay rate and expected hours per week ...</p>
     {% endcall %}
+
+  Args:
+    level: semantic level (see above); unknown values fall back to 'info'
+    title: short contextual header text — say what the condition IS
+           ("Recovery code expires in ten minutes"), not a bare level
+           word ("Warning")
+    icon: Material Symbols icon name for the header
+    body_class: extra classes on the card wrapper (spacing, d-none, ...)
+    role: optional ARIA role ('alert' for errors surfaced after an
+          action, 'status' for live results, 'note' for static advice)
+    id: optional element id (auto-generated when dismissible)
+    heading_tag: element for the title (default h3; sized as .h5)
+    dismissible: render a close button that removes the card
+    attrs: extra static, template-authored attributes (e.g.
+           'aria-live="polite" data-foo="bar"'); never pass user input
+    body_attrs: extra static attributes on the card body
 #}
-{% macro alert_card(level, title, icon=None, body_class='') %}
+{% macro alert_card(level, title, icon=None, body_class='', role=None, id=None, heading_tag='h3', dismissible=False, attrs='', body_attrs='') %}
 {% set _level = level if level in ['success', 'warning', 'danger', 'info'] else 'info' %}
 {% set _text_class = 'text-dark' if _level == 'warning' else 'text-white' %}
-<div class="card shadow-sm {{ body_class }}">
-  <div class="card-header bg-{{ _level }} {{ _text_class }} py-3">
-    <h6 class="mb-0 fw-semibold {{ _text_class }}">
-      {% if icon %}<span class="material-symbols-outlined icon-text-bottom me-2" aria-hidden="true">{{ icon }}</span>{% endif %}
-      {{ title }}
-    </h6>
+{% set _id = id or ('alert-card-' ~ range(100000, 999999) | random) if dismissible else id %}
+<div class="card alert-card border-{{ _level }} {{ body_class }}{% if dismissible %} fade show{% endif %}"{% if _id %} id="{{ _id }}"{% endif %}{% if role %} role="{{ role }}"{% endif %}{% if attrs %} {{ attrs | safe }}{% endif %}>
+  <div class="card-header bg-{{ _level }} {{ _text_class }} d-flex align-items-center">
+    {% if icon %}<span class="material-symbols-outlined me-2" aria-hidden="true">{{ icon }}</span>{% endif %}
+    <{{ heading_tag }} class="h5 fw-bold mb-0 {{ _text_class }}">{{ title }}</{{ heading_tag }}>
+    {% if dismissible %}<button type="button" class="btn-close{% if _level != 'warning' %} btn-close-white{% endif %} ms-auto" data-bs-dismiss="alert" data-bs-target="#{{ _id }}" aria-label="Close"></button>{% endif %}
   </div>
-  <div class="card-body">
+  <div class="card-body"{% if body_attrs %} {{ body_attrs | safe }}{% endif %}>
     {{ caller() }}
   </div>
 </div>

@@ -21,10 +21,32 @@ class TestPreprocessGithubAlerts:
     def test_note_alert_basic(self):
         md = "> [!NOTE]\n> This is a note."
         result = preprocess_github_alerts(md)
-        assert 'class="md-alert md-alert-note"' in result
-        assert 'class="md-alert-label"' in result
-        assert 'Note' in result
-        assert 'This is a note.' in result
+        assert 'class="card alert-card border-info md-alert md-alert-note"' in result
+        assert 'class="card-header bg-info text-white d-flex align-items-center"' in result
+        assert '<h3 class="h5 fw-bold mb-0 text-white">Note</h3>' in result
+        assert '<div class="card-body"><p>This is a note.</p></div>' in result
+
+    @pytest.mark.parametrize(
+        "alert_type, level, icon, label",
+        [
+            ('NOTE', 'info', 'info', 'Note'),
+            ('TIP', 'success', 'lightbulb', 'Tip'),
+            ('IMPORTANT', 'info', 'priority_high', 'Important'),
+            ('WARNING', 'warning', 'warning', 'Warning'),
+            ('CAUTION', 'danger', 'error', 'Caution'),
+        ],
+    )
+    def test_alert_card_level_icon_and_title(self, alert_type, level, icon, label):
+        """Each callout type maps to its alert-card level, icon, and title."""
+        result = preprocess_github_alerts(f"> [!{alert_type}]\n> Body.")
+        text_class = 'text-dark' if level == 'warning' else 'text-white'
+        assert f'class="card alert-card border-{level} md-alert md-alert-{alert_type.lower()}"' in result
+        assert f'class="card-header bg-{level} {text_class} d-flex align-items-center"' in result
+        assert (
+            f'<span class="material-symbols-outlined me-2" aria-hidden="true">{icon}</span>'
+            in result
+        )
+        assert f'<h3 class="h5 fw-bold mb-0 {text_class}">{label}</h3>' in result
 
     def test_tip_alert(self):
         md = "> [!TIP]\n> A helpful tip."
@@ -178,6 +200,10 @@ class TestRenderMarkdownContent:
         html, _ = render_markdown_content(md)
         assert 'md-alert-note' in html
         assert 'This is a note.' in html
+        # The alert-card markup must survive bleach sanitization intact.
+        assert 'card alert-card border-info' in html
+        assert 'aria-hidden="true"' in html
+        assert '<h3 class="h5 fw-bold mb-0 text-white">Note</h3>' in html
 
     def test_all_alert_types_rendered(self):
         types = ['NOTE', 'TIP', 'IMPORTANT', 'WARNING', 'CAUTION']

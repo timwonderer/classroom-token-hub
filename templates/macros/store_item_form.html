@@ -7,6 +7,11 @@
   Legality comes from the contract; store_item_type_gating.js only selects which
   resolved contract is showing, and disables what it hides.
 #}
+{% import 'macros/cards.html' as cards %}
+{% set info_field_cards = {
+  'collective_goal_guidance': ('Collective goal pricing guidance', 'groups'),
+  'rent_link_activation_info': ('Starts with the next rent cycle', 'event'),
+} %}
 {% macro render_store_item_contract(form, form_field_catalog) %}
 <div id="store-form-contract-renderer">
   {% for section in form_field_catalog %}
@@ -16,7 +21,10 @@
       {% for field in section.fields %}
       <div class="mb-3" data-contract-field="{{ field.name }}"{% if field.depends_on and (':' not in field.depends_on and not form[field.depends_on].data or ':' in field.depends_on and form[field.depends_on.split(':')[0]].data != field.depends_on.split(':')[1]) %} hidden{% endif %}>
       {% if field.kind == 'info' %}
-        <div class="alert alert-info mb-0">{{ field.label }}</div>
+        {% set info_card = info_field_cards.get(field.name, ('About this setting', 'info')) %}
+        {% call cards.alert_card('info', info_card[0], icon=info_card[1], body_class='mb-0') %}
+          <p class="mb-0">{{ field.label }}</p>
+        {% endcall %}
       {% else %}
         {% set control = form[field.name] %}
         {% if field.kind == 'checkbox' %}
@@ -34,7 +42,7 @@
         {{ control(class="form-control" if field.kind != 'select' else "form-select") }}
         {% endif %}
         {% endif %}
-        {% if field.name == 'economic_role' %}<div id="role-recommendation" class="alert alert-info mt-2" hidden><small><strong>Reference range:</strong> <span id="role-range-text"></span></small></div>{% endif %}
+        {% if field.name == 'economic_role' %}{% call cards.alert_card('info', 'Reference range for this role', icon='payments', id='role-recommendation', body_class='mt-2', attrs='hidden') %}<p class="mb-0"><span id="role-range-text"></span></p>{% endcall %}{% endif %}
         {% if field.name == 'price' %}<div id="economy-warnings" aria-live="polite"></div>{% endif %}
         {% if field.help_text %}<small class="text-muted d-block mt-1">{{ field.help_text }}</small>{% endif %}
         {% for error in control.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}

@@ -1,4 +1,5 @@
 {% extends 'layout_student.html' %}
+{% import 'macros/cards.html' as cards %}
 {% set page_title = "Rent" %}
 {% set current_page = "rent" %}
 {% block title %}Rent{% endblock %}
@@ -41,10 +42,6 @@
     .bills-tabs .nav-link.active {
         color: var(--text-inverse);
     }
-
-    .student-rent-class-hint.alert-info {
-        color: var(--alert-info-text);
-    }
 </style>
 {% endblock %}
 
@@ -72,10 +69,10 @@
 </div>
 {% endif %}
 
-<div class="alert alert-info mb-4 student-rent-class-hint">
-    <span class="material-symbols-outlined icon-middle" aria-hidden="true">arrow_circle_left</span> To see your bills
-    from another class, use the <strong>Switch Classes</strong> menu on the left.
-</div>
+{% call cards.alert_card('info', 'Bills from another class', icon='arrow_circle_left', body_class='mb-4') %}
+    <p class="mb-0">To see your bills
+    from another class, use the <strong>Switch Classes</strong> menu on the left.</p>
+{% endcall %}
 
 {# Phase 6-7 VERIFIED: All fields accessed via view model (view.* namespace) #}
 {# current_period is the primary obligation status for this period #}
@@ -180,52 +177,51 @@
 
         {# Payment status and actions #}
         {% if not status.rent_is_active %}
-        <div class="alert alert-info mb-0">
-            <strong>Not Yet Due</strong>
-            <br>Rent will be due starting {% if status.due_date %}{{ status.due_date.strftime('%B %d, %Y') }}{% else %}soon{% endif %}
-        </div>
+        {% call cards.alert_card('info', 'Not yet due', icon='event_upcoming', body_class='mb-0') %}
+            <p class="mb-0">Rent will be due starting {% if status.due_date %}{{ status.due_date.strftime('%B %d, %Y') }}{% else %}soon{% endif %}</p>
+        {% endcall %}
         {% else %}
         {% if status.is_waived %}
-        <div class="alert alert-info mb-0">
-            <strong>This rent period has been waived.</strong>
+        {% call cards.alert_card('info', 'Rent waived for this period', icon='money_off', body_class='mb-0') %}
+            <p class="mb-0">This rent period has been waived.
             {% if view.active_waivers and view.active_waivers|length > 0 %}
                 {% set current_waiver = view.active_waivers[0] %}
                 {% if current_waiver.reason %}
                 <br>{{ current_waiver.reason }}
                 {% endif %}
             {% endif %}
-        </div>
+            </p>
+        {% endcall %}
         {% elif status.group_is_paid %}
-        <div class="alert alert-success mb-0">
-            <strong>Great work!</strong>
-            <br>You have paid your rent{% if status.late_fees %} and any late fees{% endif %}
-            for <strong>Period {{ current_block|upper }}</strong>.
-        </div>
+        {% call cards.alert_card('success', 'Rent paid', icon='check_circle', body_class='mb-0') %}
+            <p class="mb-0">Great work! You have paid your rent{% if status.late_fees %} and any late fees{% endif %}
+            for <strong>Period {{ current_block|upper }}</strong>.</p>
+        {% endcall %}
         {% elif status.amount_paid > 0 %}
-        <div class="alert alert-warning mb-3">
-            <strong>Partial Payment Made:</strong> ${{ "%.2f"|format(status.amount_paid) }} of ${{
+        {% call cards.alert_card('warning', 'Partial payment made', icon='payments', body_class='mb-3') %}
+            <p class="mb-0">${{ "%.2f"|format(status.amount_paid) }} of ${{
             "%.2f"|format(status.amount_due) }}
-            <br><small>Remaining: <strong>${{ "%.2f"|format(status.remaining_amount) }}</strong></small>
-        </div>
+            <br>Remaining: <strong>${{ "%.2f"|format(status.remaining_amount) }}</strong></p>
+        {% endcall %}
         {% if status.is_late %}
-        <div class="alert alert-danger mb-3">
-            <strong>Late!</strong> Grace period ended on {% if status.grace_end %}{{ status.grace_end.strftime('%B %d, %Y') }}{% else %}already{% endif %}.
-            <br>Late fee has been added to total.
-        </div>
+        {% call cards.alert_card('danger', 'Rent is late', icon='error', body_class='mb-3') %}
+            <p class="mb-0">Grace period ended on {% if status.grace_end %}{{ status.grace_end.strftime('%B %d, %Y') }}{% else %}already{% endif %}.
+            <br>Late fee has been added to total.</p>
+        {% endcall %}
         {% endif %}
         {% elif status.is_late %}
-        <div class="alert alert-danger mb-3">
-            <strong>Late!</strong> Grace period ended on {% if status.grace_end %}{{ status.grace_end.strftime('%B %d, %Y') }}{% else %}already{% endif %}.
-            <br>A late fee has been added.
-        </div>
+        {% call cards.alert_card('danger', 'Rent is late', icon='error', body_class='mb-3') %}
+            <p class="mb-0">Grace period ended on {% if status.grace_end %}{{ status.grace_end.strftime('%B %d, %Y') }}{% else %}already{% endif %}.
+            <br>A late fee has been added.</p>
+        {% endcall %}
         <div class="mb-3">
             <p class="text-muted"><strong>Total Amount Due:</strong></p>
             <div class="h4 text-danger mb-1">${{ "%.2f"|format(status.amount_due) }}</div>
         </div>
         {% else %}
-        <div class="alert alert-info mb-3">
-            <strong>Grace Period:</strong> Pay by {% if status.grace_end %}{{ status.grace_end.strftime('%B %d, %Y') }}{% else %}the grace deadline{% endif %} to avoid late fee.
-        </div>
+        {% call cards.alert_card('info', 'Grace period', icon='schedule', body_class='mb-3') %}
+            <p class="mb-0">Pay by {% if status.grace_end %}{{ status.grace_end.strftime('%B %d, %Y') }}{% else %}the grace deadline{% endif %} to avoid late fee.</p>
+        {% endcall %}
         {% endif %}
 
         {% if not status.group_is_paid %}
@@ -373,9 +369,9 @@
             {% endif %}
 
             {% if view.payment_history|length == 0 %}
-            <div class="alert alert-info mb-0">
-                No payment history yet for this class.
-            </div>
+            {% call cards.alert_card('info', 'No payments yet', icon='history', body_class='mb-0') %}
+                <p class="mb-0">No payment history yet for this class.</p>
+            {% endcall %}
             {% else %}
             <div class="table-responsive">
                 <table class="table table-striped mb-0">

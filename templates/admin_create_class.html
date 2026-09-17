@@ -1,4 +1,5 @@
 {% from "macros/auth_brand.html" import auth_brand %}
+{% import 'macros/cards.html' as cards %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -27,15 +28,16 @@
               {% if messages %}
                 <div class="mb-3">
                   {% for category, message in messages %}
-                    <div class="alert
-                      {% if category == 'success' %}alert-success
-                      {% elif category == 'error' %}alert-danger
-                      {% else %}alert-secondary
-                      {% endif %}
-                      alert-dismissible fade show" role="alert">
-                      {{ message }}
-                      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                    </div>
+                    {% if category == 'success' %}
+                      {% set flash_level, flash_title, flash_icon = 'success', 'Class created', 'check_circle' %}
+                    {% elif category == 'error' %}
+                      {% set flash_level, flash_title, flash_icon = 'danger', 'Class not created', 'error' %}
+                    {% else %}
+                      {% set flash_level, flash_title, flash_icon = 'info', 'Class setup update', 'info' %}
+                    {% endif %}
+                    {% call cards.alert_card(flash_level, flash_title, icon=flash_icon, role='alert', heading_tag='h2', dismissible=True, body_class='mb-2') %}
+                      <p class="mb-0">{{ message }}</p>
+                    {% endcall %}
                   {% endfor %}
                 </div>
               {% endif %}

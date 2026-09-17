@@ -1,4 +1,5 @@
 {% extends "layout_student.html" %}
+{% import 'macros/cards.html' as cards %}
 {% set page_title = "Store" %}
 {% set current_page = "store" %}
 {% block title %}Store{% endblock %}
@@ -35,7 +36,7 @@
 {% endblock %}
 
 {% block content %}
-<div id="storePageFeedback" class="alert d-none" role="status" aria-live="polite" aria-atomic="true" tabindex="-1"></div>
+<div id="storePageFeedback" class="mb-3 d-none" role="status" aria-live="polite" aria-atomic="true" tabindex="-1"></div>
 
 <!-- Tabs -->
 <ul class="nav nav-tabs mb-4" id="storeTabs" role="tablist">
@@ -64,9 +65,9 @@
                     <div class="card-body d-flex flex-column">
                         <h2 class="h5 card-title">{{ item.name }}</h2>
                         {% if item.is_rent_covered %}
-                        <div class="alert alert-success alert-sm mb-2 py-1 px-2">
-                            <small><strong><span class="material-symbols-outlined icon-xs icon-middle" aria-hidden="true">check_circle</span> Included in your rent!</strong></small>
-                        </div>
+                        {% call cards.alert_card('success', 'Included in your rent', icon='check_circle', body_class='mb-2') %}
+                            <p class="mb-0">Your rent already covers this item.</p>
+                        {% endcall %}
                         {% elif item.is_rent_perk_item %}
                         <div class="mb-2">
                             <span class="badge bg-info"><span class="material-symbols-outlined icon-2xs icon-middle" aria-hidden="true">card_membership</span> Rent Perk</span>
@@ -113,13 +114,13 @@
                         {% if item.collective_progress %}
                         <div class="mb-3">
                             {% if item.collective_progress.goal_type == 'whole_class' %}
-                                <div class="alert alert-info p-2 mb-2">
-                                    <small><strong>Whole Class Goal:</strong> All {{ class_size }} students must purchase!</small>
-                                </div>
+                                {% call cards.alert_card('info', 'Whole class goal', icon='groups', body_class='mb-2') %}
+                                    <p class="mb-0">All {{ class_size }} students must purchase!</p>
+                                {% endcall %}
                             {% elif item.collective_progress.goal_type == 'fixed' %}
-                                <div class="alert alert-info p-2 mb-2">
-                                    <small><strong>Collective Goal:</strong> {{ item.collective_progress.target_count }} students needed to unlock</small>
-                                </div>
+                                {% call cards.alert_card('info', 'Collective goal', icon='group', body_class='mb-2') %}
+                                    <p class="mb-0">{{ item.collective_progress.target_count }} students needed to unlock</p>
+                                {% endcall %}
                             {% endif %}
                             <div class="progress shop-goal-progress">
                                 <div class="progress-bar {% if item.collective_progress.is_complete %}bg-success{% else %}bg-warning{% endif %}"
@@ -138,9 +139,9 @@
                                 <small class="text-success"><span class="material-symbols-outlined" aria-hidden="true">check_circle</span> Goal reached! Item will unlock soon.</small>
                             {% endif %}
                             {% if item.collective_progress.display_expires_at %}
-                            <div class="alert alert-warning p-2 mt-2 mb-0">
-                                <small><span class="material-symbols-outlined icon-2xs icon-middle" aria-hidden="true">schedule</span> <strong>Deadline:</strong> Goal expires {{ item.collective_progress.display_expires_at }}</small>
-                            </div>
+                            {% call cards.alert_card('warning', 'Goal deadline', icon='schedule', body_class='mt-2 mb-0') %}
+                                <p class="mb-0">Goal expires {{ item.collective_progress.display_expires_at }}</p>
+                            {% endcall %}
                             {% endif %}
                         </div>
                         {% endif %}
@@ -180,10 +181,9 @@
             {% endfor %}
         </div>
         {% else %}
-        <div class="alert alert-info text-center">
-            <h2 class="h5">No Items Available</h2>
+        {% call cards.alert_card('info', 'No items available', icon='storefront', heading_tag='h2') %}
             <p class="mb-0">There are currently no items in the store. Check back later!</p>
-        </div>
+        {% endcall %}
         {% endif %}
     </div>
 
@@ -266,11 +266,9 @@
             {% endfor %}
         </div>
         {% else %}
-        <div class="alert alert-info text-center">
-            <span class="material-symbols-outlined icon-2xl" aria-hidden="true">inventory_2</span>
-            <h2 class="h5 mt-2">No Purchased Items</h2>
+        {% call cards.alert_card('info', 'No purchased items', icon='inventory_2', heading_tag='h2') %}
             <p class="mb-0">You haven't purchased any items yet. Browse the store to get started!</p>
-        </div>
+        {% endcall %}
         {% endif %}
     </div>
 </div>
@@ -284,8 +282,9 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <div id="buyFeedback" class="alert d-none" role="alert" aria-live="assertive" aria-atomic="true" tabindex="-1"></div>
-                <div class="alert alert-info">
+                <div id="buyFeedback" class="mb-3 d-none" role="alert" aria-live="assertive" aria-atomic="true" tabindex="-1"></div>
+                {% call cards.alert_card('info', 'What you are buying', icon='shopping_cart', body_class='mb-3') %}
+                    <p class="mb-0">
                     <strong>Item:</strong> <span id="modalItemName"></span><br>
                     <strong>Unit Price:</strong> $<span id="modalItemPrice"></span><br>
                     <span id="rentPerkModalNote" hidden>
@@ -296,15 +295,13 @@
                         <strong>Bundle:</strong> <span id="modalBundleQuantity"></span> items per bundle<br>
                     </span>
                     <span id="modalDiscountInfo" class="shop-modal-block" hidden>
-                        <strong>Bulk Discount:</strong> <span id="modalDiscountPercentage"></span>% off when buying <span id="modalDiscountQuantity"></span>+<br>
+                        <strong>Bulk Discount:</strong> <span id="modalDiscountPercentage"></span>% off when buying <span id="modalDiscountQuantity"></span>+
                     </span>
-                </div>
+                    </p>
+                {% endcall %}
 
                 <!-- Item Type Explanation -->
-                <div id="itemTypeExplanation" class="alert mb-3" hidden>
-                    <h3 class="h6 alert-heading mb-2"><span class="material-symbols-outlined me-2" aria-hidden="true">info</span>How This Item Works</h3>
-                    <p id="explanationText" class="mb-0"></p>
-                </div>
+                <div id="itemTypeExplanation" class="mb-3" hidden></div>
 
                 <form id="buyItemForm">
                     <input type="hidden" id="modalItemId" name="policy_uuid">
@@ -326,12 +323,12 @@
                         <small class="text-muted" id="quantityHint"></small>
                     </div>
 
-                    <div class="alert alert-success" id="totalPriceDisplay">
-                        <strong>Total Price:</strong> $<span id="totalPrice">0.00</span>
-                        <span id="savingsDisplay" class="shop-modal-block" hidden>
-                            <br><small class="text-success"><span class="material-symbols-outlined" aria-hidden="true">check_circle</span> You save $<span id="savingsAmount">0.00</span>!</small>
-                        </span>
-                    </div>
+                    {% call cards.alert_card('success', 'Total price', icon='payments', id='totalPriceDisplay', body_class='mb-3') %}
+                        <p class="mb-0">$<span id="totalPrice">0.00</span></p>
+                        <p id="savingsDisplay" class="mb-0 mt-1 text-success" hidden>
+                            <span class="material-symbols-outlined" aria-hidden="true">check_circle</span> You save $<span id="savingsAmount">0.00</span>!
+                        </p>
+                    {% endcall %}
 
                     <div class="mb-3">
                         <label for="passphrase" class="form-label">Enter your Passphrase to confirm:</label>
@@ -356,10 +353,10 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <div id="useFeedback" class="alert d-none" role="alert" aria-live="assertive" aria-atomic="true" tabindex="-1"></div>
-                <div class="alert alert-info">
-                    <strong>Item:</strong> <span id="useModalItemName"></span>
-                </div>
+                <div id="useFeedback" class="mb-3 d-none" role="alert" aria-live="assertive" aria-atomic="true" tabindex="-1"></div>
+                {% call cards.alert_card('info', 'Item to use', icon='redeem', body_class='mb-3') %}
+                    <p class="mb-0"><span id="useModalItemName"></span></p>
+                {% endcall %}
                 <p id="useModalMessage"></p>
                 <form id="useItemForm">
                     <input type="hidden" id="useModalItemId" name="entitlement_id">
@@ -388,20 +385,33 @@
 
 {% block extra_scripts %}
 <script>
+    const STORE_FEEDBACK_TITLES = {
+        buyFeedback: 'Purchase not completed',
+        useFeedback: 'Item not used',
+    };
+    const STORE_FEEDBACK_ICONS = { success: 'check_circle', warning: 'warning', info: 'info', danger: 'error' };
+
+    function renderStoreFeedback(feedback, message, kind, title) {
+        feedback.replaceChildren(window.AppCore.buildAlertCard({
+            level: kind,
+            title,
+            icon: STORE_FEEDBACK_ICONS[kind] || 'info',
+            body: message,
+        }));
+        feedback.classList.remove('d-none');
+        feedback.focus();
+    }
+
     function announceStore(message, feedbackId, kind = 'danger') {
         const feedback = document.getElementById(feedbackId);
         if (!feedback) return;
-        feedback.className = `alert alert-${kind}`;
-        feedback.textContent = message;
-        feedback.focus();
+        renderStoreFeedback(feedback, message, kind, STORE_FEEDBACK_TITLES[feedbackId] || 'Something went wrong');
     }
 
     function announceStorePage(message, kind = 'success') {
         const feedback = document.getElementById('storePageFeedback');
         if (!feedback) return;
-        feedback.className = `alert alert-${kind}`;
-        feedback.textContent = message;
-        feedback.focus();
+        renderStoreFeedback(feedback, message, kind, kind === 'success' ? 'Done' : 'Store update');
     }
 
     let currentItemData = {};
@@ -464,36 +474,42 @@
 
         // Show item type explanation
         const explanationDiv = document.getElementById('itemTypeExplanation');
-        const explanationText = document.getElementById('explanationText');
-        let explanation = '';
-        let alertClass = 'alert-primary';
+        let explanation = null;
 
         switch (currentItemData.itemType) {
             case 'immediate':
-                explanation = '<strong>Immediate Use:</strong> This item is used instantly upon purchase. You won\'t need to redeem it later - it\'s applied to your account right away.';
-                alertClass = 'alert-success';
+                explanation = {
+                    level: 'success', icon: 'bolt', title: 'Immediate use',
+                    body: 'This item is used instantly upon purchase. You won\'t need to redeem it later - it\'s applied to your account right away.',
+                };
                 break;
             case 'delayed':
-                explanation = '<strong>Delayed Use:</strong> After purchase, this item will appear in your "My Items" tab. You can redeem it whenever you\'re ready by clicking "Use Item" and entering your PIN.';
-                alertClass = 'alert-info';
+                explanation = {
+                    level: 'info', icon: 'schedule', title: 'Delayed use',
+                    body: 'After purchase, this item will appear in your "My Items" tab. You can redeem it whenever you\'re ready by clicking "Use Item" and entering your PIN.',
+                };
                 break;
             case 'hall_pass':
-                explanation = '<strong>Hall Pass:</strong> This is a special hall pass item. Upon purchase, it\'s added to your hall pass balance and can be used during class when you need to leave.';
-                alertClass = 'alert-warning';
+                explanation = {
+                    level: 'warning', icon: 'directions_walk', title: 'Hall pass',
+                    body: 'This is a special hall pass item. Upon purchase, it\'s added to your hall pass balance and can be used during class when you need to leave.',
+                };
                 break;
             case 'collective':
-                explanation = '<strong>Collective Goal:</strong> This is a class goal! Multiple students must purchase this item before it unlocks for everyone. Your purchase counts toward the goal, and you\'ll receive the item once enough classmates have also purchased it. Check the progress bar on the item card to see how close you are!';
-                alertClass = 'alert-primary';
+                explanation = {
+                    level: 'info', icon: 'groups', title: 'Collective goal',
+                    body: 'This is a class goal! Multiple students must purchase this item before it unlocks for everyone. Your purchase counts toward the goal, and you\'ll receive the item once enough classmates have also purchased it. Check the progress bar on the item card to see how close you are!',
+                };
                 break;
             default:
-                explanation = '';
+                explanation = null;
         }
 
         if (explanation) {
-            explanationDiv.className = `alert mb-3 ${alertClass}`;
-            explanationText.innerHTML = explanation;
+            explanationDiv.replaceChildren(window.AppCore.buildAlertCard(explanation));
             explanationDiv.hidden = false;
         } else {
+            explanationDiv.replaceChildren();
             explanationDiv.hidden = true;
         }
 

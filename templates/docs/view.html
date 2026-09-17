@@ -657,87 +657,18 @@
         margin-bottom: var(--space-1);
     }
 
-    /* GitHub-style alert callout boxes */
-    .md-alert {
-        border-radius: var(--radius-lg);
+    /* GitHub-style callouts render as alert cards (see preprocess_github_alerts).
+       The Bootstrap card supplies the look; these rules only give the card
+       vertical rhythm in prose and stop .markdown-content h3 from inflating
+       the card title. */
+    .markdown-content .md-alert {
         margin: var(--space-5) 0;
-        padding: var(--space-3) var(--space-4);
-        border-left: 4px solid;
     }
 
-    .md-alert-header {
-        display: flex;
-        align-items: center;
-        gap: var(--space-2);
-        font-weight: var(--weight-bold);
-        margin-bottom: var(--space-2);
-        font-size: var(--text-sm);
-        text-transform: uppercase;
-        letter-spacing: var(--tracking-wide);
-    }
-
-    .md-alert-icon {
-        font-size: var(--icon-sm);
-        vertical-align: middle;
-    }
-
-    .md-alert-body p:last-child {
+    .markdown-content .md-alert > .card-header > h3 {
+        font-size: 1.25rem;
+        margin-top: 0;
         margin-bottom: 0;
-    }
-
-    /* NOTE — info */
-    .md-alert-note {
-        background-color: var(--info-subtle);
-        border-color: var(--info);
-    }
-
-    .md-alert-note .md-alert-header,
-    .md-alert-note .md-alert-icon {
-        color: var(--alert-info-text);
-    }
-
-    /* TIP — brand teal (primary) */
-    .md-alert-tip {
-        background-color: var(--primary-subtle);
-        border-color: var(--primary);
-    }
-
-    .md-alert-tip .md-alert-header,
-    .md-alert-tip .md-alert-icon {
-        color: var(--primary);
-    }
-
-    /* IMPORTANT — primary family (no semantic purple token) */
-    .md-alert-important {
-        background-color: var(--primary-subtle);
-        border-color: var(--primary);
-    }
-
-    .md-alert-important .md-alert-header,
-    .md-alert-important .md-alert-icon {
-        color: var(--primary);
-    }
-
-    /* WARNING */
-    .md-alert-warning {
-        background-color: var(--warning-subtle);
-        border-color: var(--warning);
-    }
-
-    .md-alert-warning .md-alert-header,
-    .md-alert-warning .md-alert-icon {
-        color: var(--alert-warning-text);
-    }
-
-    /* CAUTION — danger */
-    .md-alert-caution {
-        background-color: var(--danger-subtle);
-        border-color: var(--danger);
-    }
-
-    .md-alert-caution .md-alert-header,
-    .md-alert-caution .md-alert-icon {
-        color: var(--alert-danger-text);
     }
 
     /* Table of Contents */

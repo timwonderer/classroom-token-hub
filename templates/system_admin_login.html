@@ -1,5 +1,6 @@
 {% from "macros/auth_brand.html" import auth_brand %}
 {% from "macros/turnstile.html" import turnstile %}
+{% import "macros/cards.html" as cards %}
 <!DOCTYPE html>
 <html lang="en">
 
@@ -41,14 +42,17 @@
             {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
             {% for category, message in messages %}
-            <div class="alert alert-{{ 'danger' if category == 'error' else category }} border-0 shadow-sm mb-4">
-                {{ message }}
-            </div>
+            {%- set _flash_level = 'success' if category == 'success' else ('danger' if category in ['danger', 'error'] else ('warning' if category == 'warning' else 'info')) -%}
+            {% call cards.alert_card(_flash_level, 'Done' if _flash_level == 'success' else ('Something went wrong' if _flash_level == 'danger' else ('Heads up' if _flash_level == 'warning' else 'For your information')), icon='check_circle' if _flash_level == 'success' else ('error' if _flash_level == 'danger' else ('warning' if _flash_level == 'warning' else 'info')), body_class='mb-4') %}
+              <p class="mb-0">{{ message }}</p>
+            {% endcall %}
             {% endfor %}
             {% endif %}
             {% endwith %}
 
-            <div id="loginError" class="alert alert-danger border-0 shadow-sm mb-4 d-none" role="alert"></div>
+            {% call cards.alert_card('danger', 'Sign-in failed', icon='error', body_class='mb-4 d-none', role='alert', id='loginError') %}
+                <p class="mb-0" id="loginError-message"></p>
+            {% endcall %}
 
             {% if form %}
             <form method="POST" id="loginForm">

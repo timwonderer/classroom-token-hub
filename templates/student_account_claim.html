@@ -1,4 +1,5 @@
 {% from "macros/auth_brand.html" import auth_brand %}
+{% import 'macros/cards.html' as cards %}
 <!DOCTYPE html>
 <html lang="en">
 
@@ -42,7 +43,9 @@
             {% if messages %}
             <div class="flash-messages">
                 {% for message in messages %}
-                <div class="alert alert-info">{{ message }}</div>
+                {% call cards.alert_card('info', 'For your information', icon='info', body_class='mb-3') %}
+                    <p class="mb-0">{{ message }}</p>
+                {% endcall %}
                 {% endfor %}
             </div>
             {% endif %}

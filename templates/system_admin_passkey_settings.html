@@ -1,4 +1,5 @@
 {% extends "layout_system_admin.html" %}
+{% import "macros/cards.html" as cards %}
 {% set page_title = "Passkey Settings" %}
 {% set current_page = "passkey_settings" %}
 
@@ -21,18 +22,14 @@
             </div>
 
             <!-- Info Banner -->
-            <div class="alert alert-info d-flex align-items-start mb-4">
-                <span class="material-symbols-outlined me-2 mt-1" aria-hidden="true">info</span>
-                <div>
-                    <strong>About Passkeys</strong><br>
-                    Passkeys use WebAuthn/FIDO2 for phishing-resistant authentication. Works with:
-                    <ul class="mb-0 mt-2">
-                        <li>Hardware security keys (YubiKey, etc.)</li>
-                        <li>Platform authenticators (Touch ID, Face ID, Windows Hello)</li>
-                        <li>Synced passkeys across devices</li>
-                    </ul>
-                </div>
-            </div>
+            {% call cards.alert_card('info', 'About passkeys', icon='passkey', body_class='mb-4') %}
+                <p class="mb-0">Passkeys use WebAuthn/FIDO2 for phishing-resistant authentication. Works with:</p>
+                <ul class="mb-0 mt-2">
+                    <li>Hardware security keys (YubiKey, etc.)</li>
+                    <li>Platform authenticators (Touch ID, Face ID, Windows Hello)</li>
+                    <li>Synced passkeys across devices</li>
+                </ul>
+            {% endcall %}
 
             <!-- Registered Passkeys -->
             <div class="card mb-4">
@@ -138,9 +135,13 @@
 
             } catch (error) {
                 const feedback = document.getElementById('passkey-feedback');
-                feedback.textContent = 'Error: ' + error.message;
-                feedback.className = 'alert alert-danger';
-                feedback.classList.remove('visually-hidden');
+                feedback.replaceChildren(window.AppCore.buildAlertCard({
+                    level: 'danger',
+                    title: 'Could not delete passkey',
+                    icon: 'error',
+                    body: error.message,
+                }));
+                feedback.className = 'mb-4';
                 feedback.focus();
                 this.disabled = false;
                 this.innerHTML = '<span class="material-symbols-outlined icon-xs" aria-hidden="true">delete</span> Delete';

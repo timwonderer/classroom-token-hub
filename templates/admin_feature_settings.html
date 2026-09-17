@@ -1,4 +1,5 @@
 {% extends "layout_admin.html" %}
+{% import 'macros/cards.html' as cards %}
 {% set page_title = "Manage Class Economy Features" %}
 {% block title %}Economy Features{% endblock %}
 {% set current_page = "feature_settings" %}
@@ -93,12 +94,11 @@
     {% if view.pricing_features %}
     <h6 class="text-uppercase text-muted small fw-bold mb-2">Pricing features</h6>
     {% if not view.cwi_ready %}
-    <div class="alert alert-warning">
-      <div class="mb-2">
-        <span class="material-symbols-outlined icon-middle" aria-hidden="true">info</span>
+    {% call cards.alert_card('warning', 'Set up payroll and the economic engine first', icon='lock', body_class='mb-3') %}
+      <p class="mb-2">
         In order to use these features, you must first set up payroll and configure your
         economic engine.
-      </div>
+      </p>
       <div class="d-flex flex-wrap gap-2">
         <span class="badge {{ 'bg-success' if view.payroll_ready else 'bg-secondary' }} d-flex align-items-center gap-1">
           <span class="material-symbols-outlined icon-xs" aria-hidden="true">{{ 'check_box' if view.payroll_ready else 'check_box_outline_blank' }}</span>
@@ -109,7 +109,7 @@
           Economic Engine
         </span>
       </div>
-    </div>
+    {% endcall %}
     {% endif %}
     <div class="d-flex flex-column gap-2 {% if not view.cwi_ready %}opacity-50{% endif %}">
       {% for feat in view.pricing_features %}

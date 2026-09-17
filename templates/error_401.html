@@ -1,3 +1,4 @@
+{% import "macros/cards.html" as cards %}
 <!DOCTYPE html>
 <html lang="en">
 
@@ -56,9 +57,9 @@
         </div>
 
         <div class="error-body">
-            <div class="alert alert-info" role="alert">
-                <strong>Login Required!</strong> You need to be logged in to view this page. Please log in to continue.
-            </div>
+            {% call cards.alert_card('info', 'Login required', icon='login', body_class='mb-4', role='alert', heading_tag='h2') %}
+                <p class="mb-0">You need to be logged in to view this page. Please log in to continue.</p>
+            {% endcall %}
 
             <div class="login-links">
                 <h6>Select Your Login Type:</h6>
@@ -68,15 +69,14 @@
                 </div>
             </div>
 
-            <div class="alert alert-warning">
-                <h6 class="alert-heading">What should you do?</h6>
-                <ul class="mb-0">
+            {% call cards.alert_card('warning', 'What should you do?', icon='help', body_class='mb-4', heading_tag='h2') %}
+                <ul class="mb-0 ps-4">
                     <li>Log in if you have an account using the appropriate login button above</li>
                     <li>Make sure you're logging in with the correct account type (Student or Admin)</li>
                     <li>Your login session may have timed out - just log in again to continue</li>
                     <li>Need an account? Contact your teacher</li>
                 </ul>
-            </div>
+            {% endcall %}
 
             <div class="actions">
                 <a href="/" class="btn bg-primary text-white">Return to Login Page</a>

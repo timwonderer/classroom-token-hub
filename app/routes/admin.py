@@ -9000,7 +9000,7 @@ def announcement_edit(announcement_id):
     announcement_view = {
         'title': announcement.title,
         'message': announcement.message,
-        'priority_class': announcement.get_priority_class(),
+        'priority_level': announcement.get_priority_level(),
         'priority_icon': announcement.get_priority_icon(),
     }
 

@@ -1,4 +1,5 @@
 {% extends "layout_admin.html" %}
+{% import 'macros/cards.html' as cards %}
 {% set page_title = identity_view.full_name ~ " - Student Detail" %}
 {% block title %}{{ identity_view.full_name }} - Detail{% endblock %}
 {% block page_icon %}person{% endblock %}
@@ -114,11 +115,8 @@
 
 <!-- Rent Privileges Badges -->
 {% if rent_privileges and rent_privileges|length > 0 %}
-<div class="alert alert-light border mb-4">
-    <h6 class="mb-3">
-        <span class="material-symbols-outlined me-2" aria-hidden="true">military_tech</span>Active Rent Privileges
-        <small class="text-muted">(Per Rent Period Items)</small>
-    </h6>
+{% call cards.alert_card('info', 'Active rent privileges', icon='military_tech', body_class='mb-4') %}
+    <p class="small text-muted mb-3">Per Rent Period Items</p>
     <div class="d-flex flex-wrap gap-2">
         {% for privilege in rent_privileges %}
         <span class="badge bg-{% if privilege.source == 'rent' %}success{% else %}info{% endif %} px-3 py-2 type-sm" {% if privilege.description %}title="{{ privilege.description }}" {% endif %}>
@@ -136,7 +134,7 @@
         <strong class="text-success">Green badges</strong> = Covered by rent payment |
         <strong class="text-info">Blue badges</strong> = Purchased individually (valid until next rent due)
     </small>
-</div>
+{% endcall %}
 {% endif %}
 
 <!-- Main Content Tabs -->
@@ -255,10 +253,7 @@
 
                         <!-- Active Recovery Code Display -->
                         {% if reset_code_is_active %}
-                        <div class="alert alert-danger mt-3 border-danger shadow-sm">
-                            <h6 class="alert-heading fw-bold">
-                                <span class="material-symbols-outlined me-2" aria-hidden="true">shield</span>Account Recovery In Progress
-                            </h6>
+                        {% call cards.alert_card('danger', 'Account recovery in progress', icon='shield', body_class='mt-3') %}
                             <p class="mb-2 small">Give this information to the student to recover their account:</p>
                             <div class="bg-white p-3 rounded border border-danger text-dark">
                                 <div class="row g-2">
@@ -290,15 +285,12 @@
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                        {% endcall %}
                         {% endif %}
 
                         <!-- Account Recovery / Setup Information -->
                         {% if not student_has_completed_setup %}
-                        <div class="alert alert-warning mt-3 border-warning shadow-sm">
-                            <h6 class="alert-heading fw-bold">
-                                <span class="material-symbols-outlined me-2" aria-hidden="true">warning</span>Account Recovery / Setup
-                            </h6>
+                        {% call cards.alert_card('warning', 'Account not yet claimed', icon='warning', body_class='mt-3') %}
                             <p class="mb-2 small">Give this information to the student to claim their account:</p>
                             <div class="bg-white p-3 rounded border border-warning text-dark">
                                 <div class="row g-2">
@@ -318,7 +310,7 @@
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                        {% endcall %}
                         {% endif %}
                     </div>
                 </div>
@@ -438,9 +430,9 @@
                     </table>
                 </div>
                 {% else %}
-                <div class="alert alert-info mb-0">
-                    <span class="material-symbols-outlined me-2" aria-hidden="true">info</span>No transactions found for this student.
-                </div>
+                {% call cards.alert_card('info', 'No transactions yet', icon='receipt_long', body_class='mb-0') %}
+                    <p class="mb-0">No transactions found for this student.</p>
+                {% endcall %}
                 {% endif %}
             </div>
         </div>
@@ -508,10 +500,10 @@
                     </table>
                 </div>
                 {% else %}
-                <div class="alert alert-info mb-0">
-                    <span class="material-symbols-outlined me-2" aria-hidden="true">info</span>This student has not purchased any items
-                    yet.
-                </div>
+                {% call cards.alert_card('info', 'No purchases yet', icon='shopping_bag', body_class='mb-0') %}
+                    <p class="mb-0">This student has not purchased any items
+                    yet.</p>
+                {% endcall %}
                 {% endif %}
             </div>
         </div>
@@ -566,10 +558,10 @@
                     total</p>
                 {% endif %}
                 {% else %}
-                <div class="alert alert-info mb-0">
-                    <span class="material-symbols-outlined me-2" aria-hidden="true">info</span>No attendance records found for this
-                    student.
-                </div>
+                {% call cards.alert_card('info', 'No attendance records', icon='event_busy', body_class='mb-0') %}
+                    <p class="mb-0">No attendance records found for this
+                    student.</p>
+                {% endcall %}
                 {% endif %}
             </div>
         </div>
@@ -691,9 +683,9 @@
                     </table>
                 </div>
                 {% else %}
-                <div class="alert alert-info mb-0">
-                    <span class="material-symbols-outlined me-2" aria-hidden="true">info</span>No earnings recorded yet.
-                </div>
+                {% call cards.alert_card('info', 'No earnings yet', icon='payments', body_class='mb-0') %}
+                    <p class="mb-0">No earnings recorded yet.</p>
+                {% endcall %}
                 {% endif %}
             </div>
         </div>
@@ -732,9 +724,9 @@
                                 </button>
                             </div>
                         </form>
-                        <div class="alert alert-info mt-3 mb-0">
-                            <small><span class="material-symbols-outlined me-2" aria-hidden="true">info</span>Hall passes are entitlement events. Add creates new grant events; remove appends reversals against unconsumed grant correlations.</small>
-                        </div>
+                        {% call cards.alert_card('info', 'How hall pass adjustments are recorded', icon='confirmation_number', body_class='mt-3 mb-0') %}
+                            <p class="mb-0">Hall passes are entitlement events. Add creates new grant events; remove appends reversals against unconsumed grant correlations.</p>
+                        {% endcall %}
                     </div>
                 </div>
             </div>
@@ -809,21 +801,18 @@
                                     <label class="form-check-label" for="edit_reset_login">Reset</label>
                                 </div>
                             </div>
-                            <div class="alert alert-warning mt-3 mb-0" id="reset_login_warning" hidden>
-                                <small><span class="material-symbols-outlined me-2" aria-hidden="true">warning</span>A reset code will be
-                                    generated.
-                                    Give it to the student along with their join code. They will click
+                            {% call cards.alert_card('warning', 'A reset code will be generated', icon='lock_reset', id='reset_login_warning', body_class='mt-3 mb-0', attrs='hidden') %}
+                                <p class="mb-0">Give it to the student along with their join code. They will click
                                     <strong>"I can't log into my account"</strong> on the login page to begin
-                                    recovery.</small>
-                            </div>
+                                    recovery.</p>
+                            {% endcall %}
                         </div>
                     </div>
 
-                    <div class="alert alert-info mb-0">
-                        <small><span class="material-symbols-outlined me-2" aria-hidden="true">info</span><strong>Note:</strong> Changing
-                            the name will
-                            update what the student needs to enter during the account claim process.</small>
-                    </div>
+                    {% call cards.alert_card('info', 'Name changes affect account claim', icon='info', body_class='mb-0') %}
+                        <p class="mb-0">Changing the name will update what the student needs to enter during the account
+                            claim process.</p>
+                    {% endcall %}
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>

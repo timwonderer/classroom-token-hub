@@ -130,21 +130,21 @@
             const queueLimit = document.getElementById('newQueueLimit').value.trim();
 
             if (!name) {
-                showFeedback('Please enter a pass type name', true);
+                showFeedback('Please enter a pass type name', true, 'Pass type name required');
                 return;
             }
 
             // Check for duplicates
             const existing = passTypesData.find(pt => pt.name.toLowerCase() === name.toLowerCase());
             if (existing) {
-                showFeedback('A pass type with this name already exists', true);
+                showFeedback('A pass type with this name already exists', true, 'Duplicate pass type');
                 return;
             }
 
             // Validate limits
             const queueLimitValue = queueLimit === '' ? 10 : parseInt(queueLimit, 10);
             if (isNaN(queueLimitValue) || queueLimitValue < 0) {
-                showFeedback('Students Out At Once must be a non-negative number', true);
+                showFeedback('Students Out At Once must be a non-negative number', true, 'Invalid out limit');
                 return;
             }
 
@@ -165,7 +165,7 @@
             addPassTypeModalInstance.hide();
 
             // Show feedback
-            showFeedback('Pass type added. Don\'t forget to save!', false);
+            showFeedback('Pass type added. Don\'t forget to save!', false, 'Pass type added');
         }
 
         function removePassType(index) {
@@ -173,7 +173,7 @@
             if (confirm('Are you sure you want to remove this pass type?')) {
                 passTypesData.splice(index, 1);
                 renderPassTypes();
-                showFeedback('Pass type removed. Don\'t forget to save!', false);
+                showFeedback('Pass type removed. Don\'t forget to save!', false, 'Pass type removed');
             }
         }
 
@@ -247,10 +247,14 @@
             queueHelp.textContent = 'Calculated from individual destination limits';
         }
 
-        function showFeedback(message, isError = false) {
+        function showFeedback(message, isError = false, title = isError ? 'Something went wrong' : 'Done') {
             const feedback = document.getElementById('feedbackMessage');
-            feedback.className = `alert ${isError ? 'alert-danger' : 'alert-success'} mt-3`;
-            feedback.textContent = message;
+            feedback.replaceChildren(AppCore.buildAlertCard({
+                level: isError ? 'danger' : 'success',
+                title,
+                icon: isError ? 'error' : 'check_circle',
+                body: message,
+            }));
             feedback.hidden = false;
             feedback.focus();
 
@@ -261,7 +265,7 @@
 
         function saveConfiguration() {
             if (passTypesData.length === 0) {
-                showFeedback('Please add at least one pass type.', true);
+                showFeedback('Please add at least one pass type.', true, 'No pass types to save');
                 return;
             }
 
@@ -286,16 +290,16 @@
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    showFeedback('Configuration saved successfully!');
+                    showFeedback('Configuration saved successfully!', false, 'Configuration saved');
                     // Reload to get fresh data
                     loadConfiguration();
                 } else {
-                    showFeedback(data.message || 'Failed to save configuration.', true);
+                    showFeedback(data.message || 'Failed to save configuration.', true, 'Configuration not saved');
                 }
             })
             .catch(error => {
                 console.error('Error saving configuration:', error);
-                showFeedback('An error occurred while saving.', true);
+                showFeedback('An error occurred while saving.', true, 'Configuration not saved');
             });
         }
 
@@ -321,12 +325,12 @@
                     // Render
                     renderPassTypes();
                 } else {
-                    showFeedback('Failed to load configuration.', true);
+                    showFeedback('Failed to load configuration.', true, 'Configuration not loaded');
                 }
             })
             .catch(error => {
                 console.error('Error loading configuration:', error);
-                showFeedback(error.message || 'An error occurred while loading.', true);
+                showFeedback(error.message || 'An error occurred while loading.', true, 'Configuration not loaded');
             });
         }
 
