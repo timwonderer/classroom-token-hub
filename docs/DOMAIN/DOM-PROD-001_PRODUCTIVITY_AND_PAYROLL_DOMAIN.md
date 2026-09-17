@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-PROD-001 | 1.2 | 2026-09-15 | 1.1 | Constitutional |
+| DOM-PROD-001 | 1.3 | 2026-09-17 | 1.2 | Constitutional |
 
 ---
 
@@ -226,7 +226,13 @@ Use cases:
 Rules:
 
 - MUST be append-only
-- MUST require `class_id`, `actor_seat_id`, `target_seat_id`, `correlation_id`, `idempotency_key`, `policy_version_id`, `mechanism`, `payroll_event_type`, `recorded_at`, and `summary_json`
+- MUST require `class_id`, `actor_seat_id`, `target_seat_id`, `correlation_id`, `idempotency_key`, `mechanism`, `payroll_event_type`, `recorded_at`, and `summary_json`
+- MUST record policy provenance according to the authority that determined the amount, not the storage event type alone:
+  - `payroll` (amount priced by the payroll policy from attendance/hours): `policy_version_id` and `policy_uuid` are REQUIRED
+  - `manual_credit` initiated by a teacher who enters the amount directly: no payroll policy is required, and a class with no payroll configuration can still record it
+  - `manual_credit` used as the posting mechanism for another domain's lawful calculation (for example a productivity insurance reimbursement): MUST retain the policy provenance that calculation used
+  - `reversal`: carries the provenance of the event it compensates
+- This is a minimum requirement for `payroll` events only. It MUST NOT be inverted into a rule that `manual_credit` events carry no policy version
 - MUST set `payroll_event_type` to `payroll`, `manual_credit`, or `reversal`
 - MUST derive payroll amount from authoritative productivity facts or manual credit intent, but MUST not store the amount on the table
 - MUST use the same `correlation_id` as the original event when writing a reversal
@@ -349,7 +355,7 @@ Key fields:
 - `target_seat_id` — FK to `seats`; the seat whose productivity settlement or reversal is affected
 - `correlation_id` — workflow correlation identifier linking payroll business and ledger facts; reversals reuse the original event's correlation_id
 - `idempotency_key` — unique payroll-run replay guard
-- `policy_version_id` — frozen policy version reference for the payroll policy in effect at record time
+- `policy_version_id` — frozen policy version reference for the policy that priced the amount; required for `payroll` events, absent for teacher-entered manual credits (see §VIII)
 - `mechanism` — `TEACHER` | `SYSTEM`
 - `payroll_event_type` — `payroll` | `manual_credit` | `reversal`
 - `recorded_at` — UTC; display in class canonical time
@@ -364,7 +370,7 @@ Rules:
 - The payroll window for a `payroll` event is derived from the previous `payroll` event timestamp through the current event timestamp.
 - `manual_credit` and `reversal` events do not participate in payroll-window boundary derivation.
 - `reversal` events must carry the same `correlation_id` as the original event they reverse.
-- `policy_version_id` is immutable and must identify the payroll policy version used to evaluate the event.
+- `policy_version_id` is immutable and, where present, must identify the policy version used to evaluate the event. A database check constraint requires it, with `policy_uuid`, on every `payroll` event.
 - `policy_uuid` is immutable and must record the exact domain-policy identifier used to evaluate the event; `policy_version_id` remains the internal lineage pointer where present.
 - The row must identify the productivity window and settlement intent that authorized any downstream ledger write.
 - The row must not duplicate ledger monetary truth beyond what is necessary for business provenance.
@@ -421,7 +427,7 @@ Records one append-only payroll business event.
 
 Rules:
 
-- MUST require `class_id`, `actor_seat_id`, `target_seat_id`, `correlation_id`, `idempotency_key`, and `policy_version_id`
+- MUST require `class_id`, `actor_seat_id`, `target_seat_id`, `correlation_id`, and `idempotency_key`, plus `policy_version_id` for `payroll` events and for any event whose amount a policy calculation determined (§VIII)
 - MUST record `payroll_event_type`
 - MUST treat `payroll` as the only boundary-bearing event type
 - MUST preserve `manual_credit` and `reversal` as non-boundary event types

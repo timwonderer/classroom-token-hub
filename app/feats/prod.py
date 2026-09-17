@@ -526,7 +526,7 @@ def _record_payroll_event_impl(
     payroll_event_type: str,
     correlation_id: str,
     idempotency_key: str,
-    policy_version_id: int,
+    policy_version_id: int | None,
     mechanism: str,
     summary_json: dict | None = None,
     reference_time_utc=None,
@@ -534,11 +534,16 @@ def _record_payroll_event_impl(
     payroll_cycle_id: str | None = None,
 ) -> PayrollEventResult:
     ctx = _require_context(ctx)
-    if policy_version_id is None:
-        raise ValueError("FEAT-PROD-003 requires a payroll policy_version_id.")
-    policy_version = db.session.get(PolicyVersion, policy_version_id)
-    if policy_version is None or policy_version.class_id != ctx.class_id:
-        raise ValueError("FEAT-PROD-003 requires a payroll policy version owned by the current class.")
+    # DOM-PROD-001 §VIII: attendance-derived payroll is computed under a payroll
+    # policy version and must record it. A manual credit is teacher intent, not a
+    # policy computation, so it needs no payroll configuration.
+    if payroll_event_type == "payroll" and policy_version_id is None:
+        raise ValueError("FEAT-PROD-003 requires a payroll policy_version_id for payroll events.")
+    policy_version = None
+    if policy_version_id is not None:
+        policy_version = db.session.get(PolicyVersion, policy_version_id)
+        if policy_version is None or policy_version.class_id != ctx.class_id:
+            raise ValueError("FEAT-PROD-003 requires a payroll policy version owned by the current class.")
     evaluation = canonical_temporal_resolver(
         CLASS_LEVEL_EVALUATION,
         canonical_execution_context=ctx,
@@ -576,6 +581,10 @@ def _record_payroll_event_impl(
         )
         if original is None:
             raise LookupError("Unable to establish original payroll event for reversal.")
+        if policy_version is None and original.policy_version_id is not None:
+            # A reversal carries the provenance of the event it compensates.
+            policy_version = db.session.get(PolicyVersion, original.policy_version_id)
+            policy_version_id = original.policy_version_id
         if amount is None:
             active_correlation_id = get_correlation_id()
             linked = (
@@ -603,7 +612,7 @@ def _record_payroll_event_impl(
         correlation_id=correlation_id,
         idempotency_key=idempotency_key,
         policy_version_id=policy_version_id,
-        policy_uuid=policy_version.policy_uuid,
+        policy_uuid=policy_version.policy_uuid if policy_version else None,
         mechanism=mechanism,
         payroll_event_type=payroll_event_type,
         recorded_at=recorded_at,
@@ -640,7 +649,7 @@ def record_payroll_event(
     payroll_event_type: str,
     correlation_id: str,
     idempotency_key: str,
-    policy_version_id: int,
+    policy_version_id: int | None,
     mechanism: str,
     summary_json: dict | None = None,
     reference_time_utc=None,
@@ -669,8 +678,8 @@ def record_payroll_reversal(
     target_seat_id: int,
     correlation_id: str,
     idempotency_key: str,
-    policy_version_id: int,
     mechanism: str,
+    policy_version_id: int | None = None,
     summary_json: dict | None = None,
     reference_time_utc=None,
 ) -> PayrollEventResult:

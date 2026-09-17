@@ -1073,18 +1073,6 @@ def _require_payroll_feature_scope_from_request(
     }
 
 
-def _require_active_payroll_policy_version_id(class_id: str) -> int:
-    """Return the active class-owned payroll policy version or fail closed."""
-    policy_version = (
-        PolicyVersion.query.filter_by(class_id=class_id, domain="payroll", is_active=True)
-        .order_by(PolicyVersion.version_number.desc(), PolicyVersion.id.desc())
-        .first()
-    )
-    if policy_version is None:
-        raise InvariantViolation("No active payroll policy version exists for this class.")
-    return policy_version.id
-
-
 
 def _class_exists(class_id):
     """Return True when a class identified by class_id still exists in ClassEconomy."""
@@ -7878,7 +7866,6 @@ def payroll_manual_payment():
 
             selected_scope = _require_payroll_feature_scope_from_request()
             selected_class_id = selected_scope['class_id']
-            policy_version_id = _require_active_payroll_policy_version_id(selected_class_id)
 
             applied_count = 0
             request_nonce = secrets.token_hex(12)
@@ -7893,7 +7880,8 @@ def payroll_manual_payment():
                     payroll_event_type="manual_credit",
                     correlation_id=generate_correlation_id(),
                     idempotency_key=f"manual_credit:{selected_class_id}:{student.id}:{request_nonce}",
-                    policy_version_id=policy_version_id,
+                    # Manual credits need no payroll policy (DOM-PROD-001 §VIII).
+                    policy_version_id=None,
                     mechanism="TEACHER",
                     summary_json={
                         "description": f"Manual Credit: {description}",

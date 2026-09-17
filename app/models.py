@@ -917,8 +917,10 @@ class PayrollEvent(db.Model):
     actor_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=False, index=True)
     correlation_id = db.Column(db.String(100), nullable=False, index=True)
     idempotency_key = db.Column(db.String(255), nullable=False, index=True)
-    policy_version_id = db.Column(db.Integer, db.ForeignKey('policy_versions.id', ondelete='RESTRICT'), nullable=False, index=True)
-    policy_uuid = db.Column(db.String(36), nullable=False, index=True)
+    # Required for attendance-derived payroll; a manual credit needs no payroll
+    # policy (DOM-PROD-001 §VIII). Enforced by ck_payroll_event_payroll_policy.
+    policy_version_id = db.Column(db.Integer, db.ForeignKey('policy_versions.id', ondelete='RESTRICT'), nullable=True, index=True)
+    policy_uuid = db.Column(db.String(36), nullable=True, index=True)
     mechanism = db.Column(db.String(20), nullable=False, default="TEACHER")
     payroll_event_type = db.Column(db.String(20), nullable=False)
     recorded_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False, index=True)
@@ -932,6 +934,10 @@ class PayrollEvent(db.Model):
 
     __table_args__ = (
         db.UniqueConstraint('class_id', 'target_seat_id', 'correlation_id', 'idempotency_key', 'payroll_event_type', name='uq_payroll_event_replay_guard'),
+        db.CheckConstraint(
+            "payroll_event_type <> 'payroll' OR (policy_version_id IS NOT NULL AND policy_uuid IS NOT NULL)",
+            name='ck_payroll_event_payroll_policy',
+        ),
     )
 
 
