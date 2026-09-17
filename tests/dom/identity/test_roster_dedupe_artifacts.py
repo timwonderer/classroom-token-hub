@@ -17,7 +17,7 @@ ASSETS = Path(__file__).resolve().parents[2] / "assets" / "roster_dedupe"
 
 
 def _load(name):
-    with (ASSETS / name).open(newline="", encoding="utf-8") as handle:
+    with (ASSETS / name).open(newline="", encoding="utf-8-sig") as handle:
         rows = list(csv.DictReader(handle))
     assert rows, f"{name} is empty"
     assert {row["Expect Claim Code"] for row in rows} <= {"yes", "no"}

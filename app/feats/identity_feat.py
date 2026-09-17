@@ -581,6 +581,34 @@ def _generate_claim_code(used: set[str]) -> str:
             return code
 
 
+def _ensure_distinct_claim_codes(*, class_id, first_hash, last_hash, first_name, last_name):
+    """Give every unclaimed Seat sharing a claim name its own system-generated code.
+
+    The caller holds the class lock and has flushed the Seats it added or unclaimed.
+    A lone unclaimed Seat keeps no code; existing unique codes are never changed.
+    """
+    seats = (
+        Seat.query.filter(
+            Seat.class_id == class_id, Seat.role == "student", Seat.user_id.is_(None),
+            Seat.claim_first_name_hash == first_hash, Seat.claim_last_name_hash == last_hash,
+        ).order_by(Seat.id).populate_existing().with_for_update().all()
+    )
+    if len(seats) < 2:
+        return
+    used = {seat.dedupe_code for seat in seats if seat.dedupe_code}
+    seen = set()
+    for seat in seats:
+        if seat.dedupe_code and seat.dedupe_code not in seen:
+            seen.add(seat.dedupe_code)
+            continue
+        seat.dedupe_code = _generate_claim_code(used)
+        seen.add(seat.dedupe_code)
+        seat.roster_fingerprint = hash_roster_fingerprint(
+            class_id=class_id, first_name=first_name, last_name=last_name, dedupe_code=seat.dedupe_code,
+        )
+    db.session.flush()
+
+
 @requires_feat_context("FEAT-IDEN-006")
 def import_student_seats(*, canonical_context, rows, correlation_id, idempotency_key):
     """Atomically provision a new seat per row; never infer identity from names.
@@ -616,59 +644,35 @@ def import_student_seats(*, canonical_context, rows, correlation_id, idempotency
             raise ValueError("Notes must be text.")
         first, last = first.strip(), last.strip()
         prepared.append({
-            "first": first, "last": last, "notes": notes, "code": None,
+            "first": first, "last": last, "notes": notes,
             "first_hash": hash_claim_name(first, class_id=ctx.class_id, field="first"),
             "last_hash": hash_claim_name(last, class_id=ctx.class_id, field="last"),
         })
 
     # Serialize with claims, unclaims, and concurrent imports touching the same names.
     ClassEconomy.query.filter_by(class_id=ctx.class_id).with_for_update().one()
-    groups = {}
-    for entry in prepared:
-        groups.setdefault((entry["first_hash"], entry["last_hash"]), []).append(entry)
-    for (first_hash, last_hash), entries in groups.items():
-        existing = (
-            Seat.query.filter(
-                Seat.class_id == ctx.class_id, Seat.role == "student", Seat.user_id.is_(None),
-                Seat.claim_first_name_hash == first_hash, Seat.claim_last_name_hash == last_hash,
-            ).order_by(Seat.id).populate_existing().with_for_update().all()
-        )
-        if len(entries) + len(existing) < 2:
-            continue
-        used = {seat.dedupe_code for seat in existing if seat.dedupe_code}
-        seen = set()
-        for seat in existing:
-            if seat.dedupe_code and seat.dedupe_code not in seen:
-                seen.add(seat.dedupe_code)
-                continue
-            # Missing or colliding code: assign a fresh one so the seat stays claimable.
-            seat.dedupe_code = _generate_claim_code(used)
-            seen.add(seat.dedupe_code)
-            seat.roster_fingerprint = hash_roster_fingerprint(
-                class_id=ctx.class_id, first_name=entries[0]["first"],
-                last_name=entries[0]["last"], dedupe_code=seat.dedupe_code,
-            )
-        for entry in entries:
-            entry["code"] = _generate_claim_code(used)
-
     for entry in prepared:
         create_roster_student_seat(
             class_id=ctx.class_id, first_name=entry["first"], last_name=entry["last"],
-            notes=entry["notes"], dedupe_code=entry["code"],
+            notes=entry["notes"], dedupe_code=None,
             claim_first_name_hash=entry["first_hash"],
             claim_last_name_hash=entry["last_hash"],
             roster_fingerprint=hash_roster_fingerprint(
                 class_id=ctx.class_id, first_name=entry["first"], last_name=entry["last"],
-                dedupe_code=entry["code"] or "",
             ),
         )
+    groups = {}
+    for entry in prepared:
+        groups.setdefault((entry["first_hash"], entry["last_hash"]), entry)
+    for (first_hash, last_hash), entry in groups.items():
+        _ensure_distinct_claim_codes(class_id=ctx.class_id, first_hash=first_hash, last_hash=last_hash,
+                                     first_name=entry["first"], last_name=entry["last"])
     return len(prepared)
 
 
 @requires_feat_context("FEAT-IDEN-006")
 def unclaim_student_seat(*, canonical_context, seat_id, expected_generation,
-                         first_name, last_name, dedupe_code="",
-                         correlation_id, idempotency_key):
+                         first_name, last_name, correlation_id, idempotency_key):
     """Detach a principal; the class-owned Seat and its records survive."""
     from app.utils.student_deletion import delete_user_if_orphaned
     from app.services.recovery_service import invalidate_recovery_participation_for_seat
@@ -679,9 +683,7 @@ def unclaim_student_seat(*, canonical_context, seat_id, expected_generation,
             or not isinstance(last_name, str) or not last_name.strip()
             or len(first_name.strip()) > 100 or len(last_name.strip()) > 100):
         raise ValueError("Enter a first and last name, each at most 100 characters.")
-    if not isinstance(dedupe_code, str) or len(dedupe_code.strip()) > 8:
-        raise ValueError("The distinguishing code must be at most eight characters.")
-    first, last, code = first_name.strip(), last_name.strip(), dedupe_code.strip().upper()
+    first, last = first_name.strip(), last_name.strip()
     User.query.filter_by(id=ctx.user_id).with_for_update().one()
     class_row = ClassEconomy.query.filter_by(class_id=ctx.class_id).with_for_update().one_or_none()
     teacher = Seat.query.filter_by(id=ctx.seat_id, class_id=ctx.class_id,
@@ -700,23 +702,21 @@ def unclaim_student_seat(*, canonical_context, seat_id, expected_generation,
             or seat.claim_generation != expected_generation):
         raise ValueError("The seat's claim has changed. Refresh the roster before unclaiming it.")
     first_hash, last_hash = hash_claim_name(first, class_id=ctx.class_id, field="first"), hash_claim_name(last, class_id=ctx.class_id, field="last")
-    matches = Seat.query.filter(Seat.class_id == ctx.class_id, Seat.role == "student",
-        Seat.user_id.is_(None), Seat.claim_first_name_hash == first_hash,
-        Seat.claim_last_name_hash == last_hash).all()
-    if matches and (not code or any(not other.dedupe_code or other.dedupe_code == code for other in matches)):
-        raise ValueError("Another unclaimed seat uses this name. Use a distinct claim name, or give both seats different distinguishing codes.")
     seat.user_id = None
     seat.claimed_at = None
     seat.claim_generation += 1
     seat.claim_first_name_hash, seat.claim_last_name_hash = first_hash, last_hash
-    seat.dedupe_code = code or None
-    seat.roster_fingerprint = hash_roster_fingerprint(class_id=ctx.class_id, first_name=first, last_name=last, dedupe_code=code)
+    seat.dedupe_code = None
+    seat.roster_fingerprint = hash_roster_fingerprint(class_id=ctx.class_id, first_name=first, last_name=last)
     # A previous claimant's teacher-recovery confirmation must not transfer.
     invalidate_recovery_participation_for_seat(seat.id)
     if user.last_active_seat_id == seat.id or user.last_active_class_id == ctx.class_id:
         user.last_active_seat_id = None
         user.last_active_class_id = None
     db.session.flush()
+    # Same-name unclaimed seats each get a system-generated code, as on import.
+    _ensure_distinct_claim_codes(class_id=ctx.class_id, first_hash=first_hash, last_hash=last_hash,
+                                 first_name=first, last_name=last)
     deleted_user = delete_user_if_orphaned(old_user_id)
     return {"status": "success", "account_deleted": deleted_user,
             "message": "Seat unclaimed. Its records are preserved and it is ready to claim again."}

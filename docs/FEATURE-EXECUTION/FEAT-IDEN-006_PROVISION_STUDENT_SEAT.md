@@ -51,13 +51,14 @@ student Seat in the active owned class. This is separate from Delete. Require
 fresh first/last claim names, explicit confirmation, and the Seat's displayed
 claim generation. Reject malformed input, stale generation, already-unclaimed
 Seats, teacher Seats, and foreign-class Seats without mutation. Duplicate unclaimed
-names must remain independently claimable using distinct nonempty codes; otherwise
-reject the change and ask the teacher to distinguish the names/codes.
+names must remain independently claimable: under the class lock, the system (never
+the teacher) assigns distinct claim deduplication codes to the unclaimed Seat and any
+unclaimed namesake lacking a unique code, exactly as additive import does.
 
 One FEAT transaction validates/locks teacher ownership, class, detached principal,
 and Seat; writes only Identity state; clears the binding and claimed_at; increments
 claim_generation; preserves profile names and notes; uses the entered names only to regenerate
-normal seat claim hashes/fingerprint/code; and clears that principal's active context
+normal seat claim hashes/fingerprint, with any code system-assigned; and clears that principal's active context
 when it points at the detached Seat. Revoke this Seat’s outstanding teacher-recovery code without rerolling recipients;
 preserve accepted class confirmation and any remaining selected recipient.
 Delete the old User only if no surviving Seat/class ownership remains. Preserve

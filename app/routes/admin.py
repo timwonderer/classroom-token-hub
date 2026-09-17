@@ -4191,7 +4191,6 @@ def unclaim_student():
         result = unclaim_student_seat(canonical_context=g.canonical_context,
             seat_id=seat_id, expected_generation=generation,
             first_name=data.get('first_name'), last_name=data.get('last_name'),
-            dedupe_code=data.get('dedupe_code', ''),
             correlation_id=generate_correlation_id(),
             idempotency_key=f"identity:unclaim:{seat_id}:{generation}")
     except (ValueError, TypeError) as error:

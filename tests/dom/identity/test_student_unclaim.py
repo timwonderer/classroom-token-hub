@@ -12,7 +12,7 @@ from tests.helpers.classroom_initializer import initialize, initialize_as_teache
 
 def _unclaim(client, seat, **changes):
     payload = dict(seat_id=seat.id, claim_generation=seat.claim_generation,
-                   first_name='Fresh', last_name='Claim', dedupe_code='', confirmation='UNCLAIM')
+                   first_name='Fresh', last_name='Claim', confirmation='UNCLAIM')
     payload.update(changes)
     return client.post('/admin/student/unclaim', json=payload)
 
@@ -128,14 +128,10 @@ def test_unclaim_last_student_keeps_class_and_teacher(client, app):
     assert db.session.get(Seat, classroom.teacher_seat.id) is not None
 
 
-def test_duplicate_claim_names_fail_without_changing_existing_pending_seat(client, app):
-    classroom = initialize_as_teacher('chemistry_p1', client, app)
-    first, second = (student.seat for student in classroom.students[:2])
-    assert _unclaim(client, first).status_code == 200
-    response = _unclaim(client, second, dedupe_code='B')
-    assert response.status_code == 400
-    db.session.refresh(second)
-    assert second.user_id is not None
+def test_unclaim_page_asks_for_no_claim_code(client, app):
+    initialize_as_teacher('chemistry_p1', client, app)
+    html = client.get('/admin/students').get_data(as_text=True)
+    assert 'unclaimDedupeCode' not in html and 'name="dedupe_code"' not in html
 
 
 def test_unclaim_page_exposes_distinct_action_and_blank_required_names(client, app):
@@ -183,14 +179,21 @@ def test_unclaim_route_claim_stores_new_generation_and_rejects_stale_session(cli
     assert response.status_code == 302 and '/claim-account' in response.location
 
 
-def test_duplicate_claim_names_are_distinguished_by_codes(client, app):
+def test_duplicate_claim_names_are_distinguished_by_system_codes(client, app):
     classroom = initialize_as_teacher('chemistry_p1', client, app)
     first, second = (student.seat for student in classroom.students[:2])
-    assert _unclaim(client, first, dedupe_code='A').status_code == 200
+    assert _unclaim(client, first).status_code == 200
+    db.session.refresh(first)
+    assert first.dedupe_code is None  # alone under these names
+    # A client-sent code is ignored; the second unclaim codes both seats.
     assert _unclaim(client, second, dedupe_code='B').status_code == 200
-    for seat, code in [(first, 'A'), (second, 'B')]:
+    db.session.expire_all()
+    first, second = db.session.get(Seat, first.id), db.session.get(Seat, second.id)
+    assert first.dedupe_code and second.dedupe_code and first.dedupe_code != second.dedupe_code
+    assert 'B' not in {first.dedupe_code, second.dedupe_code}
+    for seat in (first, second):
         claim = resolve_seat_claim(join_code=classroom.join_code, first_name='Fresh',
-            last_name='Claim', dedupe_code=code)
+            last_name='Claim', dedupe_code=seat.dedupe_code)
         assert claim.success and claim.seat_id == seat.id
     assert not resolve_seat_claim(join_code=classroom.join_code,
         first_name='Fresh', last_name='Claim').success
