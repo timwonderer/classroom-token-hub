@@ -247,6 +247,28 @@
     box-shadow: none;
   }
 
+  /* The alert card is a page-level treatment — an h5 header over 1.25rem of
+     body padding. In a 380px panel whose checklist rows are 44px tall and
+     --text-sm, that dwarfs everything beside it, so alert cards rendered in
+     this widget are scaled to the panel's own type and spacing. */
+  #gsCongratsSlot .alert-card > .card-header {
+    padding: var(--space-2) var(--space-3);
+  }
+
+  #gsCongratsSlot .alert-card > .card-header h3 {
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semibold);
+  }
+
+  #gsCongratsSlot .alert-card > .card-header .material-symbols-outlined {
+    font-size: 18px;
+  }
+
+  #gsCongratsSlot .alert-card > .card-body {
+    padding: var(--space-3);
+    font-size: var(--text-sm);
+  }
+
   /* ── Sections ── */
   .gs-section-title {
     display: flex;
