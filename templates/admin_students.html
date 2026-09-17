@@ -139,11 +139,11 @@
 {% block content %}
 
 {% macro recovery_readiness_warning() %}
-{% if claimed_students|length < recovery_min_students %}
+{% if roster.recovery_at_risk %}
             {% call cards.alert_card('danger', 'Your account may be at risk of being unrecoverable', icon='shield_lock', role='note', id='recovery-readiness-warning', body_class='mb-3') %}
-                <p class="mb-0">Classroom Token Hub uses student-assisted teacher account recovery. Recovery requires enough claimed students across the classes you own, including at least {{ recovery_min_students }} claimed students in each class.
-                  <strong>You currently have {{ claimed_students|length }} claimed students in this class.</strong>
-                  Until this class reaches {{ recovery_min_students }}, teacher account recovery will not be available if you lose access.</p>
+                <p class="mb-0">Classroom Token Hub uses student-assisted teacher account recovery. Recovery requires enough claimed students across the classes you own, including at least {{ roster.recovery_min_students }} claimed students in each class.
+                  <strong>You currently have {{ roster.claimed_count }} claimed students in this class.</strong>
+                  Until this class reaches {{ roster.recovery_min_students }}, teacher account recovery will not be available if you lose access.</p>
             {% endcall %}
 {% endif %}
 {% endmacro %}
@@ -171,146 +171,25 @@
 <div class="tab-content" id="studentTabContent">
   <!-- ROSTER TAB -->
   <div class="tab-pane fade show active" id="roster" role="tabpanel" aria-labelledby="roster-tab">
-    <div class="card shadow">
-      <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-        <h2 class="mb-0 fs-3"><span class="material-symbols-outlined me-2 align-middle fs-1" aria-hidden="true">groups</span>Class Roster
-        </h2>
-        <div>
-          <a href="{{ url_for('admin.export_students') }}" class="btn btn-light btn-sm me-2">
-            <span class="material-symbols-outlined me-1 icon-middle" aria-hidden="true">download</span> Export All
-          </a>
-        </div>
-      </div>
-      <div class="card-body">
-        <!-- Current Class Content -->
+    {# No "Class Roster" card here: the tab already carries that label, and a
+       card of the same name nests a region inside a duplicate of itself. #}
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+      {# The class is the heading worth showing: the tab already says which
+         view this is, so repeating "Class Roster" here would leave the one fact
+         a teacher needs — which class they are editing — as muted body text. #}
+      <h2 class="h5 mb-0">{{ roster.class_label }}<span class="visually-hidden"> class roster</span></h2>
+      <a href="{{ url_for('admin.export_students') }}" class="btn btn-outline-secondary btn-sm">
+        <span class="material-symbols-outlined me-1 icon-middle" aria-hidden="true">download</span> Export All
+      </a>
+    </div>
   <div class="tab-content class-roster-content" id="classRosterContent">
-          <div class="tab-pane fade show active" id="class-{{ current_class_id }}">
-            <!-- Join Code Section -->
-            {% if current_class_join_code %}
-            <div class="card border-success mb-3">
-              <div class="card-header bg-success-subtle">
-                <div class="d-flex justify-content-between align-items-center">
-                  <h3 class="mb-0 text-success h6 fs-4">
-                    <span class="material-symbols-outlined me-2 align-middle" aria-hidden="true">key</span>
-                    Join Code for {{ class_display_label }}
-                  </h3>
-                  {% if unclaimed_seats|length > 0 %}
-                  <span class="badge bg-warning text-dark">
-                    {{ unclaimed_seats|length }} unclaimed seat(s)
-                  </span>
-                  {% else %}
-                  <span class="badge bg-success text-white">
-                    All seats claimed
-                  </span>
-                  {% endif %}
-                </div>
-              </div>
-              <div class="card-body">
-                <div class="row align-items-center">
-                  <div class="col-md-8">
-                    <p class="mb-2"><strong>Students use this code to claim their accounts:</strong></p>
-                    <div class="d-flex align-items-center gap-2">
-                      <div class="input-group">
-                        <label for="join-code-current-class" class="visually-hidden">Join code for {{ class_display_label }}</label>
-                        <input type="text" class="form-control form-control-lg font-monospace text-center fw-bold fs-3 join-code-display"
-                          id="join-code-current-class" value="{{ current_class_join_code }}" readonly
->
-                        <button class="btn btn-outline-success btn-lg join-code-copy-btn" type="button"
-                          data-class-id="{{ current_class_id }}" data-join-code="{{ current_class_join_code }}">
-                          <span class="material-symbols-outlined icon-middle" aria-hidden="true">content_copy</span>
-                          Copy
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="col-md-4">
-                    {% call cards.alert_card('info', 'How students join this class', icon='info', body_class='mb-0') %}
-                      <ol class="mb-0 ps-3">
-                        <li>Go to student sign-in page</li>
-                        <li>Click "First Time? Set Up Account"</li>
-                        <li>Enter this join code, then provide the first and last name from your roster</li>
-                      </ol>
-                    {% endcall %}
-                  </div>
-                </div>
-              </div>
-            </div>
-            {% endif %}
-
-            <!-- Unclaimed Seats Section -->
-            {% if unclaimed_seats|length > 0 %}
-            <div class="card border-warning mb-3">
-              <div class="card-header bg-warning-subtle d-flex justify-content-between align-items-center">
-                <h3 class="mb-0 text-dark h6 fs-4">
-                  <span class="material-symbols-outlined me-2 align-middle" aria-hidden="true">pending</span>
-                  Unclaimed Seats ({{ unclaimed_seats|length }})
-                </h3>
-              </div>
-              <div class="card-body">
-                <p class="text-muted mb-3">These students are in your roster but haven't set up their username yet.
-                  Share the join code above with them. Students who share a name also need the claim code
-                  shown beside their name.</p>
-                <div class="table-responsive">
-                  <table class="table table-sm table-striped js-sortable">
-                    <caption class="visually-hidden">Unclaimed student seats</caption>
-                    <thead class="table-light">
-                      <tr>
-                        <th scope="col">Name</th>
-                        <th scope="col">Claim code</th>
-                        <th scope="col">Added</th>
-                        <th scope="col">Status</th>
-                        <th scope="col">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {% for seat in unclaimed_seats %}
-                      <tr>
-                        <td>
-                          <span class="fw-bold">{{ seat.full_name }}</span>
-                          {% if seat.is_teacher %}
-                          <div><small class="text-muted">Claim credential: managed by system</small></div>
-                          {% endif %}
-                        </td>
-                        <td>
-                          {% if seat.claim_code %}
-                          <span class="font-monospace fw-bold">{{ seat.claim_code }}</span>
-                          {% else %}
-                          <span class="text-muted small">Not needed</span>
-                          {% endif %}
-                        </td>
-                        <td>
-                          <small class="text-muted">{{ seat.created_at.strftime('%Y-%m-%d') if seat.created_at else
-                            'N/A' }}</small>
-                        </td>
-                        <td>
-                          <span class="badge bg-warning text-dark">Waiting for Claim</span>
-                          {% if seat.is_teacher %}
-                          <div><small class="text-muted">Teacher shadow account</small></div>
-                          {% endif %}
-                        </td>
-                        <td>
-                          <button type="button" class="btn btn-sm btn-outline-danger delete-pending-student"
-                            data-seat-id="{{ seat.id }}"
-                            data-student-name="{{ seat.full_name }}"
-                            aria-label="Delete pending student {{ seat.full_name }}.">
-                            <span class="material-symbols-outlined align-middle fs-6" aria-hidden="true">delete</span>
-                          </button>
-                        </td>
-                      </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-            {% endif %}
-
-            {% if claimed_students %}
+          <div class="tab-pane fade show active" id="class-{{ roster.class_id }}">
+            {% if roster.students %}
             <div class="card border-success mb-3">
               <div class="card-header bg-success-subtle">
                 <h3 class="mb-0 text-success h6 fs-4">
                   <span class="material-symbols-outlined me-2 align-middle" aria-hidden="true">check_circle</span>
-                  Active Students ({{ claimed_students|length }})
+                  Active Students ({{ roster.claimed_count }})
                 </h3>
               </div>
               <div class="card-body">
@@ -384,41 +263,33 @@
                       </tr>
                     </thead>
                     <tbody>
-                      {% for student in claimed_students %}
-                      {% set profile = student.identity_profile %}
-                      {% set student_display_name = profile.full_name if profile else student.public_id %}
+                      {% for student in roster.students %}
                       <tr class="student-row" data-student-id="{{ student.public_id }}">
                         <td>
                           <input type="checkbox" class="form-check-input student-checkbox" value="{{ student.public_id }}"
-                            data-seat-id="{{ student.id }}"
-                            onchange="updateBulkToolbar()" aria-label="Select {{ student_display_name }}">
+                            data-seat-id="{{ student.seat_id }}"
+                            onchange="updateBulkToolbar()" aria-label="Select {{ student.full_name }}">
                         </td>
                         <td>
                           <a href="{{ student_detail_url(student.public_id) }}"
                             class="fw-bold text-decoration-none">
-                            {{ student_display_name }}
+                            {{ student.full_name }}
                           </a>
                         </td>
-                        {% set balances = student_balances_by_seat_id.get(student.id, {'checking': 0, 'savings': 0,
-                        'earnings': 0}) %}
-                        <td class="{% if balances.checking < 0 %}text-danger fw-bold{% endif %}">
-                          ${{ "%.2f"|format(balances.checking) }}
+                        <td class="{% if student.checking_is_negative %}text-danger fw-bold{% endif %}">
+                          {{ student.display_checking }}
                         </td>
-                        <td>${{ "%.2f"|format(balances.savings) }}</td>
+                        <td>{{ student.display_savings }}</td>
                         <td class="text-center">
-                          {% set hall_pass_balance = student_hall_pass_balances_by_seat_id.get(student.id, 0) %}
-                          <span class="badge bg-primary">{{ hall_pass_balance }}</span>
+                          <span class="badge bg-primary">{{ student.hall_pass_balance }}</span>
                         </td>
                         <td>
-                          {% set privileges = student_rent_privileges_by_seat_id.get(student.id, []) %}
-                          {% if privileges %}
+                          {% if student.has_privileges %}
                           <div class="d-flex flex-wrap gap-1">
-                            {% for privilege in privileges %}
-                            <span
-                              class="badge bg-{% if privilege.source == 'rent' %}success{% else %}info{% endif %} text-white type-xs"
-
-                              title="{% if privilege.source == 'rent' %}Covered by rent{% else %}Individually purchased{% endif %}">
-                              {{ privilege.name }}
+                            {% for privilege in student.privileges %}
+                            <span class="badge bg-{{ privilege.variant }} text-white type-xs"
+                              title="{{ privilege.title }}">
+                              {{ privilege.label }}
                             </span>
                             {% endfor %}
                           </div>
@@ -428,25 +299,25 @@
                         </td>
                         <td>
                         <button type="button" class="btn btn-sm btn-outline-primary quick-action-btn me-1" data-bs-toggle="modal"
-                            data-bs-target="#editStudentModal" data-student-id="{{ student.id }}"
-                            data-student-first-name="{{ profile.first_name if profile else '' }}"
-                            data-student-last-name="{{ profile.last_name if profile else '' }}"
-                            data-student-notes="{{ profile.notes if profile and profile.notes else '' }}"
+                            data-bs-target="#editStudentModal" data-student-id="{{ student.seat_id }}"
+                            data-student-first-name="{{ student.first_name }}"
+                            data-student-last-name="{{ student.last_name }}"
+                            data-student-notes="{{ student.notes }}"
                             data-student-class-id="{{ student.class_id }}">
                             <span class="material-symbols-outlined icon-middle" aria-hidden="true">edit</span>
-                            <span class="visually-hidden">Edit {{ student_display_name }}</span>
+                            <span class="visually-hidden">Edit {{ student.full_name }}</span>
                           </button>
                         <button type="button" class="btn btn-sm btn-outline-warning me-1"
                             data-bs-toggle="modal" data-bs-target="#unclaimStudentModal"
-                            data-seat-id="{{ student.id }}" data-claim-generation="{{ student.claim_generation }}"
-                            data-student-name="{{ student_display_name }}">
-                            Unclaim<span class="visually-hidden"> {{ student_display_name }}</span>
+                            data-seat-id="{{ student.seat_id }}" data-claim-generation="{{ student.claim_generation }}"
+                            data-student-name="{{ student.full_name }}">
+                            Unclaim<span class="visually-hidden"> {{ student.full_name }}</span>
                           </button>
                         <button type="button" class="btn btn-sm btn-outline-danger quick-action-btn delete-student"
-                            data-student-id="{{ student.id }}"
-                            data-student-name="{{ student_display_name }}">
+                            data-student-id="{{ student.seat_id }}"
+                            data-student-name="{{ student.full_name }}">
                             <span class="material-symbols-outlined icon-middle" aria-hidden="true">delete</span>
-                            <span class="visually-hidden">Delete {{ student_display_name }}</span>
+                            <span class="visually-hidden">Delete {{ student.full_name }}</span>
                           </button>
                         </td>
                       </tr>
@@ -459,13 +330,126 @@
             {% else %}
             {{ recovery_readiness_warning() }}
             {% call cards.alert_card('info', 'No claimed accounts yet', icon='group', body_class='mb-3') %}
-              <p class="mb-0">No students have claimed accounts in {{ class_display_label }} yet.</p>
+              <p class="mb-0">No students have claimed accounts in {{ roster.class_label }} yet.</p>
             {% endcall %}
             {% endif %}
+            {# The join code and the unclaimed seats are one task: the code is
+               what turns an unclaimed seat into a claimed one. Collapsed once
+               every seat is claimed, when there is nothing left to act on. #}
+            {% if roster.has_unclaimed_seats or roster.join_code %}
+            <div class="card border-warning mb-3">
+              <div class="card-header bg-warning-subtle">
+                <h3 class="mb-0 h6 fs-4">
+                  <button class="btn btn-link p-0 text-dark fw-bold text-decoration-none d-flex align-items-center gap-2 w-100"
+                    type="button" data-bs-toggle="collapse" data-bs-target="#unclaimedSeatsPanel"
+                    aria-expanded="{{ 'true' if roster.has_unclaimed_seats else 'false' }}"
+                    aria-controls="unclaimedSeatsPanel">
+                    <span class="material-symbols-outlined align-middle" aria-hidden="true">pending</span>
+                    {% if roster.has_unclaimed_seats %}
+                    Unclaimed seats ({{ roster.unclaimed_count }}) and join code
+                    {% else %}
+                    Join code — all seats claimed
+                    {% endif %}
+                    <span class="material-symbols-outlined ms-auto align-middle" aria-hidden="true">unfold_more</span>
+                  </button>
+                </h3>
+              </div>
+              <div id="unclaimedSeatsPanel" class="collapse{% if roster.has_unclaimed_seats %} show{% endif %}">
+                <div class="card-body">
+                  {% if roster.join_code %}
+                <div class="row align-items-center">
+                  <div class="col-md-8">
+                    <p class="mb-2"><strong>Students use this code to claim their accounts:</strong></p>
+                    <div class="d-flex align-items-center gap-2">
+                      <div class="input-group">
+                        <label for="join-code-current-class" class="visually-hidden">Join code for {{ roster.class_label }}</label>
+                        <input type="text" class="form-control form-control-lg font-monospace text-center fw-bold fs-3 join-code-display"
+                          id="join-code-current-class" value="{{ roster.join_code }}" readonly
+>
+                        <button class="btn btn-outline-success btn-lg join-code-copy-btn" type="button"
+                          data-class-id="{{ roster.class_id }}" data-join-code="{{ roster.join_code }}">
+                          <span class="material-symbols-outlined icon-middle" aria-hidden="true">content_copy</span>
+                          Copy
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    {% call cards.alert_card('info', 'How students join this class', icon='info', body_class='mb-0') %}
+                      <ol class="mb-0 ps-3">
+                        <li>Go to student sign-in page</li>
+                        <li>Click "First Time? Set Up Account"</li>
+                        <li>Enter this join code, then provide the first and last name from your roster</li>
+                      </ol>
+                    {% endcall %}
+                  </div>
+                </div>
+              
+                  {% endif %}
+                  {% if roster.has_unclaimed_seats %}
+                  {% if roster.join_code %}<hr class="my-4">{% endif %}
+                <p class="text-muted mb-3">These students are in your roster but haven't set up their username yet.
+                  Share the join code above with them. Students who share a name also need the claim code
+                  shown beside their name.</p>
+                <div class="table-responsive">
+                  <table class="table table-sm table-striped js-sortable">
+                    <caption class="visually-hidden">Unclaimed student seats</caption>
+                    <thead class="table-light">
+                      <tr>
+                        <th scope="col">Name</th>
+                        <th scope="col">Claim code</th>
+                        <th scope="col">Added</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for seat in roster.unclaimed_seats %}
+                      <tr>
+                        <td>
+                          <span class="fw-bold">{{ seat.full_name }}</span>
+                          {% if seat.is_teacher %}
+                          <div><small class="text-muted">Claim credential: managed by system</small></div>
+                          {% endif %}
+                        </td>
+                        <td>
+                          {% if seat.claim_code %}
+                          <span class="font-monospace fw-bold">{{ seat.claim_code }}</span>
+                          {% else %}
+                          <span class="text-muted small">{{ seat.claim_code_display }}</span>
+                          {% endif %}
+                        </td>
+                        <td>
+                          <small class="text-muted">{{ seat.display_added_on }}</small>
+                        </td>
+                        <td>
+                          <span class="badge bg-warning text-dark">{{ seat.status_label }}</span>
+                          {% if seat.is_teacher %}
+                          <div><small class="text-muted">Teacher shadow account</small></div>
+                          {% endif %}
+                        </td>
+                        <td>
+                          <button type="button" class="btn btn-sm btn-outline-danger delete-pending-student"
+                            data-seat-id="{{ seat.seat_id }}"
+                            data-student-name="{{ seat.full_name }}"
+                            aria-label="Delete pending student {{ seat.full_name }}.">
+                            <span class="material-symbols-outlined align-middle fs-6" aria-hidden="true">delete</span>
+                          </button>
+                        </td>
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+            {% endif %}
+
           </div>
         </div>
-      </div>
-    </div>
   </div>
 
   <!-- ADD STUDENTS TAB (paste-based staging grid) -->

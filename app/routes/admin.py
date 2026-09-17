@@ -3209,139 +3209,37 @@ def _get_rent_privileges_for_student(student, class_id, seat_id):
 @admin_bp.route('/students')
 @admin_required
 def students():
-    """View all students in the active canonical class."""
-    user_id = g.canonical_context.user_id
+    """Render the Student Management roster for the active canonical class.
 
-    current_class_id = g.canonical_context.class_id
+    The page is served from one view model (MAP-UI-002): the route resolves
+    scope and delegates, rather than assembling parallel per-seat dictionaries
+    for the template to join.
+    """
+    from app.feats.teacher_recovery_feat import MIN_CLAIMED_STUDENTS_PER_CLASS
+    from app.services.roster_view_model import build_class_roster_view
+
+    current_class_id = (getattr(g.canonical_context, "class_id", None) or "").strip()
     if not current_class_id:
-        # Class isolation (INV-ARC-004 V.1): never substitute an arbitrary class
-        # from the teacher's class set for the active class. If no class is
-        # active in the request context, send the teacher to the dashboard where
-        # the nav-bar context switcher (INV-ARC-010) establishes the active class.
+        # Class isolation (INV-ARC-004 §V.1): never substitute an arbitrary class
+        # from the teacher's class set for the active class.
         flash("Select a class to manage its students.", "info")
         return redirect(url_for('admin.dashboard'))
 
-    class_row = (
-        verify_teacher_owns_class(current_class_id, user_id)
-        if current_class_id
-        else None
+    roster = build_class_roster_view(
+        class_id=current_class_id,
+        teacher_user_id=g.canonical_context.user_id,
+        recovery_min_students=MIN_CLAIMED_STUDENTS_PER_CLASS,
+        privilege_resolver=_get_rent_privileges_for_student,
     )
+    if roster is None:
+        flash("Select a class to manage its students.", "info")
+        return redirect(url_for('admin.dashboard'))
 
-    # Strict single-context: only Seat data anchored to the active class_id.
-    class_seats = (
-        Seat.query
-        .join(IdentityProfile, IdentityProfile.seat_id == Seat.id)
-        .filter(Seat.class_id == current_class_id)
-        .all()
-    ) if current_class_id else []
-
-    # Claimed students are resolved through Seat rows in the active class.
-    active_seat_ids = sorted({
-        s.id for s in class_seats
-        if s.user_id is not None and s.claimed_at is not None and s.role == 'student'
-    })
-    all_students = (
-        sorted(
-            Seat.query
-            .join(IdentityProfile, IdentityProfile.seat_id == Seat.id)
-            .filter(Seat.id.in_(active_seat_ids))
-            .all(),
-            key=lambda seat: (
-                ((seat.class_economy.section if seat.class_economy and seat.class_economy.section else "").lower()),
-                (seat.identity_profile.first_name if seat.identity_profile else "").lower(),
-                seat.id,
-            ),
-        )
-        if active_seat_ids else []
+    return render_template(
+        'admin_students.html',
+        roster=roster,
+        current_page="students",
     )
-
-    # Add username_display attribute to each student
-    for seat in all_students:
-        if seat.user_id and seat.identity_profile:
-            seat.username_display = f"user_{seat.user_id}"
-        else:
-            seat.username_display = "Not Set"
-
-    unclaimed_seats_raw = [
-        seat for seat in class_seats
-        if seat.user_id is None and seat.claimed_at is None
-    ]
-    # Build view model dicts for unclaimed seats (no raw SQLAlchemy in templates).
-    unclaimed_seats = [
-        {
-            'id': seat.id,
-            'public_id': seat.public_id,
-            'class_id': seat.class_id,
-            'is_teacher': getattr(seat, 'is_teacher', False),
-            'created_at': seat.created_at,
-            'full_name': seat.identity_profile.full_name if seat.identity_profile else 'Unknown',
-            'claim_code': seat.dedupe_code,
-        }
-        for seat in unclaimed_seats_raw
-    ]
-
-    # CRITICAL: Add scoped balances by canonical seat_id only.
-    class_seat_pairs = [(current_class_id, seat.id) for seat in all_students] if current_class_id else []
-    raw_balances = get_batch_balances_by_class_seat(class_seat_pairs)
-    student_balances_by_seat_id = {}
-    for student in all_students:
-        bals = raw_balances.get((str(current_class_id), student.id)) if current_class_id else None
-        if not bals:
-            bals = {'checking_cents': 0, 'savings_cents': 0, 'earnings': Decimal('0.00')}
-        student_balances_by_seat_id[student.id] = {
-            'checking': float(Decimal(bals['checking_cents']) / 100),
-            'savings': float(Decimal(bals['savings_cents']) / 100),
-            'earnings': float(bals.get('earnings', Decimal('0.00')))
-        }
-
-    student_rent_privileges_by_seat_id = {}
-    student_hall_pass_balances_by_seat_id = {}
-    for student in all_students:
-        student_hall_pass_balances_by_seat_id[student.id] = get_hall_pass_balance(
-            student.id,
-            current_class_id,
-        )
-
-    class_label_parts = []
-    if class_row and class_row.section:
-        class_label_parts.append(class_row.section)
-    if class_row and class_row.display_name:
-        class_label_parts.append(class_row.display_name)
-    class_display_label = " - ".join(class_label_parts) or (class_row.class_id if class_row else "Current Class")
-    display_join_code = class_row.join_code if class_row else None
-
-    # Build view model dicts for claimed students (no raw SQLAlchemy in templates).
-    claimed_student_views = []
-    for seat in all_students:
-        profile = seat.identity_profile
-        claimed_student_views.append({
-            'id': seat.id,
-            'public_id': seat.public_id,
-            'class_id': seat.class_id,
-            'identity_profile': {
-                'full_name': profile.full_name if profile else '',
-                'first_name': profile.first_name if profile else '',
-                'last_name': profile.last_name if profile else '',
-                'notes': profile.notes if profile and profile.notes else '',
-            },
-        })
-
-    from app.feats.teacher_recovery_feat import MIN_CLAIMED_STUDENTS_PER_CLASS
-    return render_template('admin_students.html',
-                         students=claimed_student_views,
-                         class_display_label=class_display_label,
-                         current_class_id=current_class_id,
-                         current_class_section=class_row.section if class_row else None,
-                         current_class_display_name=class_row.display_name if class_row else None,
-                         current_class_join_code=display_join_code,
-                         claimed_students=claimed_student_views,
-                         recovery_min_students=MIN_CLAIMED_STUDENTS_PER_CLASS,
-                         unclaimed_seats=unclaimed_seats,
-                         student_balances_by_seat_id=student_balances_by_seat_id,
-                         student_rent_privileges_by_seat_id=student_rent_privileges_by_seat_id,
-                         student_hall_pass_balances_by_seat_id=student_hall_pass_balances_by_seat_id,
-                         single_context_mode=True,
-                         current_page="students")
 
 
 @admin_bp.route('/current-class', methods=['POST'])
