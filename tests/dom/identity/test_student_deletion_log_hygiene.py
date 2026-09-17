@@ -65,12 +65,12 @@ def test_delete_student_failure_log_omits_student_pii(client, caplog, monkeypatc
     assert first_name, "fixture must provide a decryptable name to leak"
 
     # Force the failure path that previously logged the name.
-    import app.routes.admin as admin_routes
+    import app.utils.student_deletion as student_deletion
 
     def _boom(*_args, **_kwargs):
         raise RuntimeError("forced failure for log-hygiene regression")
 
-    monkeypatch.setattr(admin_routes, "_remove_student_from_teacher_scope", _boom)
+    monkeypatch.setattr(student_deletion, "remove_student_from_teacher_scope", _boom)
 
     with caplog.at_level(logging.ERROR):
         client.post(

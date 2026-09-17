@@ -88,9 +88,8 @@ def test_DOM_CLASS_001__bulk_delete_rejects_foreign_seat_id(client):
         "/admin/pending-students/bulk-delete",
         json={"seat_ids": [other_pending]},
     )
-    assert response.status_code == 200
-    payload = response.get_json()
-    assert payload["deleted_count"] == 0
+    # Foreign selections fail closed for the whole request (FEAT-IDEN-006).
+    assert response.status_code == 404
 
     db.session.expire_all()
     assert db.session.get(Seat, other_pending) is not None

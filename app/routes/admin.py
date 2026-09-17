@@ -200,10 +200,7 @@ from app.utils.student_deletion import (
 )
 from app.utils.seat_scope import seat_scoped_filter, transaction_scope_filter
 from app.feats.admin_adjustment_feat import execute_admin_adjustments
-from app.feats.identity_feat import (
-    remove_student_from_teacher_scope as execute_identity_student_detach,
-    remove_pending_student_seat,
-)
+from app.feats.identity_feat import remove_pending_student_seat
 from app.feats.prod import record_attendance_session, record_payroll_event
 from app.feats.complete_payroll_cycle import complete_payroll_cycle
 from app.services.payroll.cycle_completion import get_completed_cycle_window
@@ -1112,24 +1109,6 @@ def _assert_transaction_deletion_allowed(class_id, *, join_code_deletion=False):
 def _hard_delete_student_if_orphaned(student_id):
     """Compatibility wrapper for internal call sites and tests."""
     return hard_delete_student_if_orphaned(student_id)
-
-
-def _remove_student_from_teacher_scope(student, user_id):
-    """
-    Remove a student from a teacher's roster.
-
-    If the student is shared with other teachers, only the current teacher
-    association is removed. The student record is hard-deleted only when it no
-    longer has any canonical class-seat links.
-    """
-    context = g.canonical_context
-    return execute_identity_student_detach(
-        canonical_context=context,
-        seat_id=student.id,
-        teacher_user_id=user_id,
-        correlation_id=generate_correlation_id(),
-        idempotency_key=f"identity:detach:{context.class_id}:{student.id}",
-    )
 
 
 def _delete_transactions_for_class(class_id, *, join_code_deletion=False):
@@ -4163,10 +4142,25 @@ def _execute_student_deletion(*, context, seat_ids, data, require_gate,
 
 
 def _dispatch_student_deletion(seat_ids, data, *, require_gate, form_response=False):
-    result = _execute_student_deletion(
-        context=g.canonical_context, seat_ids=seat_ids, data=data, require_gate=require_gate,
-        correlation_id=generate_correlation_id(), idempotency_key=f"identity:roster-delete:{uuid.uuid4().hex}",
-    )
+    from app.feats.base import InvariantViolation
+    try:
+        result = _execute_student_deletion(
+            context=g.canonical_context, seat_ids=seat_ids, data=data, require_gate=require_gate,
+            correlation_id=generate_correlation_id(), idempotency_key=f"identity:roster-delete:{uuid.uuid4().hex}",
+        )
+    except (HTTPException, InvariantViolation):
+        raise
+    except Exception:
+        db.session.rollback()
+        # Seat ids locate the records; never log decrypted profile names (INV-ARC-005).
+        current_app.logger.exception(
+            "Error deleting student seat_id=%s", ",".join(str(seat_id) for seat_id in seat_ids)
+        )
+        message = "Could not delete the selected students. Nothing was deleted."
+        if form_response:
+            flash(message, "error")
+            return redirect(url_for('admin.students'))
+        return jsonify(status="error", message=message), 500
     if not isinstance(result, dict):
         return result
     if result['account_deleted']:
