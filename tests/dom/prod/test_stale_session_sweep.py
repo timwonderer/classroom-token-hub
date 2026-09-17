@@ -73,6 +73,20 @@ def _day_bounds(classroom, reference_time_utc):
     )
 
 
+def _stale_tap_in_at(classroom):
+    """Noon, class time, two days ago: a session the scheduler never closed.
+
+    Anchored to the class day rather than ``now - 2 days`` so the result does not
+    depend on the hour the suite runs. Taken relative to now, a run in the last
+    hour before class-local midnight put tap-in + a 1-hour limit past midnight,
+    where §312's end of day correctly wins over §314's limit.
+    """
+    two_days_ago = _day_bounds(classroom, _now_utc(classroom) - timedelta(days=2))
+    tap_in_at = two_days_ago.boundary_start_utc + timedelta(hours=12)
+    assert tap_in_at < two_days_ago.boundary_end_utc - timedelta(hours=8)
+    return tap_in_at
+
+
 def _tap_in(classroom, seat, *, at):
     """Open an attendance session at ``at`` and leave it open (no tap-out)."""
     record_attendance_session(
@@ -131,7 +145,7 @@ def test_DOM_PROD_001__stale_session_closes_at_its_own_day_end(client):
     seat = classroom.students[0].seat
 
     # Tapped in two days ago and never tapped out: the scheduler was down.
-    tap_in_at = _now_utc(classroom) - timedelta(days=2)
+    tap_in_at = _stale_tap_in_at(classroom)
     _tap_in(classroom, seat, at=tap_in_at)
 
     enforce_daily_limits_job()
@@ -160,7 +174,7 @@ def test_DOM_PROD_001__stale_session_limit_applies_within_its_own_day(client):
         daily_limit_hours=daily_limit_hours,
         idempotency_key="stale_sweep:limit",
     )
-    tap_in_at = _now_utc(classroom) - timedelta(days=2)
+    tap_in_at = _stale_tap_in_at(classroom)
     _tap_in(classroom, seat, at=tap_in_at)
 
     enforce_daily_limits_job()
@@ -189,7 +203,7 @@ def test_DOM_PROD_001__stale_closure_does_not_block_working_today(client):
         daily_limit_hours=1.0,
         idempotency_key="stale_sweep:blocks_today",
     )
-    tap_in_at = _now_utc(classroom) - timedelta(days=2)
+    tap_in_at = _stale_tap_in_at(classroom)
     _tap_in(classroom, seat, at=tap_in_at)
 
     enforce_daily_limits_job()
