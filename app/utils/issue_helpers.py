@@ -160,6 +160,9 @@ def create_issue(actor, user_id, class_id, category_id, explanation, expected_ou
     canonical_seat = _resolve_actor_seat(actor)
     if not canonical_seat:
         raise ValueError("create_issue requires canonical seat public_id scope.")
+    # Share-lock the live seat so a concurrent seat deletion cannot miss this ticket.
+    if not Seat.query.filter_by(id=canonical_seat.id, class_id=class_id).with_for_update(read=True).first():
+        raise ValueError("create_issue requires a live seat in the specified class.")
 
     # v2 public support identity is the deidentified class-scoped seat UUID.
     actor_public_id = canonical_seat.public_id

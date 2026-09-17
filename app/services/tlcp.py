@@ -193,10 +193,14 @@ def persist_request_trace(
     sess = _session if _session is not None else db.session
     # after_request may run after this request destroyed its own class/seat.
     # Never recreate a trace from the pre-deletion cached request context.
+    # Share-lock the seat so a concurrent seat deletion cannot miss this trace.
+    # This writer runs in its own session after the response; a seat that is
+    # locked for deletion or update is skipped rather than waited on, since a
+    # trace is supplemental diagnostics (DOM-SUP-001 §X).
     actor_exists = sess.query(Seat.id).filter_by(
         public_id=context["actor_public_id"], class_id=context["class_id"],
         role=context.get("actor_type"),
-    ).first()
+    ).with_for_update(read=True, skip_locked=True).first()
     if actor_exists is None:
         return
 

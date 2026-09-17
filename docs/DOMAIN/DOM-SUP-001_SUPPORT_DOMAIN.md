@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-SUP-001 | 1.5 | 2026-09-15 | 1.4 | Normative |
+| DOM-SUP-001 | 1.6 | 2026-09-17 | 1.5 | Normative |
 
 ## I. Purpose
 
@@ -395,20 +395,25 @@ and therefore class-scoped; a teacher reporting a problem about themselves still
 uses their active seat and class. `issues.class_public_id` is required.
 
 Every student and teacher ticket, regardless of the problem being reported, references
-its originating seat by canonical public ID. Seat deletion cascades through the
-issue to the correlation pack, history, and resolution records. Account deletion
+its originating seat by canonical public ID. Support holds only that public ID: there is
+no foreign key to `seats`, because INV-ARC-021 §V.7 permits cross-domain foreign keys
+only to `class_id`, `seat_id`, and `user_id`. Seat deletion resolves the seat's public ID
+and deletes its issues in the same transaction; database cascades within Support then
+remove the correlation pack, history, and resolution records. Account deletion
 removes its seats and therefore these support rows; class deletion likewise
 removes its owned seats and tickets. Immutable means unchanged while retained,
 not exempt from identity deletion. Do not preserve a detached sysadmin copy.
 
 The source `actor_request_trace` rows obey the same ownership lifetime. Each
-trace requires an existing canonical Seat public ID and class ID. Deleting
-that Seat, its User, or its class deletes its traces through database cascades;
-nulling the class reference is not deletion. TTL/count pruning is supplemental
+trace requires an existing canonical Seat public ID and class ID. Deleting that Seat
+or its User deletes its traces explicitly by public ID in the same transaction;
+deleting its class deletes them through the `class_id` foreign key. Nulling the class
+reference is not deletion. TTL/count pruning is supplemental
 retention management, never a substitute for deletion closure. A request that
 finishes after destroying its own seat or class must not recreate a trace from
-cached context. The writer validates the live seat/class pair, and foreign keys
-prevent insertion if its owner is deleted concurrently.
+cached context. The writers of issues and traces validate the live seat/class pair under a share lock
+on the seat row, so a concurrent seat deletion waits for them or they observe that the
+seat is gone and write nothing.
 
 
 A teacher's directly submitted report is an explicit submission of that text;

@@ -127,7 +127,14 @@ def test_user_deletion_removes_the_username_hash(client):
     stored_hash = db.session.get(User, user_id).username_hash
     assert stored_hash, "fixture user has no username hash to retain or delete"
 
+    # A principal cannot outlive its seats (fk_seats_user_id_users is RESTRICT),
+    # so the seat goes first, as every production deletion path does.
     with FEATContext("FEAT-IDEN-007", idempotency_key="arc018:user-delete"):
+        db.session.execute(
+            text("UPDATE users SET last_active_seat_id = NULL WHERE id = :user_id"),
+            {"user_id": user_id},
+        )
+        db.session.execute(text("DELETE FROM seats WHERE user_id = :user_id"), {"user_id": user_id})
         db.session.delete(db.session.get(User, user_id))
         db.session.flush()
 

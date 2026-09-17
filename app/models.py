@@ -1928,7 +1928,9 @@ class ActorRequestTrace(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     actor_type = db.Column(db.String(20), nullable=False, index=True)
-    actor_public_id = db.Column(db.String(64), db.ForeignKey('seats.public_id', name='fk_actor_request_trace_seat', ondelete='CASCADE'), nullable=False, index=True)
+    # Seat public ID only: no cross-domain FK (INV-ARC-021 §V.7). Seat deletion
+    # deletes traces explicitly (DOM-SUP-001 §X); class deletion cascades via class_id.
+    actor_public_id = db.Column(db.String(64), nullable=False, index=True)
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
     request_id = db.Column(db.String(128), nullable=False, index=True)
     method = db.Column(db.String(10), nullable=False)
@@ -1991,12 +1993,10 @@ class Issue(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
 
-    # Public actor identifier (submitter) — resolves to seats.public_id for internal lookups
-    actor_public_id = db.Column(
-        db.String(64), db.ForeignKey("seats.public_id", ondelete="CASCADE",
-                                     name="fk_issues_actor_public_id_seats"),
-        nullable=False, index=True,
-    )
+    # Public actor identifier (submitter) — resolves to seats.public_id for internal
+    # lookups. Support holds only the public ID, with no FK into Identity
+    # (INV-ARC-021 §V.7); seat deletion deletes its issues explicitly (DOM-SUP-001 §X).
+    actor_public_id = db.Column(db.String(64), nullable=False, index=True)
 
     # Public reviewer identifier (teacher) — resolves to seats.public_id in the same class
     reviewer_public_id = db.Column(db.String(64), nullable=True, index=True)

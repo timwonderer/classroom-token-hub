@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-CORE-002     | 1.8     | 2026-08-30     | 1.7        | Constitutional |
+| DOM-CORE-002     | 1.9     | 2026-09-17     | 1.8        | Constitutional |
 
 ---
 
@@ -165,6 +165,7 @@ authority in v2 and must not be treated as canonical schema surfaces.
 
 - `recovery_requests` — teacher credential recovery lifecycle; at most one pending per user
 - `student_recovery_codes` — per-student verification codes; child of `recovery_requests`, CASCADE-deleted
+- `recovery_class_challenges` — per-class proof and confirmation state for one teacher recovery attempt; child of `recovery_requests`, CASCADE-deleted (DOM-IDEN-003 §IX)
 - `passkey_credentials` — WebAuthn/FIDO2 credential bindings; owned by `users.id`
 
 ---
@@ -283,6 +284,7 @@ The former `interpretation_snapshots` (cache) and `interpretation_annotations` t
 - `issue_status_history`
 - `issue_resolution_actions`
 - `ticket_correlation_pack`
+- `actor_request_trace` — short-lived request traces a correlation pack reads (DOM-SUP-001 §X). References its seat by public ID only, with no cross-domain foreign key (INV-ARC-021 §V.7); seat deletion deletes its traces explicitly
 - `announcements`
 - `issue_categories`
 

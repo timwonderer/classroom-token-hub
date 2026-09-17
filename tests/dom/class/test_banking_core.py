@@ -212,9 +212,7 @@ def test_DOM_CLASS_001__settlement_sweep_processes_each_pending_context_once(cli
         student_one_class = initialize("chemistry_p1", app)
         student_two_class = initialize("biology_block_a", app)
         student_one_seat_id = student_one_class.students[0].seat.id
-        student_one_user_id = student_one_class.students[0].user.id
         student_two_seat_id = student_two_class.students[0].seat.id
-        student_two_user_id = student_two_class.students[0].user.id
         class_id_one = student_one_class.class_id
         class_id_two = student_two_class.class_id
 
@@ -268,12 +266,12 @@ def test_DOM_CLASS_001__settlement_sweep_processes_each_pending_context_once(cli
     # --- Assert: settlement is durably persisted (survives beyond the sweep) ---
     db.session.expire_all()
     posted_statuses = {
-        (tx.user_id, tx.class_id, tx.account_type): tx.status
+        (tx.seat_id, tx.class_id, tx.account_type): tx.status
         for tx in Transaction.query.all()
     }
-    assert posted_statuses[(student_one_user_id, class_id_one, "checking")] == TransactionStatus.POSTED
-    assert posted_statuses[(student_one_user_id, class_id_one, "savings")] == TransactionStatus.POSTED
-    assert posted_statuses[(student_two_user_id, class_id_two, "checking")] == TransactionStatus.POSTED
+    assert posted_statuses[(student_one_seat_id, class_id_one, "checking")] == TransactionStatus.POSTED
+    assert posted_statuses[(student_one_seat_id, class_id_one, "savings")] == TransactionStatus.POSTED
+    assert posted_statuses[(student_two_seat_id, class_id_two, "checking")] == TransactionStatus.POSTED
 
     # Each context's balance cache reflects its own transactions only (class isolation).
     assert _snapshot(student_one_seat_id, class_id_one).posted_balance_cents == 1234
