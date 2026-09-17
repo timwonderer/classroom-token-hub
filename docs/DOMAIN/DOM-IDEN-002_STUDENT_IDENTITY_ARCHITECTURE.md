@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-IDEN-002 | 2.6 | 2026-09-15 | 2.5 | Constitutional |
+| DOM-IDEN-002 | 2.7 | 2026-09-17 | 2.6 | Constitutional |
 
 ---
 
@@ -215,6 +215,31 @@ Student seat state is limited to:
 - **claimed** — `user_id IS NOT NULL`, `claimed_at IS NOT NULL`
 
 No intermediate states, soft deletes, archived identities, or dormant participants exist.
+
+#### Participation and Visibility of an Unclaimed Seat
+
+An unclaimed seat is a teacher-provisioned placeholder whose runtime participation
+has not been activated (DOM-IDEN-005 §VII, INV-CORE-000). It is therefore not a
+valid participant in the class economy, and:
+
+1. **No economic participation.** An unclaimed seat SHALL NOT be the subject of any
+   economic event — payroll, manual credit, class-wide bonus, savings interest,
+   obligation assessment, entitlement grant — nor of attendance, which is paid time.
+   Enforcement is fail-closed at the domain command, not left to each caller's
+   roster query.
+2. **No display outside roster management.** An unclaimed seat SHALL NOT appear in
+   any teacher-facing count, total, aggregate, list, log or history. The sole
+   exemptions are the Student Management roster (including its unclaimed-seat
+   section), roster export intended for re-import, and terminal roster deletion
+   accounting, which counts claimed and unclaimed seats alike (DOM-CLASS-001).
+3. **Records are retained, not displayed.** Exclusion is a filter, never a deletion.
+   Unclaim preserves the seat's economic, productivity and support facts
+   (DOM-IDEN-005 §Explicit Unclaim, INV-ARC-019), and a balance retained this way
+   remains the seat's own on re-claim. Wiping, sweeping or reassigning it is
+   prohibited: re-claim is an expected lifecycle event, not a forfeiture.
+4. **`user_id` is the test.** An unclaimed seat holds an empty `user_id`. Economic
+   reads, writes and histories filter on claim state explicitly; it is never
+   inferred from the presence of activity rows, which unclaim preserves.
 
 ---
 
