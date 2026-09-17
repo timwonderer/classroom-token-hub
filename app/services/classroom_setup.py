@@ -390,6 +390,14 @@ def create_roster_student_seat(
 
 def delete_seat_with_profile(seat: Seat) -> None:
     """Delete a seat and its identity profile in canonical order."""
+    from app.models import ActorRequestTrace, Issue
+
+    # Support references a seat by public ID only (DOM-SUP-001 §X). An unclaimed
+    # seat keeps the tickets and traces of its earlier claimant, so they go here.
+    Issue.query.filter(Issue.actor_public_id == seat.public_id).delete(synchronize_session=False)
+    ActorRequestTrace.query.filter(
+        ActorRequestTrace.actor_public_id == seat.public_id
+    ).delete(synchronize_session=False)
     profile = IdentityProfile.query.filter_by(seat_id=seat.id).first()
     if profile:
         db.session.delete(profile)

@@ -4,6 +4,7 @@ import sqlalchemy as sa
 
 from app.extensions import db
 from app.models import (
+    ActorRequestTrace,
     LedgerBalanceSnapshot,
     HallPassLog,
     Issue,
@@ -173,7 +174,12 @@ def _delete_student_scoped_rows(
             db.session.query(Seat.public_id).filter(Seat.id.in_(seat_ids_for_student)).all()
         ]
         if seat_pub_ids:
+            # Support references a seat by public ID only (DOM-SUP-001 §X), so
+            # its tickets and request traces are deleted here, with the seat.
             Issue.query.filter(Issue.actor_public_id.in_(seat_pub_ids)).delete(synchronize_session=False)
+            ActorRequestTrace.query.filter(
+                ActorRequestTrace.actor_public_id.in_(seat_pub_ids)
+            ).delete(synchronize_session=False)
     for sid in (seat_ids_for_student or []):
         delete_recovery_codes_for_seat(sid)
     if tx_ids:

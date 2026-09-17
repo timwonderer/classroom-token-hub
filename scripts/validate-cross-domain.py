@@ -42,6 +42,7 @@ TABLE_DOMAIN = {
     "identity_profiles": "DOM-IDEN",
     "recovery_requests": "DOM-IDEN",
     "student_recovery_codes": "DOM-IDEN",
+    "recovery_class_challenges": "DOM-IDEN",
     "passkey_credentials": "DOM-IDEN",
     # DOM-CLASS-001 / -003 — class directives and their version lifecycle
     "class_features": "DOM-CLASS",
@@ -79,6 +80,7 @@ TABLE_DOMAIN = {
     "issue_status_history": "DOM-SUP",
     "issue_resolution_actions": "DOM-SUP",
     "ticket_correlation_pack": "DOM-SUP",
+    "actor_request_trace": "DOM-SUP",
     "announcements": "DOM-SUP",
     "issue_categories": "DOM-SUP",
     # DOM-POL-001 — append-only policy definition repository

@@ -40,7 +40,9 @@ def test_seat_deletion_deletes_only_its_traces(client):
     deleted_id = _trace(seat, "deleted-seat")
     kept_id = _trace(classroom.teacher_seat, "retained-seat")
     with FEATContext("FEAT-TEST-SETUP", idempotency_key="trace:destroy-seat"):
-        Seat.query.filter_by(id=seat.id).delete(synchronize_session=False)
+        from app.services.classroom_setup import delete_seat_with_profile
+        delete_seat_with_profile(db.session.get(Seat, seat.id))
+        db.session.flush()
     db.session.expire_all()
     assert ActorRequestTrace.query.filter_by(id=deleted_id).count() == 0
     assert db.session.get(ActorRequestTrace, kept_id) is not None
@@ -88,18 +90,41 @@ def test_account_destruction_removes_seat_then_orphan_user_and_traces(client):
     assert db.session.get(ActorRequestTrace, kept_id) is not None
 
 
-def test_database_rejects_trace_for_deleted_actor(client):
-    import pytest
-    from sqlalchemy.exc import IntegrityError
+def test_INV_ARC_021__support_holds_seat_public_id_without_foreign_key(client):
+    """Support references seats by public ID only; deletion is explicit (DOM-SUP-001 §X)."""
+    from sqlalchemy import inspect
+    inspector = inspect(db.engine)
+    for table in ("issues", "actor_request_trace"):
+        referred = {fk["referred_table"] for fk in inspector.get_foreign_keys(table)}
+        assert "seats" not in referred, f"{table} must not hold a foreign key into Identity"
+
+
+def test_deleting_an_unclaimed_seat_removes_its_earlier_tickets_and_traces(client):
+    from app.models import Issue
+    from app.services.classroom_setup import delete_seat_with_profile
+    from app.utils.issue_helpers import create_issue
+    from tests.helpers.support_domain import seed_support_issue_categories
     classroom = initialize("chemistry_p1", client.application)
     seat = classroom.students[0].seat
-    public_id, class_id = seat.public_id, seat.class_id
-    with FEATContext("FEAT-TEST-SETUP", idempotency_key="trace:remove-before-insert"):
-        Seat.query.filter_by(id=seat.id).delete(synchronize_session=False)
-    with pytest.raises(IntegrityError):
-        with FEATContext("FEAT-TEST-SETUP", idempotency_key="trace:reject-late-insert"):
-            db.session.add(ActorRequestTrace(
-                actor_type="student", actor_public_id=public_id, class_id=class_id,
-                request_id="invalid-late-insert", method="GET", endpoint="/student/dashboard",
-            ))
-            db.session.flush()
+    other = classroom.students[1].seat
+    seed_support_issue_categories()
+    from app.models import IssueCategory
+    category = IssueCategory.query.first()
+    issue = create_issue(seat, seat.user_id, classroom.class_id, category.id, "Earlier claimant's report",
+                         "Expected outcome", correlation_id="support:earlier-claimant",
+                         idempotency_key="support:earlier-claimant")
+    issue_id = issue.id
+    kept_issue = create_issue(other, other.user_id, classroom.class_id, category.id, "Classmate report",
+                              "Expected outcome", correlation_id="support:classmate",
+                              idempotency_key="support:classmate").id
+    trace_id = _trace(seat, "earlier-claimant")
+    with FEATContext("FEAT-TEST-SETUP", idempotency_key="support:unclaim-then-delete"):
+        live = db.session.get(Seat, seat.id)
+        live.user_id, live.claimed_at = None, None
+        db.session.flush()
+        delete_seat_with_profile(live)
+        db.session.flush()
+    db.session.expire_all()
+    assert db.session.get(Issue, issue_id) is None
+    assert ActorRequestTrace.query.filter_by(id=trace_id).count() == 0
+    assert db.session.get(Issue, kept_issue) is not None

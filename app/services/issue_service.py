@@ -12,9 +12,10 @@ def create_support_ticket(*, actor_public_id: str, class_public_id: str, categor
     # seat destroys the ticket and attached pack through database cascades.
     class_row = ClassEconomy.query.filter_by(class_public_id=class_public_id).first()
 
+    # Share-lock the seat so a concurrent seat deletion cannot miss this ticket.
     if not class_row or not Seat.query.filter_by(
         public_id=actor_public_id, class_id=class_row.class_id, role='teacher',
-    ).first():
+    ).with_for_update(read=True).first():
         raise ValueError('Teacher tickets require a seat in the specified class.')
 
     from flask import request
