@@ -139,6 +139,23 @@
 
 {% block content %}
 
+{% macro recovery_readiness_warning() %}
+{% if claimed_students|length < recovery_min_students %}
+            <div class="card border-danger mb-3" role="note" id="recovery-readiness-warning">
+              <div class="card-header bg-danger text-white d-flex align-items-center">
+                <span class="material-symbols-outlined me-2" aria-hidden="true">shield_lock</span>
+                <h3 class="h5 fw-bold mb-0">Your account may be at risk of being unrecoverable</h3>
+              </div>
+              <div class="card-body">
+                <p class="mb-0">Classroom Token Hub uses student-assisted teacher account recovery. Recovery requires enough claimed students across the classes you own, including at least {{ recovery_min_students }} claimed students in each class.
+                  <strong>You currently have {{ claimed_students|length }} claimed students in this class.</strong>
+                  Until this class reaches {{ recovery_min_students }}, teacher account recovery will not be available if you lose access.</p>
+              </div>
+            </div>
+{% endif %}
+{% endmacro %}
+
+
 <div id="student-management-feedback" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true" tabindex="-1"></div>
 
 
@@ -225,19 +242,6 @@
                     </div>
                   </div>
                 </div>
-              </div>
-            </div>
-            {% endif %}
-
-            {% if claimed_students|length < recovery_min_students %}
-            <div class="alert alert-warning d-flex align-items-start mb-3" role="note" id="recovery-readiness-warning">
-              <span class="material-symbols-outlined me-2" aria-hidden="true">shield_lock</span>
-              <div>
-                <h3 class="h6 fw-bold mb-1">Account recovery is unavailable until this class has {{ recovery_min_students }} claimed students</h3>
-                <p class="mb-0">This class has {{ claimed_students|length }}. If you lose access to your teacher account,
-                  recovery randomly selects 2 students in each of your classes to confirm it is you. With fewer than
-                  {{ recovery_min_students }}, that selection would be predictable, so recovery stays blocked for your whole
-                  account until every class reaches {{ recovery_min_students }}.</p>
               </div>
             </div>
             {% endif %}
@@ -370,7 +374,7 @@
                     </div>
                   </div>
                 </div>
-
+                {{ recovery_readiness_warning() }}
                 <div class="table-responsive">
                   <table class="table table-hover table-striped js-sortable" id="students-table-current-class">
                     <caption class="visually-hidden">Current class student roster</caption>
@@ -462,6 +466,7 @@
               </div>
             </div>
             {% else %}
+            {{ recovery_readiness_warning() }}
             <div class="alert alert-info">
               <span class="material-symbols-outlined me-2 icon-middle" aria-hidden="true">info</span>No students have
               claimed accounts in {{ class_display_label }} yet.

@@ -334,7 +334,21 @@ def test_recovery_minimum_is_stated_on_teacher_surfaces(client,app):
     assert 'at least 3 claimed students in every class' in client.get('/admin/setup-recovery').get_data(as_text=True)
     _shrink_class(c,2)
     roster=client.get('/admin/students').get_data(as_text=True)
-    assert 'recovery-readiness-warning' in roster and 'This class has 2.' in roster
+    assert roster.count('id="recovery-readiness-warning"')==1
+    assert 'You currently have 2 claimed students in this class.' in roster
+
+
+def test_recovery_warning_shows_for_a_class_with_no_claimed_students(client,app):
+    from tests.helpers.classroom_initializer import initialize_as_teacher
+    from app.models import Seat
+    c=initialize_as_teacher('chemistry_p1',client,app)
+    with FEATContext('FEAT-TEST-SETUP',idempotency_key='recovery:no-claimed'):
+        for s in c.students: db.session.get(Seat, s.seat.id).user_id=None
+        for s in c.students: db.session.get(Seat, s.seat.id).claimed_at=None
+    roster=client.get('/admin/students').get_data(as_text=True)
+    assert 'No students have' in roster
+    assert roster.count('id="recovery-readiness-warning"')==1
+    assert 'You currently have 0 claimed students in this class.' in roster
 
 
 def test_DOM_IDEN_003__two_classes_require_three_usernames_each(app):
