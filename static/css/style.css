@@ -205,9 +205,49 @@ a:hover {
     font-weight: 600;
 }
 
+/* ── Checkbox, radio and switch boundaries ── */
+/* A control's boundary and its on/off state each need 3:1 against what sits
+ * next to them (WCAG 1.4.11, INV-ARC-020 VII.D). Bootstrap's resting border and
+ * switch thumb are both rgba(0, 0, 0, 0.25): 1.84:1 on a white track, and
+ * 1.30:1 on a dark section header, where the control all but vanishes.
+ * --neutral-500 measures 4.76:1 on --surface. */
+.form-check-input {
+    border-color: var(--neutral-500);
+}
+
+/* The thumb is a background image, so its colour is re-specified rather than
+ * inherited. Same --neutral-500 (#737370) as the border. */
+.form-switch .form-check-input {
+    --bs-form-switch-bg: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%23737370'/%3e%3c/svg%3e");
+}
+
 .form-check-input:checked {
     background-color: var(--primary);
     border-color: var(--primary);
+}
+
+/* Inside a dark section header the checked fill above is --primary on a
+ * --primary background: 1.00:1. The track disappeared and the white thumb read
+ * as a dot floating in the header — the Payroll Settings "Advanced Mode"
+ * switch. In that context the control takes the accent fill (--secondary on
+ * --primary is 4.34:1) and a light boundary (--text-inverse at 65% is
+ * 5.10:1), in both states. */
+.bg-primary .form-check-input,
+.bg-dark .form-check-input {
+    border-color: color-mix(in srgb, var(--text-inverse) 65%, transparent);
+}
+
+.bg-primary .form-check-input:checked,
+.bg-dark .form-check-input:checked {
+    background-color: var(--secondary);
+    border-color: var(--secondary);
+}
+
+.bg-primary .form-switch .form-check-input:checked,
+.bg-dark .form-switch .form-check-input:checked {
+    /* Dark thumb on the gold fill: #171717 is --neutral-900, which
+     * --secondary-text resolves to. 6.90:1 on --secondary. */
+    --bs-form-switch-bg: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%23171717'/%3e%3c/svg%3e");
 }
 
 .form-check-input:focus {
