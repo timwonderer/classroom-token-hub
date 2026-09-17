@@ -152,13 +152,12 @@ def test_unclaim_page_exposes_distinct_action_and_blank_required_names(client, a
 
 
 def test_unclaim_revokes_previous_teacher_recovery_confirmation(client, app):
-    from app.feats.teacher_recovery_feat import begin_attempt, prove_class, select_class_recipients
+    from app.feats.teacher_recovery_feat import begin_attempt, select_class_recipients
     from app.services.recovery_service import get_recovery_request_by_id, list_recovery_codes_for_request
     classroom = initialize_as_teacher('chemistry_p1', client, app)
     common = dict(correlation_id='unclaim-recovery', idempotency_key='unclaim:recovery')
-    attempt = begin_attempt(join_code=classroom.join_code, **common)
-    assert prove_class(request_id=attempt['id'], attempt_nonce=attempt['nonce'],
-        join_code=classroom.join_code, username=classroom.students[0].username, **common)
+    attempt = begin_attempt(pairs=[(classroom.join_code, s.username) for s in classroom.students], **common)
+    assert attempt
     assert select_class_recipients(request_id=attempt['id'], attempt_nonce=attempt['nonce'], class_id=classroom.class_id, **common)
     selected = list_recovery_codes_for_request(attempt['id'])
     seat = db.session.get(Seat, selected[0].seat_id)

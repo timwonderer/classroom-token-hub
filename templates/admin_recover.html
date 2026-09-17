@@ -111,7 +111,7 @@
             <div class="mb-2">
                 <small class="text-muted">TEACHER PORTAL</small>
                 <h1 id="account-recovery-heading" class="h3 fw-bold text-primary">Account Recovery</h1>
-                <p class="subtitle">Enter one student per class you teach to verify your identity</p>
+                <p class="subtitle">Enter students from every class you teach to verify your identity</p>
             </div>
 
             {% with messages = get_flashed_messages(with_categories=true) %}
@@ -131,10 +131,20 @@
               {% endif %}
             {% endwith %}
 
+            <div class="alert alert-warning" role="note">
+                <h2 class="h6 fw-bold mb-1">Security requirement: {{ recovery_min_students }} students per class</h2>
+                <p class="small mb-0">Every class you teach must have at least {{ recovery_min_students }} students who have
+                    claimed their accounts. Recovery randomly picks 2 of them to confirm your identity, and with fewer
+                    students that pick would be predictable, so recovery cannot start. This protects your account from
+                    someone who knows a small class well.</p>
+            </div>
+
             <div class="info-box">
                 <h5>How Recovery Works</h5>
                 <ul class="small">
-                    <li>Enter the <strong>join code</strong> and <strong>one student username</strong> for each class you teach</li>
+                    <li>Enter a <strong>join code</strong> and <strong>student username</strong> pair for each class you teach, one row per student</li>
+                    <li>Rows per class: <strong>6</strong> if you teach one class, <strong>3</strong> each for two classes, <strong>2</strong> each for three classes, and <strong>1</strong> each for four or more. If a class has fewer students with claimed accounts than that, enter all of them</li>
+                    <li>Each student username can be used only once, even if that student is in more than one of your classes</li>
                     <li>All pairs must be correct to proceed</li>
                     <li>Selected students will receive a verification prompt in the app</li>
                 </ul>
@@ -160,9 +170,11 @@
                     </div>
 
                     <button type="button" class="btn-add-row" id="add-row-btn" onclick="addRow()">
-                        + Add another class
+                        + Add another row
                     </button>
                 </div>
+
+                <div id="recovery-form-error" class="alert alert-danger mt-3 mb-0" role="alert" hidden></div>
 
                 <button type="submit" class="btn btn-primary w-100 btn-lg mt-4 mb-4">Verify Identity</button>
             </form>
@@ -200,6 +212,32 @@
             row.remove();
             updateRemoveButtons();
         }
+
+        document.getElementById('recovery-form').addEventListener('submit', function (event) {
+            const error = document.getElementById('recovery-form-error');
+            const seen = new Set();
+            let duplicate = null;
+            document.querySelectorAll('input[name="student_username[]"]').forEach(input => {
+                const value = input.value.trim();
+                input.classList.remove('is-invalid');
+                input.removeAttribute('aria-invalid');
+                if (!value) return;
+                if (seen.has(value)) {
+                    input.classList.add('is-invalid');
+                    input.setAttribute('aria-invalid', 'true');
+                    duplicate = duplicate || input;
+                }
+                seen.add(value);
+            });
+            if (duplicate) {
+                event.preventDefault();
+                error.textContent = 'Each student username can be used only once. Remove or replace the highlighted duplicate.';
+                error.hidden = false;
+                duplicate.focus();
+            } else {
+                error.hidden = true;
+            }
+        });
 
         function updateRemoveButtons() {
             const rows = document.querySelectorAll('.pair-row');

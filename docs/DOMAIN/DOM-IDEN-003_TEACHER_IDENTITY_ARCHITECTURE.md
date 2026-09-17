@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-IDEN-003 | 2.7 | 2026-09-16 | 2.6 | Constitutional |
+| DOM-IDEN-003 | 2.8 | 2026-09-17 | 2.7 | Constitutional |
 
 ---
 
@@ -225,28 +225,62 @@ administrator intervention is required.
 
 The attempt is User-owned under INV-ARC-019's credential-recovery authority. Its
 manifest contains the required owned class IDs; its coordinator combines deposited
-proofs, not student/roster data. Each roster proof, recipient selection, student
-issuance and code submission is an independent command with one explicit class_id.
-The browser makes separate class-scoped requests; do not implement roster fan-out
-inside a global HTTP handler. Only ownership metadata and recovery proof results
-may be combined by the principal-level coordinator.
+proofs, not student/roster data. Recipient selection, student issuance and code
+submission are independent commands with one explicit class_id each; the browser
+makes separate class-scoped requests for them.
+
+The initial knowledge proof is the one exception. It is an ingress check that
+authorizes creating the attempt, not part of the attempt, and it runs as a single
+precheck command: it resolves each join code to class_id and each username within
+that class, and it holds resolved student identities only in memory for that command.
+Submitted usernames and resolved students are never persisted, logged or carried
+into the attempt; the attempt stores only the per-class proof result.
 
 ### Initial proof and fixed selection
 
-1. Teacher supplies a valid join-code/student-username pair for every owned class.
-   Resolve each join code to class_id before checking the username against that
-   class's claimed student Seats. These inputs prove account structure; they do
-   not nominate recovery recipients. Do not reveal individual proof validity.
+1. Teacher submits join-code/student-username pairs for every owned class in one
+   request. All join codes must resolve to classes owned by one teacher User, and
+   the submitted classes must equal that User's owned class set.
+   Resolve each join code to class_id before checking the usernames against that
+   class's claimed student Seats. The number of distinct claimed students each
+   class must prove depends on how many classes the teacher owns:
+
+   | Owned classes | Usernames per class |
+   |---|---|
+   | 1 | 6 |
+   | 2 | 3 |
+   | 3 | 2 |
+   | 4 or more | 1 |
+
+   **Security posture:** every owned class must have at least three claimed student
+   Seats. Step 2 randomly picks two recipients per class, and with fewer than three
+   eligible Seats that pick is predictable to anyone who knows the class, so a class
+   below three fails the proof closed and student-assisted recovery is unavailable
+   for the whole account. Teacher-facing recovery, setup and roster surfaces SHALL
+   state this requirement and its reason. A class with at least three but fewer
+   claimed students than its requirement must prove every claimed student. Each resolved student User may
+   back only one pair of a submission, even when that student holds Seats in several
+   of the teacher's classes; uniqueness is checked on resolved user_id, not on the
+   typed text. Any failure creates nothing. These inputs prove account structure;
+   they do not nominate recovery recipients. Do not reveal individual proof validity.
 2. Only after the complete nonempty class proof set is present may selection begin.
-   Within each class, cryptographically randomly sample two distinct eligible
-   claimed student Seats, or one if only one exists. No eligible Seat fails closed.
+   Within each class, cryptographically randomly sample exactly two distinct eligible
+   claimed student Seats. Fewer than three eligible Seats fails closed.
+   Recipients SHALL be selected independently within each class. Selection MUST NOT
+   exclude, prefer or otherwise alter the eligibility of a Seat based on the existence
+   or selection of Seats belonging to the same users.id in another class. The two
+   stages differ deliberately: claimant-chosen evidence (step 1) requires distinct
+   principals to prevent concentration, while system-randomized recipients stay
+   ignorant of cross-class identity (INV-ARC-008). One student may therefore be
+   selected in several classes; that follows from membership and chance, not from
+   claimant control, and is accepted.
 3. Notify both selected recipients immediately through their authenticated class
    sessions. There is no primary/backup role. Hide identities and per-recipient
    state from the teacher. Class names are display labels only, never scope keys.
 4. Freeze the selected seat IDs for the five-day attempt. Duplicate requests,
    code expiration, failed submission and regeneration cannot reroll or add seats.
-   Only one selected attempt per teacher may exist within its lifetime. Unproven
-   staging cannot reserve that slot. Losing a selected Seat removes that recipient;
+   Only one selected attempt per teacher may exist within its lifetime. An attempt
+   exists only after a complete proof, so unproven input cannot reserve that slot. Losing a selected Seat removes that recipient;
    the remaining recipient may still help. Never replace a removed recipient.
 
 ### Lifetimes and student issuance

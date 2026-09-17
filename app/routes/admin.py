@@ -3193,12 +3193,13 @@ def signup():
 @admin_bp.route('/recover', methods=['GET', 'POST'])
 @limiter.limit("5 per hour")
 def recover():
-    from app.feats.teacher_recovery_feat import begin_attempt
+    from app.feats.teacher_recovery_feat import MIN_CLAIMED_STUDENTS_PER_CLASS, begin_attempt
     form = AdminRecoveryForm()
     if request.method == 'POST' and form.validate_on_submit():
         joins, usernames = request.form.getlist('join_code[]'), request.form.getlist('student_username[]')
-        if joins and len(joins)==len(usernames) and all(x.strip() for x in joins+usernames) and len(set(joins))==len(joins):
-            result = begin_attempt(join_code=joins[0], current_request_id=session.get('recovery_request_id'),
+        if joins and len(joins) == len(usernames):
+            result = begin_attempt(pairs=list(zip(joins, usernames)),
+                current_request_id=session.get('recovery_request_id'),
                 attempt_nonce=session.get('teacher_recovery_attempt_nonce'), correlation_id=generate_correlation_id(),
                 idempotency_key='teacher-recovery:begin')
             if result:
@@ -3206,24 +3207,9 @@ def recover():
                 session['teacher_recovery_attempt_nonce'] = result['nonce']
                 if result['existing']:
                     return redirect(url_for('admin.recovery_status'))
-                return render_template('admin_recovery_prepare.html', pairs=[dict(join_code=j, username=u) for j,u in zip(joins,usernames)])
+                return render_template('admin_recovery_prepare.html', class_refs=result['class_refs'])
         flash('Unable to begin recovery. Check all entries or resume your existing recovery attempt.', 'error')
-    return render_template('admin_recover.html', form=form)
-
-
-@admin_bp.route('/recovery/class-proof', methods=['POST'])
-@limiter.limit('30 per hour')
-def recovery_class_proof():
-    from app.feats.teacher_recovery_feat import prove_class
-    data = request.get_json(silent=True)
-    data = data if isinstance(data, dict) else {}
-    join = str(data.get('join_code', '')).strip().upper()
-    prove_class(request_id=session.get('recovery_request_id'), attempt_nonce=session.get('teacher_recovery_attempt_nonce'),
-        join_code=join, username=str(data.get('username','')), correlation_id=generate_correlation_id(),
-        idempotency_key='teacher-recovery:class-proof')
-    classroom = ClassEconomy.query.filter_by(join_code=join).first()
-    # No username/proof validity feedback. The complete proof set is evaluated later.
-    return jsonify(received=True, class_ref=classroom.class_public_id if classroom else None)
+    return render_template('admin_recover.html', form=form, recovery_min_students=MIN_CLAIMED_STUDENTS_PER_CLASS)
 
 
 @admin_bp.route('/recovery/select-class', methods=['POST'])
@@ -3380,7 +3366,8 @@ def setup_recovery():
     if request.method == 'POST':
         flash("Recovery setup is already enabled without date-of-birth requirements.", "success")
         return redirect(url_for('admin.dashboard'))
-    return render_template('admin_setup_recovery.html')
+    from app.feats.teacher_recovery_feat import MIN_CLAIMED_STUDENTS_PER_CLASS
+    return render_template('admin_setup_recovery.html', recovery_min_students=MIN_CLAIMED_STUDENTS_PER_CLASS)
 
 
 @admin_bp.route('/customizations', methods=['GET', 'POST'])
@@ -3660,6 +3647,7 @@ def students():
             },
         })
 
+    from app.feats.teacher_recovery_feat import MIN_CLAIMED_STUDENTS_PER_CLASS
     return render_template('admin_students.html',
                          students=claimed_student_views,
                          class_display_label=class_display_label,
@@ -3668,6 +3656,7 @@ def students():
                          current_class_display_name=class_row.display_name if class_row else None,
                          current_class_join_code=display_join_code,
                          claimed_students=claimed_student_views,
+                         recovery_min_students=MIN_CLAIMED_STUDENTS_PER_CLASS,
                          unclaimed_seats=unclaimed_seats,
                          student_balances_by_seat_id=student_balances_by_seat_id,
                          student_rent_privileges_by_seat_id=student_rent_privileges_by_seat_id,

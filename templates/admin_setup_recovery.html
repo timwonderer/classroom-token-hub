@@ -12,7 +12,7 @@
 
 {% call help.topic('rec-scope', 'check_circle', 'What confirming here does') %}
 <ul class="ps-3">
-    <li class="mb-2"><strong>Recovery is scoped to a class,</strong> so it works while you have at least one class with students in it.</li>
+    <li class="mb-2"><strong>Every class needs at least {{ recovery_min_students }} students with claimed accounts.</strong> Recovery randomly picks 2 students per class to confirm it is you; with fewer, that pick would be predictable, so recovery is unavailable until each class reaches {{ recovery_min_students }}.</li>
     <li class="mb-0"><strong>Confirming here acknowledges the method.</strong> There is no code to write down and nothing to store somewhere safe.</li>
 </ul>
 <p class="mb-0 text-muted">Registering a passkey is the other half of not being locked out: recovery is the fallback, a passkey is the everyday way in.</p>
@@ -37,6 +37,13 @@
                         <li>Verified student recovery workflow for your class scope</li>
                     </ul>
                 
+                    <div class="alert alert-warning" role="note">
+                        <h2 class="h6 fw-bold mb-1">Security requirement: at least {{ recovery_min_students }} claimed students in every class</h2>
+                        <p class="mb-0">When you recover your account, Classroom Token Hub randomly selects 2 students in each of
+                            your classes to give you confirmation codes. If a class has fewer than {{ recovery_min_students }} students
+                            with claimed accounts, that selection would be predictable, so recovery is blocked for your whole
+                            account until every class reaches {{ recovery_min_students }}. Have students claim their accounts early.</p>
+                    </div>
                     <p class="text-secondary-dark ">
                     No additional personal information is required to enable recovery in v2.</p>
                      <p class="text-success fw-medium">

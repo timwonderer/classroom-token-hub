@@ -1,25 +1,23 @@
 {% extends "base.html" %}
 {% block content %}
 <main class="container py-4"><h1>Preparing account recovery</h1>
-<p id="preparationStatus" role="status">Checking the complete class proof set…</p>
+<p id="preparationStatus" role="status">Selecting recovery helpers in each class…</p>
 <a href="{{ url_for('admin.recover') }}">Return to recovery</a></main>
 <script>
 (async () => {
-  const pairs = {{ pairs|tojson }};
+  const classes = {{ class_refs|tojson }};
   const post = async (url, data) => {
     const response = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':{{ csrf_token()|tojson }}}, body:JSON.stringify(data)});
-    if (!response.ok) throw new Error('Recovery could not be prepared. Check all entries and try again.');
+    if (!response.ok) throw new Error('Recovery could not be prepared. Try again or resume your existing attempt.');
     return response.json();
   };
   try {
-    const classes = [];
-    for (const pair of pairs) classes.push((await post({{ url_for('admin.recovery_class_proof')|tojson }}, pair)).class_ref);
     let ready = true;
     for (const class_ref of classes) {
       const result = await post({{ url_for('admin.recovery_select_class')|tojson }}, {class_ref});
       ready = result.ready && ready;
     }
-    if (!ready) throw new Error('Recovery could not be prepared. Check all entries and try again.');
+    if (!ready) throw new Error('Recovery could not be prepared. Try again or resume your existing attempt.');
     window.location.assign({{ url_for('admin.recovery_status')|tojson }});
   } catch (error) {document.getElementById('preparationStatus').textContent = error.message;}
 })();

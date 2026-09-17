@@ -227,6 +227,19 @@
             </div>
             {% endif %}
 
+            {% if claimed_students|length < recovery_min_students %}
+            <div class="alert alert-warning d-flex align-items-start mb-3" role="note" id="recovery-readiness-warning">
+              <span class="material-symbols-outlined me-2" aria-hidden="true">shield_lock</span>
+              <div>
+                <h3 class="h6 fw-bold mb-1">Account recovery is unavailable until this class has {{ recovery_min_students }} claimed students</h3>
+                <p class="mb-0">This class has {{ claimed_students|length }}. If you lose access to your teacher account,
+                  recovery randomly selects 2 students in each of your classes to confirm it is you. With fewer than
+                  {{ recovery_min_students }}, that selection would be predictable, so recovery stays blocked for your whole
+                  account until every class reaches {{ recovery_min_students }}.</p>
+              </div>
+            </div>
+            {% endif %}
+
             <!-- Unclaimed Seats Section -->
             {% if unclaimed_seats|length > 0 %}
             <div class="card border-warning mb-3">

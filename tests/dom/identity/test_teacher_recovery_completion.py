@@ -8,7 +8,7 @@ import pytest
 import sqlalchemy as sa
 from app import db
 from app.feats.base import FEATContext
-from app.feats.teacher_recovery_feat import (begin_attempt, prove_class, select_class_recipients,
+from app.feats.teacher_recovery_feat import (begin_attempt, select_class_recipients,
     issue_confirmation, confirm_class, authorize_setup, complete_setup, save_progress, resume_attempt, attempt_status)
 from app.models import ClassEconomy, PasskeyCredential, User, Seat
 from app.services.recovery_service import get_recovery_request_by_id, list_recovery_codes_for_request
@@ -21,13 +21,24 @@ def call(fn, **kwargs):
     return fn(**kwargs, correlation_id='recovery-test', idempotency_key='recovery-test:'+fn.__name__)
 
 
+def proof_pairs(classes, per_class=None):
+    """Distinct students per class; a student seated in two classes backs one pair."""
+    from app.feats.teacher_recovery_feat import usernames_required_per_class
+    need=per_class or usernames_required_per_class(len(classes))
+    used, pairs=set(), []
+    for c in reversed(classes):  # later classes have fewer unshared students
+        chosen=[s for s in c.students if s.user.id not in used][:need]
+        used.update(s.user.id for s in chosen)
+        pairs+=[(c.join_code, s.username) for s in chosen]
+    return pairs
+
+
 @pytest.fixture
 def recovery(app, monkeypatch):
     classes=[initialize('chemistry_p1', app), initialize('ap_csp_p3', app)]
     monkeypatch.setattr('secrets.SystemRandom.sample', lambda self, population, k: population[-k:])
-    attempt=call(begin_attempt, join_code=classes[0].join_code)
-    for c in classes:
-        assert call(prove_class, request_id=attempt['id'], attempt_nonce=attempt['nonce'], join_code=c.join_code, username=c.students[0].username)
+    attempt=call(begin_attempt, pairs=proof_pairs(classes))
+    assert attempt
     for c in classes:
         assert call(select_class_recipients, request_id=attempt['id'], attempt_nonce=attempt['nonce'], class_id=c.class_id)
     with FEATContext('FEAT-TEST-SETUP', idempotency_key='recovery:passkey'):
@@ -75,7 +86,7 @@ def test_selection_is_random_hidden_and_frozen(recovery):
         before=[x.seat_id for x in chosen]
         assert call(select_class_recipients, request_id=r.id, attempt_nonce=r.access, class_id=c.class_id)
         assert before==[x.seat_id for x in rows(r,i)]
-    assert call(begin_attempt, join_code=r.classes[0].join_code) is None
+    assert call(begin_attempt, pairs=proof_pairs(r.classes)) is None
     assert 'seat_id' not in str(attempt_status(r.id,r.access))
 
 
@@ -241,14 +252,17 @@ def test_both_recipients_receive_prompt_until_private_confirmation(recovery):
     assert all(get_pending_recovery_code_for_seat(c.seat_id,utc_now(),class_id=scope) is None for c in chosen)
 
 
-def test_staged_proof_then_selection_is_class_scoped(app):
+def test_incomplete_proof_creates_nothing_then_selection_is_class_scoped(app):
     classes=[initialize('chemistry_p1',app),initialize('ap_csp_p3',app)]
-    attempt=call(begin_attempt,join_code=classes[0].join_code)
+    requests=db.metadata.tables['recovery_requests']
+    count=lambda: db.session.execute(sa.select(sa.func.count()).select_from(requests)).scalar()
+    pairs=proof_pairs(classes)
+    # Missing an owned class: no attempt exists to reserve or resume.
+    assert call(begin_attempt,pairs=[p for p in pairs if p[0]==classes[0].join_code]) is None
+    assert count()==0
+    attempt=call(begin_attempt,pairs=pairs)
+    assert attempt and count()==1
     args=dict(request_id=attempt['id'],attempt_nonce=attempt['nonce'])
-    assert call(prove_class,**args,join_code=classes[0].join_code,username=classes[0].students[0].username)
-    assert not call(select_class_recipients,**args,class_id=classes[0].class_id)
-    assert list_recovery_codes_for_request(attempt['id'])==[]
-    assert call(prove_class,**args,join_code=classes[1].join_code,username=classes[1].students[0].username)
     assert call(select_class_recipients,**args,class_id=classes[0].class_id)
     assert {x.class_id for x in list_recovery_codes_for_request(attempt['id'])}=={classes[0].class_id}
 
@@ -271,14 +285,124 @@ def test_route_preparation_and_completion(recovery,client):
     assert response.status_code==302 and '/admin/login' in response.location
 
 
-def test_single_eligible_student_is_selected(client,app):
+def _shrink_class(c, keep):
+    from app.utils.student_deletion import remove_student_from_teacher_scope
+    with FEATContext('FEAT-TEST-SETUP',idempotency_key=f'recovery:shrink:{keep}'):
+        for s in c.students[keep:]:remove_student_from_teacher_scope(s.seat.id,c.teacher_user.id)
+    return c.students[:keep]
+
+
+def test_DOM_IDEN_003__class_below_three_claimed_students_blocks_recovery(client,app):
+    from tests.helpers.classroom_initializer import initialize_as_teacher
+    c=initialize_as_teacher('chemistry_p1',client,app)
+    remaining=_shrink_class(c,2)
+    requests=db.metadata.tables['recovery_requests']
+    assert call(begin_attempt,pairs=[(c.join_code,s.username) for s in remaining]) is None
+    assert db.session.execute(sa.select(sa.func.count()).select_from(requests)).scalar()==0
+
+
+def test_DOM_IDEN_003__three_claimed_students_select_exactly_two(client,app):
+    from tests.helpers.classroom_initializer import initialize_as_teacher
+    c=initialize_as_teacher('chemistry_p1',client,app)
+    remaining=_shrink_class(c,3)
+    attempt=call(begin_attempt,pairs=[(c.join_code,s.username) for s in remaining])
+    assert attempt
+    args=dict(request_id=attempt['id'],attempt_nonce=attempt['nonce'])
+    assert call(select_class_recipients,**args,class_id=c.class_id)
+    assert len(list_recovery_codes_for_request(attempt['id']))==2
+
+
+def test_DOM_IDEN_003__selection_fails_closed_if_class_drops_below_three(client,app):
     from tests.helpers.classroom_initializer import initialize_as_teacher
     from app.utils.student_deletion import remove_student_from_teacher_scope
     c=initialize_as_teacher('chemistry_p1',client,app)
-    with FEATContext('FEAT-TEST-SETUP',idempotency_key='single-witness'):
-        for s in c.students[1:]:remove_student_from_teacher_scope(s.seat.id,c.teacher_user.id)
-    attempt=call(begin_attempt,join_code=c.join_code)
+    remaining=_shrink_class(c,3)
+    attempt=call(begin_attempt,pairs=[(c.join_code,s.username) for s in remaining])
+    with FEATContext('FEAT-TEST-SETUP',idempotency_key='recovery:drop-after-proof'):
+        remove_student_from_teacher_scope(remaining[-1].seat.id,c.teacher_user.id)
     args=dict(request_id=attempt['id'],attempt_nonce=attempt['nonce'])
-    assert call(prove_class,**args,join_code=c.join_code,username=c.students[0].username)
-    assert call(select_class_recipients,**args,class_id=c.class_id)
-    assert len(list_recovery_codes_for_request(attempt['id']))==1
+    assert not call(select_class_recipients,**args,class_id=c.class_id)
+    assert list_recovery_codes_for_request(attempt['id'])==[]
+
+
+def test_recovery_minimum_is_stated_on_teacher_surfaces(client,app):
+    from tests.helpers.classroom_initializer import initialize_as_teacher
+    c=initialize_as_teacher('chemistry_p1',client,app)
+    roster=client.get('/admin/students').get_data(as_text=True)
+    assert 'recovery-readiness-warning' not in roster  # four claimed students
+    assert '3 students per class' in client.get('/admin/recover').get_data(as_text=True)
+    assert 'at least 3 claimed students in every class' in client.get('/admin/setup-recovery').get_data(as_text=True)
+    _shrink_class(c,2)
+    roster=client.get('/admin/students').get_data(as_text=True)
+    assert 'recovery-readiness-warning' in roster and 'This class has 2.' in roster
+
+
+def test_DOM_IDEN_003__two_classes_require_three_usernames_each(app):
+    classes=[initialize('chemistry_p1',app),initialize('ap_csp_p3',app)]
+    assert call(begin_attempt,pairs=proof_pairs(classes,per_class=2)) is None
+    assert call(begin_attempt,pairs=proof_pairs(classes,per_class=3))
+
+
+def test_DOM_IDEN_003__one_student_backs_only_one_pair_across_classes(app):
+    from app.services.classroom_setup import create_roster_student_seat
+    classes=[initialize('chemistry_p1',app),initialize('ap_csp_p3',app)]
+    shared=classes[0].students[0]
+    with FEATContext('FEAT-TEST-SETUP',idempotency_key='recovery:shared-student'):
+        seat=create_roster_student_seat(class_id=classes[1].class_id, first_name='Shared', last_name='Student',
+                                        claimed_at=utc_now())
+        seat.user_id=shared.user.id
+    pairs=[(classes[0].join_code,s.username) for s in classes[0].students[:3]]
+    others=[(classes[1].join_code,s.username) for s in classes[1].students[:2]]
+    # The shared student already backs a class-A pair, so it cannot be class B's third.
+    assert call(begin_attempt,pairs=pairs+others+[(classes[1].join_code,shared.username)]) is None
+    assert call(begin_attempt,pairs=pairs+others+[(classes[1].join_code,classes[1].students[2].username)])
+
+
+def test_DOM_IDEN_003__recipient_selection_ignores_cross_class_identity(app, monkeypatch):
+    from app.services.classroom_setup import create_roster_student_seat
+    classes=[initialize('chemistry_p1',app),initialize('ap_csp_p3',app)]
+    shared=max(classes[0].students, key=lambda s: s.seat.id)
+    with FEATContext('FEAT-TEST-SETUP',idempotency_key='recovery:shared-recipient'):
+        seat=create_roster_student_seat(class_id=classes[1].class_id, first_name='Shared', last_name='Recipient',
+                                        claimed_at=utc_now())
+        seat.user_id=shared.user.id
+        shared_b=seat.id
+    # Deterministic "random": each class takes its highest seat ids, which include the shared student.
+    monkeypatch.setattr('secrets.SystemRandom.sample', lambda self, population, k: population[-k:])
+    others=[s for s in classes[0].students if s.user.id!=shared.user.id]
+    pairs=[(classes[0].join_code,s.username) for s in others[:3]]+[(classes[1].join_code,s.username) for s in classes[1].students[:3]]
+    attempt=call(begin_attempt,pairs=pairs)
+    assert attempt
+    for c in classes:
+        assert call(select_class_recipients,request_id=attempt['id'],attempt_nonce=attempt['nonce'],class_id=c.class_id)
+    chosen=list_recovery_codes_for_request(attempt['id'])
+    assert shared.seat.id in {x.seat_id for x in chosen if x.class_id==classes[0].class_id}
+    assert shared_b in {x.seat_id for x in chosen if x.class_id==classes[1].class_id}
+
+
+def test_DOM_IDEN_003__single_class_with_fewer_than_six_students_needs_all(client,app):
+    from tests.helpers.classroom_initializer import initialize_as_teacher
+    c=initialize_as_teacher('chemistry_p1',client,app)
+    pairs=[(c.join_code,s.username) for s in c.students]
+    assert len(pairs) < 6
+    assert call(begin_attempt,pairs=pairs[:-1]) is None
+    assert call(begin_attempt,pairs=pairs[:-1]+[pairs[0]]) is None
+    assert call(begin_attempt,pairs=pairs)
+
+
+def test_recover_form_rejects_a_username_reused_across_pairs(app,client):
+    classes=[initialize('chemistry_p1',app),initialize('ap_csp_p3',app)]
+    requests=db.metadata.tables['recovery_requests']
+    count=lambda: db.session.execute(sa.select(sa.func.count()).select_from(requests)).scalar()
+    def post(pairs):
+        return client.post('/admin/recover',data={
+            'join_code[]':[p[0] for p in pairs],'student_username[]':[p[1] for p in pairs]})
+    app.config['WTF_CSRF_ENABLED']=False
+    try:
+        pairs=proof_pairs(classes)
+        rejected=post(pairs[:-1]+[pairs[0]])
+        assert b'Unable to begin recovery' in rejected.data and count()==0
+        accepted=post(pairs)
+        assert b'Preparing account recovery' in accepted.data and count()==1
+    finally:
+        app.config['WTF_CSRF_ENABLED']=True

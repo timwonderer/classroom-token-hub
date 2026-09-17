@@ -81,12 +81,63 @@ def _class_row(row, class_id):
         table.c.class_id == class_id).with_for_update()).first()
 
 
+# Security posture (DOM-IDEN-003 §IX): recovery randomly picks 2 recipients per class.
+# With fewer than 3 eligible students that pick is predictable, so the class cannot
+# support student-assisted recovery at all.
+MIN_CLAIMED_STUDENTS_PER_CLASS = 3
+
+
+def usernames_required_per_class(class_count):
+    """DOM-IDEN-003 §IX: fewer owned classes demand more student usernames per class."""
+    return {1: 6, 2: 3, 3: 2}.get(class_count, 1)
+
+
+def _proof_holds(owned_class_ids, usernames_by_class):
+    """Ephemeral knowledge proof. Resolved students live only in this call's locals."""
+    required_per_class = usernames_required_per_class(len(owned_class_ids))
+    seen_user_ids = set()
+    for class_id in owned_class_ids:
+        usernames = usernames_by_class[class_id]
+        claimed = Seat.query.join(User, User.id == Seat.user_id).filter(
+            Seat.class_id == class_id, Seat.role == 'student', Seat.claimed_at.isnot(None))
+        claimed_count = claimed.count()
+        if claimed_count < MIN_CLAIMED_STUDENTS_PER_CLASS:
+            return False
+        matched_user_ids = []
+        for username in usernames:
+            match = claimed.filter(User.username_lookup_hash == hash_username_lookup(username)).with_entities(User.id).first()
+            if match is None:
+                continue
+            # One student in several of this teacher's classes backs one pair only.
+            if match.id in seen_user_ids:
+                return False
+            seen_user_ids.add(match.id)
+            matched_user_ids.append(match.id)
+        # A class with fewer claimed students than the requirement must prove all of them.
+        if len(matched_user_ids) < min(required_per_class, claimed_count):
+            return False
+    return True
+
+
 @requires_feat_context('FEAT-IDEN-103')
-def begin_attempt(*, join_code, current_request_id=None, attempt_nonce=None, correlation_id, idempotency_key):
-    classroom = ClassEconomy.query.filter_by(join_code=join_code.strip().upper()).first()
-    if not classroom:
+def begin_attempt(*, pairs, current_request_id=None, attempt_nonce=None, correlation_id, idempotency_key):
+    """Authorize a recovery attempt from one complete join-code/username proof set.
+
+    Pass creates the attempt with its class proofs; fail creates nothing. The
+    submitted usernames and resolved students are never persisted.
+    """
+    if (not isinstance(pairs, (list, tuple)) or not pairs
+            or any(not isinstance(pair, (list, tuple)) or len(pair) != 2
+                   or not all(isinstance(v, str) and v.strip() for v in pair) for pair in pairs)):
         return None
-    user = User.query.filter_by(id=classroom.teacher_user_id, user_role='teacher').populate_existing().with_for_update().one_or_none()
+    usernames_by_join = {}
+    for join_code, username in pairs:
+        usernames_by_join.setdefault(join_code.strip().upper(), []).append(normalize_auth_username(username))
+    classrooms = {join: ClassEconomy.query.filter_by(join_code=join).first() for join in usernames_by_join}
+    teacher_ids = {c.teacher_user_id for c in classrooms.values() if c is not None}
+    if None in classrooms.values() or len(teacher_ids) != 1:
+        return None
+    user = User.query.filter_by(id=teacher_ids.pop(), user_role='teacher').populate_existing().with_for_update().one_or_none()
     if not user:
         return None
     requests, _ = _tables()
@@ -95,31 +146,19 @@ def begin_attempt(*, join_code, current_request_id=None, attempt_nonce=None, cor
         requests.c.selection_started_at.isnot(None))).first()
     if existing:
         return dict(id=existing.id, nonce=attempt_nonce, existing=True) if existing.id == current_request_id and _access(existing, attempt_nonce) else None
+    owned = sorted(c.class_id for c in ClassEconomy.query.filter_by(teacher_user_id=user.id).all())
+    usernames_by_class = {classrooms[join].class_id: names for join, names in usernames_by_join.items()}
+    if sorted(usernames_by_class) != owned or not _proof_holds(owned, usernames_by_class):
+        return None
     nonce = secrets.token_urlsafe(32)
-    required = sorted(c.class_id for c in ClassEconomy.query.filter_by(teacher_user_id=user.id).all())
     request_id = db.session.execute(sa.insert(requests).values(user_id=user.id, status='pending',
-        expires_at=utc_now()+timedelta(days=5), required_class_ids=required,
+        expires_at=utc_now()+timedelta(days=5), required_class_ids=owned,
         attempt_nonce_hash=_attempt_digest(nonce)).returning(requests.c.id)).scalar_one()
-    return dict(id=request_id, nonce=nonce, existing=False)
-
-
-@requires_feat_context('FEAT-IDEN-103')
-def prove_class(*, request_id, attempt_nonce, join_code, username, correlation_id, idempotency_key):
-    user, row = _lock(request_id)
-    if not _active(user, row) or not _access(row, attempt_nonce):
-        return False
-    classroom = ClassEconomy.query.filter_by(join_code=join_code.strip().upper(), teacher_user_id=user.id).first()
-    if not classroom or classroom.class_id not in row.required_class_ids:
-        return False
-    class_id = classroom.class_id
-    match = Seat.query.join(User, User.id == Seat.user_id).filter(Seat.class_id == class_id,
-        Seat.role == 'student', Seat.claimed_at.isnot(None), User.username_lookup_hash == hash_username_lookup(username)).first()
-    if not match:
-        return False
-    if not _class_row(row, class_id):
-        db.session.execute(sa.insert(_challenges()).values(recovery_request_id=row.id,
-            class_id=class_id, proof_verified_at=utc_now()))
-    return True
+    now = utc_now()
+    db.session.execute(sa.insert(_challenges()), [
+        dict(recovery_request_id=request_id, class_id=class_id, proof_verified_at=now) for class_id in owned])
+    return dict(id=request_id, nonce=nonce, existing=False,
+                class_refs=[c.class_public_id for c in classrooms.values()])
 
 
 @requires_feat_context('FEAT-IDEN-103')
@@ -141,9 +180,9 @@ def select_class_recipients(*, request_id, attempt_nonce, class_id, correlation_
         return False
     eligible = [s.id for s in Seat.query.filter_by(class_id=class_id, role='student').filter(
         Seat.user_id.isnot(None), Seat.claimed_at.isnot(None)).order_by(Seat.id).all()]
-    if not eligible:
+    if len(eligible) < MIN_CLAIMED_STUDENTS_PER_CLASS:
         return False
-    selected = secrets.SystemRandom().sample(eligible, min(2, len(eligible)))
+    selected = secrets.SystemRandom().sample(eligible, 2)
     db.session.execute(sa.insert(codes), [dict(recovery_request_id=row.id, class_id=class_id, seat_id=s) for s in selected])
     table = _challenges()
     db.session.execute(sa.update(table).where(table.c.recovery_request_id == row.id, table.c.class_id == class_id).values(

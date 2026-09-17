@@ -2,7 +2,7 @@
 {% block content %}
 <main class="container py-4" aria-labelledby="recoveryHeading">
 <h1 id="recoveryHeading">Account recovery</h1>
-<p>CTH has chosen up to two students in each class. Ask each class to check their accounts. Only one code per class is needed. Recipients stay the same for this attempt.</p>
+<p>CTH has randomly chosen two students in each class. Ask each class to check their accounts. Only one code per class is needed. Recipients stay the same for this attempt.</p>
 <p>Codes expire 30 minutes after issuance. Save each code here while it is fresh. Code validity is checked privately; you will receive only an overall result after submitting the full set.</p>
 <p>Attempt expires {{ status.expires_at.strftime('%B %d, %Y at %I:%M %p') }}.</p>
 {% for category, message in get_flashed_messages(with_categories=true) %}<p role="alert">{{ message }}</p>{% endfor %}
