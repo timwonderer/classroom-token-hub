@@ -166,7 +166,7 @@
             <span class="material-symbols-outlined me-1" aria-hidden="true">history</span>Attendance
         </button>
     </li>
-    {% if student.is_rent_enabled %}
+    {% if rent_enabled %}
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="housing-tab" data-bs-toggle="tab" data-bs-target="#housing" type="button"
             role="tab" aria-controls="housing" aria-selected="false">
@@ -235,12 +235,6 @@
                                     {% endif %}
                                 </td>
                             </tr>
-                            {% if student.is_rent_enabled %}
-                            <tr>
-                                <td class="fw-bold">Housing:</td>
-                                <td><span class="badge bg-secondary">Renter</span></td>
-                            </tr>
-                            {% endif %}
                             <!-- Join Codes Row -->
                             {% if join_codes %}
                             <tr>
@@ -581,8 +575,9 @@
         </div>
     </div>
 
-    <!-- RENT TAB (Only if rent enabled globally and for student) -->
-    {% if student.is_rent_enabled %}
+    <!-- RENT TAB (only when rent is enabled for this class) -->
+    {% if rent_enabled %}
+    {% set rent_period = rent_view.current_period if rent_view and rent_view.current_period else None %}
     <div class="tab-pane fade" id="housing" role="tabpanel" aria-labelledby="housing-tab">
         <div class="row">
             <!-- Rent Card -->
@@ -592,40 +587,43 @@
                         <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">home</span>Rent Information</h5>
                     </div>
                     <div class="card-body">
-                <table class="table table-borderless">
-                    <caption class="visually-hidden">Student payroll summary</caption>
+                        {% if rent_period %}
+                        <table class="table table-borderless mb-0">
+                            <caption class="visually-hidden">Current rent period</caption>
                             <tr>
                                 <td class="fw-bold">Status:</td>
                                 <td>
-                                    <span class="badge bg-info">Rent Enabled</span>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td class="fw-bold">Last Payment:</td>
-                                <td>
-                                    {% if student.rent_last_paid %}
-                                    {{ student.rent_last_paid|fmt_timestamp }}
+                                    {% if rent_period.is_waived %}
+                                    <span class="badge bg-secondary">Waived</span>
+                                    {% elif rent_period.is_paid %}
+                                    <span class="badge bg-success">Paid</span>
+                                    {% elif rent_period.is_past_due %}
+                                    <span class="badge bg-danger">Past due</span>
                                     {% else %}
-                                    <span class="text-muted">Never</span>
+                                    <span class="badge bg-warning text-dark">Due</span>
                                     {% endif %}
                                 </td>
                             </tr>
                             <tr>
                                 <td class="fw-bold">Due Date:</td>
-                                <td>{{ student.rent_due_date.strftime('%B %d, %Y') if student.rent_due_date else 'N/A'
-                                    }}</td>
+                                <td>{{ rent_view.display_current_due_date or 'N/A' }}</td>
                             </tr>
                             <tr>
-                                <td class="fw-bold">Overdue:</td>
-                                <td>
-                                    {% if student.rent_overdue %}
-                                    <span class="badge bg-danger">Yes</span>
-                                    {% else %}
-                                    <span class="badge bg-success">No</span>
-                                    {% endif %}
-                                </td>
+                                <td class="fw-bold">Amount Due:</td>
+                                <td>{{ rent_view.display_total_due }}</td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold">Paid:</td>
+                                <td>{{ rent_view.display_amount_paid }}</td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold">Remaining:</td>
+                                <td>{{ rent_view.display_remaining_amount }}</td>
                             </tr>
                         </table>
+                        {% else %}
+                        <p class="text-muted mb-0">No rent has been charged to this student yet.</p>
+                        {% endif %}
                     </div>
                 </div>
             </div>

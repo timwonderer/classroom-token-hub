@@ -939,7 +939,7 @@ def dashboard():
 
     rent_status = None
     rent_settings = get_rent_settings_for_context(context)
-    if rent_settings and student.is_rent_enabled:
+    if rent_settings:
         now = utc_now()
         timeline = _calculate_rent_timeline(rent_settings, now)
         due_date = timeline['due_date']
@@ -2991,11 +2991,6 @@ def rent_pay(period):
     if not settings:
         current_app.logger.info("rent_pay exit: rent settings missing or disabled")
         flash("Rent system is currently disabled.", "error")
-        return redirect(url_for('student.dashboard'))
-
-    if not seat.is_rent_enabled:
-        current_app.logger.info("rent_pay exit: student rent disabled")
-        flash("Rent is not enabled for your account.", "error")
         return redirect(url_for('student.dashboard'))
 
     # Resolve the seat's rent assessments (chronological order). Each rent

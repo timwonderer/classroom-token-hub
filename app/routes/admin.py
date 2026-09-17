@@ -3773,35 +3773,19 @@ def student_detail_public(actor_public_id):
     )
 
     # Attendance context uses the canonical PROD session backend.
-    # Fetch last rent payment
-    rent_query = Transaction.query.filter(tx_scope, Transaction.type == "rent")
-    latest_rent = rent_query.order_by(Transaction.timestamp.desc()).first()
-    student.rent_last_paid = latest_rent.timestamp if latest_rent else None
-
-    # Fetch last property tax payment
-    tax_query = Transaction.query.filter(tx_scope, Transaction.type == "property_tax")
-    latest_tax = tax_query.order_by(Transaction.timestamp.desc()).first()
-    student.property_tax_last_paid = latest_tax.timestamp if latest_tax else None
-
-    # Compute due dates and overdue status using class-local timezone
-    from datetime import date
-    from app.utils.canonical_temporal_resolver import _get_class_timezone
-    effective_tz = _get_class_timezone(class_id)
-    today = utc_now().astimezone(effective_tz).date()
-    class_tz = effective_tz
-    # Rent due on 5th, overdue after 6th
-    rent_due = date(today.year, today.month, 5)
-    student.rent_due_date = rent_due
-    student.rent_overdue = today > rent_due and (
-        not student.rent_last_paid or student.rent_last_paid.astimezone(class_tz).date() <= rent_due
-    )
-
-    # Property tax due on 5th, overdue after 6th
-    tax_due = date(today.year, today.month, 5)
-    student.property_tax_due_date = tax_due
-    student.property_tax_overdue = today > tax_due and (
-        not student.property_tax_last_paid or student.property_tax_last_paid.astimezone(class_tz).date() <= tax_due
-    )
+    # Rent is a class feature; its status comes from recorded rent assessments,
+    # the same obligation view the student rent page and Rent roster use.
+    rent_scope = resolve_feature_class_for_class(class_id, 'rent')
+    rent_enabled = bool(rent_scope and rent_scope.get("enabled"))
+    rent_view = None
+    if rent_enabled:
+        from app.services.obligation_view_model import (
+            add_display_formatting_to_student_obligation_view,
+            build_student_obligation_view,
+        )
+        rent_view = add_display_formatting_to_student_obligation_view(
+            build_student_obligation_view(seat_id, class_id, 'RENT')
+        )
 
     transactions_query = Transaction.query.filter(tx_scope)
 
@@ -3984,7 +3968,9 @@ def student_detail_public(actor_public_id):
                          hall_pass_balance=hall_pass_balance,
                          current_join_code=None,
                          current_class_id=class_id,
-                         rent_privileges=rent_privileges)
+                         rent_privileges=rent_privileges,
+                         rent_enabled=rent_enabled,
+                         rent_view=rent_view)
 
 
 @admin_bp.route('/student/<int:seat_id>/adjust-hall-pass-entitlements', methods=['POST'])
@@ -8095,7 +8081,7 @@ def export_students():
     writer.writerow([
         'First Name', 'Last Name', 'Block', 'Checking Balance',
         'Savings Balance', 'Total Earnings', 'Insurance Plan',
-        'Rent Enabled', 'Has Completed Setup'
+        'Has Completed Setup'
     ])
 
     # Write student data
@@ -8188,7 +8174,6 @@ def export_students():
             f"{savings_balance:.2f}",
             f"{total_earnings:.2f}",
             _sanitize_csv_field(insurance_name),
-            'Yes' if seat.is_rent_enabled else 'No',
             'Yes' if (seat.user and seat.user.pin_hash is not None) else 'No'
         ])
 

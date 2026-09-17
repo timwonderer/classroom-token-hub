@@ -278,10 +278,6 @@ class Seat(db.Model):
         )
 
     @property
-    def is_rent_enabled(self):
-        return not self.has_received_rent_exemption
-
-    @property
     def block(self):
         """Compatibility view for legacy block-based admin rendering."""
         if self.class_economy is None:
