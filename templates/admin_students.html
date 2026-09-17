@@ -65,6 +65,8 @@
   <li><strong>Join Code</strong> — Found in the Class Roster tab for the current class</li>
   <li><strong>First Name</strong> — As entered in your roster</li>
   <li><strong>Last Name</strong> — As entered in your roster</li>
+  <li><strong>Claim Code</strong> — Only when another unclaimed student shares their name. The system
+    generates it; find it in the Unclaimed Seats list</li>
   <li><strong>Class</strong> — The student must use the join code for this class</li>
 </ul>
 
@@ -101,20 +103,20 @@
 </ol>
 
 <div class="alert alert-info mb-0">
-  <strong><span class="material-symbols-outlined me-1" aria-hidden="true">info</span>Important:</strong> If you change their name, the
-  student will need the updated first and last name when they claim or recover their account.
+  <strong><span class="material-symbols-outlined me-1" aria-hidden="true">info</span>Important:</strong> Changing a name only changes
+  how it is displayed. It does not change the student's login or the name used to claim a seat.
 </div>
 {% endcall %}
 
 {% call help.topic('stu-reset', 'restart_alt', 'How to reset student login') %}
-<p>Use reset when a student forgets credentials or cannot log in. Resetting preserves account data but
-  forces a new claim.</p>
+<p>Use reset when a student forgets credentials or cannot log in. Resetting preserves account data and
+  issues a recovery code.</p>
 <div class="alert alert-warning">
-  <strong>Resetting requires a new claim:</strong> The student must re-claim using the join code and their
-  updated details.
+  <strong>The recovery code expires in ten minutes:</strong> Give it to the student right away. A new
+  code replaces any earlier one.
 </div>
-<p class="mb-0">After the reset, have the student follow the normal claim process on the student login
-  page.</p>
+<p class="mb-0">The student enters the code from account recovery on the student login page, then chooses a
+  new username, PIN, and passphrase.</p>
 {% endcall %}
 
 {% call help.topic('stu-remove', 'person_remove', 'How to remove students') %}

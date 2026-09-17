@@ -24,7 +24,7 @@ It takes four screens, and one of them shows you something you will never be sho
 
 1. On the student sign-in page, select **I need a student account**.
 2. Fill in **Join Code** (from your teacher), **First Name**, and **Last Name**. Type your name exactly as your teacher has it on the roster.
-3. Leave **Deduplication Code (Optional)** empty unless your teacher handed you one — that only happens when two students in the class share a name.
+3. Leave **Deduplication Code (Optional)** empty unless your teacher gave you one. Codes are generated automatically and only needed when another student waiting to claim in your class shares your name.
 4. **Submit**.
 
 ### 2. Create Your Username

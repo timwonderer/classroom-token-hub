@@ -80,7 +80,7 @@
                         <div class="card card-body mb-2" style="border-radius:0px 0px 10px 10px" >
                             While these fields are labeled as first name and last name, teachers can use agreed classroom names or nicknames. Students must enter the values the teacher supplied; a nickname does not make linked classroom records anonymous.
                         </div>
-                        </li><li>The roster supports optional encrypted teacher notes. Keep unnecessary personal or sensitive information out of notes and other free-text fields.</li><li>The student enters the class join code, matching name fields, and a teacher-provided distinguishing code if duplicate roster names require one, then creates a username, PIN, and passphrase.</li></ul>
+                        </li><li>The roster supports optional encrypted teacher notes. Keep unnecessary personal or sensitive information out of notes and other free-text fields.</li><li>The student enters the class join code, matching name fields, and, if another unclaimed roster entry shares the name, the distinguishing code the system generated for their entry and the teacher shares, then creates a username, PIN, and passphrase.</li></ul>
                         <h3>Stored records</h3>
                         <p>Display names and roster notes use application-level Fernet encryption. Username and roster-name matching use keyed HMAC-SHA256 digests. PINs and passphrases use salted scrypt hashes. These protections apply to specific fields; they do not mean every database field is encrypted.</p>
                         <p>The application also stores classroom activity, support content, and technical diagnostic records. Names directly identify people. Activity stored under an opaque student reference is pseudonymous: the application can link it to a student, but an amount or timestamp is not itself a name. These linked records are not anonymous.</p>
@@ -95,8 +95,8 @@
 
                     <section class="public-section" id="student-claim">
                         <h2>3. Student Account Claiming</h2>
-                        <p>Claim-matching hashes and distinguishing codes are cleared after a successful claim. Display names remain encrypted for classroom use. Importing a roster creates new entries; matching an already-claimed student’s name does not merge or update their entry.</p>
-                        <ol><li>The teacher provisions a roster entry and shares the class join code.</li><li>The student enters the join code and first and last name fields matching that entry.</li><li>If several entries match, the student enters the distinguishing code supplied by the teacher.</li><li>The student creates a username, a 4–6 digit PIN, and a passphrase to finish setup.</li></ol>
+                        <p>Claim-matching hashes and distinguishing codes are cleared after a successful claim. Display names remain encrypted for classroom use. Importing a roster creates new entries; matching an already-claimed student’s name does not merge or update their entry. When unclaimed entries share a name, the system assigns each a distinct distinguishing code, including an existing unclaimed entry that did not have one.</p>
+                        <ol><li>The teacher provisions a roster entry and shares the class join code.</li><li>The student enters the join code and first and last name fields matching that entry.</li><li>If several entries match, the student enters their entry’s system-generated distinguishing code, which the teacher shares from the roster.</li><li>The student creates a username, a 4–6 digit PIN, and a passphrase to finish setup.</li></ol>
                     </section>
 
                     <section class="public-section" id="what-not-collect">
