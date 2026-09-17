@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-SUP-001 | 1.6 | 2026-09-17 | 1.5 | Normative |
+| DOM-SUP-001 | 1.7 | 2026-09-17 | 1.6 | Normative |
 
 ## I. Purpose
 
@@ -296,7 +296,8 @@ Rules:
   display logic uses `expires_at` to suppress rendering.
 - A teacher may only create announcements for classes they hold a teacher seat in
   (`created_by_seat_id` must resolve to a teacher seat in the explicit `class_id`).
-  FEAT enforces this; the domain stores the result.
+  FEAT-SUP-002 enforces this on create, and on every edit, toggle and delete, for
+  the announcement's own class; the domain stores the result.
 
 ## VII. Constraints
 

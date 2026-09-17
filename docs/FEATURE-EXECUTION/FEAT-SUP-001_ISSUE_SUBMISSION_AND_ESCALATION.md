@@ -23,5 +23,7 @@ include class names or economic records.
 Capture occurs once at submission. Escalation and operator views use saved values
 without re-reading teacher/student seat data. Permission and workflow metadata
 may change; captured context and correlation packs may not. Issue actor references
-are canonical seat public IDs with database deletion cascades, including teacher-submitted tickets. Seat/account deletion removes the corresponding issue,
-pack, history, and resolution rows rather than retaining a detached snapshot.
+are canonical seat public IDs, including teacher-submitted tickets, with no foreign
+key to `seats` (DOM-SUP-001 §X). Seat/account deletion deletes the corresponding
+issues by public ID, and Support's own cascades remove the pack, history, and
+resolution rows, rather than retaining a detached snapshot.

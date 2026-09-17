@@ -8867,7 +8867,6 @@ def update_class_feature_setting():
 def announcements():
     """
     """
-    user_id = g.canonical_context.user_id
     class_context = _resolve_admin_class_context(g.canonical_context)
     if not class_context:
         flash("Select a class from the sidebar before managing announcements.", "warning")
@@ -8877,8 +8876,8 @@ def announcements():
 
     # Get announcements for this teacher scoped to the active class context only.
     from app.models import Announcement
+    # The class is teacher-owned (verified above); announcements are class-scoped.
     announcements_list = Announcement.query.filter_by(
-        user_id=user_id,
         class_id=selected_class_id,
     ).order_by(Announcement.created_at.desc()).all()
 
@@ -8896,7 +8895,6 @@ def announcement_create():
     from app.forms import AnnouncementForm
     from app.models import Announcement
 
-    user_id = g.canonical_context.user_id
     class_context = _resolve_admin_class_context(g.canonical_context)
     if not class_context:
         flash("Select a class from the sidebar before creating announcements.", "warning")
@@ -8911,15 +8909,19 @@ def announcement_create():
 
     if form.validate_on_submit():
         try:
-            announcement = create_class_announcement(
-                created_by_seat_id=resolve_teacher_seat_for_class(selected_class_id).id,
-                class_id=selected_class_id,
-                title=form.title.data,
-                message=form.message.data,
-                priority=form.priority.data,
-                is_active=form.is_active.data,
-                expires_at=form.expires_at.data,
-            )
+            with FEATContext(
+                "FEAT-SUP-002",
+                idempotency_key=f"announcement:create:{selected_class_id}:{generate_correlation_id()}",
+            ):
+                create_class_announcement(
+                    created_by_seat_id=resolve_teacher_seat_for_class(selected_class_id).id,
+                    class_id=selected_class_id,
+                    title=form.title.data,
+                    message=form.message.data,
+                    priority=form.priority.data,
+                    is_active=form.is_active.data,
+                    expires_at=form.expires_at.data,
+                )
             flash(f'Announcement "{form.title.data}" created successfully!', 'success')
 
             return redirect(url_for('admin.announcements'))
@@ -8944,7 +8946,6 @@ def announcement_edit(announcement_id):
     from app.forms import AnnouncementForm
     from app.models import Announcement
 
-    user_id = g.canonical_context.user_id
     class_context = _resolve_admin_class_context(g.canonical_context)
     if not class_context:
         flash("Select a class from the sidebar before editing announcements.", "warning")
@@ -8953,7 +8954,6 @@ def announcement_edit(announcement_id):
     # Get announcement and verify ownership in active class context.
     announcement = Announcement.query.filter_by(
         id=announcement_id,
-        user_id=user_id,
         class_id=class_context["class_id"],
     ).first()
 
@@ -8967,14 +8967,19 @@ def announcement_edit(announcement_id):
 
     if form.validate_on_submit():
         try:
-            update_class_announcement(
-                announcement,
-                title=form.title.data,
-                message=form.message.data,
-                priority=form.priority.data,
-                is_active=form.is_active.data,
-                expires_at=form.expires_at.data,
-            )
+            with FEATContext(
+                "FEAT-SUP-002",
+                idempotency_key=f"announcement:edit:{announcement.id}:{generate_correlation_id()}",
+            ):
+                update_class_announcement(
+                    announcement,
+                    acting_seat_id=resolve_teacher_seat_for_class(class_context["class_id"]).id,
+                    title=form.title.data,
+                    message=form.message.data,
+                    priority=form.priority.data,
+                    is_active=form.is_active.data,
+                    expires_at=form.expires_at.data,
+                )
 
             flash(f'Announcement "{announcement.title}" updated successfully!', 'success')
             return redirect(url_for('admin.announcements'))
@@ -9014,7 +9019,6 @@ def announcement_delete(announcement_id):
     """Delete an announcement."""
     from app.models import Announcement
 
-    user_id = g.canonical_context.user_id
     class_context = _resolve_admin_class_context(g.canonical_context)
     if not class_context:
         flash("Select a class from the sidebar before deleting announcements.", "warning")
@@ -9023,7 +9027,6 @@ def announcement_delete(announcement_id):
     # Get announcement and verify ownership in active class context.
     announcement = Announcement.query.filter_by(
         id=announcement_id,
-        user_id=user_id,
         class_id=class_context["class_id"],
     ).first()
 
@@ -9033,7 +9036,14 @@ def announcement_delete(announcement_id):
 
     try:
         title = announcement.title
-        delete_class_announcement(announcement)
+        with FEATContext(
+            "FEAT-SUP-002",
+            idempotency_key=f"announcement:delete:{announcement.id}:{generate_correlation_id()}",
+        ):
+            delete_class_announcement(
+                announcement,
+                acting_seat_id=resolve_teacher_seat_for_class(class_context["class_id"]).id,
+            )
 
         flash(f'Announcement "{title}" deleted successfully!', 'success')
 
@@ -9051,7 +9061,6 @@ def announcement_toggle(announcement_id):
     """Toggle announcement active status."""
     from app.models import Announcement
 
-    user_id = g.canonical_context.user_id
     class_context = _resolve_admin_class_context(g.canonical_context)
     if not class_context:
         return jsonify({'status': 'error', 'message': 'Select a class from the sidebar first.'}), 400
@@ -9059,7 +9068,6 @@ def announcement_toggle(announcement_id):
     # Get announcement and verify ownership in active class context.
     announcement = Announcement.query.filter_by(
         id=announcement_id,
-        user_id=user_id,
         class_id=class_context["class_id"],
     ).first()
 
@@ -9067,14 +9075,19 @@ def announcement_toggle(announcement_id):
         return jsonify({'status': 'error', 'message': 'Announcement not found'}), 404
 
     try:
-        update_class_announcement(
-            announcement,
-            title=announcement.title,
-            message=announcement.message,
-            priority=announcement.priority,
-            is_active=not announcement.is_active,
-            expires_at=announcement.expires_at,
-        )
+        with FEATContext(
+            "FEAT-SUP-002",
+            idempotency_key=f"announcement:toggle:{announcement.id}:{generate_correlation_id()}",
+        ):
+            update_class_announcement(
+                announcement,
+                acting_seat_id=resolve_teacher_seat_for_class(class_context["class_id"]).id,
+                title=announcement.title,
+                message=announcement.message,
+                priority=announcement.priority,
+                is_active=not announcement.is_active,
+                expires_at=announcement.expires_at,
+            )
 
         return jsonify({
             'status': 'success',
