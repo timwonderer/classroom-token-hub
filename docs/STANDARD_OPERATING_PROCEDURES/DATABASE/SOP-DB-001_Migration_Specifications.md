@@ -2,13 +2,21 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DB-001       | 1.2     | 2026-09-17     | 1.1 (issued as SOP-DB-011) | Normative |
+| SOP-DB-001       | 1.3     | 2026-09-17     | 1.2 | Normative |
 
 > [!NOTE]
-> v1.1 (2026-09-14) adds §V.A, a single named exception to Golden Rule 3. Rule 3 is not weakened:
+> v1.1 (2026-09-14) adds §V.A, a named exception to Golden Rule 3. Rule 3 is not weakened:
 > merged migrations are still never edited. §V.A defines the one circumstance in which following
 > Rule 3 literally would preserve an execution path that destroys state protected by a superior
-> `INV` or `DOM` document, and it prohibits every other use. No other rule changed.
+> `INV` or `DOM` document, and it prohibits every other use.
+>
+> v1.3 (2026-09-17) adds §V.B, a second named exception, narrower than the first. It exists because
+> `0001_bootstrap` builds the baseline from *today's* ORM metadata rather than from a frozen
+> snapshot, so a schema element removed from the ORM after a historical migration was written is
+> absent when that migration replays — and the migration fails on a schema it was never written
+> for. §V.B permits only the guard that declines the operation in that case. It may not change what
+> the migration does when the element is present, and it may not alter the migration's intended end
+> state. Golden Rule 3 now names two exceptions and no others.
 
 > [!IMPORTANT]
 > This is the **Single Source of Truth** for all database migration policies, best practices, and workflows in the Classroom Economy project. All contributors must adhere to these standards.
@@ -34,14 +42,16 @@ Normative (SOP Tier). Subordinate to INV-CORE-000.
 
 1.  **NEVER modify `app/models.py` without creating a migration.**
 2.  **ALWAYS test migrations before committing** (upgrade AND downgrade).
-3.  **NEVER edit old migrations after they're merged to main.** The sole exception is a Replay-Safety Correction under §V.A. There is no other.
+3.  **NEVER edit old migrations after they're merged to main.** The only exceptions are a
+    Replay-Safety Correction under §V.A and a Bootstrap-Replay Correction under §V.B. There are no
+    others, and neither may be used to change what a merged migration intends to do.
 4.  **ALWAYS review auto-generated migrations** before committing.
 5.  **NEVER skip migrations** - each schema change needs its own migration.
 6.  **ALWAYS include idempotency helpers** in every migration (`table_exists`, `column_exists`, etc.).
 7.  **NEVER use hardcoded constraint names** - discover dynamically via inspection.
 8.  **ALWAYS check existence before CREATE operations** (tables, columns, indexes, foreign keys).
 
-### V.A Replay-Safety Correction (Sole Exception to Rule 3)
+### V.A Replay-Safety Correction (First Exception to Rule 3)
 
 A merged migration MUST NOT otherwise be modified.
 
@@ -96,6 +106,145 @@ scope (`INV-ARC-017` §V). At minimum:
 Each candidate is evaluated on its own evidence. Resemblance to a migration already corrected under
 this section is not evidence that a candidate qualifies, and a prior correction is not precedent
 for another.
+
+
+### V.B Bootstrap-Replay Correction (Second Exception to Rule 3)
+
+A merged migration MUST NOT otherwise be modified. This exception is narrower than §V.A: it permits
+one shape of change only — a guard that makes a historical operation a no-op when the schema element
+it operates on is absent — and it permits that only because of a defect in the baseline migration.
+
+#### The condition it exists for
+
+`0001_bootstrap` materializes the baseline by calling `metadata.create_all` against the **current**
+ORM metadata. Its own docstring states the consequence: "deleting a model retroactively removes a
+table that existed at baseline time — and later migrations in the chain still legitimately reference
+it." The revision graph is unchanged by such a deletion, so nothing signals that a historical
+revision has lost its precondition.
+
+The bootstrap already remedies this for whole **tables**, in `_create_retired_baseline_tables`.
+There is no equivalent remedy for **columns**. A column present at baseline time and since removed
+from the ORM is therefore absent on a fresh chain, and the historical migration that alters it
+raises. That failure is not a defect in the historical migration; it is the bootstrap presenting a
+schema the migration was never written against.
+
+This is a replay **error**, not destruction, so it does not and cannot qualify under §V.A —
+condition 1 there excludes "a replay that is merely untidy, that errors, or that adds drift without
+destroying, rewriting, or invalidating protected state." Nothing in §V.A covers it, and §V.A must
+not be stretched to cover it.
+
+#### Conditions
+
+A merged migration MAY receive a bootstrap-replay correction. It qualifies only when **all** of the
+following are proven:
+
+1. **The failure is a bootstrap artifact.** The operation fails because `0001_bootstrap` materialized
+   current ORM metadata in which the target schema element no longer exists. The element must be
+   shown absent from today's models and required by the historical revision.
+2. **The failure is an error, not destruction.** No state is destroyed, rewritten, or invalidated.
+   A correction that prevents destruction is a §V.A matter and is evaluated there instead.
+3. **No forward remedy exists.** No later migration can supply the precondition, because the failure
+   occurs within the execution of the historical revision itself.
+4. **The guard is the whole change.** The correction adds only an existence check, and the
+   existence-check helper it needs. It changes no operation, no order, no value, and no downgrade
+   behavior.
+5. **First execution is unchanged.** Where the element is present — every database already migrated
+   through this revision, and any replay against the schema the revision was written for — the guard
+   is satisfied and the original statements execute identically.
+6. **The intended end state is unchanged.** The correction MUST NOT alter the schema or data
+   transformation the merged revision intends. Where the element exists, the intended end state is
+   still reached. Where it does not, the migration declines; it MUST NOT substitute a different
+   operation on a differently-named element to reach an equivalent-looking result.
+7. **The chain still replays to a single head.** A full upgrade against an empty schema reaches
+   head, and `flask db heads` reports exactly one. Where the corrected revision's own downgrade is
+   reachable from head, a downgrade and re-upgrade across it is also proven. It is not always
+   reachable: this chain contains revisions that refuse downgrade by design (`SOP-DEP-001` §XIV), so
+   a downgrade walk past one of those is unavailable and MUST NOT be claimed as evidence.
+
+#### Prohibited uses
+
+This exception MUST NOT be used to:
+
+- change a historical migration's intended schema or data transformation;
+- retarget a historical operation onto a renamed or replacement column;
+- repair a defect that a forward corrective migration can repair;
+- tidy, modernize, or re-lint a merged migration;
+- prevent a destructive replay — that is §V.A, and it must meet §V.A's conditions on its own
+  evidence;
+- avoid fixing the bootstrap. The correct structural remedy is a frozen baseline (see §V.B
+  *Standing remedy* below). Each correction under this section is an acknowledged deferral of that
+  remedy, not a substitute for it.
+
+#### Evidence
+
+Proven by execution, not by argument, and reported with its exact command and scope
+(`INV-ARC-017` §V). At minimum:
+
+- **Condition 1:** the element's absence from current ORM metadata, and the replay failure itself.
+- **Conditions 5 and 6:** a fresh upgrade through the full chain reaches the same schema as before
+  the correction; and where the element is present the revision emits the same mutating statements.
+- **Condition 7:** a full upgrade against an empty schema, and `flask db heads` showing exactly
+  one head. State plainly whether the revision's own downgrade is reachable from head, and if it is
+  not, say so rather than reporting a downgrade that was never run.
+
+#### Recording
+
+- The corrected migration carries a comment naming this section and stating which element is absent
+  and why.
+- The PR description and `CHANGELOG.md` record the correction and the deferral of the standing
+  remedy.
+- Each correction is listed in the register below. The register is the complete set; a correction
+  absent from it is an unrecorded edit to a merged migration and a Rule 3 violation.
+
+#### Standing remedy (not optional, deferred)
+
+`0001_bootstrap` must stop materializing live ORM metadata and instead emit a frozen baseline
+schema, so historical migrations execute against the schema they were written against. Until that
+lands, every model removal can retroactively break another historical revision, and this section
+will keep being invoked. Tracked as post-launch architectural debt in
+`docs/TRACKING/PRODUCTION_READINESS_2026-09.md` §VI. Note that the bootstrap is itself a merged
+migration, so the remedy is a baseline replacement, not an edit under this section.
+
+#### Register of corrections
+
+| Revision | Absent element | Historical operation | Corrected |
+|----------|----------------|----------------------|-----------|
+| `3a69db4907b4` | `announcements.user_id` | backfill delete + `alter_column(nullable=False)` | 2026-09-17 |
+| `8f1a2c3d4b5e` | `policy_transitions.created_by` | `create_foreign_key("fk_policy_transitions_created_by")` | 2026-09-17 |
+
+**`3a69db4907b4` — Clean up announcement model.** Announcement authorship moved from a `User` to a
+`Seat`; `announcements` now carries `created_by_seat_id` and no `user_id`. The bootstrap therefore
+creates the table without `user_id`, and `alter_column('announcements', 'user_id', nullable=False)`
+raises on a fresh chain. The correction wraps the backfill delete and the `alter_column` in
+`column_exists('announcements', 'user_id')`. The unguarded `alter_column` on `class_id` is
+untouched, because `class_id` still exists. No row is destroyed that was not already destroyed: on
+a fresh chain there are no rows, and where `user_id` exists the original delete runs unchanged.
+
+*Known and deliberately not corrected:* this revision's `downgrade()` ends with an unguarded
+`alter_column('announcements', 'user_id', nullable=True)`, which carries the same defect in the
+reverse direction. It is left alone for two reasons. Condition 4 permits only the guard on the
+operation that fails, and this one does not fail — it is unreachable: `c7a7b8c9d0e1` sits later in
+the chain and raises on downgrade by design, so no downgrade from head can arrive at this revision.
+Guarding an unreachable statement would be tidying a merged migration, which the prohibition list
+forbids. If the frozen-baseline remedy lands, this disappears with the rest of the problem; if a
+future change ever makes that downgrade reachable, it becomes a live candidate and must be evaluated
+on its own evidence.
+
+**`8f1a2c3d4b5e` — Add policy transition created_by FK.** The same rename: `policy_transitions` now
+carries `created_by_seat_id` and no `created_by`. The revision adds a foreign key on `created_by`,
+which cannot exist on a fresh chain. The correction returns early unless
+`column_exists("policy_transitions", "created_by")`, and adds the `column_exists` helper the file
+lacked. The pre-existing `foreign_key_exists` guard is preserved beneath it.
+
+Neither correction retargets its operation onto `created_by_seat_id`. That column is created by the
+bootstrap with its constraints already in place, and rewriting a historical revision to constrain a
+column that did not exist when it was written would change its intended end state, which condition 6
+forbids.
+
+#### Independent Evaluation
+
+Each candidate is evaluated on its own evidence. The register is a record of past decisions, not
+precedent: resemblance to a listed correction is not evidence that a candidate qualifies.
 
 ---
 

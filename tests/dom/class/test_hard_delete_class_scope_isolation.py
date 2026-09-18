@@ -56,7 +56,7 @@ def test_DOM_CLASS_001__hard_delete_class_scope_spares_sibling_class(client):
     )
 
     # _hard_delete_class_scope is decorated with @requires_feat_context, so it
-    # opens its own FEAT-CLASS-001 context; call it directly (no outer wrapper).
+    # opens its own FEAT-CLASS-006 context; call it directly (no outer wrapper).
     from app.feats.base import generate_correlation_id
     from app.routes.admin import _hard_delete_class_scope
 

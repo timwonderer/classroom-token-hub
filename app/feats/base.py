@@ -230,6 +230,10 @@ FEAT_REGISTRY = {
     "FEAT-CLASS-003": {"domain": "Class Configuration", "blast_radius": "MED", "desc": "Insurance Policy Management (invokes POL domain commands)"},
     "FEAT-CLASS-004": {"domain": "Class Configuration", "blast_radius": "MED", "desc": "Feature enablement"},
     "FEAT-CLASS-005": {"domain": "Class Configuration", "blast_radius": "HIGH", "desc": "Economic engine evolution"},
+    # Destruction is a different command from creation, not a mode of it: it removes
+    # every class-scoped record and the class's seats (INV-CORE-000 §26, §33). It is
+    # FEAT-CLASS-001's counterpart, never FEAT-CLASS-001 itself.
+    "FEAT-CLASS-006": {"domain": "Class Configuration", "blast_radius": "HIGH", "desc": "Destroy class boundary"},
     "FEAT-SETTINGS-001": {"domain": "Class Configuration", "blast_radius": "MED", "desc": "Class Settings Update"},
     "FEAT-POL-001": {"domain": "Policies", "blast_radius": "MED", "desc": "Policy Reference Management (insurance policy family)"},
     "FEAT-ITR-001": {"domain": "Interpretation", "blast_radius": "LOW", "desc": "Compute Interpretation Snapshot"},

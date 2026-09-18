@@ -1,4 +1,4 @@
-"""Terminal destruction of class universes and teacher accounts (FEAT-CLASS-001, FEAT-IDEN-007).
+"""Terminal destruction of class universes and teacher accounts (FEAT-CLASS-006, FEAT-IDEN-007).
 
 Domain commands composed by the FEAT envelopes in ``app/routes/admin.py`` and by
 the teacher retention job in ``app/services/teacher_lifecycle.py``. They open no
@@ -307,7 +307,7 @@ def _destroy_teacher_account_rows(*, canonical_context, admin_user=None):
     every owned class universe is destroyed through the ``_destroy_class_scope_rows``
     *domain command*, then the account-level residue (settings, credentials,
     recovery material, the ``users`` row itself). The class destruction is
-    composed, not delegated to FEAT-CLASS-001 — a FEAT never executes another
+    composed, not delegated to FEAT-CLASS-006 — a FEAT never executes another
     FEAT (INV-ARC-000 §VIII.2, INV-ARC-021 §V.2), and a single envelope is what
     makes the whole account teardown one atomic transaction.
 

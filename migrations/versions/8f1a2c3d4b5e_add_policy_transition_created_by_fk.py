@@ -44,7 +44,11 @@ def column_exists(table_name, column_name):
 
 
 def upgrade():
-    # Fresh bootstrap creates current ORM metadata, which has no legacy author column.
+    # Bootstrap-Replay Correction, SOP-DB-001 §V.B, 2026-09-17.
+    # `policy_transitions.created_by` is absent from current ORM metadata (authorship moved
+    # to `created_by_seat_id`), so `0001_bootstrap` creates this table without it and the
+    # foreign key below has no column to constrain on a fresh chain. Where the column is
+    # present the original guarded create_foreign_key runs unchanged.
     if not column_exists("policy_transitions", "created_by"):
         return
     if not foreign_key_exists("policy_transitions", "fk_policy_transitions_created_by"):

@@ -7,6 +7,8 @@ These FEATs orchestrate canonical class configuration mutations per DOM-CLASS-00
 - FEAT-CLASS-003: Insurance policy management (orchestrates FEAT-POL-001 definition writes)
 - FEAT-CLASS-004: Feature enablement/disablement (append-only class_features timeline)
 - FEAT-CLASS-005: Economic engine evolution (immutable versioned policy transitions)
+- FEAT-CLASS-006: Destroy class boundary (counterpart of 001, not a mode of it;
+  envelope lives in app/routes/admin.py::_hard_delete_class_scope)
 
 All FEATs enforce:
 - CanonicalContext (user_id, class_id, seat_id, actor_role=teacher)

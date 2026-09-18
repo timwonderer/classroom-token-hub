@@ -34,15 +34,36 @@ is distinct from actor_public_id-based modification of an exported roster under
 FEAT-CLASS-002. Notes are passed to the encrypted profile field.
 
 
-## Roster removal and terminal consequences (2026-09-15)
+## Roster removal and terminal consequences (2026-09-15, amended 2026-09-17)
 
 Teacher-authorized deletion uses the active canonical class and explicit student
 Seat IDs; cross-class, teacher-seat, missing, or malformed selections fail closed.
-One transaction locks the teacher and class, verifies the current roster, and
-composes Identity removal or class/account destruction as appropriate. The
+One transaction locks the teacher and class and verifies the current roster. The
 confirmation phrase must match the current consequence, including deletion of
 the class and teacher account when their final student/class is removed.
 Delete physically destroys the Seat; it is not an implicit Unclaim operation.
+
+**This FEAT owns roster removal only** — the case in which the seats go and the
+class universe survives. It does not own the terminal consequences. Emptying the
+final roster destroys the class universe, which `FEAT-CLASS-006` owns; doing so
+to the principal's final class destroys the principal, which `FEAT-IDEN-007`
+owns. The route dispatches to the owning FEAT before that FEAT opens, so exactly
+one FEAT executes per request (INV-ARC-000 §VIII.2) and the FEAT recorded in
+`feat_code` is the one whose contract covers what was destroyed.
+
+The dispatching preview holds no lock and authorizes nothing; it selects the
+FEAT. The selected executor takes the teacher and class locks, re-derives the
+plan, and **fails closed** if the terminal scope has changed since the preview
+(DOM-CLASS-001 §Terminal Roster Deletion). A narrower FEAT must never perform a
+wider destruction than its contract covers.
+
+Amended 2026-09-17. The previous wording had this FEAT "compose Identity removal
+or class/account destruction as appropriate", which attributed class-universe and
+principal destruction to a MED-blast-radius provisioning FEAT and left the HIGH
+idempotency discipline of `FEAT-IDEN-007` and `FEAT-CLASS-006` inapplicable to
+the most destructive operation in the system. The three consequences are mutually
+exclusive, so routing by scope still yields one envelope per request and keeps
+destruction atomic.
 
 ## Explicit Unclaim (2026-09-15)
 

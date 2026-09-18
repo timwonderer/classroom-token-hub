@@ -1103,14 +1103,48 @@ def _delete_transactions_for_class(class_id, *, join_code_deletion=False):
     return Transaction.query.filter_by(class_id=class_id).delete(synchronize_session=False)
 
 
-@requires_feat_context("FEAT-CLASS-001")
-def _hard_delete_class_scope(*, class_id, canonical_context, correlation_id, idempotency_key):
-    """Public FEAT entry for single-class destruction (FEAT-CLASS-001).
+class _DeletionScopeChanged(Exception):
+    """The locked state no longer matches the scope the open FEAT owns.
 
-    Thin envelope over the ``_destroy_class_scope_rows`` domain command. Callers
-    that already hold a FEAT context (teacher account destruction) must invoke
-    that command directly rather than this wrapper.
+    Destruction dispatch happens before a FEAT opens, from a read that holds no
+    lock. That read selects the executor; it never authorizes the destruction.
+    Each executor re-evaluates the authoritative state under lock and raises this
+    rather than destroying a scope its own FEAT does not cover.
     """
+
+
+def _lock_class_destruction_scope(*, class_id, user_id):
+    """Take the destruction locks in one fixed order.
+
+    Both class destruction and roster deletion serialize on the same two rows,
+    and both take them principal-first. A second order anywhere would let the two
+    paths deadlock against each other.
+    """
+    User.query.filter_by(id=user_id).with_for_update().one()
+    ClassEconomy.query.filter_by(class_id=class_id).with_for_update().one()
+
+
+@requires_feat_context("FEAT-CLASS-006")
+def _hard_delete_class_scope(*, class_id, canonical_context, correlation_id, idempotency_key):
+    """Public FEAT entry for single-class destruction (FEAT-CLASS-006).
+
+    Envelope over the ``_destroy_class_scope_rows`` domain command. Callers that
+    already hold a FEAT context (teacher account destruction) must invoke that
+    command directly rather than this wrapper.
+
+    FEAT-CLASS-006 covers destroying a class **while its owning principal
+    survives**. Whether that is the lawful outcome depends on whether the class
+    holds the principal's last seat, which callers read before this FEAT opens
+    and cannot hold still. So the condition is re-evaluated here, under the
+    locks, and a class whose destruction would now orphan its principal is
+    refused without mutation: that is FEAT-IDEN-007's command, and a principal
+    holding no seat anywhere cannot exist (DOM-IDEN-005 §V.6, §VI).
+    """
+    _lock_class_destruction_scope(class_id=class_id, user_id=canonical_context.user_id)
+    if _class_deletion_destroys_principal(canonical_context.user_id, class_id):
+        raise _DeletionScopeChanged(
+            f"expected=class actual=account class_id={class_id}"
+        )
     return _destroy_class_scope_rows(
         class_id=class_id,
         canonical_context=canonical_context,
@@ -3713,28 +3747,53 @@ def student_deletion_preview():
     return jsonify(_student_deletion_plan(g.canonical_context, data.get('student_ids', [])))
 
 
-@requires_feat_context("FEAT-IDEN-006")
-def _execute_student_deletion(*, context, seat_ids, data, require_gate,
-                              correlation_id, idempotency_key):
-    # Serialize roster-empty decisions and parent destruction with new membership.
-    User.query.filter_by(id=context.user_id).with_for_update().one()
-    ClassEconomy.query.filter_by(class_id=context.class_id).with_for_update().one()
-    plan = _student_deletion_plan(context, seat_ids)
-    if require_gate or plan['class_deleted']:
-        error = _validate_destruction_gate(data, expected_phrase=plan['expected_phrase'])
-        if error:
-            return error
+# Roster deletion terminates at one of three scopes, and each scope is a
+# different destructive command owned by a different FEAT: removing seats is
+# Identity provisioning's inverse (FEAT-IDEN-006), emptying the last roster
+# destroys the class universe (FEAT-CLASS-006), and doing that to the teacher's
+# final class destroys the principal itself (FEAT-IDEN-007, HIGH). Running all
+# three under FEAT-IDEN-006 recorded the most destructive operation in the
+# system under a MED provisioning FEAT.
+_DELETION_SCOPE_SEATS = "seats"
+_DELETION_SCOPE_CLASS = "class"
+_DELETION_SCOPE_ACCOUNT = "account"
+
+
+def _deletion_scope(plan):
+    """Name the terminal scope a deletion plan describes."""
     if plan['account_deleted']:
-        _destroy_teacher_account_rows(canonical_context=context)
-    elif plan['class_deleted']:
-        _destroy_class_scope_rows(class_id=context.class_id, canonical_context=context)
-        user = db.session.get(User, context.user_id)
-        user.last_active_class_id = None
-        user.last_active_seat_id = None
-    else:
-        from app.utils.student_deletion import remove_student_from_teacher_scope
-        for seat_id in plan['student_ids']:
-            remove_student_from_teacher_scope(seat_id, context.user_id)
+        return _DELETION_SCOPE_ACCOUNT
+    if plan['class_deleted']:
+        return _DELETION_SCOPE_CLASS
+    return _DELETION_SCOPE_SEATS
+
+
+def _locked_deletion_plan(context, seat_ids, *, expected_scope):
+    """Re-derive the deletion plan inside the executing transaction.
+
+    DOM-CLASS-001 §Terminal Roster Deletion requires ownership, the selected
+    seats, and whether class/account destruction follows to be re-evaluated
+    inside the locked execution transaction; this plan — not the preview that
+    chose the FEAT — is the authority for what gets destroyed.
+
+    The preview runs before any lock is held, so a concurrent claim, provision,
+    or delete can move the terminal scope between selecting a FEAT and executing
+    under it. When that happens the open FEAT is the wrong authority for the
+    command the plan now describes, so this fails closed rather than destroying
+    a wider scope than the FEAT attests to.
+    """
+    # Serialize roster-empty decisions and parent destruction with new membership.
+    _lock_class_destruction_scope(class_id=context.class_id, user_id=context.user_id)
+    plan = _student_deletion_plan(context, seat_ids)
+    actual_scope = _deletion_scope(plan)
+    if actual_scope != expected_scope:
+        raise _DeletionScopeChanged(
+            f"expected={expected_scope} actual={actual_scope}"
+        )
+    return plan
+
+
+def _deletion_result(plan):
     return dict(status="success", class_deleted=plan['class_deleted'],
                 account_deleted=plan['account_deleted'], deleted_count=len(plan['student_ids']),
                 message="Teacher account deleted." if plan['account_deleted'] else
@@ -3743,13 +3802,90 @@ def _execute_student_deletion(*, context, seat_ids, data, require_gate,
                          url_for('admin.dashboard') if plan['class_deleted'] else url_for('admin.students'))
 
 
+@requires_feat_context("FEAT-IDEN-006")
+def _execute_seat_deletion(*, context, seat_ids, data, require_gate,
+                           correlation_id, idempotency_key):
+    """Remove the selected student seats. The class and the principal survive."""
+    plan = _locked_deletion_plan(context, seat_ids, expected_scope=_DELETION_SCOPE_SEATS)
+    if require_gate:
+        error = _validate_destruction_gate(data, expected_phrase=plan['expected_phrase'])
+        if error:
+            return error
+    from app.utils.student_deletion import remove_student_from_teacher_scope
+    for seat_id in plan['student_ids']:
+        remove_student_from_teacher_scope(seat_id, context.user_id)
+    return _deletion_result(plan)
+
+
+@requires_feat_context("FEAT-CLASS-006")
+def _execute_class_scope_deletion(*, context, seat_ids, data, require_gate,
+                                  correlation_id, idempotency_key):
+    """Deleting the final seats destroys the class universe; the principal survives."""
+    plan = _locked_deletion_plan(context, seat_ids, expected_scope=_DELETION_SCOPE_CLASS)
+    # Class destruction is gated unconditionally, whatever the caller asked for.
+    error = _validate_destruction_gate(data, expected_phrase=plan['expected_phrase'])
+    if error:
+        return error
+    _destroy_class_scope_rows(class_id=context.class_id, canonical_context=context)
+    # The destroyed class must not survive as a canonical pointer (INV-ARC-012 §V).
+    user = db.session.get(User, context.user_id)
+    user.last_active_class_id = None
+    user.last_active_seat_id = None
+    return _deletion_result(plan)
+
+
+@requires_feat_context("FEAT-IDEN-007")
+def _execute_account_scope_deletion(*, context, seat_ids, data, require_gate,
+                                    correlation_id, idempotency_key):
+    """The final seats in the teacher's only class: the principal cannot survive it."""
+    plan = _locked_deletion_plan(context, seat_ids, expected_scope=_DELETION_SCOPE_ACCOUNT)
+    error = _validate_destruction_gate(data, expected_phrase=plan['expected_phrase'])
+    if error:
+        return error
+    _destroy_teacher_account_rows(canonical_context=context)
+    return _deletion_result(plan)
+
+
+def _deletion_executor(scope, context):
+    """Pair a terminal scope with the FEAT that owns it and that FEAT's key.
+
+    The two HIGH-blast-radius scopes take the same idempotency keys the
+    join-code destruction route uses for the same commands, so one class or one
+    principal destroyed through either surface reads as the same operation.
+    """
+    if scope == _DELETION_SCOPE_ACCOUNT:
+        return _execute_account_scope_deletion, f"account:destroy:{context.user_id}"
+    if scope == _DELETION_SCOPE_CLASS:
+        return _execute_class_scope_deletion, f"class:destroy:{context.class_id}"
+    return _execute_seat_deletion, f"identity:roster-delete:{uuid.uuid4().hex}"
+
+
 def _dispatch_student_deletion(seat_ids, data, *, require_gate, form_response=False):
     from app.feats.base import InvariantViolation
+    context = g.canonical_context
+    # This preview holds no lock and authorizes nothing. It decides exactly one
+    # thing: which FEAT opens. The executor re-derives the plan under lock and
+    # refuses if the scope has moved (DOM-CLASS-001 §Terminal Roster Deletion).
+    executor, idempotency_key = _deletion_executor(
+        _deletion_scope(_student_deletion_plan(context, seat_ids)), context
+    )
     try:
-        result = _execute_student_deletion(
-            context=g.canonical_context, seat_ids=seat_ids, data=data, require_gate=require_gate,
-            correlation_id=generate_correlation_id(), idempotency_key=f"identity:roster-delete:{uuid.uuid4().hex}",
+        result = executor(
+            context=context, seat_ids=seat_ids, data=data, require_gate=require_gate,
+            correlation_id=generate_correlation_id(), idempotency_key=idempotency_key,
         )
+    except _DeletionScopeChanged as change:
+        db.session.rollback()
+        current_app.logger.warning(
+            "Roster deletion refused: scope changed under lock (%s) seat_id=%s",
+            change, ",".join(str(seat_id) for seat_id in seat_ids),
+        )
+        message = ("This class changed while the delete was being confirmed. "
+                   "Nothing was deleted — reload the roster and try again.")
+        if form_response:
+            flash(message, "error")
+            return redirect(url_for('admin.students'))
+        return jsonify(status="error", message=message), 409
     except (HTTPException, InvariantViolation):
         raise
     except Exception:
@@ -3870,7 +4006,7 @@ def delete_join_code():
         if _class_deletion_destroys_principal(user_id, class_id):
             # This class holds the principal's last seat, so the principal cannot
             # survive it (DOM-IDEN-005 §VI). That is FEAT-IDEN-007, not
-            # FEAT-CLASS-001.
+            # FEAT-CLASS-006.
             _hard_delete_teacher_account_scope(
                 canonical_context=g.canonical_context,
                 admin_user=db.session.get(User, user_id),
@@ -3906,6 +4042,22 @@ def delete_join_code():
             "status": "success",
             "message": f"{display_label} and all scoped records were permanently deleted."
         })
+    except _DeletionScopeChanged as change:
+        # Between the pre-FEAT read and the locks, this became the principal's
+        # last class. FEAT-CLASS-006 does not destroy principals, so nothing was
+        # touched; the teacher must re-confirm against the real consequence,
+        # whose confirmation phrase is the stronger one.
+        db.session.rollback()
+        current_app.logger.warning(
+            "Class destruction refused: scope changed under lock (%s)", change
+        )
+        return jsonify({
+            "status": "error",
+            "message": (
+                "This became your last class while the delete was being confirmed. "
+                "Nothing was deleted — reload the page and confirm again."
+            ),
+        }), 409
     except InvariantViolation:
         db.session.rollback()
         raise
