@@ -325,7 +325,7 @@ function updateHallPassOverlay(hallPass) {
         level,
         icon,
         title,
-        body: bodyParts,
+        bodyNodes: bodyParts,
         className: 'mb-2',
       }));
     };

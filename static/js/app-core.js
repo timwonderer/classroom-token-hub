@@ -110,13 +110,22 @@
   }
 
   // Alert-as-card builder. DOM twin of the `alert_card` macro in
-  // templates/macros/cards.html — keep the two in lockstep. `body` may be
-  // a string (set as text, never parsed as HTML), a Node, or an array of
-  // either. Returns the card element; the caller inserts it.
+  // templates/macros/cards.html — keep the two in lockstep.
+  //
+  // Text and elements arrive through separate parameters, and the split is
+  // deliberate. `body` is text only: a string or number, or an array of them,
+  // set through textContent and never parsed. `bodyNodes` is element content
+  // the caller has already built. Callers routinely pass an exception message
+  // or a server error string as `body` (showToast's no-Bootstrap fallback, the
+  // passkey and roster surfaces), so keeping that value away from every DOM
+  // insertion point is what makes "never parsed as HTML" checkable rather than
+  // merely intended.
+  //
+  // Returns the card element; the caller inserts it.
   const ALERT_CARD_LEVELS = ['success', 'warning', 'danger', 'info'];
   let alertCardSeq = 0;
 
-  function buildAlertCard({ level = 'info', title, icon, body, role, id, dismissible = false, className = '' } = {}) {
+  function buildAlertCard({ level = 'info', title, icon, body, bodyNodes, role, id, dismissible = false, className = '' } = {}) {
     const resolvedLevel = ALERT_CARD_LEVELS.includes(level) ? level : 'info';
     const textClass = resolvedLevel === 'warning' ? 'text-dark' : 'text-white';
 
@@ -153,24 +162,19 @@
     cardBody.className = 'card-body';
     (Array.isArray(body) ? body : [body]).forEach((part) => {
       if (part === undefined || part === null || part === '') return;
-      // Text first, and never as markup: a caller may pass an exception message
-      // straight through (showToast's no-Bootstrap fallback does), so the string
-      // case is handled and returned before any DOM insertion is considered.
-      // Ordering it this way also states the guarantee to a reader — and to a
-      // scanner, which cannot infer it from an `instanceof` guard alone.
-      if (typeof part === 'string' || typeof part === 'number') {
-        const p = document.createElement('p');
-        p.className = 'mb-0';
-        p.textContent = String(part);
-        cardBody.appendChild(p);
-        return;
-      }
-      if (part instanceof Node) {
-        cardBody.appendChild(part);
-        return;
-      }
-      // Anything else (a plain object, a function) is not renderable content
-      // and is dropped rather than stringified into the card.
+      // Text only. Anything that is not a string or number is dropped rather
+      // than coerced, so this branch has no path to a DOM insertion.
+      if (typeof part !== 'string' && typeof part !== 'number') return;
+      const p = document.createElement('p');
+      p.className = 'mb-0';
+      p.textContent = String(part);
+      cardBody.appendChild(p);
+    });
+
+    (Array.isArray(bodyNodes) ? bodyNodes : [bodyNodes]).forEach((node) => {
+      // Elements the caller built. Every in-repo caller composes these with
+      // textContent or append(); none parses markup.
+      if (node instanceof Node) cardBody.appendChild(node);
     });
 
     card.appendChild(header);
