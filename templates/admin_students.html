@@ -266,7 +266,11 @@
                       {% for student in roster.students %}
                       <tr class="student-row" data-student-id="{{ student.public_id }}">
                         <td>
-                          <input type="checkbox" class="form-check-input student-checkbox" value="{{ student.public_id }}"
+                          {# The checkbox carries the seat id: every bulk endpoint
+                             it feeds takes internal ids. public_id addresses a
+                             page in a URL, and the detail link below uses it
+                             there. #}
+                          <input type="checkbox" class="form-check-input student-checkbox" value="{{ student.seat_id }}"
                             data-seat-id="{{ student.seat_id }}"
                             onchange="updateBulkToolbar()" aria-label="Select {{ student.full_name }}">
                         </td>
@@ -1310,7 +1314,7 @@
 
   function bulkDeleteStudents() {
     const selected = currentClassStudentTable().querySelectorAll('.student-checkbox:checked');
-    deleteStudentsWithPreview(Array.from(selected).map(cb => cb.value));
+    deleteStudentsWithPreview(Array.from(selected).map(cb => cb.dataset.seatId));
   }
 
   document.addEventListener('click', event => {
@@ -1419,7 +1423,9 @@
   function bulkUpdateHallPass() {
     const table = currentClassStudentTable();
     const checkboxes = table.querySelectorAll('.student-checkbox:checked');
-    const studentIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+    const studentIds = Array.from(checkboxes)
+      .map(cb => parseInt(cb.dataset.seatId, 10))
+      .filter(Number.isInteger);
 
     if (studentIds.length === 0) {
       announceStudentManagement('Select at least one student.', 'warning');
