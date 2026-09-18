@@ -153,14 +153,24 @@
     cardBody.className = 'card-body';
     (Array.isArray(body) ? body : [body]).forEach((part) => {
       if (part === undefined || part === null || part === '') return;
-      if (part instanceof Node) {
-        cardBody.appendChild(part);
-      } else {
+      // Text first, and never as markup: a caller may pass an exception message
+      // straight through (showToast's no-Bootstrap fallback does), so the string
+      // case is handled and returned before any DOM insertion is considered.
+      // Ordering it this way also states the guarantee to a reader — and to a
+      // scanner, which cannot infer it from an `instanceof` guard alone.
+      if (typeof part === 'string' || typeof part === 'number') {
         const p = document.createElement('p');
         p.className = 'mb-0';
         p.textContent = String(part);
         cardBody.appendChild(p);
+        return;
       }
+      if (part instanceof Node) {
+        cardBody.appendChild(part);
+        return;
+      }
+      // Anything else (a plain object, a function) is not renderable content
+      // and is dropped rather than stringified into the card.
     });
 
     card.appendChild(header);
