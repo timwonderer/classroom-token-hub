@@ -124,6 +124,15 @@ def _destroy_class_scope_rows(*, class_id, canonical_context, **_ignored):
         Announcement.class_id == class_id,
     ).delete(synchronize_session=False)
 
+    # Hold every seat in the class before its tickets are removed. Support keeps
+    # no foreign key into `seats`, so a ticket inserted after this sweep would
+    # outlive the class it belongs to (DOM-SUP-001 §X). Issue writers validate
+    # the seat under FOR SHARE, which this conflicts with.
+    from app.utils.student_deletion import lock_seats_for_deletion
+    lock_seats_for_deletion(
+        [row[0] for row in db.session.query(Seat.id).filter(Seat.class_id == class_id).all()]
+    )
+
     # Issue data tied to this class
     IssueResolutionAction.query.filter(
         IssueResolutionAction.issue_id.in_(sa.select(issue_ids_subq))

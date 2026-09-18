@@ -24,6 +24,38 @@ from app.models import (
 from app.services.recovery_service import delete_recovery_codes_for_seat
 
 
+def lock_seats_for_deletion(seat_ids):
+    """Take an exclusive lock on each seat before its dependents are collected.
+
+    Support holds no foreign key into ``seats`` (DOM-SUP-001 §X, INV-ARC-021
+    §V.7): tickets and request traces reference a seat by public ID, and the
+    domain requires seat deletion to remove them *in the same transaction*.
+    Nothing in the database enforces that, so the ordering has to.
+
+    The issue and trace writers validate the live seat under ``FOR SHARE``
+    before inserting. Reading the seat unlocked here left a window: cleanup
+    could run, a writer could then take its share lock, insert a ticket and
+    commit, and the seat DELETE would still succeed — leaving the ticket and its
+    captured context behind with nothing to attach them to. ``FOR UPDATE``
+    conflicts with that share lock, so a writer either commits before the
+    deletion begins and has its ticket collected, or waits and then finds the
+    seat gone and writes nothing.
+
+    Locked in id order so that two concurrent deletions touching overlapping
+    seats cannot deadlock against each other.
+    """
+    ids = sorted({int(seat_id) for seat_id in (seat_ids or []) if seat_id})
+    if not ids:
+        return []
+    return (
+        Seat.query
+        .filter(Seat.id.in_(ids))
+        .order_by(Seat.id)
+        .with_for_update()
+        .all()
+    )
+
+
 def _collect_related_ids_for_seats(seat_ids_for_student):
     """Materialize dependent record IDs once for downstream delete/update queries."""
     seat_ids_for_student = list(seat_ids_for_student or [])
@@ -266,6 +298,9 @@ def hard_delete_student_if_orphaned(student_id):
     if has_links:
         return False
 
+    lock_seats_for_deletion(
+        [row[0] for row in db.session.query(Seat.id).filter(Seat.user_id == student_id).all()]
+    )
     entitlement_ids, issue_ids, tx_ids, seat_ids = _collect_related_ids(student_id)
     _unclaim_all_seats_for_student(student_id)
     _clear_support_transaction_refs(tx_ids)
@@ -287,6 +322,7 @@ def remove_student_from_teacher_scope(seat_id, user_id):
     if not owner or owner.teacher_user_id != user_id:
         raise ValueError("Student seat is outside teacher ownership")
     student_user_id = seat.user_id
+    lock_seats_for_deletion([seat_id])
     entitlement_ids, issue_ids, tx_ids, seat_ids = _collect_related_ids_for_seats([seat_id])
     _clear_support_transaction_refs(tx_ids)
     _delete_student_scoped_rows(student_user_id, entitlement_ids, issue_ids, tx_ids,

@@ -391,6 +391,11 @@ def create_roster_student_seat(
 def delete_seat_with_profile(seat: Seat) -> None:
     """Delete a seat and its identity profile in canonical order."""
     from app.models import ActorRequestTrace, Issue
+    from app.utils.student_deletion import lock_seats_for_deletion
+
+    # Hold the seat exclusively first: a ticket written between this cleanup and
+    # the seat DELETE would have nothing left to attach to (DOM-SUP-001 §X).
+    lock_seats_for_deletion([seat.id])
 
     # Support references a seat by public ID only (DOM-SUP-001 §X). An unclaimed
     # seat keeps the tickets and traces of its earlier claimant, so they go here.
