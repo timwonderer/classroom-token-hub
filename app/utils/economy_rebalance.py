@@ -378,7 +378,7 @@ def _get_effective_rent_settings(class_id: str | None):
     return get_rent_settings(class_id)
 
 
-def _apply_change_list(class_id, changes, activation_mode, *, reference_time=None, canonical_context=None):
+def _apply_change_list(class_id, changes, activation_mode, *, reference_time=None, canonical_context=None, actor_seat_id=None):
     """Apply policy changes to a class's economic configuration.
 
     Args:
@@ -436,7 +436,15 @@ def _apply_change_list(class_id, changes, activation_mode, *, reference_time=Non
                 if hasattr(product, field)
             }
             definition["price"] = Decimal(str(change.get("new_value")))
-            store_service.supersede_product(current=product, definition=definition)
+            # A replacement version is authored by whoever caused the
+            # rebalance. Omitting the seat left every superseded product with a
+            # null author, which INV-ARC-019 §VII makes a classroom fact
+            # without an owner.
+            store_service.supersede_product(
+                current=product,
+                definition=definition,
+                actor_seat_id=actor_seat_id,
+            )
             applied_labels.append(f"Store: {product.name}")
             applied_changes.append(dict(change))
         elif change_type == "overdraft_fee":
@@ -518,6 +526,7 @@ def apply_rebalance_changes(actor_seat_id, class_id, change_plan, activation_mod
         activation_mode,
         reference_time=reference_time,
         canonical_context=canonical_context,
+        actor_seat_id=actor_seat_id,
     )
     if applied_changes:
         _create_policy_transitions_for_changes(

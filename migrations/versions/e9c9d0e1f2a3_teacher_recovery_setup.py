@@ -62,3 +62,20 @@ def downgrade():
     for name, _type in _SETUP_COLUMNS:
         if column_exists('recovery_requests', name):
             op.drop_column('recovery_requests', name)
+    # The upgrade widened this column to Text; leaving it wide made the
+    # downgrade a partial reversal, so a rehearsal would not return the schema
+    # it started from. b484581f2fc9 created it as String(100).
+    #
+    # The column holds a new username mid-recovery — transient by construction,
+    # and encrypted since this revision, so a ciphertext can exceed 100
+    # characters. Clearing it first means the narrowing cannot fail on a value
+    # that no longer has a session to belong to; an interrupted recovery is
+    # restarted, not resumed across a schema rollback.
+    op.execute("UPDATE recovery_requests SET resume_new_username = NULL")
+    op.alter_column(
+        'recovery_requests',
+        'resume_new_username',
+        type_=sa.String(length=100),
+        existing_type=sa.Text(),
+        existing_nullable=True,
+    )

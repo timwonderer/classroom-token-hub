@@ -4773,7 +4773,13 @@ def edit_store_item(product_lineage_uuid):
                             current.collective_goal_instance_code
                         )
 
-                successor = supersede_product(current=current, definition=definition)
+                successor = supersede_product(
+                    current=current,
+                    definition=definition,
+                    actor_seat_id=resolve_teacher_seat_for_class(
+                        selected_scope['class_id']
+                    ).id,
+                )
                 _apply_rent_link_from_form(
                     form,
                     class_id=selected_scope['class_id'],
