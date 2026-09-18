@@ -596,6 +596,11 @@ def activate_due_rebalances(user_id, *, class_id=None, reference_time=None):
                     [change],
                     activation_mode,
                     reference_time=reference_time,
+                    # A product superseded by this sweep is authored by the seat
+                    # that scheduled the transition, not by the sweep. Without
+                    # this the activation path recreated the null-author row the
+                    # immediate path was just fixed to stop writing.
+                    actor_seat_id=transition.created_by_seat_id,
                 )
                 if applied_changes:
                     activated_version = _activate_pending_policy_version(transition, reference_time=reference_time)
