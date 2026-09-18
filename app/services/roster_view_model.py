@@ -77,7 +77,6 @@ class UnclaimedSeatRow:
     claim_code: str | None
     claim_code_display: str
     display_added_on: str
-    is_teacher: bool
     status_label: str
 
 
@@ -241,7 +240,6 @@ def build_class_roster_view(
             # A seat only needs a distinguishing code when it shares a name.
             claim_code_display=seat.dedupe_code or "Not needed",
             display_added_on=seat.created_at.strftime("%Y-%m-%d") if seat.created_at else "N/A",
-            is_teacher=bool(getattr(seat, "is_teacher", False)),
             status_label="Waiting for Claim",
         )
         for seat in unclaimed

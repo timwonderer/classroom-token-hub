@@ -417,9 +417,6 @@
                       <tr>
                         <td>
                           <span class="fw-bold">{{ seat.full_name }}</span>
-                          {% if seat.is_teacher %}
-                          <div><small class="text-muted">Claim credential: managed by system</small></div>
-                          {% endif %}
                         </td>
                         <td>
                           {% if seat.claim_code %}
@@ -433,9 +430,6 @@
                         </td>
                         <td>
                           <span class="badge bg-warning text-dark">{{ seat.status_label }}</span>
-                          {% if seat.is_teacher %}
-                          <div><small class="text-muted">Teacher shadow account</small></div>
-                          {% endif %}
                         </td>
                         <td>
                           <button type="button" class="btn btn-sm btn-outline-danger delete-pending-student"

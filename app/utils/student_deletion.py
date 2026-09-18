@@ -288,29 +288,6 @@ def delete_user_if_orphaned(user_id):
     return bool(delete_orphaned_users([user_id]))
 
 
-def hard_delete_student_if_orphaned(student_id):
-    """Hard-delete a student and dependent rows only when no teacher links remain."""
-    has_links = (
-        db.session.query(Seat.id)
-        .filter(Seat.user_id == student_id)
-        .all()
-    )
-    if has_links:
-        return False
-
-    lock_seats_for_deletion(
-        [row[0] for row in db.session.query(Seat.id).filter(Seat.user_id == student_id).all()]
-    )
-    entitlement_ids, issue_ids, tx_ids, seat_ids = _collect_related_ids(student_id)
-    _unclaim_all_seats_for_student(student_id)
-    _clear_support_transaction_refs(tx_ids)
-    _delete_student_scoped_rows(student_id, entitlement_ids, issue_ids, tx_ids, seat_ids)
-    Seat.query.filter(Seat.user_id == student_id).delete(synchronize_session=False)
-    # The principal does not outlive its last seat.
-    delete_user_if_orphaned(student_id)
-    return True
-
-
 def remove_student_from_teacher_scope(seat_id, user_id):
     """
     Remove a student's seat from a specific teacher's roster and hard-delete if orphaned.

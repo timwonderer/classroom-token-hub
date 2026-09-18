@@ -239,9 +239,17 @@ output is advisory only and is **not** independent verification authority.
 4. Do **not** use `alembic downgrade` / `flask db downgrade` as automatic
    recovery. Downgrade is a rehearsed, explicitly targeted operation; the bare
    form aborts with "Ambiguous walk" when the head is a merge point.
-5. Confirm a recoverable snapshot of the target database exists before the test
+5. **Some revisions cannot be downgraded at all.** `c7a7b8c9d0e1`
+   (seat-owned records) raises on downgrade: it removes principal references
+   from classroom facts, and rebinding cannot reconstruct which principal a
+   seat previously carried. `c1a1b2d3e4f5` (claim-artifact cleanup) downgrades
+   to a no-op for the same reason — erased claim material is not recoverable.
+   Rolling back past either revision means restoring the database snapshot
+   taken in step 6, not walking the chain backwards. Confirm that snapshot
+   exists before applying them.
+6. Confirm a recoverable snapshot of the target database exists before the test
    window opens.
-6. Reopen traffic only after the decision is recorded.
+7. Reopen traffic only after the decision is recorded.
 
 ## XV. Record Storage
 

@@ -200,7 +200,6 @@ from app.utils.auth_username import (
 )
 from app.utils.student_deletion import (
     delete_orphaned_users,
-    hard_delete_student_if_orphaned,
 )
 from app.utils.seat_scope import seat_scoped_filter, transaction_scope_filter
 from app.feats.admin_adjustment_feat import execute_admin_adjustments
@@ -1096,11 +1095,6 @@ def _assert_transaction_deletion_allowed(class_id, *, join_code_deletion=False):
             f"Refusing to delete transactions for active class '{class_id}'. "
             "Use student removal or class deletion flows instead."
         )
-
-
-def _hard_delete_student_if_orphaned(student_id):
-    """Compatibility wrapper for internal call sites and tests."""
-    return hard_delete_student_if_orphaned(student_id)
 
 
 def _delete_transactions_for_class(class_id, *, join_code_deletion=False):
