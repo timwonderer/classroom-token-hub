@@ -35,6 +35,9 @@
 
     --leading-tight: 1.25;
     --leading-snug: 1.4;
+    /* Body copy in a narrow column: looser than snug, tighter than the 1.6 used
+       for full-width prose. */
+    --leading-body: 1.5;
     --leading-normal: 1.6;
 
     /* Tracking. --tracking-widest is for the PIN and recovery-code inputs, where
@@ -45,8 +48,13 @@
     --tracking-wider: 0.1em;
     --tracking-widest: 0.5em;
 
-    /* Spacing — 4px base */
+    /* Spacing — 4px base.
+       Two sub-steps exist below the base for controls that must stay compact
+       inside a dense component — a count badge, an icon-only dismiss button —
+       where 4px is already too much padding to hold the shape. */
     --space-0: 0;
+    --space-hairline: 1px;
+    --space-half: 2px;
     --space-1: 4px;
     --space-2: 8px;
     --space-3: 12px;
@@ -80,6 +88,10 @@
     --alpha-soft: 0.16;
     --alpha-medium: 0.35;
     --alpha-strong: 0.6;
+    /* Near-solid: an element that is legibly present but deliberately one step
+       back from its neighbours, such as a progress count or a resting icon
+       button on a coloured header. */
+    --alpha-heavy: 0.85;
 
     /* Radius — Minimal / Crisp */
     --radius-xs: 2px;
