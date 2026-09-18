@@ -78,7 +78,7 @@
                         <ul><li>The teacher supplies first and last name fields as they should be entered during claiming. These may be full or partial names; the last field is not restricted to one initial.
                         <div class="card card-header text-white fw-semibold mt-2" style="background-color:var(--primary);border-radius:10px 10px 0px 0px"><p class="mb-0 mt-0"><span aria-hidden="true" class="material-symbols-outlined" style="vertical-align: middle; margin-right: 0.5rem;">privacy_tip</span>Choose classroom names with privacy in mind</p></div>
                         <div class="card card-body mb-2" style="border-radius:0px 0px 10px 10px" >
-                            While these fields are labeled as first name and last name, teachers can use agreed classroom names or nicknames. Students must enter the values the teacher supplied; a nickname does not make linked classroom records anonymous.
+                            While these fields are labeled as first name and last name, teachers can use agreed classroom names or nicknames. Students enter the values the teacher supplied. A roster built entirely from classroom nicknames leaves no real-name identifier in the platform.
                         </div>
                         </li><li>The roster supports optional encrypted teacher notes. Keep unnecessary personal or sensitive information out of notes and other free-text fields.</li><li>The student enters the class join code, matching name fields, and, if another unclaimed roster entry shares the name, the distinguishing code the system generated for their entry and the teacher shares, then creates a username, PIN, and passphrase.</li></ul>
                         <h3>Stored records</h3>
@@ -125,7 +125,7 @@
                         <p>Teachers can see classroom rosters and activity, manage student participation, and download class roster or student exports. Students see their own display name and classroom information made available to them.</p>
                         <p>Support staff can review submitted teacher reports and escalated student issues. Reports include technical diagnostics such as the page URL, route and request correlation information, IP address, and browser details. Teachers choose separately whether to include balances, the reported transaction, recent transactions, student report text, and the class label. These options are not selected by default. The submitted snapshot is fixed: support does not refresh it from live classroom records. Every ticket belongs to a class participation record, including a teacher’s own ticket, and deletion of that record removes the associated ticket. Free-text submissions contain what the author types; omit unnecessary personal details.</p>
                         <h3>Shared hall-pass verification</h3>
-                        <p>A person with a teacher’s verification link can select one of that teacher’s classes and submit a student’s first and last name. A matching result can display the student’s name, class, destination, pass status, and departure or return details for the current day. The page does not require a teacher or student login. Share the link only with intended school staff.</p>
+                        <p>A person with a teacher’s verification link can select one of that teacher’s classes and submit a student’s first and last name. Because the class and the name are both supplied by the person asking, a match confirms what they already hold rather than disclosing a student; it adds the pass itself — destination, status, and the current day’s departure or return time. The page returns no roster, no multi-day history, and no internal identifiers. The page does not require a teacher or student login. Share the link only with intended school staff.</p>
                     </section>
 
                     <section class="public-section" id="app-vs-infra">
@@ -152,7 +152,7 @@
                         <h2>11. Simulated Financial and Activity Records</h2>
                         <p>CTH currency has no real monetary value. The application does not connect to banks or real payment processing.</p>
                         <p>It records classroom payroll, bonuses and fines, transfers, rent and other obligations, insurance, store purchases, and entitlement use. Balances are derived from ledger records; pending transactions can affect the amount available to spend. Corrections use recorded reversal or void workflows.</p>
-                        <p>These records use class and student participation identifiers and can be linked back to a student by authorized application views. Amounts, timestamps, and ordinary activity fields are not all encrypted with the display-name encryption facility. Class-level economic summaries are available to teachers.</p>
+                        <p>These records use class and student participation identifiers, and are resolved back to a named student only in the provisioning teacher’s own class views. Amounts, timestamps, and ordinary activity fields are not all encrypted with the display-name encryption facility. Class-level economic summaries are available to teachers.</p>
                     </section>
 
                     <section class="public-section" id="what-not-do">
