@@ -3624,6 +3624,16 @@ def edit_student():
     if not verify_teacher_owns_class(current_class_id, user_id):
         abort(404)
 
+    # An unclaimed seat is a roster placeholder whose stored name IS the claim
+    # key (DOM-IDEN-002 §VIII). Editing the display profile here would leave
+    # those hashes matching the old name while the roster showed the new one,
+    # and the seat could then only be claimed under a name the teacher can no
+    # longer see. Display-name edits do not regenerate claim artifacts, so the
+    # edit itself is refused: the roster offers no edit control for these seats,
+    # and removing and re-adding the seat is the supported correction.
+    if student.claimed_at is None or student.user_id is None:
+        abort(404)
+
     # Get form data
     new_first_name = request.form.get('first_name', '').strip()
     last_name_input = request.form.get('last_name', '').strip()

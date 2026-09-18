@@ -222,3 +222,49 @@ def test_DOM_IDEN_002__attendance_history_api_hides_an_unclaimed_seat(client):
     assert after.status_code == 200
     assert not any(row["seat_id"] == student.id for row in after.get_json()["records"])
     assert AttendanceSession.query.filter_by(target_seat_id=student.id).count() == 1
+
+
+def test_DOM_IDEN_002__an_unclaimed_seat_cannot_be_renamed(client):
+    """Renaming an unclaimed seat would desynchronise its claim key.
+
+    An unclaimed seat's stored name is what a student matches against at claim
+    (DOM-IDEN-002 §VIII), and display-name edits do not regenerate claim
+    artifacts. Editing one would leave the hashes on the old name while the
+    roster showed the new one, so the seat could only be claimed under a name
+    the teacher can no longer see. The roster renders no edit control for these
+    rows; this holds the same rule for a request that arrives without one.
+    """
+    from app.models import IdentityProfile
+
+    classroom = initialize_as_teacher("chemistry_p1", client, client.application)
+    seat = _unclaimed_seat_holding_money(classroom)
+    before = IdentityProfile.query.filter_by(seat_id=seat.id).first()
+    original_first, original_hash = before.first_name, seat.claim_first_name_hash
+
+    response = client.post(
+        "/admin/student/edit",
+        data={"seat_id": seat.id, "first_name": "Renamed", "last_name": "Namesake"},
+    )
+    assert response.status_code == 404
+
+    db.session.expire_all()
+    after = IdentityProfile.query.filter_by(seat_id=seat.id).first()
+    assert after.first_name == original_first
+    assert db.session.get(Seat, seat.id).claim_first_name_hash == original_hash
+
+
+def test_DOM_IDEN_002__a_claimed_seat_can_still_be_renamed(client):
+    """The guard is about claim state, not about editing: claimed seats still edit."""
+    from app.models import IdentityProfile
+
+    classroom = initialize_as_teacher("chemistry_p1", client, client.application)
+    student = classroom.students[0].seat
+
+    response = client.post(
+        "/admin/student/edit",
+        data={"seat_id": student.id, "first_name": "Renamed", "last_name": "Student"},
+    )
+    assert response.status_code in (200, 302)
+
+    db.session.expire_all()
+    assert IdentityProfile.query.filter_by(seat_id=student.id).first().first_name == "Renamed"
