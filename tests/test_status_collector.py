@@ -46,6 +46,30 @@ def test_collector_records_all_signals_with_one_correlation_and_no_raw_body():
     assert next(record for record in records if record.capability == "login").outcome == Outcome.UNKNOWN
     assert next(record for record in records if record.capability == "public_service_reachability").outcome == Outcome.PASS
     assert all("secret" not in repr(record) for record in records)
+    assert all(record.observed_at == NOW for record in records)
+
+
+def test_collector_default_clock_validates_and_stores_receipt_time(monkeypatch):
+    receipt_time = NOW + timedelta(minutes=3)
+    clock_reads = iter((NOW, receipt_time))
+
+    class ReceiptClock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            assert tz == timezone.utc
+            return next(clock_reads)
+
+    monkeypatch.setattr("status_service.collector.datetime", ReceiptClock)
+    store = RecordingStore()
+    records = collect(store, client_id="id", client_secret="secret",
+                      fetch=lambda *_: payload(timestamp=receipt_time))
+
+    database = next(record for record in records if record.capability == "database")
+    assert database.outcome == Outcome.PASS
+    assert database.epistemic_state == EpistemicState.KNOWN
+    assert database.diagnostic_code == "DATABASE_REACHABLE"
+    assert all(record.observed_at == receipt_time for record in records)
+    assert store.records == records
 
 
 def test_access_denial_is_not_reported_as_app_failure():

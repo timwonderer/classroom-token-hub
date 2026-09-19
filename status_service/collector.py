@@ -96,10 +96,10 @@ def collect(store: FirestoreNoticeStore, *, client_id: str, client_secret: str, 
     signals = {key: (Outcome.UNKNOWN, EpistemicState.UNAVAILABLE, "PROBE_UNAVAILABLE") for key in SIGNALS}
     try:
         body = fetch(client_id, client_secret)
+        observed_at = now if now is not None else datetime.now(timezone.utc)
         reachability = (Outcome.PASS, EpistemicState.KNOWN, "HTTP_OK")
-        # Validate against receipt time, not the timestamp captured before the
-        # request: a current response is necessarily later than that timestamp.
-        signals = _signal_map(body, now if now is not None else datetime.now(timezone.utc))
+        # Use the same receipt time for validation and persisted freshness.
+        signals = _signal_map(body, observed_at)
     except HTTPError as exc:
         # Access denial is a monitor-credential problem, not evidence of app failure.
         if exc.code not in (301, 302, 303, 307, 308, 401, 403):
