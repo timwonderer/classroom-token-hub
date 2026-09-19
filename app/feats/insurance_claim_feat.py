@@ -1860,7 +1860,6 @@ def _resolve_insurance_claim_impl(
                 target_seat_id=student_seat.id,
                 actor_seat_id=teacher_seat.id,
                 mechanism="system",
-                user_id=student_seat.user_id,
                 amount=reimbursement_amount,
                 account_type="checking",
                 type="insurance_reimbursement",

@@ -11,6 +11,7 @@ from app.models import (
     ClassEconomy,
     PolicyTransition,
     PolicyVersion,
+    Seat,
     RentSettings,
 )
 from app.services.admin_settings_service import supersede_rent_settings
@@ -195,12 +196,14 @@ def _create_policy_transition(
     domain: str,
     change_payload: dict[str, Any],
     activation_mode: str,
-    created_by: int,
+    created_by_seat_id: int,
     status: str,
     reference_time: datetime,
     applied_at: datetime | None = None,
     correlation_id: str | None = None,
 ) -> PolicyTransition:
+    if not Seat.query.filter_by(id=created_by_seat_id, class_id=class_id, role="teacher").first():
+        raise ValueError("Policy author must be a teacher seat in this class.")
     source_version = _get_active_policy_version(class_id, domain)
     conflict_key = _transition_conflict_key(domain, change_payload)
     target_version = PolicyVersion(
@@ -223,7 +226,7 @@ def _create_policy_transition(
         activation_mode=activation_mode,
         status=status,
         created_at=reference_time,
-        created_by=created_by,
+        created_by_seat_id=created_by_seat_id,
         applied_at=applied_at if status == POLICY_TRANSITION_STATUS_APPLIED else None,
         correlation_id=correlation_id,
     )
@@ -256,7 +259,7 @@ def _create_policy_transitions_for_changes(
     changes: list[dict[str, Any]],
     *,
     activation_mode: str,
-    created_by: int,
+    created_by_seat_id: int,
     status: str,
     reference_time: datetime,
     applied_at: datetime | None = None,
@@ -285,7 +288,7 @@ def _create_policy_transitions_for_changes(
                 domain=domain,
                 change_payload=change,
                 activation_mode=activation_mode,
-                created_by=created_by,
+                created_by_seat_id=created_by_seat_id,
                 status=status,
                 reference_time=reference_time,
                 applied_at=applied_at,
@@ -295,10 +298,12 @@ def _create_policy_transitions_for_changes(
     return created
 
 
-def cancel_pending_policy_transitions(class_id: str | None, *, actor_id: int, reference_time: datetime | None = None) -> int:
+def cancel_pending_policy_transitions(class_id: str | None, *, actor_seat_id: int, reference_time: datetime | None = None) -> int:
     if not class_id:
         return 0
     reference_time = ensure_utc(reference_time) if reference_time else utc_now()
+    if not Seat.query.filter_by(id=actor_seat_id, class_id=class_id, role="teacher").first():
+        raise ValueError("Policy cancellation actor must be a teacher seat in this class.")
     pending = PolicyTransition.query.filter_by(
         class_id=class_id,
         status=POLICY_TRANSITION_STATUS_PENDING,
@@ -307,7 +312,7 @@ def cancel_pending_policy_transitions(class_id: str | None, *, actor_id: int, re
         transition.status = POLICY_TRANSITION_STATUS_CANCELLED
         transition.cancelled_at = reference_time
         transition.applied_at = reference_time
-        transition.created_by = actor_id
+        transition.created_by_seat_id = actor_seat_id
     return len(pending)
 
 
@@ -373,11 +378,10 @@ def _get_effective_rent_settings(class_id: str | None):
     return get_rent_settings(class_id)
 
 
-def _apply_change_list(user_id, class_id, changes, activation_mode, *, reference_time=None, canonical_context=None):
+def _apply_change_list(class_id, changes, activation_mode, *, reference_time=None, canonical_context=None, actor_seat_id=None):
     """Apply policy changes to a class's economic configuration.
 
     Args:
-        user_id: Teacher who triggered the rebalance
         class_id: Class to apply changes to (canonical identifier)
         changes: List of change dictionaries from policy payload
         activation_mode: When to activate (REBALANCE_ACTIVATION_*)
@@ -432,7 +436,15 @@ def _apply_change_list(user_id, class_id, changes, activation_mode, *, reference
                 if hasattr(product, field)
             }
             definition["price"] = Decimal(str(change.get("new_value")))
-            store_service.supersede_product(current=product, definition=definition)
+            # A replacement version is authored by whoever caused the
+            # rebalance. Omitting the seat left every superseded product with a
+            # null author, which INV-ARC-019 §VII makes a classroom fact
+            # without an owner.
+            store_service.supersede_product(
+                current=product,
+                definition=definition,
+                actor_seat_id=actor_seat_id,
+            )
             applied_labels.append(f"Store: {product.name}")
             applied_changes.append(dict(change))
         elif change_type == "overdraft_fee":
@@ -491,14 +503,14 @@ def _activate_pending_policy_version(transition: PolicyTransition, *, reference_
     return activated_version
 
 
-def apply_rebalance_changes(user_id, class_id, change_plan, activation_mode, *, reference_time=None, canonical_context=None):
+def apply_rebalance_changes(actor_seat_id, class_id, change_plan, activation_mode, *, reference_time=None, canonical_context=None):
     """Apply rebalance changes for a class.
 
     Refactored in Phase 2 to remove FeatureSettings dependency (table dropped).
     Now takes class_id directly instead of settings_row object.
 
     Args:
-        user_id: Teacher user ID
+        actor_seat_id: Teacher seat ID
         class_id: Class to apply changes to
         change_plan: List of change payloads from policy
         activation_mode: When to activate (REBALANCE_ACTIVATION_*)
@@ -509,19 +521,19 @@ def apply_rebalance_changes(user_id, class_id, change_plan, activation_mode, *, 
     """
     reference_time = ensure_utc(reference_time) if reference_time else utc_now()
     applied_labels, applied_changes = _apply_change_list(
-        user_id,
         class_id,
         change_plan,
         activation_mode,
         reference_time=reference_time,
         canonical_context=canonical_context,
+        actor_seat_id=actor_seat_id,
     )
     if applied_changes:
         _create_policy_transitions_for_changes(
             class_id,
             applied_changes,
             activation_mode=activation_mode,
-            created_by=user_id,
+            created_by_seat_id=actor_seat_id,
             status=POLICY_TRANSITION_STATUS_APPLIED,
             reference_time=reference_time,
             applied_at=reference_time,
@@ -580,11 +592,15 @@ def activate_due_rebalances(user_id, *, class_id=None, reference_time=None):
                     continue
 
                 applied_now, applied_changes = _apply_change_list(
-                    user_id,
                     current_class_id,
                     [change],
                     activation_mode,
                     reference_time=reference_time,
+                    # A product superseded by this sweep is authored by the seat
+                    # that scheduled the transition, not by the sweep. Without
+                    # this the activation path recreated the null-author row the
+                    # immediate path was just fixed to stop writing.
+                    actor_seat_id=transition.created_by_seat_id,
                 )
                 if applied_changes:
                     activated_version = _activate_pending_policy_version(transition, reference_time=reference_time)
@@ -615,7 +631,7 @@ def activate_due_rebalances(user_id, *, class_id=None, reference_time=None):
 
 
 def queue_scheduled_policy_transitions(
-    user_id: int,
+    actor_seat_id: int,
     class_id: str,
     scheduled_changes: list[dict[str, Any]],
     *,
@@ -627,7 +643,7 @@ def queue_scheduled_policy_transitions(
         class_id,
         scheduled_changes,
         activation_mode=activation_mode,
-        created_by=user_id,
+        created_by_seat_id=actor_seat_id,
         status=POLICY_TRANSITION_STATUS_PENDING,
         reference_time=reference_time,
     )

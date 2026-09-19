@@ -21,7 +21,6 @@ from sqlalchemy.orm import Session, validates, synonym
 from sqlalchemy import event
 from sqlalchemy.dialects.postgresql import JSONB
 from app.extensions import db
-from app.hash_utils import get_random_salt, hash_hmac, hash_username, hash_username_lookup
 from app.utils.encryption import PIIEncryptedType, normalize_totp_for_storage
 from app.utils.canonical_temporal_resolver import utc_now, ensure_utc
 
@@ -121,6 +120,7 @@ class User(db.Model):
     totp_secret_encrypted = db.Column(db.String(200), nullable=True)
     pin_hash = db.Column(db.Text, nullable=True)
     passphrase_hash = db.Column(db.Text, nullable=True)
+    last_signed_in_at = db.Column(db.DateTime(timezone=True), nullable=True, index=True)
     current_session_started_at = db.Column(db.DateTime(timezone=True), nullable=True)
     current_session_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
     current_session_nonce = db.Column(db.String(128), nullable=True, index=True)
@@ -128,6 +128,8 @@ class User(db.Model):
     reset_code = db.Column(db.String(8), nullable=True)
     reset_code_generated_at = db.Column(db.DateTime(timezone=True), nullable=True)
     reset_code_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    recovery_setup_nonce_hash = db.Column(db.String(64), nullable=True)
+    recovery_setup_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
     last_active_seat_id = db.Column(
         db.Integer,
         db.ForeignKey('seats.id', ondelete='SET NULL', use_alter=True, name='fk_users_last_active_seat_id_seats'),
@@ -161,8 +163,8 @@ class User(db.Model):
         'Seat',
         backref='user',
         lazy='dynamic',
-        cascade='all, delete-orphan',
-        passive_deletes=True,
+        cascade='save-update, merge',
+        passive_deletes='all',
         foreign_keys='Seat.user_id',
     )
     last_active_seat = db.relationship('Seat', foreign_keys=[last_active_seat_id], post_update=True)
@@ -230,9 +232,11 @@ class Seat(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     public_id = db.Column(db.String(36), unique=True, nullable=False, index=True, default=lambda: str(uuid.uuid4()))
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=True, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='RESTRICT'), nullable=True, index=True)
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
     role = db.Column(db.String(20), nullable=False, default='student')
+
+    claim_generation = db.Column(db.Integer, nullable=False, default=0, server_default="0")
 
     # Canonical seat-local metadata for the identity overhaul target.
     roster_fingerprint = db.Column(db.String(128), nullable=True, index=True)
@@ -272,10 +276,6 @@ class Seat(db.Model):
             .order_by(Transaction.timestamp.desc())
             .all()
         )
-
-    @property
-    def is_rent_enabled(self):
-        return not self.has_received_rent_exemption
 
     @property
     def block(self):
@@ -457,7 +457,6 @@ class Transaction(db.Model):
     seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
     target_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
     actor_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
 
     # CRITICAL: class_id is the canonical anchor for class isolation.
     # join_code is ingress/display metadata only and may resolve to class_id
@@ -525,7 +524,6 @@ class Transaction(db.Model):
     )
 
     # Relationship to track which actor and target seat the transaction binds to
-    teacher = db.relationship('User', backref=db.backref('transactions', lazy='dynamic'))
     seat = db.relationship('Seat', backref=db.backref('transactions', lazy='dynamic'), foreign_keys=[seat_id])
     target_seat = db.relationship('Seat', foreign_keys=[target_seat_id], post_update=True)
     actor_seat = db.relationship('Seat', foreign_keys=[actor_seat_id], post_update=True)
@@ -687,7 +685,7 @@ def _enforce_transaction_integrity(_mapper, _connection, target):
 # arrive as new linked rows rather than edits — so a reversal that rewrote
 # `amount` in place would erase the very history the ledger exists to keep.
 _LEDGER_IMMUTABLE_FIELDS = frozenset({
-    'seat_id', 'target_seat_id', 'actor_seat_id', 'user_id', 'class_id',
+    'seat_id', 'target_seat_id', 'actor_seat_id', 'class_id',
     'join_code', 'mechanism', 'amount', 'amount_cents', 'timestamp',
     'account_type', 'effective_at', 'date_funds_available', 'description',
     'correlation_id', 'original_transaction_id',
@@ -802,18 +800,6 @@ def _guard_ledger_immutability(_mapper, connection, target):
         )
 
 
-def _resolve_seat_id(connection, student_id, *, class_id=None):
-    """Lookup seat ID for a student in a class universe."""
-    if not student_id or not class_id:
-        return None
-
-    seat_id = connection.execute(
-        sa.text("SELECT id FROM seats WHERE user_id = :student_id AND class_id = :class_id LIMIT 1"),
-        {"student_id": student_id, "class_id": class_id},
-    ).scalar()
-    return int(seat_id) if seat_id else None
-
-
 class LedgerBalanceSnapshot(db.Model):
     """
     Authorized snapshot of posted balances (ledger_balance_snapshot — DOM-LED-001 §2).
@@ -884,7 +870,6 @@ class AttendanceSession(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     target_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
-    target_user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=False, index=True)
     actor_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=False, index=True)
     mechanism = db.Column(db.String(20), nullable=False, default="self")
     status = db.Column(db.String(20), nullable=False, default="active")
@@ -894,7 +879,6 @@ class AttendanceSession(db.Model):
     timestamp = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False, index=True)
 
     target_seat = db.relationship("Seat", foreign_keys=[target_seat_id], backref=db.backref("attendance_sessions", passive_deletes=True))
-    target_user = db.relationship("User", foreign_keys=[target_user_id], post_update=True)
     actor_seat = db.relationship("Seat", foreign_keys=[actor_seat_id], post_update=True)
 
 
@@ -930,12 +914,13 @@ class PayrollEvent(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
     target_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
-    target_user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
     actor_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=False, index=True)
     correlation_id = db.Column(db.String(100), nullable=False, index=True)
     idempotency_key = db.Column(db.String(255), nullable=False, index=True)
-    policy_version_id = db.Column(db.Integer, db.ForeignKey('policy_versions.id', ondelete='RESTRICT'), nullable=False, index=True)
-    policy_uuid = db.Column(db.String(36), nullable=False, index=True)
+    # Required for attendance-derived payroll; a manual credit needs no payroll
+    # policy (DOM-PROD-001 §VIII). Enforced by ck_payroll_event_payroll_policy.
+    policy_version_id = db.Column(db.Integer, db.ForeignKey('policy_versions.id', ondelete='RESTRICT'), nullable=True, index=True)
+    policy_uuid = db.Column(db.String(36), nullable=True, index=True)
     mechanism = db.Column(db.String(20), nullable=False, default="TEACHER")
     payroll_event_type = db.Column(db.String(20), nullable=False)
     recorded_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False, index=True)
@@ -949,6 +934,10 @@ class PayrollEvent(db.Model):
 
     __table_args__ = (
         db.UniqueConstraint('class_id', 'target_seat_id', 'correlation_id', 'idempotency_key', 'payroll_event_type', name='uq_payroll_event_replay_guard'),
+        db.CheckConstraint(
+            "payroll_event_type <> 'payroll' OR (policy_version_id IS NOT NULL AND policy_uuid IS NOT NULL)",
+            name='ck_payroll_event_payroll_policy',
+        ),
     )
 
 
@@ -1132,7 +1121,6 @@ class StoreProduct(db.Model):
         db.String(36), nullable=False, index=True, default=lambda: str(uuid.uuid4())
     )
 
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=True)
@@ -1189,7 +1177,6 @@ class StoreProduct(db.Model):
     retired_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     # Relationships
-    teacher = db.relationship('User', backref=db.backref('store_products', lazy='dynamic'))
     # Seat-level visibility keys off the LINEAGE, not this version, so a teacher
     # edit does not silently drop every per-seat visibility grant.
     visible_seats = db.relationship(
@@ -1250,7 +1237,7 @@ class StoreProduct(db.Model):
 # (DOM-POL-001 §VI.0). Only the availability projection and its retirement
 # metadata may change on a persisted row.
 _STORE_PRODUCT_IMMUTABLE_FIELDS = frozenset({
-    'policy_uuid', 'product_lineage_uuid', 'class_id', 'user_id', 'name',
+    'policy_uuid', 'product_lineage_uuid', 'class_id', 'name',
     'description', 'price', 'economic_role', 'item_type', 'inventory_total',
     'holding_limit', 'direct_purchase_allowed', 'available_with_overdue_obligations', 'activation_at', 'auto_delist_date', 'auto_expiry_days',
     'is_long_term_goal', 'bypass_cwi_warnings', 'is_bundle', 'bundle_quantity',
@@ -1941,8 +1928,10 @@ class ActorRequestTrace(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     actor_type = db.Column(db.String(20), nullable=False, index=True)
+    # Seat public ID only: no cross-domain FK (INV-ARC-021 §V.7). Seat deletion
+    # deletes traces explicitly (DOM-SUP-001 §X); class deletion cascades via class_id.
     actor_public_id = db.Column(db.String(64), nullable=False, index=True)
-    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='SET NULL'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
     request_id = db.Column(db.String(128), nullable=False, index=True)
     method = db.Column(db.String(10), nullable=False)
     endpoint = db.Column(db.String(500), nullable=False)
@@ -2004,14 +1993,16 @@ class Issue(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
 
-    # Public actor identifier (submitter) — resolves to seats.public_id for internal lookups
+    # Public actor identifier (submitter) — resolves to seats.public_id for internal
+    # lookups. Support holds only the public ID, with no FK into Identity
+    # (INV-ARC-021 §V.7); seat deletion deletes its issues explicitly (DOM-SUP-001 §X).
     actor_public_id = db.Column(db.String(64), nullable=False, index=True)
 
     # Public reviewer identifier (teacher) — resolves to seats.public_id in the same class
     reviewer_public_id = db.Column(db.String(64), nullable=True, index=True)
 
     # External-facing class context — resolves to classes.class_public_id
-    class_public_id = db.Column(db.String(36), nullable=True, index=True)
+    class_public_id = db.Column(db.String(36), nullable=False, index=True)
 
     # Class context cache (DOM-SUP-001 §VI). The class display name frozen at
     # submission time. It is deliberately NOT re-fetched live from ClassEconomy:
@@ -2055,11 +2046,11 @@ class Issue(db.Model):
     escalated_at = db.Column(db.DateTime(timezone=True), nullable=True)
     escalation_reason = db.Column(db.String(200), nullable=True)
     teacher_diagnostic_note = db.Column(db.Text, nullable=True)  # Diagnostic note for sysadmin
+    support_permissions = db.Column(db.JSON, nullable=False, default=dict, server_default='{}')
     share_class_name_with_sysadmin = db.Column(db.Boolean, default=False, nullable=False)  # Consent for class disclosure
     eligible_for_reward = db.Column(db.Boolean, default=False, nullable=False)  # Marks if student may receive reward for a legitimate bug
 
     # Sysadmin review and resolution
-    sysadmin_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     sysadmin_reviewed_at = db.Column(db.DateTime(timezone=True), nullable=True)
     sysadmin_notes = db.Column(db.Text, nullable=True)  # Separate from student content, visible to teacher only
     sysadmin_resolved_at = db.Column(db.DateTime(timezone=True), nullable=True)
@@ -2073,7 +2064,6 @@ class Issue(db.Model):
     updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
     # Relationships
-    sysadmin = db.relationship('User', foreign_keys=[sysadmin_id], backref=db.backref('reviewed_issues', lazy='dynamic'))
     related_transaction = db.relationship('Transaction', backref='related_issues')
     status_history = db.relationship('IssueStatusHistory', backref='issue', lazy='dynamic', cascade='all, delete-orphan', order_by='IssueStatusHistory.changed_at.desc()')
     resolution_actions = db.relationship('IssueResolutionAction', backref='issue', lazy='dynamic', cascade='all, delete-orphan', order_by='IssueResolutionAction.created_at.desc()')
@@ -2228,11 +2218,31 @@ class RecoveryRequest(db.Model):
     # Partial progress - allows teacher to save progress and resume later
     partial_codes = db.Column(db.JSON, nullable=True)  # Array of entered codes (not yet validated)
     resume_pin_hash = db.Column(db.String(64), nullable=True)  # Hashed PIN to resume progress
-    resume_new_username = db.Column(db.String(100), nullable=True)  # Temporary storage for new username
+    resume_new_username = db.Column(db.Text, nullable=True)  # Temporary storage for new username
+
+    submission_round = db.Column(db.Integer, nullable=False, default=0, server_default="0")
+    required_class_ids = db.Column(db.JSON, nullable=False, default=list)
+    attempt_nonce_hash = db.Column(db.String(64), nullable=True)
+    selection_started_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    setup_nonce_hash = db.Column(db.String(64), nullable=True)
+    setup_totp_encrypted = db.Column(db.Text, nullable=True)
+    setup_username = db.Column(db.Text, nullable=True)
 
     # Relationships
     user = db.relationship('User', backref=db.backref('recovery_requests', lazy='dynamic'))
     verification_codes = db.relationship('StudentRecoveryCode', backref='recovery_request', lazy='dynamic', cascade='all, delete-orphan')
+
+
+class RecoveryClassChallenge(db.Model):
+    __tablename__ = 'recovery_class_challenges'
+    recovery_request_id = db.Column(db.Integer, db.ForeignKey('recovery_requests.id', ondelete='CASCADE'), primary_key=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), primary_key=True)
+    proof_verified_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    selected_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    selected_count = db.Column(db.Integer, nullable=True)
+    satisfied_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    satisfied_round = db.Column(db.Integer, nullable=True)
+    received_round = db.Column(db.Integer, nullable=True)
 
 
 class StudentRecoveryCode(db.Model):
@@ -2244,6 +2254,8 @@ class StudentRecoveryCode(db.Model):
     seat_id = db.Column(db.Integer, db.ForeignKey('seats.id'), nullable=False, index=True)
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
 
+    issued_round = db.Column(db.Integer, nullable=True)
+    code_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
     code_hash = db.Column(db.String(64), nullable=True)
     verified_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
@@ -2600,7 +2612,7 @@ class PolicyTransition(db.Model):
     activation_mode = db.Column(db.String(32), nullable=False)
     status = db.Column(db.String(32), nullable=False, default='pending')
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
-    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_by_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=True)
     applied_at = db.Column(db.DateTime(timezone=True), nullable=True)
     correlation_id = db.Column(db.String(64), nullable=True, index=True)
     superseded_by_transition_id = db.Column(db.Integer, db.ForeignKey('policy_transitions.id'), nullable=True)
@@ -2837,7 +2849,7 @@ class Announcement(db.Model):
     id = db.Column(db.Integer, primary_key=True)
 
     # Author
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    created_by_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False)
 
     # Class scope
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
@@ -2856,10 +2868,10 @@ class Announcement(db.Model):
     expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     # Relationships
-    teacher = db.relationship('User', foreign_keys=[user_id], backref=db.backref('announcements', lazy='dynamic', passive_deletes=True))
+    author_seat = db.relationship('Seat', foreign_keys=[created_by_seat_id])
 
     def __repr__(self):
-        return f'<Announcement {self.id} - {self.title[:30]} (Teacher {self.user_id}, class {self.class_id})>'
+        return f'<Announcement {self.id} - {self.title[:30]} (Seat {self.created_by_seat_id}, class {self.class_id})>'
 
     def is_expired(self):
         if self.expires_at is None:
@@ -2869,14 +2881,15 @@ class Announcement(db.Model):
     def should_display(self):
         return self.is_active and not self.is_expired()
 
-    def get_priority_class(self):
-        priority_classes = {
-            'low': 'alert-secondary',
-            'normal': 'alert-info',
-            'high': 'alert-warning',
-            'urgent': 'alert-danger'
+    def get_priority_level(self):
+        """Semantic alert-card level (success/warning/danger/info) for this priority."""
+        priority_levels = {
+            'low': 'info',
+            'normal': 'info',
+            'high': 'warning',
+            'urgent': 'danger'
         }
-        return priority_classes.get(self.priority, 'alert-info')
+        return priority_levels.get(self.priority, 'info')
 
     def get_priority_icon(self):
         priority_icons = {
@@ -2919,7 +2932,6 @@ class AuditEvent(db.Model):
     actor_id_hash    = db.Column(db.String(64), nullable=True)
     class_id         = db.Column(db.String(36), nullable=True)
     seat_id          = db.Column(db.Integer, nullable=True)
-    teacher_id       = db.Column(db.Integer, nullable=True)
     feat_id          = db.Column(db.String(32), nullable=True)
     idempotency_key  = db.Column(db.String(128), nullable=True)
     correlation_id   = db.Column(db.String(64), nullable=True)
@@ -2998,3 +3010,11 @@ class InterpretationCycleRecord(db.Model):
 
     def __repr__(self):
         return f'<InterpretationCycleRecord class={self.class_id} cycle={self.payroll_cycle_id}>'
+
+
+class TeacherSignupAttempt(db.Model):
+    """Temporary encrypted initial provisioning, owned by FEAT-IDEN-101."""
+    __tablename__ = 'teacher_signup_attempts'
+    nonce_hash = db.Column(db.String(64), primary_key=True)
+    payload_encrypted = db.Column(db.Text, nullable=False)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False, index=True)

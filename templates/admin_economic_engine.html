@@ -1,4 +1,5 @@
 {% extends "layout_admin.html" %}
+{% import 'macros/cards.html' as cards %}
 {% block page_title %}Economic Engine{% endblock %}
 {% block page_icon %}display_settings{% endblock %}
 {% set current_page = "economic_engine" %}
@@ -18,13 +19,13 @@
   <li><strong>CWI = $50/week</strong></li>
 </ul>
 
-<div class="alert alert-success mb-3">
-  <strong><span class="material-symbols-outlined me-1" aria-hidden="true">payments</span>Why CWI Matters:</strong> Use the active policy's pricing recommendations and alert thresholds to balance your economy; rent and store guidance varies by policy.
-</div>
+{% call cards.alert_card('success', 'Why CWI matters', icon='payments', body_class='mb-3') %}
+  <p class="mb-0">Use the active policy's pricing recommendations and alert thresholds to balance your economy; rent and store guidance varies by policy.</p>
+{% endcall %}
 
-<div class="alert alert-info mb-0">
-  <strong><span class="material-symbols-outlined me-1" aria-hidden="true">settings</span>Setup:</strong> If payroll is not configured yet, set it up first to unlock CWI calculations.
-</div>
+{% call cards.alert_card('info', 'Set up payroll first', icon='settings', body_class='mb-0') %}
+  <p class="mb-0">If payroll is not configured yet, set it up first to unlock CWI calculations.</p>
+{% endcall %}
 {% endcall %}
 
 {% call help.topic('econ-hours', 'schedule', 'Update Expected Hours') %}
@@ -37,16 +38,16 @@
   <li><strong>Expected weekly hours:</strong> updates the CWI and balance calculations for the selected class.</li>
   <li><strong>Balance snapshot:</strong> flags mismatches between CWI and costs so you can adjust settings.</li>
 </ul>
-<div class="alert alert-info mt-3 mb-0">
-  <strong>Side effects:</strong> Adjusting hours changes CWI immediately for the selected class.
-</div>
+{% call cards.alert_card('info', 'Hour changes apply immediately', icon='schedule', body_class='mt-3 mb-0') %}
+  <p class="mb-0">Adjusting hours changes CWI immediately for the selected class.</p>
+{% endcall %}
 {% endcall %}
 
 {% call help.topic('econ-balance', 'balance', 'Balance Snapshot') %}
 <p>Review the balance snapshot to see how rent, insurance, fines, and store prices compare to CWI.</p>
-<div class="alert alert-warning mb-0">
-  <strong>Watch for flags:</strong> Large gaps suggest a setting may be too high or too low.
-</div>
+{% call cards.alert_card('warning', 'Watch for balance flags', icon='flag', body_class='mb-0') %}
+  <p class="mb-0">Large gaps suggest a setting may be too high or too low.</p>
+{% endcall %}
 {% endcall %}
 {% endblock %}
 
@@ -69,13 +70,9 @@
   </div>
 
   {% if not payroll_settings %}
-  <div class="alert alert-warning d-flex align-items-start gap-2">
-    <span class="material-symbols-outlined" aria-hidden="true">warning</span>
-    <div>
-      <strong>Set up payroll to calculate CWI.</strong>
-      <div class="small">We need a pay rate and expected hours per week to compute the Classroom Wage Index. Head to <a href="{{ payroll_link }}" class="alert-link">Payroll Management</a> to configure it.</div>
-    </div>
-  </div>
+  {% call cards.alert_card('warning', 'Set up payroll to calculate CWI', icon='warning', body_class='mb-3') %}
+    <p class="mb-0">We need a pay rate and expected hours per week to compute the Classroom Wage Index. Head to <a href="{{ payroll_link }}">Payroll Management</a> to configure it.</p>
+  {% endcall %}
   {% endif %}
 
   <div class="card shadow-sm mb-3">
@@ -219,9 +216,9 @@
             <div class="form-text">Rent is billed per cycle, so a new amount takes effect on the cycle after the upcoming bill. Store prices and the overdraft fee have no cycle to wait for, so they can only be applied immediately.</div>
           </fieldset>
           <div class="col-lg-6" id="immediateChangeWarning" hidden>
-            <div class="alert alert-warning mb-2">
-              Applying a cycle-based change immediately re-prices rent part-way through a cycle, so students can be billed a different amount than the one they were told at the start of it.
-            </div>
+            {% call cards.alert_card('warning', 'Immediate changes re-price the current cycle', icon='warning', body_class='mb-2') %}
+              <p class="mb-0">Applying a cycle-based change immediately re-prices rent part-way through a cycle, so students can be billed a different amount than the one they were told at the start of it.</p>
+            {% endcall %}
             <div class="form-check">
               <input class="form-check-input" type="checkbox" name="confirm_immediate" id="confirmImmediate" value="yes">
               <label class="form-check-label" for="confirmImmediate">I understand the immediate-change warning.</label>
@@ -234,7 +231,9 @@
         </div>
       </form>
       {% elif show_rebalance_review and payroll_settings %}
-      <div class="alert alert-success mt-3 mb-0">Current settings already match the active policy closely enough. No rebalance changes are recommended.</div>
+      {% call cards.alert_card('success', 'No rebalance needed', icon='check_circle', body_class='mt-3 mb-0') %}
+        <p class="mb-0">Current settings already match the active policy closely enough. No rebalance changes are recommended.</p>
+      {% endcall %}
       {% endif %}
     </div>
   </div>
@@ -294,12 +293,11 @@
             </ul>
           </div>
           {% elif payroll_settings %}
-          <div class="alert alert-warning mb-3">
-            <strong>Expected weekly hours not set.</strong>
-            CWI is undefined until you set an expected weekly hours value below.
+          {% call cards.alert_card('warning', 'Expected weekly hours not set', icon='schedule', body_class='mb-3') %}
+            <p class="mb-0">CWI is undefined until you set an expected weekly hours value below.
             Pricing recommendations are disabled until CWI is configured; features
-            like rent, insurance, and store will still work.
-          </div>
+            like rent, insurance, and store will still work.</p>
+          {% endcall %}
           <div class="p-3 bg-light rounded cwi-hours-panel">
             <div class="text-muted small">Expected Hours/Week</div>
             <form method="post" action="{{ url_for('admin.update_expected_weekly_hours') }}">
@@ -444,12 +442,13 @@
       {% if analysis %}
         {% if warnings_by_level['critical'] or warnings_by_level['warning'] or warnings_by_level['info'] %}
           {% set severity_map = {'critical': 'danger', 'warning': 'warning', 'info': 'info'} %}
+          {% set severity_titles = {'critical': 'Critical economy issues', 'warning': 'Economy warnings', 'info': 'Balance details'} %}
+          {% set severity_icons = {'critical': 'error', 'warning': 'warning', 'info': 'info'} %}
           {% for level in ['critical','warning','info'] %}
             {% set bucket = warnings_by_level[level] %}
             {% if bucket %}
-              <div class="alert alert-{{ severity_map[level] }}">
-                <strong class="text-capitalize">{{ level }}</strong>
-                <ul class="mb-0 mt-2">
+              {% call cards.alert_card(severity_map[level], severity_titles[level], icon=severity_icons[level], body_class='mb-3') %}
+                <ul class="mb-0">
                   {% for warning in bucket %}
                     {% set feature_lower = warning.feature.lower() %}
                     {% set link = None %}
@@ -466,7 +465,7 @@
                     </li>
                   {% endfor %}
                 </ul>
-              </div>
+              {% endcall %}
             {% endif %}
           {% endfor %}
         {% else %}

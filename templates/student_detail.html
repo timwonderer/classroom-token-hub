@@ -1,4 +1,5 @@
 {% extends "layout_admin.html" %}
+{% import 'macros/cards.html' as cards %}
 {% set page_title = identity_view.full_name ~ " - Student Detail" %}
 {% block title %}{{ identity_view.full_name }} - Detail{% endblock %}
 {% block page_icon %}person{% endblock %}
@@ -15,7 +16,7 @@
 
 {% call help.topic('sdet-identity', 'badge', 'Editing the name and teacher notes') %}
 <ul class="ps-3 mb-0">
-    <li class="mb-2"><strong>Edit Student Information changes the name they claim with.</strong> If the account is not yet claimed, the student must type the new name to claim it. Changing it after they have claimed it is cosmetic.</li>
+    <li class="mb-2"><strong>Edit Student Information changes how the name is displayed.</strong> It does not change the student's login or the name used to claim a seat.</li>
     <li class="mb-0"><strong>Teacher Notes are display-only</strong> and visible to you, not the student. Nothing in the economy reads them.</li>
 </ul>
 {% endcall %}
@@ -114,11 +115,8 @@
 
 <!-- Rent Privileges Badges -->
 {% if rent_privileges and rent_privileges|length > 0 %}
-<div class="alert alert-light border mb-4">
-    <h6 class="mb-3">
-        <span class="material-symbols-outlined me-2" aria-hidden="true">military_tech</span>Active Rent Privileges
-        <small class="text-muted">(Per Rent Period Items)</small>
-    </h6>
+{% call cards.alert_card('info', 'Active rent privileges', icon='military_tech', body_class='mb-4') %}
+    <p class="small text-muted mb-3">Per Rent Period Items</p>
     <div class="d-flex flex-wrap gap-2">
         {% for privilege in rent_privileges %}
         <span class="badge bg-{% if privilege.source == 'rent' %}success{% else %}info{% endif %} px-3 py-2 type-sm" {% if privilege.description %}title="{{ privilege.description }}" {% endif %}>
@@ -136,7 +134,7 @@
         <strong class="text-success">Green badges</strong> = Covered by rent payment |
         <strong class="text-info">Blue badges</strong> = Purchased individually (valid until next rent due)
     </small>
-</div>
+{% endcall %}
 {% endif %}
 
 <!-- Main Content Tabs -->
@@ -166,7 +164,7 @@
             <span class="material-symbols-outlined me-1" aria-hidden="true">history</span>Attendance
         </button>
     </li>
-    {% if student.is_rent_enabled %}
+    {% if rent_enabled %}
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="housing-tab" data-bs-toggle="tab" data-bs-target="#housing" type="button"
             role="tab" aria-controls="housing" aria-selected="false">
@@ -207,6 +205,12 @@
                                 <td>{{ identity_view.full_name }}</td>
                             </tr>
                             <tr>
+                                <td class="fw-bold">Teacher Notes:</td>
+                                <td class="text-break">
+                                    {% if identity_view.notes %}{{ identity_view.notes }}{% else %}<span class="text-muted">None</span>{% endif %}
+                                </td>
+                            </tr>
+                            <tr>
                                 <td class="fw-bold">Setup Status:</td>
                                 <td>
                                     {% if student_has_completed_setup %}
@@ -229,12 +233,6 @@
                                     {% endif %}
                                 </td>
                             </tr>
-                            {% if student.is_rent_enabled %}
-                            <tr>
-                                <td class="fw-bold">Housing:</td>
-                                <td><span class="badge bg-secondary">Renter</span></td>
-                            </tr>
-                            {% endif %}
                             <!-- Join Codes Row -->
                             {% if join_codes %}
                             <tr>
@@ -255,10 +253,7 @@
 
                         <!-- Active Recovery Code Display -->
                         {% if reset_code_is_active %}
-                        <div class="alert alert-danger mt-3 border-danger shadow-sm">
-                            <h6 class="alert-heading fw-bold">
-                                <span class="material-symbols-outlined me-2" aria-hidden="true">shield</span>Account Recovery In Progress
-                            </h6>
+                        {% call cards.alert_card('danger', 'Account recovery in progress', icon='shield', body_class='mt-3') %}
                             <p class="mb-2 small">Give this information to the student to recover their account:</p>
                             <div class="bg-white p-3 rounded border border-danger text-dark">
                                 <div class="row g-2">
@@ -290,15 +285,12 @@
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                        {% endcall %}
                         {% endif %}
 
                         <!-- Account Recovery / Setup Information -->
                         {% if not student_has_completed_setup %}
-                        <div class="alert alert-warning mt-3 border-warning shadow-sm">
-                            <h6 class="alert-heading fw-bold">
-                                <span class="material-symbols-outlined me-2" aria-hidden="true">warning</span>Account Recovery / Setup
-                            </h6>
+                        {% call cards.alert_card('warning', 'Account not yet claimed', icon='warning', body_class='mt-3') %}
                             <p class="mb-2 small">Give this information to the student to claim their account:</p>
                             <div class="bg-white p-3 rounded border border-warning text-dark">
                                 <div class="row g-2">
@@ -318,7 +310,7 @@
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                        {% endcall %}
                         {% endif %}
                     </div>
                 </div>
@@ -438,9 +430,9 @@
                     </table>
                 </div>
                 {% else %}
-                <div class="alert alert-info mb-0">
-                    <span class="material-symbols-outlined me-2" aria-hidden="true">info</span>No transactions found for this student.
-                </div>
+                {% call cards.alert_card('info', 'No transactions yet', icon='receipt_long', body_class='mb-0') %}
+                    <p class="mb-0">No transactions found for this student.</p>
+                {% endcall %}
                 {% endif %}
             </div>
         </div>
@@ -508,10 +500,10 @@
                     </table>
                 </div>
                 {% else %}
-                <div class="alert alert-info mb-0">
-                    <span class="material-symbols-outlined me-2" aria-hidden="true">info</span>This student has not purchased any items
-                    yet.
-                </div>
+                {% call cards.alert_card('info', 'No purchases yet', icon='shopping_bag', body_class='mb-0') %}
+                    <p class="mb-0">This student has not purchased any items
+                    yet.</p>
+                {% endcall %}
                 {% endif %}
             </div>
         </div>
@@ -566,17 +558,18 @@
                     total</p>
                 {% endif %}
                 {% else %}
-                <div class="alert alert-info mb-0">
-                    <span class="material-symbols-outlined me-2" aria-hidden="true">info</span>No attendance records found for this
-                    student.
-                </div>
+                {% call cards.alert_card('info', 'No attendance records', icon='event_busy', body_class='mb-0') %}
+                    <p class="mb-0">No attendance records found for this
+                    student.</p>
+                {% endcall %}
                 {% endif %}
             </div>
         </div>
     </div>
 
-    <!-- RENT TAB (Only if rent enabled globally and for student) -->
-    {% if student.is_rent_enabled %}
+    <!-- RENT TAB (only when rent is enabled for this class) -->
+    {% if rent_enabled %}
+    {% set rent_period = rent_view.current_period if rent_view and rent_view.current_period else None %}
     <div class="tab-pane fade" id="housing" role="tabpanel" aria-labelledby="housing-tab">
         <div class="row">
             <!-- Rent Card -->
@@ -586,40 +579,43 @@
                         <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">home</span>Rent Information</h5>
                     </div>
                     <div class="card-body">
-                <table class="table table-borderless">
-                    <caption class="visually-hidden">Student payroll summary</caption>
+                        {% if rent_period %}
+                        <table class="table table-borderless mb-0">
+                            <caption class="visually-hidden">Current rent period</caption>
                             <tr>
                                 <td class="fw-bold">Status:</td>
                                 <td>
-                                    <span class="badge bg-info">Rent Enabled</span>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td class="fw-bold">Last Payment:</td>
-                                <td>
-                                    {% if student.rent_last_paid %}
-                                    {{ student.rent_last_paid|fmt_timestamp }}
+                                    {% if rent_period.is_waived %}
+                                    <span class="badge bg-secondary">Waived</span>
+                                    {% elif rent_period.is_paid %}
+                                    <span class="badge bg-success">Paid</span>
+                                    {% elif rent_period.is_past_due %}
+                                    <span class="badge bg-danger">Past due</span>
                                     {% else %}
-                                    <span class="text-muted">Never</span>
+                                    <span class="badge bg-warning text-dark">Due</span>
                                     {% endif %}
                                 </td>
                             </tr>
                             <tr>
                                 <td class="fw-bold">Due Date:</td>
-                                <td>{{ student.rent_due_date.strftime('%B %d, %Y') if student.rent_due_date else 'N/A'
-                                    }}</td>
+                                <td>{{ rent_view.display_current_due_date or 'N/A' }}</td>
                             </tr>
                             <tr>
-                                <td class="fw-bold">Overdue:</td>
-                                <td>
-                                    {% if student.rent_overdue %}
-                                    <span class="badge bg-danger">Yes</span>
-                                    {% else %}
-                                    <span class="badge bg-success">No</span>
-                                    {% endif %}
-                                </td>
+                                <td class="fw-bold">Amount Due:</td>
+                                <td>{{ rent_view.display_total_due }}</td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold">Paid:</td>
+                                <td>{{ rent_view.display_amount_paid }}</td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold">Remaining:</td>
+                                <td>{{ rent_view.display_remaining_amount }}</td>
                             </tr>
                         </table>
+                        {% else %}
+                        <p class="text-muted mb-0">No rent has been charged to this student yet.</p>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -687,9 +683,9 @@
                     </table>
                 </div>
                 {% else %}
-                <div class="alert alert-info mb-0">
-                    <span class="material-symbols-outlined me-2" aria-hidden="true">info</span>No earnings recorded yet.
-                </div>
+                {% call cards.alert_card('info', 'No earnings yet', icon='payments', body_class='mb-0') %}
+                    <p class="mb-0">No earnings recorded yet.</p>
+                {% endcall %}
                 {% endif %}
             </div>
         </div>
@@ -728,9 +724,9 @@
                                 </button>
                             </div>
                         </form>
-                        <div class="alert alert-info mt-3 mb-0">
-                            <small><span class="material-symbols-outlined me-2" aria-hidden="true">info</span>Hall passes are entitlement events. Add creates new grant events; remove appends reversals against unconsumed grant correlations.</small>
-                        </div>
+                        {% call cards.alert_card('info', 'How hall pass adjustments are recorded', icon='confirmation_number', body_class='mt-3 mb-0') %}
+                            <p class="mb-0">Hall passes are entitlement events. Add creates new grant events; remove appends reversals against unconsumed grant correlations.</p>
+                        {% endcall %}
                     </div>
                 </div>
             </div>
@@ -805,21 +801,18 @@
                                     <label class="form-check-label" for="edit_reset_login">Reset</label>
                                 </div>
                             </div>
-                            <div class="alert alert-warning mt-3 mb-0" id="reset_login_warning" hidden>
-                                <small><span class="material-symbols-outlined me-2" aria-hidden="true">warning</span>A reset code will be
-                                    generated.
-                                    Give it to the student along with their join code. They will click
+                            {% call cards.alert_card('warning', 'A reset code will be generated', icon='lock_reset', id='reset_login_warning', body_class='mt-3 mb-0', attrs='hidden') %}
+                                <p class="mb-0">Give it to the student along with their join code. They will click
                                     <strong>"I can't log into my account"</strong> on the login page to begin
-                                    recovery.</small>
-                            </div>
+                                    recovery.</p>
+                            {% endcall %}
                         </div>
                     </div>
 
-                    <div class="alert alert-info mb-0">
-                        <small><span class="material-symbols-outlined me-2" aria-hidden="true">info</span><strong>Note:</strong> Changing
-                            the name will
-                            update what the student needs to enter during the account claim process.</small>
-                    </div>
+                    {% call cards.alert_card('info', 'Name changes affect account claim', icon='info', body_class='mb-0') %}
+                        <p class="mb-0">Changing the name will update what the student needs to enter during the account
+                            claim process.</p>
+                    {% endcall %}
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>

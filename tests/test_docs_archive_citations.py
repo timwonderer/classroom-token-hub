@@ -4,7 +4,7 @@ Two failure modes are indistinguishable from success unless something checks:
 
 1. A link that resolves to nothing. Nobody notices, because a broken markdown
    link renders as ordinary text on GitHub and a 404 in the docs site — neither
-   of which fails a build. `docs/STANDARD_OPERATING_PROCEDURES/SOP-DOC-002`
+   of which fails a build. `docs/STANDARD_OPERATING_PROCEDURES/SOP-DOC-001`
    accumulated 69 of these before anyone looked.
 2. A link into `docs/archive/` with no label. The archive exists precisely so
    superseded material cannot be mistaken for current authority; an unlabelled

@@ -164,7 +164,6 @@ def test_edit_form_applies_the_contract_and_keeps_persisted_values(client, page)
         item = publish_store_product(
             class_id=classroom.class_id,
             entitlement_type="DELAYED_USE",
-            user_id=classroom.teacher_user.id,
             name="Snack Pack",
             price="25.00",
             is_bundle=True,

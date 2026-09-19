@@ -28,7 +28,8 @@ h6 {
  * stays legible on colored backgrounds. Font-size and font-weight are
  * NOT normalized here — templates control them per level:
  *   - Top-level cards use <h5 class="fw-bold"> (larger, more prominent)
- *   - Nested / alert cards use <h6 class="fw-semibold"> (calmer)
+ *   - Nested cards use <h6 class="fw-semibold"> (calmer)
+ *   - Alert cards (macros/cards.html alert_card) use <h3 class="h5 fw-bold">
  * Both classes are supplied at the template layer so the visual
  * hierarchy is explicit in each site rather than hidden in CSS. */
 .card-header h1,
@@ -147,12 +148,6 @@ a:hover {
 }
 
 /* ─── WCAG Contrast Overrides ─── */
-.alert-warning {
-    color: color-mix(in srgb, var(--warning) 60%, #000) !important;
-    background-color: var(--warning-subtle) !important;
-    border-color: color-mix(in srgb, var(--warning) 20%, transparent) !important;
-}
-
 .btn-outline-secondary {
     color: var(--neutral-700) !important;
     border-color: var(--neutral-400) !important;
@@ -166,6 +161,24 @@ a:hover {
 .btn-outline-info {
     color: var(--info) !important;
     border-color: var(--info) !important;
+}
+
+/* Gold is a fill, not a text colour (tokens.css): raw --warning text is 2.2:1 on
+   white. Outline warning buttons use the gold accent text token (6.7:1 on white,
+   5.5:1 on striped rows) and dark text on the gold fill when pressed (7.9:1). */
+.btn-outline-warning {
+    color: var(--accent-text-on-light) !important;
+    border-color: var(--accent-text-on-light) !important;
+    background: transparent;
+}
+
+.btn-outline-warning:hover,
+.btn-outline-warning:focus-visible,
+.btn-outline-warning:active,
+.btn-outline-warning.active {
+    background-color: var(--warning) !important;
+    border-color: var(--warning) !important;
+    color: var(--secondary-text) !important;
 }
 
 .btn-outline-info:hover {
@@ -192,9 +205,49 @@ a:hover {
     font-weight: 600;
 }
 
+/* ── Checkbox, radio and switch boundaries ── */
+/* A control's boundary and its on/off state each need 3:1 against what sits
+ * next to them (WCAG 1.4.11, INV-ARC-020 VII.D). Bootstrap's resting border and
+ * switch thumb are both rgba(0, 0, 0, 0.25): 1.84:1 on a white track, and
+ * 1.30:1 on a dark section header, where the control all but vanishes.
+ * --neutral-500 measures 4.76:1 on --surface. */
+.form-check-input {
+    border-color: var(--neutral-500);
+}
+
+/* The thumb is a background image, so its colour is re-specified rather than
+ * inherited. Same --neutral-500 (#737370) as the border. */
+.form-switch .form-check-input {
+    --bs-form-switch-bg: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%23737370'/%3e%3c/svg%3e");
+}
+
 .form-check-input:checked {
     background-color: var(--primary);
     border-color: var(--primary);
+}
+
+/* Inside a dark section header the checked fill above is --primary on a
+ * --primary background: 1.00:1. The track disappeared and the white thumb read
+ * as a dot floating in the header — the Payroll Settings "Advanced Mode"
+ * switch. In that context the control takes the accent fill (--secondary on
+ * --primary is 4.34:1) and a light boundary (--text-inverse at 65% is
+ * 5.10:1), in both states. */
+.bg-primary .form-check-input,
+.bg-dark .form-check-input {
+    border-color: color-mix(in srgb, var(--text-inverse) 65%, transparent);
+}
+
+.bg-primary .form-check-input:checked,
+.bg-dark .form-check-input:checked {
+    background-color: var(--secondary);
+    border-color: var(--secondary);
+}
+
+.bg-primary .form-switch .form-check-input:checked,
+.bg-dark .form-switch .form-check-input:checked {
+    /* Dark thumb on the gold fill: #171717 is --neutral-900, which
+     * --secondary-text resolves to. 6.90:1 on --secondary. */
+    --bs-form-switch-bg: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%23171717'/%3e%3c/svg%3e");
 }
 
 .form-check-input:focus {
@@ -371,6 +424,14 @@ a:hover {
 
 /* ─── Cards & Containers ─── */
 .card {
+    /* Feed Bootstrap's own card radii from the token. Its
+     * `.card-header:first-child` / `.card-footer:last-child` rules outrank
+     * `.card-header` below and round the header with
+     * --bs-card-inner-border-radius; left at Bootstrap's 6px default, a
+     * colored header's corners overhang the 4px border and the card surface
+     * shows through at each corner. */
+    --bs-card-border-radius: var(--radius-sm);
+    --bs-card-inner-border-radius: calc(var(--radius-sm) - 1px);
     background-color: var(--surface);
     border: 1px solid var(--neutral-300);
     border-radius: var(--radius-sm);
@@ -412,6 +473,21 @@ a:hover {
 .card-header.bg-info {
     color: white;
     background: var(--info) !important;
+}
+
+/* Alert-as-card (macros/cards.html `alert_card`, AppCore.buildAlertCard).
+ * The border must match the header fill, so it reads the same role-aware
+ * token rather than Bootstrap's `.border-*` utility, whose color comes from
+ * Bootstrap's own `--bs-*-rgb` palette. */
+.alert-card.border-success { border-color: var(--success) !important; }
+.alert-card.border-info    { border-color: var(--info) !important; }
+.alert-card.border-warning { border-color: var(--warning) !important; }
+.alert-card.border-danger  { border-color: var(--danger) !important; }
+
+/* The body holds explanatory prose; trim the trailing margin so a lone
+ * paragraph or list sits flush with the card padding. */
+.alert-card > .card-body > :last-child {
+    margin-bottom: 0;
 }
 
 .card-body {
@@ -566,37 +642,6 @@ a:hover {
 
 .badge.bg-secondary {
     border: 1px solid color-mix(in srgb, var(--secondary) 80%, black);
-}
-
-.alert {
-    border-radius: var(--radius-sm);
-    border: 1px solid transparent;
-    padding: 1rem;
-    margin-bottom: 1.5rem;
-}
-
-.alert-success {
-    background-color: var(--success-subtle);
-    color: var(--success);
-    border-color: color-mix(in srgb, var(--success) 30%, transparent);
-}
-
-.alert-danger {
-    background-color: var(--danger-subtle);
-    color: var(--danger);
-    border-color: color-mix(in srgb, var(--danger) 30%, transparent);
-}
-
-.alert-warning {
-    background-color: var(--warning-subtle);
-    color: var(--warning);
-    border-color: color-mix(in srgb, var(--warning) 30%, transparent);
-}
-
-.alert-info {
-    background-color: var(--info-subtle);
-    color: var(--info);
-    border-color: color-mix(in srgb, var(--info) 30%, transparent);
 }
 
 /* ─── Navigation (Sidebar) ─── */
@@ -826,12 +871,6 @@ a:hover {
     color: #000;
 }
 
-.sidebar-switcher .alert {
-    background: rgba(255, 193, 7, 0.15);
-    border: 1px solid rgba(255, 193, 7, 0.4);
-    color: var(--text-inverse);
-}
-
 .sidebar-switcher-add {
     width: 26px;
     height: 26px;
@@ -979,18 +1018,6 @@ a:hover {
 .student-content .badge.bg-secondary,
 .student-content .badge.bg-secondary.text-muted {
     color: var(--text-inverse) !important;
-}
-
-.student-content .alert-warning {
-    color: var(--alert-warning-text);
-}
-
-.student-content .alert-danger {
-    color: var(--alert-danger-text);
-}
-
-.student-content .alert-info {
-    color: var(--alert-info-text);
 }
 
 .student-shell .sidebar a.active,
@@ -2351,7 +2378,7 @@ body.maintenance-active .sidebar {
    body.error-page so none of it reaches another surface; page-specific
    panels (login links, request URL, status box) stay in their own template.
    The reset is wrapped in :where() so it keeps the zero specificity of the
-   bare `*` it replaced and still yields to .alert, .btn, and element rules. */
+   bare `*` it replaced and still yields to .card, .btn, and element rules. */
 :where(body.error-page) * {
     margin: 0;
     padding: 0;

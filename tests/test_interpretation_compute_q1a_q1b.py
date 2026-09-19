@@ -70,16 +70,16 @@ def _seed_window(classroom):
     with FEATContext("FEAT-PROD-001", correlation_id="itr-test:att", idempotency_key="itr:att"):
         db.session.add_all([
             AttendanceSession(
-                target_seat_id=sA.seat_id, class_id=cid, target_user_id=sA.user.id,
+                target_seat_id=sA.seat_id, class_id=cid,
                 actor_seat_id=teacher_seat_id, reason_code="start_work", timestamp=now,
             ),
             AttendanceSession(
-                target_seat_id=sB.seat_id, class_id=cid, target_user_id=sB.user.id,
+                target_seat_id=sB.seat_id, class_id=cid,
                 actor_seat_id=teacher_seat_id, reason_code="start_work", timestamp=now,
             ),
             # Out-of-window: must NOT count toward Q1a for seat C.
             AttendanceSession(
-                target_seat_id=sC.seat_id, class_id=cid, target_user_id=sC.user.id,
+                target_seat_id=sC.seat_id, class_id=cid,
                 actor_seat_id=teacher_seat_id, reason_code="start_work", timestamp=before_window,
             ),
         ])

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-TEST-002    | 2.0     | 2026-07-17     | 1.0        | Constitutional  |
+| SPEC-TEST-002    | 2.1     | 2026-09-15     | 2.0        | Constitutional  |
 
 ---
 
@@ -204,7 +204,7 @@ If any self-test assertion fails, the test is aborted immediately via `pytest.fa
 | DB — Teacher User | `user_role == TEACHER`; `username_hash` set; `last_active_class_id` and `last_active_seat_id` correct |
 | DB — Teacher Seat | `role == "teacher"`; `user_id` and `class_id` correct |
 | DB — Student User | `user_role == STUDENT`; `username_hash`, `pin_hash`, `passphrase_hash` set; `last_active_class_id` and `last_active_seat_id` correct |
-| DB — Student Seat | `role == "student"`; `user_id` and `class_id` correct; `claimed_at` set; claim hashes and `roster_fingerprint` set |
+| DB — Student Seat | `role == "student"`; `user_id` and `class_id` correct; `claimed_at` set; claim hashes, `roster_fingerprint`, and `dedupe_code` cleared after claim |
 | DB — IdentityProfile | `class_id`, `first_name`, `last_name` match fixture |
 | Session | `current_session_nonce` in session matches `user.current_session_nonce` in DB |
 | Context | `resolve_canonical_context()` returns `CanonicalContext`; `user_id`, `class_id`, `seat_id`, `actor_role` all match provisioned state |

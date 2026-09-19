@@ -20,7 +20,7 @@ def test_DOM_SUP_001__resolve_actor_context_uses_student_canonical_context(app):
 
     assert context is not None
     assert context["actor_type"] == "student"
-    assert context["actor_id"] == student.user.id
+    assert "actor_id" not in context
     assert context["actor_public_id"] == student.seat.public_id
     assert context["class_id"] == classroom.class_id
 
@@ -38,7 +38,7 @@ def test_DOM_SUP_001__resolve_actor_context_uses_teacher_canonical_context(app):
 
     assert context is not None
     assert context["actor_type"] == "teacher"
-    assert context["actor_id"] == classroom.teacher_user.id
+    assert "actor_id" not in context
     assert context["actor_public_id"] == classroom.teacher_seat.public_id
     assert context["class_id"] == classroom.class_id
 

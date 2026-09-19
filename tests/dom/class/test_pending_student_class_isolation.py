@@ -12,7 +12,7 @@ the precise scenario a class-isolation violation would leak across.
 
 from app.extensions import db
 from app.feats.base import FEATContext
-from app.hash_utils import hash_username_lookup
+from app.hash_utils import hash_claim_name, hash_roster_fingerprint
 from app.models import IdentityProfile, Seat
 from tests.helpers.classroom_initializer import initialize, initialize_as_teacher
 
@@ -28,11 +28,9 @@ def _add_pending_seat(class_id: str, first_name: str, last_name: str) -> int:
             role="student",
             claimed_at=None,
             user_id=None,
-            claim_first_name_hash=hash_username_lookup(first_name.lower()),
-            claim_last_name_hash=hash_username_lookup(last_name.lower()),
-            roster_fingerprint=hash_username_lookup(
-                f"{class_id}|{first_name.lower()}|{last_name.lower()}"
-            ),
+            claim_first_name_hash=hash_claim_name(first_name.lower(), class_id=class_id, field="first"),
+            claim_last_name_hash=hash_claim_name(last_name.lower(), class_id=class_id, field="last"),
+            roster_fingerprint=hash_roster_fingerprint(class_id=class_id, first_name=first_name, last_name=last_name),
         )
         db.session.add(seat)
         db.session.flush()
@@ -90,9 +88,8 @@ def test_DOM_CLASS_001__bulk_delete_rejects_foreign_seat_id(client):
         "/admin/pending-students/bulk-delete",
         json={"seat_ids": [other_pending]},
     )
-    assert response.status_code == 200
-    payload = response.get_json()
-    assert payload["deleted_count"] == 0
+    # Foreign selections fail closed for the whole request (FEAT-IDEN-006).
+    assert response.status_code == 404
 
     db.session.expire_all()
     assert db.session.get(Seat, other_pending) is not None

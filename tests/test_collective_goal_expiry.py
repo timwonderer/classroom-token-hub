@@ -57,7 +57,6 @@ def classroom(app):
                     idempotency_key=f"goal-expiry-fund:{student.seat_id}",
                     seat_id=student.seat_id,
                     class_id=room.class_id,
-                    user_id=student.user_id,
                     amount=Decimal("1000.00"),
                     account_type="checking",
                     type="payroll",

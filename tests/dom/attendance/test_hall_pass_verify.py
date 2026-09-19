@@ -151,7 +151,7 @@ def _post_verify(client, token: str, classroom, *, first_name: str = "Ava", last
     return client.post(
         f"/verify/hallpass/{token}",
         data={
-            "class_id": classroom.class_id,
+            "join_code": classroom.join_code,
             "first_name": first_name,
             "last_name": last_name,
         },
@@ -296,7 +296,7 @@ def test_DOM_PROD_002__post_verify_no_history_shown(client, verification_context
 
 
 def test_DOM_PROD_002__post_verify_wrong_class_rejected(client, verification_context):
-    """POST with a class_id that does not belong to this teacher returns no_match."""
+    """POST with a join_code that does not belong to this teacher returns no_match."""
     other_class = initialize("biology_block_a", client.application)
     response = _post_verify(client, verification_context["token"], other_class)
 
@@ -380,7 +380,7 @@ def test_DOM_PROD_002__post_verify_finds_match_beyond_first_20_records(client, v
 
 
 def test_DOM_PROD_002__post_verify_input_normalization(client, verification_context):
-    """Mixed-case first name and last name should still match hashed seat names."""
+    """Mixed-case first name and last name should still match class-scoped profile names."""
     classroom = verification_context["classroom"]
     log = _issue_hall_pass(classroom, hall_pass_id="HP-VERIFY-NORMALIZED")
     _mark_left(classroom, log)
@@ -449,3 +449,45 @@ def test_DOM_PROD_002__token_not_derived_from_teacher_id(verification_context):
     assert token != str(teacher.id)
     assert token != hex(teacher.id)
     assert token != f"{teacher.id:064d}"
+
+
+def test_profile_edit_changes_verification_without_claim_material(client, verification_context):
+    classroom = verification_context['classroom']
+    student = classroom.students[0]
+    assert student.seat.claim_first_name_hash is None
+    _issue_hall_pass(classroom, hall_pass_id='HP-PROFILE-EDIT')
+    with FEATContext('FEAT-IDEN-006', idempotency_key='hall-pass:profile-edit'):
+        student.profile.first_name = 'Updated'
+        db.session.flush()
+    old = _post_verify(client, verification_context['token'], classroom)
+    assert 'No hall pass record found' in old.text
+    updated = _post_verify(client, verification_context['token'], classroom, first_name='Updated')
+    assert 'Updated Chen' in updated.text
+    assert classroom.class_id not in updated.text
+    assert student.seat.claim_first_name_hash is None
+
+
+def test_duplicate_profiles_are_ambiguous_even_with_one_pass(client):
+    classroom = initialize('duplicate_names', client.application)
+    token = _set_verify_token(classroom)
+    _issue_hall_pass(classroom, hall_pass_id='HP-ONE-DUPLICATE')
+    response = _post_verify(client, token, classroom, first_name='Alex', last_name='Lee')
+    assert 'Unable to uniquely verify' in response.text
+
+
+def test_foreign_capability_rejected_before_profile_read(client, verification_context, monkeypatch):
+    from app.services import identity_service
+    other = initialize('duplicate_names', client.application)
+    def unexpected_read(**kwargs):
+        pytest.fail('Foreign class profiles must not be read')
+    monkeypatch.setattr(identity_service, 'match_hall_pass_profiles', unexpected_read)
+    response = _post_verify(client, verification_context['token'], other)
+    assert 'No hall pass record found' in response.text
+
+
+def test_verification_form_accessibility(client, verification_context):
+    from tests.test_accessibility import _audit_html_accessibility
+    response = client.get(f"/verify/hallpass/{verification_context['token']}")
+    _audit_html_accessibility(response.text)
+    assert 'name="join_code"' in response.text
+    assert 'name="class_id"' not in response.text

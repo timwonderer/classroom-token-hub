@@ -69,7 +69,7 @@ jobs:
           echo "🔍 Running comprehensive migration validation..."
           python scripts/validate-migrations.py
 
-      # SOP-DB-011 has required the linter since 2026-02-04, but nothing ran it,
+      # SOP-DB-001 has required the linter since 2026-02-04, but nothing ran it,
       # so migrations dated 2026-09 landed non-idempotent. The whole corpus is
       # linted against a frozen baseline of the debt SOP-DB-009 VI already
       # accepts: history may fail, new work may not, and the baseline can only

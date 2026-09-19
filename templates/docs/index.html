@@ -32,25 +32,6 @@
         </div>
     </form>
 
-    {#
-       Only operators get an audience switch. This site is the in-app help
-       centre for teachers and students; offering them "Technical Docs" just
-       drops them into invariants and domain specs they have no use for.
-    #}
-    {% if session.get('is_system_admin') %}
-    <div class="btn-group docs-hero-toggle" role="group" aria-label="Documentation Audience Toggle">
-        <a href="{{ url_for('docs.set_audience', aud='user') }}"
-            class="btn {% if audience == 'user' %}btn-secondary active fw-bold{% else %}btn-outline-light{% endif %} px-4">
-            <span class="material-symbols-outlined icon-sm icon-text-bottom" aria-hidden="true">group</span>
-            User Guides
-        </a>
-        <a href="{{ url_for('docs.set_audience', aud='devops') }}"
-            class="btn {% if audience == 'devops' %}btn-secondary active fw-bold{% else %}btn-outline-light{% endif %} px-4">
-            <span class="material-symbols-outlined icon-sm icon-text-bottom" aria-hidden="true">terminal</span>
-            Technical Docs
-        </a>
-    </div>
-    {% endif %}
 {% endcall %}
 
 <div class="container mt-5 mb-5">
@@ -164,7 +145,7 @@
                                 class="text-decoration-none fw-semibold text-primary">Interactive Timeline →</a></li>
                         <li><a href="https://github.com/timwonderer/classroom-economy/blob/main/DEVELOPMENT.md"
                                 target="_blank" rel="noopener" class="text-decoration-none">Development Roadmap <span class="visually-hidden">(opens in a new tab)</span></a></li>
-                        <li><a href="{{ url_for('docs.view_doc', doc_path='STANDARD_OPERATING_PROCEDURES/SOP-DOC-002_DOCUMENTATION_INDEX') }}"
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='STANDARD_OPERATING_PROCEDURES/SOP-DOC-001_DOCUMENTATION_INDEX') }}"
                                 class="text-decoration-none">Documentation Index</a></li>
                         <li><a href="{{ url_for('docs.view_doc', doc_path='PRINCIPLES/PROJECT_PHILOSOPHY/PRN-PHL-001_Design_Principles_And_Project_History') }}"
                                 class="text-decoration-none">Design Principles &amp; Project History</a></li>
@@ -210,7 +191,7 @@
                     <p class="card-text text-muted">Deployment, maintenance, and operational procedures for maintainers.
                     </p>
                     <ul>
-                        <li><a href="{{ url_for('docs.view_doc', doc_path='STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-023_V2_Production_Transition_Runbook') }}"
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook') }}"
                                 class="text-decoration-none">Production Transition Runbook</a></li>
                         <li><a href="{{ url_for('docs.view_doc', doc_path='SPEC/SPEC-OPS-004_SYSTEM_ADMINISTRATION_CONSOLE') }}"
                                 class="text-decoration-none">System Administration Console</a></li>

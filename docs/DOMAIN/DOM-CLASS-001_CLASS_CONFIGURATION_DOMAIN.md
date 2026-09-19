@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-CLASS-001 | 3.2 | 2026-08-08 | 3.1 | Constitutional |
+| DOM-CLASS-001 | 3.3 | 2026-09-15 | 3.2 | Constitutional |
 
 ## I. Purpose
 
@@ -149,3 +149,20 @@ Revisions to this document must:
 1. Increment the version number.
 2. Update the Effective Date.
 3. Maintain consistency with `INV-CORE-000`.
+
+
+## Terminal Roster Deletion
+
+A teacher deleting the final student Seat triggers class-universe destruction,
+including the administrative teacher Seat. Count all student Seats (claimed or
+unclaimed), not visible rows or only currently signed-in students. If this is
+the teacher's final class membership, destroy the teacher principal through the
+account-destruction command. Otherwise preserve sibling classes and clear
+canonical pointers to the destroyed class.
+
+Preview the complete consequence in the deletion modal. Re-evaluate ownership,
+selected seats, and whether class/account destruction follows inside the locked
+execution transaction. An outdated, narrower confirmation must be rejected.
+Unclaim retains the Seat and does not trigger this rule. Initial empty-class
+creation remains valid until roster setup; there is no empty-class or stale-class
+background inference.

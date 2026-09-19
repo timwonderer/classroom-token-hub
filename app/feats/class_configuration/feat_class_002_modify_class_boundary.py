@@ -171,6 +171,30 @@ def _execute_modify_student_impl(
             error_message=f"Seat {seat_id} is not a student seat",
         )
 
+    # An unclaimed seat's stored name is the key a student matches at claim, and
+    # a display-name edit SHALL NOT regenerate claim artifacts (DOM-IDEN-002
+    # §VIII.7). Renaming one here would move the profile while
+    # claim_first_name_hash / claim_last_name_hash stayed on the old name, so the
+    # roster would show a name the seat can no longer be claimed under.
+    #
+    # Regenerating the hashes instead is not the alternative: §VIII.7 forbids it,
+    # and DOM-IDEN-005 §Explicit Unclaim places hash regeneration at unclaim,
+    # from freshly entered names, not as a side effect of an edit. The seat also
+    # carries a roster_fingerprint that the student's username is derived from,
+    # which a rename cannot move either. So the edit is refused, matching
+    # /admin/student/edit. Removing and re-adding the seat is the supported
+    # correction; a claimed seat edits as before.
+    if student_seat.claimed_at is None or student_seat.user_id is None:
+        return ModifyStudentResult(
+            success=False,
+            correlation_id=corr_id,
+            error_code="SEAT_NOT_CLAIMED",
+            error_message=(
+                f"Seat {seat_id} is unclaimed; its name is claim material and cannot be "
+                "edited. Remove the seat and add it again under the correct name."
+            ),
+        )
+
     # Validate name fields
     if not first_name or not isinstance(first_name, str) or len(first_name.strip()) == 0:
         return ModifyStudentResult(

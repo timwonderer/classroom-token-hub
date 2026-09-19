@@ -109,11 +109,7 @@ from app.utils.economy_rebalance import (
     prepare_scheduled_rebalance_changes,
     queue_scheduled_policy_transitions,
 )
-from app.utils.claim_credentials import (
-    compute_primary_claim_hash,
-    match_claim_hash,
-    normalize_claim_hash,
-)
+
 from app.services.announcement_service import (
     create_class_announcement,
     delete_class_announcement,
@@ -139,8 +135,6 @@ from app.services.classroom_setup import (
     create_teacher,
     create_pending_student_seat,
     delete_seat_with_profile,
-    create_roster_student_seat,
-    update_or_create_roster_seat,
 )
 from app.services.payroll_settings_service import upsert_payroll_settings
 from app.services import store_service
@@ -174,7 +168,12 @@ from app.services.class_configuration_query_service import (
 from app.services.class_configuration_view_models import (
     build_feature_settings_page_view,
 )
+from app.services.identity_service import resolve_teacher_seat_for_class
 from app.services.admin_identity_service import delete_admin_account_rows
+from app.services.teacher_destruction import (
+    _destroy_class_scope_rows,
+    _destroy_teacher_account_rows,
+)
 from app.services.admin_settings_service import (
     create_rent_settings,
     supersede_rent_settings,
@@ -182,7 +181,6 @@ from app.services.admin_settings_service import (
 from app.services.issue_service import create_support_ticket
 from app.utils.ip_handler import get_real_ip
 from app.utils.turnstile import verify_turnstile_token
-from app.utils.name_utils import hash_last_name_parts, verify_last_name_parts
 from app.utils.help_content import HELP_ARTICLES
 from app.utils.encryption import encrypt_totp, decrypt_totp
 from app.utils.passwordless_client import (
@@ -202,14 +200,10 @@ from app.utils.auth_username import (
 )
 from app.utils.student_deletion import (
     delete_orphaned_users,
-    hard_delete_student_if_orphaned,
 )
 from app.utils.seat_scope import seat_scoped_filter, transaction_scope_filter
 from app.feats.admin_adjustment_feat import execute_admin_adjustments
-from app.feats.identity_feat import (
-    remove_student_from_teacher_scope as execute_identity_student_detach,
-    remove_pending_student_seat,
-)
+from app.feats.identity_feat import remove_pending_student_seat
 from app.feats.prod import record_attendance_session, record_payroll_event
 from app.feats.complete_payroll_cycle import complete_payroll_cycle
 from app.services.payroll.cycle_completion import get_completed_cycle_window
@@ -221,7 +215,7 @@ from app.feats.transaction_void_feat import (
     execute_void_transaction,
     execute_void_transactions,
 )
-from app.hash_utils import get_random_salt, hash_hmac, hash_username, hash_username_lookup
+from app.hash_utils import hash_username_lookup
 from app.attendance import (
     get_last_payroll_time,
     calculate_unpaid_attendance_seconds,
@@ -245,15 +239,12 @@ from app.services.admin_identity_service import (
     touch_admin_credentials_last_used,
 )
 from app.services.recovery_service import (
-    create_recovery_request_with_seats,
     delete_recovery_rows_for_user,
     find_recovery_request_by_resume_pin,
     get_active_recovery_request_for_user,
     get_recovery_request_by_id,
     invalidate_recovery_codes,
     list_recovery_codes_for_request,
-    mark_recovery_request_verified,
-    save_recovery_progress,
 )
 # TODO (Phase 4): insurance_eligibility deleted; use canonical tools + FEAT-STOR-003
 # from app.utils.insurance_eligibility import (
@@ -478,7 +469,6 @@ def _handle_mismatched_admin_class_context():
     current_app.logger.error(
         "Blocked admin write with mismatched class context",
         extra={
-            'user_id': user_id,
             'endpoint': request.endpoint,
             'method': request.method,
             'path': request.path,
@@ -509,7 +499,6 @@ def _handle_missing_admin_class_context():
     current_app.logger.error(
         "Blocked admin write without class context",
         extra={
-            'user_id': user_id,
             'endpoint': request.endpoint,
             'method': request.method,
             'path': request.path,
@@ -807,16 +796,10 @@ def _parse_dob_date(dob_str):
     raise ValueError("Invalid date format. Please use the date picker.")
 
 
-def _normalize_full_name_for_dedupe(first_name: str, last_name: str) -> str:
-    """Return lowercase letters-only full name for dedupe key input."""
-    return re.sub(r"[^a-z]", "", f"{first_name}{last_name}".lower())
-
-
 def _build_teacher_block_dedupe_key(class_id: str, first_name: str, last_name: str) -> str:
-    """Build deterministic dedupe key: class_id|normalized_full_name."""
-    normalized_full_name = _normalize_full_name_for_dedupe(first_name, last_name)
-    dedupe_input = f"{class_id}|{normalized_full_name}".encode()
-    return hash_hmac(dedupe_input, b"")[:8]
+    from app.hash_utils import hash_roster_fingerprint
+    return hash_roster_fingerprint(class_id=class_id, first_name=first_name,
+                                   last_name=last_name)[:8]
 
 
 def _find_admin_by_auth_username(username: str):
@@ -1093,18 +1076,6 @@ def _require_payroll_feature_scope_from_request(
     }
 
 
-def _require_active_payroll_policy_version_id(class_id: str) -> int:
-    """Return the active class-owned payroll policy version or fail closed."""
-    policy_version = (
-        PolicyVersion.query.filter_by(class_id=class_id, domain="payroll", is_active=True)
-        .order_by(PolicyVersion.version_number.desc(), PolicyVersion.id.desc())
-        .first()
-    )
-    if policy_version is None:
-        raise InvariantViolation("No active payroll policy version exists for this class.")
-    return policy_version.id
-
-
 
 def _class_exists(class_id):
     """Return True when a class identified by class_id still exists in ClassEconomy."""
@@ -1126,391 +1097,65 @@ def _assert_transaction_deletion_allowed(class_id, *, join_code_deletion=False):
         )
 
 
-def _hard_delete_student_if_orphaned(student_id):
-    """Compatibility wrapper for internal call sites and tests."""
-    return hard_delete_student_if_orphaned(student_id)
-
-
-def _remove_student_from_teacher_scope(student, user_id):
-    """
-    Remove a student from a teacher's roster.
-
-    If the student is shared with other teachers, only the current teacher
-    association is removed. The student record is hard-deleted only when it no
-    longer has any canonical class-seat links.
-    """
-    context = g.canonical_context
-    return execute_identity_student_detach(
-        canonical_context=context,
-        seat_id=student.id,
-        teacher_user_id=user_id,
-        correlation_id=generate_correlation_id(),
-        idempotency_key=f"identity:detach:{context.class_id}:{student.id}",
-    )
-
-
 def _delete_transactions_for_class(class_id, *, join_code_deletion=False):
     """Hard-delete transactions scoped to class_id (class destruction only)."""
     _assert_transaction_deletion_allowed(class_id, join_code_deletion=join_code_deletion)
     return Transaction.query.filter_by(class_id=class_id).delete(synchronize_session=False)
 
 
-def _destroy_class_scope_rows(*, class_id, canonical_context, **_ignored):
-    """Domain command: permanently remove records scoped to a destroyed class.
+class _DeletionScopeChanged(Exception):
+    """The locked state no longer matches the scope the open FEAT owns.
 
-    Plain command — it opens no FEAT context of its own so that composing
-    commands (teacher account destruction, which must destroy every owned class
-    in one transaction) can call it inside their own envelope. FEAT contexts
-    cannot nest: exactly one FEAT executes per request
-    (INV-ARC-000 §VIII.2, INV-ARC-021 §V.2 — compose domain commands, not FEATs).
-
-    The boundary may enter through join_code, but internal deletion uses the
-    canonical class_id anchor only.
+    Destruction dispatch happens before a FEAT opens, from a read that holds no
+    lock. That read selects the executor; it never authorizes the destruction.
+    Each executor re-evaluates the authoritative state under lock and raises this
+    rather than destroying a scope its own FEAT does not cover.
     """
-    if canonical_context is None or not getattr(canonical_context, "user_id", None):
-        raise ValueError("canonical_context is required for class deletion")
-    user_id = canonical_context.user_id
-
-    if not class_id:
-        current_app.logger.critical("P0 INVARIANT VIOLATION: class deletion invoked without class_id.")
-        raise InvariantViolation("class deletion requires canonical class_id")
-
-    # Append-only history is a within-universe invariant.  Explicit class-universe
-    # destruction is the authorized lifecycle exception for immutable history rows.
-    db.session.execute(text("SET LOCAL cth.class_universe_destroying = 'on'"))
-
-    class_row = get_class_economy(class_id)
-    if not class_row:
-        return
-
-    invalid_scope_rows = []
-    scoped_models = (
-        ("ledger_transaction", Transaction),
-        ("attendance_sessions", AttendanceSession),
-        ("hall_pass_logs", HallPassLog),
-        ("payroll_event", PayrollEvent),
-        ("student_items", EntitlementEvent),
-        ("issues", Issue),
-        ("announcements", Announcement),
-    )
-    for label, model in scoped_models:
-        join_code_column = getattr(model, "join_code", None)
-        class_id_column = getattr(model, "class_id", None)
-        if join_code_column is None or class_id_column is None:
-            continue
-        count = db.session.query(model).filter(
-            class_id_column.is_(None),
-            ).count()
-        if count:
-            invalid_scope_rows.append(f"{label}={count}")
-    if invalid_scope_rows:
-        message = (
-            f"class_id NULL rows detected for class_id={class_id}: {', '.join(invalid_scope_rows)}"
-        )
-        current_app.logger.critical("P0 INVARIANT VIOLATION: %s", message)
-        raise InvariantViolation(message)
-
-    scoped_student_ids = [
-        sid for (sid,) in db.session.query(Seat.user_id)
-        .filter(Seat.class_id == class_id, Seat.user_id.isnot(None))
-        .distinct()
-        .all()
-    ]
-    store_purchase_entitlement_ids_subq = (
-        db.session.query(EntitlementEvent.entitlement_id)
-        .filter(
-            EntitlementEvent.class_id == class_id,
-            EntitlementEvent.event_type == "GRANTED",
-            EntitlementEvent.acquisition_type == "PURCHASE",
-        )
-        .subquery()
-    )
-    tx_ids_subq = (
-        db.session.query(Transaction.id)
-        .filter(Transaction.class_id == class_id)
-        .subquery()
-    )
-    _class_row = get_class_economy(class_id)
-    _class_pub_id = _class_row.class_public_id if _class_row else None
-    issue_ids_subq = (
-        db.session.query(Issue.id)
-        .filter(Issue.class_public_id == _class_pub_id)
-        .subquery()
-    )
-    # Class-scoped records
-    PendingAction.query.filter(
-        PendingAction.class_id == class_id,
-        PendingAction.entitlement_id.in_(sa.select(store_purchase_entitlement_ids_subq)),
-    ).delete(synchronize_session=False)
-    EntitlementEvent.query.filter(
-        EntitlementEvent.class_id == class_id,
-        EntitlementEvent.event_type.in_(["GRANTED", "CONSUMED", "EXPIRED", "REVOKED"]),
-        EntitlementEvent.acquisition_type == "PURCHASE",
-    ).delete(synchronize_session=False)
-    AttendanceSession.query.filter(AttendanceSession.class_id == class_id).delete(synchronize_session=False)
-    HallPassLog.query.filter(HallPassLog.class_id == class_id).delete(synchronize_session=False)
-    PayrollEvent.query.filter(PayrollEvent.class_id == class_id).delete(synchronize_session=False)
-    LedgerBalanceSnapshot.query.filter(LedgerBalanceSnapshot.class_id == class_id).delete(synchronize_session=False)
-    Announcement.query.filter(
-        Announcement.user_id == user_id,
-        Announcement.class_id == class_id,
-    ).delete(synchronize_session=False)
-
-    # Issue data tied to this class
-    IssueResolutionAction.query.filter(
-        IssueResolutionAction.issue_id.in_(sa.select(issue_ids_subq))
-    ).delete(synchronize_session=False)
-    Issue.query.filter(Issue.class_public_id == _class_pub_id).delete(synchronize_session=False)
-
-    # Financial ledger (only here)
-    Transaction.query.filter(Transaction.class_id == class_id).delete(synchronize_session=False)
-    PayrollSettings.query.filter(PayrollSettings.class_id == class_id).delete(synchronize_session=False)
-    RentSettings.query.filter(RentSettings.class_id == class_id).delete(synchronize_session=False)
-
-    # Remove store items and their visibility/entitlement rows for this class.
-    # This is unconditional: destroying a class always tears down its store
-    # catalog. (Previously gated on teacher block/section labels, which is
-    # display-only metadata and never a valid precondition for cleanup.)
-    # ``store_products.class_id`` is the isolation boundary, so every product
-    # version in this class is deletable and no other class can reference one.
-    # The previous version of this block asked the question sideways — it kept
-    # any product that still had a visibility row, and it spared class-wide
-    # products (which have no visibility rows at all) entirely.
-    class_product_lineages = (
-        db.session.query(StoreProduct.product_lineage_uuid)
-        .filter(StoreProduct.class_id == class_id)
-        .subquery()
-    )
-    StoreItemVisibility.query.filter(
-        StoreItemVisibility.product_lineage_uuid.in_(sa.select(class_product_lineages))
-    ).delete(synchronize_session=False)
-
-    class_item_entitlement_ids = (
-        db.session.query(EntitlementEvent.entitlement_id)
-        .filter(
-            EntitlementEvent.class_id == class_id,
-            EntitlementEvent.event_type == "GRANTED",
-            EntitlementEvent.acquisition_type == "PURCHASE",
-        )
-        .subquery()
-    )
-    PendingAction.query.filter(
-        PendingAction.class_id == class_id,
-        PendingAction.entitlement_id.in_(sa.select(class_item_entitlement_ids))
-    ).delete(synchronize_session=False)
-    EntitlementEvent.query.filter(
-        EntitlementEvent.class_id == class_id,
-    ).delete(synchronize_session=False)
-    StoreProduct.query.filter(
-        StoreProduct.class_id == class_id
-    ).delete(synchronize_session=False)
-
-    # Seats/ownership for this class
-    Seat.query.filter(Seat.class_id == class_id).delete(synchronize_session=False)
-    ClassEconomy.query.filter_by(class_id=class_id).delete(synchronize_session=False)
-
-    # Principals that held a seat only in this class are now parentless and must
-    # not survive the scope that gave them existence. The teacher who owns the
-    # class is protected by the ownership check inside the sweep; they are
-    # destroyed only through FEAT-IDEN-007.
-    # The acting principal is never swept here: for single-class destruction they
-    # survive the class, and for account destruction FEAT-IDEN-007 removes them
-    # explicitly once every owned class is gone.
-    acting_user_id = getattr(canonical_context, "user_id", None)
-    _delete_orphan_students(
-        [sid for sid in scoped_student_ids if sid != acting_user_id]
-    )
 
 
-@requires_feat_context("FEAT-CLASS-001")
+def _lock_class_destruction_scope(*, class_id, user_id):
+    """Take the destruction locks in one fixed order.
+
+    Both class destruction and roster deletion serialize on the same two rows,
+    and both take them principal-first. A second order anywhere would let the two
+    paths deadlock against each other.
+    """
+    User.query.filter_by(id=user_id).with_for_update().one()
+    ClassEconomy.query.filter_by(class_id=class_id).with_for_update().one()
+
+
+@requires_feat_context("FEAT-CLASS-006")
 def _hard_delete_class_scope(*, class_id, canonical_context, correlation_id, idempotency_key):
-    """Public FEAT entry for single-class destruction (FEAT-CLASS-001).
+    """Public FEAT entry for single-class destruction (FEAT-CLASS-006).
 
-    Thin envelope over the ``_destroy_class_scope_rows`` domain command. Callers
-    that already hold a FEAT context (teacher account destruction) must invoke
-    that command directly rather than this wrapper.
+    Envelope over the ``_destroy_class_scope_rows`` domain command. Callers that
+    already hold a FEAT context (teacher account destruction) must invoke that
+    command directly rather than this wrapper.
+
+    FEAT-CLASS-006 covers destroying a class **while its owning principal
+    survives**. Whether that is the lawful outcome depends on whether the class
+    holds the principal's last seat, which callers read before this FEAT opens
+    and cannot hold still. So the condition is re-evaluated here, under the
+    locks, and a class whose destruction would now orphan its principal is
+    refused without mutation: that is FEAT-IDEN-007's command, and a principal
+    holding no seat anywhere cannot exist (DOM-IDEN-005 §V.6, §VI).
     """
+    _lock_class_destruction_scope(class_id=class_id, user_id=canonical_context.user_id)
+    if _class_deletion_destroys_principal(canonical_context.user_id, class_id):
+        raise _DeletionScopeChanged(
+            f"expected=class actual=account class_id={class_id}"
+        )
     return _destroy_class_scope_rows(
         class_id=class_id,
         canonical_context=canonical_context,
     )
 
 
-def _delete_teacher_residual_ownership_rows(canonical_context):
-    """Delete teacher-user link rows not already removed by class-scoped deletion."""
-    user_id = canonical_context.user_id
-    # SQLAlchemy forbids bulk delete() on a joined query; scope through a
-    # subquery instead (same pattern as the settings/activity deletions below).
-    owned_class_ids_subq = db.session.query(ClassEconomy.class_id).filter(
-        ClassEconomy.teacher_user_id == user_id
-    ).subquery()
-    Seat.query.filter(
-        Seat.class_id.in_(sa.select(owned_class_ids_subq))
-    ).delete(synchronize_session=False)
-
-
-def _delete_teacher_settings_activity_and_audit_rows(canonical_context):
-    """Delete teacher-user scoped settings, activity, and audit rows."""
-    user_id = canonical_context.user_id
-    class_ids_subq = db.session.query(ClassEconomy.class_id).filter(
-        ClassEconomy.teacher_user_id == user_id
-    ).subquery()
-    HallPassSettings.query.filter(
-        HallPassSettings.class_id.in_(sa.select(class_ids_subq))
-    ).delete(synchronize_session=False)
-    PayrollSettings.query.filter(
-        PayrollSettings.class_id.in_(sa.select(class_ids_subq))
-    ).delete(synchronize_session=False)
-    Announcement.query.filter(
-        Announcement.user_id == user_id
-    ).delete(synchronize_session=False)
-    Transaction.query.filter_by(user_id=user_id).delete(synchronize_session=False)
-    PendingAction.query.filter(
-        PendingAction.authoritative_feat == "FEAT-STOR-002",
-        PendingAction.class_id.in_(sa.select(class_ids_subq)),
-    ).delete(synchronize_session=False)
-
-
-def _delete_teacher_rent_rows(canonical_context):
-    """Delete rent settings and dependent items owned by the teacher user."""
-    user_id = canonical_context.user_id
-    class_ids_subq = db.session.query(ClassEconomy.class_id).filter(
-        ClassEconomy.teacher_user_id == user_id
-    ).subquery()
-    RentSettings.query.filter(
-        RentSettings.class_id.in_(sa.select(class_ids_subq))
-    ).delete(synchronize_session=False)
-
-
-def _delete_teacher_insurance_rows(canonical_context):
-    """Delete insurance policies and dependent rows scoped to classes owned by the teacher user."""
-    user_id = canonical_context.user_id
-    class_ids_subq = db.session.query(ClassEconomy.class_id).filter(
-        ClassEconomy.teacher_user_id == user_id
-    ).subquery()
-    # Insurance tables are removed in v2; no legacy cleanup path remains here.
-    _ = class_ids_subq
-
-
-def _delete_teacher_issue_rows(canonical_context):
-    """Delete issue records belonging to classes owned by this teacher.
-
-    Issues are scoped by class_public_id matching the teacher's classes.
-    """
-    user_id = canonical_context.user_id
-    class_public_ids = [
-        pub_id for (pub_id,) in
-        db.session.query(ClassEconomy.class_public_id).filter(ClassEconomy.teacher_user_id == user_id).all()
-    ]
-    if not class_public_ids:
-        return
-    issue_ids_subq = db.session.query(Issue.id).filter(
-        Issue.class_public_id.in_(class_public_ids)
-    ).subquery()
-    IssueResolutionAction.query.filter(
-        IssueResolutionAction.issue_id.in_(sa.select(issue_ids_subq))
-    ).delete(synchronize_session=False)
-    IssueStatusHistory.query.filter(
-        IssueStatusHistory.issue_id.in_(sa.select(issue_ids_subq))
-    ).delete(synchronize_session=False)
-    Issue.query.filter(Issue.class_public_id.in_(class_public_ids)).delete(synchronize_session=False)
-
-
-def _delete_teacher_recovery_and_credentials_rows(canonical_context):
-    """Delete teacher-user recovery and credential rows."""
-    user_id = canonical_context.user_id
-    delete_recovery_rows_for_user(user_id)
-    delete_admin_credentials_for_user(user_id)
-
-
-def _delete_teacher_store_rows(canonical_context):
-    """Delete store rows owned by the teacher user."""
-    user_id = canonical_context.user_id
-    # Entitlements point at the lineage, not at any one version, so the subquery
-    # collects lineages rather than primary keys.
-    lineages_subq = (
-        db.session.query(StoreProduct.product_lineage_uuid)
-        .filter_by(user_id=user_id)
-        .subquery()
-    )
-    StoreItemVisibility.query.filter(
-        StoreItemVisibility.product_lineage_uuid.in_(sa.select(lineages_subq))
-    ).delete(synchronize_session=False)
-    EntitlementEvent.query.filter(
-        EntitlementEvent.product_id.in_(sa.select(lineages_subq))
-    ).delete(synchronize_session=False)
-    StoreProduct.query.filter_by(user_id=user_id).delete(synchronize_session=False)
-
-
-def _delete_orphan_students(affected_student_ids):
-    """Delete principals left with no seat in any class after a teardown.
-
-    ``affected_student_ids`` is the set of users who held a seat in a scope that
-    was just destroyed. Any of them with no remaining seat anywhere must be
-    removed entirely — a ``users`` row has no standalone existence and carries
-    credential material (INV-CORE-000 §III.5, DOM-IDEN-001 §VI).
-    """
-    if not affected_student_ids:
-        return
-    delete_orphaned_users(affected_student_ids)
-
-
 @requires_feat_context("FEAT-IDEN-007")
 def _hard_delete_teacher_account_scope(
     *, canonical_context, admin_user=None, correlation_id=None, idempotency_key=None
 ):
-    """Terminal destruction of a teacher principal and everything it owns.
-
-    Public FEAT entry (FEAT-IDEN-007). One envelope covers the whole command:
-    every owned class universe is destroyed through the ``_destroy_class_scope_rows``
-    *domain command*, then the account-level residue (settings, credentials,
-    recovery material, the ``users`` row itself). The class destruction is
-    composed, not delegated to FEAT-CLASS-001 — a FEAT never executes another
-    FEAT (INV-ARC-000 §VIII.2, INV-ARC-021 §V.2), and a single envelope is what
-    makes the whole account teardown one atomic transaction.
-
-    Authority is the canonical context alone; no display value or alias
-    participates in resolving what gets destroyed (INV-CORE-000 §III.4).
-    """
-    if canonical_context is None or not getattr(canonical_context, "user_id", None):
-        raise ValueError("canonical_context is required for account deletion")
-    user_id = canonical_context.user_id
-
-    class_ids = [
-        value for (value,) in db.session.query(ClassEconomy.class_id).filter(
-            ClassEconomy.teacher_user_id == user_id,
-        ).distinct().all()
-    ]
-
-    affected_student_ids = {
-        sid for (sid,) in db.session.query(Seat.user_id)
-        .filter(Seat.class_id.in_(class_ids), Seat.user_id.isnot(None))
-        .distinct()
-        .all()
-    }
-    # The teacher may hold a seat in their own class. Their principal is removed
-    # explicitly at the end of this command, not by the orphan sweep.
-    affected_student_ids.discard(user_id)
-
-    # Required ordering: all class-scoped data is destroyed before the account rows.
-    for class_id in class_ids:
-        _destroy_class_scope_rows(
-            class_id=class_id,
-            canonical_context=canonical_context,
-        )
-
-    _delete_teacher_residual_ownership_rows(canonical_context)
-    _delete_teacher_settings_activity_and_audit_rows(canonical_context)
-    _delete_teacher_rent_rows(canonical_context)
-    _delete_teacher_insurance_rows(canonical_context)
-    _delete_teacher_issue_rows(canonical_context)
-    _delete_teacher_recovery_and_credentials_rows(canonical_context)
-    _delete_teacher_store_rows(canonical_context)
-    _delete_orphan_students(affected_student_ids)
-
-    # The principal itself. Terminal — the users row does not survive.
-    if admin_user is not None:
-        delete_admin_account_rows(admin_user)
+    return _destroy_teacher_account_rows(canonical_context=canonical_context, admin_user=admin_user)
 
 
 def _sanitize_csv_field(value):
@@ -2504,7 +2149,7 @@ def _apply_rebalance_plan(canonical_context, class_id, change_plan, activation_m
     """Apply rebalance plan for a class (wrapper for economy_rebalance function)."""
     user_id = canonical_context.user_id
     applied_labels = apply_rebalance_changes(
-        user_id, class_id, change_plan, activation_mode,
+        canonical_context.seat_id, class_id, change_plan, activation_mode,
         canonical_context=canonical_context,
     )
     current_app.logger.info(
@@ -2683,7 +2328,17 @@ def dashboard():
     # the read to other classes the teacher owns.
     active_class_id = current_class_id
 
-    seats = Seat.query.filter(Seat.class_id == active_class_id, Seat.role == 'student').all()
+    # Claimed seats only. An unclaimed seat is a teacher-provisioned placeholder
+    # whose runtime participation is not activated (DOM-IDEN-005 §VII,
+    # INV-CORE-000 §Constraints); unclaim keeps its economic facts but restores
+    # that placeholder state. Counting it here reported a student body and an
+    # economy value that Banking and Payroll — both scoped to claimed seats —
+    # contradicted for the same class.
+    seats = Seat.query.filter(
+        Seat.class_id == active_class_id,
+        Seat.role == 'student',
+        Seat.claimed_at.isnot(None),
+    ).all()
     total_students = len(seats)
 
     # Seat-based name lookup for templates (keyed by seat_id)
@@ -2808,9 +2463,13 @@ def dashboard():
     recent_redemptions = pending_redemptions[:5]
 
     # Recent transactions (limited to 5 for display)
+    # Claimed seats only, like every other figure on this page. `seats` above is
+    # already the claimed roster for this class.
+    claimed_seat_ids = [seat.id for seat in seats]
     recent_transactions = (
         Transaction.query
         .filter(Transaction.class_id == active_class_id)
+        .filter(Transaction.seat_id.in_(claimed_seat_ids) if claimed_seat_ids else sa.false())
         .filter(Transaction.status != TransactionStatus.VOID)
         .order_by(Transaction.timestamp.desc())
         .limit(5)
@@ -2823,6 +2482,7 @@ def dashboard():
     total_transactions_today = (
         Transaction.query
         .filter(Transaction.class_id == active_class_id)
+        .filter(Transaction.seat_id.in_(claimed_seat_ids) if claimed_seat_ids else sa.false())
         .filter(
             Transaction.timestamp >= today_start_db,
             Transaction.status != TransactionStatus.VOID,
@@ -2842,7 +2502,13 @@ def dashboard():
             ),
         )
         .join(ClassEconomy, AttendanceSession.class_id == ClassEconomy.class_id)
-        .filter(AttendanceSession.class_id == ctx.class_id)
+        .filter(
+            AttendanceSession.class_id == ctx.class_id,
+            # Attendance kept from before an unclaim stays on the seat but is no
+            # longer displayed (DOM-IDEN-002 §VIII).
+            Seat.role == "student",
+            Seat.claimed_at.isnot(None),
+        )
         .order_by(AttendanceSession.timestamp.desc(), AttendanceSession.id.desc())
         .limit(5)
         .all()
@@ -2926,8 +2592,17 @@ def give_bonus_all():
     tx_type = request.form.get('type')
 
     ctx = g.canonical_context
-    class_ids_subq = [ctx.class_id]
-    seats = Seat.query.filter(Seat.class_id.in_(sa.select(class_ids_subq)), Seat.role == 'student').all()
+    # One canonical class, compared directly. This read used to wrap a Python
+    # list of one class_id in `sa.select(...)`, which SQLAlchemy 2.0 rejects
+    # outright, so every class-wide bonus raised before reaching the ledger.
+    #
+    # Unclaimed seats hold no principal and no activated participation
+    # (DOM-IDEN-005 §VII-VIII), so a class-wide bonus skips them.
+    seats = Seat.query.filter(
+        Seat.class_id == ctx.class_id,
+        Seat.role == 'student',
+        Seat.claimed_at.isnot(None),
+    ).all()
     user_id = ctx.user_id
 
     adjustments = []
@@ -2935,7 +2610,6 @@ def give_bonus_all():
     for seat in seats:
         adjustments.append({
             'seat': seat,
-            'user_id': user_id,
             'amount': amount,
             'type': tx_type,
             'description': title,
@@ -2993,6 +2667,8 @@ def login():
                         "FEAT-IDEN-001",
                         idempotency_key=f"identity:teacher-login:{user.id}:{nonce}",
                     ):
+                        from app.services.teacher_lifecycle import record_teacher_sign_in
+                        user = record_teacher_sign_in(user.id)
                         establish_teacher_session(user)
                         session["current_session_nonce"] = nonce
                         user.current_session_nonce = nonce
@@ -3037,7 +2713,7 @@ def signup():
 
     Step 1 (GET /signup): Class creation form (class name, section, teacher display name).
     Step 1 (POST /signup with signup_step=class_setup): Validates and stages
-        class/display data in session; no database row is created.
+        encrypted class/display data on the server; no identity is created.
     Step 2 (POST /signup with username, no totp_code): Username validation, generates TOTP secret,
         shows QR code.
     Step 3 (POST /signup with totp_code): Validates TOTP, atomically creates
@@ -3091,13 +2767,13 @@ def signup():
 
             # Stage only. The class, teacher, seat, and profile are created
             # together after username and TOTP verification.
-            for stale_key in ("signup_class_id", "signup_seat_id"):
-                session.pop(stale_key, None)
-            session["signup_class_display_name"] = class_display_name
-            session["signup_section"] = section
-            session["signup_teacher_first_name"] = teacher_first_name
-            session["signup_teacher_last_name"] = teacher_last_name
-            session["signup_class_timezone"] = class_timezone
+            from app.feats.teacher_signup_feat import stage_signup
+            session['teacher_signup_nonce'] = stage_signup(
+                previous_nonce=session.get('teacher_signup_nonce'),
+                metadata=dict(class_display_name=class_display_name, section=section,
+                    teacher_first_name=teacher_first_name, teacher_last_name=teacher_last_name,
+                    class_timezone=class_timezone),
+                correlation_id=generate_correlation_id(), idempotency_key='teacher-signup:stage')
 
             # Render step 2 (username form)
             form = AdminSignupForm()
@@ -3116,11 +2792,9 @@ def signup():
         )
 
     # ---- Guard: steps 2/3 require class context from step 1 ----
-    if (
-        not session.get("signup_class_display_name")
-        or not session.get("signup_teacher_first_name")
-        or not session.get("signup_class_timezone")
-    ):
+    from app.feats.teacher_signup_feat import read_signup, prepare_totp, complete_signup
+    pending = read_signup(session.get('teacher_signup_nonce'))
+    if pending is None:
         flash("Please start by creating your class.", "error")
         return redirect(url_for("admin.signup"))
 
@@ -3138,13 +2812,11 @@ def signup():
                     turnstile_site_key=current_app.config.get("TURNSTILE_SITE_KEY"),
                 )
 
-            # Generate TOTP secret
-            if "admin_totp_secret" not in session or session.get("admin_totp_username") != username:
-                totp_secret = pyotp.random_base32()
-                session["admin_totp_secret"] = totp_secret
-                session["admin_totp_username"] = username
-            else:
-                totp_secret = session["admin_totp_secret"]
+            totp_secret = prepare_totp(nonce=session.get('teacher_signup_nonce'), username=username,
+                correlation_id=generate_correlation_id(), idempotency_key='teacher-signup:totp')
+            if not totp_secret:
+                flash("Session expired. Please start over.", "error")
+                return redirect(url_for("admin.signup"))
 
             totp_uri = pyotp.totp.TOTP(totp_secret).provisioning_uri(name=username, issuer_name="Classroom Economy Admin")
             img = qrcode.make(totp_uri)
@@ -3177,9 +2849,9 @@ def signup():
 
     username = normalize_auth_username(form.username.data)
     totp_code = form.totp_code.data.strip()
-    totp_secret = session.get("admin_totp_secret")
+    totp_secret = pending.get("totp_secret")
 
-    if not totp_secret or session.get("admin_totp_username") != username:
+    if not totp_secret or pending.get("username") != username:
         flash("Session expired. Please start over.", "error")
         return redirect(url_for("admin.signup"))
 
@@ -3209,46 +2881,18 @@ def signup():
         flash("You must agree to the Terms of Service and Privacy Policy.", "error")
         return redirect(url_for("admin.signup"))
 
-    # Re-check username uniqueness (race condition guard)
-    if _auth_username_exists(username):
-        flash("Username is not available. Please choose another.", "error")
-        session.pop("admin_totp_secret", None)
-        session.pop("admin_totp_username", None)
-        return redirect(url_for("admin.signup"))
-
-    # Atomically create the teacher identity and class boundary.
-    from app.services.classroom_setup import create_class
-    from app.utils.join_code import generate_join_code
-    signup_idempotency_key = f"feat:iden:admin-signup:{username}"
     try:
-        with FEATContext("FEAT-IDEN-001", idempotency_key=signup_idempotency_key):
-            new_user = create_teacher(username, totp_secret=totp_secret)
-            economy = create_class(
-                new_user.id,
-                join_code=generate_join_code(),
-                display_name=session["signup_class_display_name"],
-                section=session.get("signup_section"),
-                class_timezone=session["signup_class_timezone"],
-                teacher_first_name=session["signup_teacher_first_name"],
-                teacher_last_name=session.get("signup_teacher_last_name"),
-            )
+        completed = complete_signup(nonce=session.get('teacher_signup_nonce'),
+            username=username, totp_code=totp_code, correlation_id=generate_correlation_id(),
+            idempotency_key='teacher-signup:complete')
     except ValueError:
-        db.session.rollback()
         flash("Username is not available. Please choose another.", "error")
-        session.pop("admin_totp_secret", None)
-        session.pop("admin_totp_username", None)
         return redirect(url_for("admin.signup"))
+    if not completed:
+        flash("Session expired. Please start over.", "error")
+        return redirect(url_for("admin.signup"))
+    session.pop('teacher_signup_nonce', None)
 
-    # Clean up signup session keys
-    session.pop("admin_totp_secret", None)
-    session.pop("admin_totp_username", None)
-    session.pop("signup_class_display_name", None)
-    session.pop("signup_section", None)
-    session.pop("signup_teacher_first_name", None)
-    session.pop("signup_teacher_last_name", None)
-    session.pop("signup_class_timezone", None)
-
-    current_app.logger.info(f"Teacher signup complete: user={new_user.id}, class={economy.class_id}")
     flash("Account created successfully! Please log in with your username and authenticator.", "success")
     return redirect(url_for("admin.login"))
 
@@ -3256,210 +2900,69 @@ def signup():
 @admin_bp.route('/recover', methods=['GET', 'POST'])
 @limiter.limit("5 per hour")
 def recover():
-    """
-    Account recovery - Step 1: Roster verification.
-
-    Teacher submits one (join_code, student_username) pair per class taught.
-    Lookup order (enforced):
-      1. Resolve join_code -> ClassEconomy -> class_id (establishes user_id and class scope)
-      2. Find the seat by username_lookup_hash *within* the resolved class roster
-    All pairs must resolve to the same teacher and must cover all active class_ids.
-    No DOB is used.
-
-    Generic errors only — do not reveal which pair failed.
-    Rate limited to prevent brute-force enumeration.
-    """
+    from app.feats.teacher_recovery_feat import MIN_CLAIMED_STUDENTS_PER_CLASS, begin_attempt
     form = AdminRecoveryForm()
-    _GENERIC_ERROR = "Unable to verify identity. Please check your entries and try again."
-
     if request.method == 'POST' and form.validate_on_submit():
-        recovery_join_codes = request.form.getlist('join_code[]')
-        recovery_usernames = request.form.getlist('student_username[]')
+        joins, usernames = request.form.getlist('join_code[]'), request.form.getlist('student_username[]')
+        if joins and len(joins) == len(usernames):
+            result = begin_attempt(pairs=list(zip(joins, usernames)),
+                current_request_id=session.get('recovery_request_id'),
+                attempt_nonce=session.get('teacher_recovery_attempt_nonce'), correlation_id=generate_correlation_id(),
+                idempotency_key='teacher-recovery:begin')
+            if result:
+                session['recovery_request_id'] = result['id']
+                session['teacher_recovery_attempt_nonce'] = result['nonce']
+                if result['existing']:
+                    return redirect(url_for('admin.recovery_status'))
+                return render_template('admin_recovery_prepare.html', class_refs=result['class_refs'])
+        flash('Unable to begin recovery. Check all entries or resume your existing recovery attempt.', 'error')
+    return render_template('admin_recover.html', form=form, recovery_min_students=MIN_CLAIMED_STUDENTS_PER_CLASS)
 
-        # Strip and filter empty entries
-        recovery_pairs = [
-            (jc.strip().upper(), un.strip())
-            for jc, un in zip(recovery_join_codes, recovery_usernames)
-            if jc.strip() and un.strip()
-        ]
 
-        if not recovery_pairs:
-            flash(_GENERIC_ERROR, "error")
-            return render_template("admin_recover.html", form=form)
+@admin_bp.route('/recovery/select-class', methods=['POST'])
+@limiter.limit('30 per hour')
+def recovery_select_class():
+    from app.feats.teacher_recovery_feat import select_class_recipients
+    data = request.get_json(silent=True)
+    data = data if isinstance(data, dict) else {}
+    classroom = ClassEconomy.query.filter_by(class_public_id=str(data.get('class_ref', ''))).first()
+    success = select_class_recipients(request_id=session.get('recovery_request_id'),
+        attempt_nonce=session.get('teacher_recovery_attempt_nonce'), class_id=classroom.class_id if classroom else None,
+        correlation_id=generate_correlation_id(), idempotency_key='teacher-recovery:select-class')
+    return jsonify(ready=success)
 
-        # ----------------------------------------------------------------
-        # Step 1: Establish class authority from the first explicit ingress boundary
-        # ----------------------------------------------------------------
-        display_join_code = recovery_pairs[0][0]
-        normalized_code = display_join_code.strip().upper() if display_join_code else display_join_code
-        first_class = ClassEconomy.query.filter_by(join_code=normalized_code).first()
-        if not first_class:
-            current_app.logger.warning(
-                f"Admin recovery: initial join_code '{display_join_code}' not found"
-            )
-            flash(_GENERIC_ERROR, "error")
-            return render_template("admin_recover.html", form=form)
 
-        recovered_account_id = first_class.teacher_user_id
-        # NOTE (INV-ARC-004): this is a PRE-AUTH, account-level identity challenge —
-        # not a class-local runtime capability. Enumerating the account's classes is
-        # intrinsic to verifying "you own this account" (the applicant must reproduce
-        # the full class set exactly, below). No class-scoped data is read or written
-        # across boundaries here, so the one-tenant-per-request rule for class-local
-        # operations does not apply to this identity-verification path.
-        active_classes = get_all_classes_by_teacher(recovered_account_id)
-        class_by_id = {c.class_id: c for c in active_classes if c.class_id}
-
-        resolved_pairs = []
-        for recovery_join_code, recovery_username in recovery_pairs:
-            resolved_class = next((c for c in active_classes if c.join_code == recovery_join_code), None)
-            if not resolved_class:
-                current_app.logger.warning(
-                    f"Admin recovery: join_code '{recovery_join_code}' not found in recovered account scope"
-                )
-                flash(_GENERIC_ERROR, "error")
-                return render_template("admin_recover.html", form=form)
-            resolved_pairs.append((resolved_class.class_id, recovery_username))
-
-        # ----------------------------------------------------------------
-        # Step 2: Verify submitted class_ids exactly match the active class records
-        # ----------------------------------------------------------------
-        all_active_class_ids = set(class_by_id)
-        submitted_class_ids = set(class_id for class_id, _ in resolved_pairs)
-
-        # Must exactly match backend list
-        if all_active_class_ids != submitted_class_ids:
-            current_app.logger.warning(
-                f"Admin recovery: class_id set mismatch for recovered account {recovered_account_id}"
-            )
-            flash(_GENERIC_ERROR, "error")
-            return render_template("admin_recover.html", form=form)
-
-        # Reject duplicates (e.g. submitting the same valid class 3 times)
-        if len(submitted_class_ids) != len(resolved_pairs):
-            current_app.logger.warning(
-                f"Admin recovery: duplicate class_ids submitted"
-            )
-            flash(_GENERIC_ERROR, "error")
-            return render_template("admin_recover.html", form=form)
-
-        # ----------------------------------------------------------------
-        # Step 3: Verify each recovered seat belongs in the correct class scope
-        # ----------------------------------------------------------------
-        resolved_seats = {}   # class_id -> seat record
-
-        # Group seat IDs by class for quick lookup
-        seats_by_class_id = {}
-        for c in active_classes:
-            if c.class_id:
-                jc_seats = (
-                    Seat.query
-                    .join(User, User.id == Seat.user_id)
-                    .filter(
-                        Seat.class_id == c.class_id,
-                        Seat.claimed_at.isnot(None),
-                    )
-                    .with_entities(Seat.id, User.id)
-                    .all()
-                )
-                seats_by_class_id[c.class_id] = jc_seats
-
-        for recovery_class_id, recovery_username in resolved_pairs:
-            # We already know this class is in scope from the set comparison.
-            recovery_lookup_hash = hash_username_lookup(recovery_username)
-
-            # Get all seat IDs associated with this specific class
-            seats_for_jc = seats_by_class_id.get(recovery_class_id, [])
-            seat_ids_in_class = [seat_id for seat_id, _student_id in seats_for_jc if seat_id]
-
-            seat = (
-                Seat.query
-                .join(User, User.id == Seat.user_id)
-                .filter(
-                    Seat.id.in_(seat_ids_in_class),
-                    User.username_lookup_hash == recovery_lookup_hash,
-                )
-                .first()
-            )
-
-            if not seat:
-                current_app.logger.warning(
-                    f"Admin recovery: recovered seat not found in recovery scope"
-                )
-                flash(_GENERIC_ERROR, "error")
-                return render_template("admin_recover.html", form=form)
-
-            resolved_seats[recovery_class_id] = seat
-
-        # ----------------------------------------------------------------
-        # Step 4: Check for existing active recovery request
-        # ----------------------------------------------------------------
-        existing_request = get_active_recovery_request_for_user(recovered_account_id, utc_now())
-
-        if existing_request:
-            flash("You already have an active recovery request. Please check back or wait for it to expire.", "info")
-            session['recovery_request_id'] = existing_request.id
-            return redirect(url_for('admin.recovery_status'))
-
-        # ----------------------------------------------------------------
-        # Step 4: Create recovery request (5-day expiration)
-        # ----------------------------------------------------------------
-        expires_at = utc_now() + timedelta(days=5)
-        recovery_request = create_recovery_request_with_seats(
-            user_id=recovered_account_id,
-            seat_class_pairs=[(seat.id, class_id) for class_id, seat in resolved_seats.items()],
-            expires_at=expires_at,
-        )
-
-        session['recovery_request_id'] = recovery_request.id
-        current_app.logger.info(
-            f"Admin recovery: request created for recovered account {recovered_account_id}, expires {expires_at}"
-        )
-
-        flash("Recovery request created! Your students have been notified. You have 5 days to complete this process.", "success")
-        return redirect(url_for('admin.recovery_status'))
-
-    return render_template("admin_recover.html", form=form)
-
+@admin_bp.route('/recovery/submit-class-code', methods=['POST'])
+@limiter.limit('10 per hour')
+def recovery_submit_class_code():
+    from app.feats.teacher_recovery_feat import confirm_class
+    data = request.get_json(silent=True)
+    data = data if isinstance(data, dict) else {}
+    classroom = ClassEconomy.query.filter_by(class_public_id=str(data.get('class_ref', ''))).first()
+    received = confirm_class(request_id=session.get('recovery_request_id'),
+        attempt_nonce=session.get('teacher_recovery_attempt_nonce'), class_id=classroom.class_id if classroom else None,
+        code=str(data.get('code','')).strip(), correlation_id=generate_correlation_id(),
+        idempotency_key='teacher-recovery:submit-class-code')
+    return jsonify(received=received)
 
 
 @admin_bp.route('/recovery-status', methods=['GET'])
 def recovery_status():
-    """
-    Show status of recovery request and collected codes.
-    """
-    recovery_request_id = session.get('recovery_request_id')
-    if not recovery_request_id:
-        flash("No active recovery request found.", "error")
+    from app.feats.teacher_recovery_feat import attempt_status
+    status = attempt_status(session.get('recovery_request_id'), session.get('teacher_recovery_attempt_nonce'))
+    if status is None:
+        flash('Recovery is unavailable. Resume or begin recovery again.', 'error')
         return redirect(url_for('admin.recover'))
+    return render_template('admin_recovery_status.html', status=status)
 
-    recovery_request = get_recovery_request_by_id(recovery_request_id)
-    if not recovery_request:
-        flash("Recovery request not found.", "error")
-        session.pop('recovery_request_id', None)
-        return redirect(url_for('admin.recover'))
 
-    # Check if expired (handle timezone-naive datetimes from SQLite)
-    expires_at = ensure_utc(recovery_request.expires_at)
-    if expires_at < utc_now():
-        flash("Your recovery request has expired. Please start a new recovery.", "error")
-        session.pop('recovery_request_id', None)
-        return redirect(url_for('admin.recover'))
-
-    # Get verification codes
-    codes = list_recovery_codes_for_request(recovery_request.id)
-    verified_count = sum(1 for c in codes if c.code_hash is not None)
-    total_count = len(codes)
-
-    # Check if all verified
-    all_verified = verified_count == total_count and total_count > 0
-
-    return render_template("admin_recovery_status.html",
-                         recovery_request=recovery_request,
-                         codes=codes,
-                         verified_count=verified_count,
-                         total_count=total_count,
-                         all_verified=all_verified)
+def _render_teacher_recovery_setup(form, authorized):
+    secret, username = authorized['secret'], authorized['username']
+    uri = pyotp.TOTP(secret).provisioning_uri(name=username, issuer_name="Classroom Economy Admin")
+    buf = io.BytesIO()
+    qrcode.make(uri).save(buf, format='PNG')
+    return render_template('admin_reset_credentials.html', form=form, show_qr=True,
+        qr_b64=base64.b64encode(buf.getvalue()).decode('utf-8'), totp_secret=secret, new_username=username)
 
 
 @admin_bp.route('/reset-credentials', methods=['GET', 'POST'])
@@ -3476,214 +2979,63 @@ def reset_credentials():
         return redirect(url_for('admin.recover'))
 
     recovery_request = get_recovery_request_by_id(recovery_request_id)
-    if not recovery_request or recovery_request.status != 'pending':
+    if not recovery_request or recovery_request.status != 'pending' or ensure_utc(recovery_request.expires_at) <= utc_now():
         flash("Invalid or expired recovery request.", "error")
         return redirect(url_for('admin.recover'))
 
     form = AdminResetCredentialsForm()
     if request.method == 'POST' and form.validate_on_submit():
-        # Get recovery codes from dynamic fields
-        entered_codes = request.form.getlist('recovery_code')
-        entered_codes = [c.strip() for c in entered_codes if c.strip()]
-        new_username = form.new_username.data.strip()
-
-        # Get all student recovery codes for this request
-        student_codes = list_recovery_codes_for_request(recovery_request.id)
-
-        # Verify all students have generated codes
-        if any(sc.code_hash is None for sc in student_codes):
-            flash("Not all students have verified yet. Please wait for all students to generate their recovery codes.", "error")
+        from app.feats.teacher_recovery_feat import authorize_setup
+        result = authorize_setup(request_id=recovery_request.id,
+            attempt_nonce=session.get('teacher_recovery_attempt_nonce'),
+            username=form.new_username.data, correlation_id=generate_correlation_id(),
+            idempotency_key=f"teacher-recovery:authorize:{recovery_request.id}")
+        if not result:
+            session.pop('teacher_recovery_setup_nonce', None)
+            flash("Recovery could not be verified. Collect fresh codes for every class and try again, or restart if the attempt expired.", "error")
             return redirect(url_for('admin.recovery_status'))
+        totp_secret, new_username = result['secret'], result['username']
+        session['teacher_recovery_setup_nonce'] = result['nonce']
+        return _render_teacher_recovery_setup(form, result)
 
-        # Verify count matches
-        if len(entered_codes) != len(student_codes):
-            current_app.logger.warning(f"Admin recovery: code count mismatch for request {recovery_request.id} - expected {len(student_codes)}, got {len(entered_codes)}")
-            # Invalidate ALL codes
-            _invalidate_all_recovery_codes(recovery_request.id)
-            flash(f"Wrong number of codes entered. All codes have been invalidated. Your students must generate new codes.", "error")
-            return redirect(url_for('admin.recovery_status'))
+    from app.feats.teacher_recovery_feat import read_setup
+    authorized = read_setup(recovery_request.id, session.get('teacher_recovery_setup_nonce'))
+    if authorized:
+        return _render_teacher_recovery_setup(form, authorized)
 
-        # Verify entered codes match (in any order)
-        entered_hashes = set()
-        for code in entered_codes:
-            # Validate format
-            if not code.isdigit() or len(code) != 6:
-                current_app.logger.warning(f"Admin recovery: invalid code format for request {recovery_request.id}")
-                _invalidate_all_recovery_codes(recovery_request.id)
-                flash("Invalid code format detected. All codes have been invalidated. Your students must generate new codes.", "error")
-                return redirect(url_for('admin.recovery_status'))
-            # Hash the entered code (no salt for recovery codes - they're already random)
-            code_hash = hash_hmac(code.encode(), b'')
-            entered_hashes.add(code_hash)
-
-        stored_hashes = set(sc.code_hash for sc in student_codes)
-
-        if entered_hashes != stored_hashes:
-            current_app.logger.warning(f"Admin recovery: code mismatch for request {recovery_request.id}")
-            # Invalidate ALL codes on failed attempt
-            _invalidate_all_recovery_codes(recovery_request.id)
-            flash("Recovery codes do not match. All codes have been invalidated. Your students must generate new codes.", "error")
-            return redirect(url_for('admin.recovery_status'))
-
-        # Check username uniqueness
-        if _auth_username_exists(new_username, exclude_admin_id=recovery_request.user_id):
-            flash("Username already exists. Please choose a different username.", "error")
-            return render_template("admin_reset_credentials.html", form=form, show_qr=False)
-
-        # Generate new TOTP secret
-        totp_secret = pyotp.random_base32()
-        totp_uri = pyotp.totp.TOTP(totp_secret).provisioning_uri(name=new_username, issuer_name="Classroom Economy Admin")
-
-        # Generate QR code
-        img = qrcode.make(totp_uri)
-        buf = io.BytesIO()
-        img.save(buf, format='PNG')
-        buf.seek(0)
-        img_b64 = base64.b64encode(buf.read()).decode('utf-8')
-
-        # Store in session for TOTP verification
-        session['reset_totp_secret'] = totp_secret
-        session['reset_new_username'] = new_username
-
-        return render_template("admin_reset_credentials.html", form=form, show_qr=True, qr_b64=img_b64, totp_secret=totp_secret, new_username=new_username)
-
-    # Check if resuming from saved progress
-    resume_mode = session.get('resume_mode', False)
-    saved_codes = recovery_request.partial_codes if resume_mode else []
-    saved_username = recovery_request.resume_new_username if resume_mode else ''
-
-    # Clear resume mode flag
-    if resume_mode:
-        session.pop('resume_mode', None)
-
-    return render_template("admin_reset_credentials.html",
-                         form=form,
-                         show_qr=False,
-                         saved_codes=saved_codes,
-                         saved_username=saved_username)
-
-
-def _invalidate_all_recovery_codes(recovery_request_id: int):
-    """
-    Invalidate all recovery codes forcing students to regenerate new ones.
-    This prevents attackers from testing codes individually.
-    """
-    invalidated_count = invalidate_recovery_codes(recovery_request_id)
-    current_app.logger.info(
-        f"Invalidated {invalidated_count} recovery codes - students must regenerate"
-    )
+    return redirect(url_for('admin.recovery_status'))
 
 
 @admin_bp.route('/confirm-reset', methods=['POST'])
 @limiter.limit("10 per hour")
 def confirm_reset():
-    """
-    Confirm TOTP code and complete the account reset.
-    Rate limited to prevent brute force attacks on TOTP codes.
-    """
-    recovery_request_id = session.get('recovery_request_id')
-    if not recovery_request_id:
-        flash("Invalid recovery session.", "error")
-        return redirect(url_for('admin.recover'))
-
-    recovery_request = get_recovery_request_by_id(recovery_request_id)
-    if not recovery_request:
-        flash("Invalid recovery session.", "error")
-        return redirect(url_for('admin.recover'))
-
-    teacher = db.session.get(User, recovery_request.user_id)
-    if not teacher:
-        flash("Invalid recovery session.", "error")
-        return redirect(url_for('admin.recover'))
-
-    totp_code = request.form.get('totp_code', '').strip()
-    totp_secret = session.get('reset_totp_secret')
-    new_username = session.get('reset_new_username')
-
-    if not totp_code or not totp_secret or not new_username:
-        flash("Invalid reset session.", "error")
+    from app.feats.teacher_recovery_feat import complete_setup
+    request_id = session.get('recovery_request_id')
+    success = complete_setup(request_id=request_id,
+        nonce=session.get('teacher_recovery_setup_nonce'),
+        totp_code=request.form.get('totp_code', '').strip(),
+        correlation_id=generate_correlation_id(),
+        idempotency_key=f"teacher-recovery:complete:{request_id}") if request_id else False
+    if not success:
+        flash("Recovery could not be completed. Check the authenticator code or restart recovery.", "error")
         return redirect(url_for('admin.reset_credentials'))
-
-    # Verify TOTP code
-    totp = pyotp.TOTP(totp_secret)
-    if not totp.verify(totp_code):
-        flash("Invalid TOTP code. Please try again.", "error")
-        return redirect(url_for('admin.reset_credentials'))
-
-    # Update admin account
-    previous_username_lookup_hash = teacher.username_lookup_hash
-    user = User.query.filter_by(username_lookup_hash=previous_username_lookup_hash).first()
-    if not user:
-        flash("Canonical account identity is missing. Contact support.", "error")
-        return redirect(url_for('admin.recover'))
-
-    salt, username_hash, username_lookup_hash = _build_admin_auth_fields(new_username, existing_salt=teacher.salt)
-    teacher.salt = salt
-    teacher.username = None
-    teacher.username_hash = username_hash
-    teacher.username_lookup_hash = username_lookup_hash
-    encrypted_totp_secret = encrypt_totp(totp_secret)
-    user.username_hash = username_hash
-    user.username_lookup_hash = username_lookup_hash
-    user.totp_secret_encrypted = encrypted_totp_secret
-
-    # Mark recovery request as completed
-    mark_recovery_request_verified(recovery_request.id, utc_now())
-
-    # Clear recovery session
-    session.pop('reset_totp_secret', None)
-    session.pop('reset_new_username', None)
-
-    flash("Your account has been successfully reset! Please log in with your new username and TOTP.", "success")
+    session.clear()
+    flash("Your account has been reset. Sign in with your new username and authenticator code.", "success")
     return redirect(url_for('admin.login'))
 
 
 @admin_bp.route('/save-recovery-progress', methods=['POST'])
 @limiter.limit("10 per hour")
 def save_recovery_progress():
-    """
-    Save partial recovery progress and generate a resume PIN.
-    Allows teachers to enter codes gradually without needing all students at once.
-    """
-    recovery_request_id = session.get('recovery_request_id')
-    if not recovery_request_id:
-        flash("No active recovery request found.", "error")
+    from app.feats.teacher_recovery_feat import save_progress
+    request_id = session.get('recovery_request_id')
+    pin = save_progress(request_id=request_id, attempt_nonce=session.get('teacher_recovery_attempt_nonce'),
+        username='', correlation_id=generate_correlation_id(), idempotency_key='teacher-recovery:save')
+    if pin is None:
+        flash('Recovery progress could not be saved.', 'error')
         return redirect(url_for('admin.recover'))
-
-    recovery_request = get_recovery_request_by_id(recovery_request_id)
-    if not recovery_request or recovery_request.status != 'pending':
-        flash("Invalid or expired recovery request.", "error")
-        return redirect(url_for('admin.recover'))
-
-    # Get entered codes and new username
-    entered_codes = request.form.getlist('recovery_code')
-    entered_codes = [c.strip() for c in entered_codes if c.strip()]
-    new_username = request.form.get('new_username', '').strip()
-
-    if not entered_codes:
-        flash("Please enter at least one recovery code before saving progress.", "error")
-        return redirect(url_for('admin.reset_credentials'))
-
-    # Generate a 6-digit resume PIN using cryptographically secure randomness
-    resume_pin = ''.join([str(secrets.randbelow(10)) for _ in range(6)])
-
-    # Hash the PIN
-    resume_pin_hash = hash_hmac(resume_pin.encode(), b'')
-
-    # Save partial progress
-    save_recovery_progress(
-        recovery_request.id,
-        partial_codes=entered_codes,
-        resume_pin_hash=resume_pin_hash,
-        resume_new_username=new_username,
-    )
-    current_app.logger.info(f"Admin recovery: saved partial progress for request {recovery_request.id}")
-
-    # Show the PIN to the teacher
-    return render_template("admin_recovery_saved.html",
-                         resume_pin=resume_pin,
-                         codes_saved=len(entered_codes),
-                         recovery_request=recovery_request)
+    return render_template('admin_recovery_saved.html', resume_pin=pin, codes_saved=0,
+        recovery_request=get_recovery_request_by_id(request_id))
 
 
 @admin_bp.route('/resume-credentials', methods=['GET', 'POST'])
@@ -3703,23 +3055,15 @@ def resume_credentials():
         flash("Please enter a valid 6-digit resume PIN.", "error")
         return render_template("admin_resume_credentials.html")
 
-    # Find recovery request with matching PIN
-    resume_pin_hash = hash_hmac(resume_pin.encode(), b'')
-
-    recovery_request = find_recovery_request_by_resume_pin(resume_pin_hash, utc_now())
-
-    if not recovery_request:
-        current_app.logger.warning("Admin recovery: invalid resume PIN attempt")
-        flash("Invalid or expired resume PIN. Please check your PIN or start a new recovery.", "error")
-        return render_template("admin_resume_credentials.html")
-
-    # Set session and redirect to reset credentials with saved progress
-    session['recovery_request_id'] = recovery_request.id
-    session['resume_mode'] = True
-
-    current_app.logger.info(f"Admin recovery: resumed progress for request {recovery_request.id}")
-    flash(f"Progress resumed! You have {len(recovery_request.partial_codes or [])} code(s) already saved.", "info")
-    return redirect(url_for('admin.reset_credentials'))
+    from app.feats.teacher_recovery_feat import resume_attempt
+    result = resume_attempt(pin=resume_pin, correlation_id=generate_correlation_id(), idempotency_key='teacher-recovery:resume')
+    if not result:
+        flash('Invalid or expired resume PIN.', 'error')
+        return render_template('admin_resume_credentials.html')
+    session['recovery_request_id'] = result['id']
+    session['teacher_recovery_attempt_nonce'] = result['nonce']
+    session.pop('teacher_recovery_setup_nonce', None)
+    return redirect(url_for('admin.recovery_status'))
 
 
 @admin_bp.route('/setup-recovery', methods=['GET', 'POST'])
@@ -3729,7 +3073,8 @@ def setup_recovery():
     if request.method == 'POST':
         flash("Recovery setup is already enabled without date-of-birth requirements.", "success")
         return redirect(url_for('admin.dashboard'))
-    return render_template('admin_setup_recovery.html')
+    from app.feats.teacher_recovery_feat import MIN_CLAIMED_STUDENTS_PER_CLASS
+    return render_template('admin_setup_recovery.html', recovery_min_students=MIN_CLAIMED_STUDENTS_PER_CLASS)
 
 
 @admin_bp.route('/customizations', methods=['GET', 'POST'])
@@ -3892,136 +3237,37 @@ def _get_rent_privileges_for_student(student, class_id, seat_id):
 @admin_bp.route('/students')
 @admin_required
 def students():
-    """View all students in the active canonical class."""
-    user_id = g.canonical_context.user_id
+    """Render the Student Management roster for the active canonical class.
 
-    current_class_id = g.canonical_context.class_id
+    The page is served from one view model (MAP-UI-002): the route resolves
+    scope and delegates, rather than assembling parallel per-seat dictionaries
+    for the template to join.
+    """
+    from app.feats.teacher_recovery_feat import MIN_CLAIMED_STUDENTS_PER_CLASS
+    from app.services.roster_view_model import build_class_roster_view
+
+    current_class_id = (getattr(g.canonical_context, "class_id", None) or "").strip()
     if not current_class_id:
-        # Class isolation (INV-ARC-004 V.1): never substitute an arbitrary class
-        # from the teacher's class set for the active class. If no class is
-        # active in the request context, send the teacher to the dashboard where
-        # the nav-bar context switcher (INV-ARC-010) establishes the active class.
+        # Class isolation (INV-ARC-004 §V.1): never substitute an arbitrary class
+        # from the teacher's class set for the active class.
         flash("Select a class to manage its students.", "info")
         return redirect(url_for('admin.dashboard'))
 
-    class_row = (
-        verify_teacher_owns_class(current_class_id, user_id)
-        if current_class_id
-        else None
+    roster = build_class_roster_view(
+        class_id=current_class_id,
+        teacher_user_id=g.canonical_context.user_id,
+        recovery_min_students=MIN_CLAIMED_STUDENTS_PER_CLASS,
+        privilege_resolver=_get_rent_privileges_for_student,
     )
+    if roster is None:
+        flash("Select a class to manage its students.", "info")
+        return redirect(url_for('admin.dashboard'))
 
-    # Strict single-context: only Seat data anchored to the active class_id.
-    class_seats = (
-        Seat.query
-        .join(IdentityProfile, IdentityProfile.seat_id == Seat.id)
-        .filter(Seat.class_id == current_class_id)
-        .all()
-    ) if current_class_id else []
-
-    # Claimed students are resolved through Seat rows in the active class.
-    active_seat_ids = sorted({
-        s.id for s in class_seats
-        if s.user_id is not None and s.claimed_at is not None and s.role == 'student'
-    })
-    all_students = (
-        sorted(
-            Seat.query
-            .join(IdentityProfile, IdentityProfile.seat_id == Seat.id)
-            .filter(Seat.id.in_(active_seat_ids))
-            .all(),
-            key=lambda seat: (
-                ((seat.class_economy.section if seat.class_economy and seat.class_economy.section else "").lower()),
-                (seat.identity_profile.first_name if seat.identity_profile else "").lower(),
-                seat.id,
-            ),
-        )
-        if active_seat_ids else []
+    return render_template(
+        'admin_students.html',
+        roster=roster,
+        current_page="students",
     )
-
-    # Add username_display attribute to each student
-    for seat in all_students:
-        if seat.user_id and seat.identity_profile:
-            seat.username_display = f"user_{seat.user_id}"
-        else:
-            seat.username_display = "Not Set"
-
-    unclaimed_seats_raw = [
-        seat for seat in class_seats
-        if seat.user_id is None and seat.claimed_at is None
-    ]
-    # Build view model dicts for unclaimed seats (no raw SQLAlchemy in templates).
-    unclaimed_seats = [
-        {
-            'id': seat.id,
-            'public_id': seat.public_id,
-            'class_id': seat.class_id,
-            'is_teacher': getattr(seat, 'is_teacher', False),
-            'created_at': seat.created_at,
-            'full_name': seat.identity_profile.full_name if seat.identity_profile else 'Unknown',
-        }
-        for seat in unclaimed_seats_raw
-    ]
-
-    # CRITICAL: Add scoped balances by canonical seat_id only.
-    class_seat_pairs = [(current_class_id, seat.id) for seat in all_students] if current_class_id else []
-    raw_balances = get_batch_balances_by_class_seat(class_seat_pairs)
-    student_balances_by_seat_id = {}
-    for student in all_students:
-        bals = raw_balances.get((str(current_class_id), student.id)) if current_class_id else None
-        if not bals:
-            bals = {'checking_cents': 0, 'savings_cents': 0, 'earnings': Decimal('0.00')}
-        student_balances_by_seat_id[student.id] = {
-            'checking': float(Decimal(bals['checking_cents']) / 100),
-            'savings': float(Decimal(bals['savings_cents']) / 100),
-            'earnings': float(bals.get('earnings', Decimal('0.00')))
-        }
-
-    student_rent_privileges_by_seat_id = {}
-    student_hall_pass_balances_by_seat_id = {}
-    for student in all_students:
-        student_hall_pass_balances_by_seat_id[student.id] = get_hall_pass_balance(
-            student.id,
-            current_class_id,
-        )
-
-    class_label_parts = []
-    if class_row and class_row.section:
-        class_label_parts.append(class_row.section)
-    if class_row and class_row.display_name:
-        class_label_parts.append(class_row.display_name)
-    class_display_label = " - ".join(class_label_parts) or (class_row.class_id if class_row else "Current Class")
-    display_join_code = class_row.join_code if class_row else None
-
-    # Build view model dicts for claimed students (no raw SQLAlchemy in templates).
-    claimed_student_views = []
-    for seat in all_students:
-        profile = seat.identity_profile
-        claimed_student_views.append({
-            'id': seat.id,
-            'public_id': seat.public_id,
-            'class_id': seat.class_id,
-            'identity_profile': {
-                'full_name': profile.full_name if profile else '',
-                'first_name': profile.first_name if profile else '',
-                'last_name': profile.last_name if profile else '',
-                'notes': profile.notes if profile and profile.notes else '',
-            },
-        })
-
-    return render_template('admin_students.html',
-                         students=claimed_student_views,
-                         class_display_label=class_display_label,
-                         current_class_id=current_class_id,
-                         current_class_section=class_row.section if class_row else None,
-                         current_class_display_name=class_row.display_name if class_row else None,
-                         current_class_join_code=display_join_code,
-                         claimed_students=claimed_student_views,
-                         unclaimed_seats=unclaimed_seats,
-                         student_balances_by_seat_id=student_balances_by_seat_id,
-                         student_rent_privileges_by_seat_id=student_rent_privileges_by_seat_id,
-                         student_hall_pass_balances_by_seat_id=student_hall_pass_balances_by_seat_id,
-                         single_context_mode=True,
-                         current_page="students")
 
 
 @admin_bp.route('/current-class', methods=['POST'])
@@ -4121,35 +3367,19 @@ def student_detail_public(actor_public_id):
     )
 
     # Attendance context uses the canonical PROD session backend.
-    # Fetch last rent payment
-    rent_query = Transaction.query.filter(tx_scope, Transaction.type == "rent")
-    latest_rent = rent_query.order_by(Transaction.timestamp.desc()).first()
-    student.rent_last_paid = latest_rent.timestamp if latest_rent else None
-
-    # Fetch last property tax payment
-    tax_query = Transaction.query.filter(tx_scope, Transaction.type == "property_tax")
-    latest_tax = tax_query.order_by(Transaction.timestamp.desc()).first()
-    student.property_tax_last_paid = latest_tax.timestamp if latest_tax else None
-
-    # Compute due dates and overdue status using class-local timezone
-    from datetime import date
-    from app.utils.canonical_temporal_resolver import _get_class_timezone
-    effective_tz = _get_class_timezone(class_id)
-    today = utc_now().astimezone(effective_tz).date()
-    class_tz = effective_tz
-    # Rent due on 5th, overdue after 6th
-    rent_due = date(today.year, today.month, 5)
-    student.rent_due_date = rent_due
-    student.rent_overdue = today > rent_due and (
-        not student.rent_last_paid or student.rent_last_paid.astimezone(class_tz).date() <= rent_due
-    )
-
-    # Property tax due on 5th, overdue after 6th
-    tax_due = date(today.year, today.month, 5)
-    student.property_tax_due_date = tax_due
-    student.property_tax_overdue = today > tax_due and (
-        not student.property_tax_last_paid or student.property_tax_last_paid.astimezone(class_tz).date() <= tax_due
-    )
+    # Rent is a class feature; its status comes from recorded rent assessments,
+    # the same obligation view the student rent page and Rent roster use.
+    rent_scope = resolve_feature_class_for_class(class_id, 'rent')
+    rent_enabled = bool(rent_scope and rent_scope.get("enabled"))
+    rent_view = None
+    if rent_enabled:
+        from app.services.obligation_view_model import (
+            add_display_formatting_to_student_obligation_view,
+            build_student_obligation_view,
+        )
+        rent_view = add_display_formatting_to_student_obligation_view(
+            build_student_obligation_view(seat_id, class_id, 'RENT')
+        )
 
     transactions_query = Transaction.query.filter(tx_scope)
 
@@ -4332,7 +3562,9 @@ def student_detail_public(actor_public_id):
                          hall_pass_balance=hall_pass_balance,
                          current_join_code=None,
                          current_class_id=class_id,
-                         rent_privileges=rent_privileges)
+                         rent_privileges=rent_privileges,
+                         rent_enabled=rent_enabled,
+                         rent_view=rent_view)
 
 
 @admin_bp.route('/student/<int:seat_id>/adjust-hall-pass-entitlements', methods=['POST'])
@@ -4420,6 +3652,16 @@ def edit_student():
     if not verify_teacher_owns_class(current_class_id, user_id):
         abort(404)
 
+    # An unclaimed seat is a roster placeholder whose stored name IS the claim
+    # key (DOM-IDEN-002 §VIII). Editing the display profile here would leave
+    # those hashes matching the old name while the roster showed the new one,
+    # and the seat could then only be claimed under a name the teacher can no
+    # longer see. Display-name edits do not regenerate claim artifacts, so the
+    # edit itself is refused: the roster offers no edit control for these seats,
+    # and removing and re-adding the seat is the supported correction.
+    if student.claimed_at is None or student.user_id is None:
+        abort(404)
+
     # Get form data
     new_first_name = request.form.get('first_name', '').strip()
     last_name_input = request.form.get('last_name', '').strip()
@@ -4432,7 +3674,7 @@ def edit_student():
         flash("Student display profile is missing.", "error")
         return redirect(url_for('admin.students'))
 
-    # Check if name changed (keep seat identity fields in sync).
+    # Detect profile changes without changing seat identity or claim material.
     current_first_name = student_profile.first_name or ""
     current_last_name = student_profile.last_name or ""
     current_notes = student_profile.notes or ""
@@ -4445,28 +3687,17 @@ def edit_student():
     student_profile.first_name = new_first_name
     student_profile.last_name = last_name_input
     student_profile.notes = notes_input or None
-    student.claim_first_name_hash = hash_username_lookup(new_first_name.lower())
-    student.claim_last_name_hash = hash_username_lookup(last_name_input.lower())
 
     # Handle account reset — generate recovery code per DOM-IDEN-002 §IX
     reset_login = request.form.get('reset_login') == 'on'
     if reset_login:
-        import secrets as _secrets
-        _ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-        code = ''.join(_secrets.choice(_ALPHABET) for _ in range(8))
-        _reset_user = db.session.get(User, student.user_id) if student.user_id else None
-        if _reset_user:
-            _now = utc_now()
-            _reset_user.reset_code = code
-            _reset_user.reset_code_generated_at = _now
-            _reset_user.reset_code_expires_at = _now + timedelta(minutes=10)
-
-            current_app.logger.info(
-                f"Reset code generated for seat {student.id} (user {_reset_user.id}) by admin {user_id}"
-            )
-
+        from app.services.student_recovery import issue_student_recovery_code
+        code = issue_student_recovery_code(student.user_id) if student.user_id else None
+        if code:
             flash(f"Reset code generated for {student_profile.full_name}: {code} — Expires in 10 minutes. "
                   f"Give this code to the student.", "warning")
+        else:
+            flash("Student has no linked account.", "error")
 
     try:
         if name_changed:
@@ -4484,105 +3715,249 @@ def edit_student():
     return redirect(url_for('admin.students'))
 
 
+def _student_deletion_plan(context, seat_ids):
+    try:
+        ids = {int(value) for value in seat_ids}
+    except (ValueError, TypeError):
+        abort(400)
+    if not ids or not _admin_owns_class(context, context.class_id):
+        abort(404)
+    rows = Seat.query.filter_by(class_id=context.class_id, role="student").all()
+    if not ids.issubset({row.id for row in rows}):
+        abort(404)
+    destroys_class = ids == {row.id for row in rows}
+    destroys_account = destroys_class and _class_deletion_destroys_principal(context.user_id, context.class_id)
+    if destroys_account:
+        phrase = "DELETE TEACHER ACCOUNT"
+        warning = "These are the last students in your only class. Deleting them permanently deletes this class, your teacher account, and all associated data. You will be signed out."
+    elif destroys_class:
+        phrase = "DELETE CLASS"
+        warning = "These are the last students in this class. Deleting them permanently deletes the class and all its data. Your other classes and teacher account remain."
+    else:
+        phrase = "DELETE STUDENTS"
+        warning = f"Permanently delete {len(ids)} student seat(s) and their data in this class. Their seats in other classes remain."
+    return dict(student_ids=sorted(ids), class_deleted=destroys_class,
+                account_deleted=destroys_account, expected_phrase=phrase, warning=warning)
+
+
+@admin_bp.route('/students/deletion-preview', methods=['POST'])
+@admin_required
+def student_deletion_preview():
+    data = request.get_json(silent=True) or {}
+    return jsonify(_student_deletion_plan(g.canonical_context, data.get('student_ids', [])))
+
+
+# Roster deletion terminates at one of three scopes, and each scope is a
+# different destructive command owned by a different FEAT: removing seats is
+# Identity provisioning's inverse (FEAT-IDEN-006), emptying the last roster
+# destroys the class universe (FEAT-CLASS-006), and doing that to the teacher's
+# final class destroys the principal itself (FEAT-IDEN-007, HIGH). Running all
+# three under FEAT-IDEN-006 recorded the most destructive operation in the
+# system under a MED provisioning FEAT.
+_DELETION_SCOPE_SEATS = "seats"
+_DELETION_SCOPE_CLASS = "class"
+_DELETION_SCOPE_ACCOUNT = "account"
+
+
+def _deletion_scope(plan):
+    """Name the terminal scope a deletion plan describes."""
+    if plan['account_deleted']:
+        return _DELETION_SCOPE_ACCOUNT
+    if plan['class_deleted']:
+        return _DELETION_SCOPE_CLASS
+    return _DELETION_SCOPE_SEATS
+
+
+def _locked_deletion_plan(context, seat_ids, *, expected_scope):
+    """Re-derive the deletion plan inside the executing transaction.
+
+    DOM-CLASS-001 §Terminal Roster Deletion requires ownership, the selected
+    seats, and whether class/account destruction follows to be re-evaluated
+    inside the locked execution transaction; this plan — not the preview that
+    chose the FEAT — is the authority for what gets destroyed.
+
+    The preview runs before any lock is held, so a concurrent claim, provision,
+    or delete can move the terminal scope between selecting a FEAT and executing
+    under it. When that happens the open FEAT is the wrong authority for the
+    command the plan now describes, so this fails closed rather than destroying
+    a wider scope than the FEAT attests to.
+    """
+    # Serialize roster-empty decisions and parent destruction with new membership.
+    _lock_class_destruction_scope(class_id=context.class_id, user_id=context.user_id)
+    plan = _student_deletion_plan(context, seat_ids)
+    actual_scope = _deletion_scope(plan)
+    if actual_scope != expected_scope:
+        raise _DeletionScopeChanged(
+            f"expected={expected_scope} actual={actual_scope}"
+        )
+    return plan
+
+
+def _deletion_result(plan):
+    return dict(status="success", class_deleted=plan['class_deleted'],
+                account_deleted=plan['account_deleted'], deleted_count=len(plan['student_ids']),
+                message="Teacher account deleted." if plan['account_deleted'] else
+                        "Class and its data deleted." if plan['class_deleted'] else "Selected students deleted.",
+                redirect=url_for('admin.login') if plan['account_deleted'] else
+                         url_for('admin.dashboard') if plan['class_deleted'] else url_for('admin.students'))
+
+
+@requires_feat_context("FEAT-IDEN-006")
+def _execute_seat_deletion(*, context, seat_ids, data, require_gate,
+                           correlation_id, idempotency_key):
+    """Remove the selected student seats. The class and the principal survive."""
+    plan = _locked_deletion_plan(context, seat_ids, expected_scope=_DELETION_SCOPE_SEATS)
+    if require_gate:
+        error = _validate_destruction_gate(data, expected_phrase=plan['expected_phrase'])
+        if error:
+            return error
+    from app.utils.student_deletion import remove_student_from_teacher_scope
+    for seat_id in plan['student_ids']:
+        remove_student_from_teacher_scope(seat_id, context.user_id)
+    return _deletion_result(plan)
+
+
+@requires_feat_context("FEAT-CLASS-006")
+def _execute_class_scope_deletion(*, context, seat_ids, data, require_gate,
+                                  correlation_id, idempotency_key):
+    """Deleting the final seats destroys the class universe; the principal survives."""
+    plan = _locked_deletion_plan(context, seat_ids, expected_scope=_DELETION_SCOPE_CLASS)
+    # Class destruction is gated unconditionally, whatever the caller asked for.
+    error = _validate_destruction_gate(data, expected_phrase=plan['expected_phrase'])
+    if error:
+        return error
+    _destroy_class_scope_rows(class_id=context.class_id, canonical_context=context)
+    # The destroyed class must not survive as a canonical pointer (INV-ARC-012 §V).
+    user = db.session.get(User, context.user_id)
+    user.last_active_class_id = None
+    user.last_active_seat_id = None
+    return _deletion_result(plan)
+
+
+@requires_feat_context("FEAT-IDEN-007")
+def _execute_account_scope_deletion(*, context, seat_ids, data, require_gate,
+                                    correlation_id, idempotency_key):
+    """The final seats in the teacher's only class: the principal cannot survive it."""
+    plan = _locked_deletion_plan(context, seat_ids, expected_scope=_DELETION_SCOPE_ACCOUNT)
+    error = _validate_destruction_gate(data, expected_phrase=plan['expected_phrase'])
+    if error:
+        return error
+    _destroy_teacher_account_rows(canonical_context=context)
+    return _deletion_result(plan)
+
+
+def _deletion_executor(scope, context):
+    """Pair a terminal scope with the FEAT that owns it and that FEAT's key.
+
+    The two HIGH-blast-radius scopes take the same idempotency keys the
+    join-code destruction route uses for the same commands, so one class or one
+    principal destroyed through either surface reads as the same operation.
+    """
+    if scope == _DELETION_SCOPE_ACCOUNT:
+        return _execute_account_scope_deletion, f"account:destroy:{context.user_id}"
+    if scope == _DELETION_SCOPE_CLASS:
+        return _execute_class_scope_deletion, f"class:destroy:{context.class_id}"
+    return _execute_seat_deletion, f"identity:roster-delete:{uuid.uuid4().hex}"
+
+
+def _dispatch_student_deletion(seat_ids, data, *, require_gate, form_response=False):
+    from app.feats.base import InvariantViolation
+    context = g.canonical_context
+    # This preview holds no lock and authorizes nothing. It decides exactly one
+    # thing: which FEAT opens. The executor re-derives the plan under lock and
+    # refuses if the scope has moved (DOM-CLASS-001 §Terminal Roster Deletion).
+    executor, idempotency_key = _deletion_executor(
+        _deletion_scope(_student_deletion_plan(context, seat_ids)), context
+    )
+    try:
+        result = executor(
+            context=context, seat_ids=seat_ids, data=data, require_gate=require_gate,
+            correlation_id=generate_correlation_id(), idempotency_key=idempotency_key,
+        )
+    except _DeletionScopeChanged as change:
+        db.session.rollback()
+        current_app.logger.warning(
+            "Roster deletion refused: scope changed under lock (%s) seat_id=%s",
+            change, ",".join(str(seat_id) for seat_id in seat_ids),
+        )
+        message = ("This class changed while the delete was being confirmed. "
+                   "Nothing was deleted — reload the roster and try again.")
+        if form_response:
+            flash(message, "error")
+            return redirect(url_for('admin.students'))
+        return jsonify(status="error", message=message), 409
+    except (HTTPException, InvariantViolation):
+        raise
+    except Exception:
+        db.session.rollback()
+        # Seat ids locate the records; never log decrypted profile names (INV-ARC-005).
+        current_app.logger.exception(
+            "Error deleting student seat_id=%s", ",".join(str(seat_id) for seat_id in seat_ids)
+        )
+        message = "Could not delete the selected students. Nothing was deleted."
+        if form_response:
+            flash(message, "error")
+            return redirect(url_for('admin.students'))
+        return jsonify(status="error", message=message), 500
+    if not isinstance(result, dict):
+        return result
+    if result['account_deleted']:
+        session.clear()
+    elif result['class_deleted']:
+        session.pop('class_id', None)
+        session.pop('seat_id', None)
+    if form_response:
+        flash(result['message'], 'success')
+        return redirect(result['redirect'])
+    return jsonify(result)
+
+
+@admin_bp.route('/student/unclaim', methods=['POST'])
+@admin_required
+def unclaim_student():
+    from app.feats.identity_feat import unclaim_student_seat
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict) or data.get('confirmation') != 'UNCLAIM':
+        return jsonify(status='error', message='Confirm Unclaim before continuing.'), 400
+    if type(data.get('seat_id')) is not int:
+        return jsonify(status='error', message='Select a valid seat.'), 400
+    try:
+        seat_id = data['seat_id']
+        generation = data.get('claim_generation')
+        if type(generation) is not int:
+            raise ValueError('Refresh the roster before unclaiming this seat.')
+        result = unclaim_student_seat(canonical_context=g.canonical_context,
+            seat_id=seat_id, expected_generation=generation,
+            first_name=data.get('first_name'), last_name=data.get('last_name'),
+            correlation_id=generate_correlation_id(),
+            idempotency_key=f"identity:unclaim:{seat_id}:{generation}")
+    except (ValueError, TypeError) as error:
+        return jsonify(status='error', message=str(error) if isinstance(error, ValueError) else 'Select a valid seat.'), 400
+    except LookupError:
+        return jsonify(status='error', message='Student seat not found in this class.'), 404
+    return jsonify(result)
+
+
 @admin_bp.route('/student/archive', methods=['GET', 'POST'])
 @admin_bp.route('/student/delete', methods=['GET', 'POST'])
 @admin_required
 def delete_student():
-    """Remove a student from this teacher and delete fully if no links remain."""
-    # Log which fields arrived, never their values: this form carries the CSRF
-    # token, and a whole-form dump puts a session-bound secret in an unencrypted
-    # log (.claude/rules/security.md, "NEVER commit secrets ... ALWAYS use CSRF").
-    current_app.logger.info(
-        "Delete student route accessed. method=%s form_keys=%s",
-        request.method,
-        sorted(request.form.keys()),
-    )
-
-    # If GET request, show error and redirect (for debugging)
-    if request.method == 'GET':
-        flash("Delete student must be accessed via POST request.", "error")
+    current_app.logger.info("Delete student route accessed. method=%s form_keys=%s",
+                            request.method, sorted(request.form.keys()))
+    if request.method != 'POST':
         return redirect(url_for('admin.students'))
-
-    seat_id = request.form.get('seat_id', type=int)
-    confirmation = request.form.get('confirmation', '').strip()
-
-    if not seat_id:
-        current_app.logger.error("No seat_id provided in delete request")
-        flash("Error: No student identifier provided.", "error")
-        return redirect(url_for('admin.students'))
-
-    if confirmation != 'DELETE':
-        current_app.logger.info(f"Delete cancelled: confirmation '{confirmation}' != 'DELETE'")
+    if request.form.get('confirmation', '').strip() != 'DELETE':
         flash("Delete cancelled: confirmation text did not match.", "warning")
         return redirect(url_for('admin.students'))
-
-    student = db.session.get(Seat, seat_id)
-    if not student:
-        abort(404)
-    if not verify_teacher_owns_class(student.class_id, g.canonical_context.user_id):
-        abort(404)
-    student_name = student.identity_profile.full_name if student.identity_profile else str(student.id)
-
-    # Prevent deletion of teacher student accounts
-    if student.role == "teacher":
-        flash("Teacher student accounts cannot be deleted directly. They are removed only when the class is deleted.", "error")
-        return redirect(url_for('admin.students'))
-
-    try:
-        was_hard_deleted = _remove_student_from_teacher_scope(student, g.canonical_context.user_id)
-        if was_hard_deleted:
-            flash(f"Deleted {student_name}.", "success")
-        else:
-            flash(f"Removed {student_name} from this class. Student still exists in other linked classes.", "success")
-
-    except Exception:
-        db.session.rollback()
-        # Never log the identity profile name here. It is decrypted PII and
-        # application logs are unencrypted and routinely shipped off-host
-        # (INV-ARC-005; .claude/rules/security.md "Sensitive Data Exposure").
-        # The seat id locates the record without exposing the student.
-        current_app.logger.exception("Error deleting student seat_id=%s", seat_id)
-        flash("Cannot delete student due to internal error", "error")
-
-    return redirect(url_for('admin.students'))
+    return _dispatch_student_deletion([request.form.get('seat_id')], request.form,
+                                     require_gate=False, form_response=True)
 
 
 @admin_bp.route('/students/bulk-delete', methods=['POST'])
 @admin_required
 def bulk_delete_students():
-    """Remove multiple students from this teacher and delete true orphans."""
     data = request.get_json(silent=True) or {}
-    student_ids = data.get('student_ids', [])
-
-    if not student_ids:
-        return jsonify({"status": "error", "message": "No students selected."}), 400
-
-    gate_error = _validate_destruction_gate(data, expected_phrase="DELETE STUDENTS")
-    if gate_error:
-        return gate_error
-
-    try:
-        removed_count = 0
-        deleted_count = 0
-        for seat_id in student_ids:
-            student = db.session.get(Seat, int(seat_id))
-            if student and student.role != "teacher":
-                was_hard_deleted = _remove_student_from_teacher_scope(student, g.canonical_context.user_id)
-                removed_count += 1
-                if was_hard_deleted:
-                    deleted_count += 1
-
-        return jsonify({
-            "status": "success",
-            "message": (
-                f"Successfully removed {removed_count} student(s) from this class. "
-                f"{deleted_count} student(s) were fully deleted."
-            )
-        })
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error deleting students: {e}")
-        return jsonify({"status": "error", "message": "An error occurred while deleting students. Please try again."}), 500
+    return _dispatch_student_deletion(data.get('student_ids', []), data, require_gate=True)
 
 
 # NOTE: The legacy `/students/delete-block` endpoint was removed. Block/section
@@ -4631,7 +4006,7 @@ def delete_join_code():
         if _class_deletion_destroys_principal(user_id, class_id):
             # This class holds the principal's last seat, so the principal cannot
             # survive it (DOM-IDEN-005 §VI). That is FEAT-IDEN-007, not
-            # FEAT-CLASS-001.
+            # FEAT-CLASS-006.
             _hard_delete_teacher_account_scope(
                 canonical_context=g.canonical_context,
                 admin_user=db.session.get(User, user_id),
@@ -4667,6 +4042,22 @@ def delete_join_code():
             "status": "success",
             "message": f"{display_label} and all scoped records were permanently deleted."
         })
+    except _DeletionScopeChanged as change:
+        # Between the pre-FEAT read and the locks, this became the principal's
+        # last class. FEAT-CLASS-006 does not destroy principals, so nothing was
+        # touched; the teacher must re-confirm against the real consequence,
+        # whose confirmation phrase is the stronger one.
+        db.session.rollback()
+        current_app.logger.warning(
+            "Class destruction refused: scope changed under lock (%s)", change
+        )
+        return jsonify({
+            "status": "error",
+            "message": (
+                "This became your last class while the delete was being confirmed. "
+                "Nothing was deleted — reload the page and confirm again."
+            ),
+        }), 409
     except InvariantViolation:
         db.session.rollback()
         raise
@@ -4679,146 +4070,28 @@ def delete_join_code():
 @admin_bp.route('/pending-students/delete', methods=['POST'])
 @admin_required
 def delete_pending_student():
-    """
-    Delete a single pending student (unclaimed Seat entry).
-
-    Pending students are roster entries that have not yet been claimed by students.
-    This route ensures comprehensive cleanup with no leftover traces.
-    """
-    data = request.get_json()
-    seat_id = data.get('seat_id')
-    if seat_id:
-        try:
-            seat_id = int(seat_id)
-        except (ValueError, TypeError):
-            return jsonify({"status": "error", "message": "Invalid seat ID."}), 400
-
-    user_id = g.canonical_context.user_id
-
-    if not seat_id:
-        return jsonify({"status": "error", "message": "No seat ID provided."}), 400
-
-    try:
-        # Find the Seat entry (joining to ClassEconomy to verify user ownership)
-        seat_entry = (
-            Seat.query
-            .join(ClassEconomy, ClassEconomy.class_id == Seat.class_id)
-            .filter(
-                Seat.id == seat_id,
-                ClassEconomy.teacher_user_id == user_id,
-            )
-            .first()
-        )
-
-        if not seat_entry:
-            return jsonify({"status": "error", "message": "Pending student not found or access denied."}), 404
-
-        # Verify it's actually unclaimed
-        if seat_entry.claimed_at is not None or seat_entry.user_id is not None:
-            return jsonify({
-                "status": "error",
-                "message": "This seat has already been claimed. Use the regular student deletion route instead."
-            }), 400
-
-        student_name = (
-            seat_entry.identity_profile.full_name
-            if seat_entry.identity_profile
-            else 'Unknown'
-        )
-
-        # Delete the Seat entry (this is the only record for unclaimed seats)
-        result = remove_pending_student_seat(
-            canonical_context=g.canonical_context,
-            seat_id=seat_entry.id,
-            correlation_id=generate_correlation_id(),
-            idempotency_key=f"identity:pending-remove:{g.canonical_context.class_id}:{seat_entry.id}",
-        )
-        if result != "REMOVED":
-            return jsonify({"status": "error", "message": "Pending student could not be removed."}), 409
-        return jsonify({
-            "status": "success",
-            "message": f"Successfully deleted pending student {student_name}."
-        })
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error deleting pending student: {e}")
-        return jsonify({"status": "error", "message": "An error occurred while deleting the pending student. Please try again."}), 500
+    data = request.get_json(silent=True) or {}
+    seat = Seat.query.filter_by(id=data.get('seat_id'), class_id=g.canonical_context.class_id,
+                               role='student', user_id=None, claimed_at=None).first()
+    if seat is None:
+        abort(404)
+    return _dispatch_student_deletion([seat.id], data, require_gate=False)
 
 
 @admin_bp.route('/pending-students/bulk-delete', methods=['POST'])
 @admin_required
 def bulk_delete_pending_students():
-    """
-    Delete multiple pending students (unclaimed Seat entries) at once.
-
-    Operates strictly within the single active canonical class
-    (``g.canonical_context.class_id``). Accepts an explicit list of Seat IDs
-    (each validated to belong to the active class), or ``all_pending: true`` to
-    remove every unclaimed seat in the active class. block/section is never used
-    as a scoping key.
-    """
-    data = request.get_json() or {}
-    seat_ids = data.get('seat_ids', [])
-    delete_all_pending = bool(data.get('all_pending'))
-
-    active_class_id = (getattr(g.canonical_context, "class_id", None) or "").strip() or None
-    if not active_class_id:
-        return jsonify({"status": "error", "message": "Class context required."}), 400
-
-    if not seat_ids and not delete_all_pending:
-        return jsonify({
-            "status": "error",
-            "message": "Either seat_ids or all_pending must be provided."
-        }), 400
-
+    data = request.get_json(silent=True) or {}
+    rows = Seat.query.filter_by(class_id=g.canonical_context.class_id, role='student',
+                               user_id=None, claimed_at=None).all()
+    allowed = {row.id for row in rows}
+    ids = list(allowed) if data.get('all_pending') else data.get('seat_ids', [])
     try:
-        deleted_count = 0
-
-        if delete_all_pending:
-            # Remove every unclaimed seat in the active class only.
-            pending_seats = Seat.query.filter(
-                Seat.class_id == active_class_id,
-                Seat.claimed_at.is_(None),
-                Seat.user_id.is_(None),
-            ).all()
-            for seat_entry in pending_seats:
-                result = remove_pending_student_seat(
-                    canonical_context=g.canonical_context,
-                    seat_id=seat_entry.id,
-                    correlation_id=generate_correlation_id(),
-                    idempotency_key=f"identity:pending-remove:{active_class_id}:{seat_entry.id}",
-                )
-                if result == "REMOVED":
-                    deleted_count += 1
-        else:
-            # Delete specific seats — each must belong to the active class.
-            for seat_id in seat_ids:
-                seat_entry = Seat.query.filter(
-                    Seat.id == seat_id,
-                    Seat.class_id == active_class_id,
-                ).first()
-
-                if seat_entry and seat_entry.claimed_at is None and seat_entry.user_id is None:
-                    result = remove_pending_student_seat(
-                        canonical_context=g.canonical_context,
-                        seat_id=seat_entry.id,
-                        correlation_id=generate_correlation_id(),
-                        idempotency_key=f"identity:pending-remove:{active_class_id}:{seat_entry.id}",
-                    )
-                    if result == "REMOVED":
-                        deleted_count += 1
-
-        message = f"Successfully deleted {deleted_count} pending student(s)."
-
-        return jsonify({
-            "status": "success",
-            "message": message,
-            "deleted_count": deleted_count
-        })
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error bulk deleting pending students: {e}")
-        return jsonify({"status": "error", "message": "An error occurred while bulk deleting pending students. Please try again."}), 500
+        if not {int(value) for value in ids}.issubset(allowed):
+            abort(404)
+    except (ValueError, TypeError):
+        abort(400)
+    return _dispatch_student_deletion(ids, data, require_gate=False)
 
 
 @admin_bp.route('/student/add-individual', methods=['POST'])
@@ -4840,22 +4113,6 @@ def add_individual_student():
         if len(section) > 10:
             flash("Class section name must be 10 characters or fewer.", "error")
             return redirect(url_for('admin.students'))
-
-        # Generate initials
-        first_initial = first_name[0].upper()
-        last_initial = last_name[0].upper()
-
-        # Generate salt
-        salt = get_random_salt()
-
-        # v2: eliminate DOB-based credential material.
-        claim_seed = int.from_bytes(salt[:2], "big") % 10000
-        first_half_hash = compute_primary_claim_hash(first_initial, claim_seed, salt)
-        second_half_hash = hash_hmac(str(claim_seed).encode(), salt)
-        seed_hash = hash_hmac(str(claim_seed).encode(), salt)
-
-        # Compute last_name_hash_by_part for fuzzy matching
-        last_name_parts = hash_last_name_parts(last_name, salt)
 
         user_id = g.canonical_context.user_id
         class_context = _resolve_student_add_class_context(
@@ -5182,7 +4439,7 @@ def store_management():
                 # HIDDEN is a teacher's withdrawal, and nothing un-hides a row
                 # when its start date arrives.
                 new_item = publish_product(
-                    user_id=user_id,
+                    actor_seat_id=resolve_teacher_seat_for_class(selected_scope["class_id"]).id,
                     class_id=selected_scope['class_id'],
                     definition=_store_definition_from_form(form),
                     availability_state=store_service.IN_USE,
@@ -5672,7 +4929,13 @@ def edit_store_item(product_lineage_uuid):
                             current.collective_goal_instance_code
                         )
 
-                successor = supersede_product(current=current, definition=definition)
+                successor = supersede_product(
+                    current=current,
+                    definition=definition,
+                    actor_seat_id=resolve_teacher_seat_for_class(
+                        selected_scope['class_id']
+                    ).id,
+                )
                 _apply_rent_link_from_form(
                     form,
                     class_id=selected_scope['class_id'],
@@ -7065,7 +6328,7 @@ def update_economy_policy():
         settings_row = get_feature_settings_row_for_class(class_id, create=True)
         if settings_row:
             settings_row.economy_policy_updated_at = utc_now()
-        cancel_pending_policy_transitions(class_id, actor_id=user_id)
+        cancel_pending_policy_transitions(class_id, actor_seat_id=resolve_teacher_seat_for_class(class_id).id)
 
     current_app.logger.info(
         "Economy policy mode changed teacher=%s class_id=%s mode=%s",
@@ -7225,7 +6488,7 @@ def apply_economy_rebalance():
                 insurance_policies=insurance_policies,
             )
             queued_transition_count = queue_scheduled_policy_transitions(
-                g.canonical_context.user_id,
+                resolve_teacher_seat_for_class(selected_scope["class_id"]).id,
                 selected_scope['class_id'],
                 scheduled_changes,
                 activation_mode=activation_mode,
@@ -7443,11 +6706,16 @@ def _build_payroll_event_display_rows(*, ctx, payroll_events, class_label=None):
         if class_row and class_row.display_name
         else (class_row.join_code if class_row else ctx.class_id)
     )
+    # Claimed student seats only (DOM-IDEN-002 §VIII). Events recorded before a
+    # seat was unclaimed survive on that seat; rendering them here listed payroll
+    # history for a seat that is no longer an economic participant.
     seat_lookup = {
         seat.id: seat
         for seat in Seat.query.filter(
             Seat.class_id == ctx.class_id,
             Seat.id.in_(target_seat_ids),
+            Seat.role == "student",
+            Seat.claimed_at.isnot(None),
         ).all()
     } if target_seat_ids else {}
     ledger_rows = (
@@ -7476,6 +6744,10 @@ def _build_payroll_event_display_rows(*, ctx, payroll_events, class_label=None):
     payroll_records = []
     for event in payroll_events:
         seat = seat_lookup.get(event.target_seat_id)
+        if seat is None:
+            # Not a claimed participant, so the event is not displayed. Rendering
+            # it as "Unknown" would show a row the teacher cannot act on.
+            continue
         summary = event.summary_json or {}
         ledger_amount = _ledger_amount_for_event(event)
         payroll_records.append({
@@ -8375,13 +7647,16 @@ def payroll_manual_payment():
 
             selected_scope = _require_payroll_feature_scope_from_request()
             selected_class_id = selected_scope['class_id']
-            policy_version_id = _require_active_payroll_policy_version_id(selected_class_id)
 
             applied_count = 0
             request_nonce = secrets.token_hex(12)
             for actor_public_id in student_ids:
                 student = _resolve_student_detail_seat(str(actor_public_id))
                 if student is None or student.class_id != selected_class_id:
+                    continue
+                # The picker lists claimed seats only; a submitted unclaimed seat
+                # takes part in no economic activity, so it receives nothing.
+                if student.claimed_at is None or student.user_id is None:
                     continue
 
                 record_payroll_event(
@@ -8390,7 +7665,8 @@ def payroll_manual_payment():
                     payroll_event_type="manual_credit",
                     correlation_id=generate_correlation_id(),
                     idempotency_key=f"manual_credit:{selected_class_id}:{student.id}:{request_nonce}",
-                    policy_version_id=policy_version_id,
+                    # Manual credits need no payroll policy (DOM-PROD-001 §VIII).
+                    policy_version_id=None,
                     mechanism="TEACHER",
                     summary_json={
                         "description": f"Manual Credit: {description}",
@@ -8457,7 +7733,7 @@ def upload_students():
     Creates Seat entries (unclaimed accounts) in the current class.
     """
     data = request.get_json(silent=True)
-    if not data or not isinstance(data.get("students"), list):
+    if not isinstance(data, dict) or not isinstance(data.get("students"), list):
         return jsonify(status="error", message="Invalid request."), 400
 
     rows = data["students"]
@@ -8475,114 +7751,19 @@ def upload_students():
 
     join_code = get_display_join_code(class_id)
 
-    from app.models import Seat, IdentityProfile
-    from app.hash_utils import hash_username_lookup
-    import random
-    import string
+    from app.feats.identity_feat import import_student_seats
 
-    idempotency_hash = hashlib.sha256(
-        "|".join(f"{r.get('first_name','')},{r.get('last_name','')}" for r in rows).encode()
-    ).hexdigest()[:16]
-    idempotency_key = f"feat:iden:upload-students:{user_id}:{idempotency_hash}"
-
-    added_count = 0
-    errors = []
-    duplicated = 0
-    matched_seats = set()
-    name_counts_in_run = {}
-
-    # This top-level FEAT owns the transaction boundary. FEATContext.__enter__
-    # discards any incidental read-only autobegin left by the before_request
-    # context resolver, so its commit persists (no manual rollback needed here).
-    with FEATContext("FEAT-IDEN-001", idempotency_key=idempotency_key):
-        for i, row in enumerate(rows):
-            try:
-                first_name = (row.get("first_name") or "").strip()
-                last_name = (row.get("last_name") or "").strip()
-
-                if not first_name and not last_name:
-                    continue
-                if not first_name or not last_name:
-                    errors.append(f"Row {i+1}: Missing first or last name.")
-                    continue
-
-                claim_first_name_hash = hash_username_lookup(first_name.lower())
-                claim_last_name_hash = hash_username_lookup(last_name.lower())
-                name_key = (first_name.lower(), last_name.lower())
-
-                db_seats = (
-                    Seat.query
-                    .join(IdentityProfile, IdentityProfile.seat_id == Seat.id)
-                    .filter(
-                        Seat.class_id == class_id,
-                        Seat.claim_first_name_hash == claim_first_name_hash,
-                        Seat.claim_last_name_hash == claim_last_name_hash,
-                    )
-                    .all()
-                )
-
-                matched_seat = None
-                for s in db_seats:
-                    if s.id not in matched_seats:
-                        matched_seat = s
-                        matched_seats.add(s.id)
-                        break
-
-                if matched_seat:
-                    duplicated += 1
-                    continue
-
-                total_existing = len(db_seats) + name_counts_in_run.get((class_id, name_key), 0)
-                is_collision = total_existing > 0
-
-                dedupe_code = None
-                if is_collision:
-                    alphabet = string.ascii_uppercase + string.digits
-                    dedupe_code = "".join(random.choices(alphabet, k=4))
-
-                    for s in db_seats:
-                        if s.dedupe_code is None:
-                            backfill_code = "".join(random.choices(alphabet, k=4))
-                            s.dedupe_code = backfill_code
-                            s.roster_fingerprint = hash_username_lookup(
-                                f"{class_id}|{first_name.lower()}|{last_name.lower()}|{backfill_code}"
-                            )
-
-                name_counts_in_run[(class_id, name_key)] = name_counts_in_run.get((class_id, name_key), 0) + 1
-
-                if dedupe_code:
-                    roster_fingerprint = hash_username_lookup(
-                        f"{class_id}|{first_name.lower()}|{last_name.lower()}|{dedupe_code}"
-                    )
-                else:
-                    roster_fingerprint = hash_username_lookup(
-                        f"{class_id}|{first_name.lower()}|{last_name.lower()}"
-                    )
-
-                create_roster_student_seat(
-                    class_id=class_id,
-                    first_name=first_name,
-                    last_name=last_name,
-                    dedupe_code=dedupe_code,
-                    claim_first_name_hash=claim_first_name_hash,
-                    claim_last_name_hash=claim_last_name_hash,
-                    roster_fingerprint=roster_fingerprint,
-                )
-                added_count += 1
-            except Exception:
-                # Detail stays server-side: row exceptions can carry SQL text and
-                # roster names, neither of which belongs in an HTTP response.
-                current_app.logger.exception("Error processing roster row %d", i + 1)
-                errors.append(f"Row {i+1}: Could not be processed.")
-
-    status = "success" if not errors else "partial"
-    return jsonify(
-        status=status,
-        created=added_count,
-        duplicated=duplicated,
-        join_code=join_code,
-        errors=errors,
-    )
+    request_key = uuid.uuid4().hex
+    try:
+        created = import_student_seats(
+            canonical_context=g.canonical_context,
+            rows=rows,
+            correlation_id=f"roster-import:{request_key}",
+            idempotency_key=f"roster-import:{class_id}:{request_key}",
+        )
+    except ValueError as exc:
+        return jsonify(status="error", message=str(exc), created=0), 400
+    return jsonify(status="success", created=created, join_code=join_code, errors=[])
 
 
 @admin_bp.route('/export-class-roster')
@@ -8655,11 +7836,18 @@ def export_students():
     writer.writerow([
         'First Name', 'Last Name', 'Block', 'Checking Balance',
         'Savings Balance', 'Total Earnings', 'Insurance Plan',
-        'Rent Enabled', 'Has Completed Setup'
+        'Has Completed Setup'
     ])
 
     # Write student data
-    seats = Seat.query.filter(Seat.class_id == selected_class_id, Seat.role == 'student').all()
+    # This export reports balances, earnings and insurance — an economic
+    # surface, unlike the re-import roster export, so it lists claimed
+    # participants only (DOM-IDEN-002 §VIII).
+    seats = Seat.query.filter(
+        Seat.class_id == selected_class_id,
+        Seat.role == 'student',
+        Seat.claimed_at.isnot(None),
+    ).all()
     seats.sort(key=lambda seat: (
         (seat.identity_profile.first_name if seat.identity_profile else "").lower(),
         (seat.identity_profile.last_name if seat.identity_profile else "").lower(),
@@ -8748,7 +7936,6 @@ def export_students():
             f"{savings_balance:.2f}",
             f"{total_earnings:.2f}",
             _sanitize_csv_field(insurance_name),
-            'Yes' if seat.is_rent_enabled else 'No',
             'Yes' if (seat.user and seat.user.pin_hash is not None) else 'No'
         ])
 
@@ -8810,7 +7997,7 @@ def tap_out_students():
             student_seats = Seat.query.filter_by(
                 class_id=class_id,
                 role="student",
-            ).all()
+            ).filter(Seat.claimed_at.isnot(None)).all()
             latest_by_seat_id = _latest_attendance_events_for_class(class_id)
             seat_ids = [
                 seat.id for seat in student_seats
@@ -8821,7 +8008,9 @@ def tap_out_students():
             latest_by_seat_id = _latest_attendance_events_for_class(class_id, seat_ids)
 
         for seat_id in seat_ids:
-            seat = Seat.query.filter_by(id=seat_id, class_id=class_id, role="student").first()
+            seat = Seat.query.filter_by(
+                id=seat_id, class_id=class_id, role="student",
+            ).filter(Seat.claimed_at.isnot(None)).first()
             if seat is None:
                 errors.append(f"Seat {seat_id} not found in the current class")
                 continue
@@ -8899,8 +8088,12 @@ def tap_in_students():
         latest_by_seat_id = _latest_attendance_events_for_class(class_id, seat_ids)
 
         for seat_id in seat_ids:
-            seat = Seat.query.filter_by(id=seat_id, class_id=class_id, role="student").first()
+            seat = Seat.query.filter_by(
+                id=seat_id, class_id=class_id, role="student",
+            ).filter(Seat.claimed_at.isnot(None)).first()
             if not seat:
+                # Unclaimed seats are not attendance subjects, so they are not
+                # found here either — attendance is paid time (DOM-PROD-001).
                 errors.append(f"Seat {seat_id} not found in the current class")
                 continue
 
@@ -8981,7 +8174,17 @@ def bulk_adjust_hall_pass_entitlements():
     try:
         # Process each student ID
         for seat_id in student_ids:
-            student = db.session.get(Seat, int(seat_id))
+            # Entitlements are economic state, so an unclaimed seat is not a
+            # subject of one and resolves as not found (DOM-IDEN-002 §VIII).
+            student = (
+                Seat.query
+                .filter(
+                    Seat.id == int(seat_id),
+                    Seat.role == "student",
+                    Seat.claimed_at.isnot(None),
+                )
+                .first()
+            )
 
             if not student:
                 errors.append(f"Student {seat_id} not found")
@@ -9116,17 +8319,27 @@ def banking():
         page = 1
     per_page = 50
 
+    # Claimed seats only, matching the statistics above and every other economic
+    # surface. An unclaimed seat keeps its rows, but listing them here showed the
+    # teacher activity for a seat no student holds — under a profile name a
+    # claimed classmate may share, which is unreadable rather than informative.
     query = (
         db.session.query(Transaction, Seat)
         .join(Seat, Transaction.seat_id == Seat.id)
-        .filter(Transaction.class_id == selected_class_id)
+        .filter(
+            Transaction.class_id == selected_class_id,
+            Seat.claimed_at.isnot(None),
+        )
     )
 
     if student_q:
         matching_seat_ids = []
         if student_q.isdigit():
             matching_seat_ids.append(int(student_q))
-        for seat in Seat.query.filter(Seat.class_id == selected_class_id).all():
+        for seat in Seat.query.filter(
+            Seat.class_id == selected_class_id,
+            Seat.claimed_at.isnot(None),
+        ).all():
             _ip = seat.identity_profile
             if student_q.lower() in (_ip.full_name if _ip else "").lower():
                 matching_seat_ids.append(seat.id)
@@ -9460,12 +8673,7 @@ def help_support():
     user_id = canonical_context.user_id
     selected_class_id = canonical_context.class_id
 
-    # Class isolation (INV-ARC-004 V.1): resolve ONLY the single active class.
-    # This support surface previously enumerated every class the teacher owned to
-    # render a per-feature class selector — an illegal in-feature class switcher.
-    # The POST already refuses any form-supplied class id (scope is a binary
-    # active-class vs account choice), so the active class is the only reachable
-    # scope; the option list is capped at that one class.
+    # Every ticket belongs to the active teacher seat and therefore its class.
     active_class_row = (
         verify_teacher_owns_class(selected_class_id, user_id) if selected_class_id else None
     )
@@ -9498,72 +8706,25 @@ def help_support():
     actor_public_id = teacher_seat.public_id if teacher_seat else None
 
     def _support_report_views(issues):
-        """Build view-model dicts for the My Tickets list."""
-        views = []
-        for issue in issues:
-            explanation = issue.student_explanation or ''
-            first_line = explanation.split('\n', 1)[0] if explanation else ''
-            clean = explanation
-            if first_line.startswith('SUPPORT_SCOPE|'):
-                clean = explanation.split('\n', 1)[1].strip() if '\n' in explanation else explanation
-
-            scope_jc = selected_join_code or 'Unknown'
-            class_label = selected_class_label or 'Unknown Class'
-
-            if issue.class_public_id:
-                from app.services.class_configuration_query_service import get_class_by_public_id
-                ce = get_class_by_public_id(issue.class_public_id)
-                if ce:
-                    scope_jc = ce.join_code
-                    class_label = ce.display_name or ce.join_code
-
-            views.append({
-                'report': {
-                    'title': issue.title or 'Support Ticket',
-                    'status': issue.status,
-                    'submitted_at': issue.submitted_at,
-                    'report_type': issue.issue_type,
-                },
-                'class_label': class_label,
-                'scope_join_code': scope_jc,
-                'scope_class_id': issue.class_public_id,
-                'issue_category': issue.category.name if issue.category else 'Unknown',
-                'clean_description': clean,
-            })
-        return views
+        """Display captured ticket context without refreshing its class metadata."""
+        return [{
+            'report': {
+                'title': issue.title or 'Support Ticket',
+                'status': issue.status,
+                'submitted_at': issue.submitted_at,
+                'report_type': issue.issue_type,
+            },
+            'class_label': issue.class_label,
+            'scope_class_id': issue.class_public_id,
+            'issue_category': issue.category.name if issue.category else 'Unknown',
+            'clean_description': issue.student_explanation or '',
+        } for issue in issues]
 
     category_to_report_type = {
         'general': 'comment',
         'bug': 'bug',
         'feature': 'suggestion',
     }
-
-    def _build_scope_metadata(class_id_value, class_label_value, category_value):
-        return (
-            f"SUPPORT_SCOPE|class_id={class_id_value}|class_label={class_label_value}|category={category_value}"
-        )
-
-    def _parse_scope_metadata(raw_description):
-        if not raw_description:
-            return None, None, None, raw_description
-
-        first_line, _, body = raw_description.partition("\n")
-        if not first_line.startswith("SUPPORT_SCOPE|"):
-            return None, None, None, raw_description
-
-        metadata = {}
-        for token in first_line.split("|")[1:]:
-            key, _, value = token.partition("=")
-            if key and value:
-                metadata[key] = value
-
-        cleaned_body = body.strip() if body else raw_description
-        return (
-            metadata.get('class_id'),
-            metadata.get('class_label'),
-            metadata.get('category'),
-            cleaned_body,
-        )
 
     if not selected_class_id and request.method == 'GET':
         flash(
@@ -9572,6 +8733,8 @@ def help_support():
         )
 
     if request.method == 'POST':
+        if selected_class_id and (not active_class_row or not teacher_seat or teacher_seat.class_id != selected_class_id):
+            abort(403)
         if not selected_class_id:
             flash(
                 "You cannot submit a support ticket until you have at least one class. "
@@ -9588,23 +8751,15 @@ def help_support():
             flash("Please select one of your classes before submitting a support ticket.", "error")
             return redirect(url_for('admin.help_support'))
 
-        # Scope is a BINARY choice, never an arbitrary class selection: the issue
-        # is either about the active class (canonical_context.class_id) or about
-        # the teacher's own account (no class). We only read whether the form
-        # asked for 'account' — we NEVER trust a class id from the form, so the
-        # single-active-context invariant holds (no other class is reachable here).
-        is_account_scope = request.form.get('class_id', '').strip() == 'account'
-        ticket_class_public_id = None if is_account_scope else selected_class_id
-        class_label = 'My account' if is_account_scope else (
-            selected_class_label or selected_join_code or 'Unknown'
-        )
+        # Submission topic never changes scope. Form data cannot select or remove it.
+        ticket_class_public_id = active_class_row.class_public_id
 
         if issue_category not in category_to_report_type:
             flash("Please select a valid support ticket category.", "error")
             my_reports = _support_report_views(
                 Issue.query.filter(
-                    Issue.actor_public_id == generate_anonymous_code(f"admin:{user_id}"),
-                    Issue.class_public_id == selected_class_id,
+                    Issue.actor_public_id == actor_public_id,
+                    Issue.class_public_id == active_class_row.class_public_id,
                     Issue.issue_type == 'general',
                 ).order_by(Issue.submitted_at.desc()).limit(20).all()
             )
@@ -9630,8 +8785,8 @@ def help_support():
             flash("Please provide a category, title, and description for your support ticket.", "error")
             my_reports = _support_report_views(
                 Issue.query.filter(
-                    Issue.actor_public_id == generate_anonymous_code(f"admin:{user_id}"),
-                    Issue.class_public_id == selected_class_id,
+                    Issue.actor_public_id == actor_public_id,
+                    Issue.class_public_id == active_class_row.class_public_id,
                     Issue.issue_type == 'general',
                 ).order_by(Issue.submitted_at.desc()).limit(20).all()
             )
@@ -9652,13 +8807,9 @@ def help_support():
                 form_expected_behavior=expected_behavior,
                 form_page_url=page_url,
             )
-        anonymous_code = generate_anonymous_code(f"admin:{user_id}")
-        metadata_header = _build_scope_metadata(
-            'account' if is_account_scope else selected_class_id,
-            class_label or 'Unknown',
-            issue_category,
-        )
-        scoped_description = f"{metadata_header}\n\n{description}"
+        anonymous_code = actor_public_id
+        # Submitted text is intentional; do not prepend private class metadata.
+        scoped_description = description
 
         # Derive the key from the submitted payload, as every other mutation in
         # this module does. A random key would make each POST a distinct command,
@@ -9672,6 +8823,7 @@ def help_support():
                     "description": description,
                     "expected_behavior": expected_behavior,
                     "page_url": page_url,
+                    "share_class_name": request.form.get("share_class_name") == "on",
                 },
                 sort_keys=True,
                 default=str,
@@ -9694,6 +8846,7 @@ def help_support():
                     category_id=category.id,
                     title=title,
                     scoped_description=scoped_description,
+                    share_class_name=(request.form.get("share_class_name") == "on"),
                     expected_behavior=expected_behavior,
                     page_url=page_url,
                 )
@@ -9706,14 +8859,14 @@ def help_support():
             flash("An error occurred while submitting your ticket. Please try again.", "error")
             return redirect(url_for('admin.help_support'))
 
-    anonymous_code = generate_anonymous_code(f"admin:{user_id}")
+    anonymous_code = actor_public_id
     reports = Issue.query.filter(
         Issue.actor_public_id == anonymous_code,
         Issue.issue_type == 'general',
     ).order_by(Issue.submitted_at.desc()).limit(50).all()
     filtered_reports = [
         r for r in reports
-        if not selected_class_id or not r.class_public_id or r.class_public_id == selected_class_id
+        if active_class_row and r.class_public_id == active_class_row.class_public_id
     ][:20]
     my_reports = _support_report_views(filtered_reports)
 
@@ -9850,7 +9003,6 @@ def update_class_feature_setting():
 def announcements():
     """
     """
-    user_id = g.canonical_context.user_id
     class_context = _resolve_admin_class_context(g.canonical_context)
     if not class_context:
         flash("Select a class from the sidebar before managing announcements.", "warning")
@@ -9860,8 +9012,8 @@ def announcements():
 
     # Get announcements for this teacher scoped to the active class context only.
     from app.models import Announcement
+    # The class is teacher-owned (verified above); announcements are class-scoped.
     announcements_list = Announcement.query.filter_by(
-        user_id=user_id,
         class_id=selected_class_id,
     ).order_by(Announcement.created_at.desc()).all()
 
@@ -9879,7 +9031,6 @@ def announcement_create():
     from app.forms import AnnouncementForm
     from app.models import Announcement
 
-    user_id = g.canonical_context.user_id
     class_context = _resolve_admin_class_context(g.canonical_context)
     if not class_context:
         flash("Select a class from the sidebar before creating announcements.", "warning")
@@ -9894,15 +9045,19 @@ def announcement_create():
 
     if form.validate_on_submit():
         try:
-            announcement = create_class_announcement(
-                user_id=user_id,
-                class_id=selected_class_id,
-                title=form.title.data,
-                message=form.message.data,
-                priority=form.priority.data,
-                is_active=form.is_active.data,
-                expires_at=form.expires_at.data,
-            )
+            with FEATContext(
+                "FEAT-SUP-002",
+                idempotency_key=f"announcement:create:{selected_class_id}:{generate_correlation_id()}",
+            ):
+                create_class_announcement(
+                    created_by_seat_id=resolve_teacher_seat_for_class(selected_class_id).id,
+                    class_id=selected_class_id,
+                    title=form.title.data,
+                    message=form.message.data,
+                    priority=form.priority.data,
+                    is_active=form.is_active.data,
+                    expires_at=form.expires_at.data,
+                )
             flash(f'Announcement "{form.title.data}" created successfully!', 'success')
 
             return redirect(url_for('admin.announcements'))
@@ -9927,7 +9082,6 @@ def announcement_edit(announcement_id):
     from app.forms import AnnouncementForm
     from app.models import Announcement
 
-    user_id = g.canonical_context.user_id
     class_context = _resolve_admin_class_context(g.canonical_context)
     if not class_context:
         flash("Select a class from the sidebar before editing announcements.", "warning")
@@ -9936,7 +9090,6 @@ def announcement_edit(announcement_id):
     # Get announcement and verify ownership in active class context.
     announcement = Announcement.query.filter_by(
         id=announcement_id,
-        user_id=user_id,
         class_id=class_context["class_id"],
     ).first()
 
@@ -9950,14 +9103,19 @@ def announcement_edit(announcement_id):
 
     if form.validate_on_submit():
         try:
-            update_class_announcement(
-                announcement,
-                title=form.title.data,
-                message=form.message.data,
-                priority=form.priority.data,
-                is_active=form.is_active.data,
-                expires_at=form.expires_at.data,
-            )
+            with FEATContext(
+                "FEAT-SUP-002",
+                idempotency_key=f"announcement:edit:{announcement.id}:{generate_correlation_id()}",
+            ):
+                update_class_announcement(
+                    announcement,
+                    acting_seat_id=resolve_teacher_seat_for_class(class_context["class_id"]).id,
+                    title=form.title.data,
+                    message=form.message.data,
+                    priority=form.priority.data,
+                    is_active=form.is_active.data,
+                    expires_at=form.expires_at.data,
+                )
 
             flash(f'Announcement "{announcement.title}" updated successfully!', 'success')
             return redirect(url_for('admin.announcements'))
@@ -9978,7 +9136,7 @@ def announcement_edit(announcement_id):
     announcement_view = {
         'title': announcement.title,
         'message': announcement.message,
-        'priority_class': announcement.get_priority_class(),
+        'priority_level': announcement.get_priority_level(),
         'priority_icon': announcement.get_priority_icon(),
     }
 
@@ -9997,7 +9155,6 @@ def announcement_delete(announcement_id):
     """Delete an announcement."""
     from app.models import Announcement
 
-    user_id = g.canonical_context.user_id
     class_context = _resolve_admin_class_context(g.canonical_context)
     if not class_context:
         flash("Select a class from the sidebar before deleting announcements.", "warning")
@@ -10006,7 +9163,6 @@ def announcement_delete(announcement_id):
     # Get announcement and verify ownership in active class context.
     announcement = Announcement.query.filter_by(
         id=announcement_id,
-        user_id=user_id,
         class_id=class_context["class_id"],
     ).first()
 
@@ -10016,7 +9172,14 @@ def announcement_delete(announcement_id):
 
     try:
         title = announcement.title
-        delete_class_announcement(announcement)
+        with FEATContext(
+            "FEAT-SUP-002",
+            idempotency_key=f"announcement:delete:{announcement.id}:{generate_correlation_id()}",
+        ):
+            delete_class_announcement(
+                announcement,
+                acting_seat_id=resolve_teacher_seat_for_class(class_context["class_id"]).id,
+            )
 
         flash(f'Announcement "{title}" deleted successfully!', 'success')
 
@@ -10034,7 +9197,6 @@ def announcement_toggle(announcement_id):
     """Toggle announcement active status."""
     from app.models import Announcement
 
-    user_id = g.canonical_context.user_id
     class_context = _resolve_admin_class_context(g.canonical_context)
     if not class_context:
         return jsonify({'status': 'error', 'message': 'Select a class from the sidebar first.'}), 400
@@ -10042,7 +9204,6 @@ def announcement_toggle(announcement_id):
     # Get announcement and verify ownership in active class context.
     announcement = Announcement.query.filter_by(
         id=announcement_id,
-        user_id=user_id,
         class_id=class_context["class_id"],
     ).first()
 
@@ -10050,14 +9211,19 @@ def announcement_toggle(announcement_id):
         return jsonify({'status': 'error', 'message': 'Announcement not found'}), 404
 
     try:
-        update_class_announcement(
-            announcement,
-            title=announcement.title,
-            message=announcement.message,
-            priority=announcement.priority,
-            is_active=not announcement.is_active,
-            expires_at=announcement.expires_at,
-        )
+        with FEATContext(
+            "FEAT-SUP-002",
+            idempotency_key=f"announcement:toggle:{announcement.id}:{generate_correlation_id()}",
+        ):
+            update_class_announcement(
+                announcement,
+                acting_seat_id=resolve_teacher_seat_for_class(class_context["class_id"]).id,
+                title=announcement.title,
+                message=announcement.message,
+                priority=announcement.priority,
+                is_active=not announcement.is_active,
+                expires_at=announcement.expires_at,
+            )
 
         return jsonify({
             'status': 'success',
@@ -10360,7 +9526,6 @@ def api_economy_analyze():
                 severity="warning",
                 domain="economy",
                 route=request.path,
-                actor_id=user_id,
                 class_id=None,
                 correlation_id=get_correlation_id(),
                 details={
@@ -10470,7 +9635,6 @@ def api_economy_validate(feature):
                 severity="warning",
                 domain="economy",
                 route=request.path,
-                actor_id=user_id,
                 class_id=None,
                 correlation_id=get_correlation_id(),
                 details={
@@ -10711,6 +9875,9 @@ def passkey_auth_finish():
         # so update last_used for all credentials belonging to this canonical user.
         now = utc_now()
         touch_admin_credentials_last_used(user.id, now)
+
+        from app.services.teacher_lifecycle import record_teacher_sign_in
+        user = record_teacher_sign_in(user.id)
 
         # Create session
         auth_username = session.get('passkey_auth_username')
@@ -11274,12 +10441,12 @@ def escalate_issue(issue_ref):
     if issue_id is None:
         abort(404)
 
-    issue_query = Issue.query.filter_by(id=issue_id)
-    if class_id:
-        class_row = get_class_economy(class_id)
-        if class_row:
-            issue_query = issue_query.filter_by(class_public_id=class_row.class_public_id)
-    issue = issue_query.first_or_404()
+    class_row = verify_teacher_owns_class(class_id, user_id) if class_id else None
+    if not class_row or not teacher_public_id:
+        abort(403)
+    issue = Issue.query.filter_by(
+        id=issue_id, class_public_id=class_row.class_public_id,
+    ).first_or_404()
 
     escalation_reason = request.form.get('escalation_reason', '').strip()
     diagnostic_note = request.form.get('diagnostic_note', '').strip()
@@ -11303,6 +10470,8 @@ def escalate_issue(issue_ref):
         # Update issue with escalation details
         issue.escalation_reason = escalation_reason
         issue.teacher_diagnostic_note = diagnostic_note
+        from app.services.support_disclosure import permissions_from_form
+        issue.support_permissions = permissions_from_form(request.form)
         issue.share_class_name_with_sysadmin = share_class_name
         issue.escalated_at = utc_now()
         # Record who escalated. `reviewer_public_id` had no writer anywhere in the

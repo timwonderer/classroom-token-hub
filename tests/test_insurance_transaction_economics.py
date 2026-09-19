@@ -138,7 +138,6 @@ def _seed_loss(classroom, student, *, idem, amount, at=None):
             idempotency_key=f"econ-source:{idem}:{uuid4().hex}",
             seat_id=student.seat.id,
             class_id=classroom.class_id,
-            user_id=student.user.id,
             amount=Decimal(amount),
             account_type="checking",
             type="purchase",

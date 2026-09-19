@@ -1,5 +1,6 @@
 {% extends "layout_student.html" %}
 {% import "macros/help.html" as help %}
+{% import 'macros/cards.html' as cards %}
 {% set current_page = "dashboard" %}
 {% block title %}Student Dashboard{% endblock %}
 {% block page_icon %}dashboard{% endblock %}
@@ -77,62 +78,40 @@
 
 <!-- Account Recovery Request -->
 {% if pending_recovery_code %}
-<div class="alert alert-info alert-dismissible fade show shadow-sm border-0 mb-4" role="alert">
-    <div class="d-flex align-items-start">
-        <span class="material-symbols-outlined fs-3 text-info me-3" aria-hidden="true">security</span>
-        <div class="flex-grow-1">
-            <h3 class="alert-heading h5 fw-bold mb-2">Account Recovery Request</h3>
-            <p class="mb-2">Your teacher is trying to recover their account and needs your help to verify their
-                identity.</p>
-            <p class="mb-3 small text-muted">
-                <span class="material-symbols-outlined fs-6 align-text-bottom" aria-hidden="true">schedule</span>
-                Expires on {{ pending_recovery_code.recovery_request.expires_at.strftime('%B %d, %Y at %I:%M %p') }}
-            </p>
-            <div class="d-flex gap-2">
-                <a href="{{ url_for('student.verify_recovery', code_id=pending_recovery_code.id) }}"
-                    class="btn btn-primary btn-sm">
-                    <span class="material-symbols-outlined fs-6 align-bottom me-1" aria-hidden="true">verified_user</span>
-                    Help Verify Identity
-                </a>
-                <form method="POST" action="{{ url_for('student.dismiss_recovery', code_id=pending_recovery_code.id) }}" class="d-inline">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="btn btn-outline-secondary btn-sm">Dismiss for now</button>
-                </form>
-            </div>
-        </div>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+{% call cards.alert_card('info', 'Account Recovery Request', icon='security', body_class='mb-4', role='alert', dismissible=True) %}
+    <p class="mb-2">CTH randomly selected you to help with teacher account recovery. Give a code in person only if your teacher is currently with your class.</p>
+    <p class="mb-3 small text-muted">
+        <span class="material-symbols-outlined fs-6 align-text-bottom" aria-hidden="true">schedule</span>
+        Expires on {{ pending_recovery_code.recovery_request.expires_at.strftime('%B %d, %Y at %I:%M %p') }}
+    </p>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('student.verify_recovery', code_id=pending_recovery_code.id) }}"
+            class="btn btn-primary btn-sm">
+            <span class="material-symbols-outlined fs-6 align-bottom me-1" aria-hidden="true">verified_user</span>
+            Help Verify Identity
+        </a>
     </div>
-</div>
+{% endcall %}
 {% endif %}
 
 {% if recent_deposit %}
-<div class="alert alert-success d-flex align-items-center mb-4 border-0 shadow-sm" role="alert">
-    <span class="material-symbols-outlined me-2 fs-4" aria-hidden="true">payments</span>
-    <div>
-        You received a deposit of <strong>${{ "%.2f"|format(recent_deposit.amount) }}</strong>!
-    </div>
-    <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert" aria-label="Close"></button>
-</div>
+{% call cards.alert_card('success', 'Deposit received', icon='payments', body_class='mb-4', role='alert', dismissible=True) %}
+    <p class="mb-0">You received a deposit of <strong>${{ "%.2f"|format(recent_deposit.amount) }}</strong>!</p>
+{% endcall %}
 {% endif %}
 
 <!-- Announcements Section -->
 {% if announcements %}
 {% for announcement in announcements %}
-<div class="alert {{ announcement.get_priority_class() }} d-flex align-items-start mb-3 border-0 shadow-sm policy-announcement"
-    role="alert" data-announcement-id="{{ announcement.id }}">
-    <span class="material-symbols-outlined me-3 fs-4" aria-hidden="true">{{ announcement.get_priority_icon() }}</span>
-    <div class="flex-grow-1">
-        <h3 class="alert-heading h6 fw-bold mb-2">{{ announcement.title }}</h3>
-        <p class="mb-1">{{ announcement.message|nl2br|safe }}</p>
-        {% if announcement.expires_at %}
-        <small class="text-muted d-block mt-2">
-            <span class="material-symbols-outlined fs-6 align-text-bottom" aria-hidden="true">schedule</span>
-            Expires {{ announcement.expires_at.strftime('%b %d, %Y') }}
-        </small>
-        {% endif %}
-    </div>
-    <button type="button" class="btn-close policy-announcement-dismiss" aria-label="Dismiss"></button>
-</div>
+{% call cards.alert_card(announcement.get_priority_level(), announcement.title, icon=announcement.get_priority_icon(), body_class='mb-3 policy-announcement', role='alert', id='policy-announcement-' ~ announcement.id, dismissible=True, attrs='data-announcement-id="' ~ announcement.id ~ '"') %}
+    <p class="mb-0">{{ announcement.message|nl2br|safe }}</p>
+    {% if announcement.expires_at %}
+    <small class="text-muted d-block mt-2">
+        <span class="material-symbols-outlined fs-6 align-text-bottom" aria-hidden="true">schedule</span>
+        Expires {{ announcement.expires_at.strftime('%b %d, %Y') }}
+    </small>
+    {% endif %}
+{% endcall %}
 {% endfor %}
 {% endif %}
 
@@ -148,13 +127,14 @@
                 el.remove();
                 return;
             }
-            const button = el.querySelector('.policy-announcement-dismiss');
+            // The alert card's own close button (data-bs-dismiss="alert")
+            // removes the card; this only remembers the dismissal.
+            const button = el.querySelector('.card-header .btn-close');
             if (!button) {
                 return;
             }
             button.addEventListener('click', () => {
                 window.localStorage.setItem(storagePrefix + announcementId, '1');
-                el.remove();
             });
         });
     })();
@@ -332,11 +312,10 @@
                 {% else %}
                 <div class="display-6 fw-bold text-muted mb-2">$0.00</div>
                 {% if savings_annual_rate %}
-                <div class="alert alert-warning border-warning py-2 px-3 mb-3 small d-flex align-items-start">
-                    <span class="material-symbols-outlined fs-6 me-2" aria-hidden="true">info</span>
-                    <span>You're missing out on interest! Transfer money from Checking to Savings to start
-                        earning.</span>
-                </div>
+                {% call cards.alert_card('warning', 'Savings is not earning interest', icon='savings', body_class='mb-3') %}
+                    <p class="mb-0">You're missing out on interest! Transfer money from Checking to Savings to start
+                        earning.</p>
+                {% endcall %}
                 {% endif %}
                 <a href="{{ url_for('student.transfer') }}" class="btn btn-success btn-sm">
                     <span class="material-symbols-outlined align-bottom fs-6 me-1" aria-hidden="true">add</span> Start Saving

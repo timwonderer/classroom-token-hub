@@ -50,12 +50,14 @@ def foreign_key_exists(table_name, fk_name):
 
 
 def upgrade():
-    # Backfill: delete legacy system announcements that lack a class_id or user_id
-    op.execute('DELETE FROM announcements WHERE class_id IS NULL OR user_id IS NULL')
-
-    op.alter_column('announcements', 'user_id',
-               existing_type=sa.INTEGER(),
-               nullable=False)
+    # Bootstrap-Replay Correction, SOP-DB-001 §V.B, 2026-09-17.
+    # `announcements.user_id` is absent from current ORM metadata (authorship moved to
+    # `created_by_seat_id`), so `0001_bootstrap` creates this table without it and the
+    # historical alter_column below raises on a fresh chain. Where the column is present —
+    # every already-migrated database — both statements execute unchanged.
+    if column_exists('announcements', 'user_id'):
+        op.execute('DELETE FROM announcements WHERE class_id IS NULL OR user_id IS NULL')
+        op.alter_column('announcements', 'user_id', existing_type=sa.INTEGER(), nullable=False)
     op.alter_column('announcements', 'class_id',
                existing_type=sa.VARCHAR(length=36),
                nullable=False)

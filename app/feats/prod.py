@@ -289,11 +289,15 @@ def _record_attendance_session_impl(
     target_seat = db.session.get(Seat, resolved_target_seat_id)
     if target_seat is None or target_seat.class_id != ctx.class_id:
         raise ValueError("Attendance target seat must belong to the canonical class.")
+    # Attendance is paid time, so recording it against an unclaimed seat is what
+    # made that seat payroll-eligible. An unclaimed seat has no activated runtime
+    # participation to record (DOM-IDEN-005 §VII).
+    if target_seat.claimed_at is None or target_seat.user_id is None:
+        raise ValueError("Attendance target seat must be claimed.")
     if resolved_actor_seat_id:
         actor_seat = db.session.get(Seat, resolved_actor_seat_id)
         if actor_seat is None or actor_seat.class_id != ctx.class_id:
             raise ValueError("Attendance actor seat must belong to the canonical class.")
-    target_user_id = target_seat.user_id
 
     if status == "active":
         day_bounds = canonical_temporal_resolver(
@@ -305,7 +309,7 @@ def _record_attendance_session_impl(
 
         # Reject if student already has done_for_day for this class today
         done_today = AttendanceSession.query.filter(
-            AttendanceSession.target_user_id == target_user_id,
+            AttendanceSession.target_seat_id == resolved_target_seat_id,
             AttendanceSession.class_id == ctx.class_id,
             AttendanceSession.reason_code == AttendanceReasonCode.DONE_FOR_DAY.value,
             AttendanceSession.timestamp >= day_bounds.boundary_start_utc,
@@ -335,7 +339,6 @@ def _record_attendance_session_impl(
                 target_seat_id=existing_active.target_seat_id,
                 actor_seat_id=resolved_actor_seat_id,
                 class_id=existing_active.class_id,
-                target_user_id=target_user_id,
                 status="inactive",
                 reason_code=AttendanceReasonCode.DONE_FOR_DAY.value,
                 timestamp=closing_timestamp,
@@ -355,7 +358,6 @@ def _record_attendance_session_impl(
         target_seat_id=resolved_target_seat_id,
         actor_seat_id=resolved_actor_seat_id,
         class_id=ctx.class_id,
-        target_user_id=target_user_id,
         status=status,
         reason_code=resolved_reason_code,
         timestamp=event_time,
@@ -529,7 +531,7 @@ def _record_payroll_event_impl(
     payroll_event_type: str,
     correlation_id: str,
     idempotency_key: str,
-    policy_version_id: int,
+    policy_version_id: int | None,
     mechanism: str,
     summary_json: dict | None = None,
     reference_time_utc=None,
@@ -537,11 +539,16 @@ def _record_payroll_event_impl(
     payroll_cycle_id: str | None = None,
 ) -> PayrollEventResult:
     ctx = _require_context(ctx)
-    if policy_version_id is None:
-        raise ValueError("FEAT-PROD-003 requires a payroll policy_version_id.")
-    policy_version = db.session.get(PolicyVersion, policy_version_id)
-    if policy_version is None or policy_version.class_id != ctx.class_id:
-        raise ValueError("FEAT-PROD-003 requires a payroll policy version owned by the current class.")
+    # DOM-PROD-001 §VIII: attendance-derived payroll is computed under a payroll
+    # policy version and must record it. A manual credit is teacher intent, not a
+    # policy computation, so it needs no payroll configuration.
+    if payroll_event_type == "payroll" and policy_version_id is None:
+        raise ValueError("FEAT-PROD-003 requires a payroll policy_version_id for payroll events.")
+    policy_version = None
+    if policy_version_id is not None:
+        policy_version = db.session.get(PolicyVersion, policy_version_id)
+        if policy_version is None or policy_version.class_id != ctx.class_id:
+            raise ValueError("FEAT-PROD-003 requires a payroll policy version owned by the current class.")
     evaluation = canonical_temporal_resolver(
         CLASS_LEVEL_EVALUATION,
         canonical_execution_context=ctx,
@@ -579,6 +586,10 @@ def _record_payroll_event_impl(
         )
         if original is None:
             raise LookupError("Unable to establish original payroll event for reversal.")
+        if policy_version is None and original.policy_version_id is not None:
+            # A reversal carries the provenance of the event it compensates.
+            policy_version = db.session.get(PolicyVersion, original.policy_version_id)
+            policy_version_id = original.policy_version_id
         if amount is None:
             active_correlation_id = get_correlation_id()
             linked = (
@@ -594,21 +605,28 @@ def _record_payroll_event_impl(
                 raise LookupError("Unable to establish original ledger transaction for reversal.")
             amount = -(Decimal(linked.amount or Decimal("0.00")))
 
-    # Look up target_seat to get user_id (required by schema for traceability)
-    target_seat = Seat.query.filter_by(id=target_seat_id).first()
+    # Validate the target seat within the class boundary.
+    target_seat = Seat.query.filter_by(id=target_seat_id, class_id=ctx.class_id).first()
     if target_seat is None:
         raise LookupError(f"Seat {target_seat_id} not found.")
-    target_user_id = target_seat.user_id
+    # Roster provisioning creates a participation opportunity and "SHALL NOT
+    # activate runtime participation"; participation becomes lawful only on
+    # Seat-to-User binding (DOM-IDEN-005 §VII-VIII). An unclaimed seat is a
+    # teacher-provisioned placeholder (INV-CORE-000 §Constraints), so it can
+    # receive no payroll or manual credit. Enforced at the single chokepoint
+    # every payroll effect passes through, rather than trusting each caller's
+    # roster query to have filtered correctly.
+    if target_seat.claimed_at is None or target_seat.user_id is None:
+        raise ValueError("A payroll event target seat must be claimed.")
 
     event = PayrollEvent(
         class_id=ctx.class_id,
         actor_seat_id=ctx.seat_id,
         target_seat_id=target_seat_id,
-        target_user_id=target_user_id,
         correlation_id=correlation_id,
         idempotency_key=idempotency_key,
         policy_version_id=policy_version_id,
-        policy_uuid=policy_version.policy_uuid,
+        policy_uuid=policy_version.policy_uuid if policy_version else None,
         mechanism=mechanism,
         payroll_event_type=payroll_event_type,
         recorded_at=recorded_at,
@@ -625,7 +643,6 @@ def _record_payroll_event_impl(
             target_seat_id=target_seat_id,
             actor_seat_id=ctx.seat_id,
             mechanism=mechanism.lower(),
-            user_id=ctx.user_id,
             amount=amount,
             account_type="checking",
             type="payroll" if payroll_event_type != "manual_credit" else "manual_payment",
@@ -646,7 +663,7 @@ def record_payroll_event(
     payroll_event_type: str,
     correlation_id: str,
     idempotency_key: str,
-    policy_version_id: int,
+    policy_version_id: int | None,
     mechanism: str,
     summary_json: dict | None = None,
     reference_time_utc=None,
@@ -675,8 +692,8 @@ def record_payroll_reversal(
     target_seat_id: int,
     correlation_id: str,
     idempotency_key: str,
-    policy_version_id: int,
     mechanism: str,
+    policy_version_id: int | None = None,
     summary_json: dict | None = None,
     reference_time_utc=None,
 ) -> PayrollEventResult:

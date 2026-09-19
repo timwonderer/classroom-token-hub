@@ -31,7 +31,6 @@ def _publish(classroom, name, price, **kwargs):
         return publish_store_product(
             class_id=classroom.class_id,
             entitlement_type="IMMEDIATE_USE",
-            user_id=classroom.teacher_user.id,
             name=name,
             description="Analysis fixture",
             price=price,

@@ -56,11 +56,11 @@ def test_DOM_LED_001__one_to_many_reservation_replays_effect_set(client, app):
     effects = [
         {"seat_id": first.id, "class_id": classroom.class_id, "target_seat_id": first.id,
          "actor_seat_id": classroom.teacher_seat.id, "mechanism": "teacher",
-         "user_id": first.user_id, "amount": Decimal("2.00"), "account_type": "checking",
+         "amount": Decimal("2.00"), "account_type": "checking",
          "type": "manual_payment", "description": "bonus"},
         {"seat_id": second.id, "class_id": classroom.class_id, "target_seat_id": second.id,
          "actor_seat_id": classroom.teacher_seat.id, "mechanism": "teacher",
-         "user_id": second.user_id, "amount": Decimal("2.00"), "account_type": "checking",
+         "amount": Decimal("2.00"), "account_type": "checking",
          "type": "manual_payment", "description": "bonus"},
     ]
     with FEATContext("FEAT-LED-000", idempotency_key="command:bulk-replay"):
@@ -102,7 +102,7 @@ def test_DOM_LED_001__idempotent_transaction_reuses_existing_row_on_retry(client
             idempotency_key=idempotency_key,
             seat_id=student.id,
             class_id=class_row.class_id,
-            user_id=student.user_id,
+
             amount=Decimal("10.00"),
             account_type="checking",
             type="insurance_reimbursement",
@@ -113,7 +113,7 @@ def test_DOM_LED_001__idempotent_transaction_reuses_existing_row_on_retry(client
             idempotency_key=idempotency_key,
             seat_id=student.id,
             class_id=class_row.class_id,
-            user_id=student.user_id,
+
             amount=Decimal("10.00"),
             account_type="checking",
             type="insurance_reimbursement",
@@ -138,7 +138,7 @@ def test_DOM_LED_001__idempotent_transaction_recovers_from_integrity_race(client
             idempotency_key=idempotency_key,
             seat_id=student.id,
             class_id=class_row.class_id,
-            user_id=student.user_id,
+
             amount=Decimal("11.00"),
             account_type="checking",
             type="insurance_reimbursement",
@@ -151,7 +151,7 @@ def test_DOM_LED_001__idempotent_transaction_recovers_from_integrity_race(client
             idempotency_key=idempotency_key,
             seat_id=student.id,
             class_id=class_row.class_id,
-            user_id=student.user_id,
+
             amount=Decimal("11.00"),
             account_type="checking",
             type="insurance_reimbursement",
@@ -177,7 +177,7 @@ def test_DOM_LED_001__idempotent_transaction_rejects_non_idempotent_types(client
                 idempotency_key="txn:unknown:op",
                 seat_id=student.id,
                 class_id=class_row.class_id,
-                user_id=student.user_id,
+
                 amount=Decimal("5.00"),
                 account_type="checking",
                 type="UnknownType",
@@ -198,7 +198,7 @@ def test_DOM_LED_001__idempotent_transaction_rejects_empty_keys(client, bad_key,
                 idempotency_key=bad_key,
                 seat_id=student.id,
                 class_id=class_row.class_id,
-                user_id=student.user_id,
+
                 amount=Decimal("5.00"),
                 account_type="checking",
                 type="refund",
@@ -218,7 +218,7 @@ def test_DOM_LED_001__idempotent_transaction_rejects_oversize_keys(client, app):
                 idempotency_key="x" * (MAX_IDEMPOTENCY_KEY_LENGTH + 1),
                 seat_id=student.id,
                 class_id=class_row.class_id,
-                user_id=student.user_id,
+
                 amount=Decimal("5.00"),
                 account_type="checking",
                 type="refund",
@@ -244,10 +244,10 @@ def _single(type_, amount, account_type="checking"):
 def _bulk_effects():
     return [
         {"seat_id": 7, "class_id": "c", "target_seat_id": 7, "actor_seat_id": 3,
-         "mechanism": "teacher", "user_id": 11, "amount": Decimal("2.00"),
+         "mechanism": "teacher", "amount": Decimal("2.00"),
          "account_type": "checking", "type": "manual_payment", "description": "bonus"},
         {"seat_id": 8, "class_id": "c", "target_seat_id": 8, "actor_seat_id": 3,
-         "mechanism": "teacher", "user_id": 12, "amount": Decimal("2.00"),
+         "mechanism": "teacher", "amount": Decimal("2.00"),
          "account_type": "checking", "type": "manual_payment", "description": "bonus"},
     ]
 
@@ -255,12 +255,14 @@ def _bulk_effects():
 def test_SPEC_LED_002__version_one_digests_are_unchanged():
     assert _command_fingerprint(**_single("insurance_reimbursement", Decimal("10.00")), version=1) == _V1_REIMBURSEMENT_DIGEST
     assert _command_fingerprint(**_single("Interest", Decimal("1.25"), "savings"), version=1) == _V1_INTEREST_DIGEST
-    assert _replay_fingerprint(_bulk_effects(), 1) == _V1_BULK_DIGEST
+    with pytest.raises(ValueError, match="Legacy multi-effect"):
+        _replay_fingerprint(_bulk_effects(), 1)
 
 
 def test_SPEC_LED_002__version_two_changes_only_the_interest_amount():
     assert _command_fingerprint(**_single("insurance_reimbursement", Decimal("10.00")), version=2) == _V1_REIMBURSEMENT_DIGEST
-    assert _replay_fingerprint(_bulk_effects(), 2) == _V1_BULK_DIGEST
+    with pytest.raises(ValueError, match="Legacy multi-effect"):
+        _replay_fingerprint(_bulk_effects(), 2)
 
     first = _command_fingerprint(**_single("Interest", Decimal("1.25"), "savings"), version=2)
     recomputed = _command_fingerprint(**_single("Interest", Decimal("1.31"), "savings"), version=2)
@@ -272,13 +274,13 @@ def test_SPEC_LED_002__correlation_id_is_not_part_of_the_fingerprint():
     effect = _bulk_effects()[0]
     correlated = {**effect, "correlation_id": "purchase-correlation"}
     assert _replay_fingerprint([correlated], 2) == _replay_fingerprint([effect], 2)
-    assert _replay_fingerprint([correlated, _bulk_effects()[1]], 2) == _V1_BULK_DIGEST
+    assert _replay_fingerprint([correlated, _bulk_effects()[1]], 3) == _replay_fingerprint(_bulk_effects(), 3)
 
 
 def _interest_effect(classroom, seat, amount, account_type="savings"):
     return {
         "seat_id": seat.id, "class_id": classroom.class_id, "target_seat_id": seat.id,
-        "actor_seat_id": seat.id, "mechanism": "self", "user_id": seat.user_id,
+        "actor_seat_id": seat.id, "mechanism": "self",
         "amount": amount, "account_type": account_type, "type": "Interest",
         "description": "Monthly Savings Interest",
     }
@@ -332,7 +334,7 @@ def test_SPEC_LED_002__version_one_reservation_is_compared_under_version_one(cli
     effect = {
         "seat_id": seat.id, "class_id": classroom.class_id, "target_seat_id": seat.id,
         "actor_seat_id": classroom.teacher_seat.id, "mechanism": "teacher",
-        "user_id": seat.user_id, "amount": Decimal("3.00"), "account_type": "checking",
+        "amount": Decimal("3.00"), "account_type": "checking",
         "type": "manual_payment", "description": "bonus",
     }
     key = "command:accepted-under-v1"

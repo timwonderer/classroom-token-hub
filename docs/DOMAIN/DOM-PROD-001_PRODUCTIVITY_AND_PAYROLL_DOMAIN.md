@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-PROD-001 | 1.1 | 2026-08-30 | 1.0 | Constitutional |
+| DOM-PROD-001 | 1.3 | 2026-09-17 | 1.2 | Constitutional |
 
 ---
 
@@ -226,7 +226,13 @@ Use cases:
 Rules:
 
 - MUST be append-only
-- MUST require `class_id`, `actor_seat_id`, `target_seat_id`, `correlation_id`, `idempotency_key`, `policy_version_id`, `mechanism`, `payroll_event_type`, `recorded_at`, and `summary_json`
+- MUST require `class_id`, `actor_seat_id`, `target_seat_id`, `correlation_id`, `idempotency_key`, `mechanism`, `payroll_event_type`, `recorded_at`, and `summary_json`
+- MUST record policy provenance according to the authority that determined the amount, not the storage event type alone:
+  - `payroll` (amount priced by the payroll policy from attendance/hours): `policy_version_id` and `policy_uuid` are REQUIRED
+  - `manual_credit` initiated by a teacher who enters the amount directly: no payroll policy is required, and a class with no payroll configuration can still record it
+  - `manual_credit` used as the posting mechanism for another domain's lawful calculation (for example a productivity insurance reimbursement): MUST retain the policy provenance that calculation used
+  - `reversal`: carries the provenance of the event it compensates
+- This is a minimum requirement for `payroll` events only. It MUST NOT be inverted into a rule that `manual_credit` events carry no policy version
 - MUST set `payroll_event_type` to `payroll`, `manual_credit`, or `reversal`
 - MUST derive payroll amount from authoritative productivity facts or manual credit intent, but MUST not store the amount on the table
 - MUST use the same `correlation_id` as the original event when writing a reversal
@@ -290,7 +296,6 @@ Key fields:
 - `actor_seat_id` — FK to `seats`
 - `target_seat_id` - FK to `seats`
 - `mechanism` - `self` | `teacher` | `system`
-- `target_user_id` - FK to `users`
 - `class_id` — FK to `classes`; canonical isolation boundary
 - `status` — `active` | `inactive`
 - `timestamp` — UTC
@@ -306,11 +311,11 @@ Rules:
 - There is no canonical attendance-row deletion, soft-deletion, or correction API.
 - Teacher correction of an already-paid attendance outcome is performed by reversing the affected payroll event, not by changing attendance history.
 - Every session is scoped to exactly one `class_id`.
-- At most one active session may exist for a given `target_user_id` without a corresponding inactive event.
+- At most one active session may exist for a given `(class_id, target_seat_id)` without a corresponding inactive event.
 - The platform SHALL execute the following state transition automatically:
-    - Starting an active session SHALL automatically generate an `inactive` row for any `active` session under the same `target_user_id` with the `reason_code = done_for_day`
+    - Starting an active session SHALL automatically generate an `inactive` row for any `active` session under the same `(class_id, target_seat_id)` with the `reason_code = done_for_day`
     - Any `active` sessions SHALL automatically terminate by end of day at canonical class timezone with the `reason_code = done_for_day`. Timestamp for the `inactive` entry SHALL be recorded using the same date as the originating `active` entry.
-    - An `inactive` state with `reason_code = hall_pass` exist without a corresponding `active` row (known as "hanging hall pass") SHALL automatically generate an `active` row and an `inactive` + `reason_code = done_for_day` using the same timestamp when the following occurs: the day ends in the canonical class timezone OR when a new `active` session is created under the same `user_id` but with different `class_id`, whichever occurs first.
+    - An `inactive` state with `reason_code = hall_pass` exist without a corresponding `active` row (known as "hanging hall pass") SHALL automatically generate an `active` row and an `inactive` + `reason_code = done_for_day` using the same timestamp when the following occurs: the day ends in the canonical class timezone. Activity in another class never selects or closes this seat's timeline.
     - An `active` session reaching or exceeding the set daily limit SHALL generate an `inactive` row with `reason_code = done_for_day`. If the session exceeds the set limit, the closing row shall correct the timestamp so the accumulated time is equal to the set limit.
 - System-generated transitions MUST use the canonical teacher seat for the explicit class_id, resolved through the Identity domain’s canonical seat-resolution operation.
 - Current attendance state and accumulated daily minutes are derived from this timeline and are not stored here. 
@@ -350,7 +355,7 @@ Key fields:
 - `target_seat_id` — FK to `seats`; the seat whose productivity settlement or reversal is affected
 - `correlation_id` — workflow correlation identifier linking payroll business and ledger facts; reversals reuse the original event's correlation_id
 - `idempotency_key` — unique payroll-run replay guard
-- `policy_version_id` — frozen policy version reference for the payroll policy in effect at record time
+- `policy_version_id` — frozen policy version reference for the policy that priced the amount; required for `payroll` events, absent for teacher-entered manual credits (see §VIII)
 - `mechanism` — `TEACHER` | `SYSTEM`
 - `payroll_event_type` — `payroll` | `manual_credit` | `reversal`
 - `recorded_at` — UTC; display in class canonical time
@@ -365,7 +370,7 @@ Rules:
 - The payroll window for a `payroll` event is derived from the previous `payroll` event timestamp through the current event timestamp.
 - `manual_credit` and `reversal` events do not participate in payroll-window boundary derivation.
 - `reversal` events must carry the same `correlation_id` as the original event they reverse.
-- `policy_version_id` is immutable and must identify the payroll policy version used to evaluate the event.
+- `policy_version_id` is immutable and, where present, must identify the policy version used to evaluate the event. A database check constraint requires it, with `policy_uuid`, on every `payroll` event.
 - `policy_uuid` is immutable and must record the exact domain-policy identifier used to evaluate the event; `policy_version_id` remains the internal lineage pointer where present.
 - The row must identify the productivity window and settlement intent that authorized any downstream ledger write.
 - The row must not duplicate ledger monetary truth beyond what is necessary for business provenance.
@@ -422,7 +427,7 @@ Records one append-only payroll business event.
 
 Rules:
 
-- MUST require `class_id`, `actor_seat_id`, `target_seat_id`, `correlation_id`, `idempotency_key`, and `policy_version_id`
+- MUST require `class_id`, `actor_seat_id`, `target_seat_id`, `correlation_id`, and `idempotency_key`, plus `policy_version_id` for `payroll` events and for any event whose amount a policy calculation determined (§VIII)
 - MUST record `payroll_event_type`
 - MUST treat `payroll` as the only boundary-bearing event type
 - MUST preserve `manual_credit` and `reversal` as non-boundary event types

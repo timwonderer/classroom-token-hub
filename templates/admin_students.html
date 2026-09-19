@@ -1,4 +1,5 @@
 {% extends "layout_admin.html" %}
+{% import 'macros/cards.html' as cards %}
 {% set page_title = "Student Management" %}
 {% block title %}Student Management{% endblock %}
 {% block page_icon %}school{% endblock %}
@@ -65,6 +66,8 @@
   <li><strong>Join Code</strong> — Found in the Class Roster tab for the current class</li>
   <li><strong>First Name</strong> — As entered in your roster</li>
   <li><strong>Last Name</strong> — As entered in your roster</li>
+  <li><strong>Claim Code</strong> — Only when another unclaimed student shares their name. The system
+    generates it; find it in the Unclaimed Seats list</li>
   <li><strong>Class</strong> — The student must use the join code for this class</li>
 </ul>
 
@@ -76,17 +79,16 @@
   <li>Student creates a <strong>long passphrase</strong> (for security)</li>
 </ol>
 
-<div class="alert alert-danger mb-3">
-  <strong><span class="material-symbols-outlined me-1" aria-hidden="true">warning</span>Critical:</strong> The username is shown
-  <strong>only once</strong> during setup. Students must record it. If forgotten, you'll need to reset
-  their account.
-</div>
+{% call cards.alert_card('danger', 'The username is shown only once', icon='warning', body_class='mb-3') %}
+  <p class="mb-0">The username is shown <strong>only once</strong> during setup. Students must record it. If
+    forgotten, you'll need to reset their account.</p>
+{% endcall %}
 
-<div class="alert alert-info mb-0">
-  <strong><span class="material-symbols-outlined me-1" aria-hidden="true">lightbulb</span>Teacher Tip:</strong> Have students complete account
-  setup in class so you can help if they have issues. Although not recommended for security reasons,
-  consider keeping a secure record of usernames for your class so you can assist with forgotten usernames.
-</div>
+{% call cards.alert_card('info', 'Set up accounts in class', icon='lightbulb', body_class='mb-0') %}
+  <p class="mb-0">Have students complete account setup in class so you can help if they have issues. Although not
+    recommended for security reasons, consider keeping a secure record of usernames for your class so you can
+    assist with forgotten usernames.</p>
+{% endcall %}
 {% endcall %}
 
 {% call help.topic('stu-edit', 'person_text', 'How to update student info') %}
@@ -100,42 +102,52 @@
   <li>Click <strong>Save</strong>. The changes take effect immediately</li>
 </ol>
 
-<div class="alert alert-info mb-0">
-  <strong><span class="material-symbols-outlined me-1" aria-hidden="true">info</span>Important:</strong> If you change their name, the
-  student will need the updated first and last name when they claim or recover their account.
-</div>
+{% call cards.alert_card('info', 'Name changes are display-only', icon='info', body_class='mb-0') %}
+  <p class="mb-0">Changing a name only changes how it is displayed. It does not change the student's login or the
+    name used to claim a seat.</p>
+{% endcall %}
 {% endcall %}
 
 {% call help.topic('stu-reset', 'restart_alt', 'How to reset student login') %}
-<p>Use reset when a student forgets credentials or cannot log in. Resetting preserves account data but
-  forces a new claim.</p>
-<div class="alert alert-warning">
-  <strong>Resetting requires a new claim:</strong> The student must re-claim using the join code and their
-  updated details.
-</div>
-<p class="mb-0">After the reset, have the student follow the normal claim process on the student login
-  page.</p>
+<p>Use reset when a student forgets credentials or cannot log in. Resetting preserves account data and
+  issues a recovery code.</p>
+{% call cards.alert_card('warning', 'The recovery code expires in ten minutes', icon='schedule', body_class='mb-3') %}
+  <p class="mb-0">Give it to the student right away. A new code replaces any earlier one.</p>
+{% endcall %}
+<p class="mb-0">The student enters the code from account recovery on the student login page, then chooses a
+  new username, PIN, and passphrase.</p>
 {% endcall %}
 
 {% call help.topic('stu-remove', 'person_remove', 'How to remove students') %}
 <p>To remove a student, use the <strong>Delete</strong> action next to their name in the Class Roster.</p>
-<div class="alert alert-danger mb-0">
-  <strong>Important:</strong> Removing a student is permanent and deletes their access to the class.
-</div>
+{% call cards.alert_card('danger', 'Removing a student is permanent', icon='person_remove', body_class='mb-0') %}
+  <p class="mb-0">Removing a student is permanent and deletes their access to the class.</p>
+{% endcall %}
 {% endcall %}
 
 {% call help.topic('stu-export', 'download', 'How to export class roster') %}
 <p>Use the <strong>Export All</strong> button in the Class Roster header to download a CSV of your
   students.</p>
-<div class="alert alert-info mb-0">
-  <strong>Tip:</strong> Exports are helpful for reviewing roster data, keeping offline backups, or
-  preparing a clean bulk upload.
-</div>
+{% call cards.alert_card('info', 'Uses for a roster export', icon='lightbulb', body_class='mb-0') %}
+  <p class="mb-0">Exports are helpful for reviewing roster data, keeping offline backups, or preparing a clean
+    bulk upload.</p>
+{% endcall %}
 {% endcall %}
 {% endblock %}
 
 
 {% block content %}
+
+{% macro recovery_readiness_warning() %}
+{% if roster.recovery_at_risk %}
+            {% call cards.alert_card('danger', 'Your account may be at risk of being unrecoverable', icon='shield_lock', role='note', id='recovery-readiness-warning', body_class='mb-3') %}
+                <p class="mb-0">Classroom Token Hub uses student-assisted teacher account recovery. Recovery requires enough claimed students across the classes you own, including at least {{ roster.recovery_min_students }} claimed students in each class.
+                  <strong>You currently have {{ roster.claimed_count }} claimed students in this class.</strong>
+                  Until this class reaches {{ roster.recovery_min_students }}, teacher account recovery will not be available if you lose access.</p>
+            {% endcall %}
+{% endif %}
+{% endmacro %}
+
 
 <div id="student-management-feedback" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true" tabindex="-1"></div>
 
@@ -159,139 +171,25 @@
 <div class="tab-content" id="studentTabContent">
   <!-- ROSTER TAB -->
   <div class="tab-pane fade show active" id="roster" role="tabpanel" aria-labelledby="roster-tab">
-    <div class="card shadow">
-      <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-        <h2 class="mb-0 fs-3"><span class="material-symbols-outlined me-2 align-middle fs-1" aria-hidden="true">groups</span>Class Roster
-        </h2>
-        <div>
-          <a href="{{ url_for('admin.export_students') }}" class="btn btn-light btn-sm me-2">
-            <span class="material-symbols-outlined me-1 icon-middle" aria-hidden="true">download</span> Export All
-          </a>
-        </div>
-      </div>
-      <div class="card-body">
-        <!-- Current Class Content -->
+    {# No "Class Roster" card here: the tab already carries that label, and a
+       card of the same name nests a region inside a duplicate of itself. #}
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3 w-100">
+      {# The class is the heading worth showing: the tab already says which
+         view this is, so repeating "Class Roster" here would leave the one fact
+         a teacher needs — which class they are editing — as muted body text. #}
+    
+      <a href="{{ url_for('admin.export_students') }}" class="btn btn-outline-secondary btn-sm ms-auto">
+        <span class="material-symbols-outlined me-1 icon-middle" aria-hidden="true">download</span> Export All
+      </a>
+    </div>
   <div class="tab-content class-roster-content" id="classRosterContent">
-          <div class="tab-pane fade show active" id="class-{{ current_class_id }}">
-            <!-- Join Code Section -->
-            {% if current_class_join_code %}
-            <div class="card border-success mb-3">
-              <div class="card-header bg-success-subtle">
-                <div class="d-flex justify-content-between align-items-center">
-                  <h3 class="mb-0 text-success h6 fs-4">
-                    <span class="material-symbols-outlined me-2 align-middle" aria-hidden="true">key</span>
-                    Join Code for {{ class_display_label }}
-                  </h3>
-                  {% if unclaimed_seats|length > 0 %}
-                  <span class="badge bg-warning text-dark">
-                    {{ unclaimed_seats|length }} unclaimed seat(s)
-                  </span>
-                  {% else %}
-                  <span class="badge bg-success text-white">
-                    All seats claimed
-                  </span>
-                  {% endif %}
-                </div>
-              </div>
-              <div class="card-body">
-                <div class="row align-items-center">
-                  <div class="col-md-8">
-                    <p class="mb-2"><strong>Students use this code to claim their accounts:</strong></p>
-                    <div class="d-flex align-items-center gap-2">
-                      <div class="input-group">
-                        <label for="join-code-current-class" class="visually-hidden">Join code for {{ class_display_label }}</label>
-                        <input type="text" class="form-control form-control-lg font-monospace text-center fw-bold fs-3 join-code-display"
-                          id="join-code-current-class" value="{{ current_class_join_code }}" readonly
->
-                        <button class="btn btn-outline-success btn-lg join-code-copy-btn" type="button"
-                          data-class-id="{{ current_class_id }}" data-join-code="{{ current_class_join_code }}">
-                          <span class="material-symbols-outlined icon-middle" aria-hidden="true">content_copy</span>
-                          Copy
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="col-md-4">
-                    <div class="alert alert-info mb-0 small">
-                      <span class="material-symbols-outlined me-1 align-middle fs-6" aria-hidden="true">info</span>
-                      <strong>Student Instructions:</strong>
-                      <ol class="mb-0 mt-1 ps-3">
-                        <li>Go to student sign-in page</li>
-                        <li>Click "First Time? Set Up Account"</li>
-                        <li>Enter this join code, then provide the first and last name from your roster</li>
-                      </ol>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            {% endif %}
-
-            <!-- Unclaimed Seats Section -->
-            {% if unclaimed_seats|length > 0 %}
-            <div class="card border-warning mb-3">
-              <div class="card-header bg-warning-subtle d-flex justify-content-between align-items-center">
-                <h3 class="mb-0 text-dark h6 fs-4">
-                  <span class="material-symbols-outlined me-2 align-middle" aria-hidden="true">pending</span>
-                  Unclaimed Seats ({{ unclaimed_seats|length }})
-                </h3>
-              </div>
-              <div class="card-body">
-                <p class="text-muted mb-3">These students are in your roster but haven't set up their username yet.
-                  Share the join code above with them.</p>
-                <div class="table-responsive">
-                  <table class="table table-sm table-striped js-sortable">
-                    <caption class="visually-hidden">Unclaimed student seats</caption>
-                    <thead class="table-light">
-                      <tr>
-                        <th scope="col">Name</th>
-                        <th scope="col">Added</th>
-                        <th scope="col">Status</th>
-                        <th scope="col">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {% for seat in unclaimed_seats %}
-                      <tr>
-                        <td>
-                          <span class="fw-bold">{{ seat.full_name }}</span>
-                          {% if seat.is_teacher %}
-                          <div><small class="text-muted">Claim credential: managed by system</small></div>
-                          {% endif %}
-                        </td>
-                        <td>
-                          <small class="text-muted">{{ seat.created_at.strftime('%Y-%m-%d') if seat.created_at else
-                            'N/A' }}</small>
-                        </td>
-                        <td>
-                          <span class="badge bg-warning text-dark">Waiting for Claim</span>
-                          {% if seat.is_teacher %}
-                          <div><small class="text-muted">Teacher shadow account</small></div>
-                          {% endif %}
-                        </td>
-                        <td>
-                          <button type="button" class="btn btn-sm btn-outline-danger delete-pending-student"
-                            data-seat-id="{{ seat.id }}"
-                            data-student-name="{{ seat.full_name }}"
-                            aria-label="Delete pending student {{ seat.full_name }}.">
-                            <span class="material-symbols-outlined align-middle fs-6" aria-hidden="true">delete</span>
-                          </button>
-                        </td>
-                      </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-            {% endif %}
-
-            {% if claimed_students %}
-            <div class="card border-success mb-3">
-              <div class="card-header bg-success-subtle">
-                <h3 class="mb-0 text-success h6 fs-4">
+          <div class="tab-pane fade show active" id="class-{{ roster.class_id }}">
+            {% if roster.students %}
+            <div class="card border-primary mb-3">
+              <div class="card-header bg-primary">
+                <h3 class="mb-0 text-inverse h6 fs-4">
                   <span class="material-symbols-outlined me-2 align-middle" aria-hidden="true">check_circle</span>
-                  Active Students ({{ claimed_students|length }})
+                  ({{ roster.claimed_count }}) Active Students for {{ roster.class_label }}
                 </h3>
               </div>
               <div class="card-body">
@@ -346,7 +244,7 @@
                     </div>
                   </div>
                 </div>
-
+                {{ recovery_readiness_warning() }}
                 <div class="table-responsive">
                   <table class="table table-hover table-striped js-sortable" id="students-table-current-class">
                     <caption class="visually-hidden">Current class student roster</caption>
@@ -365,41 +263,37 @@
                       </tr>
                     </thead>
                     <tbody>
-                      {% for student in claimed_students %}
-                      {% set profile = student.identity_profile %}
-                      {% set student_display_name = profile.full_name if profile else student.public_id %}
+                      {% for student in roster.students %}
                       <tr class="student-row" data-student-id="{{ student.public_id }}">
                         <td>
-                          <input type="checkbox" class="form-check-input student-checkbox" value="{{ student.public_id }}"
-                            data-seat-id="{{ student.id }}"
-                            onchange="updateBulkToolbar()" aria-label="Select {{ student_display_name }}">
+                          {# The checkbox carries the seat id: every bulk endpoint
+                             it feeds takes internal ids. public_id addresses a
+                             page in a URL, and the detail link below uses it
+                             there. #}
+                          <input type="checkbox" class="form-check-input student-checkbox" value="{{ student.seat_id }}"
+                            data-seat-id="{{ student.seat_id }}"
+                            onchange="updateBulkToolbar()" aria-label="Select {{ student.full_name }}">
                         </td>
                         <td>
                           <a href="{{ student_detail_url(student.public_id) }}"
                             class="fw-bold text-decoration-none">
-                            {{ student_display_name }}
+                            {{ student.full_name }}
                           </a>
                         </td>
-                        {% set balances = student_balances_by_seat_id.get(student.id, {'checking': 0, 'savings': 0,
-                        'earnings': 0}) %}
-                        <td class="{% if balances.checking < 0 %}text-danger fw-bold{% endif %}">
-                          ${{ "%.2f"|format(balances.checking) }}
+                        <td class="{% if student.checking_is_negative %}text-danger fw-bold{% endif %}">
+                          {{ student.display_checking }}
                         </td>
-                        <td>${{ "%.2f"|format(balances.savings) }}</td>
+                        <td>{{ student.display_savings }}</td>
                         <td class="text-center">
-                          {% set hall_pass_balance = student_hall_pass_balances_by_seat_id.get(student.id, 0) %}
-                          <span class="badge bg-primary">{{ hall_pass_balance }}</span>
+                          <span class="badge bg-primary">{{ student.hall_pass_balance }}</span>
                         </td>
                         <td>
-                          {% set privileges = student_rent_privileges_by_seat_id.get(student.id, []) %}
-                          {% if privileges %}
+                          {% if student.has_privileges %}
                           <div class="d-flex flex-wrap gap-1">
-                            {% for privilege in privileges %}
-                            <span
-                              class="badge bg-{% if privilege.source == 'rent' %}success{% else %}info{% endif %} text-white type-xs"
-
-                              title="{% if privilege.source == 'rent' %}Covered by rent{% else %}Individually purchased{% endif %}">
-                              {{ privilege.name }}
+                            {% for privilege in student.privileges %}
+                            <span class="badge bg-{{ privilege.variant }} text-white type-xs"
+                              title="{{ privilege.title }}">
+                              {{ privilege.label }}
                             </span>
                             {% endfor %}
                           </div>
@@ -409,19 +303,25 @@
                         </td>
                         <td>
                         <button type="button" class="btn btn-sm btn-outline-primary quick-action-btn me-1" data-bs-toggle="modal"
-                            data-bs-target="#editStudentModal" data-student-id="{{ student.id }}"
-                            data-student-first-name="{{ profile.first_name if profile else '' }}"
-                            data-student-last-name="{{ profile.last_name if profile else '' }}"
-                            data-student-notes="{{ profile.notes if profile and profile.notes else '' }}"
+                            data-bs-target="#editStudentModal" data-student-id="{{ student.seat_id }}"
+                            data-student-first-name="{{ student.first_name }}"
+                            data-student-last-name="{{ student.last_name }}"
+                            data-student-notes="{{ student.notes }}"
                             data-student-class-id="{{ student.class_id }}">
                             <span class="material-symbols-outlined icon-middle" aria-hidden="true">edit</span>
-                            <span class="visually-hidden">Edit {{ student_display_name }}</span>
+                            <span class="visually-hidden">Edit {{ student.full_name }}</span>
                           </button>
-                        <button type="button" class="btn btn-sm btn-outline-danger quick-action-btn" data-bs-toggle="modal"
-                            data-bs-target="#deleteStudentModal" data-student-id="{{ student.id }}"
-                            data-student-name="{{ student_display_name }}">
+                        <button type="button" class="btn btn-sm btn-outline-warning me-1"
+                            data-bs-toggle="modal" data-bs-target="#unclaimStudentModal"
+                            data-seat-id="{{ student.seat_id }}" data-claim-generation="{{ student.claim_generation }}"
+                            data-student-name="{{ student.full_name }}">
+                            Unclaim<span class="visually-hidden"> {{ student.full_name }}</span>
+                          </button>
+                        <button type="button" class="btn btn-sm btn-outline-danger quick-action-btn delete-student"
+                            data-student-id="{{ student.seat_id }}"
+                            data-student-name="{{ student.full_name }}">
                             <span class="material-symbols-outlined icon-middle" aria-hidden="true">delete</span>
-                            <span class="visually-hidden">Delete {{ student_display_name }}</span>
+                            <span class="visually-hidden">Delete {{ student.full_name }}</span>
                           </button>
                         </td>
                       </tr>
@@ -432,15 +332,127 @@
               </div>
             </div>
             {% else %}
-            <div class="alert alert-info">
-              <span class="material-symbols-outlined me-2 icon-middle" aria-hidden="true">info</span>No students have
-              claimed accounts in {{ class_display_label }} yet.
+            {{ recovery_readiness_warning() }}
+            {% call cards.alert_card('info', 'No claimed accounts yet', icon='group', body_class='mb-3') %}
+              <p class="mb-0">No students have claimed accounts in {{ roster.class_label }} yet.</p>
+            {% endcall %}
+            {% endif %}
+            {# The join code and the unclaimed seats are one task: the code is
+               what turns an unclaimed seat into a claimed one. Collapsed once
+               every seat is claimed, when there is nothing left to act on. #}
+            {% if roster.has_unclaimed_seats or roster.join_code %}
+            <div class="card border-secondary mb-3">
+              <div class="card-header bg-secondary">
+                <h3 class="mb-0 text-dark h6 fs-4 fw-bold">
+                  <button class="btn btn-link p-0 text-dark text-decoration-none d-flex align-items-center justify-content-between gap-2 w-100 h6 fs-4 fw-medium mb-0 lh-base"
+                    type="button" data-bs-toggle="collapse" data-bs-target="#unclaimedSeatsPanel"
+                    aria-expanded="{{ 'true' if roster.has_unclaimed_seats else 'false' }}"
+                    aria-controls="unclaimedSeatsPanel"
+                    aria-label="Toggle unclaimed seats panel">
+                    <span class="d-flex align-items-center gap-2 text-start">
+                      <span class="material-symbols-outlined align-middle" aria-hidden="true">pending</span>
+                      <span>
+                        {% if roster.has_unclaimed_seats %}
+                        Unclaimed seats ({{ roster.unclaimed_count }})
+                        {% else %}
+                        Join code — all seats claimed
+                        {% endif %}
+                      </span>
+                    </span>
+                    <span class="material-symbols-outlined align-middle" aria-hidden="true">unfold_more</span>
+                  </button>
+                </h3>
+              </div>
+              <div id="unclaimedSeatsPanel" class="collapse{% if roster.has_unclaimed_seats %} show{% endif %}">
+                <div class="card-body">
+                  {% if roster.join_code %}
+                <div class="row align-items-center">
+                  <div class="col-md-8">
+                    <p class="mb-2"><strong>Students use this code to claim their accounts:</strong></p>
+                    <div class="d-flex align-items-center gap-2">
+                      <div class="input-group">
+                        <label for="join-code-current-class" class="visually-hidden">Join code for {{ roster.class_label }}</label>
+                        <input type="text" class="form-control form-control-lg font-monospace text-center fw-bold fs-3 join-code-display"
+                          id="join-code-current-class" value="{{ roster.join_code }}" readonly
+>
+                        <button class="btn btn-outline-success btn-lg join-code-copy-btn" type="button"
+                          data-class-id="{{ roster.class_id }}" data-join-code="{{ roster.join_code }}">
+                          <span class="material-symbols-outlined icon-middle" aria-hidden="true">content_copy</span>
+                          Copy
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    {% call cards.alert_card('info', 'How students join this class', icon='info', body_class='mb-0') %}
+                      <ol class="mb-0 ps-3">
+                        <li>Go to student sign-in page</li>
+                        <li>Click "First Time? Set Up Account"</li>
+                        <li>Enter this join code, then provide the first and last name from your roster</li>
+                      </ol>
+                    {% endcall %}
+                  </div>
+                </div>
+              
+                  {% endif %}
+                  {% if roster.has_unclaimed_seats %}
+                  {% if roster.join_code %}<hr class="my-4">{% endif %}
+                <p class="text-muted mb-3">These students are in your roster but haven't set up their username yet.
+                  Share the join code above with them. Students who share a name also need the claim code
+                  shown beside their name.</p>
+                <div class="table-responsive">
+                  <table class="table table-sm table-striped js-sortable">
+                    <caption class="visually-hidden">Unclaimed student seats</caption>
+                    <thead class="table-light">
+                      <tr>
+                        <th scope="col">Name</th>
+                        <th scope="col">Claim code</th>
+                        <th scope="col">Added</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for seat in roster.unclaimed_seats %}
+                      <tr>
+                        <td>
+                          <span class="fw-bold">{{ seat.full_name }}</span>
+                        </td>
+                        <td>
+                          {% if seat.claim_code %}
+                          <span class="font-monospace fw-bold">{{ seat.claim_code }}</span>
+                          {% else %}
+                          <span class="text-muted small">{{ seat.claim_code_display }}</span>
+                          {% endif %}
+                        </td>
+                        <td>
+                          <small class="text-muted">{{ seat.display_added_on }}</small>
+                        </td>
+                        <td>
+                          <span class="badge bg-warning text-dark">{{ seat.status_label }}</span>
+                        </td>
+                        <td>
+                          <button type="button" class="btn btn-sm btn-outline-danger delete-pending-student"
+                            data-seat-id="{{ seat.seat_id }}"
+                            data-student-name="{{ seat.full_name }}"
+                            aria-label="Delete pending student {{ seat.full_name }}.">
+                            <span class="material-symbols-outlined align-middle fs-6" aria-hidden="true">delete</span>
+                          </button>
+                        </td>
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              
+                  {% endif %}
+                </div>
+              </div>
             </div>
             {% endif %}
+
           </div>
         </div>
-      </div>
-    </div>
   </div>
 
   <!-- ADD STUDENTS TAB (paste-based staging grid) -->
@@ -467,11 +479,11 @@
             <p class="mb-2">
               We highlighted students in your roster who share the same name. If this is correct,
               you can submit the roster as is. Classroom Token Hub will give each student a unique
-              code to use when claiming their account.
+              claim code, shown in the Unclaimed Seats list, to use when claiming their account.
             </p>
             <p class="mb-0">
-              You can review the highlighted rows before submitting. Duplicate names are allowed and create separate
-              roster seats in the current class.
+              Duplicate names are allowed and create separate roster seats in the current class. An unclaimed
+              student already on the roster with the same name also receives a claim code.
             </p>
           </div>
         </div>
@@ -561,12 +573,6 @@
       actionTd.appendChild(removeBtn);
       tr.appendChild(actionTd);
       return tr;
-    }
-
-    function escapeHtml(str) {
-      const div = document.createElement('div');
-      div.textContent = str;
-      return div.innerHTML;
     }
 
     function getValidRows() {
@@ -719,14 +725,27 @@
       .then(r => r.json())
       .then(data => {
         if (data.status === 'success' || data.status === 'partial') {
-          let msg = data.created + ' student' + (data.created !== 1 ? 's' : '') + ' added successfully.';
+          const msgEl = document.createElement('p');
+          msgEl.className = 'mb-0';
+          msgEl.textContent = data.created + ' student' + (data.created !== 1 ? 's' : '') + ' added successfully.';
           if (data.join_code) {
-            msg += ' Join Code: <strong>' + escapeHtml(data.join_code) + '</strong>';
+            const codeEl = document.createElement('strong');
+            codeEl.textContent = data.join_code;
+            msgEl.append(' Join Code: ', codeEl);
           }
+          const bodyParts = [msgEl];
           if (data.errors && data.errors.length > 0) {
-            msg += '<br><small class="text-danger">' + data.errors.length + ' row(s) had errors.</small>';
+            const errEl = document.createElement('p');
+            errEl.className = 'mb-0 small text-danger';
+            errEl.textContent = data.errors.length + ' row(s) had errors.';
+            bodyParts.push(errEl);
           }
-          resultEl.innerHTML = '<div class="alert alert-success">' + msg + '</div>';
+          resultEl.replaceChildren(AppCore.buildAlertCard({
+            level: 'success',
+            title: data.status === 'partial' ? 'Some students added' : 'Students added',
+            icon: 'group_add',
+            bodyNodes: bodyParts,
+          }));
           resultEl.classList.remove('d-none');
           resultEl.focus();
 
@@ -743,13 +762,23 @@
           // re-renders with the new unclaimed seats.
           setTimeout(function () { window.location.reload(); }, 1500);
         } else {
-          resultEl.innerHTML = '<div class="alert alert-danger">' + escapeHtml(data.message || 'Failed to add students.') + '</div>';
+          resultEl.replaceChildren(AppCore.buildAlertCard({
+            level: 'danger',
+            title: 'Students not added',
+            icon: 'error',
+            body: data.message || 'Failed to add students.',
+          }));
           resultEl.classList.remove('d-none');
           resultEl.focus();
         }
       })
       .catch(() => {
-        resultEl.innerHTML = '<div class="alert alert-danger">Network error. Please try again.</div>';
+        resultEl.replaceChildren(AppCore.buildAlertCard({
+          level: 'danger',
+          title: 'Could not reach the server',
+          icon: 'wifi_off',
+          body: 'Network error. Please try again.',
+        }));
         resultEl.classList.remove('d-none');
         resultEl.focus();
       })
@@ -764,6 +793,38 @@
   </script>
 
 
+</div>
+
+<!-- Unclaim is distinct from destroying the Seat. Names are intentionally blank. -->
+<div class="modal fade" id="unclaimStudentModal" tabindex="-1" aria-labelledby="unclaimStudentTitle" aria-describedby="unclaimStudentExplanation" aria-hidden="true">
+  <div class="modal-dialog">
+    <form id="unclaimStudentForm" class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title h5" id="unclaimStudentTitle">Unclaim student seat</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>Unclaim <strong id="unclaimStudentName"></strong>?</p>
+        <p id="unclaimStudentExplanation">The seat stays in this class. Its balance, transactions, attendance, items, and teacher notes stay with it for the next claimant. The current account loses access to this seat. If it has no other classes, that sign-in account is deleted.</p>
+        <p>Enter the name this seat should carry from now on. It becomes the name shown on your roster <em>and</em> the name the student types to claim the seat, so the two always match. Teacher notes and the seat's records are unaffected. To consolidate accounts, the student should sign in to the account they want to keep and join this class.</p>
+        <div class="mb-3"><label for="unclaimFirstName" class="form-label">First name</label>
+          <input id="unclaimFirstName" class="form-control" name="first_name" required maxlength="100" autocomplete="off"></div>
+        <div class="mb-3"><label for="unclaimLastName" class="form-label">Last name</label>
+          <input id="unclaimLastName" class="form-control" name="last_name" required maxlength="100" autocomplete="off"></div>
+        <p class="form-text mb-3">If another unclaimed student has the same names, the system gives each of them a claim
+          code. Find it in the Unclaimed Seats list and give it to the student.</p>
+        <div class="form-check"><input type="checkbox" id="unclaimAcknowledged" class="form-check-input" required>
+          <label for="unclaimAcknowledged" class="form-check-label">I understand that the current account will be detached, the seat will be renamed, and the next claimant will receive this seat's records.</label></div>
+        {% call cards.alert_card('danger', 'Seat not unclaimed', icon='error', role='alert', id='unclaimStudentError', body_class='mt-3 d-none', attrs='tabindex="-1"') %}
+          <p class="mb-0" id="unclaimStudentErrorMessage"></p>
+        {% endcall %}
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-warning">Unclaim seat</button>
+      </div>
+    </form>
+  </div>
 </div>
 
 <!-- Edit Student Modal -->
@@ -813,59 +874,19 @@
               <label class="form-check-label" for="edit_reset_login">Reset</label>
             </div>
           </div>
-          <div class="alert alert-warning mt-3 mb-0" id="reset_login_warning" hidden>
-            <small><span class="material-symbols-outlined me-2 icon-middle" aria-hidden="true">warning</span>Student will need to re-claim their account using
-                their join code, first name, and last name.</small>
-          </div>
+          {% call cards.alert_card('warning', 'Student will need to re-claim their account', icon='warning', id='reset_login_warning', body_class='mt-3 mb-0', attrs='hidden') %}
+            <p class="mb-0">Student will need to re-claim their account using their join code, first name, and last
+              name.</p>
+          {% endcall %}
 
-          <div class="alert alert-info mt-3 mb-0">
-            <small><span class="material-symbols-outlined me-2 icon-middle" aria-hidden="true">info</span><strong>Note:</strong> Changing the name will update what the
-              student needs to enter during the account claim process.</small>
-          </div>
+          {% call cards.alert_card('info', 'Name changes affect account claim', icon='info', body_class='mt-3 mb-0') %}
+            <p class="mb-0">Changing the name will update what the student needs to enter during the account claim
+              process.</p>
+          {% endcall %}
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
           <button type="submit" class="btn btn-primary">Save Changes</button>
-        </div>
-      </div>
-    </form>
-  </div>
-</div>
-
-<!-- Delete Student Modal -->
-<div class="modal fade" id="deleteStudentModal" tabindex="-1" aria-labelledby="deleteStudentModalLabel"
-  aria-hidden="true">
-  <div class="modal-dialog">
-    <form action="{{ url_for('admin.delete_student') }}" method="post">
-      <div class="modal-content">
-        <div class="modal-header bg-danger text-white">
-          <h2 class="modal-title h5" id="deleteStudentModalLabel">
-            <span class="material-symbols-outlined me-2 icon-middle" aria-hidden="true">warning</span>Delete Student
-          </h2>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <input type="hidden" id="delete_student_id" name="seat_id">
-
-          <div class="alert alert-danger">
-            <h3 class="h6"><span class="material-symbols-outlined me-2 icon-middle" aria-hidden="true">warning</span>Warning</h3>
-            <p>You are about to delete <strong id="delete_student_name"></strong>.</p>
-            <p class="mb-0">This action will permanently delete:</p>
-            <ul class="mb-0">
-              <li>All transaction history</li>
-              <li>All attendance records</li>
-              <li>All purchased items</li>
-              <li>All other student data</li>
-            </ul>
-          </div>
-
-          <p class="mb-3">Type <strong class="text-danger">DELETE</strong> to confirm:</p>
-          <input type="text" class="form-control" id="delete_confirmation" name="confirmation" required aria-label="Type DELETE to confirm">
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-danger">Delete Permanently</button>
         </div>
       </div>
     </form>
@@ -990,58 +1011,6 @@
         });
       }
 
-    }
-
-    // Delete Student Modal
-    const deleteModal = document.getElementById('deleteStudentModal');
-    console.log('Delete modal element:', deleteModal);
-
-    if (deleteModal) {
-      console.log('Delete modal found, attaching event listeners');
-      deleteModal.addEventListener('show.bs.modal', event => {
-        const button = event.relatedTarget;
-        const studentId = button.getAttribute('data-student-id');
-        const studentName = button.getAttribute('data-student-name');
-
-        console.log('Delete modal opening:', { studentId, studentName });
-
-        const studentIdField = deleteModal.querySelector('#delete_student_id');
-        const studentNameField = deleteModal.querySelector('#delete_student_name');
-        const confirmationField = deleteModal.querySelector('#delete_confirmation');
-
-        if (studentIdField) {
-          studentIdField.value = studentId;
-          console.log('Set student_id field to:', studentIdField.value);
-        } else {
-          console.error('Could not find #delete_student_id field');
-        }
-
-        if (studentNameField) {
-          studentNameField.textContent = studentName;
-        } else {
-          console.error('Could not find #delete_student_name field');
-        }
-
-        if (confirmationField) {
-          confirmationField.value = '';
-        } else {
-          console.error('Could not find #delete_confirmation field');
-        }
-      });
-
-      // Add form submit debugging
-      const deleteForm = deleteModal.querySelector('form');
-      if (deleteForm) {
-        deleteForm.addEventListener('submit', function (e) {
-          const formData = new FormData(deleteForm);
-          console.log('Delete form submitting with data:');
-          for (let [key, value] of formData.entries()) {
-            console.log(`  ${key}: ${value}`);
-          }
-        });
-      }
-    } else {
-      console.error('Delete modal not found in DOM');
     }
 
     console.log('All student management scripts initialized');
@@ -1270,52 +1239,82 @@
     updateBulkToolbar();
   }
 
-  function bulkDeleteStudents() {
-    const table = currentClassStudentTable();
-    const checkboxes = table.querySelectorAll('.student-checkbox:checked');
-    const studentIds = Array.from(checkboxes).map(cb => cb.value);
-
-    if (studentIds.length === 0) {
-      announceStudentManagement('Select at least one student to delete.', 'warning');
-      return;
-    }
-
-    const count = studentIds.length;
-    const warning = `DANGER! YOU ARE ABOUT TO PERMANENTLY AND IRREVERSIBLY DELETE ${count} STUDENT(S) AND DATA ASSOCIATED WITH THEM.`;
-
-    showTimedDeleteGate({
-      title: 'Confirm Student Deletion',
-      warning,
-      expectedPhrase: 'DELETE STUDENTS',
-    }).then(gatePayload => {
-      if (!gatePayload) return;
-
-      fetch('/admin/students/bulk-delete', {
+  const unclaimModal = document.getElementById('unclaimStudentModal');
+  const unclaimForm = document.getElementById('unclaimStudentForm');
+  const unclaimError = document.getElementById('unclaimStudentError');
+  let unclaimTarget = null;
+  unclaimModal.addEventListener('show.bs.modal', event => {
+    const button = event.relatedTarget;
+    unclaimForm.reset();
+    unclaimError.classList.add('d-none');
+    unclaimTarget = {seat_id: Number(button.dataset.seatId), claim_generation: Number(button.dataset.claimGeneration)};
+    document.getElementById('unclaimStudentName').textContent = button.dataset.studentName;
+  });
+  unclaimModal.addEventListener('shown.bs.modal', () => document.getElementById('unclaimFirstName').focus());
+  unclaimForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (!unclaimForm.reportValidity() || !unclaimTarget) return;
+    const submit = unclaimForm.querySelector('[type="submit"]');
+    submit.disabled = true;
+    try {
+      const response = await fetch('/admin/student/unclaim', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-        },
-        body: JSON.stringify({
-          student_ids: studentIds,
-          ...gatePayload
-        })
-      })
-        .then(response => response.json())
-        .then(data => {
-          if (data.status === 'success') {
-            announceStudentManagement(data.message, 'success');
-            location.reload();
-          } else {
-            announceStudentManagement('Error: ' + data.message, 'danger');
-          }
-        })
-        .catch(error => {
-          console.error('Error:', error);
-          announceStudentManagement('Network error occurred while deleting students. Please try again.', 'danger');
-        });
-    });
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content},
+        body: JSON.stringify({...unclaimTarget, ...Object.fromEntries(new FormData(unclaimForm)), confirmation: 'UNCLAIM'})
+      });
+      const result = await response.json();
+      if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Unable to unclaim this seat.');
+      window.location.reload();
+    } catch (error) {
+      document.getElementById('unclaimStudentErrorMessage').textContent = error.message || 'Unable to unclaim this seat.';
+      unclaimError.classList.remove('d-none');
+      unclaimError.focus();
+    } finally {
+      submit.disabled = false;
+    }
+  });
+
+  async function deleteStudentsWithPreview(studentIds) {
+    if (!studentIds.length) return;
+    const headers = {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+    };
+    try {
+      const previewResponse = await fetch('/admin/students/deletion-preview', {
+        method: 'POST', headers, body: JSON.stringify({student_ids: studentIds})
+      });
+      if (!previewResponse.ok) throw new Error('Unable to verify the current roster. Refresh and try again.');
+      const preview = await previewResponse.json();
+      const gate = await showTimedDeleteGate({
+        title: preview.account_deleted ? 'Delete Class and Teacher Account' :
+               preview.class_deleted ? 'Delete Last Students and Class' : 'Delete Students',
+        warning: preview.warning, expectedPhrase: preview.expected_phrase,
+      });
+      if (!gate) return;
+      const response = await fetch('/admin/students/bulk-delete', {
+        method: 'POST', headers, body: JSON.stringify({student_ids: studentIds, ...gate})
+      });
+      const result = await response.json();
+      if (!response.ok || result.status !== 'success') {
+        announceStudentManagement(result.message || 'The roster changed. Review the deletion again.', 'danger');
+        return;
+      }
+      window.location.assign(result.redirect);
+    } catch (error) {
+      announceStudentManagement(error.message || 'Unable to delete students.', 'danger');
+    }
   }
+
+  function bulkDeleteStudents() {
+    const selected = currentClassStudentTable().querySelectorAll('.student-checkbox:checked');
+    deleteStudentsWithPreview(Array.from(selected).map(cb => cb.dataset.seatId));
+  }
+
+  document.addEventListener('click', event => {
+    const button = event.target.closest('.delete-student');
+    if (button) deleteStudentsWithPreview([button.dataset.studentId]);
+  });
 
   function bulkTapIn() {
     const table = currentClassStudentTable();
@@ -1418,7 +1417,9 @@
   function bulkUpdateHallPass() {
     const table = currentClassStudentTable();
     const checkboxes = table.querySelectorAll('.student-checkbox:checked');
-    const studentIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+    const studentIds = Array.from(checkboxes)
+      .map(cb => parseInt(cb.dataset.seatId, 10))
+      .filter(Number.isInteger);
 
     if (studentIds.length === 0) {
       announceStudentManagement('Select at least one student.', 'warning');
@@ -1483,36 +1484,7 @@
   }
 
   function deletePendingStudent(seatId, studentName) {
-    const confirmation = confirm(
-      `Are you sure you want to delete the pending roster entry for ${studentName}?\n\n` +
-      `This student has not yet claimed their account. This action will remove them from your roster.\n\n` +
-      `This action CANNOT be undone!`
-    );
-
-    if (!confirmation) return;
-
-    // Send delete request
-    fetch('/admin/pending-students/delete', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-      },
-      body: JSON.stringify({ seat_id: seatId })
-    })
-      .then(response => response.json())
-      .then(data => {
-        if (data.status === 'success') {
-          announceStudentManagement(data.message, 'success');
-          location.reload();
-        } else {
-          announceStudentManagement('Error: ' + data.message, 'danger');
-        }
-      })
-      .catch(error => {
-        console.error('Error:', error);
-        announceStudentManagement('Network error occurred while deleting the pending student. Please try again.', 'danger');
-      });
+    deleteStudentsWithPreview([seatId]);
   }
 
   // Event listener for delete pending student buttons using data attributes

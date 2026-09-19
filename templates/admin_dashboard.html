@@ -1,4 +1,5 @@
 {% extends "layout_admin.html" %}
+{% import 'macros/cards.html' as cards %}
 
 {% block page_title %}Teacher Dashboard{% endblock %}
 
@@ -39,31 +40,27 @@
 </div>
 
 {% if show_recovery_setup %}
-<div class="alert alert-warning border-0 shadow-sm mb-4 d-flex align-items-center" role="alert">
-    <span class="material-symbols-outlined me-3 fs-3" aria-hidden="true">warning</span>
-    <div>
-        <h2 class="alert-heading fw-bold h5 mb-1">Action Required: Setup Account Recovery</h2>
+{% call cards.alert_card('warning', 'Action Required: Setup Account Recovery', icon='shield_lock', body_class='mb-4', role='alert', heading_tag='h2') %}
+    <div class="d-flex flex-wrap align-items-center gap-3">
         <p class="mb-0">Your account recovery details are missing or outdated. Please update your security setup to
             enable student-assisted recovery.</p>
+        <a href="{{ url_for('admin.setup_recovery') }}"
+            class="btn btn-warning text-dark fw-medium ms-auto text-nowrap">Setup Now</a>
     </div>
-    <a href="{{ url_for('admin.setup_recovery') }}"
-        class="btn btn-warning text-dark fw-medium ms-auto text-nowrap">Setup Now</a>
-</div>
+{% endcall %}
 {% endif %}
 {% if show_insurance_tier_prompt %}
-<div class="alert alert-info border-0 shadow-sm mb-4 d-flex align-items-center" role="alert">
-    <span class="material-symbols-outlined me-3 fs-3" aria-hidden="true">shield</span>
-    <div class="me-3">
-        <h2 class="alert-heading fw-bold h5 mb-1">Update insurance to the new tiered design</h2>
+{% call cards.alert_card('info', 'Update insurance to the new tiered design', icon='shield', body_class='mb-4', role='alert', heading_tag='h2') %}
+    <div class="d-flex flex-wrap align-items-center gap-3">
         <p class="mb-0">Your existing policies use the legacy setup. Group them into tiers so students see the modern
             plan layout.</p>
+        <div class="ms-auto d-flex align-items-center gap-2 flex-wrap">
+            <a href="{{ url_for('admin.insurance_management') }}" class="btn btn-info fw-medium text-white">Review
+                policies</a>
+            <span class="text-muted small">One-time prompt for legacy policies</span>
+        </div>
     </div>
-    <div class="ms-auto d-flex align-items-center gap-2 flex-wrap">
-        <a href="{{ url_for('admin.insurance_management') }}" class="btn btn-info fw-medium text-white">Review
-            policies</a>
-        <span class="text-muted small">One-time prompt for legacy policies</span>
-    </div>
-</div>
+{% endcall %}
 {% endif %}
 
 <div class="row g-4 mb-4">

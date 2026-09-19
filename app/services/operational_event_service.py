@@ -17,7 +17,7 @@ def record(
     severity: str = "info",
     domain: str,
     route: Optional[str] = None,
-    actor_id: Optional[int] = None,
+    actor_seat_id: Optional[int] = None,
     class_id: Optional[str] = None,
     correlation_id: Optional[str] = None,
     details: Optional[dict[str, Any]] = None,
@@ -36,10 +36,11 @@ def record(
         "severity": severity,
         "domain": domain,
         "route": route or (request.path if has_request_context() else None),
-        "actor_id": actor_id if actor_id is not None else (
-            getattr(getattr(g, 'canonical_context', None), 'user_id', None)
-            if has_request_context() else None
-        ),
+        "actor_seat_id": (actor_seat_id if actor_seat_id is not None else (
+            getattr(getattr(g, 'canonical_context', None), 'seat_id', None)
+            if has_request_context() and getattr(getattr(g, 'canonical_context', None), 'class_id', None) == class_id
+            else None
+        )) if class_id else None,
         "class_id": class_id,
         "correlation_id": correlation_id,
         "details": details or {},

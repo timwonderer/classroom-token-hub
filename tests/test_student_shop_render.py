@@ -39,7 +39,6 @@ def test_shop_page_renders_with_an_owned_entitlement(client, app):
                 idempotency_key=f"shop-render-fund:{student.seat_id}",
                 seat_id=student.seat_id,
                 class_id=class_id,
-                user_id=student.user_id,
                 amount=Decimal("500.00"),
                 account_type="checking",
                 type="payroll",

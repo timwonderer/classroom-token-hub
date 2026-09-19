@@ -33,7 +33,6 @@ def _create_transaction(seat, *, type, amount, description, idempotency_key,
     """Create a ledger transaction row through the canonical FEAT boundary."""
     with FEATContext("FEAT-LED-001", idempotency_key=idempotency_key):
         tx = Transaction(
-            user_id=seat.user_id,
             class_id=seat.class_id,
             seat_id=seat.id,
             target_seat_id=seat.id,

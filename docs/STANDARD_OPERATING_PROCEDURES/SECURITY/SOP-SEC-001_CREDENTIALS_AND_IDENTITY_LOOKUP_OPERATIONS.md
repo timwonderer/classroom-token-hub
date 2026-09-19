@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-SEC-001 | 1.0 | 2026-09-05 | N/A | Normative procedure (Tier 2) |
+| SOP-SEC-001 | 1.1 | 2026-09-15 | 1.0 | Normative procedure (Tier 2) |
 
 ## I. Purpose
 
@@ -78,3 +78,14 @@ Operators MUST NOT use production backups to restore accounts, disable scope che
 ## VIII. Amendment
 
 Revisions require a version increment, updated effective date, review against the Section IV dependencies, and evidence that the revised workflow still preserves the `INV-*` requirements and `SPEC-SEC-001` code contract.
+
+
+## Student recovery-session rollout (2026-09-15)
+
+Apply migration `f4d4e5f6a7b8` before deploying session-bound recovery. Outstanding
+codes may be accepted once; sessions without the new server-backed nonce must
+restart with a teacher-issued code. Do not copy raw codes, nonces, or verifiers
+into operational logs or evidence. Verify strict expiry, code acceptance and
+completion concurrency, reissuance revocation, and credential rollback with the
+targeted Identity tests. Schema rollback removes pending recovery-session
+authority and requires newly issued recovery codes; do not preserve it elsewhere.

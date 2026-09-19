@@ -89,7 +89,6 @@ def apply_monthly_savings_interest(seat, *, annual_rate=None):
         target_seat_id=seat.id,
         actor_seat_id=seat.id,
         mechanism="self",
-        user_id=seat.user_id,
         amount=interest,
         account_type="savings",
         type="Interest",

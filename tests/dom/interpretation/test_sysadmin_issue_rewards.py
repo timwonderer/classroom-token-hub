@@ -38,12 +38,10 @@ def test_DOM_SUP_001__sysadmin_resolve_issue_issues_bug_reward_transaction(clien
     db.session.refresh(issue)
     assert issue.status == Issue.STATUS_DEV_RESOLVED
     assert issue.eligible_for_reward is True
-    assert issue.sysadmin_id == sysadmin.id
     assert issue.sysadmin_resolved_at is not None
 
     reward_tx = Transaction.query.filter(
         Transaction.seat_id == student.seat.id,
-        Transaction.user_id == student.user.id,
         Transaction.class_id == classroom.class_id,
         Transaction.type == "bug_reward",
     ).first()

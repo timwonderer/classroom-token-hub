@@ -27,7 +27,6 @@ def _add_store_item(class_id: str, user_id: int, name: str) -> str:
         product = publish_store_product(
             class_id=class_id,
             entitlement_type="IMMEDIATE_USE",
-            user_id=user_id,
             name=name,
             price="5.00",
         )
@@ -57,7 +56,7 @@ def test_DOM_CLASS_001__hard_delete_class_scope_spares_sibling_class(client):
     )
 
     # _hard_delete_class_scope is decorated with @requires_feat_context, so it
-    # opens its own FEAT-CLASS-001 context; call it directly (no outer wrapper).
+    # opens its own FEAT-CLASS-006 context; call it directly (no outer wrapper).
     from app.feats.base import generate_correlation_id
     from app.routes.admin import _hard_delete_class_scope
 

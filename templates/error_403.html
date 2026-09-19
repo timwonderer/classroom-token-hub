@@ -1,3 +1,4 @@
+{% import "macros/cards.html" as cards %}
 <!DOCTYPE html>
 <html lang="en">
 
@@ -5,7 +6,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>403 - Access Forbidden</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}">
 
     <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
@@ -22,20 +23,19 @@
         </div>
 
         <div class="error-body">
-            <div class="alert alert-danger" role="alert">
-               You don't have permission to access this page. This page is restricted and requires specific permissions to view.
-            </div>
+            {% call cards.alert_card('danger', 'Access denied', icon='block', body_class='mb-4', role='alert', heading_tag='h2') %}
+                <p class="mb-0">You don't have permission to access this page. This page is restricted and requires specific permissions to view.</p>
+            {% endcall %}
 
-            <div class="troubleshooting alert alert-info" role="alert">
-                <h5>Troubleshooting Steps</h5>
-                <ul>
+            {% call cards.alert_card('info', 'Troubleshooting steps', icon='build_circle', body_class='mb-4', role='note', heading_tag='h2') %}
+                <ul class="mb-0 ps-4">
                     <li>You might be logged in as a student but trying to access a teacher page (or vice versa)</li>
                     <li>Your session may have expired. Try logging out and logging back in</li>
                     <li>Make sure you're accessing the correct page for your account type</li>
                     <li>If you believe you should have access, ask your teacher or administrator to check your permissions</li>
                     <li>Sometimes old session data can cause permission issues. Try clearing your history and try again.</li>
                 </ul>
-            </div>
+            {% endcall %}
 
             <div class="actions">
                 <a href="/" class="btn bg-primary text-white">Return to Login Page</a>

@@ -74,7 +74,6 @@ def create_entitlement_store_item(
         product = publish_store_product(
             class_id=class_id,
             entitlement_type=entitlement_type,
-            user_id=teacher_id,
             name=name,
             price=str(price),
             availability_state=availability_state,

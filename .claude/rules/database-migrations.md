@@ -10,7 +10,7 @@
 
 1. **NEVER modify `app/models.py` without creating a migration**
 2. **ALWAYS test migrations before committing** (upgrade AND downgrade)
-3. **NEVER edit old migrations after they're merged to main** — sole exception: a Replay-Safety Correction under `SOP-DB-011` §V.A, which requires all six of its conditions to be proven and recorded. It is not a license to improve an old migration; read §V.A before relying on it.
+3. **NEVER edit old migrations after they're merged to main** — sole exception: a Replay-Safety Correction under `SOP-DB-001` §V.A, which requires all six of its conditions to be proven and recorded. It is not a license to improve an old migration; read §V.A before relying on it.
 4. **ALWAYS review auto-generated migrations** before committing
 5. **NEVER skip migrations** - each schema change needs its own migration
 6. **ALWAYS include idempotency helpers** in every migration (table_exists, column_exists, index_exists, foreign_key_exists)
@@ -254,7 +254,7 @@ This checks for:
 - Hardcoded constraint names
 - Other best practice violations
 
-**If linting fails:** Fix the issues before proceeding. See `docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-011_Migration_Specifications.md` for examples.
+**If linting fails:** Fix the issues before proceeding. See `docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-001_Migration_Specifications.md` for examples.
 
 ### Step 9: Test the Upgrade
 

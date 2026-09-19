@@ -80,7 +80,7 @@ All documents are classified into one of three tiers. See [SOP-DOC-000 Section V
 - **[Template to FEAT Wiring Map](MAP/MAP-UI-001_TEMPLATE_TO_FEAT_WIRING_MAP.md)** — Template audit findings mapped to route, context, FEAT, domain, persistence, and read-model obligations
 - **[Request Context and View Model Pipeline](MAP/MAP-UI-002_REQUEST_CONTEXT_AND_VIEW_MODEL_PIPELINE.md)** — Four-question request pipeline for authority, time, display metadata, and page view models
 - **[Documentation Standard](STANDARD_OPERATING_PROCEDURES/SOP-DOC-000_DOCUMENTATION_STANDARD.md)** — Tier classification, taxonomy, naming, authoring rules
-- **[Documentation Index](STANDARD_OPERATING_PROCEDURES/SOP-DOC-002_DOCUMENTATION_INDEX.md)** — Complete list of tracked documents
+- **[Documentation Index](STANDARD_OPERATING_PROCEDURES/SOP-DOC-001_DOCUMENTATION_INDEX.md)** — Complete list of tracked documents
 
 ---
 

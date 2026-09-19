@@ -90,7 +90,7 @@ def _seed_run(classroom, *, pending=True):
     with FEATContext("FEAT-PROD-001", correlation_id=f"att:{cid}", idempotency_key=f"att:{cid}"):
         for seat in (sA, sB):
             db.session.add(AttendanceSession(
-                target_seat_id=seat.seat_id, class_id=cid, target_user_id=seat.user.id,
+                target_seat_id=seat.seat_id, class_id=cid,
                 actor_seat_id=teacher_seat_id, reason_code="start_work",
                 timestamp=now - timedelta(minutes=30),
             ))

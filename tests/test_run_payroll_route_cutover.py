@@ -52,7 +52,7 @@ def _seed(classroom):
         v1_id, v2_id = v1.id, v2.id
     with FEATContext("FEAT-PROD-001", correlation_id=f"att:{cid}", idempotency_key=f"att:{cid}"):
         db.session.add(AttendanceSession(
-            target_seat_id=student.seat.id, class_id=cid, target_user_id=student.user.id,
+            target_seat_id=student.seat.id, class_id=cid,
             actor_seat_id=classroom.teacher_seat_id, reason_code="start_work",
             timestamp=now - timedelta(minutes=30),
         ))

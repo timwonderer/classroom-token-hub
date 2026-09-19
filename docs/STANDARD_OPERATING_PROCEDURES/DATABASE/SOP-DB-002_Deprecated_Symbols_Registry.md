@@ -1,8 +1,8 @@
-# SOP-DB-014: Deprecated Symbols Registry
+# SOP-DB-002: Deprecated Symbols Registry
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-|SOP-DB-014| 1.1 | 2026-03-08 | 1.0 |Normative|
+| SOP-DB-002 | 1.2 | 2026-09-17 | 1.1 (issued as SOP-DB-014) | Normative |
 
 ## I. Purpose
 

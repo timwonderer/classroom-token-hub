@@ -1,4 +1,5 @@
 {% extends "layout_admin.html" %}
+{% import "macros/cards.html" as cards %}
 
 {% block page_title %}Issue Details for #{{ issue.id }}{% endblock %}
 
@@ -153,10 +154,9 @@
                         </div>
                     </div>
                     {% if issue.context_snapshot.transaction.is_void %}
-                    <div class="alert alert-danger mt-3 mb-0">
-                        <span class="material-symbols-outlined me-2" aria-hidden="true">cancel</span>
-                        <strong>This transaction has been voided</strong>
-                    </div>
+                    {% call cards.alert_card('danger', 'Transaction voided', icon='cancel', body_class='mt-3 mb-0') %}
+                        <p class="mb-0">This transaction has been voided.</p>
+                    {% endcall %}
                     {% endif %}
                     {% else %}
                     <p class="text-muted mb-0">Transaction details not available</p>
@@ -361,9 +361,9 @@
                     </h5>
                 </div>
                 <div class="card-body">
-                    <div class="alert alert-info">
-                        <strong>Developer Fix Applied - Teacher Review Required</strong>
-                    </div>
+                    {% call cards.alert_card('info', 'Teacher review required', icon='rate_review', body_class='mb-3') %}
+                        <p class="mb-0">A developer fix has been applied. Review the issue before closing it.</p>
+                    {% endcall %}
                     <p class="mb-2"><strong>Original Escalation Reason:</strong> {{ issue.escalation_reason }}</p>
                     {% if issue.sysadmin_notes %}
                     <p class="mb-2"><strong>Developer Notes:</strong></p>
@@ -474,11 +474,10 @@
             <form method="POST" action="{{ url_for('admin.escalate_issue', issue_ref=issue_ref) }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-body">
-                    <div class="alert alert-info">
-                        <span class="material-symbols-outlined me-2" aria-hidden="true">info</span>
-                        <strong>Important:</strong> Escalate only when you cannot resolve the issue with available tools,
-                        or when you suspect a system bug or data integrity problem.
-                    </div>
+                    {% call cards.alert_card('info', 'When to escalate', icon='info', body_class='mb-3') %}
+                        <p class="mb-0">Escalate only when you cannot resolve the issue with available tools,
+                        or when you suspect a system bug or data integrity problem.</p>
+                    {% endcall %}
 
                     <div class="mb-3">
                         <label for="escalation_reason" class="form-label fw-bold">
@@ -504,11 +503,36 @@
                         </small>
                     </div>
 
+                    <fieldset class="mb-3">
+                        <legend class="fs-6 fw-bold">Optional information for system support</legend>
+                        <p class="text-muted">Route diagnostics, the correlation pack, IP address, and browser details are included. Choose each additional category separately for this ticket. These choices share the saved report information, not ongoing access to your class.</p>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" name="share_balances" id="share_balances" aria-describedby="share_balances_help">
+                            <label class="form-check-label" for="share_balances">I give permission to include balances</label>
+                            <small id="share_balances_help" class="d-block text-muted">Checking, savings, and total at the time of the report.</small>
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" name="share_transaction" id="share_transaction" aria-describedby="share_transaction_help">
+                            <label class="form-check-label" for="share_transaction">I give permission to include the reported transaction</label>
+                            <small id="share_transaction_help" class="d-block text-muted">The selected transaction, including its amount and description.</small>
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" name="share_recent_transactions" id="share_recent_transactions" aria-describedby="share_recent_transactions_help">
+                            <label class="form-check-label" for="share_recent_transactions">I give permission to include recent transactions</label>
+                            <small id="share_recent_transactions_help" class="d-block text-muted">Up to ten transactions saved with this report, including amounts and descriptions.</small>
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" name="share_student_report" id="share_student_report" aria-describedby="share_student_report_help">
+                            <label class="form-check-label" for="share_student_report">I give permission to include the student’s report</label>
+                            <small id="share_student_report_help" class="d-block text-muted">The student’s explanation and expected outcome.</small>
+                        </div>
+                    </fieldset>
+
                     <div class="mb-3">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" name="share_class_name" id="share_class_name">
                             <label class="form-check-label" for="share_class_name">
-                                Share class name/identifier with developer
+                                I give permission to include the class name
                             </label>
                             <small class="d-block text-muted mt-1">
                                 By default, only an opaque reference is shared. Check this if the developer needs the class name for investigation.

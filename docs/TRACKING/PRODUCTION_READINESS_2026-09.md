@@ -1370,6 +1370,84 @@ missing.
 `insurance/recommendation-card` and `archive/class-config-phase5-6` are new this pass and are the
 reason the worktrees could be removed at all.
 
+### Class destruction has no FEAT contract of its own — **RESOLVED 2026-09-17**
+
+`FEAT-CLASS-001` was the FEAT class destruction executed under: `_hard_delete_class_scope` was
+decorated with it and `FEAT-IDEN-007` §Composition designated it. But `FEAT-CLASS-001` is titled
+"Creating New Class Boundary" and is creation-shaped throughout — its §III states the workflow
+"SHALL NOT execute within CanonicalContext because the target Class Boundary does not yet exist",
+its §VII and §VIII describe rolling back a *provisioning* transaction, and its §X guarantees
+"exactly one Class Boundary is **established**". Two Normative documents disagreed about what that
+FEAT was, and the runtime followed the wrong one.
+
+**Resolved by giving destruction its own execution identity.** `FEAT-CLASS-006` — "Destroy class
+boundary", Class Configuration, blast radius HIGH — is registered and contracted at
+`docs/FEATURE-EXECUTION/FEAT-CLASS-006_DESTROYING_CLASS_BOUNDARY.md`. This is not documentation
+neatness: every request executes a single command path whose domain, capability and action are
+recorded as part of its observability (INV-ARC-000 §VIII.2), and a FEAT names a user-facing action
+rather than a bucket of operations on one table (INV-CORE-001). Destruction also has semantics
+creation has no analogue for — class-scoped data must not survive deletion of its `class_id`
+(INV-CORE-000 §26, §33) and a principal holding no Seat anywhere cannot exist (DOM-IDEN-005 §V.6,
+§VI). Attributing a destroyed class universe to the create-a-class command made the audit statement
+false, not merely imprecise.
+
+The prior designation is treated as normative debt exposed by review, not as precedent.
+`FEAT-CLASS-001` is creation only and now says so in a new §V.A, with a matching guarantee in §X.
+
+**Landed:**
+- `FEAT-CLASS-006` in `FEAT_REGISTRY` (HIGH), contract document written.
+- `_hard_delete_class_scope` (join-code surface) and `_execute_class_scope_deletion`
+  (roster-terminal surface) both execute `FEAT-CLASS-006`.
+- `FEAT-CLASS-006` §IV.2 carries the same bound established for teacher destruction: the pre-FEAT
+  read only selects the executor, and the FEAT re-acquires the locks, re-evaluates whether the
+  principal still survives the teardown, and fails closed with no mutation when it would not. The
+  join-code route surfaces that refusal as a 409 rather than a 500.
+- Both destruction paths take the same two locks in the same order (`users`, then `classes`) through
+  one helper, so they cannot deadlock against each other.
+- Normative references retargeted: `FEAT-IDEN-007` §Composition and §Automatic/roster-terminal,
+  `FEAT-IDEN-006` §Roster removal, `FEAT-CLASS-001` §V.A and §X. Descriptive references updated in
+  `MAP-UI-001`. Historical closure records elsewhere in this file keep their original identifiers.
+- `tests/dom/class/test_class_destruction_feat_identity.py` covers registry separation, a structural
+  guard that no destruction entry point is *declared* under `FEAT-CLASS-001`, both surfaces'
+  attribution, audit lineage, the locked-refusal path, atomicity, and hard-deletion scoping against
+  a surviving sibling class.
+
+**Not changed:** class creation remains `FEAT-CLASS-001` (`admin.py` create-class route and
+`feat_class_001_create_class_boundary.py`). Destruction of a class holding its principal's last Seat
+remains `FEAT-IDEN-007`, which composes the plain `_destroy_class_scope_rows` command rather than
+entering `FEAT-CLASS-006` — a FEAT never executes another FEAT (INV-ARC-000 §VIII.2).
+
+### Frozen migration baseline — replace the live-ORM bootstrap (post-launch, architectural)
+
+`0001_bootstrap` builds the baseline by calling `metadata.create_all` against **today's** ORM
+metadata instead of a frozen snapshot of the schema as it stood at baseline time. Its own docstring
+states the consequence: "deleting a model retroactively removes a table that existed at baseline
+time — and later migrations in the chain still legitimately reference it."
+
+So removing a model or a column can retroactively break an unrelated historical revision, and the
+revision graph looks untouched while it happens. The failure surfaces only on a fresh chain — a new
+production database or a `conftest` schema rebuild — never on an already-migrated one. The bootstrap
+already carries a partial remedy for whole **tables** (`_create_retired_baseline_tables`); there is
+none for **columns**.
+
+**Remedy:** emit a frozen baseline DDL snapshot, so every historical migration executes against the
+schema it was actually written against. The bootstrap is itself a merged migration, so this is a
+baseline replacement, not an edit under `SOP-DB-001` §V.B.
+
+**Interim position (accepted, not permanent):** `SOP-DB-001` §V.B defines a Bootstrap-Replay
+Correction — a guard that declines a historical operation when the bootstrap has left its target
+column absent. It may not change what the migration does when the column is present and may not
+alter its intended end state. Two corrections are recorded in that section's register
+(`3a69db4907b4`, `8f1a2c3d4b5e`), both from authorship moving off `user_id` / `created_by` onto
+`created_by_seat_id`.
+
+**Why this is not merely cosmetic debt:** without the two guards a fresh `flask db upgrade` fails at
+`3a69db4907b4`, so the first DigitalOcean deployment would not boot. The guards are load-bearing for
+deployment today. Each further model removal is a new opportunity to break the chain silently, and
+the cost of the remedy does not fall over time.
+
+**Scheduled:** post-launch. Every additional correction under §V.B raises the priority.
+
 ### Bug-hunter badge system (backlog)
 
 `DOM-OPS-003_BADGE_SYSTEM.md`, `SPEC-OPS-001_BUG_HUNTER_BADGE_SYSTEM.md`,

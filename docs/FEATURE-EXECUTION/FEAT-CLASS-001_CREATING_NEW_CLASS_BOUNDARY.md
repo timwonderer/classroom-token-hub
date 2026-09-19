@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---| --- | --- | --- |
-| FEAT-CLASS-001 | 0.1 | 2026-07-12 | N/A | Normative |
+| FEAT-CLASS-001 | 0.2 | 2026-09-17 | 0.1 | Normative |
 
 ---
 
@@ -99,6 +99,25 @@ entered the newly created Class Boundary.
 
 ---
 
+## V.A Destruction Boundary (2026-09-17)
+
+This workflow is class-boundary **creation only**. It SHALL NOT destroy a Class
+Boundary, any class-scoped record, or any Seat, and SHALL NOT be used as the
+execution identity for any such operation. Class destruction is
+`FEAT-CLASS-006`; destruction of a class that holds its principal's last Seat is
+`FEAT-IDEN-007`.
+
+Until 2026-09-17, `FEAT-IDEN-007` §Composition designated this FEAT as the
+class-destruction entry point and the implementation followed that designation.
+It contradicted this document throughout — §III forbids executing within a
+CanonicalContext because the target class does not yet exist, §VII and §VIII
+describe rolling back a *provisioning* transaction, and §X guarantees that
+exactly one Class Boundary is **established**. Nothing here ever authorized
+destroying anything. The designation was normative debt and has been retargeted
+to `FEAT-CLASS-006`; it is not precedent.
+
+---
+
 ## VI. Class Creation Inputs
 
 Class creation SHALL interpret only class-boundary inputs, including the
@@ -172,6 +191,7 @@ This FEAT delegates to:
 This FEAT guarantees:
 
 - exactly one Class Boundary is established;
+- no Class Boundary, class-scoped record, or Seat is destroyed (§V.A);
 - exactly one Teacher Seat is provisioned;
 - every initial Student Seat belongs to the newly created Class;
 - Student Users are never provisioned by this workflow;

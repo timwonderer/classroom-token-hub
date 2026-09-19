@@ -1,3 +1,4 @@
+{% import "macros/cards.html" as cards %}
 <!DOCTYPE html>
 <html lang="en">
 
@@ -5,7 +6,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Classroom Token Hub - Progress Saved</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}">
 
     <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
@@ -63,34 +64,31 @@
         <div class="status-card">
             <h1 id="recovery-saved-heading" class="status-header"><span class="material-symbols-outlined me-2" aria-hidden="true">check_circle</span>Progress Saved!</h1>
 
-            <div class="alert alert-success">
-                <h5 class="alert-heading">Your recovery codes have been saved</h5>
-                <p class="mb-0">You've saved {{ codes_saved }} recovery code(s). You can come back anytime before {{ recovery_request.expires_at.strftime('%B %d, %Y at %I:%M %p') }} to continue.</p>
-            </div>
+            {% call cards.alert_card('success', 'Your recovery attempt can be resumed', icon='check_circle', body_class='mb-3', heading_tag='h2') %}
+                <p class="mb-0">Your code-entry receipts and private class confirmations stay with this attempt. No code validity is revealed. You can come back anytime before {{ recovery_request.expires_at.strftime('%B %d, %Y at %I:%M %p') }} to continue.</p>
+            {% endcall %}
 
             <div class="resume-pin-display">
                 <div class="mb-2"><strong>Your Resume PIN:</strong></div>
                 <div class="resume-pin">{{ resume_pin }}</div>
             </div>
 
-            <div class="alert alert-warning">
-                <strong><span class="material-symbols-outlined me-1" aria-hidden="true">warning</span>Important:</strong>
-                <ul class="mb-0 mt-2">
+            {% call cards.alert_card('warning', 'Write down this PIN now', icon='warning', body_class='mb-3', heading_tag='h2') %}
+                <ul class="mb-0">
                     <li>Write down this PIN immediately - it will NOT be shown again</li>
                     <li>You'll need this PIN to resume your recovery later</li>
                     <li>This PIN expires on {{ recovery_request.expires_at.strftime('%B %d, %Y at %I:%M %p') }}</li>
                 </ul>
-            </div>
+            {% endcall %}
 
-            <div class="alert alert-info">
-                <h6><strong>What happens next?</strong></h6>
+            {% call cards.alert_card('info', 'What happens next?', icon='checklist', body_class='mb-3', heading_tag='h2') %}
                 <ol class="mb-0">
                     <li>Collect the remaining recovery codes from your students</li>
                     <li>Go to the teacher login page and click "Resume Recovery"</li>
                     <li>Enter your PIN to continue where you left off</li>
                     <li>Complete your account reset</li>
                 </ol>
-            </div>
+            {% endcall %}
 
             <div class="mt-4">
                 <a href="{{ url_for('admin.login') }}" class="btn btn-primary w-100">
@@ -100,7 +98,7 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='vendor/bootstrap/bootstrap.bundle.min.js') }}"></script>
     </main>
 </body>
 </html>

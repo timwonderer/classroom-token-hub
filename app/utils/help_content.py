@@ -22,8 +22,12 @@ HELP_ARTICLES = {
                         </li>
                         <li><strong>Share the class join code:</strong> Students use it once to enter the class and claim their seat.</li>
                     </ol>
-                    <div class="alert alert-info">
-                        <strong>Tip:</strong> Use the class you already selected for day-to-day work. If the wrong class is open, switch classes first.
+                    <div class="card alert-card border-info">
+                        <div class="card-header bg-info text-white d-flex align-items-center">
+                            <span class="material-symbols-outlined me-2" aria-hidden="true">swap_horiz</span>
+                            <h3 class="h5 fw-bold mb-0 text-white">Work in the class you selected</h3>
+                        </div>
+                        <div class="card-body"><p class="mb-0">Use the class you already selected for day-to-day work. If the wrong class is open, switch classes first.</p></div>
                     </div>
                 """
             },
@@ -38,8 +42,12 @@ HELP_ARTICLES = {
                         <li><strong>Remove a student:</strong> Deleting a seat removes the class link completely. Use it only when the student should no longer be part of that class.</li>
                         <li><strong>Fix a mismatch:</strong> If a student is in the wrong class, correct the class assignment instead of creating duplicate records.</li>
                     </ul>
-                    <div class="alert alert-info">
-                        <strong>Tip:</strong> If something looks wrong, check the student in the current class first. Most problems are caused by being in the wrong class view.
+                    <div class="card alert-card border-info">
+                        <div class="card-header bg-info text-white d-flex align-items-center">
+                            <span class="material-symbols-outlined me-2" aria-hidden="true">group</span>
+                            <h3 class="h5 fw-bold mb-0 text-white">Check the current class first</h3>
+                        </div>
+                        <div class="card-body"><p class="mb-0">If something looks wrong, check the student in the current class first. Most problems are caused by being in the wrong class view.</p></div>
                     </div>
                 """
             },

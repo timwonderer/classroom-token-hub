@@ -1,4 +1,5 @@
 {% extends "layout_student.html" %}
+{% import 'macros/cards.html' as cards %}
 {% set page_title = "Payroll" %}
 {% set current_page = "payroll" %}
 {% block title %}Payroll{% endblock %}
@@ -126,15 +127,15 @@
                     <p class="text-muted text-center small">Showing most recent 20 events</p>
                     {% endif %}
                     {% else %}
-                    <div class="alert alert-info">
-                        <span class="material-symbols-outlined" aria-hidden="true">info</span> No attendance events recorded for this class yet.
-                    </div>
+                    {% call cards.alert_card('info', 'No attendance events yet', icon='event_busy', body_class='mb-3') %}
+                        <p class="mb-0">No attendance events recorded for this class yet.</p>
+                    {% endcall %}
                     {% endif %}
                 </div>
                 {% else %}
-                <div class="alert alert-info">
-                    <span class="material-symbols-outlined" aria-hidden="true">info</span> No class selected.
-                </div>
+                {% call cards.alert_card('info', 'No class selected', icon='info', body_class='mb-3') %}
+                    <p class="mb-0">No class selected.</p>
+                {% endcall %}
                 {% endif %}
             </div>
         </div>
@@ -201,9 +202,9 @@
                     </div>
                 </div>
                 {% else %}
-                <div class="alert alert-info">
-                    <span class="material-symbols-outlined" aria-hidden="true">info</span> No attendance history available yet.
-                </div>
+                {% call cards.alert_card('info', 'No attendance history yet', icon='event_busy', body_class='mb-3') %}
+                    <p class="mb-0">No attendance history available yet.</p>
+                {% endcall %}
                 {% endif %}
             </div>
         </div>
@@ -235,9 +236,9 @@
                         <span class="material-symbols-outlined" aria-hidden="true">attach_money</span> Pay Rate Information
                     </div>
                     <div class="card-body">
-                        <div class="alert alert-info">
-                            <span class="material-symbols-outlined" aria-hidden="true">info</span> <strong>Current Pay Rate:</strong> ${{ "%.2f"|format(pay_rate_per_minute) }} per minute
-                        </div>
+                        {% call cards.alert_card('info', 'Current pay rate', icon='attach_money', body_class='mb-3') %}
+                            <p class="mb-0">${{ "%.2f"|format(pay_rate_per_minute) }} per minute</p>
+                        {% endcall %}
                         <h6 class="mb-3">Time Value Calculator:</h6>
                         <div class="table-responsive">
                             <table class="table table-sm table-striped">
@@ -258,9 +259,9 @@
                                 </tbody>
                             </table>
                         </div>
-                        <div class="alert alert-warning mt-3">
-                            <span class="material-symbols-outlined" aria-hidden="true">schedule</span> <strong>Remember:</strong> Time is tracked when you Start Work and Break. Make sure to Start Work when you begin working!
-                        </div>
+                        {% call cards.alert_card('warning', 'Start Work to track your time', icon='schedule', body_class='mt-3') %}
+                            <p class="mb-0">Time is tracked when you Start Work and Break. Make sure to Start Work when you begin working!</p>
+                        {% endcall %}
                     </div>
                 </div>
             </div>

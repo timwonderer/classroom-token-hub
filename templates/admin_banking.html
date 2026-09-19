@@ -1,4 +1,5 @@
 {% extends "layout_admin.html" %}
+{% import 'macros/cards.html' as cards %}
 {% set page_title = "Banking Management" %}
 {% set current_page = "banking" %}
 {% block title %}Banking Management{% endblock %}
@@ -14,10 +15,10 @@
   <li><strong>Total Deposits</strong> — Combined checking + savings across all students</li>
   <li><strong>Students w/ Savings</strong> — How many students are actively saving</li>
 </ul>
-<div class="alert alert-info mb-0">
-  <strong><span class="material-symbols-outlined me-1" aria-hidden="true">lightbulb</span>Teaching Tip:</strong> Encourage at least 30% of students
-  to use savings accounts. This teaches delayed gratification and financial planning!
-</div>
+{% call cards.alert_card('info', 'Encourage students to save', icon='lightbulb', body_class='mb-0') %}
+  <p class="mb-0">Encourage at least 30% of students
+  to use savings accounts. This teaches delayed gratification and financial planning!</p>
+{% endcall %}
 {% endcall %}
 
 {% call help.topic('bank-transactions', 'receipt_long', 'Transactions') %}
@@ -413,10 +414,9 @@
                 <small class="text-muted">How often interest is paid into savings accounts.</small>
               </div>
 
-              <div class="alert alert-info mb-0">
-                <span class="material-symbols-outlined me-1" aria-hidden="true">info</span>
-                Saving creates a new economic-engine version. Rate changes affect future payouts only.
-              </div>
+              {% call cards.alert_card('info', 'Rate changes apply to future payouts', icon='savings', body_class='mb-0') %}
+                <p class="mb-0">Saving creates a new economic-engine version. Rate changes affect future payouts only.</p>
+              {% endcall %}
             </div>
           </div>
         </div>
@@ -471,10 +471,9 @@
                 {% endfor %}
               </div>
 
-              <div class="alert alert-warning mb-0">
-                <span class="material-symbols-outlined me-1" aria-hidden="true">warning</span>
-                Overdraft fees reuse the classroom fine band. A fee is only active while a value is set.
-              </div>
+              {% call cards.alert_card('warning', 'Overdraft fees use the fine band', icon='warning', body_class='mb-0') %}
+                <p class="mb-0">Overdraft fees reuse the classroom fine band. A fee is only active while a value is set.</p>
+              {% endcall %}
             </div>
           </div>
         </div>

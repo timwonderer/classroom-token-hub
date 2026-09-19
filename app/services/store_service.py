@@ -277,7 +277,6 @@ def _validate_definition(definition: dict) -> None:
 
 def publish_product(
     *,
-    user_id: int,
     class_id: str,
     definition: dict,
     product_lineage_uuid: Optional[str] = None,
@@ -296,10 +295,14 @@ def publish_product(
     if availability_state not in AVAILABILITY_STATES:
         raise InvalidAvailabilityState(availability_state)
 
+    if actor_seat_id is not None and not Seat.query.filter_by(
+        id=actor_seat_id, class_id=class_id, role="teacher"
+    ).first():
+        raise InvalidDefinition("Product author must be a teacher seat in this class.")
+
     product = StoreProduct(
         policy_uuid=str(uuid.uuid4()),
         product_lineage_uuid=product_lineage_uuid or str(uuid.uuid4()),
-        user_id=user_id,
         class_id=class_id,
         availability_state=availability_state,
         created_by_seat_id=actor_seat_id,
@@ -325,7 +328,6 @@ def supersede_product(
     """
     retire_product(current)
     return publish_product(
-        user_id=current.user_id,
         class_id=current.class_id,
         definition=definition,
         product_lineage_uuid=current.product_lineage_uuid,
@@ -599,6 +601,10 @@ def create_product_block(*, product_lineage_uuid: str, class_id: str, block: str
                 ClassEconomy.class_id == class_id,
                 ClassEconomy.section.isnot(None),
                 ClassEconomy.section == normalized_block,
+                # Claimed student seats only: visibility is economic state, and
+                # an unclaimed seat is no participant (DOM-IDEN-002 §VIII).
+                Seat.role == "student",
+                Seat.claimed_at.isnot(None),
             )
             .distinct()
             .all()

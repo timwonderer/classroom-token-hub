@@ -124,7 +124,6 @@ def test_DOM_PROD_003__run_payroll_pays_attended_seat_and_skips_empty_desk(clien
     assert len(events) == 1
     event = events[0]
     assert event.target_seat_id == attended.seat.id
-    assert event.target_user_id == attended.user.id
 
     # The empty desk earned no payroll event.
     empty_events = PayrollEvent.query.filter_by(

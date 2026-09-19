@@ -1,7 +1,7 @@
 # INV-CORE-000: Core Invariants
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-|INV-CORE-000| 2.0 | 2026-06-13 | 1.1 |Foundational|
+|INV-CORE-000| 2.1 | 2026-09-15 | 2.0 |Foundational|
 
 ## I. Purpose
 This document defines the core invariants, or underlying principles, that drives the design of this application. Any future development of this application must stay within the boundaries of these invariants. This document serves as top level authority in which all other levels of authority derives from.
@@ -98,7 +98,10 @@ Authority is strictly scoped to defined principals and actors. The system distin
 - Deletion of a class must also delete all linked data entries.
 - Database backup and restoration must not be used to restore accounts.
 - When a seat is deleted with its class, if the owning user has no remaining seats in any class, the user MUST be deleted from the system entirely.
-- Stale classes and their associated seats must be automatically deleted and their data purged.
+- Classes are not classified as stale; class activity must not be inferred for retention.
+- Deleting a teacher account destroys all of its owned class universes through the same terminal destruction mechanism.
+- Deleting the last student Seat in a class destroys that class and its teacher Seat. If no other class Seat remains for the teacher, destroy the teacher User as well. The deletion confirmation must warn of the full class/account consequence before execution. Claimed and unclaimed student Seats both count; a newly created empty class is not automatically destroyed before roster provisioning.
+- A teacher account with a recorded successful sign-in is automatically destroyed after 180 days without another successful sign-in. An account that has never signed in is destroyed 30 days after creation. Both use the manual account-destruction mechanism; routine activity and session refresh do not reset these clocks.
 
 #### Prohibited Action
 - Storage of `class_id` linked data or accounts after a deletion action has been completed.

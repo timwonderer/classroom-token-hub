@@ -40,7 +40,6 @@ def _funded_transaction(classroom, student, *, key):
             idempotency_key=key,
             seat_id=student.seat.id,
             class_id=classroom.class_id,
-            user_id=student.user.id,
             amount=Decimal("40.00"),
             account_type="checking",
             type="payroll",
@@ -124,16 +123,16 @@ def test_deleting_a_refunded_student_removes_both_ends_of_the_pair(app, client):
     assert db.session.get(Transaction, original_id).reversal_transaction_id == reversal_id
     assert db.session.get(Transaction, reversal_id).original_transaction_id == original_id
 
-    # The live removal path (`app/feats/identity_feat.py:48` imports this).
+    # The live removal path the roster deletion FEAT composes.
     with FEATContext("FEAT-IDEN-007", idempotency_key="rev-del:delete"):
         removed = remove_student_from_teacher_scope(seat_id, classroom.teacher_user_id)
     db.session.commit()
     db.session.expire_all()
 
     assert removed is True
-    # The seat row survives as an unclaimed roster slot owned by the class; the
-    # principal behind it does not.
-    assert db.session.get(Seat, seat_id).user_id is None
+    # Deletion physically destroys the Seat (FEAT-IDEN-006); it is not an
+    # implicit unclaim, and the principal left with no seat goes with it.
+    assert db.session.get(Seat, seat_id) is None
     assert db.session.get(User, user_id) is None
     assert db.session.get(Transaction, original_id) is None, (
         "The original must not outlive the seat that owned it."

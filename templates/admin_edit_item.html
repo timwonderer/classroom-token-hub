@@ -1,4 +1,5 @@
 {% extends "layout_admin.html" %}
+{% import 'macros/cards.html' as cards %}
 {% set page_title = "Edit Store Item" %}
 {% block title %}Edit: {{ item.name }}{% endblock %}
 {% block page_icon %}edit{% endblock %}
@@ -58,14 +59,13 @@
             {% if form.errors %}
             {# Also lists errors on fields this catalog does not render (CSRF, submit),
                which would otherwise make a rejected save look like nothing happened. #}
-            <div class="alert alert-danger" role="alert">
-                <strong>This item could not be saved.</strong>
-                <ul class="mb-0 mt-2">
+            {% call cards.alert_card('danger', 'This item could not be saved', icon='error', role='alert', body_class='mb-3') %}
+                <ul class="mb-0">
                     {% for field_name, field_errors in form.errors.items() %}
                     {% for error in field_errors %}<li>{{ form[field_name].label.text }}: {{ error }}</li>{% endfor %}
                     {% endfor %}
                 </ul>
-            </div>
+            {% endcall %}
             {% endif %}
             <div id="economy-data" data-expected-weekly-hours="{{ expected_weekly_hours or 5.0 }}" class="visually-hidden"></div>
 

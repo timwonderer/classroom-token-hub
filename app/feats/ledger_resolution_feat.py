@@ -20,7 +20,6 @@ logger = logging.getLogger(__name__)
 class IntendedLedgerPlan:
     seat_id: int
     class_id: str
-    user_id: int | None
     debit_amount: Decimal
     description: str
     transaction_type: str
@@ -42,7 +41,6 @@ def build_intended_ledger_plan(
     *,
     seat_id: int,
     class_id: str,
-    user_id: int | None,
     debit_amount,
     description: str,
     transaction_type: str,
@@ -60,7 +58,6 @@ def build_intended_ledger_plan(
     return IntendedLedgerPlan(
         seat_id=seat_id,
         class_id=class_id,
-        user_id=user_id,
         debit_amount=_quantize_currency(debit_amount),
         description=description,
         transaction_type=transaction_type,
@@ -306,7 +303,6 @@ def apply_resolved_ledger_plan(
             target_seat_id=seat.id,
             actor_seat_id=seat.id,
             mechanism="self",
-            user_id=resolved_plan.intended_plan.user_id,
             amount=-debit_amount,
             account_type=resolved_plan.intended_plan.source_account,
             type=resolved_plan.intended_plan.transaction_type,

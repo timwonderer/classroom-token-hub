@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-SEC-001 | 1.1 | 2026-09-05 | 1.0 | Technical Specification |
+| SPEC-SEC-001 | 1.5 | 2026-09-15 | 1.4 | Technical Specification |
 
 ## I. Purpose
 
@@ -67,6 +67,39 @@ The application MUST refuse to start in any non-test environment when a required
 4. `users.id`, `seats.id`, and `class_id` MUST retain their distinct meanings. `public_id` MUST be resolved under canonical class scope and MUST never grant authority.
 5. Lookup responses MUST return the minimum result needed by the owning contract. They MUST NOT expose credential material, lookup digests, encryption keys, internal identifiers, or unrelated class membership.
 
+#### Canonical lookup encoding (pre-launch cutover)
+
+`app.hash_utils.normalize_lookup_text` is the single text normalization primitive:
+Unicode NFKC, then strip leading/trailing whitespace; names additionally use
+Unicode lowercase. Username case, internal whitespace, punctuation, and accents
+remain significant. Display values are not rewritten. Class IDs are canonical
+opaque IDs and are not normalized as names. Claim distinguishing codes retain
+their owning contract's trim/uppercase rule.
+
+Compute HMAC-SHA-256 under `PEPPER_KEY` over UTF-8 JSON arrays, serialized with
+`ensure_ascii=False` and separators `(',', ':')`. First two elements are
+`"cth.identity.lookup.v1"` and the fixed purpose label. Remaining elements:
+
+| Label | Ordered elements |
+|---|---|
+| `username` | Normalized username |
+| `username-verifier` | Lowercase hex salt, normalized username |
+| `claim-first-name` | Canonical class ID, normalized first name |
+| `claim-last-name` | Canonical class ID, normalized last name |
+| `roster-fingerprint` | Canonical class ID, normalized first name, normalized last name, distinguishing code (empty if absent) |
+
+Structured encoding prevents delimiter ambiguity. Missing class scope and unknown
+name fields fail closed. Principal lookup remains global; claim lookup first
+resolves class scope and includes that scope in its digest. Hall-pass verification
+uses the name normalization primitive for in-memory profile comparison, with no
+persistent lookup digest or claim-artifact dependency.
+
+This is a pre-launch replacement with no existing data to migrate. All current
+readers, writers and fixtures use this format; do not attempt old-digest lookup,
+dual writes, compatibility fallback, or inference from display names to repair a
+credential. Password hashing and teacher-recovery capability formats are separate
+contracts and are not changed by this lookup encoding.
+
 ### V.3 Authentication, capability, and context
 
 1. Authentication establishes `users.id`; it does not by itself establish `seat_id` or `class_id`.
@@ -80,6 +113,18 @@ The application MUST refuse to start in any non-test environment when a required
 2. Code MUST bind artifact use to its owner and canonical scope before consuming it.
 3. Successful consumption MUST be atomic with the state change it authorizes; replay, mismatch, expired use, and cross-class use MUST fail closed.
 4. Responses for failed authentication, lookup, claim, and recovery attempts MUST be generic enough not to reveal account existence, roster membership, credential validity, or class membership.
+
+#### Student recovery-session nonce representation
+
+Under DOM-IDEN-002 §IX, generate 32 random bytes and encode with unpadded URL-safe
+Base64. The accepting signed, non-permanent session holds that nonce. Persist on
+User only SHA-256 of `b"student-recovery-session:v1\0" + nonce.encode()` and the
+original code expiry. This is a high-entropy bearer capability, not a password or
+name lookup digest. Compare verifiers in constant time. Check server state on
+every setup step and under a User row lock at completion; clear it atomically with
+credential replacement. Never log or export the nonce or verifier. Reissuing the
+teacher code invalidates the stored nonce. Account deletion removes these fields
+with their User row. Cookie signing does not replace the server-side check.
 
 ### V.5 Observability and retention
 
@@ -96,3 +141,22 @@ Implementations MUST NOT select or substitute cryptographic algorithms or parame
 ## VIII. Amendment
 
 Revisions require a version increment, updated effective date, explicit derivation from the dependencies in Section IV, reconciliation with affected `DOM-*` and `FEAT-*` contracts, and focused verification of every changed invariant boundary.
+
+
+## Teacher recovery capability encoding
+
+Under DOM-IDEN-003 §IX, confirmation codes are six-digit ASCII numeric values.
+Use HMAC-SHA-256 under PEPPER_KEY over compact UTF-8 JSON
+`["teacher-recovery-code:v2", request_id, class_id, code]`, with integer request_id.
+Rows also require issued_round equal to the attempt submission_round and a live
+code_expires_at (30 minutes from issuance, capped by attempt expiry).
+
+Resume PINs use UTF-8 `teacher-recovery-resume:v1\0` + PIN under HMAC-SHA-256.
+Attempt access nonces have 32 random bytes encoded URL-safe; store SHA-256 of
+UTF-8 `teacher-recovery-attempt:v1\0` + nonce. Setup nonces use the distinct prefix
+`teacher-recovery-setup:v1\0`. Here `\0` denotes one NUL byte. Compare nonce
+verifiers in constant time. No plaintext code is saved for resume. Pending setup
+username and TOTP seed use the approved encryption facility; neither is stored in
+the signed cookie. Receipt responses reveal no code/class validity; only complete
+set validation returns a generic result. Failed rounds invalidate earlier-round
+codes/proofs while preserving recipient selection.

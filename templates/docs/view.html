@@ -74,26 +74,6 @@
                         </div>
                     </form>
 
-                    {#
-                       Only operators get an audience switch. This site is the
-                       in-app help centre; offering teachers and students
-                       "Tech" just drops them into invariants and domain specs.
-                    #}
-                    {% if session.get('is_system_admin') %}
-                    <div class="mb-4">
-                        <div class="btn-group w-100" role="group">
-                            <a href="{{ url_for('docs.set_audience', aud='user', next=request.path) }}"
-                                class="btn btn-sm {% if audience == 'user' %}btn-primary active fw-bold{% else %}btn-outline-secondary{% endif %}">
-                                <span class="material-symbols-outlined icon-small" aria-hidden="true">group</span> User
-                            </a>
-                            <a href="{{ url_for('docs.set_audience', aud='devops', next=request.path) }}"
-                                class="btn btn-sm {% if audience == 'devops' %}btn-primary active fw-bold{% else %}btn-outline-secondary{% endif %}">
-                                <span class="material-symbols-outlined icon-small" aria-hidden="true">terminal</span> Tech
-                            </a>
-                        </div>
-                    </div>
-                    {% endif %}
-
                     <!-- Navigation Accordion -->
                     <div class="accordion accordion-flush" id="docsAccordion">
                         {% if audience == 'user' %}
@@ -295,20 +275,20 @@
                         <div class="accordion-item">
                             <h2 class="accordion-header">
                                 <button
-                                    class="accordion-button {% if not (doc_path in ['PRINCIPLES/PROJECT_PHILOSOPHY/PRN-PHL-001_Design_Principles_And_Project_History', 'STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-023_V2_Production_Transition_Runbook', 'STANDARD_OPERATING_PROCEDURES/SOP-DOC-002_DOCUMENTATION_INDEX'] or doc_path.startswith('STANDARD_OPERATING_PROCEDURES/')) %}collapsed{% endif %}"
+                                    class="accordion-button {% if not (doc_path in ['PRINCIPLES/PROJECT_PHILOSOPHY/PRN-PHL-001_Design_Principles_And_Project_History', 'STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook', 'STANDARD_OPERATING_PROCEDURES/SOP-DOC-001_DOCUMENTATION_INDEX'] or doc_path.startswith('STANDARD_OPERATING_PROCEDURES/')) %}collapsed{% endif %}"
                                     type="button" data-bs-toggle="collapse" data-bs-target="#projectCollapse"
-                                    aria-controls="projectCollapse" aria-expanded="{% if doc_path in ['PRINCIPLES/PROJECT_PHILOSOPHY/PRN-PHL-001_Design_Principles_And_Project_History', 'STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-023_V2_Production_Transition_Runbook', 'STANDARD_OPERATING_PROCEDURES/SOP-DOC-002_DOCUMENTATION_INDEX'] or doc_path.startswith('STANDARD_OPERATING_PROCEDURES/') %}true{% else %}false{% endif %}">
+                                    aria-controls="projectCollapse" aria-expanded="{% if doc_path in ['PRINCIPLES/PROJECT_PHILOSOPHY/PRN-PHL-001_Design_Principles_And_Project_History', 'STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook', 'STANDARD_OPERATING_PROCEDURES/SOP-DOC-001_DOCUMENTATION_INDEX'] or doc_path.startswith('STANDARD_OPERATING_PROCEDURES/') %}true{% else %}false{% endif %}">
                                     <span class="material-symbols-outlined me-2" aria-hidden="true">folder</span>
                                     Reference & Project
                                 </button>
                             </h2>
                             <div id="projectCollapse"
-                                class="accordion-collapse collapse {% if doc_path in ['PRINCIPLES/PROJECT_PHILOSOPHY/PRN-PHL-001_Design_Principles_And_Project_History', 'STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-023_V2_Production_Transition_Runbook', 'STANDARD_OPERATING_PROCEDURES/SOP-DOC-002_DOCUMENTATION_INDEX'] or doc_path.startswith('STANDARD_OPERATING_PROCEDURES/') %}show{% endif %}">
+                                class="accordion-collapse collapse {% if doc_path in ['PRINCIPLES/PROJECT_PHILOSOPHY/PRN-PHL-001_Design_Principles_And_Project_History', 'STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook', 'STANDARD_OPERATING_PROCEDURES/SOP-DOC-001_DOCUMENTATION_INDEX'] or doc_path.startswith('STANDARD_OPERATING_PROCEDURES/') %}show{% endif %}">
                                 <div class="accordion-body p-0">
                                     <ul class="nav flex-column">
                                         <li class="nav-item">
-                                            <a class="nav-link {% if doc_path == 'STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-023_V2_Production_Transition_Runbook' %}active{% endif %}"
-                                                href="{{ url_for('docs.view_doc', doc_path='STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-023_V2_Production_Transition_Runbook') }}">
+                                            <a class="nav-link {% if doc_path == 'STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook' %}active{% endif %}"
+                                                href="{{ url_for('docs.view_doc', doc_path='STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook') }}">
                                                 Deployment
                                             </a>
                                         </li>
@@ -326,8 +306,8 @@
                                             </a>
                                         </li>
                                         <li class="nav-item">
-                                            <a class="nav-link {% if doc_path == 'STANDARD_OPERATING_PROCEDURES/SOP-DOC-002_DOCUMENTATION_INDEX' %}active{% endif %}"
-                                                href="{{ url_for('docs.view_doc', doc_path='STANDARD_OPERATING_PROCEDURES/SOP-DOC-002_DOCUMENTATION_INDEX') }}">
+                                            <a class="nav-link {% if doc_path == 'STANDARD_OPERATING_PROCEDURES/SOP-DOC-001_DOCUMENTATION_INDEX' %}active{% endif %}"
+                                                href="{{ url_for('docs.view_doc', doc_path='STANDARD_OPERATING_PROCEDURES/SOP-DOC-001_DOCUMENTATION_INDEX') }}">
                                                 Docs Index
                                             </a>
                                         </li>
@@ -657,87 +637,18 @@
         margin-bottom: var(--space-1);
     }
 
-    /* GitHub-style alert callout boxes */
-    .md-alert {
-        border-radius: var(--radius-lg);
+    /* GitHub-style callouts render as alert cards (see preprocess_github_alerts).
+       The Bootstrap card supplies the look; these rules only give the card
+       vertical rhythm in prose and stop .markdown-content h3 from inflating
+       the card title. */
+    .markdown-content .md-alert {
         margin: var(--space-5) 0;
-        padding: var(--space-3) var(--space-4);
-        border-left: 4px solid;
     }
 
-    .md-alert-header {
-        display: flex;
-        align-items: center;
-        gap: var(--space-2);
-        font-weight: var(--weight-bold);
-        margin-bottom: var(--space-2);
-        font-size: var(--text-sm);
-        text-transform: uppercase;
-        letter-spacing: var(--tracking-wide);
-    }
-
-    .md-alert-icon {
-        font-size: var(--icon-sm);
-        vertical-align: middle;
-    }
-
-    .md-alert-body p:last-child {
+    .markdown-content .md-alert > .card-header > h3 {
+        font-size: var(--text-xl);
+        margin-top: 0;
         margin-bottom: 0;
-    }
-
-    /* NOTE — info */
-    .md-alert-note {
-        background-color: var(--info-subtle);
-        border-color: var(--info);
-    }
-
-    .md-alert-note .md-alert-header,
-    .md-alert-note .md-alert-icon {
-        color: var(--alert-info-text);
-    }
-
-    /* TIP — brand teal (primary) */
-    .md-alert-tip {
-        background-color: var(--primary-subtle);
-        border-color: var(--primary);
-    }
-
-    .md-alert-tip .md-alert-header,
-    .md-alert-tip .md-alert-icon {
-        color: var(--primary);
-    }
-
-    /* IMPORTANT — primary family (no semantic purple token) */
-    .md-alert-important {
-        background-color: var(--primary-subtle);
-        border-color: var(--primary);
-    }
-
-    .md-alert-important .md-alert-header,
-    .md-alert-important .md-alert-icon {
-        color: var(--primary);
-    }
-
-    /* WARNING */
-    .md-alert-warning {
-        background-color: var(--warning-subtle);
-        border-color: var(--warning);
-    }
-
-    .md-alert-warning .md-alert-header,
-    .md-alert-warning .md-alert-icon {
-        color: var(--alert-warning-text);
-    }
-
-    /* CAUTION — danger */
-    .md-alert-caution {
-        background-color: var(--danger-subtle);
-        border-color: var(--danger);
-    }
-
-    .md-alert-caution .md-alert-header,
-    .md-alert-caution .md-alert-icon {
-        color: var(--alert-danger-text);
     }
 
     /* Table of Contents */

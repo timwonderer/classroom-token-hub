@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-IDEN-003 | 2.3 | 2026-07-10 | 2.2 | Constitutional |
+| DOM-IDEN-003 | 2.8 | 2026-09-17 | 2.7 | Constitutional |
 
 ---
 
@@ -171,6 +171,11 @@ Teacher-specific credential setup (TOTP enrollment, optional passkey enrollment)
 
 Per DOM-IDEN-005 §VI, the initial Class and administrative Seat MUST be provisioned atomically with the User. Failure to provision the initial Class SHALL invalidate the entire teacher provisioning transaction.
 
+Initial provisioning stages submitted metadata and the pending credential in an
+encrypted, expiring server record per INV-ARC-018 and FEAT-IDEN-101. The browser
+holds only a random nonce. Staging grants no identity or classroom authority;
+successful atomic provisioning consumes it.
+
 ### Session Establishment
 
 - `current_session_started_at` is written at sign-in.
@@ -212,126 +217,141 @@ Domains SHALL NOT accept teacher authority from `join_code` or `user_id` without
 
 ## IX. Teacher Account Recovery
 
-Teacher recovery is **self-serve and student-assisted**. The teacher proves identity through their roster. No sysadmin involvement is required. No DOB or personal contact information is used.
+Recovery replaces credentials on the existing teacher User. It never changes Seat
+bindings, class ownership or economic state. No DOB, contact information or
+administrator intervention is required.
 
-### Core Invariants
+### Authority and class boundaries
 
-1. **No DOB.** No date of birth, DOB sum, or any birth-date-derived value is collected, stored, or used at any point in teacher recovery.
-2. **Self-serve.** Teacher recovery does not require system admin intervention.
-3. **Credential restoration only.** Recovery replaces credential access on the same identity record. Per DOM-IDEN-005 §IX, recovery SHALL NOT modify participation, ownership, or identity bindings. It does not create new records or alter class or economic state.
-4. **All classes must be represented.** One student per active class period must participate. Partial coverage is rejected.
-5. **Distributed trust.** A single compromised student account cannot enable teacher account takeover. All represented class periods must verify.
-6. **All-or-nothing code validation.** On any failed submission of recovery codes, all codes are invalidated immediately and students must regenerate. This prevents incremental probing of individual codes.
+The attempt is User-owned under INV-ARC-019's credential-recovery authority. Its
+manifest contains the required owned class IDs; its coordinator combines deposited
+proofs, not student/roster data. Recipient selection, student issuance and code
+submission are independent commands with one explicit class_id each; the browser
+makes separate class-scoped requests for them.
 
-### Recovery Flow
+The initial knowledge proof is the one exception. It is an ingress check that
+authorizes creating the attempt, not part of the attempt, and it runs as a single
+precheck command: it resolves each join code to class_id and each username within
+that class, and it holds resolved student identities only in memory for that command.
+Submitted usernames and resolved students are never persisted, logged or carried
+into the attempt; the attempt stores only the per-class proof result.
 
-**Step 1 — Roster verification and request creation**
+### Initial proof and fixed selection
 
-The teacher submits one (`join_code`, `student_username`) pair per active class period.
+1. Teacher submits join-code/student-username pairs for every owned class in one
+   request. All join codes must resolve to classes owned by one teacher User, and
+   the submitted classes must equal that User's owned class set.
+   Resolve each join code to class_id before checking the usernames against that
+   class's claimed student Seats. The number of distinct claimed students each
+   class must prove depends on how many classes the teacher owns:
 
-Pair resolution chain:
+   | Owned classes | Usernames per class |
+   |---|---|
+   | 1 | 6 |
+   | 2 | 3 |
+   | 3 | 2 |
+   | 4 or more | 1 |
 
-1. `join_code → class_id → teacher identifier` — resolve the first submitted join code to determine the target teacher. If unrecognized, reject the entire submission generically.
-2. Collect all `join_codes` under that teacher — retrieve the definitive list from the backend.
-3. Verify the submitted set matches the backend's definitive list exactly (no missing classes, no extras, no duplicates).
-4. For each submitted pair, verify the `username_lookup_hash` exists strictly within the roster of that specific `join_code`.
+   **Security posture:** every owned class must have at least three claimed student
+   Seats. Step 2 randomly picks two recipients per class, and with fewer than three
+   eligible Seats that pick is predictable to anyone who knows the class, so a class
+   below three fails the proof closed and student-assisted recovery is unavailable
+   for the whole account. Teacher-facing recovery, setup and roster surfaces SHALL
+   state this requirement and its reason. A class with at least three but fewer
+   claimed students than its requirement must prove every claimed student. Each resolved student User may
+   back only one pair of a submission, even when that student holds Seats in several
+   of the teacher's classes; uniqueness is checked on resolved user_id, not on the
+   typed text. Any failure creates nothing. These inputs prove account structure;
+   they do not nominate recovery recipients. Do not reveal individual proof validity.
+2. Only after the complete nonempty class proof set is present may selection begin.
+   Within each class, cryptographically randomly sample exactly two distinct eligible
+   claimed student Seats. Fewer than three eligible Seats fails closed.
+   Recipients SHALL be selected independently within each class. Selection MUST NOT
+   exclude, prefer or otherwise alter the eligibility of a Seat based on the existence
+   or selection of Seats belonging to the same users.id in another class. The two
+   stages differ deliberately: claimant-chosen evidence (step 1) requires distinct
+   principals to prevent concentration, while system-randomized recipients stay
+   ignorant of cross-class identity (INV-ARC-008). One student may therefore be
+   selected in several classes; that follows from membership and chance, not from
+   claimant control, and is accepted.
+3. Notify both selected recipients immediately through their authenticated class
+   sessions. There is no primary/backup role. Hide identities and per-recipient
+   state from the teacher. Class names are display labels only, never scope keys.
+4. Freeze the selected seat IDs for the five-day attempt. Duplicate requests,
+   code expiration, failed submission and regeneration cannot reroll or add seats.
+   Only one selected attempt per teacher may exist within its lifetime. An attempt
+   exists only after a complete proof, so unproven input cannot reserve that slot. Losing a selected Seat removes that recipient;
+   the remaining recipient may still help. Never replace a removed recipient.
 
-Submission rules:
+### Lifetimes and student issuance
 
-- One pair is required per active class.
-- All pairs are validated in full before any are accepted. Partial success is never reported.
-- Generic error on any failure. Do not reveal which pair failed, which join code was unrecognized, or whether any student username exists.
-- If an active recovery request already exists for this teacher, the system SHALL present the existing request status rather than creating a duplicate.
+| Object | Lifetime |
+|---|---|
+| Recovery attempt | Five days from creation |
+| Random recipient selection | Fixed for the attempt |
+| Student confirmation code | Thirty minutes from issuance, capped by attempt expiry |
+| Accepted class confirmation | Remainder of attempt, unless the full-set submission fails |
 
-On success: a `RecoveryRequest` is provisioned with `status = 'pending'` and `expires_at = now + 5 days`. One `StudentRecoveryCode` row is provisioned per selected student seat with `code_hash = NULL`.
+A selected student authenticates in that class, re-enters their passphrase, and
+obtains a fresh six-digit numeric code. Issuing it replaces only that student's
+prior code. Regeneration is student-controlled, through the same selected Seat;
+teachers cannot target students or request replacement recipients. Store only a
+request/class-bound verifier and issuance/expiry metadata. Explain that the code
+is given in person only if the teacher is currently with the class.
 
-**Step 2 — Student verification and code generation**
+### Private class confirmations and aggregate-only feedback
 
-Each selected student SHALL be notified of the pending recovery request upon their next authenticated session. The student:
+Code entry takes place within one class_id. Return the exact same receipt for a
+correct, incorrect, malformed, expired or already-used code. Teacher status may
+show that an entry was received, never whether it was valid, which recipient
+responded, or whether a class is privately satisfied.
 
-1. Sees the banner and confirms.
-2. Enters their passphrase (financial-gate verification).
-3. On successful passphrase verification, the system generates a 6-digit numeric recovery code and displays it.
-4. The code hash (`HMAC(code, b'')`) is stored in `StudentRecoveryCode.code_hash`.
-5. Student communicates the plaintext code to their teacher in person.
+Accept either selected recipient's live code as the class proof. Atomically record
+satisfied_at for that class and invalidate both outstanding codes in that class.
+That private confirmation can persist from Monday to Tuesday while another class
+has yet to meet; a thirty-minute code expiry does not expire the accepted proof.
 
-Rules:
+After all codes have been collected, the teacher explicitly submits the full set.
+Return only a generic success or failure. Every required current class must have a
+valid private confirmation. On failure, increment the attempt's submission round:
+all previous-round codes and private confirmations become unusable, requiring
+fresh codes for every class. The selected recipients do not change. A round marker
+invalidates proofs without a cross-class mutation sweep. No individual feedback or
+partial validity results are returned, including after a failed full submission.
 
-- Each student generates exactly one code per recovery request.
-- The 6-digit code is system-generated, not student-chosen.
-- Once generated, the code is not redisplayed.
-- Students cannot confirm outside an active `RecoveryRequest` with `status = 'pending'`.
+### Resume and credential completion
 
-**Step 3 — Code entry and submission**
+The attempt has a random server-verified access nonce; knowing its ID or reentering
+roster pairs does not grant access to another browser's selected attempt. A teacher
+can obtain a six-digit resume PIN, stored only as a separate-purpose verifier.
+Resuming rotates the attempt access nonce, clears prior setup authorization, and
+retains fixed selections and private class confirmations. Ambiguous PIN matches
+fail closed. No plaintext student codes are saved for later replay.
 
-Teacher enters all recovery codes collected from students.
+Successful full-set verification grants one server-bound setup nonce. Store its
+verifier, encrypted pending TOTP seed and encrypted pending username on the attempt;
+the signed cookie holds only nonces and references. Verify the new TOTP against
+server-held state, pending status, original expiry and complete current proof set.
+Atomically replace canonical username/TOTP credentials, revoke passkeys and login
+sessions, mark verified/completed_at, and erase temporary authorization/resume data.
+Recovery completion never changes participation or class state. Require fresh login.
 
-Persistence across sessions: entered codes and the new username are saved to `RecoveryRequest.partial_codes` and `RecoveryRequest.resume_new_username` in the database. A 6-digit resume PIN is generated, hashed as `HMAC(pin, b'')`, and stored in `RecoveryRequest.resume_pin_hash`. The teacher uses this PIN to reload saved state on any future browser session within the 5-day window.
 
-Submission rules:
+## IX.A. Account Retention and Automatic Destruction
 
-- Before submission, no indication is shown as to which entered codes are valid or invalid.
-- Backend verifies all students have generated codes (`code_hash IS NOT NULL` for all).
-- Codes are validated as a set (order-independent): `set(HMAC(entered, b''))` must equal `set(stored code_hashes)`.
-- **On any failure:** ALL `StudentRecoveryCode` rows are invalidated (`code_hash = NULL`, `verified_at = NULL`). Students must regenerate.
-- The failure message does not indicate which code failed or why.
-- Teacher may reattempt after students regenerate, within the 5-day window.
+`User.last_signed_in_at` records successful teacher authentication (TOTP or passkey),
+not requests, class activity, recovery initiation, or session refresh. If present,
+eligibility begins at that instant plus 180 days; if absent, eligibility begins
+at `User.created_at` plus 30 days. An hourly lifecycle sweep rechecks eligibility
+under a User row lock and executes FEAT-IDEN-007, with the same lock used when
+recording a successful sign-in. Candidate discovery alone is not authorization.
 
-**Step 4 — Credential re-establishment**
+The scheduled lifecycle authority names the teacher principal directly after this
+policy check. It is not a sysadmin session, impersonation, or inferred class
+activity. Account destruction composes the same domain command as manual deletion
+and removes every owned class, seat, support artifact, and orphaned student User.
+A failed account transaction rolls back; a later sweep can retry.
 
-If all codes match:
-
-- Teacher enters new username and scans a newly generated TOTP QR code.
-- TOTP code from the new device is verified before credentials are written.
-- All previously enrolled user-owned passkeys are revoked.
-- New `users.username_hash`, `users.username_lookup_hash`, and `users.totp_secret_encrypted` are written atomically.
-- `RecoveryRequest.status` is set to `verified`.
-
-**Step 5 — Completion**
-
-On successful credential setup:
-
-- `RecoveryRequest.status = 'verified'`, `completed_at` set.
-- Session recovery keys cleared.
-- Teacher must re-authenticate with new credentials.
-- Audit log: teacher identity + timestamp only; no student PII logged.
-
-### Session Expiry
-
-The entire recovery session (Steps 1–5) expires 5 days after Step 1 completion. On expiry:
-
-- `RecoveryRequest.status` is set to `expired`.
-- All `StudentRecoveryCode` rows become inert.
-- Entered partial codes and resume PIN are inaccessible.
-- Teacher must restart from Step 1.
-
-### Recovery Security Properties
-
-| Property | Mechanism |
-|----------|-----------|
-| Distributed trust | One student per class; all must verify |
-| All-or-nothing code validation | Any wrong code wipes all codes — no incremental probing |
-| No pre-submission feedback | Entered codes show no valid/invalid state before submit |
-| Generic failure messages | No indication of which code or student caused failure |
-| Cross-session persistence | Partial codes persisted in DB via resume PIN, not session |
-| Passphrase gate on students | Student must re-enter passphrase to generate their code |
-| No contact PII | No email, phone used at any stage |
-| No DOB | No date of birth used anywhere |
-
-### Recovery Hard Boundaries
-
-The teacher recovery system SHALL NOT:
-
-- Accept partial class coverage (all active classes must be represented)
-- Pre-validate individual codes before the teacher submits all of them
-- Reveal which code, student, or class caused a validation failure
-- Preserve any `StudentRecoveryCode.code_hash` after a failed submission
-- Collect or verify DOB at any point
-- Allow student-initiated confirmation outside an active `RecoveryRequest`
-- Preserve enrolled passkeys across a recovery event
-- Log student PII in recovery audit records
-
----
 
 ## X. Credential Summary
 

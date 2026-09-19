@@ -109,10 +109,16 @@ def setup_test_class_and_students(app):
             db.session.add(student_user)
             db.session.flush()
 
-            # Create seat
+            # Create seat. A seat bound to a principal is *claimed*: DOM-IDEN-002
+            # §Student Seat State allows only user_id+claimed_at both NULL or both
+            # set, and class obligation reads scope to claimed student seats, so a
+            # seat with a user and no claimed_at is a state the domain forbids and
+            # the summary rightly ignores.
             seat = Seat(
                 user_id=student_user.id,
                 class_id=class_econ.class_id,
+                role='student',
+                claimed_at=datetime.now(timezone.utc),
             )
             db.session.add(seat)
             db.session.flush()

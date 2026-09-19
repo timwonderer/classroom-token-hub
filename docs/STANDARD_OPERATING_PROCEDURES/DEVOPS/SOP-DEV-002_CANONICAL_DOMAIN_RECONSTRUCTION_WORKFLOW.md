@@ -466,4 +466,4 @@ Revisions to this SOP must:
 2. update the Effective Date
 3. update the Supersedes field
 4. preserve consistency with `INV-CORE-000`, `INV-CORE-001`, `INV-ARC-009`, and `SOP-DEV-001`
-5. update `SOP-DOC-002` if the document is renamed or superseded
+5. update `SOP-DOC-001` if the document is renamed or superseded

@@ -204,7 +204,7 @@ class ClassObligationSummary:
     status_breakdown: dict  # {up_to_date, outstanding, past_due_grace, past_due_overdue}
 
     # Per-student summary
-    student_rows: list  # [{seat_id, student_name, status, due_date, amount_due, amount_paid, balance, days_overdue, is_waived}]
+    student_rows: list  # [{seat_id, public_id, student_name, status, due_date, amount_due, amount_paid, balance, days_overdue, is_waived}]
 
     # Phase 1 display formatting (audit violations: admin_rent_settings.html lines 178, 191)
     display_total_paid: str = "$0.00"  # Pre-formatted sum of all payments
@@ -700,7 +700,16 @@ def build_class_obligation_summary(
     if not class_econ:
         return None
 
-    seats = db.session.query(Seat).filter_by(class_id=class_econ.class_id).all()
+    # Claimed student seats only: an unclaimed seat is no economic participant
+    # and appears in no teacher-facing count or list (DOM-IDEN-002 §VIII).
+    # It also carried no role filter, so the teacher's own seat was counted as
+    # a student in the rent summary.
+    seats = (
+        db.session.query(Seat)
+        .filter_by(class_id=class_econ.class_id, role='student')
+        .filter(Seat.claimed_at.isnot(None))
+        .all()
+    )
     if not seats:
         seats = []
 
@@ -748,6 +757,7 @@ def build_class_obligation_summary(
 
         student_rows.append({
             'seat_id': seat.id,
+            'public_id': seat.public_id,
             'student_name': student_name,
             'status': status,
             'due_date': current.get('due_date'),
@@ -814,6 +824,7 @@ def get_outstanding_rent_by_seat(class_id: str) -> list[dict]:
 
         {
             'seat_id': int,
+            'public_id': str,
             'student_name': str,
             'outstanding_count': int,
             'outstanding_total': Decimal,        # sum of remaining amounts
@@ -843,7 +854,15 @@ def get_outstanding_rent_by_seat(class_id: str) -> list[dict]:
     if not class_econ:
         return []
 
-    seats = db.session.query(Seat).filter_by(class_id=class_id, role='student').all()
+    # Claimed student seats only (DOM-IDEN-002 §VIII). Rent assessed before an
+    # unclaim survives on the seat, so without this filter that seat kept
+    # appearing as billable and waivable to the teacher.
+    seats = (
+        db.session.query(Seat)
+        .filter_by(class_id=class_id, role='student')
+        .filter(Seat.claimed_at.isnot(None))
+        .all()
+    )
     rows: list[dict] = []
     for seat in seats:
         assessments = get_rent_assessments_for_seat_class(seat.id, class_id)
@@ -857,6 +876,7 @@ def get_outstanding_rent_by_seat(class_id: str) -> list[dict]:
         )
         rows.append({
             'seat_id': seat.id,
+            'public_id': seat.public_id,
             'student_name': student_name,
             'outstanding_count': len(outstanding),
             'outstanding_total': sum(

@@ -1,4 +1,5 @@
 {% extends "layout_system_admin.html" %}
+{% import "macros/cards.html" as cards %}
 {% set current_page = "issues" %}
 {% block page_icon %}support_agent{% endblock %}
 
@@ -65,12 +66,9 @@
                     <hr>
 
                     <!-- Escalation Reason -->
-                    <div class="mb-3">
-                        <h6 class="text-muted mb-2">Escalation Reason</h6>
-                        <div class="alert alert-warning">
-                            <strong>{{ issue.escalation_reason }}</strong>
-                        </div>
-                    </div>
+                    {% call cards.alert_card('warning', 'Escalation reason', icon='arrow_circle_up', body_class='mb-3', heading_tag='h6') %}
+                        <p class="mb-0 fw-bold">{{ issue.escalation_reason }}</p>
+                    {% endcall %}
 
                     <!-- Teacher Diagnostic Note -->
                     {% if issue.teacher_diagnostic_note %}
@@ -88,7 +86,7 @@
                     <div class="mb-3">
                         <h6 class="text-muted mb-2">Student's Original Report</h6>
                         <div class="bg-light p-3 rounded">
-                            <p class="mb-0">{{ issue.student_explanation }}</p>
+                            <p class="mb-0">{{ issue.student_explanation or 'The teacher has not shared the student’s report.' }}</p>
                         </div>
                     </div>
 
@@ -126,12 +124,9 @@
                     <!-- Sysadmin Notes (if resolved) -->
                     {% if issue.sysadmin_notes %}
                     <hr>
-                    <div class="mb-3">
-                        <h6 class="text-muted mb-2">Resolution Notes</h6>
-                        <div class="alert alert-success">
-                            <p class="mb-0">{{ issue.sysadmin_notes }}</p>
-                        </div>
-                    </div>
+                    {% call cards.alert_card('success', 'Resolution notes', icon='task_alt', body_class='mb-3', heading_tag='h6') %}
+                        <p class="mb-0">{{ issue.sysadmin_notes }}</p>
+                    {% endcall %}
                     {% endif %}
                 </div>
             </div>
@@ -145,6 +140,11 @@
                     </h5>
                 </div>
                 <div class="card-body">
+                    <dl>
+                        <dt>Page URL</dt><dd>{{ issue.context_snapshot.page_url or 'Unavailable' }}</dd>
+                        <dt>IP address</dt><dd>{{ issue.context_snapshot.ip_address or 'Unavailable' }}</dd>
+                        <dt>Browser details</dt><dd>{{ issue.context_snapshot.user_agent or 'Unavailable' }}</dd>
+                    </dl>
                     {% if issue.context_snapshot.balances %}
                     <h6 class="text-muted mb-2">Balances at Time of Report</h6>
                     <div class="row mb-3">
@@ -179,11 +179,26 @@
                     </div>
                     <p class="mb-0 mt-2"><strong>Description:</strong> {{ issue.context_snapshot.transaction.description }}</p>
                     {% if issue.context_snapshot.transaction.is_void %}
-                    <div class="alert alert-danger mt-2 mb-0">
-                        <span class="material-symbols-outlined me-2" aria-hidden="true">cancel</span>Transaction was voided
-                    </div>
+                    {% call cards.alert_card('danger', 'Transaction voided', icon='cancel', body_class='mt-2 mb-0', heading_tag='h6') %}
+                        <p class="mb-0">Transaction was voided.</p>
+                    {% endcall %}
                     {% endif %}
                     {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if issue.context_snapshot.recent_transactions %}
+            <div class="card shadow-sm mb-4">
+                <div class="card-header"><h5 class="mb-0">Recent Transactions Shared by the Teacher</h5></div>
+                <div class="card-body table-responsive">
+                    <table class="table table-sm">
+                        <caption>Transactions saved at the time of the report</caption>
+                        <thead><tr><th scope="col">ID</th><th scope="col">Amount</th><th scope="col">Description</th><th scope="col">Timestamp</th></tr></thead>
+                        <tbody>{% for transaction in issue.context_snapshot.recent_transactions %}
+                            <tr><td>{{ transaction.id }}</td><td>{{ transaction.amount }}</td><td>{{ transaction.description }}</td><td>{{ transaction.timestamp }}</td></tr>
+                        {% endfor %}</tbody>
+                    </table>
                 </div>
             </div>
             {% endif %}
@@ -420,15 +435,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 buttonEl.textContent = originalText;
                 let feedback = document.getElementById('copy-correlation-feedback');
                 if (!feedback) {
-                    feedback = document.createElement('div');
-                    feedback.id = 'copy-correlation-feedback';
-                    feedback.setAttribute('role', 'alert');
+                    feedback = window.AppCore.buildAlertCard({
+                        level: 'danger',
+                        title: 'Copy failed',
+                        icon: 'content_copy',
+                        role: 'alert',
+                        id: 'copy-correlation-feedback',
+                        body: 'Unable to copy the value. Please copy it manually.',
+                    });
                     feedback.setAttribute('aria-live', 'assertive');
                     feedback.tabIndex = -1;
                     document.body.appendChild(feedback);
                 }
-                feedback.className = 'alert alert-danger';
-                feedback.textContent = 'Unable to copy the value. Please copy it manually.';
                 feedback.focus();
             };
 

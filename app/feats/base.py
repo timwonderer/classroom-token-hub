@@ -195,6 +195,11 @@ class InvariantViolation(Exception):
 
 # Canonical FEAT Registry
 FEAT_REGISTRY = {
+    "FEAT-IDEN-101": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Teacher Initial Signup and TOTP Setup"},
+    "FEAT-IDEN-103": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Teacher Recovery Initiation"},
+    "FEAT-IDEN-104": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Student Confirmation for Teacher Recovery"},
+    "FEAT-IDEN-105": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Teacher Recovery Code Validation"},
+    "FEAT-IDEN-106": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Teacher Recovery Credential Completion"},
     "FEAT-BYPASS-LEGACY": {"domain": "Test", "blast_radius": "LOW", "desc": "Legacy fixture bypass"},
     "FEAT-LED-000": {"domain": "Ledger", "blast_radius": "HIGH", "desc": "Canonical Monetary Resolution"},
     "FEAT-LED-001": {"domain": "Ledger", "blast_radius": "HIGH", "desc": "Overdraft Fee Application"},
@@ -225,6 +230,10 @@ FEAT_REGISTRY = {
     "FEAT-CLASS-003": {"domain": "Class Configuration", "blast_radius": "MED", "desc": "Insurance Policy Management (invokes POL domain commands)"},
     "FEAT-CLASS-004": {"domain": "Class Configuration", "blast_radius": "MED", "desc": "Feature enablement"},
     "FEAT-CLASS-005": {"domain": "Class Configuration", "blast_radius": "HIGH", "desc": "Economic engine evolution"},
+    # Destruction is a different command from creation, not a mode of it: it removes
+    # every class-scoped record and the class's seats (INV-CORE-000 §26, §33). It is
+    # FEAT-CLASS-001's counterpart, never FEAT-CLASS-001 itself.
+    "FEAT-CLASS-006": {"domain": "Class Configuration", "blast_radius": "HIGH", "desc": "Destroy class boundary"},
     "FEAT-SETTINGS-001": {"domain": "Class Configuration", "blast_radius": "MED", "desc": "Class Settings Update"},
     "FEAT-POL-001": {"domain": "Policies", "blast_radius": "MED", "desc": "Policy Reference Management (insurance policy family)"},
     "FEAT-ITR-001": {"domain": "Interpretation", "blast_radius": "LOW", "desc": "Compute Interpretation Snapshot"},
@@ -236,6 +245,7 @@ FEAT_REGISTRY = {
     "FEAT-OBL-005": {"domain": "Obligations", "blast_radius": "MED", "desc": "Insurance Cancellation (stop renewal)"},
     "FEAT-OPS-001": {"domain": "Operations", "blast_radius": "MED", "desc": "Maintenance/Cleanup Operations"},
     "FEAT-SUP-001": {"domain": "Support", "blast_radius": "LOW", "desc": "Issue Submission and Category Setup"},
+    "FEAT-SUP-002": {"domain": "Support", "blast_radius": "LOW", "desc": "Class Announcement Management"},
 }
 
 def _is_scaffold_feat(feat_name: str) -> bool:
@@ -576,7 +586,6 @@ def audit_protected(
             protected_fields={f: getattr(row, f, None) for f in fields},
             class_id=getattr(row, "class_id", None),
             seat_id=getattr(row, "seat_id", None),
-            user_id=getattr(row, "user_id", None),
             actor_type=actor_type,
             actor_id_hash=actor_id_hash,
         )

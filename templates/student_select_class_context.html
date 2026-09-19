@@ -1,10 +1,14 @@
+{% import 'macros/cards.html' as cards %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Select your class</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}">
+  <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
+  <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
   <style>
     .class-select-column { max-width: 720px; }
   </style>
@@ -22,7 +26,18 @@
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% if messages %}
             {% for category, message in messages %}
-              <div class="alert alert-{{ 'danger' if category == 'error' else category }}" role="alert">{{ message }}</div>
+              {% if category == 'success' %}
+                {% set flash_level, flash_title, flash_icon = 'success', 'Done', 'check_circle' %}
+              {% elif category in ['danger', 'error'] %}
+                {% set flash_level, flash_title, flash_icon = 'danger', 'Something went wrong', 'error' %}
+              {% elif category == 'warning' %}
+                {% set flash_level, flash_title, flash_icon = 'warning', 'Heads up', 'warning' %}
+              {% else %}
+                {% set flash_level, flash_title, flash_icon = 'info', 'For your information', 'info' %}
+              {% endif %}
+              {% call cards.alert_card(flash_level, flash_title, icon=flash_icon, role='alert', body_class='mb-3') %}
+                <p class="mb-0">{{ message }}</p>
+              {% endcall %}
             {% endfor %}
           {% endif %}
         {% endwith %}

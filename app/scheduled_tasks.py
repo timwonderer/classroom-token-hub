@@ -127,11 +127,14 @@ def enforce_daily_limits_job():
                     with db.session.begin_nested():
                         checked_count += 1
 
+                        # An unclaimed seat is not an attendance subject, so its
+                        # retained open session is left untouched rather than
+                        # written to (DOM-IDEN-002 §VIII).
                         seat = Seat.query.filter_by(
                             id=seat_id,
                             class_id=class_id,
                             role="student",
-                        ).first()
+                        ).filter(Seat.claimed_at.isnot(None)).first()
                         if seat is None:
                             continue
 
@@ -807,7 +810,21 @@ def run_savings_interest_job():
     failed = 0
     period_key = utc_now().strftime("%Y-%m")
     for class_id in class_ids:
-        seats = Seat.query.filter(Seat.class_id == class_id).order_by(Seat.id.asc()).all()
+        # Claimed student seats only (DOM-IDEN-005 §VII-VIII: participation is
+        # lawful only once a Seat is bound to a User). This read carried neither
+        # filter, so it paid savings interest to teacher seats and to unclaimed
+        # seats holding a savings balance preserved through unclaim — the latter
+        # every month, forever.
+        seats = (
+            Seat.query
+            .filter(
+                Seat.class_id == class_id,
+                Seat.role == "student",
+                Seat.claimed_at.isnot(None),
+            )
+            .order_by(Seat.id.asc())
+            .all()
+        )
         try:
             with FEATContext(
                 "FEAT-LED-001",
@@ -852,7 +869,33 @@ class ScheduledJobSpec(NamedTuple):
 # balances only. Registration order alone does not enforce that at runtime —
 # run_savings_interest_job discharges the dependency itself — but declaring it
 # here keeps the relationship visible and assertable.
+def purge_stale_teacher_accounts_job():
+    from app.services.teacher_lifecycle import purge_stale_teacher_accounts
+    return purge_stale_teacher_accounts()
+
+
+def purge_expired_teacher_signups_job():
+    from app.feats.teacher_signup_feat import purge_expired_signups
+    from app.feats.base import generate_correlation_id
+    return purge_expired_signups(correlation_id=generate_correlation_id(),
+        idempotency_key='teacher-signup:purge')
+
+
 SCHEDULED_JOB_SPECS: tuple[ScheduledJobSpec, ...] = (
+    ScheduledJobSpec(
+        id='expired_teacher_signups',
+        name='Delete expired teacher signup staging',
+        func=purge_expired_teacher_signups_job,
+        trigger='interval',
+        trigger_kwargs={'hours': 1},
+    ),
+    ScheduledJobSpec(
+        id='stale_teacher_accounts',
+        name='Delete stale teacher accounts',
+        func=purge_stale_teacher_accounts_job,
+        trigger='interval',
+        trigger_kwargs={'hours': 1},
+    ),
     ScheduledJobSpec(
         id='enforce_daily_limits',
         name='Enforce daily attendance limits',

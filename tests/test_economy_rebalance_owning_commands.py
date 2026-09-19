@@ -49,7 +49,6 @@ def _overpriced_store_item(classroom):
         product = publish_store_product(
             class_id=classroom.class_id,
             entitlement_type="DELAYED_USE",
-            user_id=classroom.teacher_user.id,
             name="Overpriced Pass",
             price="9999.00",
             economic_role="necessity",
@@ -178,7 +177,7 @@ def test_a_selection_past_an_advisory_insurance_row_is_applied(client, app):
         with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"rebalance-owner:insurance:{classroom.class_id}"):
             create_policy_version(
                 class_id=classroom.class_id,
-                actor_user_id=classroom.teacher_user.id,
+                actor_seat_id=classroom.teacher_seat.id,
                 payload={
                     "name": "Overpriced Cover",
                     "premium": "9999.00",

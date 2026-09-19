@@ -13,9 +13,11 @@ immutable economic history, which is lawful only under the terminal-destruction
 lifecycle exception (INV-CORE-000 §III.5). The class-scope teardown sets
 `cth.class_universe_destroying` for exactly that reason.
 
-The command requires a canonical context and explicit `correlation_id` /
+Manual destruction requires a canonical context and explicit `correlation_id` /
 `idempotency_key` metadata. The principal destroyed is `canonical_context.user_id`
-and nothing else.
+and nothing else. The scheduled lifecycle entry derives a principal-only target
+from the locked retention-policy check below; it does not fabricate a logged-in
+teacher session.
 
 ## Authority resolution
 
@@ -31,7 +33,7 @@ One FEAT executes per request (INV-ARC-000 §VIII.2, INV-ARC-021 §V.2). This FE
 therefore composes **domain commands**, never other FEATs:
 
 - per-class teardown calls the plain `_destroy_class_scope_rows` command, not the
-  `FEAT-CLASS-001` wrapper `_hard_delete_class_scope`;
+  `FEAT-CLASS-006` envelope `_hard_delete_class_scope`;
 - account-level teardown calls the `_delete_teacher_*` commands and
   `delete_admin_account_rows` directly.
 
@@ -40,9 +42,14 @@ destruction atomic: a failure anywhere — including inside a class teardown —
 rolls back the entire account deletion rather than leaving a half-destroyed
 principal.
 
-`FEAT-CLASS-001` remains the entry point for destroying **one** class while the
+`FEAT-CLASS-006` is the entry point for destroying **one** class while the
 owning account survives. The two entry points are not interchangeable; a caller
 already holding a context must use the domain command.
+
+This designation named `FEAT-CLASS-001` until 2026-09-17. That was wrong:
+`FEAT-CLASS-001` is class-boundary **creation**, its §III forbids executing
+within a CanonicalContext, and its §X guarantees only that a boundary is
+established. Destruction now has its own contract, `FEAT-CLASS-006`.
 
 `POST /admin/join-code/delete` therefore dispatches between them. A class
 teardown destroys that class's seats, including the teacher's administrative
@@ -63,3 +70,40 @@ actor; a destroyed principal has no pointers left to clear.
 
 Authority: INV-CORE-000 §III.4, §III.5; INV-ARC-012 §V; INV-ARC-021 §V.2;
 DOM-IDEN-001.
+
+
+## Automatic and roster-terminal entry points (amended 2026-09-17)
+
+Roster deletion that removes a principal's final student Seat in its final class
+destroys the principal, so it is **this** FEAT, exactly as
+`POST /admin/join-code/delete` is (see §Composition). The roster route dispatches
+to it before any FEAT opens, and it composes the same plain account-destruction
+domain command — never a nested FEAT. Roster deletion that empties a non-final
+class is `FEAT-CLASS-006`; roster deletion that leaves the class standing is
+`FEAT-IDEN-006`. The scheduled retention entry composes the same plain command
+under this FEAT.
+
+Because the dispatching preview holds no lock, the executor re-derives the
+deletion plan under the teacher and class locks and fails closed if the terminal
+scope has moved, so a narrower FEAT cannot destroy a principal
+(DOM-CLASS-001 §Terminal Roster Deletion).
+
+Manual routes retain their confirmation gate. Final-student deletion must warn
+about class destruction and, when applicable, teacher-account destruction; it
+must require the corresponding stronger confirmation before executing.
+
+Amended 2026-09-17. This section previously read "composed by the final-student
+roster deletion FEAT", which designated `FEAT-IDEN-006` — "Provision Student Seat
+in Existing Class", blast radius MED — as the executing FEAT for principal
+destruction. `feat_code` on audit rows and every FEAT-ENTRY record take their
+value from the active FEAT, so the destruction was attributed to a provisioning
+command. Nesting remains forbidden and atomicity is unchanged: the three roster
+outcomes are mutually exclusive, so selecting the FEAT before it opens still
+gives one envelope per request.
+
+The scheduled entry locks/reloads the teacher User and requires either 180 days
+since the last successful sign-in or 30 days since creation if never signed in.
+Its authority derives directly from INV-CORE-000 §III.5 / DOM-IDEN-003, so it does
+not require a browser confirmation or sysadmin approval. Recheck after acquiring
+the same lock used by successful sign-in. One atomic account transaction performs
+all owned-class teardown, orphan handling, and principal destruction.

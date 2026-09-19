@@ -1,3 +1,4 @@
+{% import "macros/cards.html" as cards %}
 <!DOCTYPE html>
 <html lang="en">
 
@@ -5,7 +6,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>404 - Page Not Found</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}">
 
     <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
@@ -50,10 +51,10 @@
         </div>
 
         <div class="error-body">
-            <div class="alert alert-info" role="alert">
-                <strong>Oops!</strong> We couldn't find that page. The page you're looking for might have been moved,
-                deleted, or never existed.
-            </div>
+            {% call cards.alert_card('info', 'We couldn\'t find that page', icon='search_off', body_class='mb-4', role='alert', heading_tag='h2') %}
+                <p class="mb-0">The page you're looking for might have been moved,
+                deleted, or never existed.</p>
+            {% endcall %}
 
             <div class="troubleshooting">
                 <h5>What can you do?</h5>

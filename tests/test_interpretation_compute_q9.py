@@ -72,7 +72,7 @@ def _seed_q9(classroom):
         # Labor participation: sA and sB attend.
         for seat in (sA, sB):
             db.session.add(AttendanceSession(
-                target_seat_id=seat.seat_id, class_id=cid, target_user_id=seat.user.id,
+                target_seat_id=seat.seat_id, class_id=cid,
                 actor_seat_id=teacher_seat_id, reason_code="start_work", timestamp=in_window,
             ))
         # Resource balances.

@@ -127,7 +127,6 @@ def test_every_legal_contract_field_is_rendered_for_the_script_to_gate(client, s
             item = publish_store_product(
                 class_id=classroom.class_id,
                 entitlement_type="DELAYED_USE",
-                user_id=classroom.teacher_user.id,
                 name="Rendered Gating Pass",
                 price="25.00",
             )
@@ -168,7 +167,6 @@ def test_edit_form_gates_every_published_rule(client):
         item = publish_store_product(
             class_id=classroom.class_id,
             entitlement_type="IMMEDIATE_USE",
-            user_id=classroom.teacher_user.id,
             name="Homework Pass",
             description="Skip one homework assignment",
             price="25.00",

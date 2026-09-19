@@ -313,7 +313,7 @@ def _seed_q5_window(classroom):
     # both writes occur under the same context.
     with FEATContext("FEAT-PROD-003", correlation_id="q5:labor", idempotency_key="q5:labor"):
         db.session.add(PayrollEvent(
-            class_id=cid, target_seat_id=sA.seat_id, target_user_id=sA.user.id,
+            class_id=cid, target_seat_id=sA.seat_id,
             actor_seat_id=teacher_seat_id, correlation_id="corr_q5:labor",
             idempotency_key="q5:labor:evt", policy_version_id=policy.id,
             policy_uuid=policy.policy_uuid, mechanism="TEACHER",
@@ -329,7 +329,7 @@ def _seed_q5_window(classroom):
     # cat 3 — teacher/admin: manual_credit corroborated by a PayrollEvent.
     with FEATContext("FEAT-PROD-003", correlation_id="q5:manual", idempotency_key="q5:manual"):
         db.session.add(PayrollEvent(
-            class_id=cid, target_seat_id=sB.seat_id, target_user_id=sB.user.id,
+            class_id=cid, target_seat_id=sB.seat_id,
             actor_seat_id=teacher_seat_id, correlation_id="corr_q5:manual",
             idempotency_key="q5:manual:evt", policy_version_id=policy.id,
             policy_uuid=policy.policy_uuid, mechanism="TEACHER",

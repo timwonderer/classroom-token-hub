@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-PROD-001 | 1.1 | 2026-07-20 | 1.0 | Normative |
+| FEAT-PROD-001 | 1.2 | 2026-09-15 | 1.1 | Normative |
 
 ---
 
@@ -26,7 +26,6 @@ This FEAT uses `CanonicalContext` for live request authority and `canonical_temp
 - `reference_time_utc`: optional explicit timestamp for deterministic evaluation
 - `actor_seat_id`: the seat performing the action
 - `target_seat_id`: the seat whose attendance state is being recorded
-- `target_user_id`: the user bound to the target seat
 - `mechanism`: `self`, `teacher`, or `system`
 
 ### 2. Canonical Authority
@@ -62,7 +61,7 @@ Rules:
 
 - MUST require `class_id` and `seat_id`
 - MUST treat every written attendance row as immutable and permanent
-- MUST require `actor_seat_id`, `target_seat_id`, `target_user_id`, and `mechanism`
+- MUST require `actor_seat_id`, `target_seat_id`, and `mechanism`
 - MUST use class-local canonical time for the timestamp
 - MUST set `status` to `active` or `inactive`
 - MUST set `reason_code` when writing an `inactive` row
@@ -70,7 +69,7 @@ Rules:
 - MUST set `mechanism` to `self`, `teacher`, or `system`
 - MUST set `actor_seat_id` to the initiating seat
 - MUST set `target_seat_id` to the seat whose attendance state changes
-- MUST set `target_user_id` to the user bound to `target_seat_id`
+- MUST NOT persist or select attendance by an authentication principal; target identity is `(class_id, target_seat_id)`
 - MUST write `active` with `reason_code = start_work` for start work and hall-pass return
 - MUST write `inactive` with `reason_code = hall_pass` for leaving for hall pass
 - MUST write `inactive` with `reason_code = done_for_day` for end-of-day closure
@@ -96,7 +95,7 @@ Execution steps:
 2. Resolve `CLE` with `canonical_temporal_resolver("CLE", primitive="current_time", canonical_execution_context=ctx, reference_time_utc=reference_time_utc)`.
 3. Derive the canonical request timestamp in class-local time and normalize it to UTC for persistence.
 4. Determine the correct canonical row shape for the requested attendance action.
-5. Populate `actor_seat_id`, `target_seat_id`, `target_user_id`, and `mechanism`.
+5. Populate `actor_seat_id`, `target_seat_id`, and `mechanism`.
 6. If the row is hall-pass-related, require `hall_pass_id` to reference the consumed entitlement instance's `entitlement_id`.
 7. If end-of-day cleanup finds a dangling hall pass, emit `active/start_work` and then `inactive/done_for_day` at the same timestamp.
 8. Persist the append-only row or row sequence to `attendance_sessions`.

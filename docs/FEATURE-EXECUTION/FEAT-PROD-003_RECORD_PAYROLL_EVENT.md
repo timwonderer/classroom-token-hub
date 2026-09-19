@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-PROD-003 | 1.0 | 2026-07-19 | N/A | Normative |
+| FEAT-PROD-003 | 1.1 | 2026-09-17 | 1.0 | Normative |
 
 ---
 
@@ -29,7 +29,7 @@ This FEAT uses `CanonicalContext` for live request authority and the canonical t
 - `ctx`: `CanonicalContext`
 - `target_seat_id`: seat receiving the credit or reversal effect
 - `idempotency_key`: replay guard
-- `policy_version_id`: the payroll policy version in effect
+- `policy_version_id`: the policy version that priced the amount; required for `payroll`, omitted for a teacher-entered manual credit (see Rules)
 - `payroll_run_type`: `payroll`, `manual_credit`, or `reversal`
 - `correlation_id`: business-to-ledger linkage
 - `summary_json`: human-readable and structured metadata
@@ -59,7 +59,13 @@ Typical use cases:
 
 Rules:
 
-- MUST require `class_id`, `actor_seat_id`, `target_seat_id`, `correlation_id`, `idempotency_key`, `policy_version_id`, `mechanism`, `payroll_run_type`, `recorded_at`, and `summary_json`
+- MUST require `class_id`, `actor_seat_id`, `target_seat_id`, `correlation_id`, `idempotency_key`, `mechanism`, `payroll_run_type`, `recorded_at`, and `summary_json`
+- MUST record policy provenance according to the authority that determined the amount, not the storage event type alone:
+  - `payroll` (amount priced by the payroll policy from attendance/hours): `policy_version_id` and `policy_uuid` are REQUIRED
+  - `manual_credit` initiated by a teacher who enters the amount directly: no payroll policy is required, and a class with no payroll configuration can still record it
+  - `manual_credit` used as the posting mechanism for another domain's lawful calculation (for example a productivity insurance reimbursement): MUST retain the policy provenance that calculation used
+  - `reversal`: carries the provenance of the event it compensates
+- This is a minimum requirement for `payroll` events only. It MUST NOT be inverted into a rule that `manual_credit` events carry no policy version
 - MUST be append-only
 - MUST set `payroll_run_type` to `payroll`, `manual_credit`, or `reversal`
 - MUST use the original event's `correlation_id` when writing a reversal
