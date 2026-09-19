@@ -1,7 +1,7 @@
 # DOM-IDEN-005: Identity Binding and Lifecycle
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-IDEN-005   | 2.1     | 2026-09-15    | 2.0 | Constitutional   |
+| DOM-IDEN-005   | 2.2     | 2026-09-18    | 2.1 | Constitutional   |
 
 ---
 ## I. Purpose
@@ -186,8 +186,54 @@ Revisions to this document SHALL:
 ## Explicit Unclaim
 
 A teacher may detach a claimed student User from a Seat without destroying the Seat
-or its class-owned records. Require freshly entered names solely to regenerate claim hashes; preserve existing
-profile display names, encrypted notes, and economic/productivity/support facts. Delete an orphaned User only after
+or its class-owned records. Require freshly entered names. The entered names SHALL
+become both the Seat's claim material — claim first/last-name hashes and
+`roster_fingerprint`, with any deduplication code system-assigned — and the
+`IdentityProfile` display name, written in the same transaction. Preserve encrypted
+notes and economic/productivity/support facts. Delete an orphaned User only after
 detachment. Unclaim increments a server-stored `claim_generation`; earlier verified
 claim sessions and stale Unclaim forms cannot act on the new generation. This
 Identity-only transition is executed by FEAT-IDEN-006 and does not delete the class.
+
+### Why the names must be entered, never derived
+
+The entered names SHALL be supplied by the teacher at the time of the operation.
+Claim material SHALL NOT be derived from the `IdentityProfile`, and the Unclaim
+surface SHALL NOT prefill the name fields from it.
+
+`identity_profiles` is display-only identity (`INV-ARC-019`). Its values are
+decryptable, so regenerating the hashes from the stored profile is technically
+available and constitutionally forbidden: it would let display-layer metadata
+backfill the authoritative key that governs who may claim a Seat. Authority flows
+in one direction — entered names become both the claim material and the display
+name — and never back from the display layer into the claim material.
+
+It is also an inference about intent that belongs to the teacher. Deriving the
+hashes assumes the name should stay the same. A teacher who wants that types the
+same name; a teacher who does not has already decided otherwise, and a backend
+that derived the value would have silently overridden that decision. Requiring
+entry is what makes the teacher's intent observable instead of assumed.
+
+Consequently the two names an Unclaim writes are the same input, not two reads of
+two sources, and they cannot disagree.
+
+### Why the display name moves with the claim key
+
+An unclaimed Seat's displayed name and its claim material must name the same
+person. The roster shows the display name; the student claims against the hashes.
+If they diverge, the Seat is claimable only under a name the teacher cannot see,
+and the teacher will direct the student using the name on screen.
+
+Unclaim is the **only** lawful point at which an unclaimed Seat's name changes, and
+it is the only operation that asks the teacher for names. Editing an unclaimed
+Seat's name is refused outright (DOM-IDEN-002 §VIII.7 — display-name edits SHALL
+NOT regenerate claim artifacts, so the two would diverge); a claimed Seat's rename
+touches the display name alone, which is safe precisely because a claimed Seat has
+no claim material left to disagree with.
+
+Through v2.1 this section read "Require freshly entered names *solely* to regenerate
+claim hashes; preserve existing profile display names…", and the implementation
+followed it. That produced the divergence above in reverse: the claim key moved to
+the entered name while the roster kept the previous claimant's. The preservation
+rule is about not discarding the Seat's accumulated value — notes, balances,
+history — and was never meant to pin the display name to a departed claimant.

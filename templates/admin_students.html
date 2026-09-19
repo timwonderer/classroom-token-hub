@@ -806,15 +806,15 @@
       <div class="modal-body">
         <p>Unclaim <strong id="unclaimStudentName"></strong>?</p>
         <p id="unclaimStudentExplanation">The seat stays in this class. Its balance, transactions, attendance, items, and teacher notes stay with it for the next claimant. The current account loses access to this seat. If it has no other classes, that sign-in account is deleted.</p>
-        <p>Re-enter the names the student should use to claim this seat again. These rebuild claim verification; the saved display name and teacher notes stay unchanged. To consolidate accounts, the student should sign in to the account they want to keep and join this class.</p>
-        <div class="mb-3"><label for="unclaimFirstName" class="form-label">First name for claiming</label>
+        <p>Enter the name this seat should carry from now on. It becomes the name shown on your roster <em>and</em> the name the student types to claim the seat, so the two always match. Teacher notes and the seat's records are unaffected. To consolidate accounts, the student should sign in to the account they want to keep and join this class.</p>
+        <div class="mb-3"><label for="unclaimFirstName" class="form-label">First name</label>
           <input id="unclaimFirstName" class="form-control" name="first_name" required maxlength="100" autocomplete="off"></div>
-        <div class="mb-3"><label for="unclaimLastName" class="form-label">Last name for claiming</label>
+        <div class="mb-3"><label for="unclaimLastName" class="form-label">Last name</label>
           <input id="unclaimLastName" class="form-control" name="last_name" required maxlength="100" autocomplete="off"></div>
         <p class="form-text mb-3">If another unclaimed student has the same names, the system gives each of them a claim
           code. Find it in the Unclaimed Seats list and give it to the student.</p>
         <div class="form-check"><input type="checkbox" id="unclaimAcknowledged" class="form-check-input" required>
-          <label for="unclaimAcknowledged" class="form-check-label">I understand that the current account will be detached and the next claimant will receive this seat's records.</label></div>
+          <label for="unclaimAcknowledged" class="form-check-label">I understand that the current account will be detached, the seat will be renamed, and the next claimant will receive this seat's records.</label></div>
         {% call cards.alert_card('danger', 'Seat not unclaimed', icon='error', role='alert', id='unclaimStudentError', body_class='mt-3 d-none', attrs='tabindex="-1"') %}
           <p class="mb-0" id="unclaimStudentErrorMessage"></p>
         {% endcall %}

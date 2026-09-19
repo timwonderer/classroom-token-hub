@@ -78,13 +78,16 @@ unclaimed namesake lacking a unique code, exactly as additive import does.
 
 One FEAT transaction validates/locks teacher ownership, class, detached principal,
 and Seat; writes only Identity state; clears the binding and claimed_at; increments
-claim_generation; preserves profile names and notes; uses the entered names only to regenerate
-normal seat claim hashes/fingerprint, with any code system-assigned; and clears that principal's active context
+claim_generation; writes the entered names to BOTH the seat claim hashes/fingerprint
+(with any code system-assigned) AND the IdentityProfile display name, so the roster
+shows the name the Seat is claimable under (DOM-IDEN-005 §Explicit Unclaim);
+preserves encrypted notes and every Seat-owned fact; and clears that principal's active context
 when it points at the detached Seat. Revoke this Seat’s outstanding teacher-recovery code without rerolling recipients;
 preserve accepted class confirmation and any remaining selected recipient.
 Delete the old User only if no surviving Seat/class ownership remains. Preserve
-Seat/public_id/class_id, profile, balances, transactions, attendance, items, support
-records, and other Seat-owned facts. Unclaim does not invoke last-student deletion.
+Seat/public_id/class_id, profile notes, balances, transactions, attendance, items, support
+records, and other Seat-owned facts. The profile's display name is the one field the
+entered names replace; everything else on the profile survives. Unclaim does not invoke last-student deletion.
 
 Initial claim verification must capture the server-stored claim_generation in the
 signed onboarding session. Credential completion rechecks it under the class/Seat

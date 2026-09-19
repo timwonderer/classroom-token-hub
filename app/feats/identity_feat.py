@@ -25,7 +25,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
 from app.hash_utils import hash_claim_name, hash_roster_fingerprint, normalize_lookup_text
-from app.models import Seat, User, ClassEconomy
+from app.models import Seat, User, ClassEconomy, IdentityProfile
 from app.services.class_configuration_query_service import get_class_economy
 from app.services.classroom_setup import create_student_seat_with_profile, delete_seat_with_profile
 from app.services.context_resolver import CanonicalContext
@@ -708,6 +708,17 @@ def unclaim_student_seat(*, canonical_context, seat_id, expected_generation,
     seat.claim_first_name_hash, seat.claim_last_name_hash = first_hash, last_hash
     seat.dedupe_code = None
     seat.roster_fingerprint = hash_roster_fingerprint(class_id=ctx.class_id, first_name=first, last_name=last)
+    # The entered names become the display name too, in this same transaction
+    # (DOM-IDEN-005 §Explicit Unclaim). An unclaimed seat's roster name and its
+    # claim material must name the same person: the teacher reads the roster, the
+    # student claims against the hashes, and a seat claimable only under a name
+    # the teacher cannot see is unclaimable in practice. Unclaim is the one point
+    # at which an unclaimed seat's name may change, and the one operation that
+    # asks for names. Notes and every other Seat-owned fact are untouched.
+    profile = IdentityProfile.query.filter_by(seat_id=seat.id).with_for_update().one_or_none()
+    if profile is not None:
+        profile.first_name = first
+        profile.last_name = last
     # A previous claimant's teacher-recovery confirmation must not transfer.
     invalidate_recovery_participation_for_seat(seat.id)
     if user.last_active_seat_id == seat.id or user.last_active_class_id == ctx.class_id:

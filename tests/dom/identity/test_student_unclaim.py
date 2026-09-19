@@ -23,7 +23,7 @@ def _complete(seat_id, generation, username='unclaim-new-account'):
         correlation_id='corr_unclaim_setup', idempotency_key=f'unclaim:setup:{username}')
 
 
-def test_unclaim_preserves_display_and_records_then_normal_claim_works(client, app):
+def test_unclaim_renames_the_seat_and_preserves_its_records_then_claim_works(client, app):
     classroom = initialize_as_teacher('chemistry_p1', client, app)
     seat = classroom.students[0].seat
     seat_id, user_id, public_id = seat.id, seat.user_id, seat.public_id
@@ -38,7 +38,7 @@ def test_unclaim_preserves_display_and_records_then_normal_claim_works(client, a
             class_id=classroom.class_id, status='active', reason_code='start_work')
         db.session.add(attendance); db.session.flush()
         ids = tx.id, attendance.id
-    original_profile = profile.first_name, profile.last_name, profile.notes
+    original_notes = profile.notes
     response = _unclaim(client, seat)
     assert response.status_code == 200, response.get_json()
     assert response.get_json()['account_deleted'] is True
@@ -46,7 +46,12 @@ def test_unclaim_preserves_display_and_records_then_normal_claim_works(client, a
     assert db.session.get(User, user_id) is None
     seat = db.session.get(Seat, seat_id)
     assert (seat.user_id, seat.claimed_at, seat.public_id) == (None, None, public_id)
-    assert (profile.first_name, profile.last_name, profile.notes) == original_profile
+    # The entered names become the display name as well as the claim key
+    # (DOM-IDEN-005 §Explicit Unclaim v2.2). Notes and every other seat-owned
+    # fact survive — that is what "preserve" protects, not a departed
+    # claimant's name.
+    assert (profile.first_name, profile.last_name) == ('Fresh', 'Claim')
+    assert profile.notes == original_notes
     assert db.session.get(Transaction, ids[0]).amount == Decimal('7.50')
     assert db.session.get(AttendanceSession, ids[1]).target_seat_id == seat_id
     claim = resolve_seat_claim(join_code=classroom.join_code, first_name='Fresh', last_name='Claim')
@@ -197,3 +202,74 @@ def test_duplicate_claim_names_are_distinguished_by_system_codes(client, app):
         assert claim.success and claim.seat_id == seat.id
     assert not resolve_seat_claim(join_code=classroom.join_code,
         first_name='Fresh', last_name='Claim').success
+
+
+def test_unclaim_leaves_the_roster_name_and_the_claim_key_naming_one_person(client, app):
+    """The invariant behind DOM-IDEN-005 §Explicit Unclaim v2.2.
+
+    The teacher reads the roster; the student claims against the hashes. If the
+    two diverge, the seat is claimable only under a name the teacher cannot see,
+    and the teacher directs the student using the name on screen — so the claim
+    fails for a reason neither of them can observe.
+
+    Through v2.1 the entered names were written to the claim material alone
+    ("preserve existing profile display names"), so unclaiming "Ava Chen" as
+    "Robin Vale" left the roster showing Ava Chen and the seat claimable only as
+    Robin Vale.
+    """
+    from app.services.roster_view_model import build_class_roster_view
+
+    classroom = initialize_as_teacher('chemistry_p1', client, app)
+    seat = classroom.students[0].seat
+    seat_id = seat.id
+    previous_name = IdentityProfile.query.filter_by(seat_id=seat_id).one().full_name
+
+    assert _unclaim(client, seat, first_name='Robin', last_name='Vale').status_code == 200
+    db.session.expire_all()
+
+    # What the teacher sees on the roster.
+    roster = build_class_roster_view(
+        class_id=classroom.class_id,
+        teacher_user_id=classroom.teacher_user.id,
+        recovery_min_students=3,
+    )
+    row = next(r for r in roster.unclaimed_seats if r.seat_id == seat_id)
+    assert row.full_name == 'Robin Vale'
+    assert previous_name not in row.full_name
+
+    # What the student must type to claim it.
+    claim = resolve_seat_claim(join_code=classroom.join_code, first_name='Robin', last_name='Vale')
+    assert claim.success and claim.seat_id == seat_id
+
+    # And the name the roster no longer shows no longer claims the seat.
+    stale = resolve_seat_claim(
+        join_code=classroom.join_code,
+        first_name=classroom.students[0].first_name,
+        last_name=classroom.students[0].last_name,
+    )
+    assert not (stale.success and stale.seat_id == seat_id)
+
+
+def test_unclaim_keeps_notes_and_money_while_the_name_moves(client, app):
+    """Renaming at unclaim is not a reset: the seat keeps what it accumulated."""
+    classroom = initialize_as_teacher('chemistry_p1', client, app)
+    seat = classroom.students[0].seat
+    seat_id = seat.id
+    profile = IdentityProfile.query.filter_by(seat_id=seat_id).one()
+    with FEATContext('FEAT-TEST-SETUP', idempotency_key=f'unclaim:notes:{seat_id}'):
+        profile.notes = 'Sits by the window; needs a charger'
+        tx = create_pending_transaction(
+            seat_id=seat_id, target_seat_id=seat_id, actor_seat_id=classroom.teacher_seat.id,
+            class_id=classroom.class_id, mechanism='teacher', amount=Decimal('12.25'),
+            account_type='checking', type='manual_payment', description='Earned before unclaim')
+        db.session.flush()
+        tx_id = tx.id
+
+    assert _unclaim(client, seat, first_name='Robin', last_name='Vale').status_code == 200
+    db.session.expire_all()
+
+    profile = IdentityProfile.query.filter_by(seat_id=seat_id).one()
+    assert (profile.first_name, profile.last_name) == ('Robin', 'Vale')
+    assert profile.notes == 'Sits by the window; needs a charger'
+    assert db.session.get(Transaction, tx_id).amount == Decimal('12.25')
+    assert db.session.get(Transaction, tx_id).seat_id == seat_id
