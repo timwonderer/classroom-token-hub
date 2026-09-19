@@ -7,7 +7,8 @@ evidence that the infrastructure is provisioned or running.
 
 1. Confirm the Cloud Run job identity
    `status-probe@cth-production-status.iam.gserviceaccount.com` has only the
-   scoped Firestore role granting `datastore.entities.create`,
+   dedicated scoped Firestore role granting `datastore.databases.get` (required
+   to begin and roll back transactions), `datastore.entities.create`,
    `datastore.entities.get`, `datastore.entities.list`, and
    `datastore.entities.update`, with a condition restricting access to database
    `cth-status-prod`, and Secret Manager version access to

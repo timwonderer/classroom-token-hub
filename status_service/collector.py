@@ -63,7 +63,9 @@ def _signal_map(body: bytes, now: datetime) -> dict[str, tuple[Outcome, Epistemi
     if not isinstance(payload, dict) or set(payload) != {"observed_at", "signals"}:
         raise ValueError("Unexpected health payload")
     observed_at = datetime.fromisoformat(payload["observed_at"])
-    if observed_at.tzinfo is None or not timedelta(0) <= now - observed_at <= timedelta(minutes=2):
+    # The app and collector use separate clocks. Permit only a small positive
+    # clock skew, while still rejecting stale or materially future payloads.
+    if observed_at.tzinfo is None or not -timedelta(seconds=5) <= now - observed_at <= timedelta(minutes=2):
         raise ValueError("Stale or future health payload")
     if not isinstance(payload["signals"], list) or len(payload["signals"]) != len(SIGNALS):
         raise ValueError("Incomplete health signal set")
@@ -95,7 +97,9 @@ def collect(store: FirestoreNoticeStore, *, client_id: str, client_secret: str, 
     try:
         body = fetch(client_id, client_secret)
         reachability = (Outcome.PASS, EpistemicState.KNOWN, "HTTP_OK")
-        signals = _signal_map(body, observed_at)
+        # Validate against receipt time, not the timestamp captured before the
+        # request: a current response is necessarily later than that timestamp.
+        signals = _signal_map(body, now if now is not None else datetime.now(timezone.utc))
     except HTTPError as exc:
         # Access denial is a monitor-credential problem, not evidence of app failure.
         if exc.code not in (301, 302, 303, 307, 308, 401, 403):

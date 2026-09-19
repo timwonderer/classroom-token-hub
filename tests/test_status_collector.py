@@ -1,8 +1,10 @@
 import json
 import sys
 import types
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.error import HTTPError, URLError
+
+import pytest
 
 from status.projection import EpistemicState, Outcome
 from status.contracts import ExternalObservationRecord
@@ -82,6 +84,14 @@ def test_unregistered_or_stale_payload_fails_closed():
         assert False, "unregistered key accepted"
     except ValueError:
         pass
+
+
+def test_health_response_accepts_bounded_clock_skew_but_rejects_future_payload():
+    # A response generated after the poll began can be slightly ahead of the
+    # collector's clock; an arbitrarily future response is not evidence.
+    assert _signal_map(payload(timestamp=NOW + timedelta(seconds=1)), NOW)["database"][0] == Outcome.PASS
+    with pytest.raises(ValueError, match="future"):
+        _signal_map(payload(timestamp=NOW + timedelta(seconds=6)), NOW)
 
 
 def test_diagnostic_cannot_claim_pass_for_unregistered_check():
