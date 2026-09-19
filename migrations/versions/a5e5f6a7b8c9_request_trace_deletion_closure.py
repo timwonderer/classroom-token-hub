@@ -27,9 +27,14 @@ def upgrade():
     foreign_keys = sa.inspect(bind).get_foreign_keys("actor_request_trace")
     with op.batch_alter_table("actor_request_trace") as batch:
         batch.alter_column("class_id", existing_type=sa.String(36), nullable=False)
+        # Only the class_id key is created. A key on actor_public_id -> seats
+        # was created here originally and dropped a few revisions later by
+        # d9e1f3a5b7c9: INV-ARC-021 V.7 permits cross-domain foreign keys only
+        # to class_id, seat_id and user_id. Trace rows still die with their
+        # class through class_id, and with their seat through the explicit
+        # sweep in app/utils/student_deletion.py (DOM-SUP-001 X).
         for columns, name, target, remote in [
             (["class_id"], "fk_actor_request_trace_class_id_classes", "classes", ["class_id"]),
-            (["actor_public_id"], "fk_actor_request_trace_seat", "seats", ["public_id"]),
         ]:
             existing = next((fk for fk in foreign_keys if fk["constrained_columns"] == columns), None)
             if existing and existing.get("options", {}).get("ondelete", "").upper() == "CASCADE":
@@ -40,8 +45,12 @@ def upgrade():
 
 
 def downgrade():
+    existing = {fk["name"] for fk in sa.inspect(op.get_bind()).get_foreign_keys("actor_request_trace")}
     with op.batch_alter_table("actor_request_trace") as batch:
-        batch.drop_constraint("fk_actor_request_trace_seat", type_="foreignkey")
+        # Present only on a database that applied an earlier form of this
+        # revision, before the seat key was removed from it.
+        if "fk_actor_request_trace_seat" in existing:
+            batch.drop_constraint("fk_actor_request_trace_seat", type_="foreignkey")
         batch.drop_constraint("fk_actor_request_trace_class_id_classes", type_="foreignkey")
         batch.alter_column("class_id", existing_type=sa.String(36), nullable=True)
         batch.create_foreign_key("fk_actor_request_trace_class_id_classes", "classes",

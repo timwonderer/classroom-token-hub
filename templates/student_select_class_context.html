@@ -5,8 +5,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Select your class</title>
+  <link href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
+  <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
   <style>
     .class-select-column { max-width: 720px; }
   </style>

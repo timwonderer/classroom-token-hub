@@ -36,7 +36,20 @@ def old_database(tmp_path):
     engine.dispose()
 
 
-def test_trace_migration_removes_detached_rows_and_installs_cascades(old_database):
+def test_trace_migration_removes_detached_rows_and_binds_traces_to_their_class(old_database):
+    """Detached rows go, and the class becomes the trace's existential root.
+
+    The trace's *class* lifetime is a foreign key: `class_id` is one of the
+    three columns INV-ARC-021 §V.7 permits a cross-domain key to target, so
+    destroying a class takes its traces with it.
+
+    The trace's *seat* lifetime is not. This revision used to add
+    `fk_actor_request_trace_seat` on `actor_public_id`, which §V.7 does not
+    permit and `d9e1f3a5b7c9` removes. Seat deletion sweeps traces explicitly
+    instead (`app/utils/student_deletion.py`, DOM-SUP-001 §X) — which is also
+    what lets an unclaimed seat keep an earlier claimant's rows, a state no
+    cascade could express.
+    """
     with old_database.begin() as connection:
         connection.execute(text("""INSERT INTO actor_request_trace VALUES
             (1,'seat-a','a','student'), (2,'seat-b','b','teacher'),
@@ -44,11 +57,19 @@ def test_trace_migration_removes_detached_rows_and_installs_cascades(old_databas
         migration = _migration(connection)
         migration.upgrade()
         assert connection.execute(text("SELECT id FROM actor_request_trace ORDER BY id")).scalars().all() == [1, 2]
-        assert all(fk["options"]["ondelete"] == "CASCADE" for fk in inspect(connection).get_foreign_keys("actor_request_trace"))
+
+        foreign_keys = inspect(connection).get_foreign_keys("actor_request_trace")
+        assert [fk["referred_table"] for fk in foreign_keys] == ["classes"]
+        assert all(fk["options"]["ondelete"] == "CASCADE" for fk in foreign_keys)
+
+        # Deleting the seat leaves the trace to the explicit sweep.
         connection.execute(text("DELETE FROM seats WHERE public_id='seat-a'"))
-        assert connection.execute(text("SELECT id FROM actor_request_trace")).scalars().all() == [2]
+        assert connection.execute(text("SELECT id FROM actor_request_trace ORDER BY id")).scalars().all() == [1, 2]
+
+        # Deleting the class still takes its traces with it.
         connection.execute(text("DELETE FROM classes WHERE class_id='b'"))
-        assert connection.execute(text("SELECT COUNT(*) FROM actor_request_trace")).scalar() == 0
+        assert connection.execute(text("SELECT id FROM actor_request_trace")).scalars().all() == [1]
+
         migration.downgrade()
         assert len(inspect(connection).get_foreign_keys("actor_request_trace")) == 1
 

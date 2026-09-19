@@ -68,14 +68,17 @@ def upgrade():
 
 
 def downgrade():
-    for table, name in _SEAT_REFERENCES:
-        if not table_exists(table):
-            continue
-        orphaned = op.get_bind().execute(sa.text(
-            f"SELECT 1 FROM {table} t WHERE NOT EXISTS "
-            f"(SELECT 1 FROM seats s WHERE s.public_id = t.actor_public_id) LIMIT 1"
-        )).first()
-        if orphaned:
-            raise RuntimeError(f'{table} has rows without a live seat; cannot restore {name}. No rows were changed.')
-        if not foreign_key_exists(table, name):
-            op.create_foreign_key(name, table, 'seats', ['actor_public_id'], ['public_id'], ondelete='CASCADE')
+    """No-op by design.
+
+    Neither e3c3d4e5f6a7 nor a5e5f6a7b8c9 creates a foreign key from
+    actor_public_id to seats.public_id any more, so the state this revision
+    downgrades to has none, and restoring one here would produce a schema no
+    upgrade path ever builds. It would also be unsafe: an unclaimed seat may
+    hold an earlier claimant's tickets, so these columns can legitimately
+    reference a seat that is gone, which is exactly why INV-ARC-021 V.7 allows
+    no such key.
+
+    The upgrade above stays a defensive drop for databases that applied the
+    earlier forms of those revisions.
+    """
+    return

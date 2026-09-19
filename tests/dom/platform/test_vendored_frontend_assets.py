@@ -72,3 +72,32 @@ def test_templates_reference_the_bundle_rather_than_the_bare_js():
         if "vendor/bootstrap/bootstrap.min.js" in path.read_text(encoding="utf-8")
     ]
     assert offenders == [], offenders
+
+
+def test_every_standalone_page_loads_bootstrap_and_the_design_tokens():
+    """A page that declares its own document must load the whole style stack.
+
+    ``style.css`` consumes design tokens but does not import them — it opens
+    "Consumes tokens.css for role-aware theming" — so a page that loads only
+    ``style.css`` resolves every ``var(--…)`` to nothing. Bootstrap is the same
+    story for layout: ``card``, ``d-flex`` and the spacing utilities come from
+    it, not from this project's stylesheet.
+
+    ``student_select_class_context.html`` was rendering the ``alert_card`` macro
+    with neither layer loaded, so its alerts lost both their colours and their
+    layout while the page around them still looked broadly right — the failure
+    mode that makes this worth pinning rather than eyeballing.
+    """
+    offenders = []
+    for path in _templates():
+        text = path.read_text(encoding="utf-8")
+        if "DOCTYPE" not in text:
+            continue  # a fragment or an extending template inherits the stack
+        missing = []
+        if "vendor/bootstrap/bootstrap.min.css" not in text:
+            missing.append("bootstrap")
+        if "tokens.css" not in text:
+            missing.append("tokens.css")
+        if missing:
+            offenders.append(f"{path.relative_to(REPO_ROOT)} missing {'+'.join(missing)}")
+    assert offenders == [], offenders

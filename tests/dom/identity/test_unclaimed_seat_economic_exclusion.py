@@ -268,3 +268,102 @@ def test_DOM_IDEN_002__a_claimed_seat_can_still_be_renamed(client):
 
     db.session.expire_all()
     assert IdentityProfile.query.filter_by(seat_id=student.id).first().first_name == "Renamed"
+
+
+def _modify_via_feat_class_002(classroom, seat_id, first_name, last_name):
+    """Drive the other rename entry point: FEAT-CLASS-002 roster modification.
+
+    `/admin/student/edit` is not the only way a seat gets renamed. FEAT-CLASS-002
+    owns `actor_public_id`-based modification of an exported roster
+    (FEAT-IDEN-006 §Additive roster import draws the distinction explicitly), and
+    it reaches the same profile write through a different door.
+    """
+    from app.feats.base import generate_correlation_id
+    from app.feats.class_configuration.feat_class_002_modify_class_boundary import (
+        execute_modify_student,
+    )
+    from app.services.context_resolver import CanonicalContext
+
+    teacher_seat = Seat.query.filter_by(class_id=classroom.class_id, role="teacher").one()
+    return execute_modify_student(
+        canonical_context=CanonicalContext(
+            user_id=classroom.teacher_user.id,
+            class_id=classroom.class_id,
+            seat_id=teacher_seat.id,
+            actor_role="teacher",
+        ),
+        class_id=classroom.class_id,
+        seat_id=seat_id,
+        first_name=first_name,
+        last_name=last_name,
+        correlation_id=generate_correlation_id(),
+        idempotency_key=f"class:modify-student:{seat_id}",
+    )
+
+
+def test_DOM_IDEN_002__the_roster_modification_feat_also_refuses_an_unclaimed_seat(client):
+    """The same rule, held at the second entry point.
+
+    FEAT-CLASS-002 validated context, ownership, role and non-empty names, but
+    never claim state, and then updated the IdentityProfile alone — leaving the
+    claim hashes on the old name. Recomputing them instead is not the fix:
+    DOM-IDEN-002 §VIII.7 forbids display-name edits from regenerating claim
+    artifacts, and DOM-IDEN-005 §Explicit Unclaim puts regeneration at unclaim,
+    from freshly entered names.
+    """
+    from app.models import IdentityProfile
+
+    classroom = initialize_as_teacher("chemistry_p1", client, client.application)
+    seat = _unclaimed_seat_holding_money(classroom)
+    before = IdentityProfile.query.filter_by(seat_id=seat.id).first()
+    original_first = before.first_name
+    original_first_hash = seat.claim_first_name_hash
+    original_last_hash = seat.claim_last_name_hash
+    original_fingerprint = seat.roster_fingerprint
+
+    result = _modify_via_feat_class_002(classroom, seat.id, "Renamed", "Namesake")
+
+    assert result.success is False
+    assert result.error_code == "SEAT_NOT_CLAIMED"
+
+    db.session.expire_all()
+    after_seat = db.session.get(Seat, seat.id)
+    assert IdentityProfile.query.filter_by(seat_id=seat.id).first().first_name == original_first
+    # Neither moved, so the displayed name and the claim key cannot disagree.
+    assert after_seat.claim_first_name_hash == original_first_hash
+    assert after_seat.claim_last_name_hash == original_last_hash
+    assert after_seat.roster_fingerprint == original_fingerprint
+
+
+def test_DOM_IDEN_002__the_roster_modification_feat_still_renames_a_claimed_seat(client):
+    """Scoped to claim state, not to renaming generally."""
+    from app.models import IdentityProfile
+
+    classroom = initialize_as_teacher("chemistry_p1", client, client.application)
+    student = classroom.students[0].seat
+
+    result = _modify_via_feat_class_002(classroom, student.id, "Renamed", "Student")
+
+    assert result.success is True, result.error_message
+    db.session.expire_all()
+    profile = IdentityProfile.query.filter_by(seat_id=student.id).first()
+    assert profile.first_name == "Renamed"
+    assert profile.last_name == "Student"
+
+
+def test_DOM_IDEN_002__renaming_a_claimed_seat_does_not_recreate_claim_artifacts(client):
+    """The other half of §VIII.7: cleared artifacts stay cleared.
+
+    Claim material is cleared when the seat is claimed. If a later rename put it
+    back, a claimed seat would become claimable again by name.
+    """
+    classroom = initialize_as_teacher("chemistry_p1", client, client.application)
+    student = classroom.students[0].seat
+
+    assert _modify_via_feat_class_002(classroom, student.id, "Renamed", "Student").success is True
+
+    db.session.expire_all()
+    after = db.session.get(Seat, student.id)
+    assert after.claim_first_name_hash is None
+    assert after.claim_last_name_hash is None
+    assert after.dedupe_code is None

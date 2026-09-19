@@ -250,7 +250,21 @@ def test_teacher_account_deletion_removes_seat_scoped_ticket_and_pack(client):
     assert db.session.get(TicketCorrelationPack, issue_id) is None
 
 
-def test_seat_cascade_migration_upgrade_and_downgrade(monkeypatch):
+def test_support_seat_revision_scopes_the_ticket_without_a_key_to_seats(monkeypatch):
+    """`class_public_id` becomes required; `actor_public_id` gains no foreign key.
+
+    This revision used to create `fk_issues_actor_public_id_seats` and cascade a
+    ticket away with its seat. INV-ARC-021 §V.7 permits a cross-domain key only
+    to `class_id`, `seat_id` or `user_id`, so `d9e1f3a5b7c9` removes it, and
+    building it here only to drop it a few revisions later was both
+    contradictory and unsafe: nothing reconciled `issues` first, so one ticket
+    pointing at a seat that no longer exists failed the upgrade outright.
+
+    Ticket lifetime is enforced by the explicit sweep in
+    `app/utils/student_deletion.py` (DOM-SUP-001 §X), which is also what allows
+    an unclaimed seat to keep an earlier claimant's tickets — a state a cascade
+    cannot express.
+    """
     from alembic.migration import MigrationContext
     from alembic.operations import Operations
     path = Path(__file__).resolve().parents[3] / 'migrations/versions/e3c3d4e5f6a7_support_seat_deletion_cascade.py'
@@ -265,14 +279,20 @@ def test_seat_cascade_migration_upgrade_and_downgrade(monkeypatch):
         conn.execute(sa.text("INSERT INTO issues VALUES (1, 'seat-reference', 'class-reference')"))
         monkeypatch.setattr(migration, 'op', Operations(MigrationContext.configure(conn)))
         migration.upgrade()
-        migration.upgrade()
+        migration.upgrade()  # idempotent
         columns = {c['name']: c for c in sa.inspect(conn).get_columns('issues')}
         assert columns['class_public_id']['nullable'] is False
-        conn.execute(sa.text("DELETE FROM seats WHERE public_id = 'seat-reference'"))
-        assert conn.execute(sa.text('SELECT count(*) FROM issues')).scalar_one() == 0
-        migration.downgrade()
-        migration.downgrade()
         assert sa.inspect(conn).get_foreign_keys('issues') == []
+
+        # The ticket outlives its seat here; the deletion path removes it.
+        conn.execute(sa.text("DELETE FROM seats WHERE public_id = 'seat-reference'"))
+        assert conn.execute(sa.text('SELECT count(*) FROM issues')).scalar_one() == 1
+
+        migration.downgrade()
+        migration.downgrade()  # idempotent
+        assert sa.inspect(conn).get_foreign_keys('issues') == []
+        columns = {c['name']: c for c in sa.inspect(conn).get_columns('issues')}
+        assert columns['class_public_id']['nullable'] is True
 
 
 def test_teacher_ticket_keeps_original_class_label_after_class_rename(client):
