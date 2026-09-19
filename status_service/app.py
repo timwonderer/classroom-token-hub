@@ -12,34 +12,38 @@ from flask import Flask, abort, jsonify, redirect, render_template, request, ses
 from .contracts import ExternalStatusNoticeEvent, NoticeState, RecoveryExpectationState
 from .identity import authenticated_operator_email
 from .log_setup import configure_logging
-from status.projection import derive_capability_cards, derive_platform_checks
+from status.projection import _current_evidence, derive_capability_cards, derive_platform_checks
 from .store import FirestoreNoticeStore
 
 
-def derive_overall_status(notices: list[dict]) -> dict[str, str]:
-    """Derive the public summary from the current notice projection.
-
-    Resolved notices remain visible as history but do not keep the overall
-    signal impaired. In the absence of a fresh observation source, no active
-    notice is deliberately reported as unknown rather than healthy.
-    """
+def derive_overall_status(notices: list[dict], cards: list[dict] | None = None, platform: list[dict] | None = None, observations: dict[str, dict] | None = None) -> dict:
+    """Combine active notices and fresh bounded evidence without assuming health."""
+    now = datetime.now(timezone.utc)
+    keys = {item["key"] for item in (cards or []) + (platform or [])}
+    fresh = [evidence["observed_at"] for key in keys
+             if (evidence := _current_evidence(observations, key, now)) is not None]
+    checked = max(fresh).strftime("%Y-%m-%d %H:%M UTC") if fresh else "awaiting monitoring evidence"
+    if any((evidence := _current_evidence(observations, key, now)) is not None
+           and evidence["outcome"] == "FAIL" and evidence["epistemic_state"] == "KNOWN"
+           for key in keys):
+        return {"state": "DEGRADED", "label": "DETECTED PROBLEMS", "headline": "A current check detected a service problem.", "detail": "See the affected services below for current evidence.", "checked": checked}
     active = [notice for notice in notices if notice.get("state") != NoticeState.RESOLVED.value]
-    if not active:
-        return {
-            "state": "UNKNOWN",
-            "label": "UNKNOWN",
-            "headline": "Service monitoring is starting up.",
-            "detail": "There are no active service notices. We do not yet have monitoring evidence to confirm current availability.",
+    if active:
+        priority = {
+            NoticeState.INVESTIGATING.value: (0, "DETECTED PROBLEMS", "We are investigating a service issue."),
+            NoticeState.IDENTIFIED.value: (1, "DETECTED PROBLEMS", "A service issue has been identified."),
+            NoticeState.MONITORING.value: (2, "UNDER MAINTENANCE", "A service recovery is being monitored."),
         }
-    priority = {
-        NoticeState.INVESTIGATING.value: (0, "DETECTED PROBLEMS", "We are investigating a service issue."),
-        NoticeState.IDENTIFIED.value: (1, "DETECTED PROBLEMS", "A service issue has been identified."),
-        NoticeState.MONITORING.value: (2, "UNDER MAINTENANCE", "A service recovery is being monitored."),
-    }
-    notice = min(active, key=lambda item: priority.get(item.get("state"), (0, "INVESTIGATING", "We are investigating a service issue."))[0])
-    state = notice.get("state", NoticeState.INVESTIGATING.value)
-    _, label, headline = priority.get(state, priority[NoticeState.INVESTIGATING.value])
-    return {"state": state, "label": label, "headline": headline, "detail": notice.get("impact_statement", "")}
+        notice = min(active, key=lambda item: priority.get(item.get("state"), priority[NoticeState.INVESTIGATING.value])[0])
+        state = notice.get("state", NoticeState.INVESTIGATING.value)
+        _, label, headline = priority.get(state, priority[NoticeState.INVESTIGATING.value])
+        return {"state": state, "label": label, "headline": headline, "detail": notice.get("impact_statement", ""), "checked": checked, "notice": notice}
+    states = [item["state"] for item in (cards or []) + (platform or [])]
+    if any(state in {"DEGRADED", "UNAVAILABLE", "INVESTIGATING", "IDENTIFIED"} for state in states):
+        return {"state": "DEGRADED", "label": "DETECTED PROBLEMS", "headline": "Some checks detected a problem.", "detail": "See the affected services below for current evidence.", "checked": checked}
+    if states and all(state == "AVAILABLE" for state in states):
+        return {"state": "AVAILABLE", "label": "EVERYTHING IS WORKING", "headline": "Everything is looking good.", "detail": "All listed checks have recent successful observations.", "checked": checked}
+    return {"state": "UNKNOWN", "label": "UNKNOWN", "headline": "Current service health is not yet confirmed.", "detail": "Some checks have no recent conclusive evidence. This does not mean a problem has been detected.", "checked": checked}
 
 
 def create_app(store=None) -> Flask:
@@ -49,8 +53,8 @@ def create_app(store=None) -> Flask:
     if app.config["STATUS_SERVICE_MODE"] not in {"public", "operator"}:
         raise RuntimeError("STATUS_SERVICE_MODE must be public or operator")
     app.config["SECRET_KEY"] = os.environ.get("STATUS_SESSION_SECRET", "")
-    app.config["STATUS_CAPABILITIES"] = tuple(item.strip() for item in os.environ.get("STATUS_CAPABILITIES", "public_service_reachability").split(",") if item.strip())
-    app.config["STATUS_PLATFORM_CHECKS"] = tuple(item.strip() for item in os.environ.get("STATUS_PLATFORM_CHECKS", "database,background_jobs,monitoring_freshness").split(",") if item.strip())
+    app.config["STATUS_CAPABILITIES"] = tuple(item.strip() for item in os.environ.get("STATUS_CAPABILITIES", "public_service_reachability,login,attendance,payroll,roster,classroom_economy").split(",") if item.strip())
+    app.config["STATUS_PLATFORM_CHECKS"] = tuple(item.strip() for item in os.environ.get("STATUS_PLATFORM_CHECKS", "database,background_jobs,external_integrations,monitoring_freshness,invariant_verification").split(",") if item.strip())
     if store is None:
         from google.cloud import firestore
         store = FirestoreNoticeStore(firestore.Client(database=os.environ.get("FIRESTORE_DATABASE", "cth-status-prod")))
@@ -76,14 +80,17 @@ def create_app(store=None) -> Flask:
     def public_status():
         if app.config["STATUS_SERVICE_MODE"] != "public":
             abort(404)
-        notices = store.list_notices(limit=20)
-        active_notices = [notice for notice in notices if notice.get("state") != NoticeState.RESOLVED.value]
+        active_notices = store.list_active_notices()
+        observations = store.list_current_observations()
+        now = datetime.now(timezone.utc)
+        cards = derive_capability_cards(active_notices, app.config["STATUS_CAPABILITIES"], observations, now=now)
+        platform = derive_platform_checks(active_notices, app.config["STATUS_PLATFORM_CHECKS"], observations, now=now)
         return render_template(
             "public_status.html",
             notices=active_notices,
-            overall_status=derive_overall_status(notices),
-            capability_cards=derive_capability_cards(notices, app.config["STATUS_CAPABILITIES"]),
-            platform_checks=derive_platform_checks(notices, app.config["STATUS_PLATFORM_CHECKS"]),
+            overall_status=derive_overall_status(active_notices, cards, platform, observations),
+            capability_cards=cards,
+            platform_checks=platform,
         )
 
     @app.get("/operator/notices")

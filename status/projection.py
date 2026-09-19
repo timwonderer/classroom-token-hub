@@ -59,36 +59,83 @@ PLATFORM_CHECK_LABELS = {
 
 
 def _active_notice_index(notices: list[dict]) -> dict:
-    return {notice.get("capability"): notice for notice in notices if notice.get("state") != "RESOLVED"}
+    active = {}
+    for notice in notices:
+        if notice.get("state") != "RESOLVED":
+            active.setdefault(notice.get("capability"), notice)
+    return active
 
 
-def derive_capability_cards(notices: list[dict], capabilities: tuple[str, ...]) -> list[dict[str, str]]:
+def _current_evidence(observations: dict[str, dict] | None, key: str, now: datetime | None) -> dict | None:
+    """Accept only a fresh, lawful, closed external-probe projection."""
+    candidate = (observations or {}).get(key)
+    if not isinstance(candidate, dict) or candidate.get("source") != EvidenceSource.EXTERNAL_PROBE.value:
+        return None
+    if candidate.get("capability") != key:
+        return None
+    observed_at = candidate.get("observed_at")
+    current = now or datetime.now(timezone.utc)
+    if not isinstance(observed_at, datetime) or observed_at.tzinfo is None:
+        return None
+    if not timedelta(0) <= current - observed_at <= FRESHNESS_MAX_AGE["REALTIME"]:
+        return None
+    try:
+        outcome = Outcome(candidate.get("outcome"))
+        epistemic = EpistemicState(candidate.get("epistemic_state"))
+    except ValueError:
+        return None
+    if (outcome, epistemic) not in _VALID_RAW_STATES:
+        return None
+    return candidate
+
+
+def _public_evidence_state(candidate: dict | None) -> tuple[str, str]:
+    if candidate is None:
+        return "UNKNOWN", "No recent verified observation is available."
+    if candidate["epistemic_state"] == EpistemicState.UNAVAILABLE.value:
+        return "UNKNOWN", "The current check could not establish service health."
+    if candidate["outcome"] == Outcome.PASS.value:
+        return "AVAILABLE", "No problem detected by the current check."
+    if candidate["outcome"] == Outcome.FAIL.value:
+        return "DEGRADED", "The current check detected a problem."
+    return "UNKNOWN", "The current check could not establish availability."
+
+
+def derive_capability_cards(notices: list[dict], capabilities: tuple[str, ...], observations: dict[str, dict] | None = None, *, now: datetime | None = None) -> list[dict[str, str]]:
     active = _active_notice_index(notices)
     cards = []
     for capability in capabilities:
         name, question = CAPABILITY_LABELS.get(capability, (capability.replace("_", " ").title(), "Is this service working right now?"))
         notice = active.get(capability)
+        evidence = _current_evidence(observations, capability, now)
+        state, detail = _public_evidence_state(evidence)
+        failure = state == "DEGRADED"
+        checked = evidence["observed_at"].strftime("%Y-%m-%d %H:%M UTC") if evidence else "No recent verified observation"
         cards.append({
             "key": capability,
             "name": name,
             "question": question,
-            "state": notice.get("state", "UNKNOWN") if notice else "UNKNOWN",
-            "label": notice.get("impact_statement", "Monitoring evidence is not available yet.") if notice else "Monitoring evidence is not available yet.",
-            "checked": "Active status notice" if notice else "No verified observation yet",
+            "state": state if failure else notice.get("state", "UNKNOWN") if notice else state,
+            "label": f"{detail} Observed {checked}." if failure else notice.get("impact_statement", detail) if notice else detail,
+            "checked": checked if failure or not notice else "Active status notice",
         })
     return cards
 
 
-def derive_platform_checks(notices: list[dict], checks: tuple[str, ...]) -> list[dict[str, str]]:
+def derive_platform_checks(notices: list[dict], checks: tuple[str, ...], observations: dict[str, dict] | None = None, *, now: datetime | None = None) -> list[dict[str, str]]:
     active = _active_notice_index(notices)
     rows = []
     for check in checks:
         notice = active.get(check)
+        evidence = _current_evidence(observations, check, now)
+        state, detail = _public_evidence_state(evidence)
+        failure = state == "DEGRADED"
+        checked = evidence["observed_at"].strftime("%Y-%m-%d %H:%M UTC") if evidence else "No recent verified observation"
         rows.append({
             "key": check,
             "name": PLATFORM_CHECK_LABELS.get(check, check.replace("_", " ").title()),
-            "state": notice.get("state", "UNKNOWN") if notice else "UNKNOWN",
-            "detail": notice.get("impact_statement", "No current platform evidence is available.") if notice else "No current platform evidence is available.",
+            "state": state if failure else notice.get("state", "UNKNOWN") if notice else state,
+            "detail": f"{detail} Observed {checked}." if failure else notice.get("impact_statement", detail) if notice else detail,
         })
     return rows
 

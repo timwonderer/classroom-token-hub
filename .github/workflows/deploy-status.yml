@@ -55,7 +55,7 @@ jobs:
       - name: Run focused status tests
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/classroom_economy_v2_test
-        run: pytest -q tests/test_status_contracts.py tests/test_status_projection.py tests/test_status_telemetry.py tests/test_status_identity.py tests/test_status_deploy_workflow.py
+        run: pytest -q tests/test_status_contracts.py tests/test_status_projection.py tests/test_status_telemetry.py tests/test_status_identity.py tests/test_status_collector.py tests/test_status_deploy_workflow.py
 
   deploy:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
@@ -104,6 +104,22 @@ jobs:
           --project "$GCP_PROJECT_ID"
           --update-env-vars "STATUS_SERVICE_MODE=operator,FIRESTORE_DATABASE=cth-status-prod"
           --update-secrets "STATUS_SESSION_SECRET=status-session-secret:latest"
+          --quiet
+      # Explicitly opt in after provisioning the collector identity, secret
+      # access, Firestore permissions, and Scheduler trigger in the ops runbook.
+      # The presence of Secret Manager versions alone must not activate probing.
+      - name: Deploy app health collector job
+        if: ${{ vars.STATUS_APP_HEALTH_COLLECTOR_ENABLED == 'true' }}
+        run: >-
+          gcloud run jobs deploy cth-status-app-health-collector
+          --image "$IMAGE_URI"
+          --region "$GCP_REGION"
+          --project "$GCP_PROJECT_ID"
+          --service-account "status-probe@cth-production-status.iam.gserviceaccount.com"
+          --command python
+          --args=-m,status_service.collector
+          --update-env-vars "FIRESTORE_DATABASE=cth-status-prod"
+          --update-secrets "CF_ACCESS_CLIENT_ID=cth-status-cf-access-client-id:latest,CF_ACCESS_CLIENT_SECRET=cth-status-cf-access-client-secret:latest"
           --quiet
       # Inspects the services rather than requesting them. Both run with
       # restricted ingress, so their run.app URLs answer a GitHub runner with
