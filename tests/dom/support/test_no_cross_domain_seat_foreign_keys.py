@@ -31,19 +31,63 @@ _CREATE_FK = re.compile(
 )
 
 
+def _forbidden_keys(source: str) -> list[str]:
+    """Foreign keys this source creates from actor_public_id to seats.
+
+    Pure over the text so the guard itself can be tested against a known
+    violation, rather than only ever being run over a corpus that passes.
+    """
+    return [
+        " ".join(match.group(0).split())[:120]
+        for match in _CREATE_FK.finditer(source)
+        if "seats" in match.group(0)
+    ]
+
+
 def test_no_migration_creates_a_foreign_key_on_actor_public_id():
     offenders = []
     for path in sorted(MIGRATIONS.glob("*.py")):
         if path.name.startswith(_REMOVAL_REVISION):
             continue
-        text = path.read_text(encoding="utf-8")
-        for match in _CREATE_FK.finditer(text):
-            if "seats" in match.group(0):
-                offenders.append(f"{path.name}: {' '.join(match.group(0).split())[:120]}")
+        for found in _forbidden_keys(path.read_text(encoding="utf-8")):
+            offenders.append(f"{path.name}: {found}")
     assert offenders == [], (
         "actor_public_id carries no foreign key to seats (INV-ARC-021 §V.7); "
         f"seat-scoped sweeps handle deletion instead: {offenders}"
     )
+
+
+def test_the_guard_catches_a_migration_that_adds_the_key():
+    """The mutation proof: commit the forbidden thing, confirm CI stops it.
+
+    Without this, a green check above means either "no migration creates the
+    key" or "the pattern stopped matching" — and the two are indistinguishable
+    from the outside. Each spelling below is one a real migration would plausibly
+    use, including the batch form, which is how both removed instances were
+    written.
+    """
+    violations = [
+        """op.create_foreign_key('fk_issues_actor_public_id_seats', 'issues', 'seats',
+                                 ['actor_public_id'], ['public_id'], ondelete='CASCADE')""",
+        """with op.batch_alter_table('issues') as batch:
+               batch.create_foreign_key(_NAME, 'seats', ['actor_public_id'], ['public_id'])""",
+        """op.create_foreign_key(
+               name,
+               'actor_request_trace',
+               'seats',
+               ['actor_public_id'],
+               ['public_id'],
+           )""",
+    ]
+    for source in violations:
+        assert _forbidden_keys(source), f"guard missed a forbidden key:\n{source}"
+
+    # And it must not fire on the permitted key to classes, or the guard would
+    # block the class_id cascade the chain legitimately relies on.
+    permitted = """op.create_foreign_key('fk_actor_request_trace_class_id_classes',
+                        'actor_request_trace', 'classes', ['class_id'], ['class_id'],
+                        ondelete='CASCADE')"""
+    assert not _forbidden_keys(permitted)
 
 
 def test_the_removal_revision_does_not_restore_the_key_on_downgrade():

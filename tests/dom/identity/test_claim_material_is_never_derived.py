@@ -53,33 +53,40 @@ def _describe(node: ast.AST) -> str:
         return type(node).__name__
 
 
+def _derived_name_arguments(source: str, label: str = "<source>") -> list[str]:
+    """Claim-material calls in this source whose name argument is read off an object.
+
+    Pure over the text so the guard can be run against a known violation as well
+    as against the repo, which is the only way to tell "nothing violates this"
+    from "the detector stopped detecting".
+    """
+    offenders = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.Call):
+            continue
+        callee = getattr(node.func, "id", None) or getattr(node.func, "attr", None)
+        spec = CLAIM_MATERIAL_FUNCTIONS.get(callee)
+        if spec is None:
+            continue
+        for argument in _name_arguments(node, spec):
+            if isinstance(argument, ast.Attribute):
+                offenders.append(f"{label}:{node.lineno} {callee}(… {_describe(argument)} …)")
+    return offenders
+
+
 def test_no_claim_hash_is_computed_from_a_stored_row():
     """The name argument must be a plain value, never read off an object.
 
-    Checked by shape rather than by variable name. An earlier version of this
-    test matched a list of likely names (`profile`, `identity_profile`, …) and
-    let a deliberately injected `_probe_profile.first_name` straight through —
-    a guard keyed on naming only catches violations that are already obvious.
-
-    Any attribute read here (`x.first_name`) means the name came out of a
-    persisted row rather than from this operation's input, which is the
-    direction DOM-IDEN-005 forbids. `class_id` and `field` are exempt: they are
-    scope, not identity.
+    Checked by shape rather than by variable name. Any attribute read here
+    (`x.first_name`) means the name came out of a persisted row rather than from
+    this operation's input, which is the direction DOM-IDEN-005 forbids.
+    `class_id` and `field` are exempt: they are scope, not identity.
     """
     offenders = []
     for relative in SOURCES:
-        path = REPO_ROOT / relative
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.Call):
-                continue
-            callee = getattr(node.func, "id", None) or getattr(node.func, "attr", None)
-            spec = CLAIM_MATERIAL_FUNCTIONS.get(callee)
-            if spec is None:
-                continue
-            for argument in _name_arguments(node, spec):
-                if isinstance(argument, ast.Attribute):
-                    offenders.append(f"{relative}:{node.lineno} {callee}(… {_describe(argument)} …)")
+        offenders += _derived_name_arguments(
+            (REPO_ROOT / relative).read_text(encoding="utf-8"), relative
+        )
     assert offenders == [], (
         "Claim material must be minted from names entered at the time of the "
         "operation, never read back off a stored row — the IdentityProfile is "
@@ -87,6 +94,40 @@ def test_no_claim_hash_is_computed_from_a_stored_row():
         "governs who may claim a Seat (DOM-IDEN-005 §Why the names must be "
         f"entered, never derived): {offenders}"
     )
+
+
+def test_the_guard_catches_a_name_read_off_a_stored_row():
+    """The mutation proof: commit the forbidden thing, confirm CI stops it.
+
+    The first version of this guard matched a list of likely variable names
+    (`profile`, `identity_profile`, …). A deliberately injected
+    `_probe_profile.first_name` passed it — a guard keyed on naming only catches
+    violations obvious enough not to need catching, and its green check is then
+    read as proof the defect is impossible.
+
+    Every spelling below is one a future change would plausibly use, including
+    the innocuously-named local that defeated the original.
+    """
+    violations = [
+        "hash_roster_fingerprint(class_id=c, first_name=profile.first_name, last_name=last)",
+        "hash_roster_fingerprint(class_id=c, first_name=_probe_profile.first_name, last_name=last)",
+        "hash_roster_fingerprint(class_id=c, first_name=seat.identity_profile.first_name, last_name=last)",
+        "hash_claim_name(existing.first_name, class_id=c, field='first')",
+        "seat.claim_last_name_hash = hash_claim_name(row.last_name, class_id=c, field='last')",
+    ]
+    for source in violations:
+        assert _derived_name_arguments(source), f"guard missed a derived name: {source}"
+
+    # It must stay quiet on entered values, including a `class_id` read off a
+    # row — that is scope, not identity, and flagging it would block every
+    # legitimate call site.
+    permitted = [
+        "hash_roster_fingerprint(class_id=ctx.class_id, first_name=first, last_name=last)",
+        "hash_claim_name(first_name, class_id=seat.class_id, field='first')",
+        "hash_claim_name(entry['first'], class_id=class_row.class_id, field='first')",
+    ]
+    for source in permitted:
+        assert not _derived_name_arguments(source), f"guard fired on a lawful call: {source}"
 
 
 def test_the_unclaim_form_does_not_prefill_the_name_fields(client, app):

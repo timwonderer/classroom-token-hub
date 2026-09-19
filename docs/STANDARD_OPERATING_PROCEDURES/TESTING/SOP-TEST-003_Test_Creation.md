@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-TEST-003     | 1.1     | 2026-09-06     | SOP-TEST-003 v1.0 | Standard Operating Procedure |
+| SOP-TEST-003     | 1.2     | 2026-09-18     | SOP-TEST-003 v1.1 | Standard Operating Procedure |
 
 ## I. Purpose
 
@@ -141,6 +141,7 @@ Before a new test is treated as authoritative, the contributor must validate tha
 3. The test passes against the patched behavior.
 4. The test is not overfitted to an incidental fixture artifact.
 5. The test does not duplicate an existing test without adding a stricter contract.
+6. **A structural guard ships with a mutation proof.** See §IX.A.
 
 Minimum validation evidence for a newly added test:
 
@@ -148,6 +149,51 @@ Minimum validation evidence for a newly added test:
 - the intended scope
 - the passing result
 - if relevant, the prior failure mode that the test would have caught
+
+### IX.A Mutation Proof For Structural Guards
+
+A **structural guard** is a test whose purpose is to make a class of violation
+impossible to merge: a scan of source, templates or migrations; a decorator,
+registry or naming check; a "no file may contain X" rule. It asserts about the
+shape of the codebase rather than the behavior of a run.
+
+Condition 2 above cannot validate one. It asks that the test fail for the prior
+broken behavior *while that behavior is still present* — and a structural guard
+is normally added to a codebase that already complies, so there is nothing to
+watch fail. A guard can therefore be merged having never detected anything, and
+its green check is then read as proof the violation is impossible.
+
+Every structural guard SHALL therefore ship with a **mutation proof**: a
+companion test, in the same file, that runs the guard's detector against a
+synthetic violating input and asserts the violation is reported. The statement it
+must establish is: *the forbidden thing was committed, and CI stopped it.*
+
+Requirements:
+
+1. **The detector is a pure function** over source text or a parsed tree,
+   returning the offenders it finds. The repo-wide test and the mutation proof
+   both call it. A guard whose logic exists only inside its own assertion cannot
+   be mutation-tested.
+2. **The mutation is a near miss** — the spelling a well-meaning future change
+   would actually produce, not a caricature. Include the form that would defeat a
+   naive implementation of the same check.
+3. **Lawful inputs are asserted quiet.** A guard that fires on legitimate code
+   gets suppressed, which removes it as surely as deleting it.
+4. **Where the detector locates targets by a form that can be renamed** — a
+   decorator name, an import path, a marker string — the guard also asserts that
+   it still finds its targets in the real source. Otherwise a rename turns the
+   check into a no-op that keeps passing.
+
+#### Rationale
+
+Recorded after two guards in one session (2026-09-18) passed while failing to
+guard. One matched a list of likely variable names and let an injected
+`_probe_profile.first_name` through; it was rewritten to check argument shape.
+Two others asserted a database cascade that the governing contract forbade, so
+they defended a defect rather than a rule. In each case the suite was green and
+the protection was absent.
+
+---
 
 ## X. Standard Test Shapes
 
@@ -202,6 +248,19 @@ Must include:
 - the expected status or redirect
 - the expected no-write or write behavior
 
+### 6. Structural Guard
+
+Use when the contract is about the shape of the codebase rather than the behavior
+of a run — an architecture rule that must not be reintroduced anywhere.
+
+Must include:
+
+- the invariant or domain clause the rule comes from
+- a pure detector over source text or a parsed tree
+- the repo-wide assertion that no offender exists
+- the mutation proof required by §IX.A, with at least one near-miss spelling
+- an assertion that a lawful construct is not flagged
+
 ## XI. Quality Bar
 
 A newly created test is acceptable only if it is:
@@ -212,6 +271,7 @@ A newly created test is acceptable only if it is:
 4. scoped to the changed contract
 5. able to fail for the relevant regression
 6. able to distinguish correct from incorrect behavior
+7. for a structural guard, demonstrated to detect the violation it forbids (§IX.A)
 
 If a test requires excessive setup to prove a small contract, the test design is too broad and should be simplified.
 

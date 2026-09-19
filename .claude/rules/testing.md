@@ -403,6 +403,22 @@ assert get_available_balance(seat_id, class_id, "checking") == Decimal("75.00")
 assert get_available_balance(seat_id, class_id, "savings") == Decimal("25.00")
 ```
 
+### MISTAKE 6a: Shipping a structural guard that has never caught anything
+
+A guard against an architecture violation — a source/template/migration scan, a
+decorator or registry check — is normally added to a codebase that already
+complies. So it passes from the moment it is written, and nothing distinguishes
+"no violation exists" from "the detector stopped detecting".
+
+`SOP-TEST-003` §IX.A requires a **mutation proof**: factor the detection into a
+pure function over source text or a parsed tree, and add a companion test that
+feeds it a synthetic violation and asserts it is reported. Make the mutation a
+near miss — the spelling a future change would really use.
+
+Two guards in this repo passed while failing to guard: one matched likely
+variable names and let an injected `_probe_profile.first_name` through, and two
+migration tests asserted a cascade the contract forbade. Green, and unprotected.
+
 ### MISTAKE 6: Trusting a green test you never saw fail
 
 Especially for concurrency, locking, and trigger tests, where the database often

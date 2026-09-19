@@ -105,19 +105,17 @@ def test_the_feat_registry_separates_creating_a_class_from_destroying_one():
     assert "destroy" in destroy_desc
 
 
-def test_no_destruction_entry_point_is_declared_under_the_creation_feat():
-    """Structural guard: the decorator on each destructive entry point.
+def _declared_feats(source: str, wanted: set[str]) -> dict[str, list[str]]:
+    """The FEAT each named function declares via @requires_feat_context.
 
-    Runtime capture proves what happened on one path; this proves no destruction
-    entry point is *declared* under FEAT-CLASS-001, including paths a given test
-    run never reaches.
+    Pure over the text so the guard can be run against a known violation as well
+    as against the repo.
     """
-    tree = ast.parse(ADMIN_SOURCE.read_text(encoding="utf-8"))
-    found = {}
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.FunctionDef) or node.name not in DESTRUCTION_ENTRY_POINTS:
+    found: dict[str, list[str]] = {}
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.FunctionDef) or node.name not in wanted:
             continue
-        feats = [
+        found[node.name] = [
             decorator.args[0].value
             for decorator in node.decorator_list
             if isinstance(decorator, ast.Call)
@@ -125,11 +123,61 @@ def test_no_destruction_entry_point_is_declared_under_the_creation_feat():
             and decorator.args
             and isinstance(decorator.args[0], ast.Constant)
         ]
-        assert len(feats) == 1, f"{node.name} must declare exactly one FEAT, got {feats}"
-        found[node.name] = feats[0]
+    return found
 
-    assert found == DESTRUCTION_ENTRY_POINTS, found
-    assert "FEAT-CLASS-001" not in found.values()
+
+def test_no_destruction_entry_point_is_declared_under_the_creation_feat():
+    """Structural guard: the decorator on each destructive entry point.
+
+    Runtime capture proves what happened on one path; this proves no destruction
+    entry point is *declared* under FEAT-CLASS-001, including paths a given test
+    run never reaches.
+    """
+    found = _declared_feats(ADMIN_SOURCE.read_text(encoding="utf-8"), set(DESTRUCTION_ENTRY_POINTS))
+    for name, feats in found.items():
+        assert len(feats) == 1, f"{name} must declare exactly one FEAT, got {feats}"
+
+    declared = {name: feats[0] for name, feats in found.items()}
+    assert declared == DESTRUCTION_ENTRY_POINTS, declared
+    assert "FEAT-CLASS-001" not in declared.values()
+
+
+def test_the_guard_catches_a_destruction_path_declared_under_creation():
+    """The mutation proof: commit the forbidden thing, confirm CI stops it.
+
+    A guard that only ever runs over a passing repo cannot distinguish "every
+    entry point is correct" from "the decorator is no longer being found" — a
+    rename of `requires_feat_context`, or a switch to a bare `FEATContext`
+    block, would silently turn this check into a no-op that keeps passing.
+    """
+    regressed = """
+@requires_feat_context("FEAT-CLASS-001")
+def _hard_delete_class_scope(*, class_id, canonical_context, correlation_id, idempotency_key):
+    return _destroy_class_scope_rows(class_id=class_id, canonical_context=canonical_context)
+"""
+    declared = _declared_feats(regressed, {"_hard_delete_class_scope"})
+    assert declared["_hard_delete_class_scope"] == ["FEAT-CLASS-001"]
+    assert declared["_hard_delete_class_scope"][0] != DESTRUCTION_ENTRY_POINTS["_hard_delete_class_scope"]
+
+    # An entry point that declares no FEAT at all must also be visible, not
+    # silently absent — that is the other way this check could go quiet.
+    undecorated = """
+def _execute_class_scope_deletion(*, context, seat_ids, data, require_gate,
+                                  correlation_id, idempotency_key):
+    return None
+"""
+    assert _declared_feats(undecorated, {"_execute_class_scope_deletion"}) == {
+        "_execute_class_scope_deletion": []
+    }
+
+    # And the real source must still be parseable by this detector — if the
+    # decorator form changes, the mutation cases above keep passing while the
+    # repo check goes blind, so assert it actually finds every entry point.
+    real = _declared_feats(ADMIN_SOURCE.read_text(encoding="utf-8"), set(DESTRUCTION_ENTRY_POINTS))
+    assert set(real) == set(DESTRUCTION_ENTRY_POINTS), (
+        "the detector no longer locates every destruction entry point; the "
+        f"decorator form may have changed: found {sorted(real)}"
+    )
 
 
 def test_deleting_a_class_executes_under_feat_class_006(client, app, captured_class_destruction):

@@ -31,11 +31,28 @@ def _templates():
     return sorted(TEMPLATES.rglob("*.html"))
 
 
+def _loads_bootstrap_from_a_cdn(source: str) -> bool:
+    """Pure over the text, so the guard can be run against a known violation."""
+    return bool(_BOOTSTRAP_CDN.search(source))
+
+
+def _missing_style_layers(source: str) -> list[str]:
+    """Layers a standalone page fails to load. Empty for a fragment."""
+    if "DOCTYPE" not in source:
+        return []  # a fragment or extending template inherits the stack
+    missing = []
+    if "vendor/bootstrap/bootstrap.min.css" not in source:
+        missing.append("bootstrap")
+    if "tokens.css" not in source:
+        missing.append("tokens.css")
+    return missing
+
+
 def test_no_template_loads_bootstrap_from_a_cdn():
     offenders = [
         str(path.relative_to(REPO_ROOT))
         for path in _templates()
-        if _BOOTSTRAP_CDN.search(path.read_text(encoding="utf-8"))
+        if _loads_bootstrap_from_a_cdn(path.read_text(encoding="utf-8"))
     ]
     assert offenders == [], (
         "Bootstrap must be served from static/vendor/bootstrap so a CDN outage "
@@ -90,14 +107,49 @@ def test_every_standalone_page_loads_bootstrap_and_the_design_tokens():
     """
     offenders = []
     for path in _templates():
-        text = path.read_text(encoding="utf-8")
-        if "DOCTYPE" not in text:
-            continue  # a fragment or an extending template inherits the stack
-        missing = []
-        if "vendor/bootstrap/bootstrap.min.css" not in text:
-            missing.append("bootstrap")
-        if "tokens.css" not in text:
-            missing.append("tokens.css")
+        missing = _missing_style_layers(path.read_text(encoding="utf-8"))
         if missing:
             offenders.append(f"{path.relative_to(REPO_ROOT)} missing {'+'.join(missing)}")
     assert offenders == [], offenders
+
+
+def test_the_guards_catch_the_regressions_they_exist_to_stop():
+    """The mutation proof: commit the forbidden thing, confirm CI stops it.
+
+    Both checks above are substring scans over templates, which fail silently in
+    one particular way: if the thing they search for is renamed — a new vendor
+    path, a different CDN host, a build step that inlines the stylesheet — the
+    scan finds nothing and reports success. A green check would then mean
+    "no template regressed" or "the scan no longer looks at anything", and
+    nothing distinguishes them.
+    """
+    cdn_forms = [
+        '<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">',
+        "<script src='https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js'></script>",
+    ]
+    for source in cdn_forms:
+        assert _loads_bootstrap_from_a_cdn(source), f"guard missed a CDN load: {source}"
+    assert not _loads_bootstrap_from_a_cdn(
+        '<link href="/static/vendor/bootstrap/bootstrap.min.css" rel="stylesheet">'
+    )
+
+    bare = "<!DOCTYPE html><html><head><title>x</title></head><body></body></html>"
+    assert set(_missing_style_layers(bare)) == {"bootstrap", "tokens.css"}
+
+    tokens_only = bare.replace("<title>x</title>", '<title>x</title><link href="css/tokens.css">')
+    assert _missing_style_layers(tokens_only) == ["bootstrap"]
+
+    bootstrap_only = bare.replace(
+        "<title>x</title>", '<title>x</title><link href="vendor/bootstrap/bootstrap.min.css">'
+    )
+    assert _missing_style_layers(bootstrap_only) == ["tokens.css"]
+
+    complete = bare.replace(
+        "<title>x</title>",
+        '<title>x</title><link href="vendor/bootstrap/bootstrap.min.css"><link href="css/tokens.css">',
+    )
+    assert _missing_style_layers(complete) == []
+
+    # A fragment is exempt by design; the guard must keep treating it that way,
+    # or every partial in the tree becomes a false failure.
+    assert _missing_style_layers('{% extends "base.html" %}<div>partial</div>') == []
