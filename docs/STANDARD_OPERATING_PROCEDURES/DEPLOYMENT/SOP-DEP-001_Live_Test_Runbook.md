@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-001      | 2.0     | 2026-09-17     | 1.2 (issued as SOP-DEP-022) | Normative |
+| SOP-DEP-001      | 2.1     | 2026-09-19     | 2.0 | Normative |
 
 ## I. Purpose
 
@@ -260,6 +260,27 @@ Store the finalized record as a repository artifact under `docs/ops/audits/`,
 or as a retained PR/ticket comment. **Do not create `docs/LOGS/`** — that root
 was removed on 2026-09-05 and must not be reintroduced; chronology belongs in
 `CHANGELOG.md` and rationale in `docs/PRINCIPLES/`.
+
+### Preserving the gate suite
+
+`pytest_result/` is gitignored and stays that way: every targeted run during
+ordinary development writes its own CSV, summary and failures log, which would
+accumulate into thousands of files a week.
+
+**Only the deployed full suite is preserved.** Copy that one run's artifacts
+verbatim into `docs/ops/audits/evidence/<date>_<label>_<short-sha>/` and link
+them from the record. Do not promote targeted runs, and do not edit or
+regenerate a promoted artifact — its value is that it is the file the run
+produced.
+
+Two mechanical points, both of which will otherwise cost an operator time:
+
+- `*.log` is gitignored repository-wide, so a failures log must be renamed
+  (`.txt`) to be tracked. Preserve it even when it records no failures: an
+  empty result is evidence, an absent file is not.
+- The promoted summary's own `git_commit` field must match the release SHA.
+  That is what proves the suite ran against the release rather than a nearby
+  tree, and it is worth checking rather than assuming.
 
 The record must name the exact deployed SHA (`git rev-parse HEAD`) and be
 immutable once finalized.
