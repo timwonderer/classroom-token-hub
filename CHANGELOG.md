@@ -10,6 +10,8 @@ and this project follows semantic versioning principles.
 
 ### Interface
 
+- **Status summaries share one freshness clock (2026-09-19)** — The hero and service cards use the same request timestamp, keeping their result and last-checked text consistent at the freshness boundary. Next-update times use readable UTC formatting when a timezone is supplied; values without a timezone say so explicitly. The collector deployment test now rejects duplicate commands even when their step names match.
+
 - **The student class-selection page loads the stylesheets it renders against (2026-09-18)** — `student_select_class_context.html` declares its own document and loaded only `fonts.css` and `style.css`. `style.css` consumes design tokens but does not import them, so every `var(--…)` resolved to nothing, and without Bootstrap the page's `card`, `container` and spacing utilities had no rules either — including the `alert_card` macro the page had started rendering. It now loads vendored Bootstrap and `tokens.css` ahead of `style.css`, matching its sibling `admin_select_class_context.html`. This was the last standalone page missing the stack after Bootstrap was vendored; `tests/dom/platform/test_vendored_frontend_assets.py` now asserts that every template declaring a full document loads both layers.
 
 

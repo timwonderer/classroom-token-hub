@@ -23,6 +23,7 @@ AUDIENCE = "/projects/123456789012/locations/us-west2/services/cth-status-operat
 OPERATOR = "operator@example.com"
 ALLOWLIST_SECRET = {"secretKeyRef": {"name": "status-operator-allowlist", "key": "latest"}}
 IMAGE = f"us-west2-docker.pkg.dev/{PROJECT}/status/cth-status:1eeaaa8e346c74a6a64493fb81954c045db571ed"
+COLLECTOR_JOB = "cth-status-app-health-collector"
 
 # Stands in for `gcloud secrets versions access`: serves the payloads it is
 # given, and refuses any other secret, project or command the way a missing
@@ -45,6 +46,46 @@ sys.stdout.write(payloads[name])
 
 def _deploy_steps():
     return yaml.safe_load(WORKFLOW.read_text())["jobs"]["deploy"]["steps"]
+
+
+def test_focused_status_job_runs_collector_and_workflow_tests():
+    steps = yaml.safe_load(WORKFLOW.read_text())["jobs"]["test"]["steps"]
+    command = next(step["run"] for step in steps if step.get("name") == "Run focused status tests")
+    assert "tests/test_status_collector.py" in command
+    assert "tests/test_status_deploy_workflow.py" in command
+
+
+def test_collector_job_uses_shared_image_scoped_identity_and_secret_references():
+    step = _step("Deploy app health collector job")
+    command = step["run"]
+    assert f"gcloud run jobs deploy {COLLECTOR_JOB}" in command
+    assert '--image "$IMAGE_URI"' in command
+    assert '--region "$GCP_REGION"' in command
+    assert '--project "$GCP_PROJECT_ID"' in command
+    assert '--service-account "status-probe@cth-production-status.iam.gserviceaccount.com"' in command
+    assert "--command python" in command
+    assert "--args=-m,status_service.collector" in command
+    assert "FIRESTORE_DATABASE=cth-status-prod" in command
+    assert "CF_ACCESS_CLIENT_ID=cth-status-cf-access-client-id:latest" in command
+    assert "CF_ACCESS_CLIENT_SECRET=cth-status-cf-access-client-secret:latest" in command
+    assert not any(flag in command for flag in REPLACING_FLAGS)
+
+
+def test_collector_job_requires_explicit_opt_in():
+    step = _step("Deploy app health collector job")
+    assert step["if"] == "${{ vars.STATUS_APP_HEALTH_COLLECTOR_ENABLED == 'true' }}"
+    assert sum(
+        other.get("run", "").count(f"gcloud run jobs deploy {COLLECTOR_JOB}")
+        for other in _deploy_steps()
+    ) == 1
+
+
+def test_duplicate_collector_step_with_same_name_is_rejected(monkeypatch):
+    steps = _deploy_steps()
+    duplicate = next(step for step in steps if step.get("name") == "Deploy app health collector job")
+    monkeypatch.setattr(sys.modules[__name__], "_deploy_steps", lambda: [*steps, duplicate])
+    with pytest.raises(AssertionError):
+        test_collector_job_requires_explicit_opt_in()
 
 
 def test_status_image_contains_shared_projection_package():
