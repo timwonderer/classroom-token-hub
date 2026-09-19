@@ -13,6 +13,7 @@ thereafter immutable, at §XVI.
 | Field | Value |
 |---|---|
 | **Deployed SHA** | `8c5cff7c894eb38e2f4908fbf49b08e41f8f3e9a` |
+| **Deployable ref (§VI.A)** | tag `live-test/2026-09-19` — annotated, pinned to the SHA above |
 | Branch | `main` |
 | Commit | Merge commit, PR #1401 (`codex/claim-identity-remediation`) |
 | Merged | 2026-09-19T02:56:19Z by `timwonderer` |
@@ -193,6 +194,13 @@ Merged from PR #1401. Significant items for operational awareness:
 ---
 
 ## §VII — Runtime Preparation
+
+Checkout ref: `live-test/2026-09-19` (detached). Not `main` — at gate close
+`main` was already `cc9639b11`, carrying this record, and its tree
+(`8418c38e6c3d`) differs from the deployed tree (`2f053318634b`). The delta is
+documentation only, verified with `git diff --name-only`, but the deployed ref
+is the tag regardless.
+
 
 > **Worker count: ONE.**
 > The APScheduler background scheduler starts inside `create_app`, so every

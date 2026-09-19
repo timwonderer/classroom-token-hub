@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-001      | 2.1     | 2026-09-19     | 2.0 | Normative |
+| SOP-DEP-001      | 2.2     | 2026-09-19     | 2.1 | Normative |
 
 ## I. Purpose
 
@@ -42,8 +42,12 @@ Normative (SOP Tier). Subordinate to INV-CORE-000.
 
 ## V. Environment Truth
 
-- Deployment branch: repository `main`. The names `codex/v2.0` and `CTH_v2.0`
+- Release source: repository `main`. The names `codex/v2.0` and `CTH_v2.0`
   are retired and resolve to nothing.
+- **Deployable ref: an annotated tag, never a branch.** `main` moves the moment
+  the deployment record is committed to it, so a host told to check out `main`
+  gets a tree no suite ran against. The tag is what the host checks out and
+  what the record names (§VI.1a).
 - Host access: the approved Tailscale/SSH path to the deployment host.
 - Service: `classroom-economy` systemd unit, fronted by Nginx, with PostgreSQL
   on the host.
@@ -81,10 +85,47 @@ pytest -q
 
 5. Record SHA, branch, migration head, operator, verifier, and test window.
 
+### VI.A Pin the release
+
+Before the deployment record is committed, and before anything else is pushed,
+create an annotated tag on the release SHA and push it:
+
+```bash
+git tag -a live-test/<date> <release-sha> -m "<gate summary>"
+git push origin live-test/<date>
+```
+
+The tag is the deployable ref for §VII.2. It exists because committing the
+record moves `main` past the release: the record itself is the first thing to
+make `main` and the tested tree disagree. That first divergence is
+documentation-only and harmless, which is exactly why it is dangerous — the
+habit of deploying `main` survives it, and the next divergence is code.
+
+Verify before proceeding:
+
+```bash
+test "$(git rev-parse <tag>^{commit})" = "<release-sha>"
+git diff --name-only <tag> main   # know precisely what main carries that the release does not
+```
+
+Record the tag name alongside the SHA. A deployment that cannot name its ref
+cannot prove what it deployed.
+
 ## VII. Runtime Preparation
 
 1. Put the domain in maintenance/holding mode and confirm the public response.
-2. Replace the existing checkout with the approved checkout at the release SHA.
+2. Replace the existing checkout with the release tag from §VI.A — never a
+   branch name:
+
+```bash
+git fetch --tags origin
+git checkout --detach live-test/<date>
+git rev-parse HEAD      # must equal the recorded release SHA
+git status --porcelain  # must be empty
+```
+
+   Confirm the resolved SHA against the record before continuing. A detached
+   checkout at a tag cannot silently advance; a branch checkout can.
 3. Create or refresh the virtual environment from the pinned requirements.
 4. Install the systemd unit with an explicit protected environment source.
 5. Confirm bind address, worker count, timeout, logging, and restart policy.
