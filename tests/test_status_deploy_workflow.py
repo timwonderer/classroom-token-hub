@@ -74,10 +74,18 @@ def test_collector_job_uses_shared_image_scoped_identity_and_secret_references()
 def test_collector_job_requires_explicit_opt_in():
     step = _step("Deploy app health collector job")
     assert step["if"] == "${{ vars.STATUS_APP_HEALTH_COLLECTOR_ENABLED == 'true' }}"
-    assert not any(
-        COLLECTOR_JOB in other.get("run", "")
-        for other in _deploy_steps() if other.get("name") != step["name"]
-    )
+    assert sum(
+        other.get("run", "").count(f"gcloud run jobs deploy {COLLECTOR_JOB}")
+        for other in _deploy_steps()
+    ) == 1
+
+
+def test_duplicate_collector_step_with_same_name_is_rejected(monkeypatch):
+    steps = _deploy_steps()
+    duplicate = next(step for step in steps if step.get("name") == "Deploy app health collector job")
+    monkeypatch.setattr(sys.modules[__name__], "_deploy_steps", lambda: [*steps, duplicate])
+    with pytest.raises(AssertionError):
+        test_collector_job_requires_explicit_opt_in()
 
 
 def test_status_image_contains_shared_projection_package():

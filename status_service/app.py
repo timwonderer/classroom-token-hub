@@ -16,9 +16,9 @@ from status.projection import _current_evidence, derive_capability_cards, derive
 from .store import FirestoreNoticeStore
 
 
-def derive_overall_status(notices: list[dict], cards: list[dict] | None = None, platform: list[dict] | None = None, observations: dict[str, dict] | None = None) -> dict:
+def derive_overall_status(notices: list[dict], cards: list[dict] | None = None, platform: list[dict] | None = None, observations: dict[str, dict] | None = None, *, now: datetime | None = None) -> dict:
     """Combine active notices and fresh bounded evidence without assuming health."""
-    now = datetime.now(timezone.utc)
+    now = now if now is not None else datetime.now(timezone.utc)
     keys = {item["key"] for item in (cards or []) + (platform or [])}
     fresh = [evidence["observed_at"] for key in keys
              if (evidence := _current_evidence(observations, key, now)) is not None]
@@ -46,9 +46,24 @@ def derive_overall_status(notices: list[dict], cards: list[dict] | None = None, 
     return {"state": "UNKNOWN", "label": "UNKNOWN", "headline": "Current service health is not yet confirmed.", "detail": "Some checks have no recent conclusive evidence. This does not mean a problem has been detected.", "checked": checked}
 
 
+def format_status_time(value: datetime | str) -> str:
+    """Present notice times without inferring a missing timezone."""
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value)
+        except ValueError:
+            return "Time unavailable"
+    if not isinstance(value, datetime):
+        return "Time unavailable"
+    if value.utcoffset() is None:
+        return value.strftime("%Y-%m-%d %H:%M") + " (timezone not provided)"
+    return value.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+
 def create_app(store=None) -> Flask:
     configure_logging()
     app = Flask(__name__, static_folder="static", template_folder="templates")
+    app.jinja_env.filters["status_time"] = format_status_time
     app.config["STATUS_SERVICE_MODE"] = os.environ.get("STATUS_SERVICE_MODE", "operator").strip().lower()
     if app.config["STATUS_SERVICE_MODE"] not in {"public", "operator"}:
         raise RuntimeError("STATUS_SERVICE_MODE must be public or operator")
@@ -88,7 +103,7 @@ def create_app(store=None) -> Flask:
         return render_template(
             "public_status.html",
             notices=active_notices,
-            overall_status=derive_overall_status(active_notices, cards, platform, observations),
+            overall_status=derive_overall_status(active_notices, cards, platform, observations, now=now),
             capability_cards=cards,
             platform_checks=platform,
         )

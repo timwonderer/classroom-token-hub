@@ -273,6 +273,63 @@ def test_last_checked_excludes_rejected_current_records():
     assert derive_overall_status([], cards, [], {"login": valid})["checked"] != "awaiting monitoring evidence"
 
 
+def test_public_page_uses_one_clock_at_freshness_boundary(monkeypatch):
+    _overall_status()
+    module = sys.modules["status_service.app"]
+    monkeypatch.setenv("STATUS_SERVICE_MODE", "public")
+    monkeypatch.setenv("STATUS_CAPABILITIES", "login")
+    monkeypatch.setenv("STATUS_PLATFORM_CHECKS", "")
+
+    class Clock(datetime):
+        calls = 0
+
+        @classmethod
+        def now(cls, tz=None):
+            value = NOW + timedelta(microseconds=cls.calls)
+            cls.calls += 1
+            return value
+
+    class Store:
+        def list_active_notices(self):
+            return []
+
+        def list_current_observations(self):
+            return {"login": {"source": "EXTERNAL_PROBE", "capability": "login",
+                              "observed_at": NOW - timedelta(minutes=5),
+                              "outcome": "PASS", "epistemic_state": "KNOWN"}}
+
+    monkeypatch.setattr(module, "datetime", Clock)
+    page = module.create_app(store=Store()).test_client().get("/").get_data(as_text=True)
+    assert "EVERYTHING IS WORKING" in page
+    assert "Last checked: 2026-09-05 11:55 UTC" in page
+    assert Clock.calls == 1
+
+
+@pytest.mark.parametrize("value,expected", [
+    (datetime(2026, 9, 19, 19, 30, tzinfo=timezone.utc), "2026-09-19 19:30 UTC"),
+    ("2026-09-19T12:30:00-07:00", "2026-09-19 19:30 UTC"),
+    ("2026-09-19T19:30", "2026-09-19 19:30 (timezone not provided)"),
+    (datetime(2026, 9, 19, 19, 30), "2026-09-19 19:30 (timezone not provided)"),
+    ("invalid-time", "Time unavailable"),
+])
+def test_public_next_update_formats_time_without_inventing_timezone(monkeypatch, value, expected):
+    _overall_status()
+    module = sys.modules["status_service.app"]
+    monkeypatch.setenv("STATUS_SERVICE_MODE", "public")
+
+    class Store:
+        def list_active_notices(self):
+            return [{"state": "INVESTIGATING", "capability": "login",
+                     "impact_statement": "Sign-in impaired.", "next_update_at": value,
+                     "recommended_user_action": "Please wait."}]
+
+        def list_current_observations(self):
+            return {}
+
+    page = module.create_app(store=Store()).test_client().get("/").get_data(as_text=True)
+    assert f"Next update:</strong> {expected}" in page
+
+
 def _overall_status():
     """Load the pure hero projection without optional cloud runtime packages."""
     if "status_service.app" not in sys.modules:
