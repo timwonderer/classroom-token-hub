@@ -8,6 +8,14 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Operations
+
+- **Feature-health review completion (2026-09-20)** — Defined separate readiness/correctness reduction keys and a distinct capability projection, explicit per-feature freshness limits with independently aged audit-lineage proofs, and collector-owned bounded transport metadata. These are governing documentation changes; feature evaluators are not claimed implemented or deployed.
+
+- **Feature-health review clarifications (2026-09-19)** — The governing contracts now record evidence source, freshness class, and receipt-time staleness without treating a historical freshness result as current. External observations can transport CTH-produced results while preserving their source and owning evaluator version separately from collector protocol version. Login, attendance, and roster retain separate readiness and correctness dimensions; Productivity owns attendance-session verification.
+
+- **Feature status requires affirmative evidence (2026-09-19)** — The Operations status contract now distinguishes naturally observed feature activity from synthetic probes. Login, Attendance, Payroll, Roster, and Classroom Economy can report an observed-runtime-integrity PASS only when recent real activity and all registered execution, validity, lineage, and reconciliation checks are fresh and affirmative; proven failures remain failures, while idle or incomplete evidence remains UNKNOWN. External status infrastructure receives bounded results only and no classroom credentials or tenant data. This is a governing contract, not a claim that the evaluators are implemented or deployed.
+
 ### Fixed
 
 - **Advanced payroll rate no longer divides by 60 on every re-save (2026-09-19)** — `PayrollSettings.pay_rate` is canonically dollars per minute, while the Advanced settings form asks for dollars per the teacher's chosen unit and converts on save. The display side never converted back: it rendered the raw per-minute figure against the chosen unit, so a class configured at $1.50/hour — stored as $0.025/minute — showed "$0.02" (two-decimal formatting rounds half to even). Because that same value pre-populates the pay-rate input, opening and re-saving the settings page stored $0.02/hour, or $0.00033/minute: **a 75-fold cut for that example**, silently, on a financial setting. The factor is not fixed — the missing conversion accounts for 60× on its own, and rounding the displayed value moves it either way — which is part of why the corruption was hard to notice. The two directions now share one table of exact integer second-ratios (`SECONDS_PER_TIME_UNIT` in `app/services/payroll/builders.py`), imported by the route rather than written out at both ends, which is how they came to disagree; a test asserts the display→save round trip is exact for every unit and that the route uses the shared helper. Surfaced by review of the rate-unit wording fix below.

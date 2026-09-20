@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-OPS-002 | 1.2 | 2026-08-31 | 1.1 | Normative |
+| SPEC-OPS-002 | 1.4 | 2026-09-19 | 1.3 | Normative |
 
 ## I. Purpose
 
@@ -26,20 +26,47 @@ Normative (SPEC Tier). Subordinate to `INV-CORE-000`, `INV-CORE-001`, `INV-ARC-0
 
 ### 5.1 External Observation — append-only
 
-Records one externally performed observation of one public capability or infrastructure dependency.
+Records one bounded observation received by the independent status service for
+one public capability or infrastructure dependency. The condition may be
+measured by the external collector itself or evaluated within CTH and
+transported to the collector. Persistence outside CTH does not make an
+application-produced result an independently performed external probe.
 
 Required logical fields:
 
 - stable observation ID;
-- observed-at timestamp and correlation ID;
+- check time (`checked_at`, null only when no check ran), collector receipt
+  time (`received_at`), and correlation ID;
+- approved freshness class and immutable staleness state at receipt;
+- bounded evidence source, including independent `EXTERNAL_PROBE` and
+  `APPLICATION_RUNTIME_EVIDENCE` for feature results transported from CTH;
 - capability/component key from a closed registry;
 - observation class: `LIVENESS`, `READINESS`, `CORRECTNESS`, or `INFRASTRUCTURE_FAILURE`;
 - outcome: `PASS`, `FAIL`, or `UNKNOWN`;
 - epistemic state: `KNOWN` or `UNAVAILABLE`;
 - bounded diagnostic code and bounded latency/result metadata;
-- probe version.
+- probe version, identifying the external collector/check transport;
+- bounded evaluator version for a registered application feature result;
+  null only when no feature evaluator ran (including an unregistered
+  `UNKNOWN` result) or for non-feature observations.
+
+The current projection recomputes staleness from `checked_at`, freshness
+class, and evaluation time. An old recorded `FRESH` state cannot keep a
+capability green after its maximum age. A missing check time cannot establish
+current health. For an external probe, check time is the time of its own
+measurement; for an application result, the collector preserves CTH's
+original check time rather than replacing it with receipt time.
 
 Observations MUST NOT contain tenant identifiers, PII, credentials, raw response bodies, stack traces, arbitrary payloads, or inferred internal causes. They cannot be updated or deleted during their retention window. `CONFLICTING` is not a raw-observation state; it belongs to derived assessment or projection state composed from multiple observations.
+
+An external collector MUST preserve the source of the condition it transports:
+fetching an application-produced feature result does not turn that result
+into an independent external probe. Its own reachability measurement remains
+an `EXTERNAL_PROBE`, separately timestamped from the application's bounded
+feature assessment. Both records retain their original provenance. The
+collector protocol's `probe_version` is not evidence of which owning feature
+evaluator ran; a conclusive registered feature result also requires its
+separate `evaluator_version` from CTH.
 
 The fields have distinct meanings: `outcome` records the result of this observation; `epistemic_state` records whether the capability state can be established from the available evidence. A single observation cannot claim aggregate disagreement.
 
