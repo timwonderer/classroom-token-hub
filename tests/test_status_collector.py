@@ -1,8 +1,10 @@
 import json
 import sys
 import types
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.error import HTTPError, URLError
+
+import pytest
 
 from status.projection import EpistemicState, Outcome
 from status.contracts import ExternalObservationRecord
@@ -44,6 +46,30 @@ def test_collector_records_all_signals_with_one_correlation_and_no_raw_body():
     assert next(record for record in records if record.capability == "login").outcome == Outcome.UNKNOWN
     assert next(record for record in records if record.capability == "public_service_reachability").outcome == Outcome.PASS
     assert all("secret" not in repr(record) for record in records)
+    assert all(record.observed_at == NOW for record in records)
+
+
+def test_collector_default_clock_validates_and_stores_receipt_time(monkeypatch):
+    receipt_time = NOW + timedelta(minutes=3)
+    clock_reads = iter((NOW, receipt_time))
+
+    class ReceiptClock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            assert tz == timezone.utc
+            return next(clock_reads)
+
+    monkeypatch.setattr("status_service.collector.datetime", ReceiptClock)
+    store = RecordingStore()
+    records = collect(store, client_id="id", client_secret="secret",
+                      fetch=lambda *_: payload(timestamp=receipt_time))
+
+    database = next(record for record in records if record.capability == "database")
+    assert database.outcome == Outcome.PASS
+    assert database.epistemic_state == EpistemicState.KNOWN
+    assert database.diagnostic_code == "DATABASE_REACHABLE"
+    assert all(record.observed_at == receipt_time for record in records)
+    assert store.records == records
 
 
 def test_access_denial_is_not_reported_as_app_failure():
@@ -82,6 +108,14 @@ def test_unregistered_or_stale_payload_fails_closed():
         assert False, "unregistered key accepted"
     except ValueError:
         pass
+
+
+def test_health_response_accepts_bounded_clock_skew_but_rejects_future_payload():
+    # A response generated after the poll began can be slightly ahead of the
+    # collector's clock; an arbitrarily future response is not evidence.
+    assert _signal_map(payload(timestamp=NOW + timedelta(seconds=1)), NOW)["database"][0] == Outcome.PASS
+    with pytest.raises(ValueError, match="future"):
+        _signal_map(payload(timestamp=NOW + timedelta(seconds=6)), NOW)
 
 
 def test_diagnostic_cannot_claim_pass_for_unregistered_check():
