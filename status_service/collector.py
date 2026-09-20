@@ -127,7 +127,7 @@ def collect(store: FirestoreNoticeStore, *, client_id: str, client_secret: str, 
         # A reachable but unusable payload establishes liveness only.
         pass
     records = []
-    states = [("public_service_reachability", ObservationClass.LIVENESS, (*reachability, None))]
+    states = [("public_service_reachability", ObservationClass.LIVENESS, (*reachability, observed_at))]
     states.extend((key, kind, signals[key]) for key, (_, kind) in SIGNALS.items())
     for key, kind, (outcome, epistemic, diagnostic, checked_at) in states:
         record = ExternalObservationRecord(
@@ -138,7 +138,10 @@ def collect(store: FirestoreNoticeStore, *, client_id: str, client_secret: str, 
                     else EvidenceSource.EXTERNAL_PROBE),
             capability=key, observation_class=kind, outcome=outcome,
             epistemic_state=epistemic, diagnostic_code=diagnostic,
-            latency_ms=None, probe_version=PROBE_VERSION, checked_at=checked_at,
+            latency_ms=None, probe_version=PROBE_VERSION,
+            freshness_class="REALTIME",
+            staleness_state_at_receipt=("UNKNOWN" if checked_at is None else "FRESH"),
+            evaluator_version=None, checked_at=checked_at,
         )
         record.validate()
         records.append(record)

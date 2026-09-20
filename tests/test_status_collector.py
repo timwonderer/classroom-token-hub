@@ -170,8 +170,18 @@ def test_conclusive_app_observation_requires_original_check_time():
     record = ExternalObservationRecord(
         "missing-time", NOW, "corr", EvidenceSource.APPLICATION_RUNTIME_EVIDENCE,
         "payroll", ObservationClass.READINESS, Outcome.PASS, EpistemicState.KNOWN,
-        "FEATURE_INTEGRITY_PASS", None, "v2")
+        "FEATURE_INTEGRITY_PASS", None, "v2", "REALTIME", "UNKNOWN", None)
     with pytest.raises(ValueError, match="check time"):
+        record.validate()
+
+
+def test_conclusive_feature_observation_requires_separate_evaluator_version():
+    record = ExternalObservationRecord(
+        "missing-version", NOW, "corr", EvidenceSource.APPLICATION_RUNTIME_EVIDENCE,
+        "payroll", ObservationClass.CORRECTNESS, Outcome.PASS, EpistemicState.KNOWN,
+        "FEATURE_INTEGRITY_PASS", None, "collector-v2", "REALTIME", "FRESH", None,
+        checked_at=NOW)
+    with pytest.raises(ValueError, match="evaluator version"):
         record.validate()
 
 
@@ -245,7 +255,8 @@ def test_store_keeps_newest_current_and_append_only_history(monkeypatch):
 
     def record(identifier, minute, outcome, epistemic):
         return ExternalObservationRecord(identifier, NOW.replace(minute=minute), "corr", EvidenceSource.EXTERNAL_PROBE,
-                                         "login", ObservationClass.READINESS, outcome, epistemic, "CHECK", None, "v1")
+                                         "login", ObservationClass.READINESS, outcome, epistemic, "CHECK", None, "v1",
+                                         "REALTIME", "FRESH", None, checked_at=NOW.replace(minute=minute))
 
     newer = record("newer", 31, Outcome.FAIL, EpistemicState.UNAVAILABLE)
     older = record("older", 30, Outcome.PASS, EpistemicState.KNOWN)
@@ -262,13 +273,16 @@ def test_store_keeps_newest_current_and_append_only_history(monkeypatch):
     transport_gap = ExternalObservationRecord(
         "transport-gap", NOW.replace(minute=32), "corr", EvidenceSource.EXTERNAL_PROBE,
         "login", ObservationClass.READINESS, Outcome.UNKNOWN, EpistemicState.UNAVAILABLE,
-        "PROBE_UNAVAILABLE", None, "v2")
+        "PROBE_UNAVAILABLE", None, "v2", "REALTIME", "UNKNOWN", None)
     recovered = ExternalObservationRecord(
         "recovered", NOW.replace(minute=33), "corr", EvidenceSource.APPLICATION_RUNTIME_EVIDENCE,
         "login", ObservationClass.READINESS, Outcome.PASS, EpistemicState.KNOWN,
-        "FEATURE_INTEGRITY_PASS", None, "v2", checked_at=NOW.replace(minute=31))
+        "FEATURE_INTEGRITY_PASS", None, "v2", "REALTIME", "FRESH", "eval-v1",
+        checked_at=NOW.replace(minute=31))
     store.append_observations([transport_gap])
     store.append_observations([recovered])
     current = client.data["external_status_current"]["login"]
     assert (current["observation_id"], current["observed_at"], current["checked_at"]) == (
         "recovered", NOW.replace(minute=33), NOW.replace(minute=31))
+    assert (current["freshness_class"], current["staleness_state_at_receipt"], current["evaluator_version"]) == (
+        "REALTIME", "FRESH", "eval-v1")
