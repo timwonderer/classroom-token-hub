@@ -21,7 +21,13 @@ things follow that nothing currently checks:
 2. A contract with no registry entry is a law with no executor — either unimplemented, or
    implemented under a different id, which makes the audit trail name the wrong action.
 
-The registry holds **47** ids; `docs/FEATURE-EXECUTION/` holds **40** contracts. They overlap on **36**.
+`FEAT_REGISTRY` holds **48** entries. **47** are numbered business FEATs and are what this
+document reconciles; the 48th is `FEAT-BYPASS-LEGACY`, the test and legacy write bypass, which
+carries domain `Test` and is excluded by `_is_scaffold_feat()` from the nesting and idempotency
+rules every other entry obeys. It names no user-facing action (`FEAT-CORE-000`), so it can have
+no contract and is out of scope here rather than missing from it.
+
+Against those 47: `docs/FEATURE-EXECUTION/` holds **40** contracts, overlapping on **36**.
 
 Those totals include the one change this audit led to: registering `FEAT-OBLI-001`, which had a
 contract and no registry entry (§V). Every other line below is unchanged and undecided.
@@ -43,7 +49,8 @@ developer documentation site.
 | Contracted, not registered — feature exists under other ids | 2 | Deferred |
 | Contracted, not registered — delegated | 1 | Deferred — confirm |
 
-Registry: 36 + 3 + 6 + 2 = 47. Contracts: 36 + 1 + 2 + 1 = 40. The id-collision row
+Registry: 36 + 3 + 6 + 2 = 47 numbered ids, plus `FEAT-BYPASS-LEGACY` = 48 entries.
+Contracts: 36 + 1 + 2 + 1 = 40. The id-collision row
 this table carried is gone because §V resolved it: `FEAT-OBLI-001` is now counted in
 "registered and contracted".
 
@@ -133,13 +140,15 @@ contract for rent payment. Nothing above forecloses either decision.
 
 ## VI. Contracted, not registered
 
+Four rows. `FEAT-OBLI-001` was the fifth and was removed when §V registered it — a registered
+workflow does not belong in a table of unregistered ones.
+
 | Id | Contract | Reading |
 |---|---|---|
 | `FEAT-CORE-000` | Feature Execution Constitutional Directive (2026-04-23) | Correct as-is. It defines what a FEAT *is*; it is not itself executable. |
 | `FEAT-IDEN-102` | Teacher Passkey Enrollment (v1.0, 2026-08-09, `Status: NEW`) | Passkey code exists (`app/utils/passwordless_client.py`, `app/auth.py`) but runs under no FEAT id. Either register these two, or record that enrollment happens inside `FEAT-IDEN-101`. |
 | `FEAT-IDEN-107` | Teacher Revoke Passkey (v1.0, 2026-08-09, `Status: NEW`) | As above. |
 | `FEAT-ECON-001` | Economic Policy Transition and Activation Orchestration (v2.1, 2026-09-15) | Actively cited by `app/utils/economy_rebalance.py` and `app/services/admin_settings_service.py`, and `FEAT-CLASS-005` lists it as a composing FEAT that "may delegate to this FEAT". Confirm whether it executes through `FEAT-CLASS-005` — if so, say so in the contract. |
-| `FEAT-OBLI-001` | Assess Obligation | **RESOLVED 2026-09-19** — registered; see §V. Listed here for the record, and no longer counted in this section's total. |
 
 ---
 
