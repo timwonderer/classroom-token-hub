@@ -11,4 +11,9 @@
 .happening-banner--available{border-top-color:var(--primary)}.happening-banner--available .happening-banner-title{background:var(--primary);color:#fff}
 .happening-banner--degraded{border-top-color:#ffbd00}.happening-banner--degraded .happening-banner-title{background:#ffbd00}
 .capability-result--degraded,.capability-result--unavailable{background:#ffbd00;color:#7d4700}.capability-result--monitoring{background:#4f86d9;color:#fff}
+.working-section .capability-card .capability-unknown-summary{margin:0;padding:.75rem 1rem .25rem;color:var(--text-secondary);font-size:.9rem;line-height:1.4}
+.capability-unknown-details{padding:0 1rem .85rem;text-align:left;font-size:.85rem;color:var(--text-secondary)}
+.capability-unknown-details summary{cursor:pointer;color:var(--primary);font-weight:700}
+.capability-unknown-details summary:focus-visible{outline:3px solid var(--secondary);outline-offset:3px}
+.capability-unknown-details p{margin:.5rem 0 0!important;padding:0!important}
 .platform-row--available{border-left-color:var(--primary)}.platform-row--degraded,.platform-row--unavailable{border-left-color:#ffbd00}

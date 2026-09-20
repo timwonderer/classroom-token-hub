@@ -88,6 +88,36 @@ def test_fresh_collector_receipt_does_not_refresh_stale_app_check():
     assert card["state"] == "UNKNOWN"
 
 
+def test_unknown_feature_card_explains_missing_evidence_without_claiming_failure(monkeypatch):
+    _overall_status()
+    create_app = sys.modules["status_service.app"].create_app
+    monkeypatch.setenv("STATUS_SERVICE_MODE", "public")
+    monkeypatch.setenv("STATUS_CAPABILITIES", "login,attendance,payroll")
+    monkeypatch.setenv("STATUS_PLATFORM_CHECKS", "")
+
+    class Store:
+        def list_active_notices(self):
+            return []
+
+        def list_current_observations(self):
+            return {
+                "attendance": {"source": "APPLICATION_RUNTIME_EVIDENCE", "capability": "attendance",
+                               "outcome": "UNKNOWN", "epistemic_state": "UNAVAILABLE",
+                               "diagnostic_code": "CHECK_NOT_REGISTERED", "checked_at": None},
+                "payroll": {"source": "APPLICATION_RUNTIME_EVIDENCE", "capability": "payroll",
+                            "outcome": "PASS", "epistemic_state": "KNOWN",
+                            "checked_at": datetime.now(timezone.utc) - timedelta(minutes=10)},
+            }
+
+    page = create_app(store=Store()).test_client().get("/").get_data(as_text=True)
+    assert page.count("Not recently verified") == 3
+    assert page.count("This does not mean a problem was detected.") >= 3
+    assert page.count("<summary>Why is this unknown?</summary>") == 3
+    assert "A feature check has not been registered yet." in page
+    assert "Last recorded check:" in page
+    assert "No recent conclusive check is available." in page
+
+
 def test_active_notice_overrides_green_probe():
     current = {"login": {"source": "APPLICATION_RUNTIME_EVIDENCE", "capability": "login", "observed_at": NOW, "checked_at": NOW,
                          "outcome": "PASS", "epistemic_state": "KNOWN"}}
