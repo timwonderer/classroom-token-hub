@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-OPS-001 | 1.0 | 2026-08-31 | N/A | Normative |
+| SOP-OPS-001 | 1.1 | 2026-09-19 | 1.0 | Normative |
 
 ## I. Purpose
 
@@ -39,6 +39,28 @@ Normative (SOP Tier). Subordinate to `INV-CORE-000`, `INV-CORE-001`, `INV-ARC-00
 4. It must not ingest or publish `class_id`, `seat_id`, `user_id`, join codes, names, contact methods, financial values, or other tenant-linked data.
 5. It must not recompute or replace business-domain truth. Operational interpretations must remain consistent with `DOM-OPS` contracts.
 6. Liveness, readiness, and correctness must remain distinguishable; a reachable endpoint is not sufficient evidence of correctness.
+
+### Feature-health evidence
+
+The prohibition on external-service credentials in rule 3 is unchanged.
+Feature-health evaluators observe naturally occurring application executions
+and consume bounded results from owning-domain verification. They do not
+create monitoring teachers/students, initiate synthetic FEAT actions, or
+receive authority to mutate a classroom. Where an owning verifier must read
+domain state, each execution is authorized for one canonical class; an
+Operations coordinator receives only redacted outcomes and never performs a
+cross-class domain query.
+
+Before publishing a feature as operational, the operator must confirm that
+its evidence registry defines the relevant activity window, minimum recent
+activity, qualifying execution failures, required state/transition checks,
+lineage and reconciliation checks, and freshness limits. Absence of errors
+alone is not positive evidence. If a required dimension has not run or has
+stale/insufficient evidence, the result is `UNKNOWN`; an affirmative
+violation is `FAIL`. The public wording must name only the observed scope
+and must not imply that an idle or unmeasured user journey has been tested.
+The application health endpoint returns only bounded current assessments;
+the external collector transports them without raw tenant or financial data.
 
 ## VI. Observation and Publication Procedure
 

@@ -8,6 +8,10 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Operations
+
+- **Feature status requires affirmative evidence (2026-09-19)** — The Operations status contract now distinguishes naturally observed feature activity from synthetic probes. Login, Attendance, Payroll, Roster, and Classroom Economy can report an observed-runtime-integrity PASS only when recent real activity and all registered execution, validity, lineage, and reconciliation checks are fresh and affirmative; proven failures remain failures, while idle or incomplete evidence remains UNKNOWN. External status infrastructure receives bounded results only and no classroom credentials or tenant data. This is a governing contract, not a claim that the evaluators are implemented or deployed.
+
 ### Interface
 
 - **Status summaries share one freshness clock (2026-09-19)** — The hero and service cards use the same request timestamp, keeping their result and last-checked text consistent at the freshness boundary. Next-update times use readable UTC formatting when a timezone is supplied; values without a timezone say so explicitly. The collector deployment test now rejects duplicate commands even when their step names match.
