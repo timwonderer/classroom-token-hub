@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001      | 3.5     | 2026-09-20     | 3.4        | Normative |
+| SOP-DOC-001      | 3.6     | 2026-09-20     | 3.5        | Normative |
 
 ---
 
@@ -193,6 +193,7 @@ Archived material is deliberately absent; see §VI.
 
 ### Reference (REF)
 - [REF-API-001 — HTTP Interface Reference](../REFERENCE/REF-API-001_HTTP_INTERFACE_REFERENCE.md)
+- [REF-DES-001 — Visual Identity History](../REFERENCE/REF-DES-001_VISUAL_IDENTITY_HISTORY.md)
 - [REF-TERM-001 — Developer Vocabulary](../REFERENCE/REF-TERM-001_DEVELOPER_VOCABULARY.md)
 - [REF-TERM-002 — User Vocabulary](../REFERENCE/REF-TERM-002_USER_VOCABULARY.md)
 
@@ -258,6 +259,10 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.6 (2026-09-20):**
+- Registered `REF-DES-001`, an informative, commit-cited history of visual identity,
+  role palettes, brand assets, typography, and public/documentation surfaces.
 
 **Version 3.5 (2026-09-20):**
 - Added `SPEC-OPS-005_FEATURE_HEALTH_EVIDENCE`, registered on `main` while 3.4 was in review.

@@ -33,6 +33,7 @@
   --text-3xl: 1.875rem;
   --text-4xl: 2.5rem;
   --text-5xl: 3rem;
+  --text-6xl: 4rem;
 
   --weight-normal: 400;
   --weight-medium: 500;
@@ -48,6 +49,7 @@
   --tracking-normal: 0;
   --tracking-wide: 0.05em;
   --tracking-wider: 0.1em;
+  --tracking-widest: 0.5em;
 
   /* ── Spacing — 4px base ── */
   --space-0: 0;
@@ -65,11 +67,14 @@
   --space-16: 64px;
 
   /* ── Icon sizing ── */
+  --icon-2xs: 0.875rem;
+  --icon-xs: 1rem;
   --icon-sm: 1.125rem;
   --icon-md: 1.25rem;
   --icon-lg: 1.5rem;
   --icon-xl: 2rem;
   --icon-2xl: 3rem;
+  --icon-3xl: 4rem;
 
   /* ── Motion ── */
   --duration-fast: 120ms;
@@ -82,6 +87,7 @@
   --alpha-soft: 0.16;
   --alpha-medium: 0.35;
   --alpha-strong: 0.6;
+  --alpha-heavy: 0.85;
 
   /* ── Radius — sm: cards and inputs · md: buttons · lg: large containers ── */
   --radius-xs: 2px;
@@ -124,6 +130,13 @@
   --accent-text-on-light: #735816;
   --text-on-dark-muted: #DEDEDE;
 
+  /* Admonition body text, darkened past the status tokens so it clears AA on
+     the matching --*-subtle fill. The site has admonitions; without these an
+     admonition reaches for a status token, which is a fill, not a text colour. */
+  --alert-warning-text: #5f3d00;
+  --alert-danger-text: #8f1f1f;
+  --alert-info-text: #1f4f73;
+
   /* ── Teacher theme (Advisor Green) — the default identity ── */
   --primary: #1a4d47;
   --primary-hover: #15403b;
@@ -136,10 +149,13 @@
   --accent: var(--secondary);
 
   --success: #2e7d5b;
+  --success-hover: #276a4d;
   --success-subtle: #e6f4ed;
   --info: #35719a;
+  --info-hover: #2e6285;
   --info-subtle: #e6f0f8;
   --warning: #D4A857;
+  --warning-hover: #a87912;
   --warning-subtle: #fef8e6;
   --danger: #c0392b;
   --danger-hover: #a83024;

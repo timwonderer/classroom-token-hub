@@ -102,7 +102,8 @@
     --radius-lg: 8px;
     /* Modals, Large Containers */
     --radius-xl: 12px;
-    /* Auth cards, feature panels */
+    /* Feature panels. NOT the auth card: .auth-container is square and lifted
+       by --shadow-lg alone (SPEC-DES-001 §IX). */
     --radius-pill: 999px;
     /* Status Badges, Chips */
 
@@ -197,6 +198,10 @@
     --info-hover: #2e6285;
     --info-subtle: #e6f0f8;
     --warning: #D4A857;
+    /* Identical in all three role themes, like --secondary-hover above and for
+       the same reason: --warning is the same gold everywhere, so a per-role
+       hover is a difference with no cause. The student and sysadmin themes
+       carried #b88f22 until 2026-09-20 with nothing recorded to justify it. */
     --warning-hover: #a87912;
     --warning-subtle: #fef8e6;
     --danger: #c0392b;
@@ -242,7 +247,7 @@ body.student-shell {
     --info-hover: #2e5d8b;
     --info-subtle: #e8f0f8;
     --warning: #D4A857;
-    --warning-hover: #b88f22;
+    --warning-hover: #a87912;
     --warning-subtle: #fbf3d6;
     --danger: #c44040;
     --danger-hover: #aa3636;
@@ -289,8 +294,14 @@ body.sysadmin-shell {
     --sysadmin-accent: var(--secondary);
     --sysadmin-accent-bright: #FDB034;
     --sysadmin-bottom-nav-height: var(--bottom-nav-height);
-    /* Sign-out hover on the dark sysadmin sidebar. --danger is tuned for
-       light surfaces and reads muddy there. */
+    /* Sign-out chrome on the dark sysadmin sidebar. --danger is tuned for
+       light surfaces and reads muddy there, so the sidebar carries its own
+       pair. Both are pinned for legibility ON --sysadmin-sidebar-bg (#2C2C2C)
+       and MUST be used at full opacity for the label: #dc5050 composited at
+       85% was 2.91:1, and diluting a text colour to suggest a resting state is
+       the same defect §IX names for link hovers. Resting 5.75:1, hover 4.88:1.
+       The 40% border composite below is chrome, not text. */
+    --sysadmin-signout-accent: #ff8080;
     --sysadmin-signout-hover: #ff6666;
 
     /* Secondary: Bright Gold */
@@ -298,8 +309,11 @@ body.sysadmin-shell {
     --secondary-hover: #c09840;
     --secondary-text: var(--neutral-900);
     --secondary-subtle: #f9f5e6;
-    /* Dark text on gold */
-    --accent: #FDB034;
+    /* Emphasis alias. Pinned to --secondary in every role theme: a shared
+       component tinted by --accent must not change hue for one role only.
+       The brighter gold this token used to hold is --sysadmin-accent-bright
+       above, which is what it was actually wanted for. */
+    --accent: var(--secondary);
 
     /* Semantic Status Colors (Shared with Teacher) */
     --success: #2e7d5b;
@@ -309,7 +323,7 @@ body.sysadmin-shell {
     --info-hover: #2e6285;
     --info-subtle: #e6f0f8;
     --warning: #D4A857;
-    --warning-hover: #b88f22;
+    --warning-hover: #a87912;
     --warning-subtle: #fbf3d6;
     --danger: #c0392b;
     --danger-hover: #a83024;
