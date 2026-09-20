@@ -53,6 +53,7 @@ class FirestoreNoticeStore:
             document = {
                 "observation_id": record.observation_id,
                 "observed_at": record.observed_at,
+                "checked_at": record.checked_at,
                 "correlation_id": record.correlation_id,
                 "source": record.source.value,
                 "capability": record.capability,
@@ -62,6 +63,9 @@ class FirestoreNoticeStore:
                 "diagnostic_code": record.diagnostic_code,
                 "latency_ms": record.latency_ms,
                 "probe_version": record.probe_version,
+                "freshness_class": record.freshness_class,
+                "staleness_state_at_receipt": record.staleness_state_at_receipt,
+                "evaluator_version": record.evaluator_version,
             }
             documents.append(document)
 
@@ -103,3 +107,53 @@ class FirestoreNoticeStore:
         projection = {**notice, "external_notice_id": notice_id, "updated_at": now, "last_event_id": event_id}
         self.client.collection("external_status_notices").document(notice_id).set(projection)
         return event_id
+
+    def resolve_notices(self, selections: dict[str, str], message: str, actor: str) -> None:
+        """Resolve exact reviewed versions atomically, preserving publication history."""
+        from google.cloud import firestore
+        from .contracts import ExternalStatusNoticeEvent, NoticeState, RecoveryExpectationState
+
+        if not selections or len(selections) > 100 or not message.strip() or len(message) > 500:
+            raise ValueError("Select 1–100 issues and provide a resolution of at most 500 characters.")
+        if any(not key or "/" in key or not version for key, version in selections.items()):
+            raise ValueError("Invalid issue selection.")
+        current = self.client.collection("external_status_notices")
+        history = self.client.collection("external_status_notice_events")
+        now = datetime.now(timezone.utc)
+
+        @firestore.transactional
+        def resolve(transaction):
+            snapshots = {key: current.document(key).get(transaction=transaction) for key in selections}
+            writes = []
+            for key, snapshot in snapshots.items():
+                notice = snapshot.to_dict() if snapshot.exists else None
+                if (not notice or notice.get("state") not in {"INVESTIGATING", "IDENTIFIED", "MONITORING"}
+                        or notice.get("last_event_id") != selections[key]
+                        or notice.get("external_notice_id") != key
+                        or not notice.get("incident_ref")):
+                    raise ValueError("An issue changed or cannot be resolved. Refresh and review the selection.")
+                event_id = f"event-{uuid4().hex}"
+                updated = {**notice, "state": "RESOLVED", "impact_statement": message.strip(),
+                           "recommended_user_action": "No action required.", "recovery_state": "UNAVAILABLE",
+                           "recovery_expectation": None, "next_update_at": None, "next_update_unavailable": True,
+                           "updated_at": now, "last_event_id": event_id}
+                record = ExternalStatusNoticeEvent(
+                    external_notice_id=key, incident_ref=notice["incident_ref"], event_id=event_id,
+                    event_type="RESOLVED", published_at=now, state=NoticeState.RESOLVED,
+                    capability=notice["capability"], impact_statement=updated["impact_statement"],
+                    recommended_user_action=updated["recommended_user_action"],
+                    recovery_state=RecoveryExpectationState.UNAVAILABLE, recovery_expectation=None,
+                    next_update_at=None, next_update_unavailable=True,
+                    source_observation_ids=tuple(notice.get("source_observation_ids", ())))
+                record.validate()
+                event = {field: updated[field] for field in (
+                    "external_notice_id", "incident_ref", "state", "capability", "impact_statement",
+                    "recommended_user_action", "recovery_state", "recovery_expectation", "next_update_at",
+                    "next_update_unavailable", "source_observation_ids")}
+                event.update(event_id=event_id, event_type="RESOLVED", published_at=now, actor=actor)
+                writes.append((key, event_id, updated, event))
+            for key, event_id, updated, event in writes:
+                transaction.create(history.document(event_id), event)
+                transaction.set(current.document(key), updated)
+
+        resolve(self.client.transaction())

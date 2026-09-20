@@ -95,7 +95,6 @@ def execute_store_purchase(
     quantity: int,
     correlation_id: str | None = None,
     idempotency_key: str | None = None,
-    instant_use: bool = False,
 ) -> StorePurchaseResult:
     """
     Execute a lawful store purchase and create entitlement grants.
@@ -106,13 +105,20 @@ def execute_store_purchase(
         quantity: Positive integer number of units
         correlation_id: Optional; generated if not provided
         idempotency_key: Optional replay guard
-        instant_use: If True, immediately consume granted entitlements
 
     Returns:
         StorePurchaseResult with success status and granted entitlements
 
     Contract: Caller is responsible for discovering which policy applies.
     This FEAT accepts the exact policy_uuid and resolves it without inference.
+
+    Whether a grant is consumed at the moment of sale is NOT a caller decision.
+    ``SPEC-STORE-001`` §III defines IMMEDIATE_USE as "granted and consumed in the
+    same action", so it is a property of the resolved product, derived in Phase 4
+    below. It was previously an ``instant_use`` argument defaulting to False,
+    which every call site forgot to set — leaving immediate-use items sitting
+    unexercised in the student's item list, the state the specification says
+    cannot exist.
     """
     # Use decorator's idempotency generation if not provided
     return _execute_store_purchase_impl(
@@ -121,7 +127,6 @@ def execute_store_purchase(
         quantity=quantity,
         correlation_id=correlation_id,
         idempotency_key=idempotency_key,
-        instant_use=instant_use,
     )
 
 
@@ -133,7 +138,6 @@ def _execute_store_purchase_impl(
     quantity: int,
     correlation_id: str | None = None,
     idempotency_key: str | None = None,
-    instant_use: bool = False,
 ) -> StorePurchaseResult:
     """
     Internal implementation wrapped in @requires_feat_context for context management.
@@ -432,6 +436,18 @@ def _execute_store_purchase_impl(
     timestamp_utc = temporal_eval.canonical_now_utc
 
     entitlement_ids = []
+
+    # Derived from the resolved product, never from the caller. SPEC-STORE-001
+    # §III: "IMMEDIATE_USE - Granted and consumed in the same action (no
+    # expiry)", restated in §V.A as "IMMEDIATE_USE is exercised at the moment of
+    # sale". An unexercised IMMEDIATE_USE entitlement is a state the
+    # specification does not permit, so consumption is not optional for this
+    # type and not available to any other.
+    #
+    # Resolved here rather than at Phase 4 because the GRANTED payload below
+    # records it: the grant and the consumption must agree about what kind of
+    # sale this was.
+    instant_use = policy_config.entitlement_type == 'IMMEDIATE_USE'
 
     for _unit_idx in range(units_to_grant):
         entitlement_id = str(uuid.uuid4())

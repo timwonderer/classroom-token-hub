@@ -154,15 +154,36 @@ class TestStorePurchaseHappyPath:
 
 
 class TestInstantUse:
-    """Test instant-use coordination (purchase + immediate consume)."""
+    """Test instant-use coordination (purchase + immediate consume).
+
+    Instant use is a property of the product, not of the caller. This test used
+    to pass ``instant_use=True`` to ``execute_store_purchase``; that argument no
+    longer exists, because a caller-supplied flag defaulting to False is exactly
+    what let every real call site omit it and leave IMMEDIATE_USE items
+    unexercised (SPEC-STORE-001 §III). The property under test is unchanged —
+    an immediate-use sale writes GRANTED and CONSUMED together — so it is now
+    expressed through the product's ``entitlement_type``.
+
+    Quantity is 1 rather than 2: FEAT-STOR-001 rejects any quantity but one for
+    IMMEDIATE_USE and PRIVILEGE, so a two-unit instant-use purchase was never a
+    reachable state.
+    """
 
     def test_instant_use_creates_consumed_events(self, app_with_class, test_class_and_seat):
-        """Instant-use purchase creates both GRANTED and CONSUMED events."""
+        """An immediate-use purchase creates both GRANTED and CONSUMED events."""
         with app_with_class.app_context():
             class_id = test_class_and_seat["class_id"]
             student_seat_id = test_class_and_seat["student_seat_id"]
             student_user_id = test_class_and_seat["student_user_id"]
-            policy_uuid = test_class_and_seat["policy_uuid"]
+
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key="phase4-purchase:instant-policy"):
+                instant_policy = publish_store_product(
+                    class_id=class_id,
+                    entitlement_type="IMMEDIATE_USE",
+                    name="Instant Purchase",
+                    created_by_seat_id=test_class_and_seat["teacher_seat_id"],
+                )
+            db.session.commit()
 
             ctx = CanonicalContext(
                 user_id=student_user_id,
@@ -173,13 +194,12 @@ class TestInstantUse:
 
             result = execute_store_purchase(
                 canonical_context=ctx,
-                policy_uuid=policy_uuid,
-                quantity=2,
-                instant_use=True,
+                policy_uuid=instant_policy.policy_uuid,
+                quantity=1,
             )
 
             assert result.success is True
-            assert result.quantity_granted == 2
+            assert result.quantity_granted == 1
 
             # Verify GRANTED events
             granted = (
@@ -188,7 +208,7 @@ class TestInstantUse:
                 .filter_by(correlation_id=result.correlation_id)
                 .all()
             )
-            assert len(granted) == 2
+            assert len(granted) == 1
 
             # Verify CONSUMED events (same count)
             consumed = (
@@ -197,12 +217,40 @@ class TestInstantUse:
                 .filter_by(correlation_id=result.correlation_id)
                 .all()
             )
-            assert len(consumed) == 2
+            assert len(consumed) == 1
 
-            # Verify each CONSUMED event references a GRANTED entitlement
-            granted_ids = {e.entitlement_id for e in granted}
-            consumed_ids = {e.entitlement_id for e in consumed}
-            assert consumed_ids == granted_ids
+            # Each CONSUMED event closes the lifecycle its GRANTED event opened,
+            # rather than some other entitlement that happens to share the sale.
+            assert {e.entitlement_id for e in consumed} == {e.entitlement_id for e in granted}
+
+    def test_a_delayed_use_purchase_is_not_consumed(self, app_with_class, test_class_and_seat):
+        """The complement: nothing else is consumed at sale.
+
+        Without this, a change that consumed every grant would satisfy the test
+        above while silently destroying items the student has not redeemed.
+        """
+        with app_with_class.app_context():
+            ctx = CanonicalContext(
+                user_id=test_class_and_seat["student_user_id"],
+                class_id=test_class_and_seat["class_id"],
+                seat_id=test_class_and_seat["student_seat_id"],
+                actor_role="student",
+            )
+
+            result = execute_store_purchase(
+                canonical_context=ctx,
+                policy_uuid=test_class_and_seat["policy_uuid"],
+                quantity=2,
+            )
+
+            assert result.success is True
+            consumed = (
+                EntitlementEvent.query
+                .filter_by(class_id=test_class_and_seat["class_id"], event_type="CONSUMED")
+                .filter_by(correlation_id=result.correlation_id)
+                .all()
+            )
+            assert consumed == []
 
 
 class TestQuantityLogic:

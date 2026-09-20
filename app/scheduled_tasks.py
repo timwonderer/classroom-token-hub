@@ -369,6 +369,94 @@ def run_rent_reconciliation_job():
     )
 
 
+def _advance_local_calendar_days(occurrence_utc, days: int, ctx):
+    """Advance an occurrence by `days` *local calendar* days, keeping the local clock.
+
+    `occurrence_utc + timedelta(days=N)` preserves the clock time in UTC rather
+    than in the class's timezone, so a DST transition inside the interval moves
+    the run to the wrong local date — twice a year, permanently, because each
+    run seeds the next.
+
+    Preserving the wall-clock components is what makes this exact. An earlier
+    attempt added the *elapsed* UTC duration since local midnight to the target
+    midnight, which is not the same thing: on a 25-hour fall-back day an
+    occurrence at 23:30 local is 24h30m after midnight, so the target landed on
+    the following local date — reintroducing the defect in a narrower case.
+
+    Ambiguous and nonexistent local times are the two cases a naive
+    implementation silently gets wrong, so both are decided explicitly:
+
+    * **Ambiguous** (fall back — the clock reads 01:30 twice): take the
+      chronologically earlier instant, so the interval never silently lengthens.
+    * **Nonexistent** (spring forward — 02:30 never happens): take the smallest
+      forward shift onto a time that does exist, so 02:30 becomes 03:30.
+
+    Both are chosen by comparing the candidate instants directly rather than by
+    passing an ``is_dst`` flag. The flag does not mean "the earlier one": in
+    Europe/Dublin the tz database models winter as *negative* DST, so
+    ``is_dst=True`` on an ambiguous Dublin timestamp returns the **later**
+    instant — the opposite of Los Angeles. Selecting on the property actually
+    wanted is the only formulation that holds in every zone.
+
+    The local time of day is preserved rather than normalised to midnight
+    because `next_payroll_date` falls back to `created_at` for classes that
+    never set a first pay date (`payroll_settings_service`); forcing midnight
+    would move an established run time for those classes.
+    """
+    from datetime import datetime, timedelta, timezone as _timezone
+
+    import pytz
+
+    from app.utils.canonical_temporal_resolver import (
+        CLASS_LEVEL_EVALUATION,
+        canonical_temporal_resolver,
+    )
+
+    # Ask CLE which timezone governs this class rather than reading
+    # ClassEconomy here: the class-to-timezone mapping is the resolver's to own.
+    authority = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=ctx,
+        primitive="current_time",
+    ).temporal_authority
+    tz = pytz.timezone(authority)
+
+    local_occurrence = occurrence_utc.astimezone(tz)
+    target_naive = datetime.combine(
+        local_occurrence.date() + timedelta(days=days),
+        local_occurrence.time(),
+    )
+
+    try:
+        target_local = tz.localize(target_naive, is_dst=None)
+    except pytz.exceptions.AmbiguousTimeError:
+        # Two instants carry this wall clock; take the earlier. Compared as UTC
+        # rather than selected by flag — see the note on Europe/Dublin above.
+        target_local = min(
+            (tz.localize(target_naive, is_dst=flag) for flag in (True, False)),
+            key=lambda candidate: candidate.astimezone(_timezone.utc),
+        )
+    except pytz.exceptions.NonExistentTimeError:
+        # No instant carries this wall clock, so the local time must move. Take
+        # the smallest *forward* move onto a time that exists: 02:30 becomes
+        # 03:30, not 01:30 (backwards, which would run early) and not 03:00
+        # (the first existing instant, which would pull the run earlier within
+        # the day than configured).
+        candidates = [
+            tz.normalize(tz.localize(target_naive, is_dst=flag))
+            for flag in (False, True)
+        ]
+        target_local = min(
+            candidates,
+            key=lambda candidate: (
+                candidate.replace(tzinfo=None) <= target_naive,
+                abs(candidate.replace(tzinfo=None) - target_naive),
+            ),
+        )
+
+    return target_local.astimezone(_timezone.utc)
+
+
 def run_automatic_payroll_job():
     """Automatic payroll: fire the canonical completion FEAT for every due class.
 
@@ -467,7 +555,11 @@ def run_automatic_payroll_job():
                 )
                 # Scheduling bookkeeping (the scheduler's own concern), committed
                 # atomically with the cycle so a failure leaves the class due.
-                settings.next_payroll_date = scheduled_occurrence + timedelta(days=frequency_days)
+                #
+                # Advanced by local calendar days, not by 24-hour UTC spans.
+                settings.next_payroll_date = _advance_local_calendar_days(
+                    scheduled_occurrence, frequency_days, ctx
+                )
             ran += 1
         except Exception:
             failed += 1

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-OPS-001      | 2.4     | 2026-09-15     | 2.3        | Normative       |
+| DOM-OPS-001      | 2.6     | 2026-09-19     | 2.5        | Normative       |
 
 ## 0. Authority Level and Dependencies
 
@@ -55,6 +55,35 @@ This channel exists only to preserve useful public communication during canonica
 *   **Entitlement Balances**: It does not own the count of perks or items.
 *   **Economic Policy Truth**: It does not own `policy_versions` or `policy_transitions`. Class configuration and `economic-engine` are owned by `DOM-CLASS-001`; `policy_versions` and `policy_transitions` are owned by `DOM-CLASS-003`.
 *   **Operational Boundary Legality**: It does not determine whether a rent cycle has closed, an insurance period has expired, or an accrual rollover is lawful. Those determinations belong to the owning operational domain (see §8).
+
+### Public Feature Health Facets
+
+In addition to the system-level capabilities in the Operations verifier
+policy, the closed public feature-health registry contains `login`,
+`attendance`, `payroll`, `roster`, and `classroom_economy`. Each is an
+Operations assessment of **observed runtime integrity**, not a claim that
+every user can complete every journey or that Operations owns the underlying
+domain truth.
+
+Feature assessments consume naturally occurring execution evidence and
+read-only, class-bound verification results from the owning domains. They
+MUST NOT create synthetic teacher/student identities, initiate attendance or
+payroll, or otherwise mutate business state to manufacture monitoring
+activity. A coordinator may aggregate only redacted, bounded outcomes from
+independently authorized one-class executions; it may not query tenant tables
+across classes. External status infrastructure receives no class or user
+identifier, credential, financial value, raw result, or mutation authority.
+
+`PASS` requires fresh relevant real activity, no qualifying execution
+failures, and fresh affirmative state/transition/lineage/reconciliation
+checks for every dimension declared necessary by that evaluator. A proven
+execution, state, transition, lineage, or reconciliation failure is `FAIL`.
+Missing activity or missing, stale, skipped, failed-dispatch, or incomplete
+verification is `UNKNOWN`, not `PASS`. One database or HTTP ping never
+stands in for a feature assessment. These results are health evidence, not
+canonical incidents or corrections of domain facts. The read-only health
+endpoint may publish a bounded current assessment but MUST NOT perform
+mutations during GET.
 
 ### Interactions:
 *   **Reads From**: All domains (Identity, Ledger, Obligations, Attendance, Store, Class Config) to evaluate invariants and health.
@@ -256,12 +285,33 @@ This channel exists only to preserve useful public communication during canonica
 
 ### `health_check_events`
 *   `id`: UUID
-*   `timestamp`: TIMESTAMPTZ
+*   `checked_at`: TIMESTAMPTZ (when the check completed; nullable only when no check ran)
+*   `received_at`: TIMESTAMPTZ (when Operations received the bounded result)
 *   `check_type`: ENUM ('LIVENESS', 'READINESS', 'CORRECTNESS')
 *   `component`: VARCHAR
-*   `outcome`: ENUM ('PASS', 'FAIL', 'WARN')
-*   `correlation_id`: UUID (Nullable)
-*   `payload`: JSONB
+*   `evidence_source`: bounded source from the approved Operations registry
+*   `freshness_class`: ENUM ('REALTIME', 'PERIODIC_CORRECTNESS', 'DEEP_INTEGRITY')
+*   `staleness_state_at_receipt`: ENUM ('FRESH', 'STALE', 'UNKNOWN')
+*   `outcome`: ENUM ('PASS', 'FAIL', 'UNKNOWN')
+*   `epistemic_state`: ENUM ('KNOWN', 'UNAVAILABLE')
+*   `correlation_id`: UUID
+*   `probe_version`: VARCHAR (version of the check or collector protocol)
+*   `evaluator_version`: VARCHAR (nullable only when no feature evaluator ran)
+*   `payload`: JSONB (closed, bounded diagnostic fields only; no tenant identity or raw domain result)
+
+The recorded staleness state describes the result at receipt; it is immutable
+with the event. A current projection MUST recompute freshness from `checked_at`,
+`freshness_class`, and its evaluation time rather than trusting a historical
+`FRESH` value. Missing `checked_at` yields `UNKNOWN`, never a current pass.
+For application feature results, `probe_version` identifies transport and
+`evaluator_version` identifies the owning feature evaluator; they are not
+interchangeable. A registered feature `PASS` or `FAIL` requires both.
+
+The only lawful raw pairs are `PASS + KNOWN`, `FAIL + KNOWN`,
+`FAIL + UNAVAILABLE`, and `UNKNOWN + UNAVAILABLE` as specified in
+`SPEC-OPS-002`. A feature assessment derived from several checks may preserve
+disagreement separately; it MUST NOT encode aggregate conflict as a raw
+health event.
 
 ---
 

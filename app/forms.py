@@ -84,7 +84,13 @@ class StoreItemForm(FlaskForm):
                 field.errors = list(field.errors) + [message]
                 valid = False
 
-        if self.activation_date.data and self.activation_date.data < date.today():
+        # `local_today` is the class's current local date, set by the route from
+        # CLE. Falling back to `date.today()` reads the *server's* clock: on a
+        # UTC host, a teacher in the Americas creating an item after late
+        # afternoon was told their own current date was "before today", because
+        # UTC had already rolled over.
+        today = getattr(self, 'local_today', None) or date.today()
+        if self.activation_date.data and self.activation_date.data < today:
             self.activation_date.errors = list(self.activation_date.errors) + ['Start date cannot be before today.']
             valid = False
 

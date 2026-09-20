@@ -55,9 +55,9 @@ def test_status_registry_separates_user_capabilities_from_platform_checks():
 
 def test_live_evidence_makes_only_measured_checks_available_and_stale_checks_unknown():
     current = {
-        "database": {"source": "EXTERNAL_PROBE", "capability": "database", "observed_at": NOW,
+        "database": {"source": "APPLICATION_RUNTIME_EVIDENCE", "capability": "database", "observed_at": NOW, "checked_at": NOW,
                      "outcome": "PASS", "epistemic_state": "KNOWN"},
-        "login": {"source": "EXTERNAL_PROBE", "capability": "login", "observed_at": NOW,
+        "login": {"source": "APPLICATION_RUNTIME_EVIDENCE", "capability": "login", "observed_at": NOW,
                   "outcome": "UNKNOWN", "epistemic_state": "UNAVAILABLE"},
     }
     cards = derive_capability_cards([], ("login", "attendance"), current, now=NOW)
@@ -67,8 +67,59 @@ def test_live_evidence_makes_only_measured_checks_available_and_stale_checks_unk
     assert derive_platform_checks([], ("database",), current, now=NOW + timedelta(minutes=6))[0]["state"] == "UNKNOWN"
 
 
+def test_external_reachability_cannot_make_app_feature_available():
+    observations = {
+        "public_service_reachability": {
+            "source": "EXTERNAL_PROBE", "capability": "public_service_reachability",
+            "observed_at": NOW, "outcome": "PASS", "epistemic_state": "KNOWN"},
+        "login": {"source": "EXTERNAL_PROBE", "capability": "login",
+                  "observed_at": NOW, "outcome": "PASS", "epistemic_state": "KNOWN"},
+    }
+    cards = derive_capability_cards([], ("public_service_reachability", "login"), observations, now=NOW)
+    assert [card["state"] for card in cards] == ["AVAILABLE", "UNKNOWN"]
+
+
+def test_fresh_collector_receipt_does_not_refresh_stale_app_check():
+    observations = {"payroll": {
+        "source": "APPLICATION_RUNTIME_EVIDENCE", "capability": "payroll",
+        "observed_at": NOW, "checked_at": NOW - timedelta(minutes=6),
+        "outcome": "PASS", "epistemic_state": "KNOWN"}}
+    card = derive_capability_cards([], ("payroll",), observations, now=NOW)[0]
+    assert card["state"] == "UNKNOWN"
+
+
+def test_unknown_feature_card_explains_missing_evidence_without_claiming_failure(monkeypatch):
+    _overall_status()
+    create_app = sys.modules["status_service.app"].create_app
+    monkeypatch.setenv("STATUS_SERVICE_MODE", "public")
+    monkeypatch.setenv("STATUS_CAPABILITIES", "login,attendance,payroll")
+    monkeypatch.setenv("STATUS_PLATFORM_CHECKS", "")
+
+    class Store:
+        def list_active_notices(self):
+            return []
+
+        def list_current_observations(self):
+            return {
+                "attendance": {"source": "APPLICATION_RUNTIME_EVIDENCE", "capability": "attendance",
+                               "outcome": "UNKNOWN", "epistemic_state": "UNAVAILABLE",
+                               "diagnostic_code": "CHECK_NOT_REGISTERED", "checked_at": None},
+                "payroll": {"source": "APPLICATION_RUNTIME_EVIDENCE", "capability": "payroll",
+                            "outcome": "PASS", "epistemic_state": "KNOWN",
+                            "checked_at": datetime.now(timezone.utc) - timedelta(minutes=10)},
+            }
+
+    page = create_app(store=Store()).test_client().get("/").get_data(as_text=True)
+    assert page.count("Not recently verified") == 3
+    assert page.count("This does not mean a problem was detected.") >= 3
+    assert page.count("<summary>Why is this unknown?</summary>") == 3
+    assert "A feature check has not been registered yet." in page
+    assert "Last recorded check:" in page
+    assert "No recent conclusive check is available." in page
+
+
 def test_active_notice_overrides_green_probe():
-    current = {"login": {"source": "EXTERNAL_PROBE", "capability": "login", "observed_at": NOW,
+    current = {"login": {"source": "APPLICATION_RUNTIME_EVIDENCE", "capability": "login", "observed_at": NOW, "checked_at": NOW,
                          "outcome": "PASS", "epistemic_state": "KNOWN"}}
     notices = [{"capability": "login", "state": "INVESTIGATING", "impact_statement": "Sign-in is impaired."}]
     assert derive_capability_cards(notices, ("login",), current, now=NOW)[0]["state"] == "INVESTIGATING"
@@ -94,7 +145,7 @@ def test_fresh_known_failure_overrides_monitoring_card_and_platform_row():
         for key in ("login", "database")
     ]
     current = {
-        key: {"source": "EXTERNAL_PROBE", "capability": key, "observed_at": NOW,
+        key: {"source": "APPLICATION_RUNTIME_EVIDENCE", "capability": key, "observed_at": NOW, "checked_at": NOW,
               "outcome": "FAIL", "epistemic_state": "KNOWN"}
         for key in ("login", "database")
     }
@@ -125,8 +176,8 @@ def test_hero_probe_failure_does_not_inherit_unrelated_notice_guidance():
     now = datetime.now(timezone.utc)
     notices = [{"capability": "payroll", "state": "MONITORING",
                 "recommended_user_action": "Wait for payroll."}]
-    evidence = {"login": {"source": "EXTERNAL_PROBE", "capability": "login",
-                          "observed_at": now, "outcome": "FAIL", "epistemic_state": "KNOWN"}}
+    evidence = {"login": {"source": "APPLICATION_RUNTIME_EVIDENCE", "capability": "login",
+                          "observed_at": now, "checked_at": now, "outcome": "FAIL", "epistemic_state": "KNOWN"}}
     cards = derive_capability_cards(notices, ("login",), evidence, now=now)
     hero = derive_overall_status(notices, cards, [], evidence)
     assert hero["state"] == "DEGRADED"
@@ -164,8 +215,9 @@ def test_public_page_renders_guidance_only_for_hero_condition(monkeypatch):
     assert "Use another sign-in method." in page
     assert "Wait for payroll." not in page
 
-    store.observations = {"login": {"source": "EXTERNAL_PROBE", "capability": "login",
+    store.observations = {"login": {"source": "APPLICATION_RUNTIME_EVIDENCE", "capability": "login",
                                     "observed_at": datetime.now(timezone.utc),
+                                    "checked_at": datetime.now(timezone.utc),
                                     "outcome": "FAIL", "epistemic_state": "KNOWN"}}
     page = client.get("/").get_data(as_text=True)
     assert "A current check detected a service problem." in page
@@ -223,7 +275,7 @@ def test_old_unresolved_notice_survives_more_than_twenty_newer_resolutions(monke
                    "updated_at": now - timedelta(days=1)}
     resolved = [{"incident_ref": f"closed-{index}", "capability": "login", "state": "RESOLVED",
                  "updated_at": now - timedelta(minutes=index)} for index in range(21)]
-    observations = {"login": {"source": "EXTERNAL_PROBE", "capability": "login", "observed_at": now,
+    observations = {"login": {"source": "APPLICATION_RUNTIME_EVIDENCE", "capability": "login", "observed_at": now, "checked_at": now,
                               "outcome": "PASS", "epistemic_state": "KNOWN"}}
     store = FirestoreNoticeStore(Client([*resolved, open_notice], observations))
     assert all(notice["incident_ref"] != "still-open" for notice in store.list_notices(limit=20))
@@ -237,7 +289,7 @@ def test_old_unresolved_notice_survives_more_than_twenty_newer_resolutions(monke
 def test_fresh_known_failure_takes_precedence_over_monitoring_hero():
     derive_overall_status = _overall_status()
     now = datetime.now(timezone.utc)
-    current = {"login": {"source": "EXTERNAL_PROBE", "capability": "login", "observed_at": now,
+    current = {"login": {"source": "APPLICATION_RUNTIME_EVIDENCE", "capability": "login", "observed_at": now, "checked_at": now,
                          "outcome": "FAIL", "epistemic_state": "KNOWN"}}
     notices = [{"capability": "login", "state": "MONITORING", "impact_statement": "Recovery is being monitored."}]
     cards = derive_capability_cards(notices, ("login",), current, now=now)
@@ -246,12 +298,12 @@ def test_fresh_known_failure_takes_precedence_over_monitoring_hero():
     assert hero["label"] == "DETECTED PROBLEMS"
     assert "detected a service problem" in hero["headline"]
     assert hero["checked"] != "awaiting monitoring evidence"
-    assert derive_overall_status(notices, cards, [], {"login": {**current["login"], "observed_at": now - timedelta(minutes=6)}})["state"] == "MONITORING"
+    assert derive_overall_status(notices, cards, [], {"login": {**current["login"], "checked_at": now - timedelta(minutes=6)}})["state"] == "MONITORING"
 
 
 def test_unavailable_probe_failure_does_not_claim_feature_or_hero_problem():
     derive_overall_status = _overall_status()
-    current = {"login": {"source": "EXTERNAL_PROBE", "capability": "login", "observed_at": NOW,
+    current = {"login": {"source": "APPLICATION_RUNTIME_EVIDENCE", "capability": "login", "observed_at": NOW,
                          "outcome": "FAIL", "epistemic_state": "UNAVAILABLE"}}
     cards = derive_capability_cards([], ("login",), current, now=NOW)
     assert cards[0]["state"] == "UNKNOWN"
@@ -261,7 +313,7 @@ def test_unavailable_probe_failure_does_not_claim_feature_or_hero_problem():
 def test_last_checked_excludes_rejected_current_records():
     derive_overall_status = _overall_status()
     now = datetime.now(timezone.utc)
-    valid = {"source": "EXTERNAL_PROBE", "capability": "login", "observed_at": now,
+    valid = {"source": "APPLICATION_RUNTIME_EVIDENCE", "capability": "login", "observed_at": now, "checked_at": now,
              "outcome": "PASS", "epistemic_state": "KNOWN"}
     cards = [{"key": "login", "state": "AVAILABLE"}]
     for bad in (
@@ -294,8 +346,8 @@ def test_public_page_uses_one_clock_at_freshness_boundary(monkeypatch):
             return []
 
         def list_current_observations(self):
-            return {"login": {"source": "EXTERNAL_PROBE", "capability": "login",
-                              "observed_at": NOW - timedelta(minutes=5),
+            return {"login": {"source": "APPLICATION_RUNTIME_EVIDENCE", "capability": "login",
+                              "observed_at": NOW, "checked_at": NOW - timedelta(minutes=5),
                               "outcome": "PASS", "epistemic_state": "KNOWN"}}
 
     monkeypatch.setattr(module, "datetime", Clock)

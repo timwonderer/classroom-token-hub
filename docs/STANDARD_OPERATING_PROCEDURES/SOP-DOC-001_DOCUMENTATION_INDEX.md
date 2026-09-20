@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001      | 3.4     | 2026-09-19     | 3.3        | Normative |
+| SOP-DOC-001      | 3.5     | 2026-09-20     | 3.4        | Normative |
 
 ---
 
@@ -147,6 +147,7 @@ Archived material is deliberately absent; see §VI.
 - [SPEC-OPS-002 — External Status Persistence Model](../SPEC/SPEC-OPS-002_EXTERNAL_STATUS_PERSISTENCE_MODEL.md)
 - [SPEC-OPS-003 — Application Observability Contract](../SPEC/SPEC-OPS-003_APPLICATION_OBSERVABILITY_CONTRACT.md)
 - [SPEC-OPS-004 — System Administration Console](../SPEC/SPEC-OPS-004_SYSTEM_ADMINISTRATION_CONSOLE.md)
+- [SPEC-OPS-005 — Feature Health Evidence](../SPEC/SPEC-OPS-005_FEATURE_HEALTH_EVIDENCE.md)
 - [SPEC-SEC-001 — Credentials and Identity Lookup Code Contract](../SPEC/SPEC-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_CODE_CONTRACT.md)
 - [SPEC-STORE-001 — Store Product Policy Payload Schema](../SPEC/SPEC-STORE-001_PRODUCT_POLICY_PAYLOAD_SCHEMA.md)
 - [SPEC-TEST-001 — Canonical Test Initializer](../SPEC/SPEC-TEST-001_CANONICAL_TEST_INITIALIZER.md)
@@ -257,6 +258,12 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.5 (2026-09-20):**
+- Added `SPEC-OPS-005_FEATURE_HEALTH_EVIDENCE`, registered on `main` while 3.4 was in review.
+- Merged with 3.4's completion of §V. `main` had bumped the header to 3.5 over the 3.3 body;
+  this revision keeps that number and the completed listing, so the version reflects both.
+
 
 **Version 3.4 (2026-09-19):**
 - Completed the index. Version 3.3 listed 85 of the 131 numbered documents in the repository while
