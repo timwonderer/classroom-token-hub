@@ -14,6 +14,8 @@ and this project follows semantic versioning principles.
 
 - **Feature-health review clarifications (2026-09-19)** — The governing contracts now record evidence source, freshness class, and receipt-time staleness without treating a historical freshness result as current. External observations can transport CTH-produced results while preserving their source and owning evaluator version separately from collector protocol version. Login, attendance, and roster retain separate readiness and correctness dimensions; Productivity owns attendance-session verification.
 
+- **App evidence keeps its own clock and provenance (2026-09-19)** — The status collector now records the app-reported check time for each measured signal and distinguishes app-origin results from its own outside-in HTTP reachability check. Persisted observations also carry their approved freshness class, receipt-time staleness state, and a separate evaluator version when a registered feature result exists. A stale feature result becomes Unknown without hiding a fresh database result; unregistered feature checks remain Unknown. The health payload and collector must be rolled out together; mixed versions fail closed until both are deployed.
+
 - **Feature status requires affirmative evidence (2026-09-19)** — The Operations status contract now distinguishes naturally observed feature activity from synthetic probes. Login, Attendance, Payroll, Roster, and Classroom Economy can report an observed-runtime-integrity PASS only when recent real activity and all registered execution, validity, lineage, and reconciliation checks are fresh and affirmative; proven failures remain failures, while idle or incomplete evidence remains UNKNOWN. External status infrastructure receives bounded results only and no classroom credentials or tenant data. This is a governing contract, not a claim that the evaluators are implemented or deployed.
 
 ### Fixed
@@ -31,6 +33,8 @@ and this project follows semantic versioning principles.
 - Resolve selected open issues through version-bound checkboxes rather than free-text resolution references. Resolution events and current projections are written atomically; stale, missing, or already resolved selections reject the entire submission. History and unselected issues are preserved.
 
 ### Interface
+
+- **Unknown feature status explains its evidence gap (2026-09-19)** — Status cards now say “Not recently verified” and explain that insufficient recent evidence is not a detected failure. A native disclosure exposes the bounded reason and last recorded check time when available, without requiring hover or implying that idle activity is healthy.
 
 - **Status summaries share one freshness clock (2026-09-19)** — The hero and service cards use the same request timestamp, keeping their result and last-checked text consistent at the freshness boundary. Next-update times use readable UTC formatting when a timezone is supplied; values without a timezone say so explicitly. The collector deployment test now rejects duplicate commands even when their step names match.
 

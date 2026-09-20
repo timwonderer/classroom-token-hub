@@ -38,3 +38,22 @@ evidence that the infrastructure is provisioned or running.
 If any prerequisite fails, leave the GitHub variable unset or false and keep
 the Scheduler job disabled. Do not publish a healthy app status from missing
 or stale observations.
+
+## App evidence protocol rollout
+
+The app and status service deploy independently. The v2 health payload adds a
+per-signal `checked_at` timestamp so a collector receipt cannot make an old
+app result fresh. Receipt time orders observations; the original check time
+governs freshness. The collector also preserves application-origin evidence separately
+from the collector's own reachability probe. The collector rejects the old
+signal shape. During a mixed-version rollout, app-derived signals therefore
+become `UNKNOWN` (not healthy) until both sides serve v2.
+
+Before declaring the rollout complete, verify the app's `/health/status`
+returns `checked_at` for the database check and null for unregistered
+features, run the collector, then verify Firestore keeps
+`APPLICATION_RUNTIME_EVIDENCE` for app signals and `EXTERNAL_PROBE` for
+`public_service_reachability`. Confirm the public page still shows unregistered
+features as Unknown and does not treat an old feature check as fresh. Do not
+call feature-health evaluation complete merely because this transport is
+working; owning-domain evidence producers are separate work.

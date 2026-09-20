@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 
-from .projection import EpistemicState, EvidenceSource, ObservationClass, Outcome
+from .projection import EpistemicState, EvidenceSource, FRESHNESS_MAX_AGE, ObservationClass, Outcome
 
 
 class NoticeState(str, Enum):
@@ -35,6 +35,10 @@ class ExternalObservationRecord:
     diagnostic_code: str
     latency_ms: int | None
     probe_version: str
+    freshness_class: str
+    staleness_state_at_receipt: str
+    evaluator_version: str | None
+    checked_at: datetime | None = None
 
     def validate(self) -> None:
         if not self.observation_id or not self.correlation_id or not self.source or not self.capability:
@@ -45,6 +49,27 @@ class ExternalObservationRecord:
             raise ValueError("Observation latency is outside the bounded range.")
         if not self.probe_version or len(self.probe_version) > 32:
             raise ValueError("Observation probe_version must be bounded.")
+        if self.freshness_class not in FRESHNESS_MAX_AGE:
+            raise ValueError("Observation freshness_class must be approved.")
+        if self.staleness_state_at_receipt not in {"FRESH", "STALE", "UNKNOWN"}:
+            raise ValueError("Observation staleness state must be closed.")
+        if self.evaluator_version is not None and (not self.evaluator_version or len(self.evaluator_version) > 32):
+            raise ValueError("Observation evaluator_version must be bounded.")
+        if self.observed_at.tzinfo is None:
+            raise ValueError("Observation receipt time must be timezone-aware.")
+        if self.checked_at is not None and self.checked_at.tzinfo is None:
+            raise ValueError("Observation checked_at must be timezone-aware.")
+        if self.checked_at is None and self.staleness_state_at_receipt != "UNKNOWN":
+            raise ValueError("Missing check time cannot have known freshness.")
+        if self.checked_at is not None:
+            age = self.observed_at - self.checked_at
+            expected = "FRESH" if -5 <= age.total_seconds() <= FRESHNESS_MAX_AGE[self.freshness_class].total_seconds() else "STALE"
+            if self.staleness_state_at_receipt != expected:
+                raise ValueError("Recorded receipt-time staleness disagrees with check time.")
+        if self.source == EvidenceSource.APPLICATION_RUNTIME_EVIDENCE and self.outcome in {Outcome.PASS, Outcome.FAIL} and self.checked_at is None:
+            raise ValueError("Conclusive app evidence requires its original check time.")
+        if self.source == EvidenceSource.APPLICATION_RUNTIME_EVIDENCE and self.capability in {"login", "attendance", "payroll", "roster", "classroom_economy"} and self.outcome in {Outcome.PASS, Outcome.FAIL} and self.evaluator_version is None:
+            raise ValueError("Conclusive feature evidence requires its evaluator version.")
         if (self.outcome, self.epistemic_state) not in {
             (Outcome.PASS, EpistemicState.KNOWN),
             (Outcome.FAIL, EpistemicState.KNOWN),

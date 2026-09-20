@@ -53,6 +53,7 @@ class FirestoreNoticeStore:
             document = {
                 "observation_id": record.observation_id,
                 "observed_at": record.observed_at,
+                "checked_at": record.checked_at,
                 "correlation_id": record.correlation_id,
                 "source": record.source.value,
                 "capability": record.capability,
@@ -62,6 +63,9 @@ class FirestoreNoticeStore:
                 "diagnostic_code": record.diagnostic_code,
                 "latency_ms": record.latency_ms,
                 "probe_version": record.probe_version,
+                "freshness_class": record.freshness_class,
+                "staleness_state_at_receipt": record.staleness_state_at_receipt,
+                "evaluator_version": record.evaluator_version,
             }
             documents.append(document)
 
