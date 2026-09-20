@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-OPS-001      | 2.5     | 2026-09-19     | 2.4        | Normative       |
+| DOM-OPS-001      | 2.6     | 2026-09-19     | 2.5        | Normative       |
 
 ## 0. Authority Level and Dependencies
 
@@ -285,15 +285,27 @@ mutations during GET.
 
 ### `health_check_events`
 *   `id`: UUID
-*   `timestamp`: TIMESTAMPTZ (when the check completed)
+*   `checked_at`: TIMESTAMPTZ (when the check completed; nullable only when no check ran)
 *   `received_at`: TIMESTAMPTZ (when Operations received the bounded result)
 *   `check_type`: ENUM ('LIVENESS', 'READINESS', 'CORRECTNESS')
 *   `component`: VARCHAR
+*   `evidence_source`: bounded source from the approved Operations registry
+*   `freshness_class`: ENUM ('REALTIME', 'PERIODIC_CORRECTNESS', 'DEEP_INTEGRITY')
+*   `staleness_state_at_receipt`: ENUM ('FRESH', 'STALE', 'UNKNOWN')
 *   `outcome`: ENUM ('PASS', 'FAIL', 'UNKNOWN')
 *   `epistemic_state`: ENUM ('KNOWN', 'UNAVAILABLE')
 *   `correlation_id`: UUID
-*   `probe_version`: VARCHAR
+*   `probe_version`: VARCHAR (version of the check or collector protocol)
+*   `evaluator_version`: VARCHAR (nullable only when no feature evaluator ran)
 *   `payload`: JSONB (closed, bounded diagnostic fields only; no tenant identity or raw domain result)
+
+The recorded staleness state describes the result at receipt; it is immutable
+with the event. A current projection MUST recompute freshness from `checked_at`,
+`freshness_class`, and its evaluation time rather than trusting a historical
+`FRESH` value. Missing `checked_at` yields `UNKNOWN`, never a current pass.
+For application feature results, `probe_version` identifies transport and
+`evaluator_version` identifies the owning feature evaluator; they are not
+interchangeable. A registered feature `PASS` or `FAIL` requires both.
 
 The only lawful raw pairs are `PASS + KNOWN`, `FAIL + KNOWN`,
 `FAIL + UNAVAILABLE`, and `UNKNOWN + UNAVAILABLE` as specified in

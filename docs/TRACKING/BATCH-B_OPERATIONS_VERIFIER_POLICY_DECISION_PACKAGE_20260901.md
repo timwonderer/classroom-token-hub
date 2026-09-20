@@ -2,7 +2,7 @@
 
 | Reference | Version | Effective Date | Supersedes | Status |
 |---|---:|---|---|---|
-| BATCH-B-OPS-VERIFIER-POLICY | 1.3 | 2026-09-19 | 1.2 | Approved policy record |
+| BATCH-B-OPS-VERIFIER-POLICY | 1.4 | 2026-09-19 | 1.3 | Approved policy record |
 
 ## I. Purpose
 
@@ -81,10 +81,10 @@ observation class, required freshness class, and public eligibility.
 | production telemetry | Grafana telemetry, bounded to the closed capability registry | LIVENESS, READINESS, or CORRECTNESS as declared by the probe | eligible after capability projection |
 | audit integrity | canonical audit-lineage verifier | CORRECTNESS | eligible after capability projection |
 | canonical incident/publication state | DOM-OPS or authorized external notice | publication state | eligible as canonical/publication projection |
-| login | natural execution telemetry + bounded Identity verification | READINESS | eligible only with fresh real activity and all registered checks |
-| attendance | natural execution telemetry + bounded Attendance verification | READINESS | eligible only with fresh real activity and all registered checks |
+| login | natural execution telemetry + bounded Identity verification | READINESS and CORRECTNESS (separate results) | eligible only with fresh real activity and all registered checks |
+| attendance | natural execution telemetry + bounded Productivity verification of `attendance_sessions` | READINESS and CORRECTNESS (separate results) | eligible only with fresh real activity and all registered checks |
 | payroll | natural execution telemetry + bounded Productivity/Ledger verification | READINESS and CORRECTNESS (separate results) | eligible only with fresh real activity and all registered checks |
-| roster | natural execution telemetry + bounded Identity/Class verification | READINESS | eligible only with fresh real activity and all registered checks |
+| roster | natural execution telemetry + bounded Identity/Class verification | READINESS and CORRECTNESS (separate results) | eligible only with fresh real activity and all registered checks |
 | classroom economy | natural execution telemetry + bounded owning-domain verification | READINESS and CORRECTNESS (separate results) | eligible only with fresh real activity and all registered checks |
 
 Raw evidence is never directly public. All sources pass through a capability-level

@@ -10,6 +10,8 @@ and this project follows semantic versioning principles.
 
 ### Operations
 
+- **Feature-health review clarifications (2026-09-19)** — The governing contracts now record evidence source, freshness class, and receipt-time staleness without treating a historical freshness result as current. External observations can transport CTH-produced results while preserving their source and owning evaluator version separately from collector protocol version. Login, attendance, and roster retain separate readiness and correctness dimensions; Productivity owns attendance-session verification.
+
 - **Feature status requires affirmative evidence (2026-09-19)** — The Operations status contract now distinguishes naturally observed feature activity from synthetic probes. Login, Attendance, Payroll, Roster, and Classroom Economy can report an observed-runtime-integrity PASS only when recent real activity and all registered execution, validity, lineage, and reconciliation checks are fresh and affirmative; proven failures remain failures, while idle or incomplete evidence remains UNKNOWN. External status infrastructure receives bounded results only and no classroom credentials or tenant data. This is a governing contract, not a claim that the evaluators are implemented or deployed.
 
 ### Interface

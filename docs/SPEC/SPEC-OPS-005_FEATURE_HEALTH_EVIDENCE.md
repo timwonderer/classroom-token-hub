@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| SPEC-OPS-005 | 1.0 | 2026-09-19 | N/A | Normative |
+| SPEC-OPS-005 | 1.1 | 2026-09-19 | 1.0 | Normative |
 
 ## I. Purpose
 
@@ -99,7 +99,11 @@ class. A replaceable current assessment MAY be derived from it. The public
 health endpoint is a pure GET: it reads a bounded assessment and MUST NOT
 execute a FEAT, repair a record, or start a verifier. The external collector
 receives only capability key, observation class, lawful outcome/epistemic
-pair, checked-at time, and a closed diagnostic code. No class/user/seat
+pair, checked-at time, a closed diagnostic code, and the bounded evaluator
+version when a registered feature evaluator ran. The collector derives the
+bounded evidence source from the validated signal origin and stamps its own
+transport `probe_version`; neither value substitutes for the owning evaluator
+version. An unregistered `UNKNOWN` has no evaluator version. No class/user/seat
 identifier, contact detail, credential, financial value, row ID, free-form
 exception, or raw verifier result crosses that boundary.
 
@@ -117,9 +121,11 @@ The collector derives `APPLICATION_RUNTIME_EVIDENCE` only from a validated,
 closed application signal; it derives `EXTERNAL_PROBE` only from its own
 reachability check. The observation `probe_version` identifies the collector
 transport protocol, not the feature evaluator. A feature evaluator MUST
-provide a separately bounded and validated evaluator version before its
-result can be registered as `PASS` or `FAIL`. Until that producer and version
-are implemented, its public result remains `CHECK_NOT_REGISTERED` / `UNKNOWN`.
+provide a separately bounded and validated evaluator version in the
+application-to-collector signal before its result can be registered as `PASS`
+or `FAIL`. The external observation stores that version separately from
+`probe_version`. Until that producer and transport field are implemented,
+its public result remains `CHECK_NOT_REGISTERED` / `UNKNOWN`.
 
 ## VIII. Public wording
 
