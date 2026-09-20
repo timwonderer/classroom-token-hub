@@ -26,10 +26,11 @@ on:
       - '.github/workflows/github-pages.yml'
   workflow_dispatch:
 
+# Least privilege: `build` runs `npm ci` and `npm run build`, whose child
+# processes inherit the job environment. OIDC belongs only to the job that
+# deploys, so id-token lives on `deploy`.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: github-pages
@@ -38,9 +39,17 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          # Docusaurus reads `git log` for each document's last-update time
+          # (showLastUpdateTime). A shallow clone has no history to read, so the
+          # deployed pages would show missing or wrong dates.
+          fetch-depth: 0
 
       - name: Configure Pages
         if: github.event_name != 'pull_request'
@@ -86,6 +95,9 @@ jobs:
   deploy:
     if: github.event_name != 'pull_request'
     needs: build
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

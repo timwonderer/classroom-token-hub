@@ -70,7 +70,10 @@ const config = {
             "README.md",
           ],
           sidebarPath: require.resolve("./sidebars.js"),
-          editUrl: `${repoUrl}/tree/main/docs/`,
+          // Function form, not a string: the plugin reads from `../docs`, so a
+          // string base has that relative path appended verbatim and produces
+          // `/edit/main/docs/../docs/<file>`, which GitHub does not normalise.
+          editUrl: ({docPath}) => `${repoUrl}/edit/main/docs/${docPath}`,
           showLastUpdateTime: true,
         },
         blog: {
@@ -80,7 +83,7 @@ const config = {
           blogDescription:
             "Release notes, decision records, and migration write-ups",
           showReadingTime: true,
-          editUrl: `${repoUrl}/tree/main/docs-site/`,
+          editUrl: ({blogPath}) => `${repoUrl}/edit/main/docs-site/blog/${blogPath}`,
           onInlineAuthors: "ignore",
           onUntruncatedBlogPosts: "ignore",
         },

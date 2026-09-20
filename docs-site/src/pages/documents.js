@@ -24,7 +24,7 @@ const GROUPS = [
 // FEAT-CLASS-001_CREATING_NEW_CLASS_BOUNDARY -> "FEAT-CLASS-001 · Creating new class boundary"
 function label(id) {
   const name = id.split("/").pop();
-  const match = name.match(/^((?:INV|DOM|FEAT|SPEC|SOP|MAP|REF|PRN)-[A-Z]+-\d+)[_ ](.*)$/);
+  const match = name.match(/^((?:INV|DOM|FEAT|SPEC|SOP|MAP|REF|PRN)-[A-Z]+-\d+[A-Z]?)[_ ](.*)$/);
   const words = (rest) =>
     rest.replace(/[_-]+/g, " ").toLowerCase().replace(/^./, (c) => c.toUpperCase());
   return match ? `${match[1]} · ${words(match[2])}` : words(name);
