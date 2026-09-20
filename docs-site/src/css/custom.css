@@ -1,170 +1,443 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+/*
+ * Developer docs site — Infima mapped onto the project design tokens.
+ *
+ * SPEC-DES-001 §VI.4 holds the canonical brand values; tokens.css transcribes
+ * them. This file states no design value of its own: every declaration below
+ * resolves through a token, and the only literals are structural (§IX).
+ *
+ * Infima ships its palette and several component rules at a selector carrying
+ * two id-worth of specificity — `:not(#\#):not(#\#)` — so an override here has
+ * to match or exceed it. Where a rule below carries that escape hatch, that is
+ * why; it is not decoration.
+ */
 
-:root {
-  --ifm-color-primary: #1a4d47;
-  --ifm-color-primary-dark: #15403b;
-  --ifm-color-primary-darker: #123833;
-  --ifm-color-primary-darkest: #0f2e2a;
-  --ifm-color-primary-light: #23665d;
-  --ifm-color-primary-lighter: #2b796f;
-  --ifm-color-primary-lightest: #38867b;
-  --ifm-background-color: #f5f5f3;
-  --ifm-navbar-background-color: rgba(250, 250, 249, 0.92);
-  --ifm-footer-background-color: #171717;
-  --ifm-font-family-base: "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --ifm-heading-font-family: "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --ifm-card-border-radius: 12px;
-  --ifm-global-radius: 12px;
-  --ifm-code-font-size: 95%;
-  --ifm-toc-border-color: #e8e8e5;
-  --ifm-link-color: #1a4d47;
-  --ifm-navbar-link-hover-color: #15403b;
-  --ifm-footer-color: #fafaf9;
-  --ifm-footer-link-color: #fafaf9;
-  --ifm-footer-title-color: #fafaf9;
+@import "./fonts.css";
+@import "./tokens.css";
+
+/* ── Infima variable bridge ──────────────────────────────────────────────
+   Infima's own tokens, remapped onto the project's. Nothing here invents a
+   value; each line names the token that already owns the decision. */
+
+:root:not(#\#):not(#\#):not(#\#) {
+  --ifm-color-primary: var(--primary);
+  --ifm-color-primary-dark: var(--primary-hover);
+  --ifm-color-primary-darker: var(--primary-hover);
+  --ifm-color-primary-darkest: var(--primary-hover);
+  --ifm-color-primary-light: var(--primary);
+  --ifm-color-primary-lighter: var(--primary);
+  --ifm-color-primary-lightest: var(--primary-subtle);
+
+  --ifm-color-success: var(--success);
+  --ifm-color-info: var(--info);
+  --ifm-color-warning: var(--warning);
+  --ifm-color-danger: var(--danger);
+
+  --ifm-background-color: var(--background);
+  --ifm-background-surface-color: var(--surface);
+  --ifm-navbar-background-color: var(--surface);
+  --ifm-footer-background-color: var(--neutral-900);
+  --ifm-footer-color: var(--text-inverse);
+  --ifm-footer-link-color: var(--text-on-dark-muted);
+  --ifm-footer-title-color: var(--text-inverse);
+  --ifm-footer-link-hover-color: var(--secondary);
+
+  --ifm-font-family-base: var(--font-family);
+  --ifm-heading-font-family: var(--font-display);
+  --ifm-font-family-monospace: var(--font-data);
+  --ifm-font-size-base: var(--text-base);
+  --ifm-line-height-base: var(--leading-normal);
+  --ifm-heading-font-weight: var(--weight-semibold);
+  --ifm-font-weight-semibold: var(--weight-semibold);
+  --ifm-font-weight-bold: var(--weight-bold);
+  --ifm-heading-line-height: var(--leading-tight);
+  --ifm-code-font-size: var(--text-sm);
+
+  --ifm-font-color-base: var(--text-primary);
+  --ifm-heading-color: var(--neutral-900);
+  --ifm-link-color: var(--primary);
+  --ifm-link-hover-color: var(--primary-hover);
+  --ifm-navbar-link-color: var(--text-primary);
+  --ifm-navbar-link-hover-color: var(--primary);
+  --ifm-menu-color: var(--text-secondary);
+  --ifm-menu-color-active: var(--primary);
+  --ifm-menu-color-background-active: var(--primary-subtle);
+  --ifm-menu-color-background-hover: var(--primary-subtle);
+  --ifm-breadcrumb-color-active: var(--primary);
+  --ifm-breadcrumb-item-background-active: var(--primary-subtle);
+  --ifm-toc-link-color: var(--text-secondary);
+
+  --ifm-color-emphasis-200: var(--neutral-200);
+  --ifm-color-emphasis-300: var(--neutral-300);
+  --ifm-toc-border-color: var(--border-color);
+  --ifm-table-border-color: var(--border-color);
+  --ifm-table-stripe-background: var(--neutral-50);
+  --ifm-table-head-background: var(--primary-subtle);
+  --ifm-blockquote-border-color: var(--secondary);
+  --ifm-blockquote-color: var(--text-secondary);
+  --ifm-hr-background-color: var(--border-color);
+  --ifm-code-background: var(--neutral-100);
+  --ifm-pre-background: var(--neutral-50);
+
+  /* Radius: sm for cards and inputs, md for buttons, lg for large containers. */
+  --ifm-global-radius: var(--radius-sm);
+  --ifm-card-border-radius: var(--radius-sm);
+  --ifm-button-border-radius: var(--radius-md);
+  --ifm-code-border-radius: var(--radius-xs);
+  --ifm-badge-border-radius: var(--radius-pill);
+
+  /* Elevation is for genuine overlay. Resting surfaces are flat and separate
+     by border and spacing instead (§V.1.3). */
+  --ifm-global-shadow-lw: none;
+  --ifm-global-shadow-md: var(--shadow-md);
+  --ifm-global-shadow-tl: var(--shadow-lg);
+  --ifm-navbar-shadow: none;
+
+  --ifm-transition-fast: var(--duration-fast);
+  --ifm-transition-slow: var(--duration-base);
+  --ifm-transition-timing-default: var(--ease-standard);
+
+  --ifm-spacing-horizontal: var(--space-4);
+  --ifm-navbar-padding-horizontal: var(--space-4);
+  --ifm-navbar-item-padding-horizontal: var(--space-3);
+  --ifm-global-spacing: var(--space-4);
+  --ifm-paragraph-margin-bottom: var(--space-4);
+  --ifm-leading: var(--space-6);
+
+  --docusaurus-highlighted-code-line-bg: var(--primary-subtle);
 }
 
-html {
-  scroll-behavior: smooth;
-}
+/* ── Page chrome ─────────────────────────────────────────────────────── */
 
 body {
-  background:
-    radial-gradient(circle at top left, rgba(26, 77, 71, 0.08), transparent 32%),
-    linear-gradient(180deg, #fafaf9 0%, #f5f5f3 100%);
-  color: #262626;
+  background: var(--background);
+  color: var(--text-primary);
 }
 
 .navbar {
-  border-bottom: 1px solid #e8e8e5;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  backdrop-filter: blur(10px);
+  border-bottom: var(--space-hairline) solid var(--border-color);
 }
 
-.navbar__brand {
-  font-weight: 700;
-  letter-spacing: -0.02em;
+.navbar__brand,
+.navbar__title {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-tight);
 }
 
 .navbar__link {
-  font-weight: 500;
+  font-weight: var(--weight-medium);
 }
 
-.hero {
-  background:
-    radial-gradient(circle at top left, rgba(26, 77, 71, 0.14), transparent 34%),
-    radial-gradient(circle at 85% 20%, rgba(196, 149, 100, 0.12), transparent 24%),
-    linear-gradient(180deg, #fafaf9 0%, #f5f5f3 100%);
-  border-bottom: 1px solid #e8e8e5;
+.footer {
+  background: var(--neutral-900);
+  border-top: var(--space-hairline) solid var(--neutral-800);
 }
 
-.hero__title {
-  letter-spacing: -0.03em;
+.footer__title:not(#\#):not(#\#) {
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
 }
 
-.hero__subtitle {
-  max-width: 44rem;
-  color: #404040;
+/* ── Brand wordmark (SPEC-DES-001 §IX) ────────────────────────────────
+   The brand is text — three rows, each led by its Material Symbol — not an
+   image. This mirrors macros/docs_hero.html: the same rows, the same gold
+   rule on the trailing edge, on the same --primary band. */
+
+.landing-hero {
+  background: var(--primary);
+  color: var(--text-inverse);
+  padding: var(--space-10) 0 var(--space-12);
 }
 
-.button {
-  border-radius: 8px;
-  font-weight: 600;
+.landing-hero-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-10);
+  align-items: center;
 }
 
-.button--secondary {
-  background: #ffffff;
-  color: #1a4d47;
-  border-color: #d4d4d0;
+.landing-brand {
+  display: grid;
+  gap: var(--space-1);
+  padding-right: var(--space-8);
+  border-right: var(--space-half) solid var(--secondary);
 }
 
-.button--secondary:hover {
-  background: #f5f5f3;
-  color: #15403b;
+.landing-brand-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-display);
+  font-size: var(--text-4xl);
+  line-height: var(--leading-tight);
+  font-weight: var(--weight-medium);
 }
 
-.card,
-.theme-doc-sidebar-container,
-.menu {
-  border-radius: 12px;
+.landing-brand-row .material-symbols-outlined {
+  color: var(--secondary);
+  font-size: var(--icon-2xl);
 }
+
+/* Gold headline on the green band, as the application's landing and docs
+   heroes render it. #D4A857 on #1a4d47 is 4.76:1.
+   Infima colours every heading at `h1:not(#\#):not(#\#)`, which outranks a
+   plain descendant selector — without the escape hatch this renders
+   --ifm-heading-color (#171717) on the green band, at 1.6:1. */
+.landing-welcome h1:not(#\#):not(#\#) {
+  color: var(--secondary);
+  font-size: var(--text-3xl);
+  line-height: var(--leading-tight);
+  font-weight: var(--weight-semibold);
+  margin: 0;
+}
+
+.landing-welcome p {
+  color: var(--text-on-dark-muted);
+  font-size: var(--text-lg);
+  line-height: var(--leading-body);
+  font-weight: var(--weight-normal);
+  margin: var(--space-3) 0 0;
+  max-width: 46rem;
+}
+
+.hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+}
+
+/* On the dark band the secondary button needs a light fill to stay legible;
+   the primary fill is the gold accent, which carries --secondary-text. */
+.landing-hero .button--primary:not(#\#):not(#\#) {
+  background: var(--secondary);
+  border-color: var(--secondary);
+  color: var(--secondary-text);
+}
+
+.landing-hero .button--primary:not(#\#):not(#\#):hover {
+  background: var(--secondary-hover);
+  border-color: var(--secondary-hover);
+  color: var(--secondary-text);
+}
+
+.landing-hero .button--secondary:not(#\#):not(#\#) {
+  background: transparent;
+  border-color: var(--text-on-dark-muted);
+  color: var(--text-inverse);
+}
+
+.landing-hero .button--secondary:not(#\#):not(#\#):hover {
+  background: color-mix(in srgb, var(--text-inverse) 8%, transparent);
+  color: var(--text-inverse);
+}
+
+/* Docusaurus's own desktop/mobile boundary; a media query cannot read a custom
+   property, so the reference value is written out (SPEC-DES-001 §VI.1). */
+@media (max-width: 996px) {
+  .landing-hero-grid {
+    grid-template-columns: 1fr;
+    gap: var(--space-6);
+  }
+
+  .landing-brand {
+    border-right: 0;
+    border-bottom: var(--space-half) solid var(--secondary);
+    padding-right: 0;
+    padding-bottom: var(--space-5);
+  }
+
+  .landing-brand-row {
+    font-size: var(--text-3xl);
+  }
+
+  .landing-brand-row .material-symbols-outlined {
+    font-size: var(--icon-xl);
+  }
+}
+
+/* ── Landing sections ────────────────────────────────────────────────── */
+
+.section-lede {
+  max-width: 46rem;
+  color: var(--text-secondary);
+  line-height: var(--leading-normal);
+}
+
+.section-card {
+  display: block;
+  height: 100%;
+  text-decoration: none;
+  color: inherit;
+  border: var(--space-hairline) solid var(--border-color);
+  background: var(--surface);
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+
+.section-card:hover {
+  text-decoration: none;
+  color: inherit;
+  border-color: var(--primary);
+}
+
+.section-card__tier {
+  display: inline-block;
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
+  color: var(--accent-text-on-light);
+}
+
+.section-card__title:not(#\#):not(#\#) {
+  font-family: var(--font-display);
+  margin: var(--space-2) 0 var(--space-2);
+  font-size: var(--text-lg);
+}
+
+.section-card__body {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+}
+
+/* ── Documentation surfaces ──────────────────────────────────────────── */
 
 .card {
-  border: 1px solid #e8e8e5;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-}
-
-.hero-card {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(250, 250, 249, 0.98));
-}
-
-.hero-card__title {
-  margin-bottom: 0.75rem;
-}
-
-.hero-card__list {
-  display: grid;
-  gap: 0.75rem;
-  color: #404040;
-  line-height: 1.55;
-}
-
-.theme-doc-markdown img,
-.theme-doc-markdown table {
-  border-radius: 10px;
+  border: var(--space-hairline) solid var(--border-color);
+  background: var(--surface);
+  box-shadow: none;
 }
 
 .markdown h1,
 .markdown h2,
 .markdown h3,
 .markdown h4 {
-  letter-spacing: -0.02em;
+  font-family: var(--font-display);
+  letter-spacing: var(--tracking-tight);
 }
 
 .markdown a {
-  font-weight: 600;
+  font-weight: var(--weight-medium);
+}
+
+.markdown table {
+  font-size: var(--text-sm);
+}
+
+.markdown table th {
+  font-weight: var(--weight-semibold);
 }
 
 .theme-code-block {
-  border: 1px solid #e8e8e5;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  border: var(--space-hairline) solid var(--border-color);
+  box-shadow: none;
 }
 
-.footer {
-  background: #171717;
-  border-top: 1px solid #262626;
+/* Reference numbers, tokens and identifiers read as data, not as prose. */
+code {
+  font-family: var(--font-data);
+  border-color: var(--border-color);
 }
 
-.footer a,
-.footer__title,
-.footer__copyright {
-  color: #fafaf9;
+/* Document names are long and fully significant — FEAT-CLASS-001 and
+   FEAT-CLASS-006 differ in one character. Wrap them rather than clip. */
+.menu__link {
+  overflow-wrap: anywhere;
+  line-height: var(--leading-snug);
 }
 
-.footer__link-item:hover {
-  color: #d3af37;
+article .card .text--truncate:not(#\#):not(#\#):not(#\#),
+article .card .theme-doc-card-title:not(#\#):not(#\#):not(#\#) {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
 }
 
-.docSearch-button,
-.menu__link--active {
-  border-radius: 10px;
-}
-
-.menu__link--active {
-  background: rgba(26, 77, 71, 0.08);
-}
-
-.table-of-contents__link--active {
-  color: #1a4d47;
+/* Card descriptions take the document's first paragraph, which here is the
+   header table — "| Reference Number | Vers…". The title carries the meaning. */
+article .card .theme-doc-card-description {
+  display: none;
 }
 
 .theme-doc-toc-desktop {
-  border-left: 1px solid #e8e8e5;
+  border-left: var(--space-hairline) solid var(--border-color);
+}
+
+/* ── Accessibility ───────────────────────────────────────────────────── */
+
+/* Focus is part of the system, not a per-component decision (§XI.3). */
+a:focus-visible,
+button:focus-visible,
+.navbar__link:focus-visible,
+.menu__link:focus-visible,
+.card:focus-visible {
+  outline: var(--space-half) solid var(--primary);
+  outline-offset: var(--space-half);
+}
+
+.landing-hero a:focus-visible {
+  outline-color: var(--secondary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+.document-index {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  columns: 2;
+  column-gap: var(--space-8);
+}
+
+.document-index li {
+  break-inside: avoid;
+  margin-bottom: var(--space-2);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
 }
 
 @media (max-width: 996px) {
-  .navbar {
-    backdrop-filter: none;
+  .document-index {
+    columns: 1;
   }
+}
+
+.quick-links {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  gap: var(--space-3) var(--space-8);
+}
+
+.quick-links li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-half);
+  padding-bottom: var(--space-3);
+  border-bottom: var(--space-hairline) solid var(--border-color);
+}
+
+.quick-links a {
+  font-weight: var(--weight-semibold);
+}
+
+.quick-links__blurb {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
 }

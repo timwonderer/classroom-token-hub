@@ -72,8 +72,21 @@ Two separate platforms, each serving a different audience and use case.
 
 ### A. Docusaurus Public Site
 
-**Purpose:** External-facing documentation for users, developers, and educators.
-**URL:** `classroomtokenhub.com/docs` or `docs.classroomtokenhub.com`
+> [!IMPORTANT]
+> **Built 2026-09-19, and narrower than described below.** The site publishes the
+> developer-facing tree only — `INVARIANT/`, `DOMAIN/`, `FEATURE-EXECUTION/`,
+> `SPEC/`, `STANDARD_OPERATING_PROCEDURES/`, `MAP/`, `REFERENCE/`,
+> `PRINCIPLES/`, `ops/`, `self-hosting/`, `TRACKING/`. The four content areas
+> below assumed it would also carry the teacher and student guides; it does
+> not. `docs/user-guides` belongs to the Flask application, which serves it at
+> `app.classroomtokenhub.com/docs/`, and no document is rendered by both. Read
+> content areas 2 and 3 as work items for section B, not for this site.
+
+**Purpose:** Developer-facing documentation — the invariants, contracts, and
+procedures that govern the system.
+**URL:** `classroomtokenhub.com/docs/`, deployed to GitHub Pages alongside the
+marketing pages by `.github/workflows/github-pages.yml`. Workspace:
+`docs-site/`.
 
 Four content areas:
 
@@ -99,10 +112,11 @@ Four content areas:
    - v2 architecture deep dives
 
 #### Acceptance Criteria
-- [ ] Docusaurus site scaffolded and deployable
-- [ ] All four content areas populated with initial content
-- [ ] Deployed to production URL
-- [ ] CI pipeline for docs builds
+- [x] Docusaurus site scaffolded and deployable
+- [x] Developer documentation published (content areas 1 and 4)
+- [x] Deployed to production URL
+- [x] CI pipeline for docs builds
+- [ ] Engineering blog populated beyond its first entries
 
 ### B. In-App Custom Doc Site
 

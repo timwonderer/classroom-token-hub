@@ -1,8 +1,9 @@
 # GitHub Pages Site
 
 This directory is the deployable GitHub Pages source for `classroomtokenhub.com` (see `CNAME`).
-`.github/workflows/github-pages-transition.yml` uploads the whole directory as the Pages artifact,
-so every file here is published.
+`.github/workflows/github-pages.yml` copies this whole directory to the root of the Pages artifact,
+so every file here is published. The same workflow builds `docs-site/` into `/docs/` alongside it,
+which is where the footer's "Developer Documentation" link goes.
 
 - `index.html` — the v2.0 "launching soon" holding page.
 - `district.html`, `privacy.html`, `terms.html` — the district brief and legal pages. The

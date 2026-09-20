@@ -378,9 +378,9 @@ def test_documentation_timeline_disclosures_have_keyboard_contract():
 def test_public_pages_load_an_icon_font():
     """The published public pages must render their icons.
 
-    These files are published to GitHub Pages, where the artifact is
-    ``github-pages/`` alone (see
-    ``.github/workflows/github-pages-transition.yml``). A relative
+    These files are published to GitHub Pages, where they are copied to the
+    root of the artifact (see ``.github/workflows/github-pages.yml``; the
+    developer docs site occupies ``/docs/`` in the same artifact). A relative
     ``../static/`` path cannot resolve there, so the source must name a CDN.
 
     They used to be served a second time by the application at ``/gh/<page>``,

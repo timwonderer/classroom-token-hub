@@ -149,9 +149,11 @@ def docs_url_for(doc_path=None, prefer_external=None):
     external_base = get_external_docs_base_url()
     external_target = get_external_docs_target(normalized_doc_path)
     if external_target is None and not is_user_guide_doc_path(normalized_doc_path):
-        # Unmapped and developer-facing: the technical site's root, matching the
-        # redirect the docs blueprint performs for the same path.
-        external_target = ""
+        # Unmapped and developer-facing. The technical site publishes the docs/
+        # tree at its own repository-relative paths, so the deep link survives
+        # unchanged; route-map.json only has to carry the exceptions, which are
+        # the paths that were renamed on the way over.
+        external_target = normalized_doc_path
     if prefer_external and external_base and external_target is not None:
         normalized_target = external_target.strip("/")
         if normalized_target:

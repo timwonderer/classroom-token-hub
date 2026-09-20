@@ -1,0 +1,96 @@
+name: Deploy GitHub Pages Site
+
+# The Pages deployment is one artifact assembled from two sources:
+#
+#   /            github-pages/   — the static marketing + policy pages
+#   /docs/       docs-site/      — the Docusaurus developer documentation site,
+#                                  built from the docs/ tree
+#
+# User guides are NOT published here. They are served by the Flask app at
+# app.classroomtokenhub.com/docs/ — see app/routes/docs.py.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'github-pages/**'
+      - 'docs-site/**'
+      - 'docs/**'
+      - '.github/workflows/github-pages.yml'
+  pull_request:
+    paths:
+      - 'github-pages/**'
+      - 'docs-site/**'
+      - 'docs/**'
+      - '.github/workflows/github-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Configure Pages
+        if: github.event_name != 'pull_request'
+        uses: actions/configure-pages@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: docs-site/package-lock.json
+
+      - name: Install docs dependencies
+        working-directory: docs-site
+        run: npm ci
+
+      - name: Build developer docs site
+        working-directory: docs-site
+        env:
+          DOCS_SITE_URL: https://classroomtokenhub.com
+          DOCS_SITE_BASE_URL: /docs/
+          APP_DOCS_ORIGIN: https://app.classroomtokenhub.com
+        run: npm run build
+
+      - name: Assemble Pages artifact
+        run: |
+          set -euo pipefail
+          rm -rf _site
+          mkdir -p _site
+          cp -R github-pages/. _site/
+          mkdir -p _site/docs
+          cp -R docs-site/build/. _site/docs/
+          touch _site/.nojekyll
+          test -f _site/index.html
+          test -f _site/docs/index.html
+
+      - name: Upload Pages artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
