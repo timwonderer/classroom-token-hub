@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-DES-001 | 2.1 | 2026-09-11 | `FEAT-DES-001` v1.1 (archived) | Normative |
+| SPEC-DES-001 | 2.2 | 2026-09-20 | `FEAT-DES-001` v1.1 (archived) | Normative |
 
 > Supersedes `docs/archive/v1-docs/FEATURES/DESIGN/FEAT-DES-001_Design_System.md` (archived, non-normative). That document described the v1 token set and carries values that no longer match the implementation; it governs nothing and is retained as history only.
 
@@ -97,7 +97,7 @@ Defined on `:root`, identical in every role.
 | Typeface | `--font-family`, `--font-display`, `--font-data` | Inter / Atkinson Hyperlegible Next / IBM Plex Mono |
 | Type scale | `--text-2xs` … `--text-4xl`, `--leading-*`, `--weight-*`, `--tracking-*` | §VI.2 |
 | Spacing | `--space-0` … `--space-16` | §VI.2 |
-| Radius | `--radius-xs` (2px), `--radius-sm` (4px), `--radius-md` (6px), `--radius-lg` (8px), `--radius-xl` (12px), `--radius-pill` (999px) | `sm` cards/inputs, `md` buttons, `lg` modals, `xl` auth cards and feature panels |
+| Radius | `--radius-xs` (2px), `--radius-sm` (4px), `--radius-md` (6px), `--radius-lg` (8px), `--radius-xl` (12px), `--radius-pill` (999px) | `sm` cards/inputs, `md` buttons, `lg` modals, `xl` feature panels. The auth card is **square** — see §IX |
 | Elevation | `--shadow-sm`, `--shadow-md`, `--shadow-lg` | Overlay only; not decoration |
 | Motion | `--duration-fast/base/slow`, `--ease-standard` | §VI.2 |
 | Opacity | `--alpha-subtle/soft/medium/strong` | §VI.2 |
@@ -305,6 +305,8 @@ Two macros render it, and a third surface MUST reuse one rather than add a fourt
 
 Sign-in, sign-up, and recovery pages use one stacked layout: the brand band on top, the interactive panel (`.auth-body`) beneath. A two-column split that places the brand beside the form is prohibited — it forces the brand to be dropped entirely at narrow widths, which is what the prior `@media (max-width: 768px) { .login-right { display: none } }` rule did on all fourteen pages.
 
+**The auth card is square.** `.auth-container` sets `width`, `margin`, `background`, `box-shadow` and `overflow`, and no `border-radius`; `--shadow-lg` alone lifts it off the page. Through v2.1 this table assigned `--radius-xl` to "auth cards and feature panels", which no rule applied and no page rendered — the fourteen auth pages have shipped square throughout. The square card is the intended form: it is coherent with the flat, border-over-shadow treatment in §V.1.3, and a documented radius that nothing applies is a spec describing a UI that does not exist. `--radius-xl` remains the value for feature panels.
+
 The band's fill is `var(--primary)`, so the role theme carried on `<body>` selects it with no per-page override and no role conditional (§V.2). Wordmark text is `var(--text-inverse)`; the leading icons are `var(--secondary)` and are decorative (`aria-hidden="true"`), per §VIII.4.
 
 Inside `.auth-body` the surface is `var(--surface)`, so **no text may use `--secondary` or `--secondary-hover`** — they are 2.12:1 and 2.69:1 on white. Links, subtitles, field labels, and helper text take `var(--accent-text-on-light)` (§V.6). The shell defines `.auth-body a:not(.btn)` as a floor precisely because these pages carry page-local `<style>` blocks: a bare `a { color: var(--secondary) }` in one of them loses to the floor on specificity, so the accessible colour survives a page that reaches for the accent again. A hover MUST NOT be expressed as `opacity` on the link — diluting `--accent-text-on-light` to 80% lands at 4.21:1, below the §XI threshold. Use `text-decoration: underline`.
@@ -395,13 +397,17 @@ The token layer conforms when:
 
 `github-pages/` and `docs-site/` maintain their own stylesheets and are outside the runtime token layer. They are nonetheless **brand surfaces** and MUST NOT contradict §VI.4.
 
-At the time of this revision `github-pages/style.css` defines `--secondary: #d3af37` and `--primary-color: #236960`, neither of which matches the canonical values. That is a live brand split on the public site. Reconciling it is tracked work; until reconciled, §VI.4 is the authority and the published site is the artifact that is wrong.
+`github-pages/style.css` carried `--secondary: #d3af37` and `--primary-color: #236960` through v2.1; both were reconciled on 2026-09-19. `status_service/` is served from the same stylesheet: `status_service/static/cth-public.css` is a byte-identical copy of `github-pages/style.css`, and a divergence between them is therefore a diff, not a silent fork. It held one for roughly a day — a copy frozen immediately before the 2026-09-19 fix, which left `.toc a:hover` accessible on one host and at 3.16:1 on the other — and that is the failure mode the byte-identity requirement exists to prevent.
+
+The status service additionally carries `status_service/static/status-overrides.css`, which is **subordinate to this specification**: it may add state chrome the marketing stylesheet has no use for, but every design value in it MUST resolve through a token defined in the shared public token block. It MUST NOT introduce a colour. Service states derive from the status quartet in §VI, differentiated by shape where two states share a fill, per §XI.2.
 
 ---
 
 ## XIV. Enforcement
 
-Design-system conformance is mechanically checkable and SHOULD be gated rather than reviewed by eye. Rules 1, 5, 6, and 7 are gated over every template under `templates/` by `scripts/lint_design_tokens.py`, which `tests/test_design_token_contract.py` runs with one test per rule; run the script directly on the templates being edited. The test also carries probes for each rule, so the gate cannot go green because the scanner stopped seeing. The checkable rules:
+Design-system conformance is mechanically checkable and SHOULD be gated rather than reviewed by eye. `scripts/lint_design_tokens.py` gates rules 1 and 5–10, and `tests/test_design_token_contract.py` runs it with one test per rule; run the script directly on the files being edited. The test also carries a mutation proof for every rule — a synthetic near-miss violation it asserts is reported — so the gate cannot go green because the scanner stopped seeing.
+
+Rules 1, 5, 6 and 7 scan `templates/`. Rules 8, 9 and 10 scan the token layer and stylesheets of **all four brand surfaces** named in §XIII, not the application alone. The application was the only gated surface through v2.1, and it was also the only one that had not drifted; that is not a coincidence, and it is why the scope is now the surface list rather than `templates/`. The checkable rules:
 
 1. No hex/`rgb()`/`hsl()` literal under `templates/`.
 2. No raw color in `style.css` outside a token definition block.
@@ -410,6 +416,9 @@ Design-system conformance is mechanically checkable and SHOULD be gated rather t
 5. No inline `style` attribute lacking a Jinja expression.
 6. No literal length, weight, duration, or opacity in a template `<style>` block outside the structural categories named in §IX.
 7. No selector appearing in both a template `<style>` block and `style.css`.
+8. No colour literal outside a token definition, on any surface. A literal is legitimate only in a declaration that *defines* a custom property — a property test, not a selector test, since the role themes are token blocks mounted on `body.student-shell` and `body.sysadmin-shell` rather than on `:root`. An achromatic value used as an operand inside a colour function (`color-mix(… , black)`, `rgba(0,0,0,.08)`) is a shading operation rather than a brand colour and is admitted; the same word standing alone as a whole value is not, because `color: white` is `--text-inverse` spelled wrong.
+9. No `var(--token)` reference that the surface's own token layer does not define. Such a declaration is invalid and the property falls back silently, which is how `--font-data` rendered the status page's capability ids in Inter, and how the public site's `--secondary-color` leaked into `style.css` and failed on seven lines. Framework namespaces (`--bs-`, `--ifm-`) are owned elsewhere and are exempt per surface.
+10. A stylesheet declared a copy of another is byte-identical to it. `status_service/static/cth-public.css` MUST equal `github-pages/style.css`. A copy that is allowed to drift is a fork nobody declared; this one drifted for a day and left the same selector accessible on one host and at 3.16:1 on the other.
 
 Rule 7 catches a failure mode the others miss. A page copy that loses the cascade renders nothing, so it can drift arbitrarily far from the shared rule without any visible symptom — it is edited, reviewed, and merged as if it were live. The fourteen auth templates each carried a `.btn-primary` block that had not rendered since `style.css` claimed the selector with `!important`, and three of them had independently drifted the hover fill to a colour that would have failed contrast had it ever applied.
 

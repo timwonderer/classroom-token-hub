@@ -66,7 +66,7 @@ a:hover {
 /* Backgrounds */
 .bg-primary {
     background-color: var(--primary) !important;
-    color: white;
+    color: var(--text-inverse);
 }
 
 .bg-secondary {
@@ -76,12 +76,12 @@ a:hover {
 
 .bg-success {
     background-color: var(--success) !important;
-    color: white;
+    color: var(--text-inverse);
 }
 
 .bg-danger {
     background-color: var(--danger) !important;
-    color: white;
+    color: var(--text-inverse);
 }
 
 .bg-warning {
@@ -91,7 +91,7 @@ a:hover {
 
 .bg-info {
     background-color: var(--info) !important;
-    color: white;
+    color: var(--text-inverse);
 }
 
 .bg-light {
@@ -101,7 +101,7 @@ a:hover {
 
 .bg-dark {
     background-color: var(--neutral-800) !important;
-    color: white;
+    color: var(--text-inverse);
 }
 
 /* Text */
@@ -135,7 +135,7 @@ a:hover {
 }
 
 .text-white {
-    color: white !important;
+    color: var(--text-inverse) !important;
 }
 
 .text-dark {
@@ -288,7 +288,7 @@ a:hover {
 .btn-primary {
     background-color: var(--primary) !important;
     border-color: var(--primary) !important;
-    color: white !important;
+    color: var(--text-inverse) !important;
 }
 
 .btn-primary:hover,
@@ -296,7 +296,7 @@ a:hover {
 .btn-primary:active {
     background-color: var(--primary-hover) !important;
     border-color: var(--primary-hover) !important;
-    color: white !important;
+    color: var(--text-inverse) !important;
 }
 
 .btn-secondary {
@@ -314,25 +314,25 @@ a:hover {
 .btn-success {
     background-color: var(--success);
     border-color: var(--success);
-    color: white;
+    color: var(--text-inverse);
 }
 
 .btn-success:hover {
     background-color: var(--success-hover);
     border-color: var(--success-hover);
-    color: white;
+    color: var(--text-inverse);
 }
 
 .btn-danger {
     background-color: var(--danger);
     border-color: var(--danger);
-    color: white;
+    color: var(--text-inverse);
 }
 
 .btn-danger:hover {
     background-color: var(--danger-hover);
     border-color: var(--danger-hover);
-    color: white;
+    color: var(--text-inverse);
 }
 
 .btn-warning {
@@ -350,13 +350,13 @@ a:hover {
 .btn-info {
     background-color: var(--info);
     border-color: var(--info);
-    color: white;
+    color: var(--text-inverse);
 }
 
 .btn-info:hover {
     background-color: var(--info-hover);
     border-color: var(--info-hover);
-    color: white;
+    color: var(--text-inverse);
 }
 
 .btn-light {
@@ -378,7 +378,7 @@ a:hover {
 
 .btn-outline-primary:hover {
     background-color: var(--primary) !important;
-    color: white !important;
+    color: var(--text-inverse) !important;
 }
 
 .btn-check:checked + .btn-outline-primary,
@@ -411,7 +411,7 @@ a:hover {
 /* Steward / Student Role Utilities */
 .bg-student {
     background-color: var(--steward-blue) !important;
-    color: white;
+    color: var(--text-inverse);
 }
 
 .text-student {
@@ -451,17 +451,17 @@ a:hover {
 }
 
 .card-header.bg-primary {
-    color: white;
+    color: var(--text-inverse);
     background: var(--primary) !important;
 }
 
 .card-header.bg-success {
-    color: white;
+    color: var(--text-inverse);
     background: var(--success) !important;
 }
 
 .card-header.bg-danger {
-    color: white;
+    color: var(--text-inverse);
     background: var(--danger) !important;
 }
 
@@ -471,7 +471,7 @@ a:hover {
 }
 
 .card-header.bg-info {
-    color: white;
+    color: var(--text-inverse);
     background: var(--info) !important;
 }
 
@@ -648,7 +648,7 @@ a:hover {
 .sidebar {
     width: 280px;
     background-color: var(--primary);
-    color: white;
+    color: var(--text-inverse);
     min-height: 100vh;
     position: fixed;
     top: 0;
@@ -710,7 +710,7 @@ a:hover {
 }
 
 .sidebar a:hover {
-    color: white;
+    color: var(--text-inverse);
     background-color: rgba(255, 255, 255, 0.1);
 }
 
@@ -759,7 +759,7 @@ a:hover {
 }
 
 .sidebar-brand {
-    color: white;
+    color: var(--text-inverse);
     font-size: 1.25rem;
     font-weight: 700;
     margin-bottom: 2rem;
@@ -769,7 +769,7 @@ a:hover {
 }
 
 .sidebar-brand:hover {
-    color: white;
+    color: var(--text-inverse);
 }
 
 .nav-brand-block {
@@ -868,7 +868,7 @@ a:hover {
 }
 
 .sidebar-switcher .form-select option {
-    color: #000;
+    color: var(--neutral-900);
 }
 
 .sidebar-switcher-add {
@@ -909,7 +909,7 @@ a:hover {
 .student-sidebar {
     width: 260px;
     background-color: var(--primary);
-    color: white;
+    color: var(--text-inverse);
     padding: 1.5rem 1.25rem;
     position: fixed;
     top: 0;
@@ -974,7 +974,7 @@ a:hover {
 
 .student-nav a.active {
     background-color: var(--student-nav-active-bg);
-    color: white;
+    color: var(--text-inverse);
     font-weight: 700;
 }
 
@@ -1023,7 +1023,7 @@ a:hover {
 .student-shell .sidebar a.active,
 .student-sidebar .student-nav a.active {
     background-color: var(--student-nav-active-bg);
-    color: white;
+    color: var(--text-inverse);
 }
 
 /* ─── Sysadmin Shell Specifics ─── */
@@ -1032,12 +1032,12 @@ body.sysadmin-shell {
 }
 
 .sysadmin-sidebar {
-    background: var(--sysadmin-sidebar-bg, #2C2C2C);
+    background: var(--sysadmin-sidebar-bg);
     width: 260px;
     min-height: 100vh;
     padding: 1.5rem;
-    color: var(--sysadmin-sidebar-text, #ffffff);
-    border-right: 1px solid rgba(212, 168, 87, 0.15);
+    color: var(--sysadmin-sidebar-text);
+    border-right: 1px solid color-mix(in srgb, var(--secondary) 15%, transparent);
     display: flex;
     flex-direction: column;
     position: fixed;
@@ -1051,7 +1051,7 @@ body.sysadmin-shell {
 
 .sysadmin-brand {
     text-decoration: none;
-    color: var(--sysadmin-sidebar-text, #ffffff);
+    color: var(--sysadmin-sidebar-text);
     margin-bottom: 1rem;
     display: block;
 }
@@ -1063,14 +1063,14 @@ body.sysadmin-shell {
 }
 
 .sysadmin-brand:hover {
-    color: var(--sysadmin-sidebar-text, #ffffff);
+    color: var(--sysadmin-sidebar-text);
 }
 
 .sysadmin-identity {
-    color: var(--sysadmin-sidebar-text, #ffffff);
+    color: var(--sysadmin-sidebar-text);
     font-weight: 500;
     padding: 1rem 0;
-    border-bottom: 1px solid rgba(212, 168, 87, 0.2);
+    border-bottom: 1px solid color-mix(in srgb, var(--secondary) 20%, transparent);
     margin-bottom: 1rem;
     font-size: 0.95rem;
 }
@@ -1087,7 +1087,7 @@ body.sysadmin-shell {
     align-items: center;
     gap: 0.75rem;
     padding: 0.65rem 0.85rem;
-    color: rgba(245, 245, 245, 0.8);
+    color: color-mix(in srgb, var(--neutral-100) 80%, transparent);
     text-decoration: none;
     border-radius: var(--radius-sm);
     border: 1px solid transparent;
@@ -1098,14 +1098,14 @@ body.sysadmin-shell {
 
 .sysadmin-nav a:hover {
     color: var(--sysadmin-accent);
-    border-color: rgba(212, 168, 87, 0.4);
-    background: rgba(212, 168, 87, 0.06);
+    border-color: color-mix(in srgb, var(--secondary) 40%, transparent);
+    background: color-mix(in srgb, var(--secondary) 6%, transparent);
 }
 
 .sysadmin-nav a.active {
     color: var(--sysadmin-accent);
     border-color: var(--sysadmin-accent);
-    background: rgba(212, 168, 87, 0.08);
+    background: color-mix(in srgb, var(--secondary) 8%, transparent);
 }
 
 .sysadmin-nav-spacer {
@@ -1114,17 +1114,17 @@ body.sysadmin-shell {
 }
 
 .sysadmin-nav-divider {
-    border-color: rgba(212, 168, 87, 0.2);
+    border-color: color-mix(in srgb, var(--secondary) 20%, transparent);
     margin: 0.5rem 0;
 }
 
 .sysadmin-nav-signout {
-    color: rgba(220, 80, 80, 0.85) !important;
+    color: color-mix(in srgb, var(--sysadmin-signout-accent) 85%, transparent) !important;
 }
 
 .sysadmin-nav-signout:hover {
     color: var(--sysadmin-signout-hover) !important;
-    border-color: rgba(220, 80, 80, 0.4) !important;
+    border-color: color-mix(in srgb, var(--sysadmin-signout-accent) 40%, transparent) !important;
 }
 
 .sysadmin-main {
@@ -1139,7 +1139,7 @@ body.sysadmin-shell {
 }
 
 body.sysadmin-shell .page-header {
-    background: white;
+    background: var(--surface);
     padding: 1.25rem 1.5rem 1.25rem 1rem;
     border-bottom: 1px solid var(--border-color);
     margin-bottom: 0;
@@ -1654,7 +1654,7 @@ table.js-sortable thead th:hover .sort-indicator {
     top: -100px;
     left: 0;
     background: var(--primary);
-    color: white;
+    color: var(--text-inverse);
     padding: 0.5rem 1rem;
     z-index: 9999;
     border-radius: 0 0 var(--radius-sm) 0;
@@ -1728,7 +1728,7 @@ body.maintenance-active .sidebar {
     display: grid;
     gap: 0.45rem;
     padding-right: 2.8rem;
-    border-right: 2px solid var(--secondary-color);
+    border-right: 2px solid var(--secondary);
 }
 
 .landing-brand-row {
@@ -1741,7 +1741,7 @@ body.maintenance-active .sidebar {
 }
 
 .landing-brand-row .material-symbols-outlined {
-    color: var(--secondary-color);
+    color: var(--secondary);
     font-size: 2.7rem;
 }
 
@@ -1784,7 +1784,7 @@ body.maintenance-active .sidebar {
 
 .landing-signin-panel {
     padding-right: 2rem;
-    border-right: 2px solid var(--secondary-color);
+    border-right: 2px solid var(--secondary);
 }
 
 .landing-about-panel {
@@ -1832,7 +1832,7 @@ body.maintenance-active .sidebar {
 .landing-learn-more-btn:hover,
 .landing-learn-more-btn:focus-visible {
     color: var(--text-inverse);
-    box-shadow: 0 0 5px 1px var(--secondary-color);
+    box-shadow: 0 0 5px 1px var(--secondary);
 }
 
 .landing-signin-btn-main {
@@ -1957,7 +1957,7 @@ body.maintenance-active .sidebar {
 
 .landing-footer-links a:hover,
 .landing-footer-links a:focus-visible {
-    color: var(--secondary-color);
+    color: var(--secondary);
 }
 
 .landing-footer-meta p {
@@ -1980,7 +1980,7 @@ body.maintenance-active .sidebar {
 
     .landing-brand {
         border-right: 0;
-        border-bottom: 2px solid var(--secondary-color);
+        border-bottom: 2px solid var(--secondary);
         padding-right: 0;
         padding-bottom: 1.4rem;
     }
@@ -1992,7 +1992,7 @@ body.maintenance-active .sidebar {
 
     .landing-signin-panel {
         border-right: 0;
-        border-bottom: 2px solid var(--secondary-color);
+        border-bottom: 2px solid var(--secondary);
         padding-right: 0;
         padding-bottom: 1.5rem;
     }
