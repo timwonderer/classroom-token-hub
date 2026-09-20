@@ -386,13 +386,17 @@ def _advance_local_calendar_days(occurrence_utc, days: int, ctx):
     Ambiguous and nonexistent local times are the two cases a naive
     implementation silently gets wrong, so both are decided explicitly:
 
-    * **Ambiguous** (fall back — the clock reads 01:30 twice): take the first,
-      still-DST occurrence. The run stays on the intended date and the interval
-      never silently lengthens.
-    * **Nonexistent** (spring forward — 02:30 never happens): shift forward by
-      the length of the gap, so 02:30 becomes 03:30 rather than 03:00. Again
-      the local date is what must be preserved; the offset within the day is
-      the smallest change that lands on a time which exists.
+    * **Ambiguous** (fall back — the clock reads 01:30 twice): take the
+      chronologically earlier instant, so the interval never silently lengthens.
+    * **Nonexistent** (spring forward — 02:30 never happens): take the smallest
+      forward shift onto a time that does exist, so 02:30 becomes 03:30.
+
+    Both are chosen by comparing the candidate instants directly rather than by
+    passing an ``is_dst`` flag. The flag does not mean "the earlier one": in
+    Europe/Dublin the tz database models winter as *negative* DST, so
+    ``is_dst=True`` on an ambiguous Dublin timestamp returns the **later**
+    instant — the opposite of Los Angeles. Selecting on the property actually
+    wanted is the only formulation that holds in every zone.
 
     The local time of day is preserved rather than normalised to midnight
     because `next_payroll_date` falls back to `created_at` for classes that
@@ -426,14 +430,29 @@ def _advance_local_calendar_days(occurrence_utc, days: int, ctx):
     try:
         target_local = tz.localize(target_naive, is_dst=None)
     except pytz.exceptions.AmbiguousTimeError:
-        target_local = tz.localize(target_naive, is_dst=True)
+        # Two instants carry this wall clock; take the earlier. Compared as UTC
+        # rather than selected by flag — see the note on Europe/Dublin above.
+        target_local = min(
+            (tz.localize(target_naive, is_dst=flag) for flag in (True, False)),
+            key=lambda candidate: candidate.astimezone(_timezone.utc),
+        )
     except pytz.exceptions.NonExistentTimeError:
-        # localize(..., is_dst=False) reads the wall clock against the pre-gap
-        # offset; normalize then re-expresses that instant in the post-gap
-        # offset, which advances the local clock by exactly the gap. 02:30
-        # becomes 03:30 — not 03:00, which is the first *existing* instant and
-        # would silently pull every later run earlier within the day.
-        target_local = tz.normalize(tz.localize(target_naive, is_dst=False))
+        # No instant carries this wall clock, so the local time must move. Take
+        # the smallest *forward* move onto a time that exists: 02:30 becomes
+        # 03:30, not 01:30 (backwards, which would run early) and not 03:00
+        # (the first existing instant, which would pull the run earlier within
+        # the day than configured).
+        candidates = [
+            tz.normalize(tz.localize(target_naive, is_dst=flag))
+            for flag in (False, True)
+        ]
+        target_local = min(
+            candidates,
+            key=lambda candidate: (
+                candidate.replace(tzinfo=None) <= target_naive,
+                abs(candidate.replace(tzinfo=None) - target_naive),
+            ),
+        )
 
     return target_local.astimezone(_timezone.utc)
 

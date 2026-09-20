@@ -514,3 +514,69 @@ class TestPayrollAdvancesByLocalCalendarDays:
         """
         got = self._advance(app, datetime(2026, 9, 20, 14, 37, 22))
         assert (got.hour, got.minute, got.second) == (14, 37, 22)
+
+
+class TestDstSelectionHoldsInZonesWithInvertedDstFlags:
+    """The transition policy must not depend on what ``is_dst`` means locally.
+
+    Raised in review. An earlier version selected the ambiguous candidate with
+    ``is_dst=True``, on the assumption that the DST side is the earlier one.
+    That holds in America/Los_Angeles and fails in Europe/Dublin, where the tz
+    database models *winter* as negative DST — so ``is_dst=True`` there returns
+    the **later** instant, silently inverting the documented policy for Irish
+    classes. The selection is now made by comparing the candidates.
+    """
+
+    def _advance(self, app, monkeypatch, tz_name, occurrence_local, days=14):
+        import pytz
+        from tests.helpers import canonical_identities
+        from app.scheduled_tasks import _advance_local_calendar_days
+
+        patched = dict(canonical_identities.CLASSROOMS["chemistry_p1"])
+        patched["class_timezone"] = tz_name
+        monkeypatch.setitem(canonical_identities.CLASSROOMS, "chemistry_p1", patched)
+
+        with app.app_context():
+            classroom = provision_classroom("chemistry_p1")
+            assert ClassEconomy.query.filter_by(
+                class_id=classroom.class_id
+            ).one().class_timezone == tz_name
+            ctx = CanonicalContext(
+                user_id=classroom.students[0].user_id,
+                class_id=classroom.class_id,
+                seat_id=classroom.students[0].seat_id,
+                actor_role="student",
+            )
+            tz = pytz.timezone(tz_name)
+            source = tz.localize(occurrence_local, is_dst=False).astimezone(timezone.utc)
+            return _advance_local_calendar_days(source, days, ctx).astimezone(tz)
+
+    def test_dublin_ambiguous_target_takes_the_earlier_instant(self, app, monkeypatch):
+        """2026-10-25 01:30 occurs twice in Dublin: IST (+01:00) then GMT (+00:00).
+
+        The earlier is the +01:00 one. `is_dst=True` returns +00:00 there, so
+        this is precisely the case the flag-based selection got backwards.
+        """
+        got = self._advance(app, monkeypatch, "Europe/Dublin", datetime(2026, 10, 11, 1, 30))
+
+        assert got.date() == date(2026, 10, 25)
+        assert (got.hour, got.minute) == (1, 30)
+        assert got.utcoffset().total_seconds() == 3600, (
+            "expected the earlier (+01:00) instant; +00:00 is the later one"
+        )
+
+    def test_dublin_nonexistent_target_shifts_forward(self, app, monkeypatch):
+        """2027-03-28 01:30 does not exist in Dublin; 01:00 jumps to 02:00."""
+        got = self._advance(app, monkeypatch, "Europe/Dublin", datetime(2027, 3, 14, 1, 30))
+
+        assert got.date() == date(2027, 3, 28)
+        assert (got.hour, got.minute) == (2, 30)
+
+    def test_los_angeles_ambiguous_target_still_takes_the_earlier_instant(self, app, monkeypatch):
+        """The zone where the flag happened to agree must keep working."""
+        got = self._advance(app, monkeypatch, "America/Los_Angeles", datetime(2026, 10, 18, 1, 30))
+
+        assert got.date() == date(2026, 11, 1)
+        assert (got.hour, got.minute) == (1, 30)
+        # PDT (-07:00) precedes PST (-08:00) for this wall clock.
+        assert got.utcoffset().total_seconds() == -7 * 3600
