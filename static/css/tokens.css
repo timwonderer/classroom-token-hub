@@ -298,8 +298,11 @@ body.sysadmin-shell {
     --secondary-hover: #c09840;
     --secondary-text: var(--neutral-900);
     --secondary-subtle: #f9f5e6;
-    /* Dark text on gold */
-    --accent: #FDB034;
+    /* Emphasis alias. Pinned to --secondary in every role theme: a shared
+       component tinted by --accent must not change hue for one role only.
+       The brighter gold this token used to hold is --sysadmin-accent-bright
+       above, which is what it was actually wanted for. */
+    --accent: var(--secondary);
 
     /* Semantic Status Colors (Shared with Teacher) */
     --success: #2e7d5b;
