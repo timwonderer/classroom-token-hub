@@ -8,6 +8,10 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Status service
+
+- Resolve selected open issues through version-bound checkboxes rather than free-text resolution references. Resolution events and current projections are written atomically; stale, missing, or already resolved selections reject the entire submission. History and unselected issues are preserved.
+
 ### Interface
 
 - **Status summaries share one freshness clock (2026-09-19)** — The hero and service cards use the same request timestamp, keeping their result and last-checked text consistent at the freshness boundary. Next-update times use readable UTC formatting when a timezone is supplied; values without a timezone say so explicitly. The collector deployment test now rejects duplicate commands even when their step names match.

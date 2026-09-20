@@ -8,6 +8,7 @@ import secrets
 from datetime import datetime, timezone
 
 from flask import Flask, abort, jsonify, redirect, render_template, request, session, url_for
+from itsdangerous import BadSignature, URLSafeSerializer
 
 from .contracts import ExternalStatusNoticeEvent, NoticeState, RecoveryExpectationState
 from .identity import authenticated_operator_email
@@ -114,7 +115,40 @@ def create_app(store=None) -> Flask:
             abort(404)
         require_operator()
         session.setdefault("csrf_token", secrets.token_urlsafe(32))
-        return render_template("operator_notices.html", notices=store.list_notices(), capabilities=app.config["STATUS_CAPABILITIES"], csrf_token=session["csrf_token"])
+        signer = URLSafeSerializer(app.secret_key, salt="notice-resolution")
+        open_notices = store.list_active_notices()
+        for notice in open_notices:
+            notice["resolution_token"] = signer.dumps([notice["id"], notice["last_event_id"]]) if (
+                notice.get("incident_ref") and notice.get("last_event_id") and notice.get("source_observation_ids")) else None
+        return render_template("operator_notices.html", notices=store.list_notices(), open_notices=open_notices, capabilities=app.config["STATUS_CAPABILITIES"], csrf_token=session["csrf_token"])
+
+    @app.post("/operator/notices/resolve")
+    def operator_notices_resolve():
+        if app.config["STATUS_SERVICE_MODE"] != "operator":
+            abort(404)
+        actor = require_operator()
+        expected = session.get("csrf_token", "")
+        if not expected or not hmac.compare_digest(request.form.get("csrf_token", ""), expected):
+            abort(403)
+        tokens = request.form.getlist("selected_issue")
+        message = request.form.get("resolution_message", "").strip()
+        if not tokens or len(tokens) > 100 or not message or len(message) > 500:
+            abort(400, description="Select 1–100 open issues and enter a resolution (maximum 500 characters).")
+        signer = URLSafeSerializer(app.secret_key, salt="notice-resolution")
+        selections = {}
+        try:
+            for token in tokens:
+                key, version = signer.loads(token)
+                if key in selections:
+                    abort(400)
+                selections[key] = version
+        except (BadSignature, ValueError, TypeError):
+            abort(400, description="Invalid selection. Refresh the issue list.")
+        try:
+            store.resolve_notices(selections, message, actor)
+        except ValueError:
+            abort(409, description="No issues were resolved. An issue changed or lacks required lineage. Refresh and review the selection.")
+        return redirect(url_for("operator_notices_get"))
 
     @app.post("/operator/notices")
     def operator_notices_post():
@@ -126,6 +160,8 @@ def create_app(store=None) -> Flask:
         if not expected or not hmac.compare_digest(supplied, expected):
             abort(403)
         payload = request.form
+        if payload.get("state") == NoticeState.RESOLVED.value:
+            abort(400, description="Use Resolve issues to select an existing open issue.")
         next_update_unavailable = payload.get("next_update_unavailable") == "on"
         recovery_state = payload.get("recovery_state", RecoveryExpectationState.UNAVAILABLE.value)
         source_ids = tuple(value.strip() for value in payload.get("source_observation_ids", "").split(",") if value.strip())

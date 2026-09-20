@@ -1,0 +1,25 @@
+<section class="operator-history" aria-labelledby="resolve-heading">
+  <h2 id="resolve-heading">Resolve issues</h2>
+  <p>Select the open issues this resolution addresses. Unselected issues remain open.</p>
+  {% if open_notices %}
+  <form class="operator-form" method="post" action="{{ url_for('operator_notices_resolve') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <fieldset>
+      <legend>Currently open issues</legend>
+      {% for notice in open_notices %}
+      <label class="operator-notice operator-check">
+        <input type="checkbox" name="selected_issue" value="{{ notice.resolution_token or '' }}" {% if not notice.resolution_token %}disabled{% endif %}>
+        <span><strong>{{ notice.impact_statement }}</strong><br>
+          {{ notice.capability }} · {{ notice.state }}<br>
+          Reference: {{ notice.incident_ref or 'Missing reference — cannot resolve' }}<br>
+          Last updated: {{ notice.updated_at|status_time }}
+          {% if not notice.resolution_token %}<br>Required issue lineage is missing.{% endif %}
+        </span>
+      </label>
+      {% endfor %}
+    </fieldset>
+    <label>Resolution message<textarea name="resolution_message" maxlength="500" required></textarea></label>
+    <button class="operator-submit" type="submit">Resolve selected issues</button>
+  </form>
+  {% else %}<p>No open issues to resolve.</p>{% endif %}
+</section>
