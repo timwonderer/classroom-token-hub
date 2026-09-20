@@ -419,3 +419,95 @@ class TestTeacherEnteredDatesResolveInTheClassTimezone:
 
             # And explicitly not UTC midnight, which is the defect's signature.
             assert stored != datetime.combine(date(2026, 10, 2), time.min, tzinfo=timezone.utc)
+
+
+class TestPayrollAdvancesByLocalCalendarDays:
+    """`next_payroll_date` must land on the right *local* date across DST.
+
+    Raised in review of this PR. The original advance added
+    ``timedelta(days=N)`` to the UTC instant, which preserves the clock time in
+    UTC rather than locally; the first correction added the elapsed UTC duration
+    since local midnight, which is also wrong — on a 25-hour fall-back day an
+    occurrence at 23:30 local is 24h30m past midnight, so it landed on the
+    following local date. Only preserving the wall-clock components is exact.
+
+    America/Los_Angeles is used because the fixture classroom already lives
+    there and it observes DST; a fixed-offset zone cannot exercise any of this.
+    """
+
+    TZ = "America/Los_Angeles"
+
+    def _advance(self, app, occurrence_local, days=14):
+        import pytz
+        from app.scheduled_tasks import _advance_local_calendar_days
+
+        with app.app_context():
+            classroom = provision_classroom("chemistry_p1")
+            ctx = CanonicalContext(
+                user_id=classroom.students[0].user_id,
+                class_id=classroom.class_id,
+                seat_id=classroom.students[0].seat_id,
+                actor_role="student",
+            )
+            tz = pytz.timezone(self.TZ)
+            occurrence_utc = tz.localize(occurrence_local).astimezone(timezone.utc)
+            result = _advance_local_calendar_days(occurrence_utc, days, ctx)
+            return result.astimezone(tz)
+
+    def test_a_normal_interval_keeps_the_local_clock_time(self, app):
+        got = self._advance(app, datetime(2026, 9, 20, 5, 9))
+        assert got.date() == date(2026, 10, 4)
+        assert (got.hour, got.minute) == (5, 9)
+
+    def test_crossing_fall_back_keeps_the_local_date_and_time(self, app):
+        """The case the first correction got wrong.
+
+        2026-11-01 is 25 hours long in Los Angeles, so an occurrence late on
+        that day is more than a day past local midnight.
+        """
+        got = self._advance(app, datetime(2026, 11, 1, 23, 30))
+        assert got.date() == date(2026, 11, 15), (
+            "elapsed-since-midnight arithmetic lands this on 11-16"
+        )
+        assert (got.hour, got.minute) == (23, 30)
+
+    def test_crossing_spring_forward_keeps_the_local_clock_time(self, app):
+        """2027-03-14 is 23 hours long; an interval spanning it must not shift."""
+        got = self._advance(app, datetime(2027, 3, 7, 9, 0))
+        assert got.date() == date(2027, 3, 21)
+        assert (got.hour, got.minute) == (9, 0)
+
+    def test_a_nonexistent_target_time_stays_on_the_intended_date(self, app):
+        """Spring forward skips 02:00-03:00, so 02:30 never happens that day.
+
+        The run must still fall on the intended local date rather than being
+        pushed back a day or raising.
+        """
+        got = self._advance(app, datetime(2027, 2, 28, 2, 30))
+        assert got.date() == date(2027, 3, 14)
+        assert got.hour == 3  # first instant after the gap
+
+    def test_an_ambiguous_target_time_takes_the_first_occurrence(self, app):
+        """Fall back repeats 01:00-02:00, so 01:30 happens twice.
+
+        Taking the first keeps the interval from silently lengthening by an
+        hour, and either choice must stay on the intended date.
+        """
+        import pytz
+
+        got = self._advance(app, datetime(2026, 10, 18, 1, 30))
+        assert got.date() == date(2026, 11, 1)
+        assert (got.hour, got.minute) == (1, 30)
+        # The earlier of the two 01:30s is the one still in daylight time.
+        assert got.dst() != pytz.timezone(self.TZ).localize(
+            datetime(2026, 12, 1)
+        ).dst()
+
+    def test_a_created_at_anchor_is_not_normalised_to_midnight(self, app):
+        """Classes that never set a first pay date anchor on `created_at`.
+
+        Forcing midnight would silently move an established run time, so the
+        odd hour must survive the advance.
+        """
+        got = self._advance(app, datetime(2026, 9, 20, 14, 37, 22))
+        assert (got.hour, got.minute, got.second) == (14, 37, 22)
