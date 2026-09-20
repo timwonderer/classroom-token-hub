@@ -252,6 +252,14 @@ def build_payroll_configuration_view(
     )
 
 
+_SINGULAR_TIME_UNIT = {
+    'seconds': 'second',
+    'minutes': 'minute',
+    'hours': 'hour',
+    'days': 'day',
+}
+
+
 def build_payroll_settings_display(settings: PayrollSettings | None) -> dict[str, str]:
     """
     Build pre-formatted pay rate display strings for a single PayrollSettings row.
@@ -277,6 +285,8 @@ def build_payroll_settings_display(settings: PayrollSettings | None) -> dict[str
             'display_pay_rate': "$0.00",
             'display_hourly_rate_value': "",
             'display_per_unit_rate_value': "",
+            'display_rate_unit': "",
+            'display_rate_with_unit': "$0.00",
         }
 
     rate = Decimal(str(settings.pay_rate))
@@ -288,8 +298,24 @@ def build_payroll_settings_display(settings: PayrollSettings | None) -> dict[str
     else:
         display_pay_rate = f"${display_per_unit_value}"
 
+    # `time_unit` is stored plural ('minutes', 'hours') because it names a
+    # duration. A *rate* is per one of them, so rendering the stored value
+    # directly produced "$1.50/minutes" on the settings summary. Singularised
+    # here rather than in the template: the template renders what it is handed.
+    unit = (settings.time_unit or '').strip()
+    display_rate_unit = _SINGULAR_TIME_UNIT.get(unit, unit)
+
+    if settings.settings_mode == 'simple':
+        display_rate_with_unit = f"{display_pay_rate}/hour"
+    elif display_rate_unit:
+        display_rate_with_unit = f"{display_pay_rate}/{display_rate_unit}"
+    else:
+        display_rate_with_unit = display_pay_rate
+
     return {
         'display_pay_rate': display_pay_rate,
         'display_hourly_rate_value': display_hourly_value,
         'display_per_unit_rate_value': display_per_unit_value,
+        'display_rate_unit': display_rate_unit,
+        'display_rate_with_unit': display_rate_with_unit,
     }

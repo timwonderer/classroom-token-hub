@@ -250,7 +250,7 @@ post-test batch by operator decision — none blocks the live test.
 
 ### Findings — deferred to post-test batch
 
-**1. Icon font is unsubsetted: 3.8 MB (performance, user-visible)**
+**1. Icon font is unsubsetted: 3.8 MB (performance, user-visible)** — DEFERRED
 
 `static/fonts/material-symbols-outlined.woff2` is 3,963,852 bytes — the full
 Material Symbols set, roughly 3,000 glyphs. The application uses **180**. Every
@@ -259,7 +259,7 @@ Text paints immediately and icons appear only once it arrives, which is the
 reported symptom. Subsetting to the 180 used glyphs should land in the 10–30 KB
 range. Needs a build step and verification that no icon silently disappears.
 
-**2. Static assets send `Cache-Control: no-cache` (performance)**
+**2. Static assets send `Cache-Control: no-cache` (performance)** — DEFERRED
 
 Every static asset revalidates on every page load — the access log is full of
 `304` responses at 40–100 ms each, roughly a dozen per page. Flask defaults to
@@ -270,7 +270,7 @@ URL changes whenever content does. Far-future caching is therefore already safe
 — the cache-busting was implemented and the caching it exists to enable never
 was.
 
-**3. Roster panel reports "all seats claimed" for an empty roster (correctness, display)**
+**3. Roster panel reports "all seats claimed" for an empty roster (correctness, display)** — FIXED
 
 `ClassRosterView.all_seats_claimed` returned `not self.unclaimed_seats`, which
 is vacuously true when the class has no seats at all. A brand-new class
@@ -282,7 +282,7 @@ seats to exist, and a new `unclaimed_panel_label` decides between the three
 states in the view model rather than the template. **Still needs a test before
 it ships.**
 
-**4. "Next Payroll" states a date for an unconfigured class (correctness, display)**
+**4. "Next Payroll" states a date for an unconfigured class (correctness, display)** — FIXED
 
 The dashboard showed "Next Payroll: Sep 25" for a class with **no
 `payroll_settings` row at all** (table empty). Two stacked hardcodings in
@@ -325,7 +325,7 @@ only" on the strength of the stored value existing. That was wrong — the value
 being correct in the database says nothing about whether any code reads it. The
 read path must be checked, not inferred.
 
-**5. "Global Default" is v1 vocabulary on the payroll settings surface (wording)**
+**5. "Global Default" is v1 vocabulary on the payroll settings surface (wording)** — FIXED
 
 `templates/admin_payroll.html:343` renders:
 
@@ -342,6 +342,27 @@ a financial surface; the other two erode confidence in it.
 Note this is the same failure mode `/health/status` explicitly refuses
 (§X.5): an unmonitored surface must not read as a healthy one. The principle is
 already held elsewhere in the codebase; the dashboard does not hold it.
+
+### Deferred, with reasons
+
+**Finding 2 (static asset caching) needs asset versioning first.** The obvious
+fix — raising `SEND_FILE_MAX_AGE_DEFAULT` so static files stop revalidating — is
+unsafe as the templates stand: every asset is referenced by a bare
+`url_for('static', filename=...)` with no fingerprint or version query, so a long
+`max-age` would serve stale CSS and JavaScript after each deployment with no way
+to invalidate it. That trades roughly a dozen cheap 304s per page for a class of
+bug that looks like "the fix didn't deploy". Doing it properly means adding a
+version to static URLs, which also changes the service worker's cache keys
+(`static/sw.js` caches by URL), so it deserves its own change and its own
+verification rather than riding along with a wording pass.
+
+**Finding 1 (3.8 MB icon font) is a build-pipeline change.** Subsetting to the
+~180 glyphs actually used requires a font tool in the build and a check that
+keeps the subset in step with the templates that reference new icons; shipping a
+subset without that check produces missing glyphs later, which is worse than a
+slow font now.
+
+Both remain open. Neither is a correctness defect.
 
 ### Intended behaviour — do not re-raise
 
@@ -452,7 +473,7 @@ instant printed as its UTC date, unconverted). Both read the same row. Once 6A i
 fixed the two will agree, but the settings tab should convert explicitly rather
 than coincidentally matching.
 
-**7. Stated rounding does not match actual payment behaviour (wording)**
+**7. Stated rounding does not match actual payment behaviour (wording)** — FIXED
 
 The Pay Simulator states "Time tracking **rounds down** to the nearest time
 increment." With `time_unit = minutes` a teacher reads that as "partial minutes
@@ -463,7 +484,7 @@ The ledger is correct; the description of it is not. Either the copy is wrong or
 it means "rounds to the nearest second", which is vacuous. On a financial
 surface this is worth stating accurately.
 
-**8. The app cannot link to its own status page (deferred, small)**
+**8. The app cannot link to its own status page (deferred, small)** — FIXED
 
 `wsgi.py` validates `STATUS_PAGE_URL` against an allowlist of exactly one
 provider:
@@ -480,7 +501,7 @@ The allowlist itself is sound and should be widened, not removed — it exists s
 that someone with environment access cannot redirect users to a phishing page.
 Fix: add the `status.classroomtokenhub.com` pattern, then set `STATUS_PAGE_URL`.
 
-**9. Cloudflare-origin check warns on every request (log noise, not a gap)**
+**9. Cloudflare-origin check warns on every request (log noise, not a gap)** — FIXED (app side)
 
 Every non-static request logs:
 
@@ -579,7 +600,7 @@ call site is wrong, so the copy must not be "corrected" to describe the defect.
 Found by the operator during §XI store testing, from the UI alone: an immediate
 item should not have a *Use Now* button.
 
-**11. Internal domain names leak into student-facing error copy (wording)**
+**11. Internal domain names leak into student-facing error copy (wording)** — FIXED
 
 Attempting to buy the $30 item against a $9.65 balance produced, in the purchase
 modal:
@@ -825,7 +846,7 @@ invisible until something requests the directory.
 `127.0.0.1:3000` and `GRAFANA_URL` is unset (harmless — the code default already
 matches), but no authenticated request has yet reached the proxy body.
 
-**16. Service worker's auth-route bypass misses every sysadmin route (correctness, caching safety)**
+**16. Service worker's auth-route bypass misses every sysadmin route (correctness, caching safety)** — FIXED
 
 `static/sw.js:63` excludes authenticated routes from caching:
 

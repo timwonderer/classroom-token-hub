@@ -273,6 +273,41 @@ def get_tips(user_type):
 
 # -------------------- STORE API --------------------
 
+# Student-facing copy for each way a purchase can be refused, keyed by the
+# FEAT's `error_code`. The FEAT's own `error_message` is a developer diagnostic
+# and must not reach a student: it names internal domain boundaries and can
+# carry a raw reason code. Answering the two questions a student actually has —
+# what went wrong, and what they can do — is a presentation concern, so it is
+# decided here rather than in the domain that raised it.
+_PURCHASE_ERROR_COPY = {
+    "INSUFFICIENT_FUNDS": "You do not have enough in checking to buy this right now.",
+    "HOLDING_LIMIT_EXCEEDED": "You already have as many of these as you are allowed to hold.",
+    "RENT_PAST_DUE_PURCHASE_BLOCKED": "Rent is overdue, so this item cannot be bought until it is paid.",
+    "COLLECTIVE_GOAL_EXPIRED": "This class goal has closed, so it can no longer be bought into.",
+    "QUANTITY_NOT_ALLOWED": "That quantity is not available for this item.",
+    "PRODUCT_NOT_PURCHASABLE": "This item is not on sale right now.",
+    "DIRECT_PURCHASE_NOT_ALLOWED": "This item cannot be bought directly — your teacher grants it.",
+    "PRICE_NOT_CONFIGURED": "This item has no price set yet, so it cannot be bought.",
+    "INSURANCE_NOT_PURCHASABLE_VIA_STORE": "Insurance is bought from the Insurance page, not the Store.",
+    "POLICY_NOT_FOUND": "This item is no longer available.",
+    "POLICY_INVALID": "This item is not available right now.",
+    "POLICY_SCOPE_MISMATCH": "This item belongs to a different class.",
+    "INVALID_CONTEXT": "Your class session could not be confirmed. Sign in again and retry.",
+}
+
+_PURCHASE_ERROR_FALLBACK = "The purchase could not be completed. Nothing was charged."
+
+
+def _student_purchase_error(error_code):
+    """Student-readable sentence for a purchase refusal.
+
+    An unmapped code falls back rather than leaking the code itself: a student
+    can do nothing with `POLICY_SCOPE_MISMATCH`, and a new code added to the
+    FEAT should degrade to something harmless rather than to jargon.
+    """
+    return _PURCHASE_ERROR_COPY.get(error_code, _PURCHASE_ERROR_FALLBACK)
+
+
 @api_bp.route('/purchase-item', methods=['POST'])
 @login_required
 def purchase_item():
@@ -323,8 +358,22 @@ def purchase_item():
     )
 
     if not result.success:
-        error_msg = result.error_message or f"Purchase failed: {result.error_code}"
-        return jsonify({"status": "error", "message": error_msg}), 400
+        # `result.error_message` is a diagnostic written for developers and
+        # logs — it names internal domains ("Purchase denied by Ledger") and the
+        # ledger branch interpolates a raw reason code, or the literal string
+        # "unknown", straight into it. Rendering it put that in front of a
+        # child. `error_code` is the classification and is already correct on
+        # every branch, so the student-facing sentence is derived from it here,
+        # at the presentation boundary, and the diagnostic stays in the log.
+        current_app.logger.info(
+            "Store purchase refused: code=%s detail=%s",
+            result.error_code,
+            result.error_message,
+        )
+        return jsonify({
+            "status": "error",
+            "message": _student_purchase_error(result.error_code),
+        }), 400
 
     return jsonify({
         "status": "success",

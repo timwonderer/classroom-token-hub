@@ -2530,20 +2530,24 @@ def dashboard():
     payroll_updated_at = payroll_preview["latest_updated_at"]
     total_payroll_estimate = sum(payroll_summary.values())
 
-    # Calculate next payroll date (keep in UTC for template conversion)
-    anchor_candidates = [
-        anchor + timedelta(days=14)
-        for anchor in payroll_preview["anchor_by_class_id"].values()
-        if anchor is not None
-    ]
-    if anchor_candidates:
-        next_payroll_date = min(anchor_candidates)
-    else:
-        now_utc = now
-        days_until_friday = (4 - now_utc.weekday() + 7) % 7
-        if days_until_friday == 0:
-            days_until_friday = 7
-        next_payroll_date = now_utc + timedelta(days=days_until_friday)
+    # The next payroll date is read from the class's payroll settings, which is
+    # the row the scheduler actually fires on — not derived here.
+    #
+    # This previously projected a date from the last payroll run (+14 days) and,
+    # with no runs to project from, invented "the next Friday". It consulted
+    # `payroll_settings` at no point, so a class with no payroll configured was
+    # shown a confident date for a run that would never happen, and a class with
+    # a configured schedule was shown a date contradicting it. The estimate
+    # beneath it is a real figure, which made the invented date read as equally
+    # real.
+    #
+    # None is a legitimate answer and the template renders it as "Not scheduled":
+    # an unconfigured schedule must not display as a scheduled one, the same rule
+    # `/health/status` holds by reporting UNKNOWN rather than healthy.
+    _payroll_settings = PayrollSettings.query.filter_by(
+        class_id=active_class_id,
+    ).order_by(PayrollSettings.id.desc()).first()
+    next_payroll_date = _payroll_settings.next_payroll_date if _payroll_settings else None
 
     # v2: DOB-based recovery setup prompt is disabled.
     show_recovery_setup = False

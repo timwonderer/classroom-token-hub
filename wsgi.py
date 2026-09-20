@@ -48,12 +48,25 @@ def get_validated_status_page_url():
     
     Validates that the URL starts with an expected domain to prevent
     potential phishing attacks if an attacker controls the environment variable.
-    
-    Currently only allows UptimeRobot status pages. To support other status
-    page providers, add their specific domain patterns to the validation.
+
+    The allowlist previously named only UptimeRobot, which silently rejected
+    this project's own status service at status.classroomtokenhub.com: the app
+    could not link to the status page it publishes. A rejected value returns
+    None and the link is simply omitted, so the symptom is a missing link with
+    no error anywhere — worth stating, because that is why it went unnoticed.
+
+    Kept as an exact-prefix allowlist rather than widened to "any https URL":
+    the whole point is that an attacker who can set this variable must not be
+    able to plant an arbitrary destination in the footer of every page.
     """
     url = os.getenv('STATUS_PAGE_URL')
-    if url and url.startswith('https://stats.uptimerobot.com/'):
+    if not url:
+        return None
+    allowed_prefixes = (
+        'https://status.classroomtokenhub.com/',
+        'https://stats.uptimerobot.com/',
+    )
+    if url.startswith(allowed_prefixes):
         return url
     return None
 
