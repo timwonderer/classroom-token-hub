@@ -2,7 +2,7 @@
 
 | Reference | Version | Effective Date | Supersedes | Status |
 |---|---:|---|---|---|
-| BATCH-B-OPS-VERIFIER-POLICY | 1.4 | 2026-09-19 | 1.3 | Approved policy record |
+| BATCH-B-OPS-VERIFIER-POLICY | 1.5 | 2026-09-20 | 1.4 | Approved policy record |
 
 ## I. Purpose
 
@@ -86,6 +86,31 @@ observation class, required freshness class, and public eligibility.
 | payroll | natural execution telemetry + bounded Productivity/Ledger verification | READINESS and CORRECTNESS (separate results) | eligible only with fresh real activity and all registered checks |
 | roster | natural execution telemetry + bounded Identity/Class verification | READINESS and CORRECTNESS (separate results) | eligible only with fresh real activity and all registered checks |
 | classroom economy | natural execution telemetry + bounded owning-domain verification | READINESS and CORRECTNESS (separate results) | eligible only with fresh real activity and all registered checks |
+
+The feature rows have the following explicit dimension-level freshness
+contracts. Each cell states the freshness class and maximum evidence age;
+cadences are defined in §3.1. Natural execution evidence is collected every
+minute; owning state/transition/reconciliation verification runs every 15
+minutes, with the existing settlement trigger where applicable.
+
+| Feature key | READINESS | CORRECTNESS: state, transition, reconciliation | Required audit-lineage proof, when declared |
+|---|---|---|---|
+| `login` | `REALTIME`, 5 minutes | `PERIODIC_CORRECTNESS`, 30 minutes | `DEEP_INTEGRITY`, 2 hours |
+| `attendance` | `REALTIME`, 5 minutes | `PERIODIC_CORRECTNESS`, 30 minutes | `DEEP_INTEGRITY`, 2 hours |
+| `payroll` | `REALTIME`, 5 minutes | `PERIODIC_CORRECTNESS`, 30 minutes | `DEEP_INTEGRITY`, 2 hours |
+| `roster` | `REALTIME`, 5 minutes | `PERIODIC_CORRECTNESS`, 30 minutes | `DEEP_INTEGRITY`, 2 hours |
+| `classroom_economy` | `REALTIME`, 5 minutes | `PERIODIC_CORRECTNESS`, 30 minutes | `DEEP_INTEGRITY`, 2 hours |
+
+The audit-lineage column applies only to a required canonical audit-lineage
+verifier, never to all financial lineage or to the whole correctness result.
+Posting, duplicate/orphan, balance, and projection checks retain the
+30-minute limit. Each constituent proof keeps its own check time and age
+limit; summarizing it cannot extend either. Correctness can pass only when
+all required proofs are fresh, and the capability can pass only when both
+dimension results and relevant real activity satisfy their requirements.
+The composite economy evaluator must declare every included command family
+and verifier before registration; these thresholds do not make missing
+coverage eligible or permit sampling one family as proof for all families.
 
 Raw evidence is never directly public. All sources pass through a capability-level
 DOM-OPS projection. Public output may identify a capability state such as

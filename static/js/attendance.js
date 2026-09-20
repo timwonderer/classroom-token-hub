@@ -400,10 +400,15 @@ function requestHallPass(destination) {
     return;
   }
 
+  // FEAT-IDEN-002 "Credential boundary": hall-pass use takes the PIN. Prompted
+  // the same way as "done for the day", which is the neighbouring break action.
+  const pin = prompt(`Enter your PIN to request a hall pass to ${destination.trim()}:`);
+  if (!pin) return;
+
   window.AppCore.csrfFetch('/api/hall-pass/request', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ destination: destination.trim() })
+    body: JSON.stringify({ destination: destination.trim(), pin: pin })
   })
     .then(r => r.json())
     .then(data => {

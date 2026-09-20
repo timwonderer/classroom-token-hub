@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| SPEC-OPS-005 | 1.1 | 2026-09-19 | 1.0 | Normative |
+| SPEC-OPS-005 | 1.2 | 2026-09-20 | 1.1 | Normative |
 
 ## I. Purpose
 
@@ -71,24 +71,44 @@ result code. The internal evaluator may consume only authorized one-class
 verification results. An Operations coordinator receives redacted outcomes
 through opaque work items and MUST NOT issue a cross-class domain query.
 
-For each feature and evaluation window:
+Produce an independent result for each `(feature, evaluation_window,
+check_type)` key. Here `check_type` is the declared dimension, `READINESS`
+or `CORRECTNESS`, not a second alias for the feature. Evidence and current
+results from one dimension MUST NOT overwrite or satisfy the other. Within
+each dimension:
 
 1. A fresh proven execution failure, invalid state/transition, broken
    lineage, or failed reconciliation yields `FAIL + KNOWN`, even if another
-   required dimension is unavailable. Preserve the distinct underlying
-   evidence; this reduction is only a current assessment.
+   required check in that dimension is unavailable. Preserve the distinct
+   underlying evidence; this reduction is only a current assessment.
 2. Otherwise, `PASS + KNOWN` requires relevant real activity and fresh
-   affirmative results for **every** declared dimension. A zero-error count
-   alone is never affirmative evidence of correctness.
+   affirmative results for **every** required check in that dimension. A
+   zero-error count alone is never affirmative evidence of correctness.
 3. Otherwise, return `UNKNOWN + UNAVAILABLE`. This includes no recent
    activity, incomplete coverage, stale results, unavailable sources,
    skipped checks, and failed dispatch. Do not turn an idle period into a
    failure or a pass.
 
-Feature-health readiness uses the approved `REALTIME` freshness class
-(one-minute collection cadence, five-minute maximum evidence age). A
-periodic correctness proof may retain its separately approved freshness
-class, but a stale or missing required proof still blocks feature `PASS`.
+Disagreement about the same condition is preserved as derived conflict,
+not encoded as a raw result or settled by choosing the passing source.
+
+The capability-level public projection is a separate step over the required
+dimension results, following Batch B §3.2 and `SPEC-OPS-002` §5.1. A fresh,
+proven failure remains visible even when the other dimension is unavailable;
+it supports `DEGRADED`, or `UNAVAILABLE` only with proof of unusability.
+`AVAILABLE` requires fresh affirmative results for both dimensions and no
+unresolved disagreement. Otherwise the projection is `UNKNOWN`, including
+conflicting evidence about the same condition. Retain both dimension results
+and their separate reasons; a capability projection never replaces them.
+
+Each feature dimension uses the explicit freshness mapping in Batch B §3.3.
+Readiness uses `REALTIME` (one-minute cadence, five-minute maximum age);
+state/transition/reconciliation correctness uses `PERIODIC_CORRECTNESS`
+(15-minute cadence, 30-minute maximum age). Required audit-lineage proofs
+retain `DEEP_INTEGRITY` (hourly cadence, two-hour maximum age) independently.
+Every required proof must satisfy its own age limit; a fresh summary timestamp
+cannot refresh an older proof or borrow its longer lifetime. Missing or stale
+required evidence prevents that dimension, and hence the capability, passing.
 An evaluator MUST NOT backdate a current result or substitute an old
 successful run for recent activity.
 
@@ -106,6 +126,19 @@ transport `probe_version`; neither value substitutes for the owning evaluator
 version. An unregistered `UNKNOWN` has no evaluator version. No class/user/seat
 identifier, contact detail, credential, financial value, row ID, free-form
 exception, or raw verifier result crosses that boundary.
+
+For every external observation, including a transported application result,
+the collector supplies the bounded latency/result metadata required by
+`SPEC-OPS-002` §5.1. The closed metadata contains `transport_latency_ms`
+(finite nonnegative elapsed milliseconds measured with the collector's
+monotonic clock for that fetch, at most 600000; null if not measurable within
+that bound) and `transport_http_status` (integer 100–599 when a response was
+received, otherwise null). Null never means zero latency or HTTP success.
+These fields describe transport only, never evaluator duration or business
+success. Records from the same fetch may share this metadata without sharing
+feature evidence, check times, or outcomes. The application supplies no raw
+response, arbitrary metadata, or inferred latency; evaluator provenance and
+its original checked-at time remain unchanged.
 
 The external status service stores observations and projects communication;
 it does not become the authority for Identity, Productivity, Ledger, or

@@ -60,7 +60,13 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
   // Skip caching for authenticated routes (multi-tenancy safety)
-  const authRoutes = ['/admin', '/student', '/system-admin', '/api'];
+  // Must match the registered blueprint prefixes. '/system-admin' was never one
+  // of them — the sysadmin blueprint is registered at '/sysadmin' — so no
+  // sysadmin route ever matched this bypass and every one of them fell through
+  // to the caching strategies below, in a list whose stated purpose is
+  // multi-tenancy safety. '/recovery' is intentionally absent: it is
+  // unauthenticated by design.
+  const authRoutes = ['/admin', '/student', '/sysadmin', '/api'];
   if (authRoutes.some((route) => url.pathname.startsWith(route))) {
     // Network-only for authenticated routes
     return;

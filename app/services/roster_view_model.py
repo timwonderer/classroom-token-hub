@@ -106,8 +106,34 @@ class ClassRosterView:
         return bool(self.unclaimed_seats)
 
     @property
+    def has_any_seats(self) -> bool:
+        """True when the class holds at least one student seat, claimed or not."""
+        return bool(self.students or self.unclaimed_seats)
+
+    @property
     def all_seats_claimed(self) -> bool:
-        return not self.unclaimed_seats
+        """True only when seats exist and every one of them is claimed.
+
+        The emptiness check alone is vacuously true: "every unclaimed seat is
+        claimed" holds when there are no seats at all, so a brand-new class with
+        nobody on the roster reported "all seats claimed" — the one state it
+        certainly was not in. An empty roster is a third state, not a degenerate
+        case of the second.
+        """
+        return self.has_any_seats and not self.unclaimed_seats
+
+    @property
+    def unclaimed_panel_label(self) -> str:
+        """Heading for the join-code / unclaimed-seats panel.
+
+        Decided here rather than in the template: three states, and the template
+        renders what it is handed (INV-ARC-022, MAP-UI-002).
+        """
+        if self.has_unclaimed_seats:
+            return f"Unclaimed seats ({self.unclaimed_count})"
+        if self.all_seats_claimed:
+            return "Join code — all seats claimed"
+        return "Join code — no students added yet"
 
     @property
     def recovery_at_risk(self) -> bool:

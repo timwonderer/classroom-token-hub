@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001      | 3.4     | 2026-09-19     | 3.3 | Normative |
+| SOP-DOC-001      | 3.5     | 2026-09-20     | 3.4 | Normative |
 
 ---
 
@@ -81,7 +81,7 @@ These documents conform to the V2 capability-based architecture and domain autho
 - [SPEC-OPS-002_EXTERNAL_STATUS_PERSISTENCE_MODEL.md](../SPEC/SPEC-OPS-002_EXTERNAL_STATUS_PERSISTENCE_MODEL.md) — Logical persistence model for independent external status infrastructure
 - [SPEC-OPS-003_APPLICATION_OBSERVABILITY_CONTRACT.md](../SPEC/SPEC-OPS-003_APPLICATION_OBSERVABILITY_CONTRACT.md) — Bounded non-tenant application telemetry and execution outcome vocabulary
 - [SPEC-OPS-004_SYSTEM_ADMINISTRATION_CONSOLE.md](../SPEC/SPEC-OPS-004_SYSTEM_ADMINISTRATION_CONSOLE.md) — Operator-facing sysadmin console surface and its mutation boundary
-- [SPEC-OPS-005_FEATURE_HEALTH_EVIDENCE.md](../SPEC/SPEC-OPS-005_FEATURE_HEALTH_EVIDENCE.md) — Evidence and public-claim contract for naturally observed feature health
+- [SPEC-OPS-005_FEATURE_HEALTH_EVIDENCE.md](../SPEC/SPEC-OPS-005_FEATURE_HEALTH_EVIDENCE.md) — Independent feature/dimension reductions, transport metadata, and public-claim contract (v1.2)
 - [SPEC-LED-001_LEDGER_VERIFICATION_PROOF_SURFACES.md](../SPEC/SPEC-LED-001_LEDGER_VERIFICATION_PROOF_SURFACES.md) — Ledger-owned read-only proof contracts for Operations verification
 - [SPEC-LED-002_COMMAND_IDEMPOTENCY_RESERVATION_AND_ENFORCEMENT.md](../SPEC/SPEC-LED-002_COMMAND_IDEMPOTENCY_RESERVATION_AND_ENFORCEMENT.md) — Command-level idempotency reservation and structural enforcement contract
 - [BATCH-B_OPERATIONS_VERIFIER_POLICY_DECISION_PACKAGE_20260901.md](../TRACKING/BATCH-B_OPERATIONS_VERIFIER_POLICY_DECISION_PACKAGE_20260901.md) — Operations freshness, aggregation, and evidence-registry owner decisions
