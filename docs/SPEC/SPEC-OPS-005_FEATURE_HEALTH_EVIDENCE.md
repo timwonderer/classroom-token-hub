@@ -113,6 +113,13 @@ application-reported feature result does not make that result an independent
 source `APPLICATION_RUNTIME_EVIDENCE` in external observation records.
 The collector's own HTTP reachability result remains `EXTERNAL_PROBE`.
 Neither source may overwrite the other's evidence or freshness timestamp.
+The collector derives `APPLICATION_RUNTIME_EVIDENCE` only from a validated,
+closed application signal; it derives `EXTERNAL_PROBE` only from its own
+reachability check. The observation `probe_version` identifies the collector
+transport protocol, not the feature evaluator. A feature evaluator MUST
+provide a separately bounded and validated evaluator version before its
+result can be registered as `PASS` or `FAIL`. Until that producer and version
+are implemented, its public result remains `CHECK_NOT_REGISTERED` / `UNKNOWN`.
 
 ## VIII. Public wording
 
