@@ -4164,14 +4164,58 @@ def add_individual_student():
     return redirect(url_for('admin.students'))
 
 
+def _class_local_date_start_utc(date_str):
+    """Resolve a teacher-entered calendar date to that class's local midnight, in UTC.
+
+    A date picked in a form is the teacher's *local* date: "the 2nd" means the
+    2nd where the class is, not the 2nd in UTC. Parsing it with
+    ``datetime.strptime(..., '%Y-%m-%d')`` yields a naive midnight that a
+    ``timezone=True`` column stores as midnight UTC, which for every timezone
+    west of Greenwich is the *previous* local day — so a payroll anchored on it
+    fired a day early for any US class.
+
+    Resolution goes through CLE, the only authority that knows
+    ``ClassEconomy.class_timezone``. SLE is hardcoded to UTC
+    (``canonical_temporal_resolver._resolve_authority``) and would reintroduce
+    the same defect while appearing timezone-aware.
+    """
+    if not date_str:
+        return None
+    parsed = datetime.strptime(date_str, '%Y-%m-%d').date()
+    bounds = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=g.canonical_context,
+        primitive="evaluation_day_boundaries",
+        evaluation_date=parsed,
+    )
+    return bounds.boundary_start_utc
+
+
+def _class_local_today():
+    """The class's current local date, for form validation of teacher-entered dates."""
+    return canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=g.canonical_context,
+        primitive="current_evaluation_day",
+    ).result["evaluation_date"]
+
+
 # -------------------- STORE MANAGEMENT --------------------
 
 def _end_of_day_utc(date_obj):
-    """Convert a local date to end-of-day UTC using SLE day boundaries."""
+    """Convert a teacher-entered local date to end-of-day UTC, in the class's timezone.
+
+    Previously resolved through SLE, which reads as timezone-aware but is
+    hardcoded to UTC (``canonical_temporal_resolver._resolve_authority`` returns
+    ``"UTC"`` for SLE unconditionally). A delist date of "the 2nd" therefore
+    expired at the end of the UTC 2nd — mid-afternoon of the intended last day
+    for a US class. CLE is the authority that knows ``class_timezone``.
+    """
     if not date_obj:
         return None
     bounds = canonical_temporal_resolver(
-        SYSTEM_LEVEL_EVALUATION,
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=g.canonical_context,
         primitive="evaluation_day_boundaries",
         evaluation_date=date_obj,
     )
@@ -4182,15 +4226,21 @@ def _local_date_of_end_of_day(instant):
     """Recover the local date ``_end_of_day_utc`` was given.
 
     The day boundary's end is exclusive — the next local day's midnight — so the
-    instant is stepped back a microsecond before its SLE local day is read. Taking
+    instant is stepped back a microsecond before its local day is read. Taking
     ``.date()`` of the stored datetime instead depends on the database session's
     timezone, and on a UTC server shows the following day, which a save then
     persists: each edit moved the date a day later.
+
+    Resolved through CLE to match ``_end_of_day_utc``. The two must use the same
+    authority: a CLE writer paired with an SLE reader would shift the date every
+    time a teacher opened and re-saved the form, which is the same class of bug
+    the paragraph above describes.
     """
     if not instant:
         return None
     return canonical_temporal_resolver(
-        SYSTEM_LEVEL_EVALUATION,
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=g.canonical_context,
         primitive="current_evaluation_day",
         reference_time_utc=ensure_utc(instant) - timedelta(microseconds=1),
     ).result["evaluation_date"]
@@ -4239,9 +4289,11 @@ def _store_definition_from_form(form) -> dict:
             if (not form.is_rent_linked.data or form.direct_purchase_allowed.data)
             else False
         ),
-        'activation_at': (
-            datetime.combine(form.activation_date.data, datetime.min.time(), tzinfo=timezone.utc)
-            if form.activation_date.data else None
+        # The start date is the teacher's local date. Combining it with UTC
+        # midnight put the item on sale the previous local evening for any class
+        # west of Greenwich; `_end_of_day_utc` below is its CLE counterpart.
+        'activation_at': _class_local_date_start_utc(
+            form.activation_date.data.strftime('%Y-%m-%d') if form.activation_date.data else None
         ),
         'auto_delist_date': (
             _end_of_day_utc(form.auto_delist_date.data)
@@ -4385,6 +4437,7 @@ def store_management():
     if not selected_scope:
         abort(404)
     form = StoreItemForm()
+    form.local_today = _class_local_today()
     active_form_contract = resolve_store_form_contract(
         item_type=form.item_type.data or 'immediate',
         rent_linked=bool(form.is_rent_linked.data),
@@ -4850,14 +4903,23 @@ def edit_store_item(product_lineage_uuid):
     # as absent, not fall back to the stored value and be refused as an
     # inapplicable field.
     form = StoreItemForm(obj=item) if request.method == 'GET' else StoreItemForm()
+    form.local_today = _class_local_today()
 
     rent_link = _rent_link_for_lineage(selected_scope['class_id'], product_lineage_uuid)
 
     if request.method == 'GET':
-        # activation_at is written as UTC midnight of the chosen date; read it back
-        # in UTC, not in whatever timezone the database session returned it in.
+        # activation_at is the class's local midnight for the chosen date, so read
+        # it back through CLE. Reading it in UTC (as this did) showed the previous
+        # day for any class west of Greenwich, and a save then persisted that —
+        # each edit walked the start date one day earlier.
         form.activation_date.data = (
-            ensure_utc(item.activation_at).astimezone(timezone.utc).date() if item.activation_at else None
+            canonical_temporal_resolver(
+                CLASS_LEVEL_EVALUATION,
+                canonical_execution_context=g.canonical_context,
+                primitive="current_evaluation_day",
+                reference_time_utc=ensure_utc(item.activation_at),
+            ).result["evaluation_date"]
+            if item.activation_at else None
         )
         form.auto_delist_date.data = _local_date_of_end_of_day(item.auto_delist_date)
         form.inventory.data = item.inventory_total
@@ -7308,7 +7370,7 @@ def payroll_settings():
             payroll_frequency_days = frequency_days_map.get(frequency, 14)
 
             first_pay_date_str = request.form.get('simple_first_pay_date')
-            first_pay_date = datetime.strptime(first_pay_date_str, '%Y-%m-%d') if first_pay_date_str else None
+            first_pay_date = _class_local_date_start_utc(first_pay_date_str)
 
             # Daily time limit is entered as whole hours + whole minutes (minute is the
             # realistic minimum unit) and recombined into the decimal-hours the Float

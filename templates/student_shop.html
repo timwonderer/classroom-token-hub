@@ -18,12 +18,13 @@
 {% endcall %}
 
 {% call help.topic('shop-redeem', 'redeem', 'Using an item') %}
-<p><strong>Use Item</strong> sends a redemption request to your teacher with whatever details you provide, and is confirmed with your <strong>PIN</strong>. Say clearly what you are asking for — a vague request is slower to approve.</p>
+<p><strong>Use Item</strong> sends a redemption request to your teacher with whatever details you provide, and is confirmed with your <strong>passphrase</strong>. Say clearly what you are asking for — a vague request is slower to approve.</p>
 <p class="mb-0">The request has to be accepted before anything takes effect. Send it before you need it, not at the moment you need it.</p>
 {% endcall %}
 
 {% call help.topic('shop-credentials', 'lock', 'Why it asks twice') %}
-<p class="mb-0">Spending money asks for your passphrase; redeeming something you already own asks for your PIN. Both exist so nobody else on a shared or unlocked device can spend or redeem in your name. Do not let someone else type either one.</p>
+<p>Buying and using items both ask for your <strong>passphrase</strong>, because both are decisions about what you own. Your <strong>PIN</strong> is for the quick things you do repeatedly in class — starting work, taking a break, moving money between checking and savings, and taking a hall pass.</p>
+<p class="mb-0">Either one exists so nobody else on a shared or unlocked device can act in your name. Do not let someone else type either one.</p>
 {% endcall %}
 {% endblock %}
 
@@ -369,8 +370,16 @@
                         <small class="text-muted">This information will be sent to your teacher for review.</small>
                     </div>
                     <div class="mb-3">
-                        <label for="usePassphrase" class="form-label">Enter your PIN to confirm:</label>
-                        <input type="password" class="form-control" id="usePassphrase" name="pin" inputmode="numeric" pattern="[0-9]*" autocomplete="current-password" required>
+                        {# FEAT-IDEN-002 "Credential boundary": using an entitlement
+                           takes the passphrase. Hall passes are that rule's named
+                           exception and take the PIN, but they are not redeemed from
+                           this surface at all — they are used from the dashboard
+                           Break flow — so this field is always the passphrase.
+                           It previously said "PIN" and carried inputmode="numeric",
+                           while the server verified the passphrase: a student who
+                           typed what the label asked for was refused. #}
+                        <label for="usePassphrase" class="form-label">Enter your Passphrase to confirm:</label>
+                        <input type="password" class="form-control" id="usePassphrase" name="passphrase" autocomplete="current-password" required>
                     </div>
                 </form>
             </div>
@@ -708,18 +717,18 @@
     document.getElementById('confirmUseBtn').addEventListener('click', () => {
         const form = document.getElementById('useItemForm');
         const entitlementId = form.querySelector('#useModalItemId').value;
-        const pin = form.querySelector('#usePassphrase').value;
+        const passphrase = form.querySelector('#usePassphrase').value;
         const redemptionDetails = form.querySelector('#redemptionDetails').value;
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
-        if (!pin) {
-            announceStore('Enter your PIN to confirm this action.', 'useFeedback');
+        if (!passphrase) {
+            announceStore('Enter your passphrase to confirm this action.', 'useFeedback');
             return;
         }
 
         const requestBody = {
             entitlement_id: entitlementId,
-            passphrase: pin
+            passphrase: passphrase
         };
 
         // Include redemption details if provided

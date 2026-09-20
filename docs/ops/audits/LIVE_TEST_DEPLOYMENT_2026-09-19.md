@@ -225,7 +225,1005 @@ is the tag regardless.
 
 ## §XI — Full-App First Test
 
-*Pending execution. Every path requires recorded evidence.*
+*In progress.* Paths exercised and evidence below; findings are deferred to a
+post-test batch by operator decision — none blocks the live test.
+
+### Verified working
+
+| Path | Evidence |
+|---|---|
+| Cloudflare Access → nginx → gunicorn → Flask → Postgres | teacher login page rendered through the full chain |
+| Teacher signup + TOTP enrolment | completed on a fresh database |
+| Turnstile | widget returned "Success!" — site/secret keys valid for this domain |
+| Class creation (FEAT-CLASS-001) | `users` 1 (teacher), `classes` 1, `seats` 1 (teacher, claimed), `identity_profiles` 1 — exactly FEAT-CLASS-001 §X: one boundary, one teacher seat, no student seats or users. `class_timezone` populated at creation (immutable thereafter). |
+| Vendored Bootstrap | `static/vendor/bootstrap/*` served 200 from the app, no CDN request — today's fix confirmed in production |
+| Design tokens + fonts | `tokens.css`, `style.css` and all three font faces 200 |
+| nginx `real_ip` | access log records `206.72.73.208`, in none of Cloudflare's 15 published IPv4 ranges — a resolved client, not an edge |
+| Cloudflare origin monitor | correctly warned "Request not from Cloudflare IP: 127.0.0.1" for a direct origin curl — working as designed |
+| Worker count | systemd cgroup shows master + exactly 1 worker |
+| Ledger settlement (scheduled) | the $19.65 payroll transaction flipped `PENDING` → `POSTED` unattended and a `LedgerBalanceSnapshot` was written (`posted_balance_cents` 1965) at 19:44:53Z, 44 min after the 19:00:42Z transaction — the single worker's APScheduler doing real work, confirming `-w 1` was correctly applied |
+| Store catalog creation (FEAT-SETTINGS-001) | 4 products published, all `IN_USE`, `direct_purchase_allowed` true, no date gates — all four visible to the student |
+| Store purchase, sufficient funds (FEAT-STOR-001) | $19.65 → $14.65 exactly. One `purchase` row (−5.00, checking, `PENDING`) and one `GRANTED` entitlement event sharing `correlation_id` `corr_9d5785ea…`, written 12 ms apart — the debit and the grant are one transaction, not two hopeful writes. `acquisition_type` `PURCHASE`, `target_seat_id` = `actor_seat_id` = 6, `class_id` on both rows. No `pending_actions` row (the defect fixed on the store branch stayed fixed). |
+| Store purchase, insufficient funds | $30.00 attempted against $9.65: refused with `INSUFFICIENT_FUNDS`. Verified the refusal is total — no transaction row, no entitlement event, no NSF/fee row, balance unchanged. Wording defect recorded as finding 11; the behaviour is correct. |
+| Store inventory exhaustion | "Limited item" (`inventory_total` 1) purchased once, then rendered `Available: 0 left` with a disabled **Out of Stock** control — blocked at the surface rather than driven negative |
+| Account transfer, checking → savings (FEAT-LED-000) | $7.00 moved: checking $9.65 → $2.65, savings $0.00 → $7.00. Two rows — `Withdrawal` −7.00 checking and `Deposit` +7.00 savings — sharing one `correlation_id` (`corr_ed0cb551…`) and summing to exactly zero, so the legs are one atomic unit and no value was created or destroyed. **No NSF or fee row was written**, which is the required outcome: a lateral move between a student's own accounts is not a failed agreement and must never attract a fine. |
+
+### Findings — deferred to post-test batch
+
+**1. Icon font is unsubsetted: 3.8 MB (performance, user-visible)**
+
+`static/fonts/material-symbols-outlined.woff2` is 3,963,852 bytes — the full
+Material Symbols set, roughly 3,000 glyphs. The application uses **180**. Every
+other font in the tree is 14–84 KB, so this one file is ~45× the rest combined.
+Text paints immediately and icons appear only once it arrives, which is the
+reported symptom. Subsetting to the 180 used glyphs should land in the 10–30 KB
+range. Needs a build step and verification that no icon silently disappears.
+
+**2. Static assets send `Cache-Control: no-cache` (performance)**
+
+Every static asset revalidates on every page load — the access log is full of
+`304` responses at 40–100 ms each, roughly a dozen per page. Flask defaults to
+this when `SEND_FILE_MAX_AGE_DEFAULT` is unset.
+
+The fix is already half-built: `static_url()` appends `?v=<file mtime>`, so the
+URL changes whenever content does. Far-future caching is therefore already safe
+— the cache-busting was implemented and the caching it exists to enable never
+was.
+
+**3. Roster panel reports "all seats claimed" for an empty roster (correctness, display)**
+
+`ClassRosterView.all_seats_claimed` returned `not self.unclaimed_seats`, which
+is vacuously true when the class has no seats at all. A brand-new class
+displayed "Join code — all seats claimed" — the one state it certainly was not
+in. Introduced by the 2026-09-17 roster view-model migration.
+
+Fix drafted (not deployed): `has_any_seats` added, `all_seats_claimed` requires
+seats to exist, and a new `unclaimed_panel_label` decides between the three
+states in the view model rather than the template. **Still needs a test before
+it ships.**
+
+**4. "Next Payroll" states a date for an unconfigured class (correctness, display)**
+
+The dashboard showed "Next Payroll: Sep 25" for a class with **no
+`payroll_settings` row at all** (table empty). Two stacked hardcodings in
+`admin.py` `dashboard()`:
+
+- `timedelta(days=14)` — a fortnightly cadence assumed rather than read from
+  `PayrollSettings.pay_frequency_days`;
+- when no anchor exists, an invented "next Friday": `(4 - weekday() + 7) % 7`,
+  which on Sat 19 Sep yields 6 days → Fri 25 Sep.
+
+The second is the real defect: an **unconfigured state rendered as a configured
+one**. A teacher reading a specific date would expect students to be paid then;
+nothing would happen. Display only — no scheduled job reads this value, so it
+misinforms without mispaying.
+
+**Confirmed worse than first recorded (corrected 2026-09-19).** Payroll was then
+configured through the UI and stored correctly — `payroll_settings.pay_rate`
+1.50, `payroll_frequency_days` 14, `next_payroll_date` **2026-10-02**,
+`availability_state` IN_USE, carrying a `policy_uuid`. The dashboard still
+displayed **Sep 25**.
+
+The cause is that the dashboard never reads `payroll_settings` at all. Its
+anchor is `max(event.recorded_at ...)` over `PayrollEvent` rows — the last
+payroll that actually *ran* — so:
+
+- the invented "next Friday" persists until the first payroll has ever run,
+  which is exactly the setup window where a teacher has no other reference and
+  is most likely to trust the figure;
+- it does not self-correct when payroll is configured;
+- once payroll has run, `timedelta(days=14)` is still hardcoded rather than
+  read from `payroll_frequency_days`, so any class on a non-fortnightly
+  schedule shows a wrong date indefinitely.
+
+The fix must read the configured schedule — `next_payroll_date` when set,
+`payroll_frequency_days` for the interval — and show "Not scheduled" when
+neither a schedule nor a payroll history exists.
+
+*Method note:* this entry was first narrowed to "affects unconfigured classes
+only" on the strength of the stored value existing. That was wrong — the value
+being correct in the database says nothing about whether any code reads it. The
+read path must be checked, not inferred.
+
+**5. "Global Default" is v1 vocabulary on the payroll settings surface (wording)**
+
+`templates/admin_payroll.html:343` renders:
+
+    Global Default: $1.50/minutes, biweekly , starting 10/02/2026
+
+Three problems in one line. "Global Default" is v1 language from when payroll
+settings were global across a teacher's blocks; v2 settings are class-scoped, so
+nothing is global — and a teacher running several classes would reasonably read
+it as applying to all of them, which is the opposite of the truth. Also
+"$1.50/**minutes**" (unit not singularised from the stored `time_unit`) and a
+stray space in "biweekly **,**". The first is a correctness-of-meaning problem on
+a financial surface; the other two erode confidence in it.
+
+Note this is the same failure mode `/health/status` explicitly refuses
+(§X.5): an unmonitored surface must not read as a healthy one. The principle is
+already held elsewhere in the codebase; the dashboard does not hold it.
+
+### Intended behaviour — do not re-raise
+
+**Manual payroll does not move the automatic payroll window.** Verified by
+timestamps: the `IN_USE` `payroll_settings` row has `created_at == updated_at ==
+2026-09-19 18:41:59`, and the manual payroll ran at `19:00:41` without touching
+it. `next_payroll_date` was unchanged. The dashboard *displays* a moved window
+(finding 6B) but the underlying schedule is intact — do not "fix" the payroll
+writer on the strength of that display.
+
+**Payroll policy is frozen per payment.** The `payroll_event` row carries
+`policy_version_id` and `policy_uuid`, and `payroll_settings` holds two rows —
+one `RETIRED`, one `IN_USE`, created 74 seconds apart when settings were saved
+twice. Superseded policy is retired and kept, never mutated, so a later settings
+change cannot retroactively alter what a past payment was computed under
+(readiness item B2 holding in production).
+
+**Actor/target attribution is correct on both attendance and payroll.** A
+student self-tap wrote `target_seat_id 6 / actor_seat_id 6 / mechanism self`; the
+teacher tap-out wrote `target_seat_id 6 / actor_seat_id 1 / mechanism teacher`;
+the payroll event wrote `target 6 / actor 1 / mechanism TEACHER`. A single
+`seat_id` column could not express who acted versus who the record is about,
+which is the question that matters in any dispute over hours or pay.
+
+**Student session expires 10 minutes after login, absolutely.**
+
+`student.py:3155` sets `user.current_session_expires_at = now +
+timedelta(minutes=SESSION_TIMEOUT_MINUTES)` (10) at login. It is an **absolute**
+deadline, never extended by activity: `app/auth.py` checks it *before*
+refreshing `last_activity`, so polling does not move it. Observed live — stored
+expiry `18:45:49`, `GET /api/student-status` returned 401 at `18:45:52`, three
+seconds later, while the student was polling every few seconds.
+
+**This is deliberate, not a defect.** It is a safety posture for shared
+classroom machines, where students routinely walk away from an unattended
+computer. Teachers share the 10-minute window; sysadmins get 60
+(`SYSTEM_ADMIN_SESSION_TIMEOUT_MINUTES`).
+
+The apparent friction dissolves once the interaction model is right: **the
+dashboard is a time clock, not a workstation.** A student clocks in, leaves to do
+class activities, and clocks back out — as at a real job, where you badge at the
+door rather than standing at it. No live session is needed in between, so
+expiring it costs nothing.
+
+Consequently the attendance clock continuing to run while the student is signed
+out is correct, not a leak: attendance measures being in class, not being at the
+keyboard. Session expiry deliberately does **not** tap the student out.
+`enforce_daily_limits_job()` auto-taps-out at the class's configured daily limit
+(1.5 hours here) as the backstop for a forgotten clock-out.
+
+Recorded because this was initially — and wrongly — raised as the most serious
+finding of the day and a launch blocker. It is neither. The error was inferring
+intent from a constant's name (`SESSION_TIMEOUT_MINUTES` reads like an idle
+timeout) and assuming a usage pattern that does not match how the product is
+actually used.
+
+**6. Payroll schedule: three distinct defects behind one confusing date**
+
+Observed after configuring payroll (next payroll 10/02, biweekly) and running a
+**manual** payroll on 2026-09-19. Three surfaces disagreed — dashboard "Oct 3",
+payroll overview "Oct 1, 5:00 PM PDT", settings tab "10/02/2026". They are three
+separate defects, not one.
+
+**6A — The stored schedule is wrong, not just displayed wrong.**
+*Severity: the automatic run fires on the wrong day.*
+
+`payroll_settings.next_payroll_date` holds `2026-10-02 00:00:00+00`. The class
+carries `class_timezone = America/Los_Angeles`, and
+`next_payroll_date AT TIME ZONE 'America/Los_Angeles'` = **2026-10-01 17:00**.
+
+A teacher setting 10/2 means "payday is 2 October in my classroom". They pick a
+**calendar date**, not an instant; nobody running a class period thinks in UTC.
+`class_timezone` is captured at class creation and made immutable precisely so
+scheduling resolves in class time — and this value bypasses it. The automatic
+run therefore fires at 5 PM on **1 October**, a day early and during school
+hours. The error also varies with DST: at UTC-7 vs UTC-8 the same calendar date
+resolves an hour apart, so a date set in November behaves differently from one
+set in June.
+
+Fix: interpret a teacher-picked date in `class_timezone` (10/02 00:00
+America/Los_Angeles = `2026-10-02 07:00 UTC`), and audit every other
+teacher-picked date for the same treatment.
+
+**6B — The dashboard misreports a working invariant as broken.**
+
+`admin.py` `dashboard()` derives "Next Payroll" from
+`max(PayrollEvent.recorded_at) + timedelta(days=14)` and **never reads
+`payroll_settings`**. After the manual run it showed **Oct 3** — arithmetically
+correct (Sep 19 + 14 = Oct 3) but answering the wrong question: "14 days after
+the last payroll event" instead of "when is the next scheduled payroll".
+
+The operator rule is that **running a manual payroll must not change the
+automatic payroll window**. That rule is *upheld in the data* — verified: the
+`IN_USE` settings row has `created_at == updated_at == 18:41:59`, while payroll
+ran at **19:00:41** and never touched it. But the dashboard makes it look as
+though the manual run pushed the window out two weeks.
+
+This is the entry most likely to cost someone an afternoon: the visible symptom
+points at the payroll writer, where there is no bug. The dashboard must read the
+configured schedule, and the hardcoded 14 days must come from
+`payroll_frequency_days`.
+
+**6C — Two surfaces render the same instant a day apart.**
+
+Payroll Overview shows "Oct 1, 2026, 5:00 PM PDT" (the stored instant correctly
+converted to class time). The Settings tab shows "starting 10/02/2026" (the same
+instant printed as its UTC date, unconverted). Both read the same row. Once 6A is
+fixed the two will agree, but the settings tab should convert explicitly rather
+than coincidentally matching.
+
+**7. Stated rounding does not match actual payment behaviour (wording)**
+
+The Pay Simulator states "Time tracking **rounds down** to the nearest time
+increment." With `time_unit = minutes` a teacher reads that as "partial minutes
+are not paid". Actual: 13m 6s of attendance paid **$19.65** — full per-second
+pro-rata (786s x $0.025). Rounded down to whole minutes it would be $19.50.
+
+The ledger is correct; the description of it is not. Either the copy is wrong or
+it means "rounds to the nearest second", which is vacuous. On a financial
+surface this is worth stating accurately.
+
+**8. The app cannot link to its own status page (deferred, small)**
+
+`wsgi.py` validates `STATUS_PAGE_URL` against an allowlist of exactly one
+provider:
+
+    if url and url.startswith('https://stats.uptimerobot.com/'):
+
+`status.classroomtokenhub.com` fails that test, so setting the variable makes the
+validator return `None` and the link silently never renders. The allowlist is
+v1-era and was never updated when the self-hosted status service replaced
+UptimeRobot. Its own docstring anticipates this: "To support other status page
+providers, add their specific domain patterns to the validation."
+
+The allowlist itself is sound and should be widened, not removed — it exists so
+that someone with environment access cannot redirect users to a phishing page.
+Fix: add the `status.classroomtokenhub.com` pattern, then set `STATUS_PAGE_URL`.
+
+**9. Cloudflare-origin check warns on every request (log noise, not a gap)**
+
+Every non-static request logs:
+
+    WARNING: Request not from Cloudflare IP: 127.0.0.1 (real_ip: <client ip>, ...)
+
+`validate_cloudflare_request()` (`app/utils/ip_handler.py:173`) handles the
+local-proxy case by reading `X-Real-IP`, documented as "the immediate upstream
+proxy IP", and testing it against Cloudflare's published ranges. But
+`/etc/nginx/conf.d/cloudflare-realip.conf` sets `real_ip_header CF-Connecting-IP`,
+which rewrites `$remote_addr` to the *end client* before
+`proxy_set_header X-Real-IP $remote_addr` runs. The header therefore carries the
+visitor's own IP, never Cloudflare's edge, so the check cannot succeed while
+real-ip rewriting is enabled — which is also what makes `CF-Connecting-IP`-based
+rate limiting work correctly. The two features want the same header for
+different purposes.
+
+**Not a security finding.** Origin restriction is enforced by the DigitalOcean
+firewall (Cloudflare ranges + Tailscale only); this function only logs. But it
+emits a WARNING per request, which will bury real warnings once classes are
+using the app.
+
+Fix options: pass the edge IP separately (`proxy_set_header X-CF-Edge-IP
+$realip_remote_addr`) and read that, or drop the check in favour of the firewall
+that actually enforces it. Do not "fix" it by removing `real_ip_header` — that
+would break rate limiting, which is the load-bearing consumer.
+
+**10. Immediate-use items are never consumed at sale (correctness, spec violation)** — FIXED
+
+`SPEC-STORE-001` §III defines the type in one line — "IMMEDIATE_USE — Granted
+and consumed in the same action (no expiry)" — and §V.A repeats it:
+"IMMEDIATE_USE is exercised at the moment of sale." An unexercised
+`IMMEDIATE_USE` entitlement is therefore a state the specification does not
+permit to exist.
+
+It exists. Purchasing an immediate item leaves it sitting in the student's **My
+Items** tab, badged "Ready to Use" with a *Use Now* button, requiring a second
+deliberate action to consume.
+
+`execute_store_purchase` implements the contract correctly: Phase 4
+(`app/feats/store_purchase_feat.py:486`) writes a `CONSUMED` event for every
+granted entitlement inside the same transaction as the `GRANTED` event, when
+`instant_use` is true. The sole purchase route never turns it on:
+
+    result = execute_store_purchase(
+        canonical_context=context,
+        policy_uuid=policy_uuid,
+        quantity=quantity,
+        instant_use=False,  # TODO: Read from product policy
+    )
+
+`app/routes/api.py:323` — an unfinished TODO. The flag is hardcoded off for
+every purchase of every type, so no product ever reaches Phase 4. Live evidence:
+the `GRANTED` event for the "Cheap item" purchase carries payload
+`{'instant_use': False, ...}` on an `entitlement_type` of `IMMEDIATE_USE` — the
+contradiction, recorded in the database.
+
+**Severity is bounded but it is not cosmetic.** Pressing *Use Now* does work:
+`item_type == 'immediate'` routes to `execute_use_item_immediate`
+(`app/routes/api.py:380`), which consumes the entitlement directly with no
+teacher approval and writes no `pending_actions` row. Nothing is stuck, no money
+is wrong, and no approval is spuriously demanded. The lifecycle simply takes two
+steps where the contract says one. Consequences:
+
+1. Immediate items **accumulate indefinitely**. §V.A requires `auto_expiry_days`
+   to be null for this type, so an unconsumed immediate entitlement never
+   expires; the student's item list fills with things that should have been
+   consumed at the till.
+2. Any consumed-versus-outstanding entitlement count reads immediate items as
+   permanently outstanding.
+3. Student-visible incoherence: you buy the thing, then later go "use" it.
+
+**The fix does not belong in the route.** The route holds only a `policy_uuid`
+and would have to re-resolve the product to compute the flag — and every future
+caller would have to remember to do the same. The FEAT already holds
+`policy_config.entitlement_type` before Phase 4 runs, so deriving `instant_use`
+there enforces the rule once for all callers. That also states the rule
+correctly: per the specification `instant_use` is a *derived property of the
+product type*, not a caller-supplied option, and the current signature — a
+caller-passed boolean defaulting to `False` — is what made this defect
+expressible at all.
+
+**The UI explicitly promises the behaviour that does not occur.** The purchase
+confirmation modal renders, for `item_type == 'immediate'`
+(`templates/student_shop.html:483`):
+
+> **Immediate use** — This item is used instantly upon purchase. You won't need
+> to redeem it later - it's applied to your account right away.
+
+The student confirms the purchase having just been told they will not need to
+redeem it later, and is then required to redeem it later. This raises the
+finding above a specification-conformance issue: the product states something
+false to the user at the moment of sale. Note the copy is correct *as written* —
+it describes the contract in `SPEC-STORE-001`. The template is right and the
+call site is wrong, so the copy must not be "corrected" to describe the defect.
+
+Found by the operator during §XI store testing, from the UI alone: an immediate
+item should not have a *Use Now* button.
+
+**11. Internal domain names leak into student-facing error copy (wording)**
+
+Attempting to buy the $30 item against a $9.65 balance produced, in the purchase
+modal:
+
+> **Purchase not completed**
+> Purchase denied by Ledger
+
+"Ledger" is an internal domain boundary. To a student it names nothing; it reads
+as a component that has taken a decision about them, and it does not say what
+went wrong or what to do. The correct message is that they do not have enough
+money.
+
+**The classification is already right; only the prose is wrong.**
+`execute_store_purchase` returns `error_code="INSUFFICIENT_FUNDS"` on both denial
+branches (`app/feats/store_purchase_feat.py:394` and `:407`) — accurate and
+machine-readable. The defect is that the route renders the *other* field
+verbatim:
+
+    error_msg = result.error_message or f"Purchase failed: {result.error_code}"
+    return jsonify({"status": "error", "message": error_msg}), 400
+
+`app/routes/api.py:327`. A FEAT's `error_message` is a diagnostic written for
+developers and logs; here it becomes the sentence a child reads. The second
+branch is worse still — it interpolates a raw reason string
+(`f"Purchase denied by Ledger: {ledger_result.get('reason', 'unknown')}"`), so an
+internal reason code, or the literal word `unknown`, can surface in the modal.
+
+**Rewording the FEAT string is the wrong fix.** It would leave the same pipe open
+for every other error the FEAT can return, and would push user-facing copy down
+into a domain that should not own it. The durable fix is to map `error_code` to
+student copy at the presentation boundary and stop rendering `error_message` to
+users at all — keeping it for logs, where it is useful. `INSUFFICIENT_FUNDS` then
+renders as something like "Not enough funds — this costs $30.00 and you have
+$9.65 in checking", which answers the two questions the student actually has.
+
+Raised by the operator: "the wording could be better. maybe 'Insufficient funds'
+or something else".
+
+**12. Redemption asks for a PIN and verifies the passphrase (correctness, blocks the student)** — FIXED
+
+The *Use Item* modal labels its credential field **"Enter your PIN to confirm:"**
+and the input is built for a PIN — `name="pin"`, `inputmode="numeric"`,
+`pattern="[0-9]*"` (`templates/student_shop.html:372`). The handler reads it as
+`pin`, posts it as `passphrase` (`:722`), and the server verifies it against
+`user.passphrase_hash` (`app/routes/api.py:359`), returning **"Incorrect
+passphrase."** A student who does exactly what the label says is refused, and the
+error names a credential the form never asked for.
+
+Observed live: PIN entered, "Item not used — Incorrect passphrase."
+
+**Not a hard block, and worth being exact about why.** The submit handler is bound
+to the button's `click` (`#confirmUseBtn`) and reads `.value` directly, so HTML
+constraint validation never runs and `pattern="[0-9]*"` does not actually reject
+letters. A student who guesses to type their passphrase will succeed. But
+`inputmode="numeric"` still raises a numeric keypad on a phone or tablet, so on
+the devices most classes use, entering a passphrase like
+`Dairy9_Faster_Shrunk` means fighting the keyboard the form chose.
+
+**Which credential is correct is a genuine open question, not an obvious typo.**
+`DOM-IDEN-002` §167 states: "Student financial actions (transfers, purchases,
+insurance claims) require passphrase re-verification. The passphrase gate is
+separate from the PIN used at login." Redeeming an already-purchased entitlement
+moves no money and is not in that enumeration, so the doc does not settle it. The
+purchase modal — a financial action — correctly asks for the passphrase
+(`templates/student_shop.html:334`), which is the contrast that makes the
+redemption modal look like it was meant to ask for the PIN. Either answer is
+defensible; what is not defensible is the current state, where the label, the
+input mode, and the verifier disagree. Resolve the contract first, then make all
+three agree.
+
+**13. Store offers a second, unguarded hall-pass request path (correctness, domain violation)** — FIXED
+
+A purchased hall pass is *correctly* credited to the hall-pass balance — verified
+live: `get_hall_pass_balance(seat 6) == 1` after purchase, and the dashboard
+renders it as "Passes Left" (`templates/student_dashboard.html:199`). The
+mechanism works.
+
+The defect is that the same entitlement **also** appears in the Store's *My Items*
+tab with a *Request* button, and that second path enforces none of the conditions
+the first one does. The `hall_pass` branch of `use_item`
+(`app/routes/api.py:398`) builds a pending action and calls
+`execute_use_item_request` with **no attendance precondition** — nothing checks
+whether the student is clocked in. A student who never started work, or who has
+already marked themselves done for the day, can request a hall pass from the
+Store tab.
+
+This contradicts `DOM-PROD-001`, where a hall pass marks a student *out of an
+active work session*: the attendance timeline carries `reason_code = hall_pass`
+with the consumed entitlement's `hall_pass_id` (§1, §"MUST set `hall_pass_id`").
+Outside a session there is nothing to be marked out of, so the request is
+incoherent rather than merely early.
+
+The dashboard Break flow already implements the intended contract: **Break** is
+disabled until **Start Work**, and the modal reads "Choose a hall-pass
+destination or mark yourself done for the day"
+(`templates/student_dashboard.html:234-252`). That is the lawful entry point, and
+it is the one that knows the student's attendance state.
+
+**The fix is removal, not a guard.** Adding an attendance check to the Store path
+would make it correct but still leave two ways to do one thing, one of which is
+in a surface that has no reason to know about attendance. A hall-pass entitlement
+should render in *My Items* as a **balance, not an actionable item** — consistent
+with `DOM-STORE-001` §VIII.6, which grants the entitlement here while stating
+that "the authoritative exercise may be recorded by another domain" and that
+Store must "not create a duplicate Store-and-Entitlements `CONSUMED` row when
+another domain is the authoritative consumer." Exercise belongs to Productivity;
+Store should not offer a button for it.
+
+Raised by the operator: "hall pass should not be under my item. it should be
+directly added to hall pass balance. the only time hall pass can be requested is
+when the student is currently active and they use the break feature."
+
+*Minor, same surface:* line 199 hardcodes "Passes Left", so a balance of 1 reads
+"1 Passes Left".
+
+**14. Sysadmin dashboard 500s: `operational_events` was never created (correctness, dead route)**
+
+First 500 of the deployment. Sysadmin authentication **succeeded** —
+`POST /sysadmin/login` returned 302 — and the redirect target failed:
+
+    GET /sysadmin/dashboard  →  500
+    psycopg2.errors.UndefinedTable: relation "operational_events" does not exist
+    [SQL: SELECT id, created_at, level, message, payload FROM operational_events
+          WHERE level IN ('ERROR', 'CRITICAL') ORDER BY created_at DESC, id DESC LIMIT %(limit)s]
+
+`app/routes/system_admin.py:521` → `get_recent_error_events(limit=5)` →
+`app/services/operational_event_service.py:61`.
+
+**The table was designed, referenced, and never built.** Migration
+`7c3d4e5f6a7b_drop_all_unauthorized_tables.py` drops the old error pipeline with
+these comments (§GROUP E, lines 200-205):
+
+    # error_logs   → to be replaced by operational_events(level=ERROR|CRITICAL)
+    # error_events → absorbed into operational_events (DOM-OPS-001)
+    drop_table_if_exists('error_logs')
+    drop_table_if_exists('error_events')
+
+That migration is the **only** mention of `operational_events` anywhere in
+`migrations/`. No migration creates it. There is no model for it either —
+`app/models.py:1946` carries only the comment "Error events are represented in
+operational_events". The predecessors were removed on the strength of a
+replacement that does not exist.
+
+**The writer and the reader disagree about where the data lives.** `record()`
+(`operational_event_service.py:14`) does not write to any table — its docstring
+says "Current storage target is application logs", and it emits through
+`current_app.logger`. Only the two read functions
+(`get_recent_error_events`, `get_error_events`) expect a table. So even if the
+table existed it would always be empty; the dashboard would render, and render
+nothing, forever.
+
+**Two sysadmin routes are dead**, not one: `system_admin.py:521` (dashboard) and
+`:563` (the full error view via `get_error_events()`).
+
+**Why 2997 passing tests did not catch this.** The only test that fetches the
+route is
+`tests/dom/operation/test_sysadmin_grafana_auth.py::test_DOM_OPS_001__expired_sysadmin_dashboard_still_redirects_to_login`,
+which seeds an **expired** session and asserts a **302 to login** — it never
+reaches the handler body. `tests/dom/support/test_tlcp_actor_context_resolution.py:49`
+only builds a `test_request_context` for that path and never dispatches it. **The
+sysadmin dashboard has never been rendered successfully in a test.** The reads
+use raw `sa.text()` rather than ORM entities, so SQLAlchemy never validated the
+name against metadata and nothing failed at import or startup. And `conftest.py`
+rebuilds the schema from the real migration chain, so the test database is
+missing the table too — a test that *did* render the dashboard would have failed
+immediately.
+
+This is the same failure shape the repository already legislates against: a
+guard, or here a whole route, that is green because nothing ever exercised the
+path it covers.
+
+**Grafana itself is probably fine.** `/sysadmin/grafana`
+(`system_admin.py:1055`) is a separate route that proxies to `GRAFANA_URL`
+(default `http://localhost:3000`) and does not touch `operational_events`.
+Verified on the host: `grafana-server` is **active** and listening on
+`127.0.0.1:3000`, and `GRAFANA_URL` is absent from `.env`, which is harmless
+because the code default already matches. The operator is blocked only because
+login lands on the broken dashboard; navigating directly to `/sysadmin/grafana`
+should bypass it.
+
+**Fix requires a decision, not just a migration.** Creating an empty
+`operational_events` table would stop the 500 and produce a permanently empty
+error panel, because nothing writes to it. The real question is whether
+`DOM-OPS-001` intends operational events to be durable rows or log lines. If
+rows: add the model and a creating migration, and change `record()` to write
+them. If logs: delete both read functions and the dashboard panels that call
+them. Either is defensible; shipping the current half-state is not.
+
+**15. Grafana proxy 404s on its own directory form (correctness, proxy fragility)**
+
+`/sysadmin/grafana/` — the mount point with a trailing slash — returns 404.
+Verified against the origin directly, bypassing Cloudflare and the browser:
+
+    curl -H 'Host: app.classroomtokenhub.com' https://127.0.0.1/sysadmin/grafana
+      → 302  https://.../sysadmin/login?next=/sysadmin/grafana      (route matches)
+    curl -H 'Host: app.classroomtokenhub.com' https://127.0.0.1/sysadmin/grafana/
+      → 404                                                         (matches nothing)
+
+The registered rules are:
+
+    '/sysadmin/grafana'              defaults={'path': ''}   strict_slashes=True
+    '/sysadmin/grafana/<path:path>'                          strict_slashes=True
+
+`/sysadmin/grafana/` matches neither: the `path` converter requires at least one
+character so it will not match an empty remainder, and with `strict_slashes=True`
+Werkzeug does not redirect `/foo/` → `/foo` (it only performs the opposite
+redirect, `/foo` → `/foo/`, when the rule itself carries the trailing slash).
+
+**Why this matters more for a proxy than for a page.** Grafana is a single-page
+app served at a mount point. It emits its own redirects and resolves assets
+relative to its base. A mount point that 404s on its own directory form is
+fragile: any Grafana-issued redirect to its root, any relative asset that
+resolves to the bare directory, and any user or bookmark that includes the
+customary trailing slash all fail — and they fail as a 404, which reads as
+"Grafana is not installed" rather than "the route did not match".
+
+**The trailing slash was client-side state — settled by evidence, after one wrong
+call.** Neither nginx nor Cloudflare adds it: `$request_uri` passes through
+unmodified (both forms tested against the origin), and Cloudflare Access's
+redirect carries `"redirect_url":"/sysadmin/grafana"` with no slash. The no-slash
+request never reached the server at all from Chrome — absent from the access log
+entirely, with the slashed requests carrying referrer `-`.
+
+Proof came from switching browser: the operator's first request in **Firefox**
+(`Firefox/156.0`, 21:55:05) went to `/sysadmin/grafana` unmodified and matched the
+route, returning 302 to login. Same URL, same server, no slash. The rewrite
+therefore lived in the Chrome profile — consistent with a cached permanent
+redirect, which a browser honours without issuing a network request, explaining
+the total absence of no-slash entries in the log.
+
+Recorded because the first explanation offered — omnibox autocomplete — was
+wrong, and was disproved by the operator showing the clean URL in the address bar
+before the request. The lesson is the diagnostic, not the theory: when a request
+never appears in the server log, the answer is in the client, and changing
+browser isolates it in seconds.
+
+Fix: register the directory form as well — add `strict_slashes=False` to the bare
+rule, or a `/grafana/` rule carrying the same `defaults={'path': ''}`. One line;
+it should be covered by a test asserting both forms resolve, since the failure is
+invisible until something requests the directory.
+
+*Grafana itself remains unverified.* `grafana-server` is active on
+`127.0.0.1:3000` and `GRAFANA_URL` is unset (harmless — the code default already
+matches), but no authenticated request has yet reached the proxy body.
+
+**16. Service worker's auth-route bypass misses every sysadmin route (correctness, caching safety)**
+
+`static/sw.js:63` excludes authenticated routes from caching:
+
+    const authRoutes = ['/admin', '/student', '/system-admin', '/api'];
+    if (authRoutes.some((route) => url.pathname.startsWith(route))) {
+      return;  // Network-only for authenticated routes
+    }
+
+The prefix is wrong. The blueprint is registered as
+`Blueprint('sysadmin', __name__, url_prefix='/sysadmin')`
+(`app/routes/system_admin.py:71`) — there is no `/system-admin` prefix anywhere in
+the application. `'/sysadmin/...'.startsWith('/system-admin')` is false, so **no
+sysadmin route has ever matched this bypass**, and every one of them falls
+through to the caching strategies below it.
+
+The comment on that block is "multi-tenancy safety", which is precisely the
+property it is failing to provide for the operator role. Navigation requests land
+in `handleNavigation`, which does a plain `fetch` and is harmless; non-navigation
+requests reach `cacheFirst`, so sysadmin subresource responses are cached in the
+shared service-worker cache.
+
+**Not established as the cause of finding 15's symptom.** It was found while
+investigating that, and the two are not yet connected by evidence — the
+diagnosis there is still open. This entry stands on its own: a guard list naming
+a prefix that does not exist is a defect regardless of what else it explains.
+
+A test asserting each registered blueprint prefix appears in the service worker's
+`authRoutes` would have caught it, and would catch the next prefix rename. The
+string is duplicated between Python and JavaScript with nothing tying them
+together.
+
+**17. Grafana proxy returns 502: HTML is blocked by design (correctness, caused by today's nginx decision)**
+
+Sysadmin login succeeded and redirected to `/sysadmin/grafana`; the proxy ran,
+reached Grafana, and refused its response:
+
+    WARNING in system_admin: Blocked proxied Grafana response with potentially
+    unsafe content type: text/html; charset=utf-8 for path:
+    "GET /sysadmin/grafana HTTP/1.0" 502 124
+
+`grafana_proxy` streams only an allowlist of MIME prefixes
+(`app/routes/system_admin.py:1153`): `image/`, `text/plain`, `text/css`,
+`application/json`, JavaScript, `application/octet-stream`, `application/pdf`,
+`text/csv`. The comment above it is explicit — "Everything else (including
+HTML/XML or missing/unknown types) is blocked."
+
+Grafana is a web UI. Its entry point is HTML. **This route can serve Grafana's
+stylesheets, scripts, JSON APIs and images, but never the document that loads
+them**, so the dashboard cannot render through it at any path. Nothing is
+misconfigured in Grafana: `grafana-server` is active on `127.0.0.1:3000`, it
+answered, and the proxy discarded the answer.
+
+**Root cause is this deployment's nginx decision, and the reasoning behind it was
+wrong.** The site config written today (`/etc/nginx/sites-available/classroom`,
+header comment) states:
+
+> Grafana is NOT proxied here: v2 serves it through the Flask route
+> sysadmin.grafana_proxy ... The v1 config sent /sysadmin/grafana/ straight to
+> :3000 behind an nginx auth_request; porting that forward would bypass v2's own
+> authorization entirely, because the Flask route would never execute.
+
+The premise is false. The nginx `auth_request` pattern does not bypass Flask — it
+**delegates to** Flask. `grafana_auth_check` (`system_admin.py:1013`) resolves
+canonical context, requires a `BoundaryContext` with `actor_role == 'sysadmin'`,
+enforces the sysadmin session timeout, and returns `X-Auth-User` for Grafana's
+auth-proxy login. Its docstring states its purpose outright: "Auth check endpoint
+for nginx auth_request." Authorization remains Flask's decision in both designs;
+only the byte-streaming differs. Omitting the nginx block did not harden
+anything — it stranded `grafana_auth_check` as dead code and sent traffic down a
+path that cannot serve HTML.
+
+The archived v1 runbook
+(`docs/archive/v1-docs/.../SOP-DEP-008_Grafana_Fix_Guide.md`) documents both
+options and names nginx "Recommended for Production", describing the Flask proxy
+as a "reliable fallback" — a characterisation the content-type allowlist
+contradicts for any UI traffic.
+
+**Resolution — restore the nginx location block.** It is the documented path, it
+keeps authorization in Flask, and it revives an endpoint that currently serves no
+purpose. The v1 block (adjusting the auth_request path to the v2 route) is:
+
+    location /sysadmin/grafana/ {
+        auth_request /sysadmin/grafana/auth-check;
+        auth_request_set $auth_user $upstream_http_x_auth_user;
+        error_page 401 = @grafana_login_redirect;
+        proxy_pass http://127.0.0.1:3000;   # no trailing slash: preserves path
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-WEBAUTH-USER $auth_user;
+        proxy_set_header X-WEBAUTH-ROLE Admin;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+Adding `text/html` to the Flask allowlist is the alternative and is **not**
+recommended: that allowlist is deliberate containment against serving arbitrary
+proxied markup from the application's own origin, and widening it for a UI is a
+larger security change than restoring the documented integration.
+
+Note the block is keyed on `/sysadmin/grafana/` **with** a trailing slash, which
+interacts with finding 15 — the bare `/sysadmin/grafana` would continue to fall
+through to Flask. Both forms need to resolve to the same place.
+
+**18. Tempo has been crash-looping for ~20 days; tracing is silently dead (operational)**
+
+`systemctl is-active tempo` reports `activating (auto-restart)`, never `active`.
+The restart counter reads **570,097** — at roughly one restart per three seconds
+that is about **20 days of continuous failure**.
+
+    failed parsing config: /etc/tempo/config.yml: yaml: unmarshal errors:
+      line 16: field ingester not found in type app.Config
+      line 19: field compactor not found in type app.Config
+      line 26: field traces_storage not found in type generator.Config
+      line 29: field local_blocks not found in type generator.ProcessorConfig
+
+The installed binary is **Tempo 3.0.2**; the config is in Tempo 2.x format, where
+`ingester`, `compactor`, `metrics_generator.traces_storage` and
+`processor.local_blocks` were top-level or differently nested. Tempo 3.0
+restructured them. This is an unattended major-version upgrade whose config was
+never migrated — consistent with the operator's account that the host was left
+untouched apart from security patching.
+
+**Consequences:**
+
+1. Nothing listens on `:3200` (Tempo API) or `:4318`/`:4317` (OTLP receivers) —
+   confirmed by `ss -ltn`.
+2. The application has `OTEL_TRACES_ENABLED=true` with
+   `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://127.0.0.1:4318/v1/traces`, so every
+   span is exported to a closed port.
+3. Grafana's `tempo` datasource cannot resolve; any trace panel is dead.
+4. systemd has been spawning and reaping a failing process twice a second for
+   three weeks.
+
+**No traces were lost, and the 20 days is not a data-loss window.** The
+application was shut down when v1 closed and only started serving today, so there
+was no traffic to trace for the whole of that period. The restart counter
+measures how long the misconfiguration has sat unnoticed, not an outage of a
+working feature. Recorded that way because the raw number invites the opposite
+reading.
+
+**The finding that matters is forward-looking, and it is the silence.**
+Application logs contain **zero** OTEL or connection-refused entries over a
+30-minute sample taken while the app was live and serving the §XI test traffic:
+the OTLP exporter retries and drops spans without surfacing anything. Traces are
+being dropped *now*, with real traffic, and nothing says so. Had the app been
+running for those three weeks, the same silence would have hidden it the whole
+time — which is the property worth fixing, independent of how much was actually
+lost.
+
+Compare `/health/status`, which explicitly refuses to report an unmonitored
+surface as healthy (§X.5). The same principle is not held here: a trace exporter
+pointed at a dead collector should be loud, or the flag should be off.
+
+**Rest of the stack is healthy:** `prometheus` (:9090), `loki` (:3100),
+`promtail`, `prometheus-node-exporter` (:9100) and `grafana-server` are all
+active. Only Tempo is down. `alloy` and `node-exporter` are inactive, which
+appears intentional — `prometheus-node-exporter` is the one serving :9100.
+
+Fix is to migrate `/etc/tempo/config.yml` to the 3.x schema, or pin Tempo to 2.x,
+or disable `OTEL_TRACES_ENABLED` until the collector is restored. Leaving the
+flag on against a dead endpoint is the one option to avoid, because it looks like
+tracing works.
+
+**19. Surviving v1 Grafana dashboards query labels v2 does not emit — and render as zeros (correctness, monitoring)**
+
+Four dashboards survived from v1: *Economy Health*, *Errors and Log Monitoring*,
+*Production Health*, *Node Exporter Full*. Their queries were compared against
+the labels Loki actually holds.
+
+Loki is **healthy** and ingesting: `service="classroom-economy"` from
+`/var/log/classroom-economy/app.log`, 270 error-level lines in the sampled hour.
+Available labels are `detected_level`, `filename`, `host`, `job`, `method`,
+`service`, `service_name`, `status`, `unit`. `job` values are
+`classroom_economy_app`, `nginx_access`, `nginx_error`, `systemd-journal`.
+
+| Dashboard query | Reality |
+|---|---|
+| `logger="app.services.invariant_runner"`, `message="invariant_check*"` | `app/services/invariant_runner.py` does not exist in v2, and no code emits those messages |
+| `unit="gunicorn.service"` | the unit is `classroom-economy.service`; `gunicorn.service` is not among Loki's `unit` values |
+| `level=~"WARNING\|ERROR\|CRITICAL..."` | there is no `level` label; the label is `detected_level` and `/label/level/values` returns empty |
+| `job="nginx"` | no such job; the values are `nginx_access` and `nginx_error` |
+
+Resulting panel status:
+
+- **Economy Health — 0 of 9 panels functional.** Every panel targets the v1
+  invariant-runner log stream.
+- **Errors and Log Monitoring — 1 of 4.** Only `sum by (job) (count_over_time({job=~".+"}[5m]))`
+  resolves; the other three use `level` and/or `unit="gunicorn.service"`.
+- **Production Health — node metrics work** (`prometheus-node-exporter` is
+  active on :9100), **both 5xx panels are dead** (`job="nginx"`).
+- *Node Exporter Full* is stock and unaffected.
+
+**The failure mode is the dangerous one: they render zeros, not errors.** A Loki
+stream selector that matches nothing returns an empty result, which these panels
+display as `0`. "Total Invariant Failures: **0**" is indistinguishable from a
+healthy economy, and "5xx errors: **0**" from a healthy edge. An operator reading
+these would conclude the system is quiet when the truth is that nothing is being
+measured.
+
+This is the third instance in this record of the same principle — `/health/status`
+refuses to report an unmonitored surface as healthy (§X.5); the teacher dashboard
+does not (finding 4); these dashboards do not either. The codebase holds the rule
+in one place and not the others.
+
+`gunicorn.service` is the same stale unit name already noted in
+`toggle-maintenance.yml`, which restarts a unit that does not exist. Two
+independent artifacts carry the pre-rename name.
+
+**Setting these up is a rewrite, not a repair**, for Economy Health at least: the
+v2 equivalent of the invariant-runner stream has to be identified (or the
+emission added) before the panels have anything to point at. The label fixes for
+the other two are mechanical — `unit`, `detected_level`, `nginx_access|nginx_error`.
+
+**20. The lawful hall-pass path required no credential at all (correctness, security)** — FIXED
+
+Found while auditing every credential call site against the normative matrix for
+finding 12, not from the browser.
+
+`/api/hall-pass/request` (`app/routes/api.py`) — the Break-flow path, and after
+finding 13 the *only* way to exercise a pass — enforced the two preconditions the
+Store path lacked (`get_hall_pass_balance(...) <= 0`, and the latest attendance
+event being `active`, refusing with "Start work before requesting a hall pass"),
+but verified **no credential whatsoever**. FEAT-IDEN-002's credential boundary is
+explicit that this is the one action assigned to the PIN: "Hall-pass use is the
+explicit exception to the entitlement rule and uses the PIN."
+
+Consequence: anyone holding a student's session — an unattended classroom
+machine being the obvious case, and the reason the 10-minute student session
+timeout exists — could spend a pass off that seat's balance and put the student
+on the attendance timeline as out of the room. No credential, no prompt.
+
+The front end matched: `requestHallPass()` in `static/js/attendance.js` posted
+only a destination, while its immediate neighbour in the same modal ("done for
+the day") prompted for a PIN before calling `performTap`.
+
+**Full audit result, for the record.** Every other call site already matched the
+matrix: store purchase and insurance purchase/cancel take the passphrase
+(`api.py`, `student.py`), attendance tap and checking↔savings transfer take the
+PIN. The matrix had one violation in the server and one in the UI, and both were
+on hall passes — the one row of the table that is an exception to its own rule,
+which is exactly the row an implementer is most likely to get wrong.
+
+### Status page — context and launch decisions
+
+**CORRECTION (2026-09-19).** An earlier revision of this section stated that
+"the status service is a notice board, not a health poller", that it does not
+read `/health/status`, and that nothing from Grafana is needed "by design". **All
+three claims were wrong**, and are retained here only as the error they were.
+They were reached by reading one implementation path — the Firestore notice reads
+in `status_service/app.py` — and generalising it into the design. The design
+lives in `status/projection.py` and `status/contracts.py`, which say something
+different. Corrected account follows.
+
+**The status contract has four evidence sources, not one.**
+`status/projection.py:35` defines:
+
+    class EvidenceSource(str, Enum):
+        INVARIANT_VERIFIER  = "INVARIANT_VERIFIER"
+        GRAFANA_TELEMETRY   = "GRAFANA_TELEMETRY"
+        EXTERNAL_PROBE      = "EXTERNAL_PROBE"
+        DOM_OPS_PUBLICATION = "DOM_OPS_PUBLICATION"
+
+Operator-written notices are `DOM_OPS_PUBLICATION` — one source of four. Health
+probing and Grafana telemetry are first-class members of the same contract.
+
+**The application publishes a health endpoint built for exactly this.**
+`app/routes/main.py:76` — `/health/status` — states its purpose in its first
+line: "Return bounded capability and platform signals for status publication." It
+emits `{key, layer, outcome, epistemic_state, diagnostic_code}` per signal, which
+is the `Observation` shape, and its capability keys (`login`, `attendance`,
+`payroll`, `roster`, `classroom_economy`) are exactly the keys in
+`CAPABILITY_LABELS` (`status/projection.py:42`). The two vocabularies were
+designed against each other. That is the `EXTERNAL_PROBE` source.
+
+Today it executes exactly one real check — `SELECT 1`, reported as the `database`
+platform signal. Every other signal returns UNKNOWN/UNAVAILABLE with
+`CHECK_NOT_REGISTERED`, and the docstring is emphatic that this "is the contract,
+not a gap: a capability reports UNKNOWN until a lawful read-only probe is
+registered for it, so the endpoint can never imply health it has not observed
+(INV-ARC-017)."
+
+**Grafana already has a translation seam.** `status/telemetry.py` exists solely
+to convert a bounded telemetry result into an observation, and its module
+docstring says: "Grafana and Prometheus are evidence sources; this module only
+translates an already bounded, approved result into the status observation
+contract." `TelemetryResult.healthy` is deliberately tri-state — `None` means the
+source could not establish a state "and must not be treated as healthy". It is
+covered by `tests/test_status_telemetry.py`.
+
+**What is actually missing is the transport layer.** `status/telemetry.py` says
+the "transport/query layer is deliberately outside this module", and no module
+implements it: nothing fetches `/health/status`, nothing queries Grafana, and
+`public_status()` currently projects capability cards and platform checks from
+notices alone. So the seams are specified, contracted and unit-tested, but
+unwired — which is a very different statement from "not needed by design", and
+the distinction is the whole point of this correction.
+
+The operator's proposal — have Grafana emit a signal on specific log keywords —
+lands precisely on the built seam: a Loki/Grafana alert becomes a
+`TelemetryResult`, which `to_observation()` converts to a `GRAFANA_TELEMETRY`
+observation. Note this depends on finding 19: the surviving dashboards query
+labels v2 does not emit, so keyword rules must be written against the real label
+set (`detected_level`, `unit="classroom-economy.service"`,
+`job=nginx_access|nginx_error`), not the v1 ones.
+
+**Ordering: probes before transport.** A first draft of this section called the
+transport layer the step that "unblocks everything". It is not. Building
+transport while no probe is registered would carry UNKNOWN from the endpoint to
+the page and change nothing a visitor could see — the reason would move from
+"nothing is wired" to "nothing is measured" with identical output. Registering
+real read-only probes is what makes the page say anything; transport is
+necessary but produces no observable change on its own. The single exception is
+`database`, the one signal with a real check behind it (`SELECT 1`, live: PASS /
+KNOWN / `DATABASE_REACHABLE`), which is also one of the three default
+`STATUS_PLATFORM_CHECKS`.
+
+**A capability the app cannot answer about itself.** `STATUS_CAPABILITIES`
+defaults to `public_service_reachability`, and `/health/status` never emits that
+key — it emits `login`, `attendance`, `payroll`, `roster`, `classroom_economy`.
+So the one capability card the public page shows by default has no corresponding
+signal in the endpoint, and wiring transport would not fill it even in
+principle.
+
+That is coherent rather than broken. `public_service_reachability` asks "Can I
+access Classroom Token Hub right now?", and an application cannot truthfully
+answer that about itself: when it is down it is not answering at all. The signal
+is only obtainable outside-in, which is what `EXTERNAL_PROBE` denotes and why
+finding 8's `STATUS_PAGE_URL` allowlist is UptimeRobot-shaped. The evidence
+sources divide by what each can honestly know:
+
+| Signal | Source | Why that source |
+|---|---|---|
+| `public_service_reachability` | external prober | self-reported reachability is incoherent |
+| `login`, `payroll`, `roster`, `attendance`, `classroom_economy` | app `/health/status` | only the application can exercise them |
+| `ledger_correctness` | `INVARIANT_VERIFIER` | requires invariant evaluation, not liveness |
+| keyword / rate signals | `GRAFANA_TELEMETRY` | log and metric evidence |
+
+The work is therefore not "wire up the status page" but four independent evidence
+feeds, each answering a question only it can answer, with the page reporting
+UNKNOWN for anything not yet fed.
+
+**Remaining true from the original account:** nothing in the main application
+writes notices, so an outage produces no operator notice on its own. And
+`derive_overall_status` deliberately reports UNKNOWN rather than healthy when
+there is no active notice — "In the absence of a fresh observation source, no
+active notice is deliberately reported as unknown rather than healthy" — which is
+the same INV-ARC-017 discipline, correctly held here.
+
+**Access gating — deliberate, revisit at launch.** `status.classroomtokenhub.com`
+sits behind Cloudflare Access like the app and operator hostnames, returning 302
+to the Access login for unauthenticated visitors. Service-to-service access
+(Cloud Run to Firestore, automated checks) is handled by service credentials and
+is unaffected.
+
+The open question is human visitors during an outage: a teacher whose class
+cannot sign in would also be unable to reach the status page, and if the outage
+is auth-related that is the one door they most need. **Operator decision
+2026-09-19: keep it gated for now** — pre-launch there is no user base it would
+serve, and an openly reachable status page for a product nobody can yet sign up
+for would cause confusion rather than resolve it. Revisit when the service opens
+to real classes.
+
+### Investigated, not a defect
+
+`GET /favicon.ico` → 404 on every page load. The favicon is *not* missing:
+`base.html` and all three layouts declare
+`<link rel="icon" type="image/png" sizes="192x192">` pointing at
+`static/images/icon-192.png`, which exists, and git history shows no favicon was
+ever deleted. The 404 is the browser's unconditional root-level probe, which is
+normal for sites serving a PNG icon. Recorded because it was initially raised as
+a finding and should not be re-raised.
+
+`Transaction.type` carries an inconsistent casing vocabulary. Writers emit
+lowercase `payroll`, `purchase`, `overdraft_fee`, `manual_payment`, but
+capitalised `Withdrawal` / `Deposit` (`app/services/ledger_transfer_service.py:65`
+and `:71`) and `Interest` (`app/services/ledger_interest_service.py:94`). The
+column is a bare nullable `db.String(50)` commented "optional field to describe
+the transaction type"; nothing constrains its values.
+
+The field *is* used as a filter key in exact-match comparisons
+(`app/payroll.py:258`, `app/feats/ledger_resolution_feat.py:202`,
+`app/feats/collective_goal_expiry_feat.py:114`) and in the admin transaction
+filter (`app/routes/admin.py:8354`).
+
+**Nothing is broken.** Every exact-match filter targets one of the lowercase
+values, and those are written lowercase. Templates render through `|title`, so
+display is normalised regardless. The admin filter populates its dropdown from
+`SELECT DISTINCT type`, so it offers whatever actually exists.
+
+Recorded as a latent hazard rather than work: a free-text vocabulary used as a
+filter key will eventually be filtered on with the wrong casing. The risk is
+bounded because `INV-ITR-015` already forbids Interpretation from consulting this
+column at all — the codebase has effectively ruled the field untrustworthy for
+semantics. Should it ever need to carry meaning, it needs a closed vocabulary
+first.
 
 ## §XIV — Decision and Rollback
 
