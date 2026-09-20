@@ -481,11 +481,14 @@ class TestPayrollAdvancesByLocalCalendarDays:
         """Spring forward skips 02:00-03:00, so 02:30 never happens that day.
 
         The run must still fall on the intended local date rather than being
-        pushed back a day or raising.
+        pushed back a day or raising. The time shifts forward by the length of
+        the gap — 02:30 becomes 03:30, not 03:00: 03:00 is the first instant
+        that exists, but landing there would pull the run earlier within the
+        day than the teacher configured.
         """
         got = self._advance(app, datetime(2027, 2, 28, 2, 30))
         assert got.date() == date(2027, 3, 14)
-        assert got.hour == 3  # first instant after the gap
+        assert (got.hour, got.minute) == (3, 30)
 
     def test_an_ambiguous_target_time_takes_the_first_occurrence(self, app):
         """Fall back repeats 01:00-02:00, so 01:30 happens twice.

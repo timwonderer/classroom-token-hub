@@ -389,8 +389,10 @@ def _advance_local_calendar_days(occurrence_utc, days: int, ctx):
     * **Ambiguous** (fall back — the clock reads 01:30 twice): take the first,
       still-DST occurrence. The run stays on the intended date and the interval
       never silently lengthens.
-    * **Nonexistent** (spring forward — 02:30 never happens): take the first
-      instant after the gap. Again the local date is what must be preserved.
+    * **Nonexistent** (spring forward — 02:30 never happens): shift forward by
+      the length of the gap, so 02:30 becomes 03:30 rather than 03:00. Again
+      the local date is what must be preserved; the offset within the day is
+      the smallest change that lands on a time which exists.
 
     The local time of day is preserved rather than normalised to midnight
     because `next_payroll_date` falls back to `created_at` for classes that
@@ -426,6 +428,11 @@ def _advance_local_calendar_days(occurrence_utc, days: int, ctx):
     except pytz.exceptions.AmbiguousTimeError:
         target_local = tz.localize(target_naive, is_dst=True)
     except pytz.exceptions.NonExistentTimeError:
+        # localize(..., is_dst=False) reads the wall clock against the pre-gap
+        # offset; normalize then re-expresses that instant in the post-gap
+        # offset, which advances the local clock by exactly the gap. 02:30
+        # becomes 03:30 — not 03:00, which is the first *existing* instant and
+        # would silently pull every later run earlier within the day.
         target_local = tz.normalize(tz.localize(target_naive, is_dst=False))
 
     return target_local.astimezone(_timezone.utc)
