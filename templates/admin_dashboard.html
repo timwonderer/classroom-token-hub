@@ -133,7 +133,12 @@
                     </div>
                     <span class="fw-medium text-muted">Next Payroll</span>
                 </div>
-                <div class="fw-bold h5 mb-1 text-dark">{{ next_payroll_date|fmt_compact_date }}</div>
+                {# None means no payroll schedule is configured for this class.
+                   Rendering a date anyway — which this card used to do, invented
+                   from "the next Friday" — states a run that will never happen. #}
+                <div class="fw-bold h5 mb-1 text-dark">
+                    {% if next_payroll_date %}{{ next_payroll_date|fmt_compact_date }}{% else %}Not scheduled{% endif %}
+                </div>
                 <div class="small text-muted">
                     Est: ${{ "{:,.0f}".format(total_payroll_estimate) }}
                     {% if payroll_updated_at %}

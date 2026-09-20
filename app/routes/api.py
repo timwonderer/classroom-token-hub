@@ -273,6 +273,41 @@ def get_tips(user_type):
 
 # -------------------- STORE API --------------------
 
+# Student-facing copy for each way a purchase can be refused, keyed by the
+# FEAT's `error_code`. The FEAT's own `error_message` is a developer diagnostic
+# and must not reach a student: it names internal domain boundaries and can
+# carry a raw reason code. Answering the two questions a student actually has —
+# what went wrong, and what they can do — is a presentation concern, so it is
+# decided here rather than in the domain that raised it.
+_PURCHASE_ERROR_COPY = {
+    "INSUFFICIENT_FUNDS": "You do not have enough in checking to buy this right now.",
+    "HOLDING_LIMIT_EXCEEDED": "You already have as many of these as you are allowed to hold.",
+    "RENT_PAST_DUE_PURCHASE_BLOCKED": "Rent is overdue, so this item cannot be bought until it is paid.",
+    "COLLECTIVE_GOAL_EXPIRED": "This class goal has closed, so it can no longer be bought into.",
+    "QUANTITY_NOT_ALLOWED": "That quantity is not available for this item.",
+    "PRODUCT_NOT_PURCHASABLE": "This item is not on sale right now.",
+    "DIRECT_PURCHASE_NOT_ALLOWED": "This item cannot be bought directly — your teacher grants it.",
+    "PRICE_NOT_CONFIGURED": "This item has no price set yet, so it cannot be bought.",
+    "INSURANCE_NOT_PURCHASABLE_VIA_STORE": "Insurance is bought from the Insurance page, not the Store.",
+    "POLICY_NOT_FOUND": "This item is no longer available.",
+    "POLICY_INVALID": "This item is not available right now.",
+    "POLICY_SCOPE_MISMATCH": "This item belongs to a different class.",
+    "INVALID_CONTEXT": "Your class session could not be confirmed. Sign in again and retry.",
+}
+
+_PURCHASE_ERROR_FALLBACK = "The purchase could not be completed. Nothing was charged."
+
+
+def _student_purchase_error(error_code):
+    """Student-readable sentence for a purchase refusal.
+
+    An unmapped code falls back rather than leaking the code itself: a student
+    can do nothing with `POLICY_SCOPE_MISMATCH`, and a new code added to the
+    FEAT should degrade to something harmless rather than to jargon.
+    """
+    return _PURCHASE_ERROR_COPY.get(error_code, _PURCHASE_ERROR_FALLBACK)
+
+
 @api_bp.route('/purchase-item', methods=['POST'])
 @login_required
 def purchase_item():
@@ -320,12 +355,25 @@ def purchase_item():
         canonical_context=context,
         policy_uuid=policy_uuid,
         quantity=quantity,
-        instant_use=False,  # TODO: Read from product policy
     )
 
     if not result.success:
-        error_msg = result.error_message or f"Purchase failed: {result.error_code}"
-        return jsonify({"status": "error", "message": error_msg}), 400
+        # `result.error_message` is a diagnostic written for developers and
+        # logs — it names internal domains ("Purchase denied by Ledger") and the
+        # ledger branch interpolates a raw reason code, or the literal string
+        # "unknown", straight into it. Rendering it put that in front of a
+        # child. `error_code` is the classification and is already correct on
+        # every branch, so the student-facing sentence is derived from it here,
+        # at the presentation boundary, and the diagnostic stays in the log.
+        current_app.logger.info(
+            "Store purchase refused: code=%s detail=%s",
+            result.error_code,
+            result.error_message,
+        )
+        return jsonify({
+            "status": "error",
+            "message": _student_purchase_error(result.error_code),
+        }), 400
 
     return jsonify({
         "status": "success",
@@ -355,7 +403,14 @@ def use_item():
     if not all([entitlement_id, passphrase]):
         return jsonify({"status": "error", "message": "Missing entitlement ID or passphrase."}), 400
 
-    # 1. Verify passphrase
+    # 1. Verify the passphrase.
+    #
+    # FEAT-IDEN-002 "Credential boundary" is normative and assigns "using an
+    # entitlement except hall passes" to the passphrase. Hall passes are the
+    # named exception and use the PIN, but they are not redeemable here at all:
+    # a hall pass is exercised from the attendance Break flow
+    # (`/api/hall-pass/request`), which is the only surface that knows whether
+    # the student is currently clocked in. See the hall-pass refusal below.
     if not verify_password(passphrase, user.passphrase_hash or ''):
         return jsonify({"status": "error", "message": "Incorrect passphrase."}), 403
 
@@ -396,22 +451,35 @@ def use_item():
         return jsonify({"status": "success", "message": f"You used {store_item.name}."})
 
     if store_item.item_type == 'hall_pass':
-        action_payload = {
-            "action": "REQUEST",
-            "item_type": store_item.item_type,
-            "product_id": store_item.product_lineage_uuid,
-            "policy_uuid": store_item.policy_uuid,
-            "details": details or None,
-            "destination": details or "Hall Pass",
-        }
-    else:
-        action_payload = {
-            "action": "REQUEST",
-            "item_type": store_item.item_type,
-            "product_id": store_item.product_lineage_uuid,
-            "policy_uuid": store_item.policy_uuid,
-            "details": details or None,
-        }
+        # A hall pass is not redeemed from the Store. Exercising one marks the
+        # student *out of an active work session* — DOM-PROD-001 records it on
+        # the attendance timeline as `reason_code = hall_pass` carrying the
+        # consumed entitlement's `hall_pass_id` — so outside a session there is
+        # nothing to be marked out of, and this route cannot know.
+        #
+        # `/api/hall-pass/request` is the lawful path: it refuses when the seat
+        # holds no pass and when the latest attendance event is not `active`,
+        # and it is reached from the dashboard Break flow, where the control is
+        # disabled until the student starts work. This branch previously built a
+        # second request with none of those preconditions, so a student who had
+        # never clocked in — or who had already finished for the day — could
+        # request a pass from the Store tab.
+        #
+        # Purchased passes still reach the student: FEAT-STOR-001 credits the
+        # hall-pass balance at sale, which the dashboard renders as passes
+        # remaining. Nothing is lost by refusing here.
+        return jsonify({
+            "status": "error",
+            "message": "Hall passes are used from the Break button on your dashboard, once you have started work.",
+        }), 400
+
+    action_payload = {
+        "action": "REQUEST",
+        "item_type": store_item.item_type,
+        "product_id": store_item.product_lineage_uuid,
+        "policy_uuid": store_item.policy_uuid,
+        "details": details or None,
+    }
 
     # PendingAction.correlation_id is unique, and the key below becomes that
     # correlation. A rejected request stays on file for the audit history while
@@ -569,6 +637,16 @@ def request_hall_pass():
     destination = (data.get("destination") or data.get("reason") or "Bathroom").strip()
     if not destination:
         return jsonify({"status": "error", "message": "Destination is required."}), 400
+
+    # FEAT-IDEN-002 "Credential boundary" is normative: hall-pass use is the
+    # explicit exception to the entitlement rule and takes the PIN. This route
+    # is the only lawful way to exercise a pass, and it previously took none —
+    # anyone with the session could spend a pass off the seat's balance and put
+    # the student on the attendance timeline as out of the room.
+    student_user = db.session.get(User, context.user_id)
+    pin = (data.get("pin") or "").strip()
+    if not student_user or not verify_password(pin, student_user.pin_hash or ''):
+        return jsonify({"status": "error", "message": "Incorrect PIN."}), 403
 
     if get_hall_pass_balance(student.id, context.class_id) <= 0:
         return jsonify({"status": "error", "message": "No hall passes available."}), 403

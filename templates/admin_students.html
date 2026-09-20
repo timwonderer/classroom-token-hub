@@ -352,11 +352,7 @@
                     <span class="d-flex align-items-center gap-2 text-start">
                       <span class="material-symbols-outlined align-middle" aria-hidden="true">pending</span>
                       <span>
-                        {% if roster.has_unclaimed_seats %}
-                        Unclaimed seats ({{ roster.unclaimed_count }})
-                        {% else %}
-                        Join code — all seats claimed
-                        {% endif %}
+                        {{ roster.unclaimed_panel_label }}
                       </span>
                     </span>
                     <span class="material-symbols-outlined align-middle" aria-hidden="true">unfold_more</span>

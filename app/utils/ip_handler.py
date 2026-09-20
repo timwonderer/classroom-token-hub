@@ -188,9 +188,18 @@ def validate_cloudflare_request():
     """
     # Check if request is coming from local proxy
     if request.remote_addr in ('127.0.0.1', 'localhost', '::1'):
-        # Behind local proxy - check the upstream proxy IP
-        # X-Real-IP is set by nginx and contains the immediate upstream IP
-        upstream_ip = request.headers.get('X-Real-IP')
+        # Behind local proxy - check the upstream proxy IP.
+        #
+        # X-CF-Edge-IP is preferred and is what nginx should send: with
+        # `real_ip_header CF-Connecting-IP` enabled, nginx rewrites $remote_addr
+        # to the *end client* before `proxy_set_header X-Real-IP $remote_addr`
+        # runs, so X-Real-IP carries the visitor's own address and never
+        # Cloudflare's edge. This check could therefore never succeed while
+        # real-ip rewriting was on — and rewriting is load-bearing, because
+        # CF-Connecting-IP based rate limiting depends on it. The two features
+        # wanted the same header for opposite purposes; nginx now supplies
+        # $realip_remote_addr (the pre-rewrite peer) separately.
+        upstream_ip = request.headers.get('X-CF-Edge-IP') or request.headers.get('X-Real-IP')
 
         if not upstream_ip:
             # Fallback to X-Forwarded-For (rightmost entry is the immediate proxy)
