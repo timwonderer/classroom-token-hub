@@ -55,7 +55,7 @@ jobs:
       - name: Run focused status tests
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/classroom_economy_v2_test
-        run: pytest -q tests/test_status_contracts.py tests/test_status_projection.py tests/test_status_telemetry.py tests/test_status_identity.py tests/test_status_collector.py tests/test_status_deploy_workflow.py
+        run: pytest -q tests/test_status_contracts.py tests/test_status_projection.py tests/test_status_telemetry.py tests/test_status_identity.py tests/test_status_collector.py tests/test_status_deploy_workflow.py tests/dom/operation/test_health.py
 
   deploy:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'

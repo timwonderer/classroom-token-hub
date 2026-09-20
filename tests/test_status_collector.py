@@ -33,6 +33,7 @@ def payload(*, database="PASS", timestamp=NOW):
             "outcome": database if measured else "UNKNOWN",
             "epistemic_state": "KNOWN" if measured and database == "PASS" else "UNAVAILABLE",
             "diagnostic_code": ("DATABASE_REACHABLE" if database == "PASS" else "DATABASE_UNAVAILABLE") if measured else "CHECK_NOT_REGISTERED",
+            "checked_at": timestamp.isoformat() if measured else None,
         })
     return json.dumps({"observed_at": timestamp.isoformat(), "signals": signals}).encode()
 
@@ -45,6 +46,8 @@ def test_collector_records_all_signals_with_one_correlation_and_no_raw_body():
     assert next(record for record in records if record.capability == "database").outcome == Outcome.PASS
     assert next(record for record in records if record.capability == "login").outcome == Outcome.UNKNOWN
     assert next(record for record in records if record.capability == "public_service_reachability").outcome == Outcome.PASS
+    assert next(record for record in records if record.capability == "public_service_reachability").source == EvidenceSource.EXTERNAL_PROBE
+    assert next(record for record in records if record.capability == "database").source == EvidenceSource.APPLICATION_RUNTIME_EVIDENCE
     assert all("secret" not in repr(record) for record in records)
     assert all(record.observed_at == NOW for record in records)
 
@@ -126,6 +129,50 @@ def test_diagnostic_cannot_claim_pass_for_unregistered_check():
     records = collect(store, client_id="id", client_secret="secret", now=NOW,
                       fetch=lambda *_: json.dumps(malformed).encode())
     assert all(record.outcome == Outcome.UNKNOWN for record in records[1:])
+
+
+def test_unimplemented_feature_diagnostic_is_not_accepted():
+    body = json.loads(payload())
+    login = next(signal for signal in body["signals"] if signal["key"] == "login")
+    login.update(outcome="PASS", epistemic_state="KNOWN",
+                 diagnostic_code="FEATURE_INTEGRITY_PASS", checked_at=NOW.isoformat())
+    records = collect(RecordingStore(), client_id="id", client_secret="secret", now=NOW,
+                      fetch=lambda *_: json.dumps(body).encode())
+    assert next(record for record in records if record.capability == "login").outcome == Outcome.UNKNOWN
+    assert next(record for record in records if record.capability == "public_service_reachability").outcome == Outcome.PASS
+
+
+def test_measured_app_result_preserves_check_time_and_origin():
+    checked_at = NOW - timedelta(minutes=2)
+    body = json.loads(payload())
+    database = next(signal for signal in body["signals"] if signal["key"] == "database")
+    database["checked_at"] = checked_at.isoformat()
+    records = collect(RecordingStore(), client_id="id", client_secret="secret", now=NOW,
+                      fetch=lambda *_: json.dumps(body).encode())
+    result = next(record for record in records if record.capability == "database")
+    assert (result.outcome, result.source, result.observed_at, result.checked_at) == (
+        Outcome.PASS, EvidenceSource.APPLICATION_RUNTIME_EVIDENCE, NOW, checked_at)
+    assert next(record for record in records if record.capability == "public_service_reachability").observed_at == NOW
+
+
+def test_stale_app_check_does_not_become_fresh_at_collection():
+    body = json.loads(payload())
+    database = next(signal for signal in body["signals"] if signal["key"] == "database")
+    database["checked_at"] = (NOW - timedelta(minutes=6)).isoformat()
+    records = collect(RecordingStore(), client_id="id", client_secret="secret", now=NOW,
+                      fetch=lambda *_: json.dumps(body).encode())
+    assert next(record for record in records if record.capability == "login").outcome == Outcome.UNKNOWN
+    assert next(record for record in records if record.capability == "database").outcome == Outcome.UNKNOWN
+    assert next(record for record in records if record.capability == "public_service_reachability").outcome == Outcome.PASS
+
+
+def test_conclusive_app_observation_requires_original_check_time():
+    record = ExternalObservationRecord(
+        "missing-time", NOW, "corr", EvidenceSource.APPLICATION_RUNTIME_EVIDENCE,
+        "payroll", ObservationClass.READINESS, Outcome.PASS, EpistemicState.KNOWN,
+        "FEATURE_INTEGRITY_PASS", None, "v2")
+    with pytest.raises(ValueError, match="check time"):
+        record.validate()
 
 
 def test_network_os_error_is_unavailable():
@@ -212,3 +259,16 @@ def test_store_keeps_newest_current_and_append_only_history(monkeypatch):
     store.append_observations([tie_pass])
     store.append_observations([newer])
     assert client.data["external_status_current"]["login"]["observation_id"] == "newer"
+    transport_gap = ExternalObservationRecord(
+        "transport-gap", NOW.replace(minute=32), "corr", EvidenceSource.EXTERNAL_PROBE,
+        "login", ObservationClass.READINESS, Outcome.UNKNOWN, EpistemicState.UNAVAILABLE,
+        "PROBE_UNAVAILABLE", None, "v2")
+    recovered = ExternalObservationRecord(
+        "recovered", NOW.replace(minute=33), "corr", EvidenceSource.APPLICATION_RUNTIME_EVIDENCE,
+        "login", ObservationClass.READINESS, Outcome.PASS, EpistemicState.KNOWN,
+        "FEATURE_INTEGRITY_PASS", None, "v2", checked_at=NOW.replace(minute=31))
+    store.append_observations([transport_gap])
+    store.append_observations([recovered])
+    current = client.data["external_status_current"]["login"]
+    assert (current["observation_id"], current["observed_at"], current["checked_at"]) == (
+        "recovered", NOW.replace(minute=33), NOW.replace(minute=31))

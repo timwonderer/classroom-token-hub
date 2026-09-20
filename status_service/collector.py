@@ -16,7 +16,7 @@ from .store import FirestoreNoticeStore
 
 
 APP_HEALTH_URL = "https://app.classroomtokenhub.com/health/status"
-PROBE_VERSION = "app-health-v1"
+PROBE_VERSION = "app-health-v2"
 SIGNALS = {
     "login": ("capability", ObservationClass.READINESS),
     "attendance": ("capability", ObservationClass.READINESS),
@@ -58,7 +58,7 @@ def fetch_app_health(client_id: str, client_secret: str) -> bytes:
     return body
 
 
-def _signal_map(body: bytes, now: datetime) -> dict[str, tuple[Outcome, EpistemicState, str]]:
+def _signal_map(body: bytes, now: datetime) -> dict[str, tuple[Outcome, EpistemicState, str, datetime | None]]:
     payload = json.loads(body)
     if not isinstance(payload, dict) or set(payload) != {"observed_at", "signals"}:
         raise ValueError("Unexpected health payload")
@@ -71,7 +71,7 @@ def _signal_map(body: bytes, now: datetime) -> dict[str, tuple[Outcome, Epistemi
         raise ValueError("Incomplete health signal set")
     mapped = {}
     for signal in payload["signals"]:
-        if not isinstance(signal, dict) or set(signal) != {"key", "layer", "outcome", "epistemic_state", "diagnostic_code"}:
+        if not isinstance(signal, dict) or set(signal) != {"key", "layer", "outcome", "epistemic_state", "diagnostic_code", "checked_at"}:
             raise ValueError("Unexpected health signal shape")
         key = signal["key"]
         if key not in SIGNALS or key in mapped or signal["layer"] != SIGNALS[key][0]:
@@ -85,7 +85,22 @@ def _signal_map(body: bytes, now: datetime) -> dict[str, tuple[Outcome, Epistemi
             raise ValueError("Invalid health signal state")
         if (key == "database") != diagnostic.startswith("DATABASE_"):
             raise ValueError("Diagnostic does not match health signal")
-        mapped[key] = (outcome, epistemic, diagnostic)
+        checked_at_value = signal["checked_at"]
+        if checked_at_value is None:
+            if diagnostic != "CHECK_NOT_REGISTERED":
+                raise ValueError("Registered check requires checked_at")
+            checked_at = None
+        else:
+            if not isinstance(checked_at_value, str):
+                raise ValueError("Invalid checked_at")
+            if diagnostic == "CHECK_NOT_REGISTERED":
+                raise ValueError("Unregistered check cannot claim a check time")
+            checked_at = datetime.fromisoformat(checked_at_value)
+            if checked_at.tzinfo is None or observed_at - checked_at < -timedelta(seconds=5):
+                raise ValueError("Invalid or future checked_at")
+            if observed_at - checked_at > timedelta(minutes=5):
+                raise ValueError("Stale checked_at")
+        mapped[key] = (outcome, epistemic, diagnostic, checked_at)
     return mapped
 
 
@@ -93,13 +108,15 @@ def collect(store: FirestoreNoticeStore, *, client_id: str, client_secret: str, 
     observed_at = now or datetime.now(timezone.utc)
     correlation_id = f"corr-{uuid4().hex}"
     reachability = (Outcome.UNKNOWN, EpistemicState.UNAVAILABLE, "PROBE_UNAVAILABLE")
-    signals = {key: (Outcome.UNKNOWN, EpistemicState.UNAVAILABLE, "PROBE_UNAVAILABLE") for key in SIGNALS}
+    signals = {key: (Outcome.UNKNOWN, EpistemicState.UNAVAILABLE, "PROBE_UNAVAILABLE", None) for key in SIGNALS}
+    app_evidence_received = False
     try:
         body = fetch(client_id, client_secret)
         observed_at = now if now is not None else datetime.now(timezone.utc)
         reachability = (Outcome.PASS, EpistemicState.KNOWN, "HTTP_OK")
         # Use the same receipt time for validation and persisted freshness.
         signals = _signal_map(body, observed_at)
+        app_evidence_received = True
     except HTTPError as exc:
         # Access denial is a monitor-credential problem, not evidence of app failure.
         if exc.code not in (301, 302, 303, 307, 308, 401, 403):
@@ -109,16 +126,19 @@ def collect(store: FirestoreNoticeStore, *, client_id: str, client_secret: str, 
     except (ValueError, TypeError, KeyError):
         # A reachable but unusable payload establishes liveness only.
         pass
-    states = {"public_service_reachability": (ObservationClass.LIVENESS, reachability)}
-    states.update({key: (kind, signals[key]) for key, (_, kind) in SIGNALS.items()})
     records = []
-    for key, (kind, (outcome, epistemic, diagnostic)) in states.items():
+    states = [("public_service_reachability", ObservationClass.LIVENESS, (*reachability, None))]
+    states.extend((key, kind, signals[key]) for key, (_, kind) in SIGNALS.items())
+    for key, kind, (outcome, epistemic, diagnostic, checked_at) in states:
         record = ExternalObservationRecord(
             observation_id=f"obs-{uuid4().hex}", observed_at=observed_at,
-            correlation_id=correlation_id, source=EvidenceSource.EXTERNAL_PROBE,
+            correlation_id=correlation_id,
+            source=(EvidenceSource.APPLICATION_RUNTIME_EVIDENCE
+                    if key != "public_service_reachability" and app_evidence_received
+                    else EvidenceSource.EXTERNAL_PROBE),
             capability=key, observation_class=kind, outcome=outcome,
             epistemic_state=epistemic, diagnostic_code=diagnostic,
-            latency_ms=None, probe_version=PROBE_VERSION,
+            latency_ms=None, probe_version=PROBE_VERSION, checked_at=checked_at,
         )
         record.validate()
         records.append(record)

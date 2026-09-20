@@ -35,6 +35,7 @@ class ExternalObservationRecord:
     diagnostic_code: str
     latency_ms: int | None
     probe_version: str
+    checked_at: datetime | None = None
 
     def validate(self) -> None:
         if not self.observation_id or not self.correlation_id or not self.source or not self.capability:
@@ -45,6 +46,10 @@ class ExternalObservationRecord:
             raise ValueError("Observation latency is outside the bounded range.")
         if not self.probe_version or len(self.probe_version) > 32:
             raise ValueError("Observation probe_version must be bounded.")
+        if self.checked_at is not None and self.checked_at.tzinfo is None:
+            raise ValueError("Observation checked_at must be timezone-aware.")
+        if self.source == EvidenceSource.APPLICATION_RUNTIME_EVIDENCE and self.outcome in {Outcome.PASS, Outcome.FAIL} and self.checked_at is None:
+            raise ValueError("Conclusive app evidence requires its original check time.")
         if (self.outcome, self.epistemic_state) not in {
             (Outcome.PASS, EpistemicState.KNOWN),
             (Outcome.FAIL, EpistemicState.KNOWN),

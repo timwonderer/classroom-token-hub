@@ -36,6 +36,7 @@ class EvidenceSource(str, Enum):
     INVARIANT_VERIFIER = "INVARIANT_VERIFIER"
     GRAFANA_TELEMETRY = "GRAFANA_TELEMETRY"
     EXTERNAL_PROBE = "EXTERNAL_PROBE"
+    APPLICATION_RUNTIME_EVIDENCE = "APPLICATION_RUNTIME_EVIDENCE"
     DOM_OPS_PUBLICATION = "DOM_OPS_PUBLICATION"
 
 
@@ -67,13 +68,18 @@ def _active_notice_index(notices: list[dict]) -> dict:
 
 
 def _current_evidence(observations: dict[str, dict] | None, key: str, now: datetime | None) -> dict | None:
-    """Accept only a fresh, lawful, closed external-probe projection."""
+    """Accept fresh, lawful evidence from the source authorized for this key."""
     candidate = (observations or {}).get(key)
-    if not isinstance(candidate, dict) or candidate.get("source") != EvidenceSource.EXTERNAL_PROBE.value:
+    expected_source = (EvidenceSource.EXTERNAL_PROBE if key == "public_service_reachability"
+                       else EvidenceSource.INVARIANT_VERIFIER if key in {"ledger_correctness", "invariant_verification"}
+                       else EvidenceSource.APPLICATION_RUNTIME_EVIDENCE)
+    if not isinstance(candidate, dict) or candidate.get("source") != expected_source.value:
         return None
     if candidate.get("capability") != key:
         return None
-    observed_at = candidate.get("observed_at")
+    observed_at = (candidate.get("checked_at")
+                   if expected_source == EvidenceSource.APPLICATION_RUNTIME_EVIDENCE
+                   else candidate.get("observed_at"))
     current = now or datetime.now(timezone.utc)
     if not isinstance(observed_at, datetime) or observed_at.tzinfo is None:
         return None
@@ -86,7 +92,7 @@ def _current_evidence(observations: dict[str, dict] | None, key: str, now: datet
         return None
     if (outcome, epistemic) not in _VALID_RAW_STATES:
         return None
-    return candidate
+    return {**candidate, "verified_at": observed_at}
 
 
 def _public_evidence_state(candidate: dict | None) -> tuple[str, str]:
@@ -110,7 +116,7 @@ def derive_capability_cards(notices: list[dict], capabilities: tuple[str, ...], 
         evidence = _current_evidence(observations, capability, now)
         state, detail = _public_evidence_state(evidence)
         failure = state == "DEGRADED"
-        checked = evidence["observed_at"].strftime("%Y-%m-%d %H:%M UTC") if evidence else "No recent verified observation"
+        checked = evidence["verified_at"].strftime("%Y-%m-%d %H:%M UTC") if evidence else "No recent verified observation"
         cards.append({
             "key": capability,
             "name": name,
@@ -130,7 +136,7 @@ def derive_platform_checks(notices: list[dict], checks: tuple[str, ...], observa
         evidence = _current_evidence(observations, check, now)
         state, detail = _public_evidence_state(evidence)
         failure = state == "DEGRADED"
-        checked = evidence["observed_at"].strftime("%Y-%m-%d %H:%M UTC") if evidence else "No recent verified observation"
+        checked = evidence["verified_at"].strftime("%Y-%m-%d %H:%M UTC") if evidence else "No recent verified observation"
         rows.append({
             "key": check,
             "name": PLATFORM_CHECK_LABELS.get(check, check.replace("_", " ").title()),

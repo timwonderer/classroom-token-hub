@@ -53,6 +53,7 @@ class FirestoreNoticeStore:
             document = {
                 "observation_id": record.observation_id,
                 "observed_at": record.observed_at,
+                "checked_at": record.checked_at,
                 "correlation_id": record.correlation_id,
                 "source": record.source.value,
                 "capability": record.capability,

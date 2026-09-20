@@ -20,7 +20,7 @@ def derive_overall_status(notices: list[dict], cards: list[dict] | None = None, 
     """Combine active notices and fresh bounded evidence without assuming health."""
     now = now if now is not None else datetime.now(timezone.utc)
     keys = {item["key"] for item in (cards or []) + (platform or [])}
-    fresh = [evidence["observed_at"] for key in keys
+    fresh = [evidence["verified_at"] for key in keys
              if (evidence := _current_evidence(observations, key, now)) is not None]
     checked = max(fresh).strftime("%Y-%m-%d %H:%M UTC") if fresh else "awaiting monitoring evidence"
     if any((evidence := _current_evidence(observations, key, now)) is not None

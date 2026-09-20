@@ -93,19 +93,18 @@ def health_status():
     This endpoint intentionally exposes no table counts, tenant data, raw
     errors, or internal diagnostics.
     """
-    observed_at = datetime.now(timezone.utc).isoformat()
     signals = []
 
     try:
         db.session.scalar(text('SELECT 1'))
-        signals.append({"key": "database", "layer": "platform", "outcome": "PASS", "epistemic_state": "KNOWN", "diagnostic_code": "DATABASE_REACHABLE"})
+        signals.append({"key": "database", "layer": "platform", "outcome": "PASS", "epistemic_state": "KNOWN", "diagnostic_code": "DATABASE_REACHABLE", "checked_at": datetime.now(timezone.utc).isoformat()})
     except SQLAlchemyError:
-        signals.append({"key": "database", "layer": "platform", "outcome": "FAIL", "epistemic_state": "UNAVAILABLE", "diagnostic_code": "DATABASE_UNAVAILABLE"})
+        signals.append({"key": "database", "layer": "platform", "outcome": "FAIL", "epistemic_state": "UNAVAILABLE", "diagnostic_code": "DATABASE_UNAVAILABLE", "checked_at": datetime.now(timezone.utc).isoformat()})
     for key in ("login", "attendance", "payroll", "roster", "classroom_economy"):
-        signals.append({"key": key, "layer": "capability", "outcome": "UNKNOWN", "epistemic_state": "UNAVAILABLE", "diagnostic_code": "CHECK_NOT_REGISTERED"})
+        signals.append({"key": key, "layer": "capability", "outcome": "UNKNOWN", "epistemic_state": "UNAVAILABLE", "diagnostic_code": "CHECK_NOT_REGISTERED", "checked_at": None})
     for key in ("background_jobs", "external_integrations", "monitoring_freshness", "invariant_verification"):
-        signals.append({"key": key, "layer": "platform", "outcome": "UNKNOWN", "epistemic_state": "UNAVAILABLE", "diagnostic_code": "CHECK_NOT_REGISTERED"})
-    return jsonify({"observed_at": observed_at, "signals": signals}), 200
+        signals.append({"key": key, "layer": "platform", "outcome": "UNKNOWN", "epistemic_state": "UNAVAILABLE", "diagnostic_code": "CHECK_NOT_REGISTERED", "checked_at": None})
+    return jsonify({"observed_at": datetime.now(timezone.utc).isoformat(), "signals": signals}), 200
 
 
 @main_bp.route('/privacy')
