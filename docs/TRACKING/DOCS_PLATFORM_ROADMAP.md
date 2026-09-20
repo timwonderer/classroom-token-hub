@@ -2,7 +2,7 @@
 
 **Status:** Partially superseded — see note below
 **Created:** 2026-06-14
-**Last Reconciled:** 2026-09-06
+**Last Reconciled:** 2026-09-19
 **Branch:** `main` (this document was authored on `docs/cleanup-and-organization`)
 
 ---

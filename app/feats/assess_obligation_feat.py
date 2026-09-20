@@ -1,8 +1,11 @@
 """
-FEAT-OBL-001: Assess Obligation
+FEAT-OBLI-001: Assess Obligation
 
 Creates immutable ASSESSMENT event for lawful obligation.
-Per DOM-OBL-001 §IX.1 and FEAT-OBL-001 orchestration.
+Per DOM-OBL-001 §IX.1 and FEAT-OBLI-001 §III orchestration.
+
+FEAT-OBL-001 is rent payment, a different workflow one letter away; see
+docs/TRACKING/FEAT_REGISTRY_RECONCILIATION_2026-09-19.md §V.
 """
 
 from __future__ import annotations
@@ -18,7 +21,7 @@ from app.feats.base import requires_feat_context, FEATContext
 
 @dataclass
 class AssessmentRequest:
-    """Input contract for obligation assessment (FEAT-OBL-001 §II)."""
+    """Input contract for obligation assessment (FEAT-OBLI-001 §II.1)."""
     seat_id: int
     class_id: str
     internal_ref: str  # Stable lineage key for continuing relationship
@@ -62,7 +65,8 @@ def assess_obligation(
     # and pass both. Obligations domain only validates within assessment_events/bill_cycles
     # tables per DOM-OBL-001 §VI. Cross-domain Seat validation belongs to caller.
 
-    # Required input validation: per FEAT-OBL-001 §IV
+    # Required input validation: per FEAT-OBLI-001 §II.1 (required inputs),
+    # checked in the verification phase of §III.1
     if not request.seat_id or not request.class_id:
         raise ValueError("seat_id and class_id are required")
     if not request.internal_ref or not request.correlation_id:
@@ -70,12 +74,12 @@ def assess_obligation(
     if not request.obligation_type:
         raise ValueError("obligation_type is required")
 
-    # Idempotency: per FEAT-OBL-001 §V, check for replay safety
+    # Idempotency: per FEAT-OBLI-001 §IV.3, check for replay safety
     if obligations_service.check_idempotency_assessment(
         request.internal_ref,
         request.correlation_id,
     ):
-        # Already exists; this is safe replay per FEAT-OBL-001
+        # Already exists; this is safe replay per FEAT-OBLI-001 §IV.3
         existing = obligations_service.get_assessment_for_correlation(request.correlation_id)
         return existing
 
