@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-OPS-002 | 1.2 | 2026-08-31 | 1.1 | Normative |
+| SPEC-OPS-002 | 1.3 | 2026-09-19 | 1.2 | Normative |
 
 ## I. Purpose
 
@@ -32,6 +32,8 @@ Required logical fields:
 
 - stable observation ID;
 - observed-at timestamp and correlation ID;
+- bounded evidence source, including independent `EXTERNAL_PROBE` and
+  `APPLICATION_RUNTIME_EVIDENCE` for feature results transported from CTH;
 - capability/component key from a closed registry;
 - observation class: `LIVENESS`, `READINESS`, `CORRECTNESS`, or `INFRASTRUCTURE_FAILURE`;
 - outcome: `PASS`, `FAIL`, or `UNKNOWN`;
@@ -40,6 +42,12 @@ Required logical fields:
 - probe version.
 
 Observations MUST NOT contain tenant identifiers, PII, credentials, raw response bodies, stack traces, arbitrary payloads, or inferred internal causes. They cannot be updated or deleted during their retention window. `CONFLICTING` is not a raw-observation state; it belongs to derived assessment or projection state composed from multiple observations.
+
+An external collector MUST preserve the source of the condition it transports:
+fetching an application-produced feature result does not turn that result
+into an independent external probe. Its own reachability measurement remains
+an `EXTERNAL_PROBE`, separately timestamped from the application's bounded
+feature assessment. Both records retain their original provenance.
 
 The fields have distinct meanings: `outcome` records the result of this observation; `epistemic_state` records whether the capability state can be established from the available evidence. A single observation cannot claim aggregate disagreement.
 

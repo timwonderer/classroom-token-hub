@@ -107,6 +107,13 @@ The external status service stores observations and projects communication;
 it does not become the authority for Identity, Productivity, Ledger, or
 canonical Operations incidents.
 
+Transport is not provenance: the external collector's fetch of an
+application-reported feature result does not make that result an independent
+`EXTERNAL_PROBE`. Feature results MUST retain the distinct bounded evidence
+source `APPLICATION_RUNTIME_EVIDENCE` in external observation records.
+The collector's own HTTP reachability result remains `EXTERNAL_PROBE`.
+Neither source may overwrite the other's evidence or freshness timestamp.
+
 ## VIII. Public wording
 
 The card headline MUST name the feature, not promise that every operation

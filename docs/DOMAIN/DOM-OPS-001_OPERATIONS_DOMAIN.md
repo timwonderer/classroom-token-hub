@@ -285,12 +285,21 @@ mutations during GET.
 
 ### `health_check_events`
 *   `id`: UUID
-*   `timestamp`: TIMESTAMPTZ
+*   `timestamp`: TIMESTAMPTZ (when the check completed)
+*   `received_at`: TIMESTAMPTZ (when Operations received the bounded result)
 *   `check_type`: ENUM ('LIVENESS', 'READINESS', 'CORRECTNESS')
 *   `component`: VARCHAR
-*   `outcome`: ENUM ('PASS', 'FAIL', 'WARN')
-*   `correlation_id`: UUID (Nullable)
-*   `payload`: JSONB
+*   `outcome`: ENUM ('PASS', 'FAIL', 'UNKNOWN')
+*   `epistemic_state`: ENUM ('KNOWN', 'UNAVAILABLE')
+*   `correlation_id`: UUID
+*   `probe_version`: VARCHAR
+*   `payload`: JSONB (closed, bounded diagnostic fields only; no tenant identity or raw domain result)
+
+The only lawful raw pairs are `PASS + KNOWN`, `FAIL + KNOWN`,
+`FAIL + UNAVAILABLE`, and `UNKNOWN + UNAVAILABLE` as specified in
+`SPEC-OPS-002`. A feature assessment derived from several checks may preserve
+disagreement separately; it MUST NOT encode aggregate conflict as a raw
+health event.
 
 ---
 

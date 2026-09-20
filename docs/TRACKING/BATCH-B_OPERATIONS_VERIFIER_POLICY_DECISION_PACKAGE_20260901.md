@@ -101,6 +101,9 @@ absence of errors cannot yield feature `PASS`. Missing recent real activity
 or any required verification dimension yields `UNKNOWN`; affirmative
 violations yield `FAIL`. A feature failure does not by itself establish a
 canonical incident.
+The app-origin assessment has source `APPLICATION_RUNTIME_EVIDENCE`;
+independently fetched app reachability remains `EXTERNAL_PROBE`. Transport
+does not change provenance.
 
 Grafana telemetry and Ledger invariant-verifier results are distinct evidence
 sources. Grafana observations describe the capability or infrastructure signal
