@@ -55,6 +55,10 @@ class Finding:
 
 HEX = re.compile(r"(?<![\w&#/])#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})(?![\w-])")
 COLOR_FUNC = re.compile(r"\b(?:rgba?|hsla?)\s*\(")
+# The whole call, arguments included. Reporting a bare "rgba)" would make the
+# scrim exemption undecidable per literal: a declaration carrying a scrim next
+# to a brand colour would exempt both.
+COLOR_FUNC_CALL = re.compile(r"\b(?:rgba?|hsla?)\s*\((?:[^()]|\([^()]*\))*\)", re.I)
 NAMED_COLORS = (
     "white black red green blue gray grey silver orange yellow purple pink gold "
     "navy teal maroon brown cyan magenta lime olive aqua fuchsia indigo violet "
@@ -120,7 +124,7 @@ def color_literals(value: str) -> list[str]:
     """Colour literals left in a CSS value once var() references are removed."""
     bare = _strip_var(value)
     found = [m.group(0) for m in HEX.finditer(bare)]
-    found += [m.group(0).rstrip("(") + ")" for m in COLOR_FUNC.finditer(bare)]
+    found += [" ".join(m.group(0).split()) for m in COLOR_FUNC_CALL.finditer(bare)]
     found += [m.group(0) for m in NAMED.finditer(bare)]
     # Fallbacks inside var(--x, #fff) are still hardcoded colours.
     for fallback in re.findall(r"var\(\s*--[\w-]+\s*,([^()]*(?:\([^()]*\))?[^()]*)\)", value):
@@ -391,7 +395,9 @@ def scan_stylesheet(path: Path, defined: set[str], external: tuple[str, ...]) ->
             # wherever it sits.
             if not prop.startswith("--"):
                 for literal in color_literals(_strip_shading(value)):
-                    if literal.endswith(")") and SCRIM.search(value):
+                    # Per literal: a scrim next to a brand colour must not
+                    # exempt the brand colour too.
+                    if SCRIM.match(literal):
                         continue
                     findings.append(
                         Finding(rel, line, "R8", f"colour literal {literal!r} outside a token block")
@@ -420,6 +426,14 @@ def scan_mirrors() -> list[Finding]:
     findings: list[Finding] = []
     for source_rel, copy_rel in MIRRORS:
         source, copy = REPO_ROOT / source_rel, REPO_ROOT / copy_rel
+        # Skipping an absent file would let deleting or renaming either side
+        # switch the guard off in silence — the failure mode this rule exists
+        # to catch, applied to the rule itself.
+        for rel, path in ((source_rel, source), (copy_rel, copy)):
+            if not path.exists():
+                findings.append(
+                    Finding(rel, 1, "R10", "is a declared mirror and is missing")
+                )
         if not (source.exists() and copy.exists()):
             continue
         if source.read_bytes() != copy.read_bytes():

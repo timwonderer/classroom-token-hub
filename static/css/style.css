@@ -1119,7 +1119,7 @@ body.sysadmin-shell {
 }
 
 .sysadmin-nav-signout {
-    color: color-mix(in srgb, var(--sysadmin-signout-accent) 85%, transparent) !important;
+    color: var(--sysadmin-signout-accent) !important;
 }
 
 .sysadmin-nav-signout:hover {

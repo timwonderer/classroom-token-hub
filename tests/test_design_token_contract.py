@@ -135,6 +135,10 @@ def _sheet(tmp_path, monkeypatch, css, *, tokens=""):
         (".x { color: var(--sidebar-text, #ffffff); }", "R8"),
         # a theme block is a token block, but only for the properties it defines
         ("body.student-shell { --primary: #2F4F7F; color: #2F4F7F; }", "R8"),
+        # a scrim sitting in the same declaration as a brand colour must not
+        # exempt the brand colour with it — the exemption is per literal
+        (".x { box-shadow: 0 0 0 1px rgba(0,0,0,.1), 0 0 0 3px rgba(212,168,87,.4); }", "R8"),
+        (".x { border: 1px solid rgba(255,255,255,.2); outline: 2px solid hsl(45, 60%, 58%); }", "R8"),
         # R9 — a token name from another surface, which is how --secondary-color
         # leaked into the app stylesheet and fell back silently on seven lines
         (".x { color: var(--secondary-color); }", "R9"),
@@ -158,6 +162,8 @@ def test_surface_scanner_detects_each_rule(tmp_path, monkeypatch, css, rule):
          ":root { --primary: #1a4d47; }"),
         (".x { box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08); }", ""),
         (".x { background: rgba(255, 255, 255, 0.35); }", ""),
+        # two scrims in one declaration stay two scrims
+        (".x { box-shadow: 0 1px 2px rgba(0,0,0,.04), inset 0 0 0 1px rgba(255,255,255,.1); }", ""),
         # a defined token resolves
         (".x { color: var(--primary); }", ":root { --primary: #1a4d47; }"),
     ],
@@ -185,3 +191,17 @@ def test_mirror_scanner_detects_a_fork(tmp_path, monkeypatch):
 
     (tmp_path / "copy.css").write_text(":root { --secondary: #D4A857; }", encoding="utf-8")
     assert lint.scan_mirrors() == []
+
+
+@pytest.mark.parametrize("absent", ["source.css", "copy.css"])
+def test_mirror_scanner_detects_a_missing_side(tmp_path, monkeypatch, absent):
+    """Deleting or renaming either side must not switch the guard off in
+    silence — that is this rule's own failure mode applied to itself."""
+    monkeypatch.setattr(lint, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(lint, "MIRRORS", (("source.css", "copy.css"),))
+    for name in ("source.css", "copy.css"):
+        if name != absent:
+            (tmp_path / name).write_text(":root { --secondary: #D4A857; }", encoding="utf-8")
+    findings = lint.scan_mirrors()
+    assert "R10" in {f.rule for f in findings}
+    assert absent in {f.path for f in findings}

@@ -102,7 +102,8 @@
     --radius-lg: 8px;
     /* Modals, Large Containers */
     --radius-xl: 12px;
-    /* Auth cards, feature panels */
+    /* Feature panels. NOT the auth card: .auth-container is square and lifted
+       by --shadow-lg alone (SPEC-DES-001 §IX). */
     --radius-pill: 999px;
     /* Status Badges, Chips */
 
@@ -295,8 +296,12 @@ body.sysadmin-shell {
     --sysadmin-bottom-nav-height: var(--bottom-nav-height);
     /* Sign-out chrome on the dark sysadmin sidebar. --danger is tuned for
        light surfaces and reads muddy there, so the sidebar carries its own
-       pair: --accent for the resting label and border, --hover for the lift. */
-    --sysadmin-signout-accent: #dc5050;
+       pair. Both are pinned for legibility ON --sysadmin-sidebar-bg (#2C2C2C)
+       and MUST be used at full opacity for the label: #dc5050 composited at
+       85% was 2.91:1, and diluting a text colour to suggest a resting state is
+       the same defect §IX names for link hovers. Resting 5.75:1, hover 4.88:1.
+       The 40% border composite below is chrome, not text. */
+    --sysadmin-signout-accent: #ff8080;
     --sysadmin-signout-hover: #ff6666;
 
     /* Secondary: Bright Gold */
