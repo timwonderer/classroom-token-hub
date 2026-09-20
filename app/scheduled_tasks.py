@@ -369,6 +369,51 @@ def run_rent_reconciliation_job():
     )
 
 
+def _advance_local_calendar_days(occurrence_utc, days: int, ctx):
+    """Advance an occurrence by `days` *local calendar* days, keeping local time.
+
+    `occurrence_utc + timedelta(days=N)` preserves the clock time in UTC rather
+    than in the class's timezone. A payroll anchored on local midnight therefore
+    becomes 23:00 the previous local day (or 01:00 the same day) once a DST
+    transition falls inside the interval, and every later run inherits the
+    shift — so the schedule drifts onto the wrong local date twice a year, which
+    is precisely what anchoring it locally was meant to prevent.
+
+    The local time of day is preserved rather than normalised to midnight:
+    `next_payroll_date` falls back to `created_at` when a class never set a first
+    pay date (payroll_settings_service), so forcing midnight here would silently
+    move an established run time for those classes.
+
+    Both day boundaries are resolved independently through CLE, so each carries
+    its own UTC offset and the interval between them is 23, 24 or 25 hours as
+    the calendar requires.
+    """
+    # Imported inside the function, as every other consumer in this module does.
+    from datetime import timedelta
+    from app.utils.canonical_temporal_resolver import (
+        CLASS_LEVEL_EVALUATION,
+        canonical_temporal_resolver,
+    )
+
+    local_date = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=ctx,
+        primitive="current_evaluation_day",
+        reference_time_utc=occurrence_utc,
+    ).result["evaluation_date"]
+
+    def _local_midnight_utc(day):
+        return canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=ctx,
+            primitive="evaluation_day_boundaries",
+            evaluation_date=day,
+        ).boundary_start_utc
+
+    time_into_local_day = occurrence_utc - _local_midnight_utc(local_date)
+    return _local_midnight_utc(local_date + timedelta(days=days)) + time_into_local_day
+
+
 def run_automatic_payroll_job():
     """Automatic payroll: fire the canonical completion FEAT for every due class.
 
@@ -467,7 +512,11 @@ def run_automatic_payroll_job():
                 )
                 # Scheduling bookkeeping (the scheduler's own concern), committed
                 # atomically with the cycle so a failure leaves the class due.
-                settings.next_payroll_date = scheduled_occurrence + timedelta(days=frequency_days)
+                #
+                # Advanced by local calendar days, not by 24-hour UTC spans.
+                settings.next_payroll_date = _advance_local_calendar_days(
+                    scheduled_occurrence, frequency_days, ctx
+                )
             ran += 1
         except Exception:
             failed += 1

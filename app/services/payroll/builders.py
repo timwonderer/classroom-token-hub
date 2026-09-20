@@ -259,6 +259,43 @@ _SINGULAR_TIME_UNIT = {
     'days': 'day',
 }
 
+#: Seconds in one of each selectable time unit — the same integer map
+#: ``app/payroll.py:_round_billable_seconds`` uses, so the two cannot disagree
+#: about what an "hour" is.
+#:
+#: ``PayrollSettings.pay_rate`` is canonically dollars **per minute**, while the
+#: Advanced form asks the teacher for dollars per *their* chosen unit. The two
+#: conversions below are exact inverses and are kept in one place because they
+#: were previously written only at the save end: the display rendered the raw
+#: per-minute number against the chosen unit, so a class configured at
+#: $1.50/hour showed "$0.03" in the form — and because that value pre-populates
+#: the input, each re-save divided the real rate by 60.
+#:
+#: Expressed in seconds rather than minutes so every factor is an exact integer
+#: ratio; a `Decimal('1')/Decimal('60')` intermediate does not round-trip.
+SECONDS_PER_TIME_UNIT = {
+    'seconds': 1,
+    'minutes': 60,
+    'hours': 3600,
+    'days': 86400,
+}
+
+_SECONDS_PER_MINUTE = Decimal('60')
+
+
+def _unit_seconds(time_unit: str) -> Decimal:
+    return Decimal(SECONDS_PER_TIME_UNIT.get((time_unit or '').strip(), 60))
+
+
+def rate_per_minute_to_unit(rate_per_minute, time_unit: str) -> Decimal:
+    """Convert the canonical per-minute rate into the teacher's chosen unit."""
+    return Decimal(str(rate_per_minute)) * _unit_seconds(time_unit) / _SECONDS_PER_MINUTE
+
+
+def rate_unit_to_per_minute(rate_in_unit, time_unit: str) -> Decimal:
+    """Convert a rate expressed per `time_unit` back to the canonical per minute."""
+    return Decimal(str(rate_in_unit)) * _SECONDS_PER_MINUTE / _unit_seconds(time_unit)
+
 
 def build_payroll_settings_display(settings: PayrollSettings | None) -> dict[str, str]:
     """
@@ -291,7 +328,10 @@ def build_payroll_settings_display(settings: PayrollSettings | None) -> dict[str
 
     rate = Decimal(str(settings.pay_rate))
     display_hourly_value = f"{rate * 60:.2f}"
-    display_per_unit_value = f"{rate:.2f}"
+    # Expressed in the unit the teacher configured, not the storage unit. This
+    # value also pre-populates the Advanced pay-rate input, so a mismatch here
+    # is not cosmetic: it round-trips through the next save.
+    display_per_unit_value = f"{rate_per_minute_to_unit(rate, settings.time_unit):.2f}"
 
     if settings.settings_mode == 'simple':
         display_pay_rate = f"${display_hourly_value}"

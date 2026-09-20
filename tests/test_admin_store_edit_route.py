@@ -248,7 +248,9 @@ def test_edit_keeps_the_delist_date(app, client):
     # local day. Its UTC date is the next day, so a prefill that takes
     # ``.date()`` of the stored datetime shows the wrong day on a UTC server.
     with app.app_context():
-        delist = _end_of_day_utc(date(2030, 6, 30))
+        # The class is passed explicitly: this runs outside a request, and the
+        # day boundary is a property of the class's timezone, not of `g`.
+        delist = _end_of_day_utc(date(2030, 6, 30), class_id=classroom.class_id)
     with FEATContext("FEAT-SETTINGS-001", idempotency_key=f"delist-edit:{classroom.class_id}"):
         item = publish_store_product(
             class_id=classroom.class_id,
@@ -282,7 +284,9 @@ def test_edit_keeps_the_delist_date(app, client):
         # of that instant differs between a UTC and a local database session.
         from datetime import date
         from app.routes.admin import _end_of_day_utc
-        assert current.auto_delist_date == _end_of_day_utc(date(2030, 6, 30))
+        assert current.auto_delist_date == _end_of_day_utc(
+            date(2030, 6, 30), class_id=classroom.class_id
+        )
 
 
 def test_future_start_date_publishes_in_use_and_gates_at_read_time(app, client):

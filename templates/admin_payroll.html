@@ -1107,9 +1107,12 @@
         summaryHTML += `<p class="mb-1">Students will tap out after <strong>${parts.join(' ')}</strong> per day (resets at midnight in your class's timezone).</p>`;
       }
 
-      // Simple mode applies no time rounding, so partial minutes are paid.
-      // Stating it avoids the reader assuming the Advanced-mode rounding rule
-      // carries over: 13m 6s at $1.50/hour pays $19.65, not $19.50.
+      // Simple mode applies no time rounding, so partial minutes are paid:
+      // _round_billable_seconds() returns early unless settings_mode is
+      // 'advanced'. Stating it avoids the reader carrying the Advanced rounding
+      // rule across. This field is dollars per hour, so 13m 6s at $1.50/hour
+      // pays $0.33 — the full 786 seconds pro-rata, not the 13 whole minutes
+      // that rounding down would give.
       summaryHTML += `<p class="mb-1">Worked time is paid to the second — partial minutes still count.</p>`;
     }
 

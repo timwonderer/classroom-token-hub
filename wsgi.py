@@ -62,12 +62,18 @@ def get_validated_status_page_url():
     url = os.getenv('STATUS_PAGE_URL')
     if not url:
         return None
-    allowed_prefixes = (
-        'https://status.classroomtokenhub.com/',
-        'https://stats.uptimerobot.com/',
+    # Each entry is an origin. A URL matches when it *is* that origin, or when
+    # it continues with "/" — so the bare root form is accepted while a
+    # lookalike host like "…classroomtokenhub.com.example.invalid" is not.
+    # Requiring the slash unconditionally rejected the plain origin, which is
+    # how the deployment SOP writes a custom status URL.
+    allowed_origins = (
+        'https://status.classroomtokenhub.com',
+        'https://stats.uptimerobot.com',
     )
-    if url.startswith(allowed_prefixes):
-        return url
+    for origin in allowed_origins:
+        if url == origin or url.startswith(origin + '/'):
+            return url
     return None
 
 

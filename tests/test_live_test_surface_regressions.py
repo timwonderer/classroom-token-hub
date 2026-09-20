@@ -108,6 +108,58 @@ class TestPayrollRateUnitIsSingular:
         assert display["display_rate_unit"] == "fortnights"
 
 
+class TestPayrollRateSurvivesADisplaySaveRoundTrip:
+    """`pay_rate` is stored per minute; the Advanced form speaks the teacher's unit.
+
+    Raised in review of this PR. The display rendered the raw per-minute number
+    against the chosen unit — so a class configured at $1.50/hour showed "$0.03",
+    and because that same value pre-populates the input (`admin_payroll.html`
+    line ~457), saving the page again stored $0.03/hour. **The rate divided by 60
+    on every re-save.** Pre-existing, but adding a unit suffix to the display made
+    it explicit, and the round-trip is the property that actually matters.
+    """
+
+    @pytest.mark.parametrize(
+        "unit,entered",
+        [("hours", "1.50"), ("minutes", "0.25"), ("seconds", "0.01"), ("days", "120.00")],
+    )
+    def test_saving_what_the_form_displays_does_not_change_the_rate(self, unit, entered):
+        from decimal import Decimal
+        from app.services.payroll.builders import (
+            rate_per_minute_to_unit,
+            rate_unit_to_per_minute,
+        )
+
+        stored = rate_unit_to_per_minute(Decimal(entered), unit)
+        redisplayed = rate_per_minute_to_unit(stored, unit)
+        assert redisplayed == Decimal(entered)
+
+        # And a second round trip, because the defect compounded per save.
+        assert rate_per_minute_to_unit(rate_unit_to_per_minute(redisplayed, unit), unit) == Decimal(entered)
+
+    def test_an_hourly_setting_displays_the_hourly_amount(self):
+        from decimal import Decimal
+        from types import SimpleNamespace
+
+        # $1.50/hour is stored as $0.025/minute.
+        settings = SimpleNamespace(
+            settings_mode="advanced", time_unit="hours", pay_rate=Decimal("0.025")
+        )
+        display = build_payroll_settings_display(settings)
+        assert display["display_per_unit_rate_value"] == "1.50"
+        assert display["display_rate_with_unit"] == "$1.50/hour"
+
+    def test_the_save_path_and_the_display_path_share_one_table(self):
+        """They were independent, which is how they came to disagree."""
+        import inspect
+        from app.routes import admin
+        source = inspect.getsource(admin.payroll_settings)
+        assert "rate_unit_to_per_minute" in source, (
+            "the route should convert through the shared helper, not a local table"
+        )
+        assert "unit_to_minute_multiplier" not in source
+
+
 # ---------------------------------------------------------------------------
 # Finding 8 — the app can link to its own status page
 # ---------------------------------------------------------------------------
@@ -125,6 +177,15 @@ class TestStatusPageUrlAllowlist:
 
     def test_uptimerobot_is_still_allowed(self, monkeypatch):
         url = "https://stats.uptimerobot.com/abc123"
+        assert self._validated(monkeypatch, url) == url
+
+    def test_the_bare_origin_is_allowed(self, monkeypatch):
+        """Raised in review: the deployment SOP writes it without a trailing slash.
+
+        Requiring the slash unconditionally kept rejecting the very URL this
+        finding existed to accept.
+        """
+        url = "https://status.classroomtokenhub.com"
         assert self._validated(monkeypatch, url) == url
 
     @pytest.mark.parametrize("hostile", [

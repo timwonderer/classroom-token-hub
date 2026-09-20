@@ -2544,8 +2544,14 @@ def dashboard():
     # None is a legitimate answer and the template renders it as "Not scheduled":
     # an unconfigured schedule must not display as a scheduled one, the same rule
     # `/health/status` holds by reporting UNKNOWN rather than healthy.
+    # `availability_state='IN_USE'` matters: PayrollSettings is append-only and
+    # keeps RETIRED and HIDDEN rows, and `run_automatic_payroll_job` selects only
+    # IN_USE. Taking the highest id instead would let a superseded row drive this
+    # card, so the dashboard could state a schedule the scheduler will not run —
+    # a subtler version of the invented date this replaced.
     _payroll_settings = PayrollSettings.query.filter_by(
         class_id=active_class_id,
+        availability_state='IN_USE',
     ).order_by(PayrollSettings.id.desc()).first()
     next_payroll_date = _payroll_settings.next_payroll_date if _payroll_settings else None
 
@@ -4195,6 +4201,32 @@ def _class_local_date_start_utc(date_str):
     return bounds.boundary_start_utc
 
 
+def _cle_context(class_id=None):
+    """Execution context for a CLE evaluation.
+
+    Defaults to the request's canonical context, which is what every route path
+    wants. `class_id` is accepted so these helpers can be called outside a
+    request — the temporal behaviour they encode is a property of the class, not
+    of the request, and a helper reachable only through `g` cannot be tested
+    directly.
+    """
+    if class_id:
+        return SimpleNamespace(class_id=class_id)
+    return g.canonical_context
+
+
+def _class_local_date_of(instant):
+    """The class-local calendar date an instant falls on."""
+    if instant is None:
+        return None
+    return canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=g.canonical_context,
+        primitive="current_evaluation_day",
+        reference_time_utc=ensure_utc(instant),
+    ).result["evaluation_date"]
+
+
 def _class_local_today():
     """The class's current local date, for form validation of teacher-entered dates."""
     return canonical_temporal_resolver(
@@ -4206,7 +4238,7 @@ def _class_local_today():
 
 # -------------------- STORE MANAGEMENT --------------------
 
-def _end_of_day_utc(date_obj):
+def _end_of_day_utc(date_obj, class_id=None):
     """Convert a teacher-entered local date to end-of-day UTC, in the class's timezone.
 
     Previously resolved through SLE, which reads as timezone-aware but is
@@ -4219,14 +4251,14 @@ def _end_of_day_utc(date_obj):
         return None
     bounds = canonical_temporal_resolver(
         CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=g.canonical_context,
+        canonical_execution_context=_cle_context(class_id),
         primitive="evaluation_day_boundaries",
         evaluation_date=date_obj,
     )
     return bounds.boundary_end_utc
 
 
-def _local_date_of_end_of_day(instant):
+def _local_date_of_end_of_day(instant, class_id=None):
     """Recover the local date ``_end_of_day_utc`` was given.
 
     The day boundary's end is exclusive — the next local day's midnight — so the
@@ -4244,7 +4276,7 @@ def _local_date_of_end_of_day(instant):
         return None
     return canonical_temporal_resolver(
         CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=g.canonical_context,
+        canonical_execution_context=_cle_context(class_id),
         primitive="current_evaluation_day",
         reference_time_utc=ensure_utc(instant) - timedelta(microseconds=1),
     ).result["evaluation_date"]
@@ -4401,9 +4433,20 @@ def _validate_rent_link_effective_date(form, class_id: str) -> None:
     from app.routes.student import _calculate_rent_timeline
     timeline = _calculate_rent_timeline(settings, utc_now())
     next_cycle = timeline.get('upcoming_due_date')
-    next_cycle_date = next_cycle.date() if hasattr(next_cycle, 'date') else next_cycle
+    # Both sides of this comparison are calendar dates the teacher reasons about
+    # locally, so both are resolved in the class timezone. `utc_now().date()`
+    # rolls over hours before the teacher's own midnight, which rejected a start
+    # date of their current day; taking `.date()` off the cycle boundary reads it
+    # in UTC for the same reason. The form's own validator was already corrected
+    # to `local_today`, and this second check would otherwise have refused what
+    # the first one allowed.
+    next_cycle_date = (
+        _class_local_date_of(next_cycle)
+        if hasattr(next_cycle, 'tzinfo') and next_cycle is not None
+        else next_cycle
+    )
     effective_date = form.activation_date.data
-    if effective_date < utc_now().date() or (next_cycle_date and effective_date > next_cycle_date):
+    if effective_date < _class_local_today() or (next_cycle_date and effective_date > next_cycle_date):
         raise ValueError('Rent-link effective date must be between today and the next rent-cycle start date.')
 
 
@@ -4916,15 +4959,7 @@ def edit_store_item(product_lineage_uuid):
         # it back through CLE. Reading it in UTC (as this did) showed the previous
         # day for any class west of Greenwich, and a save then persisted that —
         # each edit walked the start date one day earlier.
-        form.activation_date.data = (
-            canonical_temporal_resolver(
-                CLASS_LEVEL_EVALUATION,
-                canonical_execution_context=g.canonical_context,
-                primitive="current_evaluation_day",
-                reference_time_utc=ensure_utc(item.activation_at),
-            ).result["evaluation_date"]
-            if item.activation_at else None
-        )
+        form.activation_date.data = _class_local_date_of(item.activation_at)
         form.auto_delist_date.data = _local_date_of_end_of_day(item.auto_delist_date)
         form.inventory.data = item.inventory_total
         form.holding_limit.data = item.holding_limit
@@ -7284,12 +7319,21 @@ def payroll():
     if payroll_updated_at:
         display_payroll_updated_at = payroll_updated_at.strftime("%H:%M")
 
-    # Format first_pay_date for both display and input
+    # Format first_pay_date for both display and input.
+    #
+    # Read back in the class's timezone, because that is what it was written in.
+    # Formatting the stored instant directly reports whatever day it falls on in
+    # UTC: for a class east of Greenwich, local midnight on the 2nd is still the
+    # 1st in UTC, so the teacher was shown the previous day — and since this also
+    # fills the date input, re-saving the form persisted that earlier day. That
+    # is the same one-day walk `_local_date_of_end_of_day` documents for delist
+    # dates, in the opposite direction.
     display_first_pay_date = ""
     display_first_pay_date_iso = ""
     if default_setting and default_setting.first_pay_date:
-        display_first_pay_date = default_setting.first_pay_date.strftime("%m/%d/%Y")
-        display_first_pay_date_iso = default_setting.first_pay_date.strftime("%Y-%m-%d")
+        _local_first_pay = _class_local_date_of(default_setting.first_pay_date)
+        display_first_pay_date = _local_first_pay.strftime("%m/%d/%Y")
+        display_first_pay_date_iso = _local_first_pay.strftime("%Y-%m-%d")
 
     # Format created_at for each block setting
     display_settings_created_at_list = []
@@ -7421,14 +7465,12 @@ def payroll_settings():
             pay_amount = _quantize_currency(request.form.get('adv_pay_amount', '0.25'))
             time_unit = request.form.get('adv_time_unit', 'minutes')
 
-            # Convert to per-minute for storage
-            unit_to_minute_multiplier = {
-                'seconds': Decimal('60'),
-                'minutes': Decimal('1'),
-                'hours': Decimal('1') / Decimal('60'),
-                'days': Decimal('1') / (Decimal('60') * Decimal('24'))
-            }
-            pay_rate_per_minute = pay_amount * unit_to_minute_multiplier.get(time_unit, Decimal('1'))
+            # Convert to per-minute for storage. Shares one table with the
+            # display side (app/services/payroll/builders.py) so the two
+            # directions cannot disagree — they previously did, and the display
+            # error round-tripped into the stored rate on every re-save.
+            from app.services.payroll.builders import rate_unit_to_per_minute
+            pay_rate_per_minute = rate_unit_to_per_minute(pay_amount, time_unit)
 
             # Overtime settings
             overtime_enabled = 'adv_overtime_enabled' in request.form
@@ -7461,7 +7503,7 @@ def payroll_settings():
                 payroll_frequency_days = schedule_map.get(pay_schedule, 14)
 
             first_pay_date_str = request.form.get('adv_first_pay_date')
-            first_pay_date = datetime.strptime(first_pay_date_str, '%Y-%m-%d') if first_pay_date_str else None
+            first_pay_date = _class_local_date_start_utc(first_pay_date_str)
 
             rounding = request.form.get('adv_rounding', 'down')
 

@@ -277,10 +277,15 @@ is vacuously true when the class has no seats at all. A brand-new class
 displayed "Join code — all seats claimed" — the one state it certainly was not
 in. Introduced by the 2026-09-17 roster view-model migration.
 
-Fix drafted (not deployed): `has_any_seats` added, `all_seats_claimed` requires
-seats to exist, and a new `unclaimed_panel_label` decides between the three
-states in the view model rather than the template. **Still needs a test before
-it ships.**
+Fixed: `has_any_seats` added, `all_seats_claimed` now requires seats to exist,
+and `unclaimed_panel_label` decides between the three states in the view model
+rather than the template. Covered by
+`tests/test_live_test_surface_regressions.py::TestEmptyRosterIsNotAllClaimed`,
+which asserts each of the three states separately and that they produce three
+distinct labels — collapsing any two reintroduces the defect.
+
+Not yet on the live host: the running deployment is still `live-test/2026-09-19`
+(`8c5cff7c8`), which predates this fix.
 
 **4. "Next Payroll" states a date for an unconfigured class (correctness, display)** — FIXED
 

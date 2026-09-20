@@ -225,14 +225,21 @@
 
                         <div class="mt-auto">
                             {% if entitlement.is_hall_pass %}
-                                <!-- Hall Pass - Use immediately -->
-                                <button type="button" class="btn btn-success w-100 use-item-btn"
-                                        data-item-id="{{ entitlement.entitlement_id }}"
-                                        data-item-name="{{ entitlement.item_name }}"
-                                        data-item-type="hall_pass"
-                                        data-redemption-prompt="">
-                                    <span class="material-symbols-outlined" aria-hidden="true">exit_to_app</span> Request Hall Pass
-                                </button>
+                                {# A hall pass is held here and used elsewhere.
+                                   Exercising one marks the student out of an
+                                   active work session (DOM-PROD-001), which only
+                                   the attendance Break flow can know about — it
+                                   is disabled until the student starts work, and
+                                   refuses when the seat holds no pass. This card
+                                   therefore shows the pass and names where to
+                                   use it, rather than offering a second request
+                                   path with none of those preconditions.
+                                   /api/use-item refuses hall passes regardless,
+                                   so a button here could only ever fail. #}
+                                <p class="small text-muted mb-0">
+                                    <span class="material-symbols-outlined icon-2xs icon-middle" aria-hidden="true">info</span>
+                                    Use this from <strong>Break</strong> on your dashboard, once you have started work.
+                                </p>
                             {% elif entitlement.can_redeem_immediately %}
                                 <!-- Immediate use item - redeem now -->
                                 <button type="button" class="btn btn-primary w-100 use-item-btn"
@@ -495,13 +502,13 @@
             case 'delayed':
                 explanation = {
                     level: 'info', icon: 'schedule', title: 'Delayed use',
-                    body: 'After purchase, this item will appear in your "My Items" tab. You can redeem it whenever you\'re ready by clicking "Use Item" and entering your PIN.',
+                    body: 'After purchase, this item will appear in your "My Items" tab. You can redeem it whenever you\'re ready by clicking "Use Item" and entering your passphrase.',
                 };
                 break;
             case 'hall_pass':
                 explanation = {
                     level: 'warning', icon: 'directions_walk', title: 'Hall pass',
-                    body: 'This is a special hall pass item. Upon purchase, it\'s added to your hall pass balance and can be used during class when you need to leave.',
+                    body: 'Buying this adds one to your hall pass balance. You use it from the Break button on your dashboard while you are clocked in — not from this page.',
                 };
                 break;
             case 'collective':
@@ -698,9 +705,9 @@
                 redemptionDetailsDiv.hidden = true;
                 redemptionDetailsTextarea.value = ''; // Clear previous value
 
-                if (itemType === 'hall_pass') {
-                    document.getElementById('useModalMessage').textContent = 'This will request a hall pass. Your teacher will be notified.';
-                } else if (itemType === 'immediate') {
+                // No control emits 'hall_pass' any more: a pass is exercised
+                // from the attendance Break flow, and /api/use-item refuses it.
+                if (itemType === 'immediate') {
                     document.getElementById('useModalMessage').textContent = 'This item will be redeemed immediately upon confirmation.';
                 }
             }
