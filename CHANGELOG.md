@@ -16,6 +16,10 @@ and this project follows semantic versioning principles.
 
 - **Feature status requires affirmative evidence (2026-09-19)** — The Operations status contract now distinguishes naturally observed feature activity from synthetic probes. Login, Attendance, Payroll, Roster, and Classroom Economy can report an observed-runtime-integrity PASS only when recent real activity and all registered execution, validity, lineage, and reconciliation checks are fresh and affirmative; proven failures remain failures, while idle or incomplete evidence remains UNKNOWN. External status infrastructure receives bounded results only and no classroom credentials or tenant data. This is a governing contract, not a claim that the evaluators are implemented or deployed.
 
+### Status service
+
+- Resolve selected open issues through version-bound checkboxes rather than free-text resolution references. Resolution events and current projections are written atomically; stale, missing, or already resolved selections reject the entire submission. History and unselected issues are preserved.
+
 ### Interface
 
 - **Unknown feature status explains its evidence gap (2026-09-19)** — Status cards now say “Not recently verified” and explain that insufficient recent evidence is not a detected failure. A native disclosure exposes the bounded reason and last recorded check time when available, without requiring hover or implying that idle activity is healthy.
