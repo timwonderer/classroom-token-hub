@@ -52,7 +52,7 @@ class TestObligationsServiceReads:
 
 
 class TestAssessObligation:
-    """Test FEAT-OBL-001: Assess Obligation."""
+    """Test FEAT-OBLI-001: Assess Obligation (not FEAT-OBL-001, which is rent payment)."""
 
     def test_create_assessment_creates_assessment_event(self, app):
         """Assess obligation creates immutable ASSESSMENT event per DOM-OBL-001."""

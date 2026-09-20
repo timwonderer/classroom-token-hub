@@ -100,13 +100,13 @@ def assess_obligation(
     db.session.flush()  # Get the ID before commit
 
     # Phase 3: Audit trace
-    # Per FEAT-OBL-001 §V, emit ACT-OBLI-001 via DOM-OPS
+    # Per FEAT-OBLI-001 §V, emit ACT-OBLI-001 via DOM-OPS
     # (OPS audit integration deferred to next phase)
 
     return assessment
 
 
-@requires_feat_context("FEAT-OBL-001")
+@requires_feat_context("FEAT-OBLI-001")
 def execute_assess_obligation(
     seat_id: int,
     class_id: str,

@@ -239,6 +239,13 @@ FEAT_REGISTRY = {
     "FEAT-ITR-001": {"domain": "Interpretation", "blast_radius": "LOW", "desc": "Compute Interpretation Snapshot"},
     "FEAT-ADMN-001": {"domain": "Logistics", "blast_radius": "LOW", "desc": "Bulk administration"},
     "FEAT-OBL-001": {"domain": "Obligations", "blast_radius": "MED", "desc": "Rent Payment"},
+    # FEAT-OBLI-001 is a separate workflow from FEAT-OBL-001, not a misspelling of
+    # it: it creates the immutable ASSESSMENT event, where FEAT-OBL-001 settles a
+    # rent bill. The one-letter gap between the two ids is the whole reason the
+    # assessment entry point spent its life executing under the payment id, so
+    # neither name may be "tidied" into the other without deciding which concept
+    # keeps which number (docs/TRACKING/FEAT_REGISTRY_RECONCILIATION_2026-09-19.md §V).
+    "FEAT-OBLI-001": {"domain": "Obligations", "blast_radius": "MED", "desc": "Assess Obligation"},
     "FEAT-OBL-002": {"domain": "Obligations", "blast_radius": "MED", "desc": "Scheduled Rent Cycle"},
     "FEAT-OBL-003": {"domain": "Obligations", "blast_radius": "MED", "desc": "Scheduled Insurance Cycle"},
     "FEAT-OBL-004": {"domain": "Obligations", "blast_radius": "HIGH", "desc": "Insurance Policy Purchase / Enrollment"},
