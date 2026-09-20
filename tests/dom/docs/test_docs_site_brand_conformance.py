@@ -19,6 +19,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[3]
 APP_TOKENS = REPO_ROOT / "static" / "css" / "tokens.css"
 SITE_TOKENS = REPO_ROOT / "docs-site" / "src" / "css" / "tokens.css"
+PUBLIC_TOKENS = REPO_ROOT / "github-pages" / "style.css"
 
 # The values SPEC-DES-001 §VI.4 names as canonical, plus the pinned text token
 # §VI.6 exists to protect. A surface that gets these right is on-brand; one that
@@ -180,3 +181,47 @@ def test_every_token_the_stylesheet_uses_is_defined():
     )
 
     assert used <= defined, f"undefined token(s): {sorted(used - defined)}"
+
+
+# ---------------------------------------------------------------------------
+# github-pages/ is the other half of the Pages artifact and the other brand
+# surface SPEC-DES-001 §XIII names. It carried the split the spec recorded:
+# --primary-color #236960, --secondary #d3af37, neither canonical.
+# ---------------------------------------------------------------------------
+
+PUBLIC_BRAND_TOKENS = (
+    "--primary",
+    "--primary-hover",
+    "--primary-subtle",
+    "--secondary",
+    "--secondary-hover",
+    "--secondary-subtle",
+    "--accent-text-on-light",
+)
+
+
+@pytest.mark.parametrize("token", PUBLIC_BRAND_TOKENS)
+def test_public_site_token_matches_the_application(token):
+    app_tokens = declared_tokens(APP_TOKENS.read_text(encoding="utf-8"))
+    public_tokens = declared_tokens(PUBLIC_TOKENS.read_text(encoding="utf-8"))
+
+    assert token in public_tokens, f"{token} is not defined by the public site"
+    assert public_tokens[token].lower() == app_tokens[token].lower(), (
+        f"{token} is {public_tokens[token]} on the public site and "
+        f"{app_tokens[token]} in static/css/tokens.css"
+    )
+
+
+def test_the_public_sites_legacy_aliases_follow_the_canonical_tokens():
+    """SPEC-DES-001 §X: an alias restating a literal stops following its token.
+
+    These four names are consumed throughout the marketing stylesheet. While
+    they held their own hex values, correcting the brand in one place left the
+    pages rendering the old one.
+    """
+    public_tokens = declared_tokens(PUBLIC_TOKENS.read_text(encoding="utf-8"))
+
+    assert public_tokens["--primary-color"] == "var(--primary)"
+    assert public_tokens["--primary-dark"] == "var(--primary-hover)"
+    assert public_tokens["--secondary-color"] == "var(--secondary)"
+    assert public_tokens["--accent-color"] == "var(--secondary)"

@@ -181,7 +181,10 @@ body {
 }
 
 /* Gold headline on the green band, as the application's landing and docs
-   heroes render it. #D4A857 on #1a4d47 is 4.76:1.
+   heroes render it. #D4A857 on #1a4d47 is 4.34:1, which is the large-text
+   threshold's business: this heading is 30px at weight 600, well past the 24px
+   WCAG counts as large, so 3:1 applies and it clears it. Gold must not set
+   normal-size text on this band.
    Infima colours every heading at `h1:not(#\#):not(#\#)`, which outranks a
    plain descendant selector — without the escape hatch this renders
    --ifm-heading-color (#171717) on the green band, at 1.6:1. */
