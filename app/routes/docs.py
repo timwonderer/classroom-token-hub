@@ -135,11 +135,12 @@ def _redirect_to_public_docs(doc_path=None):
         abort(404)
 
     if normalized_doc_path:
-        # A mapped path keeps its pretty destination; anything else lands on the
-        # technical site's root. Before the split an unmapped path 404ed here,
-        # which is wrong once every technical document lives there.
+        # The technical site publishes the docs/ tree at its own
+        # repository-relative paths, so an unmapped path forwards unchanged and
+        # the reader lands on the document they asked for. route-map.json only
+        # carries the exceptions: paths that were renamed on the way over.
         mapped = EXTERNAL_DOCS_ROUTE_MAP.get(normalized_doc_path)
-        external_target = mapped.strip("/") if mapped else ""
+        external_target = (mapped or normalized_doc_path).strip("/")
     else:
         external_target = ""
 

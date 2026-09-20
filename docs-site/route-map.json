@@ -1,10 +1,6 @@
 {
-  "ARCHITECTURE/ARC-CORE-000_Architecture_Foundation": "/technical/architecture",
-  "ARCHITECTURE/OPERATIONS/ARC-OPS-005_Api_Reference": "/technical/api",
-  "development/specs/V2_DOCS_PLATFORM_SPLIT": "/technical/migration-plan",
-  "user-guides": "/user-guides",
-  "user-guides/student": "/user-guides/student",
-  "user-guides/teacher": "/user-guides/teacher",
-  "user-guides/diagnostics/student": "/user-guides/student",
-  "user-guides/diagnostics/teacher": "/user-guides/teacher"
+  "_comment": "Exceptions only. The technical site publishes docs/ at its own repository-relative paths, so an unmapped developer-facing path forwards unchanged (app/utils/helpers.py, app/routes/docs.py). Entries here exist for documents whose path changed on the way over. docs/user-guides is never listed: the Flask app owns that tree.",
+  "ARCHITECTURE/ARC-CORE-000_Architecture_Foundation": "INVARIANT/ARCHITECTURE/INV-ARC-000_EXECUTION_MODEL",
+  "ARCHITECTURE/OPERATIONS/ARC-OPS-005_Api_Reference": "REFERENCE/REF-API-001_HTTP_INTERFACE_REFERENCE",
+  "development/specs/V2_DOCS_PLATFORM_SPLIT": "TRACKING/DOCS_PLATFORM_ROADMAP"
 }

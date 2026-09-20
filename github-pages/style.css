@@ -1,9 +1,14 @@
 /* ─── Design Tokens (inlined from tokens.css for GitHub Pages) ─── */
 :root {
-    --primary-color: #236960;
-    --primary-dark: #1a4742;
-    --secondary-color: #ac8255;
-    --accent-color: #c49564;
+    /* Legacy aliases. SPEC-DES-001 §X: a token whose value restates another
+       token will not follow it when that token changes, so these reference the
+       canonical values below rather than repeating a literal. Their previous
+       values — #236960, #1a4742, #ac8255, #c49564 — predate the unified token
+       set and were the brand split recorded in §XIII. */
+    --primary-color: var(--primary);
+    --primary-dark: var(--primary-hover);
+    --secondary-color: var(--secondary);
+    --accent-color: var(--secondary);
     --text-dark: #2c2c2c;
     --text-light: #6b7280;
     --bg-light: #f1f0f0c4;
@@ -35,10 +40,16 @@
     --primary: #1a4d47;
     --primary-hover: #15403b;
     --primary-subtle: #e8f0ef;
-    --secondary: #d3af37;
-    --secondary-hover: #c49f2e;
+    /* Canonical gold (SPEC-DES-001 §VI.4). #d3af37 / #c49f2e were the v1
+       values; all three role themes have since converged on this pair. */
+    --secondary: #D4A857;
+    --secondary-hover: #c09840;
     --secondary-text: var(--neutral-900);
     --secondary-subtle: #f9f5e6;
+    /* Gold is a fill: #D4A857 is 2.12:1 on white and #c09840 is 2.69:1, so
+       neither may set text on a light surface (SPEC-DES-001 §VI.6). This pinned
+       value is 6.70:1. */
+    --accent-text-on-light: #735816;
     --advisor-green: #1a4d47;
     --steward-blue: #2F4F7F;
     --guardian-gray: #303030;
@@ -181,7 +192,7 @@ hr {
 }
 
 .toc a:hover {
-    color: var(--secondary-color);
+    color: var(--accent-text-on-light);
     text-decoration: underline;
 }
 
