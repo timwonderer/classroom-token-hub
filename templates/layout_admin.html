@@ -404,7 +404,14 @@
         </div>
         {% endif %}
 
-        <div id="stale-class-context" class="alert alert-warning d-flex align-items-start gap-2 mb-3" role="alert" hidden>
+        {# `hidden` sits on an element carrying NO display utility. Bootstrap's
+           .d-flex is `display: flex !important`, which beats the UA stylesheet's
+           unprefixed `[hidden] { display: none }` — an element with both is
+           visible permanently, whatever the script says. style.css now forces
+           [hidden] to win globally; keeping the layout utility off this element
+           as well means the markup does not read as a bug to the next person. #}
+        <div id="stale-class-context" class="alert alert-warning mb-3" role="alert" hidden>
+          <div class="d-flex align-items-start gap-2">
           <span class="material-symbols-outlined" aria-hidden="true">sync_problem</span>
           <div>
             <strong>This page is showing a different class than the one you are now in.</strong><br>
@@ -412,6 +419,7 @@
             this page applies to your <em>current</em> class, not the one shown here, so a
             student picked from this list may simply be skipped.
             <button type="button" class="btn btn-sm btn-warning ms-2" onclick="window.location.reload()">Reload this page</button>
+          </div>
           </div>
         </div>
 

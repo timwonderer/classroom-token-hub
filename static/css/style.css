@@ -4,6 +4,25 @@
 */
 
 /* ─── Reset & Typography ─── */
+
+/*
+ * The `hidden` attribute must actually hide.
+ *
+ * The UA stylesheet's `[hidden] { display: none }` carries no `!important`, so
+ * ANY Bootstrap display utility on the same element beats it — `.d-flex`,
+ * `.d-block` and `.d-grid` are all declared `display: ... !important`. An
+ * element written as `<div class="alert d-flex" hidden>` is therefore visible,
+ * permanently, and no amount of `el.hidden = true` in JavaScript changes that.
+ *
+ * That shipped once: the stale-class-context banner in layout_admin.html
+ * announced itself on every admin page regardless of whether the context had
+ * actually diverged. The markup was correct and the script was correct; the
+ * cascade quietly discarded both.
+ */
+[hidden] {
+    display: none !important;
+}
+
 body {
     font-family: var(--font-family);
     background-color: var(--background);
