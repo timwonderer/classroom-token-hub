@@ -22,7 +22,7 @@ const appDocsOrigin = stripTrailingSlash(
 );
 const baseUrl = process.env.DOCS_SITE_BASE_URL || "/docs/";
 
-const repoUrl = "https://github.com/timwonderer/classroom-economy";
+const repoUrl = "https://github.com/timwonderer/classroom-token-hub";
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
@@ -36,7 +36,7 @@ const config = {
     faster: true,
   },
   organizationName: "timwonderer",
-  projectName: "classroom-economy",
+  projectName: "classroom-token-hub",
   trailingSlash: false,
   onBrokenLinks: "throw",
   onBrokenAnchors: "throw",

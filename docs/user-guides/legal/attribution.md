@@ -138,7 +138,7 @@ If you use this project, we encourage you to:
 - **Share documentation** - Help other educators understand and use the platform
 - **Respect the license** - Use the software ethically and legally
 
-See the [Contributing Guide](https://github.com/timwonderer/classroom-economy/blob/main/.github/CONTRIBUTING.md) for contribution guidelines.
+See the [Contributing Guide](https://github.com/timwonderer/classroom-token-hub/blob/main/.github/CONTRIBUTING.md) for contribution guidelines.
 
 ---
 

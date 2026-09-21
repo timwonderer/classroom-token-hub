@@ -87,7 +87,7 @@ Tests run against a real PostgreSQL database named by `TEST_DATABASE_URL`. There
 ```bash
 # Clone and create venv
 git clone <repo-url>
-cd classroom-economy
+cd classroom-token-hub
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt

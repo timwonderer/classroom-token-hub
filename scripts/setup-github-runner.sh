@@ -85,7 +85,7 @@ echo -e "${YELLOW}Next Steps:${NC}"
 echo -e "${YELLOW}════════════════════════════════════════════════════════════${NC}"
 echo
 echo -e "1. Go to your GitHub repository:"
-echo -e "   ${BLUE}https://github.com/timwonderer/classroom-economy/settings/actions/runners/new${NC}"
+echo -e "   ${BLUE}https://github.com/timwonderer/classroom-token-hub/settings/actions/runners/new${NC}"
 echo
 echo -e "2. Copy the registration token shown on that page"
 echo
@@ -96,7 +96,7 @@ else
     echo -e "   ${GREEN}cd ${RUNNER_DIR}${NC}"
     echo -e "   ${GREEN}./config.sh \\${NC}"
 fi
-echo -e "   ${GREEN}  --url https://github.com/timwonderer/classroom-economy \\${NC}"
+echo -e "   ${GREEN}  --url https://github.com/timwonderer/classroom-token-hub \\${NC}"
 echo -e "   ${GREEN}  --token YOUR_REGISTRATION_TOKEN${NC}"
 echo
 echo -e "4. Install as a service:"
