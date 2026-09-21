@@ -33,20 +33,23 @@ class ExternalObservationRecord:
     outcome: Outcome
     epistemic_state: EpistemicState
     diagnostic_code: str
-    latency_ms: int | None
+    transport_latency_ms: int | None
     probe_version: str
     freshness_class: str
     staleness_state_at_receipt: str
     evaluator_version: str | None
     checked_at: datetime | None = None
+    transport_http_status: int | None = None
 
     def validate(self) -> None:
         if not self.observation_id or not self.correlation_id or not self.source or not self.capability:
             raise ValueError("Observation identity and capability are required.")
         if not self.diagnostic_code or len(self.diagnostic_code) > 64:
             raise ValueError("Observation diagnostic_code must be bounded.")
-        if self.latency_ms is not None and (self.latency_ms < 0 or self.latency_ms > 86_400_000):
-            raise ValueError("Observation latency is outside the bounded range.")
+        if self.transport_latency_ms is not None and (self.transport_latency_ms < 0 or self.transport_latency_ms > 600_000):
+            raise ValueError("Observation transport latency is outside the bounded range.")
+        if self.transport_http_status is not None and (not isinstance(self.transport_http_status, int) or isinstance(self.transport_http_status, bool) or not 100 <= self.transport_http_status <= 599):
+            raise ValueError("Observation transport HTTP status is outside the bounded range.")
         if not self.probe_version or len(self.probe_version) > 32:
             raise ValueError("Observation probe_version must be bounded.")
         if self.freshness_class not in FRESHNESS_MAX_AGE:

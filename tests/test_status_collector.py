@@ -9,7 +9,7 @@ import pytest
 from status.projection import EpistemicState, Outcome
 from status.contracts import ExternalObservationRecord
 from status.projection import EvidenceSource, ObservationClass
-from status_service.collector import SIGNALS, _signal_map, collect
+from status_service.collector import HealthResponse, SIGNALS, _signal_map, collect, fetch_app_health
 from status_service.store import FirestoreNoticeStore
 
 
@@ -38,9 +38,34 @@ def payload(*, database="PASS", timestamp=NOW):
     return json.dumps({"observed_at": timestamp.isoformat(), "signals": signals}).encode()
 
 
+def test_fetch_reports_received_status_without_exposing_credentials(monkeypatch):
+    class Response:
+        status = 200
+        headers = {"Content-Type": "application/json"}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+        def read(self, size):
+            assert size == 16_385
+            return b"{}"
+
+    class Opener:
+        def open(self, request, timeout):
+            assert timeout == 10
+            assert request.get_header("Cf-access-client-id") == "id"
+            return Response()
+
+    monkeypatch.setattr("status_service.collector.build_opener", lambda *_: Opener())
+    assert fetch_app_health("id", "secret") == HealthResponse(b"{}", 200)
+
+
 def test_collector_records_all_signals_with_one_correlation_and_no_raw_body():
     store = RecordingStore()
-    records = collect(store, client_id="id", client_secret="secret", now=NOW, fetch=lambda *_: payload())
+    records = collect(store, client_id="id", client_secret="secret", now=NOW, fetch=lambda *_: HealthResponse(payload(), 200))
     assert len(records) == len(SIGNALS) + 1
     assert len({record.correlation_id for record in records}) == 1
     assert next(record for record in records if record.capability == "database").outcome == Outcome.PASS
@@ -50,6 +75,8 @@ def test_collector_records_all_signals_with_one_correlation_and_no_raw_body():
     assert next(record for record in records if record.capability == "database").source == EvidenceSource.APPLICATION_RUNTIME_EVIDENCE
     assert all("secret" not in repr(record) for record in records)
     assert all(record.observed_at == NOW for record in records)
+    assert all(record.transport_http_status == 200 for record in records)
+    assert all(record.transport_latency_ms is not None for record in records)
 
 
 def test_collector_default_clock_validates_and_stores_receipt_time(monkeypatch):
@@ -65,7 +92,7 @@ def test_collector_default_clock_validates_and_stores_receipt_time(monkeypatch):
     monkeypatch.setattr("status_service.collector.datetime", ReceiptClock)
     store = RecordingStore()
     records = collect(store, client_id="id", client_secret="secret",
-                      fetch=lambda *_: payload(timestamp=receipt_time))
+                      fetch=lambda *_: HealthResponse(payload(timestamp=receipt_time), 200))
 
     database = next(record for record in records if record.capability == "database")
     assert database.outcome == Outcome.PASS
@@ -84,6 +111,7 @@ def test_access_denial_is_not_reported_as_app_failure():
     records = collect(store, client_id="id", client_secret="secret", now=NOW, fetch=denied)
     assert all(record.outcome == Outcome.UNKNOWN for record in records)
     assert all(record.epistemic_state == EpistemicState.UNAVAILABLE for record in records)
+    assert all(record.transport_http_status == 302 for record in records)
 
 
 def test_network_failure_records_reachability_failure_without_fabricating_feature_failure():
@@ -96,12 +124,23 @@ def test_network_failure_records_reachability_failure_without_fabricating_featur
     assert records[0].outcome == Outcome.FAIL
     assert records[0].epistemic_state == EpistemicState.UNAVAILABLE
     assert all(record.outcome == Outcome.UNKNOWN for record in records[1:])
+    assert all(record.transport_http_status is None for record in records)
+
+
+def test_http_failure_keeps_result_metadata_separate_from_feature_evidence():
+    def unavailable(*_):
+        raise HTTPError("https://app.classroomtokenhub.com/health/status", 503, "Unavailable", {}, None)
+
+    records = collect(RecordingStore(), client_id="id", client_secret="secret", now=NOW, fetch=unavailable)
+    assert records[0].outcome == Outcome.FAIL
+    assert all(record.outcome == Outcome.UNKNOWN for record in records[1:])
+    assert all(record.transport_http_status == 503 for record in records)
 
 
 def test_unregistered_or_stale_payload_fails_closed():
     store = RecordingStore()
     stale = payload(timestamp=datetime(2026, 9, 19, 19, 20, tzinfo=timezone.utc))
-    records = collect(store, client_id="id", client_secret="secret", now=NOW, fetch=lambda *_: stale)
+    records = collect(store, client_id="id", client_secret="secret", now=NOW, fetch=lambda *_: HealthResponse(stale, 200))
     assert records[0].outcome == Outcome.PASS  # The HTTP endpoint answered; feature evidence is unusable.
     assert all(record.outcome == Outcome.UNKNOWN for record in records[1:])
     malformed = json.loads(payload())
@@ -127,7 +166,7 @@ def test_diagnostic_cannot_claim_pass_for_unregistered_check():
     malformed["signals"][0]["epistemic_state"] = "KNOWN"
     store = RecordingStore()
     records = collect(store, client_id="id", client_secret="secret", now=NOW,
-                      fetch=lambda *_: json.dumps(malformed).encode())
+                      fetch=lambda *_: HealthResponse(json.dumps(malformed).encode(), 200))
     assert all(record.outcome == Outcome.UNKNOWN for record in records[1:])
 
 
@@ -137,7 +176,7 @@ def test_unimplemented_feature_diagnostic_is_not_accepted():
     login.update(outcome="PASS", epistemic_state="KNOWN",
                  diagnostic_code="FEATURE_INTEGRITY_PASS", checked_at=NOW.isoformat())
     records = collect(RecordingStore(), client_id="id", client_secret="secret", now=NOW,
-                      fetch=lambda *_: json.dumps(body).encode())
+                      fetch=lambda *_: HealthResponse(json.dumps(body).encode(), 200))
     assert next(record for record in records if record.capability == "login").outcome == Outcome.UNKNOWN
     assert next(record for record in records if record.capability == "public_service_reachability").outcome == Outcome.PASS
 
@@ -148,7 +187,7 @@ def test_measured_app_result_preserves_check_time_and_origin():
     database = next(signal for signal in body["signals"] if signal["key"] == "database")
     database["checked_at"] = checked_at.isoformat()
     records = collect(RecordingStore(), client_id="id", client_secret="secret", now=NOW,
-                      fetch=lambda *_: json.dumps(body).encode())
+                      fetch=lambda *_: HealthResponse(json.dumps(body).encode(), 200))
     result = next(record for record in records if record.capability == "database")
     assert (result.outcome, result.source, result.observed_at, result.checked_at) == (
         Outcome.PASS, EvidenceSource.APPLICATION_RUNTIME_EVIDENCE, NOW, checked_at)
@@ -160,7 +199,7 @@ def test_stale_app_check_does_not_become_fresh_at_collection():
     database = next(signal for signal in body["signals"] if signal["key"] == "database")
     database["checked_at"] = (NOW - timedelta(minutes=6)).isoformat()
     records = collect(RecordingStore(), client_id="id", client_secret="secret", now=NOW,
-                      fetch=lambda *_: json.dumps(body).encode())
+                      fetch=lambda *_: HealthResponse(json.dumps(body).encode(), 200))
     assert next(record for record in records if record.capability == "login").outcome == Outcome.UNKNOWN
     assert next(record for record in records if record.capability == "database").outcome == Outcome.UNKNOWN
     assert next(record for record in records if record.capability == "public_service_reachability").outcome == Outcome.PASS
