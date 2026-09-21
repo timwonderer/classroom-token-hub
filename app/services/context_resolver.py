@@ -6,11 +6,20 @@ user_id, class_id, and seat_id. It raises exceptions on failure
 and never infers or reconstructs context.
 """
 
+import logging
 from dataclasses import dataclass
 
 from flask import session
 from app.extensions import db
 from app.models import Seat, User, UserRole
+
+# These conditions are identity-resolution failures: a seat pointer that does not
+# match its class, a seat that does not belong to the authenticated user. They
+# were emitted to stdout, which reaches Loki as unstructured text -- stripped of
+# the correlation id, actor and class context the app's logging attaches, and of
+# level filtering, on precisely the events where a correlated line is most useful.
+# Only internal identifiers are recorded; no PII.
+logger = logging.getLogger(__name__)
 
 
 class ContextResolutionError(Exception):
@@ -105,7 +114,11 @@ def resolve_canonical_context(require_class: bool = True) -> CanonicalContext | 
     if not class_id:
         if not require_class and getattr(user.user_role, "value", user.user_role) == UserRole.TEACHER.value:
             return BoundaryContext(user_id=user_id, actor_role="teacher")
-        print(f"DEBUG: Missing class_id! user_id={user_id}, last_active_class_id={getattr(user, 'last_active_class_id', 'NOT SET')}")
+        logger.warning(
+            "Canonical context missing class_id: user_id=%s last_active_class_id=%s",
+            user_id,
+            getattr(user, "last_active_class_id", None),
+        )
         raise ContextInvariantViolation("Missing canonical class_id in user context.")
 
     seat_id = getattr(user, "last_active_seat_id", None)
@@ -114,24 +127,42 @@ def resolve_canonical_context(require_class: bool = True) -> CanonicalContext | 
         try:
             seat_id = int(seat_id)
         except (ValueError, TypeError):
-            print("DEBUG: Invalid canonical seat pointer.")
+            logger.warning("Invalid canonical seat pointer: user_id=%s", user_id)
             raise ContextInvariantViolation("Invalid canonical seat pointer.")
         seat = db.session.get(Seat, seat_id)
         if not seat:
-            print("DEBUG: Missing or deleted last_active_seat_id.")
+            logger.warning(
+                "Canonical seat pointer resolves to no seat: user_id=%s seat_id=%s",
+                user_id, seat_id,
+            )
             raise ContextInvariantViolation("Missing or deleted last_active_seat_id.")
         if seat.class_id != class_id:
-            print(f"DEBUG: last_active_seat_id {seat_id} does not belong to last_active_class_id {class_id}.")
+            logger.warning(
+                "Canonical seat pointer crosses class boundary: "
+                "user_id=%s seat_id=%s seat_class_id=%s active_class_id=%s",
+                user_id, seat_id, seat.class_id, class_id,
+            )
             raise ContextMismatch("last_active_seat_id does not belong to last_active_class_id.")
         if seat.user_id != user_id:
-            print("DEBUG: last_active_seat_id does not belong to authenticated user.")
+            logger.warning(
+                "Canonical seat pointer belongs to another user: "
+                "authenticated_user_id=%s seat_id=%s seat_user_id=%s",
+                user_id, seat_id, seat.user_id,
+            )
             raise ContextMismatch("last_active_seat_id does not belong to authenticated user.")
     else:
-        print("DEBUG: Missing canonical last_active_seat_id.")
+        logger.warning(
+            "Canonical context missing last_active_seat_id: user_id=%s class_id=%s",
+            user_id, class_id,
+        )
         raise ContextInvariantViolation("Missing canonical last_active_seat_id.")
 
     if getattr(seat, "role", None) == "student" and getattr(seat, "claimed_at", None) is None:
-        print("DEBUG: Student seat is not claimed.")
+        logger.warning(
+            "Canonical context resolves to an unclaimed student seat: "
+            "user_id=%s seat_id=%s class_id=%s",
+            user_id, getattr(seat, "id", None), class_id,
+        )
         raise ContextInvariantViolation("Student seat is not claimed.")
 
     return CanonicalContext(

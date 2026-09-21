@@ -71,12 +71,24 @@ CLASSROOMS = {
         "teacher": "teacher_alice",
         "display_name": "Timezone Line Islands",
         "section": "Period 1",
-        # UTC+14, the earliest civil time on Earth. Paired with a UTC-12 session
-        # clock this is a 26-hour civil-date separation -- the widest the calendar
-        # allows -- so a naive datetime cannot coincidentally land on the right
-        # local day no matter where the developer, the server or the database sit.
-        # The Pacific fixture below is environment-dependent and proves nothing on
-        # a Pacific machine; this one cannot be flattered by any environment.
+        # UTC+14, the earliest civil time on Earth, and the deliberately hostile
+        # half of this file.
+        #
+        # Paired with a UTC-12 session clock (Etc/GMT+12) it gives a 26-hour
+        # civil-date separation -- the widest the calendar allows. The reason it
+        # is so wide is the point: Kiritimati and Baker Island sit 2,129 km apart
+        # in the central Pacific, closer than London is to Moscow, which is about
+        # 1.3 hours of actual planetary rotation. The other ~24.7 hours are pure
+        # convention, because the International Date Line runs BETWEEN them.
+        # Kiribati put its islands on the western-calendar side; Baker and Howland
+        # stayed on the eastern. Two neighbours, two calendar days.
+        #
+        # That makes the pair adversarial in a way no ordinary zone is: the gap is
+        # not distance a naive computation might approximate, it is a discontinuity
+        # it cannot. The Pacific fixture below is environment-dependent and proves
+        # nothing on a Pacific developer machine -- the shipped naive parse that
+        # caused finding 25 produced the RIGHT instant there and the wrong one in
+        # production. This one cannot be flattered by any environment.
         "class_timezone": "Pacific/Kiritimati",
         "roster": [
             {

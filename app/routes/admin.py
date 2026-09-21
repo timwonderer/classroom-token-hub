@@ -7947,11 +7947,25 @@ def payroll_manual_payment():
                 )
                 applied_count += 1
 
-            message = f'Manual credit of ${amount:.2f} applied to {applied_count} student(s)!'
-            if save_action == 'save_and_apply':
-                message = f'Template saved and manual credit applied to {applied_count} student(s)!'
-
-            flash(message, 'success')
+            if applied_count == 0:
+                # The teacher deliberately selected students and none was paid,
+                # which is never a success. The usual cause is a stale tab: class
+                # context is one server-side value per teacher, so a second tab
+                # switching class leaves this page displaying a roster from a
+                # class the session is no longer in, and the loop above correctly
+                # skips every seat outside the selected class. The count was
+                # honest; the styling and the silence about the cause were not.
+                flash(
+                    'No students were paid. The selected students are not in your '
+                    'current class — your active class may have changed in another '
+                    'tab. Reload this page and try again.',
+                    'warning',
+                )
+            else:
+                message = f'Manual credit of ${amount:.2f} applied to {applied_count} student(s)!'
+                if save_action == 'save_and_apply':
+                    message = f'Template saved and manual credit applied to {applied_count} student(s)!'
+                flash(message, 'success')
 
         except HTTPException:
             raise
@@ -8105,7 +8119,12 @@ def export_students():
 
     # Write header
     writer.writerow([
-        'First Name', 'Last Name', 'Block', 'Checking Balance',
+        # "Block" is retired v1 vocabulary for what v2 calls `section`. No
+        # teacher-facing template renders the word any more, so a teacher who
+        # filled in "Section" downloaded a column labelled "Block". The value
+        # is legitimate -- section is display metadata and an export is a
+        # display surface -- and only the label was wrong.
+        'First Name', 'Last Name', 'Section', 'Checking Balance',
         'Savings Balance', 'Total Earnings', 'Insurance Plan',
         'Has Completed Setup'
     ])
@@ -9569,6 +9588,15 @@ def onboarding_status():
             'status': 'success',
             'dismissed': all(completion.values()),
             'completion': completion,
+            # Class context is ONE server-side value per teacher (INV-ARC-010
+            # makes the nav switcher its sole legal mutator), so a second tab
+            # switching class silently changes this tab's context while this tab
+            # goes on displaying the old class. No data crosses the boundary --
+            # writes are scoped and skip out-of-scope seats -- but the teacher is
+            # told "applied to 0 student(s)" with no cause named, and reasonably
+            # concludes the feature is broken. Every admin page already polls this
+            # endpoint, so returning the active class lets a stale page notice.
+            'active_class_id': active_class_id,
         })
 
     except Exception as e:

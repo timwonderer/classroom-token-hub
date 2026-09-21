@@ -8,6 +8,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block page_title %}{{ page_title or "Admin Portal" }}{% endblock %}</title>
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    {# The class this page was RENDERED for. Class context is one
+       server-side value per teacher, so a second tab switching class
+       changes this tab's context while this tab keeps showing the old
+       class. Stamping it lets the page notice it has gone stale. #}
+    <meta name="rendered-class-id" content="{{ (g.canonical_context.class_id if g.canonical_context is defined and g.canonical_context else '') or '' }}">
 
     <!-- PWA Meta Tags -->
     <meta name="theme-color" content="teal">
@@ -399,6 +404,17 @@
         </div>
         {% endif %}
 
+        <div id="stale-class-context" class="alert alert-warning d-flex align-items-start gap-2 mb-3" role="alert" hidden>
+          <span class="material-symbols-outlined" aria-hidden="true">sync_problem</span>
+          <div>
+            <strong>This page is showing a different class than the one you are now in.</strong><br>
+            Your active class changed in another tab or window. Anything you submit from
+            this page applies to your <em>current</em> class, not the one shown here, so a
+            student picked from this list may simply be skipped.
+            <button type="button" class="btn btn-sm btn-warning ms-2" onclick="window.location.reload()">Reload this page</button>
+          </div>
+        </div>
+
         {% block content %}{% endblock %}
     </main>
 
@@ -645,6 +661,55 @@
 
     <!-- Getting Started Widget (for new teachers) -->
     {% include 'components/getting_started_widget.html' %}
+<script>
+// Stale class context detection (live-test finding 22).
+//
+// Class context is ONE server-side value per teacher: resolve_canonical_context
+// reads user.last_active_class_id, and INV-ARC-010 makes the nav switcher its
+// sole legal mutator. A second tab is therefore not a second session -- switching
+// class there changes THIS tab's context while this tab goes on displaying the
+// class it was rendered for.
+//
+// Isolation holds regardless: admin writes are scoped and skip any seat outside
+// the selected class. What fails is the explanation. A manual credit reported
+// "applied to 0 student(s)" -- styled as success -- after the teacher
+// deliberately picked a student, and nothing named the cause, so the reasonable
+// conclusion was "this feature is broken" rather than "my context moved".
+//
+// The fix is not per-tab context; one active class per teacher is deliberate.
+// It is to make a stale view detectable. This checks only on focus and
+// visibility change -- the moments a teacher returns to an abandoned tab, which
+// is exactly when the divergence exists -- rather than on a timer.
+(function () {
+  var stamped = document.querySelector('meta[name="rendered-class-id"]');
+  var banner = document.getElementById('stale-class-context');
+  if (!stamped || !banner) { return; }
+  var renderedClassId = stamped.getAttribute('content') || '';
+  if (!renderedClassId) { return; }
+
+  var checking = false;
+
+  function checkContext() {
+    if (checking || document.hidden) { return; }
+    checking = true;
+    fetch('/admin/onboarding/status', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (!data || data.status !== 'success') { return; }
+        var active = data.active_class_id || '';
+        // Only an actual, known divergence raises the banner. An absent value
+        // means the answer is unknown, and warning on unknown would train the
+        // teacher to ignore it.
+        banner.hidden = !(active && active !== renderedClassId);
+      })
+      .catch(function () { /* offline or signed out; the page is no worse off */ })
+      .finally(function () { checking = false; });
+  }
+
+  window.addEventListener('focus', checkContext);
+  document.addEventListener('visibilitychange', checkContext);
+})();
+</script>
 </body>
 
 </html>
