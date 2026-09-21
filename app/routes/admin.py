@@ -568,7 +568,12 @@ def _feature_unresolved_response(feature_name: str):
     """UNRESOLVED state: no lawful class scope could be established. Fail CLOSED
     (404) — never render the feature — and emit a stable enforcement signal
     (``X-Feature-Unresolved``)."""
-    response = make_response("Not Found", 404)
+    # Rendered rather than a bare 9-byte "Not Found": that body reached the
+    # browser as raw text with no layout, indistinguishable from a proxy or
+    # gateway failure, and ``make_response`` bypasses the 404 error handler that
+    # would otherwise have produced a real page.
+    body = render_template("error_404.html", request_url=request.url)
+    response = make_response(body, 404)
     response.headers["X-Feature-Unresolved"] = feature_name
     return response
 
@@ -606,10 +611,25 @@ def before_request():
             return response
 
     feature_name = ADMIN_FEATURE_ENDPOINTS.get(request.endpoint or "")
-    if feature_name and request.method == "GET":
+    if feature_name and request.method == "GET" and canonical_context is not None:
         # Capability boundary: distinguish ENABLED / DISABLED / UNRESOLVED
         # explicitly. FAIL CLOSED for UNRESOLVED — a None scope is a failure to
         # establish authority, never a licence to render the feature.
+        #
+        # The `canonical_context is not None` condition is an ORDERING fix, not a
+        # relaxation. Blueprint before_request hooks run before the view, and
+        # therefore before the view's own ``@admin_required`` — so on an expired
+        # session `g.canonical_context` is not set yet, every feature resolved as
+        # UNRESOLVED, and this gate returned a bare 404 that short-circuited the
+        # request before ``admin_required`` could redirect to login. A teacher
+        # who timed out and refreshed got "Not Found" on the six pages they use
+        # most (payroll, store, banking, rent, insurance, hall pass) while every
+        # other admin page correctly sent them to log in.
+        #
+        # An unauthenticated request is not "unresolved feature scope"; it is
+        # "not logged in", and ``admin_required`` refuses it microseconds later.
+        # Deferring to it is strictly more accurate. Every AUTHENTICATED request
+        # still fails closed exactly as before.
         capability = _resolve_feature_capability_state(feature_name)
         if capability == FEATURE_CAPABILITY_UNRESOLVED:
             return _feature_unresolved_response(feature_name)
