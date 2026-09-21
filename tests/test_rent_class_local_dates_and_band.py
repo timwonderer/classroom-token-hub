@@ -30,6 +30,7 @@ from tests.helpers.classroom_initializer import initialize_as_teacher
 CLASSROOM_FOR_TZ = {
     "America/Los_Angeles": "tz_pacific_p1",
     "Asia/Tokyo": "tz_tokyo_p1",
+    "Pacific/Kiritimati": "tz_line_islands_p1",
 }
 
 
@@ -82,6 +83,10 @@ def _post_rent(client, **overrides):
         ("America/Los_Angeles", datetime(2026, 10, 20, 7, 0, tzinfo=timezone.utc)),
         # Oct 20 00:00 JST = Oct 19 15:00 UTC. Independent of the host.
         ("Asia/Tokyo", datetime(2026, 10, 19, 15, 0, tzinfo=timezone.utc)),
+        # UTC+14, the earliest civil time on Earth: Oct 20 00:00 there is Oct 19
+        # 10:00 UTC, and Oct 18 in a UTC-12 session. Nothing about any host's
+        # clock can make a naive parse produce this instant.
+        ("Pacific/Kiritimati", datetime(2026, 10, 19, 10, 0, tzinfo=timezone.utc)),
     ],
 )
 def test_first_rent_due_date_is_stored_as_class_local_midnight(app, client, tz_name, expected_utc):
@@ -98,7 +103,9 @@ def test_first_rent_due_date_is_stored_as_class_local_midnight(app, client, tz_n
         )
 
 
-@pytest.mark.parametrize("tz_name", ["America/Los_Angeles", "Asia/Tokyo"])
+@pytest.mark.parametrize(
+    "tz_name", ["America/Los_Angeles", "Asia/Tokyo", "Pacific/Kiritimati"]
+)
 def test_the_page_shows_back_the_date_the_teacher_typed(app, client, tz_name):
     """Teacher and student must not be told different days for one obligation.
 

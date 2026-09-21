@@ -67,6 +67,28 @@ CLASSROOMS = {
             },
         ],
     },
+    "tz_line_islands_p1": {
+        "teacher": "teacher_alice",
+        "display_name": "Timezone Line Islands",
+        "section": "Period 1",
+        # UTC+14, the earliest civil time on Earth. Paired with a UTC-12 session
+        # clock this is a 26-hour civil-date separation -- the widest the calendar
+        # allows -- so a naive datetime cannot coincidentally land on the right
+        # local day no matter where the developer, the server or the database sit.
+        # The Pacific fixture below is environment-dependent and proves nothing on
+        # a Pacific machine; this one cannot be flattered by any environment.
+        "class_timezone": "Pacific/Kiritimati",
+        "roster": [
+            {
+                "first_name": "Teraina",
+                "last_name": "Rotima",
+                "teacher_note": "",
+                "chosen_word": "compass",
+                "pin": "1234",
+                "passphrase": "testpass",
+            },
+        ],
+    },
     "tz_tokyo_p1": {
         "teacher": "teacher_alice",
         "display_name": "Timezone Tokyo",
