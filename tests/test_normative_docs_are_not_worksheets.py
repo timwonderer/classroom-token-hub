@@ -34,7 +34,10 @@ NORMATIVE_ROOTS = (
     "docs/STANDARD_OPERATING_PROCEDURES",
 )
 
-FENCE = re.compile(r"^\s*(?:```|~~~)")
+# The opening marker is captured so a fence closes only on the SAME character
+# at equal or greater length. A ````-fenced example may contain ``` as literal
+# content, and treating that as a close would resume scanning inside the block.
+FENCE = re.compile(r"^\s*(?P<marker>`{3,}|~{3,})")
 TICKED = re.compile(r"^\s*[-*+]\s+\[[xX]\]")
 
 
@@ -46,12 +49,19 @@ def ticked_checkboxes(text: str) -> list[tuple[int, str]]:
     silence the rule.
     """
     found: list[tuple[int, str]] = []
-    in_fence = False
+    open_marker: str | None = None
     for number, line in enumerate(text.splitlines(), start=1):
-        if FENCE.match(line):
-            in_fence = not in_fence
+        fence = FENCE.match(line)
+        if fence:
+            marker = fence.group("marker")
+            if open_marker is None:
+                open_marker = marker
+            elif marker[0] == open_marker[0] and len(marker) >= len(open_marker):
+                open_marker = None
+            # Otherwise it is a shorter or different marker inside a block, so
+            # it is content rather than a delimiter.
             continue
-        if not in_fence and TICKED.match(line):
+        if open_marker is None and TICKED.match(line):
             found.append((number, line.strip()))
     return found
 
@@ -111,6 +121,28 @@ def test_detector_reports_a_filled_box(markup):
 )
 def test_detector_admits_empty_boxes_prose_and_fenced_examples(markup):
     assert ticked_checkboxes(markup) == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # a ````-fenced example whose content is itself a ```-fenced block
+        "````markdown\n```\n- [x] inside a nested example\n```\n````\n",
+        # a tilde fence is not closed by a backtick fence
+        "~~~\n```\n- [x] inside a tilde block\n```\n~~~\n",
+        # a longer closing marker still closes, and nothing follows it
+        "```\n- [x] inside\n`````\n",
+    ],
+)
+def test_detector_tracks_the_opening_fence_marker(text):
+    """A shorter or different marker inside a block is content, not a close."""
+    assert ticked_checkboxes(text) == []
+
+
+def test_detector_reports_after_a_nested_example_closes():
+    """The outer fence must still close, so a real violation after it is seen."""
+    text = "````\n```\n- [x] example content\n```\n````\n\n- [x] actually ticked\n"
+    assert [n for n, _ in ticked_checkboxes(text)] == [7]
 
 
 def test_detector_resumes_after_a_closed_fence():

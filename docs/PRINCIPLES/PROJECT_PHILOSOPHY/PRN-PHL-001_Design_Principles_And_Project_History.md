@@ -105,7 +105,7 @@ The architecture reflects the pedagogy.
 
 The system avoids "magic." If something happens, it can be traced, explained, and — when appropriate — undone.
 
-```
+```text
 app/
 ├── __init__.py       # Application factory
 ├── models.py         # Explicit economic state
@@ -270,6 +270,9 @@ no longer describe the system. Each milestone carries a status:
 | **Superseded** | The mechanism was replaced. The entry names the replacement. |
 | **Evolved** | The decision holds in principle but its implementation has moved on. |
 
+An entry that is not a milestone at all carries **Reference** instead of a status, and points at the
+document that holds the account.
+
 ## From "Classroom Economy" to "Classroom Token Hub"
 
 **Status: Current.**
@@ -349,7 +352,7 @@ shape, not this entry.
 
 ## Visual Identity
 
-**Status: Recorded elsewhere.**
+**Reference: `REF-DES-001`.**
 
 The history of the visual system — role palettes and their predecessors, the move from image logos to
 a live text wordmark, typography, and the public site's parallel identity — is a separate and

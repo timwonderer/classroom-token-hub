@@ -35,6 +35,14 @@ RETIRED_URL = re.compile(r"github\.com/" + re.escape(RETIRED_OWNER_REPO) + r"(?!
 
 EXEMPT_PREFIXES = ("docs/archive/",)
 
+# Built at runtime, never written as one literal. This module is itself tracked
+# and scanned, so a fixture spelling the retired URL out would make the guard
+# report its own test data and fail on every checkout. It did: the test passed
+# while the file was still untracked and began failing the moment it was
+# committed, because committing changed the scanner's input.
+RETIRED_BASE_URL = "https://github.com/" + RETIRED_OWNER_REPO
+CURRENT_BASE_URL = "https://github.com/" + CURRENT_OWNER_REPO
+
 
 def retired_repository_links(text: str) -> list[tuple[int, str]]:
     """Lines carrying a link to the repository's retired name."""
@@ -81,11 +89,11 @@ def test_no_tracked_file_links_to_the_retired_repository_name():
 @pytest.mark.parametrize(
     "line",
     [
-        'const repoUrl = "https://github.com/timwonderer/classroom-economy";',
-        '<a href="https://github.com/timwonderer/classroom-economy">Repository</a>',
-        "See https://github.com/timwonderer/classroom-economy/blob/main/CHANGELOG.md",
-        "  --url https://github.com/timwonderer/classroom-economy \\",
-        "[docs](https://github.com/timwonderer/classroom-economy/tree/main/docs)",
+        f'const repoUrl = "{RETIRED_BASE_URL}";',
+        f'<a href="{RETIRED_BASE_URL}">Repository</a>',
+        f"See {RETIRED_BASE_URL}/blob/main/CHANGELOG.md",
+        f"  --url {RETIRED_BASE_URL} \\",
+        f"[docs]({RETIRED_BASE_URL}/tree/main/docs)",
     ],
 )
 def test_detector_reports_a_retired_link(line):
@@ -97,8 +105,8 @@ def test_detector_reports_a_retired_link(line):
     "line",
     [
         # the current name, including the prefix-collision case
-        'const repoUrl = "https://github.com/timwonderer/classroom-token-hub";',
-        "https://github.com/timwonderer/classroom-economy-archive",
+        f'const repoUrl = "{CURRENT_BASE_URL}";',
+        f"{RETIRED_BASE_URL}-archive",
         # the live production host path and service unit
         "            cd ~/classroom-economy",
         "            sudo systemctl restart classroom-economy",
@@ -108,11 +116,20 @@ def test_detector_reports_a_retired_link(line):
         # the English phrase
         "The isolated classroom-economy boundary represented canonically by `class_id`.",
         # a different owner entirely
-        "https://github.com/someone-else/classroom-economy",
+        "https://github.com/someone-else/" + RETIRED_OWNER_REPO.split("/")[1],
     ],
 )
 def test_detector_admits_infrastructure_names_and_the_current_url(line):
     assert retired_repository_links(line) == []
+
+
+def test_this_module_is_scanned_and_does_not_report_itself():
+    """The guard must cover its own file — exempting it would leave the one
+    place most likely to spell the retired URL unchecked — and must not trip
+    over its own fixtures."""
+    rel = str(Path(__file__).resolve().relative_to(REPO_ROOT))
+    assert rel in _tracked_files(), "this module must be in scope"
+    assert retired_repository_links(Path(__file__).read_text(encoding="utf-8")) == []
 
 
 def test_the_file_list_is_not_silently_empty():
