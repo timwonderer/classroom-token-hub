@@ -1495,9 +1495,20 @@ worker, migration head `d9e1f3a5b7c9`, 44 tables, fresh database.
 | | |
 |---|---|
 | §VI–§X (release gate, runtime, secrets, migration, health) | Complete, passed |
-| §XI (full-app browser test) | **In progress** |
+| §XI (full-app browser test) | **In progress** — two sessions run, 38 findings |
 | §XIV (go/no-go decision) | Pending — §XI must complete first |
 | §XVI (completion condition) | Not met |
+
+**Current as of 2026-09-21.** The finding count below (23) reflects the first
+session. The second session took it to 38, and findings 21-35 are remediated on
+`codex/live-test-launch-readiness` (PR #1420), not yet merged or deployed. The
+live host still runs `8c5cff7c8`, so **every fix in that batch is absent from
+production**. This section remains the launch gate; for the current per-finding
+status and the untested inventory see
+[`docs/ops/audits/RESUME_2026-09-22.md`](../ops/audits/RESUME_2026-09-22.md).
+
+Open launch blocker unaffected by that batch: **finding 14**, the sysadmin
+dashboard 500 (`operational_events` was never created).
 
 ### What the campaign has established
 
@@ -1540,21 +1551,24 @@ each confirmed failing against the pre-fix SHA.
 
 ### Not yet exercised
 
-Rent and insurance — the only economic domains with **zero** coverage, and the
-ones that move real money on a schedule. Also: hall-pass verification page,
-passwordless enrollment, student-side add/switch class, and the three sweeps
-(Turnstile coverage on every configured route, PII in URLs/logs/errors,
-accessibility per INV-ARC-020).
+**Superseded in part by the second session.** Rent is no longer uncovered:
+reconciliation, genesis, advance, idempotency and policy binding were all
+exercised live, and the append-only policy invariant (B1) was re-verified under
+an adversarial attempt. Rent *payment* remains untested — the class's preview
+window does not open until 2026-09-29.
 
-Rent and insurance are time-gated, but only partially: rent cycle 1 is created on
-the reconciliation job's first run with no waiting, and the advance path is
-reachable by backdating `next_assessment_at` and re-running. Insurance is
-testable end-to-end with the waiting period set to zero.
+**Insurance remains the only economic domain with zero coverage**, and it moves
+real money on a schedule. It is testable end-to-end with the waiting period set
+to zero, so nothing gates it but attention. Also still untested: the hall-pass
+verification page, passwordless enrollment, student-side add/switch class,
+recovery flows, and the three sweeps (Turnstile coverage on every configured
+route, PII in URLs/logs/errors, accessibility per INV-ARC-020).
 
 ### Standing lesson for the ship gate
 
-Every one of the 23 findings was invisible to a 2,997-test suite and visible
-within minutes of a real browser. That is not an argument against the suite —
+Every one of the first session's 23 findings — and all fifteen the second
+session added — was invisible to the test suite and visible within minutes of a
+real browser. That is not an argument against the suite —
 it caught none of these because none was the kind of thing it was written to
 catch. It is an argument that **suite-green is not a launch signal on its own**,
 and that the §XI browser pass is load-bearing rather than ceremonial.

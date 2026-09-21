@@ -7130,7 +7130,16 @@ def reverse_payroll_event(payroll_event_id):
             },
         )
     except LookupError as exc:
-        _log_api_client_error("reverse_payroll_event", exc, extra=f"event_id={event.id}")
+        # current_app.logger, not _log_api_client_error: that helper is defined in
+        # app/routes/api.py and this module neither defines nor imports it, so
+        # reaching either handler raised NameError and turned a handled refusal
+        # into an undiagnosed 500 -- an error path failing worse than the error it
+        # handles. Caught in review; the branch had no test exercising it.
+        current_app.logger.warning(
+            "Payroll reversal could not resolve its original entry: "
+            "event_id=%s class_id=%s error=%s",
+            event.id, class_id, exc,
+        )
         flash(
             "That payroll entry has no linked transaction to reverse, so there is "
             "nothing to return.",
@@ -7138,7 +7147,10 @@ def reverse_payroll_event(payroll_event_id):
         )
         return redirect(url_for('admin.payroll_history'))
     except ValueError as exc:
-        _log_api_client_error("reverse_payroll_event", exc, extra=f"event_id={event.id}")
+        current_app.logger.warning(
+            "Payroll reversal refused: event_id=%s class_id=%s error=%s",
+            event.id, class_id, exc,
+        )
         flash("That payroll entry cannot be reversed.", "warning")
         return redirect(url_for('admin.payroll_history'))
 

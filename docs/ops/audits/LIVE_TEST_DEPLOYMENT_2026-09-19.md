@@ -1582,10 +1582,17 @@ rewritten. `attendance_sessions` — the input that justifies every dollar that
 output contains — can be. Payroll reads attendance; nothing else determines what
 a student is paid. The money is defended and the evidence for it is not.
 
-No application code violates the rule today. The only writes are class-scoped
-deletions during class and teacher destruction (`app/utils/deletion.py`,
-`app/services/teacher_destruction.py`), which is teardown rather than
-correction-in-place and is consistent with the rule's intent.
+No application code violates the rule today. The only writes are the class-scoped
+deletions performed when a class or teacher account is destroyed, which is
+teardown rather than correction-in-place and is consistent with the rule's
+intent. **The active path is `app/services/teacher_destruction.py`**, reached
+from `admin.py` and `teacher_lifecycle.py`.
+
+An earlier revision of this paragraph also named `app/utils/deletion.py`. That
+was wrong and is corrected here: the module imports four models that no longer
+exist, so it cannot be imported at all, and nothing under `app/` references it
+(finding 37). Naming it gave false evidence about which code can exercise the
+DELETE exception the immutability migration grants.
 
 So this is finding 26's shape again, in a different domain: a rule stated more
 emphatically than most, with no control behind it. The operator confirmed the

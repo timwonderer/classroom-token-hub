@@ -41,6 +41,17 @@ def _manual_credit(client, classroom, amount="25.00"):
     return response, student
 
 
+def _teacher_context(classroom):
+    from app.services.context_resolver import CanonicalContext
+
+    return CanonicalContext(
+        user_id=classroom.teacher_user.id,
+        class_id=classroom.class_id,
+        seat_id=classroom.teacher_seat.id,
+        actor_role="teacher",
+    )
+
+
 def _events(class_id, **kw):
     return PayrollEvent.query.filter_by(class_id=class_id, **kw).all()
 
@@ -152,3 +163,55 @@ def test_the_payroll_page_offers_the_control(app, client):
     assert "reverse_payroll_event" in page or "/reverse" in page, (
         "the payroll page renders no control for the only documented remedy"
     )
+
+
+def test_an_entry_with_no_linked_transaction_is_refused_not_500(app, client):
+    """The LookupError branch must actually run.
+
+    `record_payroll_reversal` raises LookupError when it cannot find the ledger
+    transaction it would compensate. The handler for that branch called
+    `_log_api_client_error`, which is defined in app/routes/api.py and neither
+    defined nor imported here, so reaching it raised NameError and produced an
+    undiagnosed 500 instead of the intended refusal.
+
+    None of the original tests entered the branch -- they covered the happy path,
+    double reversal, reversing a reversal, and cross-class scoping, all of which
+    return before the try block or succeed inside it. A handler no test executes
+    is a handler that has never run. Caught in review rather than by this suite,
+    which is why the case is added here.
+
+    A zero-amount payroll event is the reachable way in: the FEAT writes the
+    event but posts no transaction, so the reversal has nothing to negate.
+    """
+    classroom = initialize_as_teacher("chemistry_p1", client, app)
+    student = classroom.students[0]
+
+    with app.app_context():
+        enable_class_feature(class_id=classroom.class_id, feature="payroll")
+        from app.feats.prod import record_payroll_event
+        from app.feats.base import generate_correlation_id
+
+        record_payroll_event(
+            ctx=_teacher_context(classroom),
+            target_seat_id=student.seat.id,
+            payroll_event_type="manual_credit",
+            correlation_id=generate_correlation_id(),
+            idempotency_key=f"zero-credit:{student.seat.id}",
+            policy_version_id=None,
+            mechanism="TEACHER",
+            summary_json={"description": "Zero-amount credit", "source": "test"},
+            amount=Decimal("0.00"),
+        )
+        db.session.flush()
+        event = _events(classroom.class_id, payroll_event_type="manual_credit")[0]
+        event_id = event.id
+        assert Transaction.query.filter_by(
+            class_id=classroom.class_id, target_seat_id=student.seat.id
+        ).count() == 0, "fixture assumption broken: a transaction was posted"
+
+    response = client.post(f"/admin/payroll/event/{event_id}/reverse")
+
+    # A refusal, not a server error.
+    assert response.status_code == 302, response.data
+    with app.app_context():
+        assert _events(classroom.class_id, payroll_event_type="reversal") == []
