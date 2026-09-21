@@ -8,7 +8,7 @@
 ## What lives here
 
 `docs/TRACKING/` holds **only live, forward-looking work**. Completed phase notes, point-in-time
-audits, and superseded plans live in [`docs/archive/v2-tracking-2026/`](https://github.com/timwonderer/classroom-economy/tree/main/docs/archive/v2-tracking-2026).
+audits, and superseded plans live in [`docs/archive/v2-tracking-2026/`](https://github.com/timwonderer/classroom-token-hub/tree/main/docs/archive/v2-tracking-2026).
 
 | File | Purpose |
 |---|---|

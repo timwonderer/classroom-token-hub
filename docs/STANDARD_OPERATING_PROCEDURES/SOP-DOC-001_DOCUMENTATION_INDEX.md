@@ -207,8 +207,13 @@ Archived material is deliberately absent; see §VI.
 These are descriptive records, not registered documents. They are listed because the sections above
 cite them and a reader following an argument needs to reach them.
 
-- [Operations verifier policy decision package (2026-09-01)](../TRACKING/BATCH-B_OPERATIONS_VERIFIER_POLICY_DECISION_PACKAGE_20260901.md) — Operations freshness, aggregation, and evidence-registry owner decisions
-- [V2 invariant verifier reconciliation (2026-08-31)](../TRACKING/V2_INVARIANT_VERIFIER_RECONCILIATION_20260831.md) — v1 economic checker to v2 verifier disposition
+They are given as repository paths rather than links. `docs/TRACKING/` holds dated working state and
+is not published to the documentation site, so a link here would resolve in the repository and 404
+on the site — and a normative index is the wrong place to depend on a descriptive record's being
+published at all.
+
+- `docs/TRACKING/BATCH-B_OPERATIONS_VERIFIER_POLICY_DECISION_PACKAGE_20260901.md` — Operations freshness, aggregation, and evidence-registry owner decisions
+- `docs/TRACKING/V2_INVARIANT_VERIFIER_RECONCILIATION_20260831.md` — v1 economic checker to v2 verifier disposition
 
 ---
 

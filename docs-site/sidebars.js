@@ -58,11 +58,6 @@ module.exports = {
       "PRN-* rationale: why a design was chosen. Informative, not binding.",
     ),
     category(
-      "Operations",
-      "ops",
-      "Operational notes, audits, and evidence.",
-    ),
-    category(
       "Self-Hosting",
       "self-hosting",
       "Running your own instance of Classroom Token Hub.",
@@ -70,7 +65,7 @@ module.exports = {
     category(
       "Tracking",
       "TRACKING",
-      "Launch readiness, domain progress, and migration status. Descriptive, never authoritative.",
+      "Roadmap, domain-tracking conventions, and the implementation plan template. Descriptive, never authoritative; dated working snapshots are not published.",
     ),
   ],
 };

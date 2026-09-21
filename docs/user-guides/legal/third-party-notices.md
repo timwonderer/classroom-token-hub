@@ -36,7 +36,7 @@ Used for UI icons and symbols.
 
 **Project:** [https://fonts.google.com/icons](https://fonts.google.com/icons)
 
-**License Details:** Full text available at [LICENSES/Apache-2.0.txt](https://github.com/timwonderer/classroom-economy/blob/main/LICENSES/Apache-2.0.txt)
+**License Details:** Full text available at [LICENSES/Apache-2.0.txt](https://github.com/timwonderer/classroom-token-hub/blob/main/LICENSES/Apache-2.0.txt)
 
 ---
 
@@ -48,7 +48,7 @@ Used for UI iconography.
 
 **Project:** [https://icons.getbootstrap.com/](https://icons.getbootstrap.com/)
 
-**License Details:** Full text available at [LICENSES/MIT.txt](https://github.com/timwonderer/classroom-economy/blob/main/LICENSES/MIT.txt)
+**License Details:** Full text available at [LICENSES/MIT.txt](https://github.com/timwonderer/classroom-token-hub/blob/main/LICENSES/MIT.txt)
 
 ---
 
@@ -71,7 +71,7 @@ The following are some of the major Python dependencies used by this project:
 - **cryptography** - PII encryption (Apache 2.0 / BSD)
 - **Gunicorn** - WSGI server (MIT)
 
-For a complete list of dependencies and their versions, see [requirements.txt](https://github.com/timwonderer/classroom-economy/blob/main/requirements.txt).
+For a complete list of dependencies and their versions, see [requirements.txt](https://github.com/timwonderer/classroom-token-hub/blob/main/requirements.txt).
 
 ---
 
@@ -89,8 +89,8 @@ All third-party dependencies used in this project are either:
 
 Full text of common open-source licenses referenced above:
 
-- **Apache License 2.0:** [LICENSES/Apache-2.0.txt](https://github.com/timwonderer/classroom-economy/blob/main/LICENSES/Apache-2.0.txt)
-- **MIT License:** [LICENSES/MIT.txt](https://github.com/timwonderer/classroom-economy/blob/main/LICENSES/MIT.txt)
+- **Apache License 2.0:** [LICENSES/Apache-2.0.txt](https://github.com/timwonderer/classroom-token-hub/blob/main/LICENSES/Apache-2.0.txt)
+- **MIT License:** [LICENSES/MIT.txt](https://github.com/timwonderer/classroom-token-hub/blob/main/LICENSES/MIT.txt)
 
 ---
 

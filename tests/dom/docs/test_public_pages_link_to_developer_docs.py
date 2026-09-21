@@ -47,7 +47,7 @@ def test_the_detector_reports_a_page_with_no_way_into_the_docs():
     """
     without = """
       <footer class="landing-footer"><div class="landing-footer-links">
-        <a href="https://github.com/timwonderer/classroom-economy">Project Repository</a>
+        <a href="https://github.com/timwonderer/classroom-token-hub">Project Repository</a>
         <a href="./privacy.html">Privacy Policy</a>
       </div></footer>
     """

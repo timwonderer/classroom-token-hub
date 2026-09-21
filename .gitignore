@@ -71,3 +71,7 @@ iap-settings.yaml
 
 # Machine-local scheduler lock (pid + session id, not shared state)
 .claude/scheduled_tasks.lock
+
+# Filled deployment checklists carry live host state. SOP-DEP-001 is the
+# tracked, namespaced procedure; a filled copy stays local.
+docs/TRACKING/PRODUCTION_FIRST_TEST_DEPLOYMENT_CHECKLIST_*.md
