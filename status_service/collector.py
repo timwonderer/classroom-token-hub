@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import os
+import time
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from urllib.error import HTTPError, URLError
 from urllib.request import HTTPRedirectHandler, Request, build_opener
@@ -36,12 +38,24 @@ _DIAGNOSTIC_STATES = {
 }
 
 
+@dataclass(frozen=True)
+class HealthResponse:
+    body: bytes
+    status: int
+
+
+class _InvalidHealthResponse(ValueError):
+    def __init__(self, message: str, status: int):
+        super().__init__(message)
+        self.status = status
+
+
 class _NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, request, response, code, message, headers, new_url):
         return None
 
 
-def fetch_app_health(client_id: str, client_secret: str) -> bytes:
+def fetch_app_health(client_id: str, client_secret: str) -> HealthResponse:
     if not client_id or not client_secret:
         raise ValueError("Both Cloudflare Access credentials are required")
     request = Request(APP_HEALTH_URL, headers={
@@ -51,11 +65,11 @@ def fetch_app_health(client_id: str, client_secret: str) -> bytes:
     })
     with build_opener(_NoRedirect()).open(request, timeout=10) as response:
         if response.status != 200 or "application/json" not in response.headers.get("Content-Type", ""):
-            raise ValueError("Health response was not JSON 200")
+            raise _InvalidHealthResponse("Health response was not JSON 200", response.status)
         body = response.read(16_385)
     if len(body) > 16_384:
-        raise ValueError("Health response exceeded bound")
-    return body
+        raise _InvalidHealthResponse("Health response exceeded bound", 200)
+    return HealthResponse(body, 200)
 
 
 def _signal_map(body: bytes, now: datetime) -> dict[str, tuple[Outcome, EpistemicState, str, datetime | None]]:
@@ -110,22 +124,34 @@ def collect(store: FirestoreNoticeStore, *, client_id: str, client_secret: str, 
     reachability = (Outcome.UNKNOWN, EpistemicState.UNAVAILABLE, "PROBE_UNAVAILABLE")
     signals = {key: (Outcome.UNKNOWN, EpistemicState.UNAVAILABLE, "PROBE_UNAVAILABLE", None) for key in SIGNALS}
     app_evidence_received = False
+    transport_http_status = None
+    started_ns = time.monotonic_ns()
     try:
-        body = fetch(client_id, client_secret)
+        response = fetch(client_id, client_secret)
+        transport_http_status = response.status
         observed_at = now if now is not None else datetime.now(timezone.utc)
+        if response.status != 200:
+            raise _InvalidHealthResponse("Health response was not JSON 200", response.status)
         reachability = (Outcome.PASS, EpistemicState.KNOWN, "HTTP_OK")
         # Use the same receipt time for validation and persisted freshness.
-        signals = _signal_map(body, observed_at)
+        signals = _signal_map(response.body, observed_at)
         app_evidence_received = True
     except HTTPError as exc:
+        transport_http_status = exc.code
         # Access denial is a monitor-credential problem, not evidence of app failure.
         if exc.code not in (301, 302, 303, 307, 308, 401, 403):
             reachability = (Outcome.FAIL, EpistemicState.UNAVAILABLE, "HTTP_UNAVAILABLE")
     except (URLError, OSError, TimeoutError):
         reachability = (Outcome.FAIL, EpistemicState.UNAVAILABLE, "NETWORK_UNAVAILABLE")
+    except _InvalidHealthResponse as exc:
+        transport_http_status = exc.status
+        if exc.status not in (301, 302, 303, 307, 308, 401, 403) and exc.status != 200:
+            reachability = (Outcome.FAIL, EpistemicState.UNAVAILABLE, "HTTP_UNAVAILABLE")
     except (ValueError, TypeError, KeyError):
         # A reachable but unusable payload establishes liveness only.
         pass
+    elapsed_ms = (time.monotonic_ns() - started_ns) / 1_000_000
+    transport_latency_ms = int(elapsed_ms) if 0 <= elapsed_ms <= 600_000 else None
     records = []
     states = [("public_service_reachability", ObservationClass.LIVENESS, (*reachability, observed_at))]
     states.extend((key, kind, signals[key]) for key, (_, kind) in SIGNALS.items())
@@ -138,10 +164,11 @@ def collect(store: FirestoreNoticeStore, *, client_id: str, client_secret: str, 
                     else EvidenceSource.EXTERNAL_PROBE),
             capability=key, observation_class=kind, outcome=outcome,
             epistemic_state=epistemic, diagnostic_code=diagnostic,
-            latency_ms=None, probe_version=PROBE_VERSION,
+            transport_latency_ms=transport_latency_ms, probe_version=PROBE_VERSION,
             freshness_class="REALTIME",
             staleness_state_at_receipt=("UNKNOWN" if checked_at is None else "FRESH"),
             evaluator_version=None, checked_at=checked_at,
+            transport_http_status=transport_http_status,
         )
         record.validate()
         records.append(record)

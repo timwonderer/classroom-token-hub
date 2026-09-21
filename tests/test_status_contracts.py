@@ -21,6 +21,18 @@ def test_observation_contract_rejects_unbounded_or_invalid_state():
         record.validate()
 
 
+@pytest.mark.parametrize("latency,status", [(-1, 200), (600001, 200), (0, 99), (0, 600), (0, True)])
+def test_observation_contract_bounds_transport_result(latency, status):
+    record = ExternalObservationRecord(
+        "obs-transport", NOW, "corr-1", EvidenceSource.EXTERNAL_PROBE, "public_service",
+        ObservationClass.LIVENESS, Outcome.UNKNOWN, EpistemicState.UNAVAILABLE,
+        "PROBE_UNAVAILABLE", latency, "probe-v1", "REALTIME", "UNKNOWN", None,
+        transport_http_status=status,
+    )
+    with pytest.raises(ValueError, match="transport"):
+        record.validate()
+
+
 def test_notice_contract_requires_explicit_recovery_and_next_update_state():
     notice = ExternalStatusNoticeEvent(
         "notice-1", "event-1", "PUBLISHED", NOW, NoticeState.INVESTIGATING,
