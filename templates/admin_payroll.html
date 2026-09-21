@@ -246,6 +246,7 @@
                 <th scope="col">Student</th>
                 <th scope="col">Amount</th>
                 <th scope="col">Notes</th>
+                <th scope="col">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -280,6 +281,26 @@
                   {% endif %}
                 </td>
                 <td>{{ entry.notes }}</td>
+                <td>
+                  {# DOM-PROD-001 §185/§187: an attendance row is never corrected,
+                     so reversing the payroll it produced is the only remedy. The
+                     original entry and its reversal both stay in the history --
+                     a compensating entry, never a deletion. #}
+                  {% if entry.can_reverse %}
+                  <form method="POST"
+                        action="{{ url_for('admin.reverse_payroll_event', payroll_event_id=entry.payroll_event_id) }}"
+                        onsubmit="return confirm('Reverse this payroll entry for {{ entry.student_name }}? {{ entry.display_amount }} will be returned. Both the original entry and the reversal stay in the history.');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-outline-danger btn-sm">
+                      <span class="material-symbols-outlined icon-xs icon-text-bottom me-1" aria-hidden="true">undo</span>Reverse
+                    </button>
+                  </form>
+                  {% elif entry.is_reversal %}
+                  <span class="text-muted small">—</span>
+                  {% else %}
+                  <span class="text-muted small">Reversed</span>
+                  {% endif %}
+                </td>
               </tr>
               {% endfor %}
               {% else %}

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-001      | 2.2     | 2026-09-19     | 2.1 | Normative |
+| SOP-DEP-001      | 2.3     | 2026-09-21     | 2.2 | Normative |
 
 ## I. Purpose
 
@@ -238,6 +238,78 @@ line records owner, timestamp, pass/fail/blocked, and notes or defect link.
 - No PII appears in URLs, logs, errors, or browser-visible diagnostics.
 - Accessibility smoke checks cover the public, login, teacher and student
   surfaces reached in this test (INV-ARC-020).
+
+### XI.A How to exercise the adversarial items
+
+Several §XI lines assert that something **cannot** happen — a query parameter
+cannot choose the class, an action cannot cross the class boundary. A negative
+result is weak evidence by default, because "the protection worked" and "the
+request never really arrived" look identical from the outside. The techniques
+below exist to tell those apart, and were derived from the 2026-09-20 session
+where each changed what a result was worth.
+
+**1. Predict the outcome before producing it.**
+
+Read the guard in the source, write down what should happen, then run the test.
+State it concretely: which row should not appear, which message should be shown,
+which status code should come back.
+
+A pass recorded without a prior expectation cannot distinguish a guard that
+fired from a request that was never dispatched, a form that failed validation
+first, or a session that had already expired. With the expectation written down,
+a pass confirms a specific mechanism and a failure names a specific place to
+look.
+
+**2. Prefer a controlled comparison over a single negative.**
+
+Run the *same* request from two contexts that should give different answers,
+rather than one request expected to give nothing.
+
+Testing `/admin/export-students?class_id=<other class>` from the wrong class and
+receiving an empty file proves little: the export might be empty for unrelated
+reasons. Running the identical URL from both the matching and non-matching
+session, and observing different responses, isolates the session context as the
+only variable that moved.
+
+**3. Reach the adversarial state the way a user would.**
+
+Where a realistic sequence produces the condition, use it in preference to a
+crafted request.
+
+Cross-context writes are usually tested by hand-building a POST. They occur in
+practice because class context is one server-side value per teacher while a
+browser holds many tabs: switching class in a second tab leaves the first tab
+displaying the old class and posting into the new one. Submitting that
+already-rendered form is both more faithful and easier than crafting a request,
+and it exercises the same guard. It also surfaces usability consequences a
+crafted request would hide, since a real operator sees whatever the application
+says afterwards.
+
+**4. Arrange the fixture so the two outcomes cannot be confused.**
+
+Give the compared scopes *different* observable content before testing them.
+
+Two classes each holding one claimed seat make a scoping bug and a correct
+result look similar. One class with a claimed seat and one with none make them
+unmistakable: the correct answer is one row in the first case and a bare header
+in the second, and any leak appears as content where there should be none.
+
+**5. Confirm at the data layer, not the response.**
+
+An HTTP status says what the application chose to return. Whether a write
+occurred is a question for the database.
+
+Check the affected rows directly — before and after, by count and by content. A
+refusal that returns 302 and still writes is a worse defect than one that
+returns 500, and only the data layer distinguishes them. The same applies in
+reverse: a route may report success while skipping the work.
+
+**6. Record the evidence, not the verdict.**
+
+Write down the request, the session context it ran under, the response size or
+status, and the row counts on both sides. "Isolation verified" is not reviewable
+six months later; the log line carrying `actor=`, `class_id=`, and the byte count
+is.
 
 ## XII. Seed and Fixture Expectations
 

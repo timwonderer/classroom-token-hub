@@ -614,8 +614,30 @@ function rotateVerifyToken() {
     if (!confirm('Regenerate the hall pass verification link? The current link will be immediately invalid.')) {
         return;
     }
-    fetch('/api/hall-pass/verify-token/rotate', {method: 'POST', headers: {'Content-Type': 'application/json'}})
-        .then(r => r.json())
+    // csrfFetch, not fetch: this call previously omitted X-CSRFToken entirely and
+    // Flask-WTF rejected every rotation with "The CSRF token is missing" before
+    // the route could run, so the verification link could never be rotated --
+    // the documented remedy for a leaked or screenshotted link. Nine of the ten
+    // POST sites in the app already route through this helper; this was the one
+    // that reached past it.
+    window.AppCore.csrfFetch('/api/hall-pass/verify-token/rotate', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+        // The refusal came back as an HTML error page, so an unguarded r.json()
+        // threw and landed in .catch(), reporting a server that had answered
+        // clearly as an unreachable one. Read the status first and only parse
+        // JSON when the server actually sent some.
+        .then(async (r) => {
+            const data = await r.json().catch(() => ({}));
+            if (!r.ok) {
+                return {
+                    status: 'error',
+                    message: data.message || 'The server refused the request. Please reload the page and try again.',
+                };
+            }
+            return data;
+        })
         .then(data => {
             if (data.status === 'success') {
                 const newUrl = window.location.origin + '/verify/hallpass/' + data.token;
@@ -626,7 +648,9 @@ function rotateVerifyToken() {
                 announceHallPass('Verification link not regenerated', data.message || 'Could not regenerate the verification link. Please try again.');
             }
         })
-        .catch(() => announceHallPass('Verification link not regenerated', 'Failed to contact the server. Please try again.'));
+        // Reached only when the request genuinely did not complete -- an offline
+        // browser or a dropped connection. A server that answered is handled above.
+        .catch(() => announceHallPass('Verification link not regenerated', 'Could not reach the server. Check your connection and try again.'));
 }
 </script>
 {% endblock %}

@@ -22,6 +22,24 @@ from app.services.admin_identity_service import delete_admin_account_rows, delet
 from app.services.class_configuration_query_service import get_class_economy
 from app.services.recovery_service import delete_recovery_rows_for_user
 from app.utils.student_deletion import delete_orphaned_users
+from sqlalchemy import text as sa_text
+
+
+def declare_attendance_teardown():
+    """Permit attendance rows to be removed for the remainder of this transaction.
+
+    ``attendance_sessions`` carries a DELETE guard (DOM-PROD-001 §184): rows are
+    append-only and are never removed to correct a record. Destroying a class or
+    a teacher account is a different operation — the class and all its evidence
+    cease to exist — so those two paths declare themselves here and nothing else
+    may.
+
+    ``SET LOCAL`` scopes the flag to the current transaction, so it expires on
+    commit or rollback and cannot leak onto a pooled connection and silently
+    disarm the guard for an unrelated request.
+    """
+    db.session.execute(sa_text("SET LOCAL app.attendance_teardown = 'on'"))
+
 
 
 def _destroy_class_scope_rows(*, class_id, canonical_context, **_ignored):
@@ -116,6 +134,9 @@ def _destroy_class_scope_rows(*, class_id, canonical_context, **_ignored):
         EntitlementEvent.event_type.in_(["GRANTED", "CONSUMED", "EXPIRED", "REVOKED"]),
         EntitlementEvent.acquisition_type == "PURCHASE",
     ).delete(synchronize_session=False)
+    # Declares this transaction as teardown so the DELETE guard on
+    # attendance_sessions permits removal (DOM-PROD-001 §184).
+    declare_attendance_teardown()
     AttendanceSession.query.filter(AttendanceSession.class_id == class_id).delete(synchronize_session=False)
     HallPassLog.query.filter(HallPassLog.class_id == class_id).delete(synchronize_session=False)
     PayrollEvent.query.filter(PayrollEvent.class_id == class_id).delete(synchronize_session=False)

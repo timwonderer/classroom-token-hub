@@ -204,7 +204,7 @@ from app.utils.student_deletion import (
 from app.utils.seat_scope import seat_scoped_filter, transaction_scope_filter
 from app.feats.admin_adjustment_feat import execute_admin_adjustments
 from app.feats.identity_feat import remove_pending_student_seat
-from app.feats.prod import record_attendance_session, record_payroll_event
+from app.feats.prod import record_attendance_session, record_payroll_event, record_payroll_reversal
 from app.feats.complete_payroll_cycle import complete_payroll_cycle
 from app.services.payroll.cycle_completion import get_completed_cycle_window
 from app.feats.direct_entitlement_grant_feat import execute_direct_grant, execute_hall_pass_adjustment
@@ -316,6 +316,12 @@ _BANKING_REDIRECT_QUERY_KEYS = {
     "page",
     "settings_block",
 }
+
+# The cadence the rent form shows before a policy exists. The frequency select
+# marks an option `selected` only from an existing RentSettings row, so with none
+# the browser selects the first option; the server-rendered pricing band must
+# describe that same cadence or it prices a period the page is not displaying.
+DEFAULT_RENT_FREQUENCY = "daily"
 
 ADMIN_FEATURE_ENDPOINTS = {
     "admin.payroll": "payroll",
@@ -568,7 +574,12 @@ def _feature_unresolved_response(feature_name: str):
     """UNRESOLVED state: no lawful class scope could be established. Fail CLOSED
     (404) — never render the feature — and emit a stable enforcement signal
     (``X-Feature-Unresolved``)."""
-    response = make_response("Not Found", 404)
+    # Rendered rather than a bare 9-byte "Not Found": that body reached the
+    # browser as raw text with no layout, indistinguishable from a proxy or
+    # gateway failure, and ``make_response`` bypasses the 404 error handler that
+    # would otherwise have produced a real page.
+    body = render_template("error_404.html", request_url=request.url)
+    response = make_response(body, 404)
     response.headers["X-Feature-Unresolved"] = feature_name
     return response
 
@@ -606,10 +617,25 @@ def before_request():
             return response
 
     feature_name = ADMIN_FEATURE_ENDPOINTS.get(request.endpoint or "")
-    if feature_name and request.method == "GET":
+    if feature_name and request.method == "GET" and canonical_context is not None:
         # Capability boundary: distinguish ENABLED / DISABLED / UNRESOLVED
         # explicitly. FAIL CLOSED for UNRESOLVED — a None scope is a failure to
         # establish authority, never a licence to render the feature.
+        #
+        # The `canonical_context is not None` condition is an ORDERING fix, not a
+        # relaxation. Blueprint before_request hooks run before the view, and
+        # therefore before the view's own ``@admin_required`` — so on an expired
+        # session `g.canonical_context` is not set yet, every feature resolved as
+        # UNRESOLVED, and this gate returned a bare 404 that short-circuited the
+        # request before ``admin_required`` could redirect to login. A teacher
+        # who timed out and refreshed got "Not Found" on the six pages they use
+        # most (payroll, store, banking, rent, insurance, hall pass) while every
+        # other admin page correctly sent them to log in.
+        #
+        # An unauthenticated request is not "unresolved feature scope"; it is
+        # "not logged in", and ``admin_required`` refuses it microseconds later.
+        # Deferring to it is strictly more accurate. Every AUTHENTICATED request
+        # still fails closed exactly as before.
         capability = _resolve_feature_capability_state(feature_name)
         if capability == FEATURE_CAPABILITY_UNRESOLVED:
             return _feature_unresolved_response(feature_name)
@@ -5204,6 +5230,82 @@ def _calculate_base_rent_amount(rent_settings: RentSettings, current_year: int, 
     return base_amount
 
 
+def _resolve_rent_policy_deferral(class_id, pending_settings):
+    """Describe a saved rent policy that is not yet the one students are billed under.
+
+    ``rent_settings`` is append-only (DOM-POL-001 SS VI.1): a save inserts a new
+    immutable row and retires its predecessor. It does not reach into the open
+    rent cycle, which froze a ``policy_uuid`` when it was created and keeps
+    resolving that row (DOM-POL-001 SS VII). The terms a class is actually billed
+    under therefore do not move until ``reconcile_rent`` advances the cycle at
+    ``next_assessment_at`` and binds whatever policy is in force by then.
+
+    That deferral is the intended protection: a teacher cannot raise rent on a
+    period students are already living through. The page said nothing about it.
+    Both the "Current Rent Configuration" card and the settings form render the
+    newest ``IN_USE`` row, which after a mid-cycle save is the *pending* policy,
+    under a heading calling it current -- so a teacher who raised rent saw the
+    new figure echoed back with no indication that no student would be charged
+    it this cycle.
+
+    Returns ``None`` when nothing is deferred: no cycle has been established yet
+    (the first save is in force immediately), or the open cycle already carries
+    the newest policy.
+    """
+    if not class_id or pending_settings is None:
+        return None
+
+    cycle = obligations_service.get_latest_bill_cycle(f"rent:{class_id}")
+    if cycle is None or not cycle.policy_uuid:
+        return None
+    if cycle.policy_uuid == pending_settings.policy_uuid:
+        return None
+
+    enforced = RentSettings.query.filter_by(policy_uuid=cycle.policy_uuid).first()
+    if enforced is None:
+        return None
+
+    # The instant the successor cycle is minted is the instant the pending policy
+    # binds, so it -- not ``cycle_boundary_at`` -- is the effective date to show.
+    # A terminal cycle (``next_assessment_at IS NULL``) mints no successor, so
+    # there is no boundary at which the pending policy could take effect at all.
+    takes_effect_on = None
+    if cycle.next_assessment_at is not None:
+        # Class timezone, not UTC: this is a class-scoped deadline the teacher
+        # reasons about locally, and SPEC-TIME-001 SS CLE is the only authority
+        # that knows ``ClassEconomy.class_timezone``.
+        takes_effect_on = canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=_cle_context(class_id),
+            primitive="current_evaluation_day",
+            reference_time_utc=ensure_utc(cycle.next_assessment_at),
+        ).result["evaluation_date"]
+
+    def _terms(policy):
+        return {
+            'amount': f"${policy.rent_amount:.2f}",
+            'cadence': frequency_label(
+                policy.frequency_type,
+                custom_frequency_value=policy.custom_frequency_value,
+                custom_frequency_unit=getattr(policy, 'custom_frequency_unit', None),
+            ),
+            'grace_period_days': policy.grace_period_days,
+            'late_penalty': f"${policy.late_penalty_amount:.2f}",
+        }
+
+    return {
+        'cycle_number': cycle.cycle_number,
+        'is_terminal': cycle.next_assessment_at is None,
+        'takes_effect_on': takes_effect_on,
+        'display_takes_effect_on': (
+            takes_effect_on.strftime("%B %d, %Y") if takes_effect_on else ""
+        ),
+        'enforced': _terms(enforced),
+        'pending': _terms(pending_settings),
+        'amount_changed': enforced.rent_amount != pending_settings.rent_amount,
+    }
+
+
 @admin_bp.route('/rent-settings', methods=['GET', 'POST'])
 @admin_required
 def rent_settings():
@@ -5285,10 +5387,16 @@ def rent_settings():
                     request.form.get('custom_frequency_unit', 'days')
                     if frequency_type == 'custom' else None
                 ),
-                'first_rent_due_date': (
-                    datetime.strptime(first_due_date_str, '%Y-%m-%d')
-                    if first_due_date_str else None
-                ),
+                # CLE, not a naive parse. `strptime` yields a naive midnight that a
+                # timezone=True column stores as midnight UTC, which for every class
+                # west of Greenwich is the PREVIOUS local day -- so a teacher who
+                # entered October 20 got a cycle boundary on the 19th, and the
+                # teacher page (formatting the stored instant) and the student page
+                # (deriving from cycle_boundary_at) showed different due dates for
+                # the same obligation. SPEC-TIME-001 §CLE names "obligation due
+                # dates" explicitly; this was the third site of the same defect,
+                # after payroll's first_pay_date and the store's activation dates.
+                'first_rent_due_date': _class_local_date_start_utc(first_due_date_str),
                 'due_day_of_month': int(request.form.get('due_day_of_month', 1)),
                 'grace_period_days': int(request.form.get('grace_period_days', 3)),
                 'late_penalty_amount': _quantize_currency(request.form.get('late_penalty_amount', '10.0')),
@@ -5312,7 +5420,32 @@ def rent_settings():
         # of "rent items" that were synchronised into store rows after the
         # fact, and the two drifted apart in every direction they could.
         # Rent settings are canonical; no policy-version snapshotting in v2.
-        flash("Rent settings updated successfully!", "success")
+        #
+        # What the teacher just saved is not necessarily what the class is now
+        # billed: an open rent cycle keeps the policy_uuid it froze, so a
+        # mid-cycle save takes effect only when the cycle advances. Saying
+        # "updated successfully" and nothing else let a teacher believe a raise
+        # or a longer preview window was live when it was not.
+        deferral = _resolve_rent_policy_deferral(class_id, block_settings)
+        if deferral is None:
+            flash("Rent settings updated successfully!", "success")
+        elif deferral['is_terminal']:
+            flash(
+                "Rent settings saved, but no further rent cycle is scheduled. "
+                "Students stay on the terms already in force "
+                f"({deferral['enforced']['amount']} {deferral['enforced']['cadence']}) "
+                "until rent billing resumes.",
+                "warning",
+            )
+        else:
+            flash(
+                "Rent settings saved. They apply from the next rent cycle, on "
+                f"{deferral['display_takes_effect_on']}. Until then students stay "
+                "on the terms the current cycle was billed under "
+                f"({deferral['enforced']['amount']} {deferral['enforced']['cadence']}) "
+                "\u2014 a cycle already underway is never altered.",
+                "info",
+            )
         return redirect(url_for('admin.rent_settings'))
 
     # Use view model to get student obligation summary (encapsulates all aggregation)
@@ -5482,11 +5615,40 @@ def rent_settings():
         display_rent_amount = f"${settings.rent_amount:.2f}"
         display_late_penalty_amount = f"${settings.late_penalty_amount:.2f}"
         if settings.first_rent_due_date:
-            display_first_rent_due_date = settings.first_rent_due_date.strftime("%B %d, %Y")
-            display_first_rent_due_date_iso = settings.first_rent_due_date.strftime("%Y-%m-%d")
+            # Read back through CLE for the same reason it is written through CLE.
+            # Formatting the stored instant directly renders it in UTC, which shows
+            # the previous local day for any class EAST of Greenwich -- the mirror
+            # image of the storage defect, and one that would have re-appeared the
+            # moment a non-US class used the app. The ISO form feeds the date input
+            # the teacher re-saves from, so a UTC reading there would walk the date
+            # backwards one day per edit.
+            _first_due_local = _class_local_date_of(settings.first_rent_due_date)
+            display_first_rent_due_date = _first_due_local.strftime("%B %d, %Y")
+            display_first_rent_due_date_iso = _first_due_local.strftime("%Y-%m-%d")
+
+    # The banner that tells the teacher which policy the class is actually on.
+    # Resolved on every render, not only after a save, because the divergence
+    # persists for the whole remaining cycle and is not tied to the request
+    # that created it.
+    rent_policy_deferral = _resolve_rent_policy_deferral(class_id, settings)
 
     canonical_rent_band = None
-    if settings and payroll_settings:
+    # Gated on payroll only. This previously required `settings` as well — an
+    # existing rent policy — so the pricing recommendation was withheld from
+    # exactly the teacher who had not priced rent yet, and appeared only once
+    # they no longer needed it. A recommendation exists to inform a decision that
+    # has not been made; nothing about the band depends on the decision's outcome.
+    # CWI comes from payroll, and the band is a percentage of CWI.
+    if payroll_settings:
+        # With no policy yet, describe the cadence the form will show on first
+        # render: the frequency select marks an option `selected` only from
+        # `settings`, so with none the browser selects the first, "Per Day".
+        # Anything else would print a band for a cadence the page is not showing.
+        band_frequency = settings.frequency_type if settings else DEFAULT_RENT_FREQUENCY
+        band_frequency_value = settings.custom_frequency_value if settings else None
+        band_frequency_unit = (
+            getattr(settings, 'custom_frequency_unit', None) if settings else None
+        )
         try:
             rent_checker = EconomyBalanceChecker(
                 g.canonical_context.user_id,
@@ -5498,18 +5660,18 @@ def rent_settings():
             ).cwi
             rent_band = rent_checker.rent_band(
                 rent_cwi,
-                settings.frequency_type,
-                settings.custom_frequency_value,
-                getattr(settings, 'custom_frequency_unit', None),
+                band_frequency,
+                band_frequency_value,
+                band_frequency_unit,
             )
             canonical_rent_band = {
                 'cwi': float(rent_cwi),
                 'min': float(rent_band['min']),
                 'max': float(rent_band['max']),
                 'period_label': frequency_label(
-                    settings.frequency_type,
-                    custom_frequency_value=settings.custom_frequency_value,
-                    custom_frequency_unit=getattr(settings, 'custom_frequency_unit', None),
+                    band_frequency,
+                    custom_frequency_value=band_frequency_value,
+                    custom_frequency_unit=band_frequency_unit,
                 ),
             }
         except (TypeError, ValueError, AttributeError):
@@ -5541,6 +5703,7 @@ def rent_settings():
                           display_current_period_end=display_current_period_end,
                           display_next_due_date=display_next_due_date,
                           canonical_rent_band=canonical_rent_band,
+                          rent_policy_deferral=rent_policy_deferral,
                           current_period_start=current_period_start,
                           current_period_end=current_period_end,
                           next_due_date=next_due_date)
@@ -6842,6 +7005,15 @@ def _build_payroll_event_display_rows(*, ctx, payroll_events, class_label=None):
         credit_tx = next((tx for tx in linked if Decimal(tx.amount or 0) > 0), None)
         return Decimal(credit_tx.amount) if credit_tx else Decimal("0.00")
 
+    # A lineage is reversed at most once. Resolved as a set for the whole page
+    # rather than per row, so rendering history stays one query.
+    reversed_correlation_ids = {
+        row[0] for row in db.session.query(PayrollEvent.correlation_id).filter(
+            PayrollEvent.class_id == ctx.class_id,
+            PayrollEvent.payroll_event_type == "reversal",
+        ).all()
+    }
+
     payroll_records = []
     for event in payroll_events:
         seat = seat_lookup.get(event.target_seat_id)
@@ -6868,9 +7040,126 @@ def _build_payroll_event_display_rows(*, ctx, payroll_events, class_label=None):
             'account_type': "checking",
             'notes': summary.get("description") or event.payroll_event_type,
             'is_reversal': event.payroll_event_type == "reversal",
-            'can_reverse': False,
+            # DOM-PROD-001 §187 names payroll reversal as THE remedy for an
+            # attendance row that produced a wrong payroll outcome. It was
+            # hardcoded False, so the remedy had no surface: `record_payroll_
+            # reversal` appeared exactly once in the repository -- its own
+            # definition -- while this template already rendered a REVERSAL
+            # badge. The read side anticipated rows the write side never made.
+            'can_reverse': (
+                event.payroll_event_type != "reversal"
+                and event.correlation_id not in reversed_correlation_ids
+            ),
         })
     return payroll_records
+
+
+@admin_bp.route('/payroll/event/<int:payroll_event_id>/reverse', methods=['POST'])
+@admin_required
+def reverse_payroll_event(payroll_event_id):
+    """Reverse a payroll event — the sole remedy for a wrong payroll outcome.
+
+    DOM-PROD-001 §185 forbids correcting payroll by mutating attendance history,
+    and §187 names this as the path instead. The path did not exist:
+    ``record_payroll_reversal`` appeared exactly once in the repository, in its
+    own definition, with no route, service or test reaching it — while the
+    payroll template already rendered a REVERSAL badge for rows nothing could
+    produce. A teacher wanting to make a student whole had to leave the dispute
+    and issue a manual credit, which records itself as ``manual_credit`` rather
+    than as a correction: the money moved and the business record did not say
+    why.
+
+    This surface is deliberately on Payroll rather than on the support ticket
+    that may have raised the dispute. A teacher can discover a payroll mistake
+    with no ticket in existence, and Support must not acquire a Productivity
+    remedy — cross-domain coordination belongs in the FEAT layer, not in another
+    domain's route. Support can deep-link here; it does not execute this.
+
+    No FEAT envelope is opened here. ``record_payroll_reversal`` carries
+    ``@requires_feat_context("FEAT-PROD-003")``, which OPENS a context, so a
+    route-level one would nest and fail — the defect this same batch fixed on
+    hall-pass approval. Driving the FEAT rather than the bare domain command is
+    what keeps the counter-entry and the payroll record one operation: the FEAT
+    inherits the original's ``policy_version_id`` and derives the amount as the
+    negation of the linked transaction, so the reversal is a compensating entry
+    with the provenance of what it compensates, never a deletion.
+    """
+    ctx = g.canonical_context
+    class_id = (getattr(ctx, "class_id", None) or "").strip()
+    if not class_id:
+        abort(404)
+
+    event = PayrollEvent.query.filter_by(
+        id=payroll_event_id, class_id=class_id
+    ).first()
+    if event is None:
+        # Scoped by class: an event id belonging to another class is not found,
+        # not forbidden, so the response reveals nothing about other classes.
+        abort(404)
+
+    if event.payroll_event_type == "reversal":
+        flash("That entry is already a reversal and cannot itself be reversed.", "warning")
+        return redirect(url_for('admin.payroll_history'))
+
+    already_reversed = PayrollEvent.query.filter_by(
+        class_id=class_id,
+        correlation_id=event.correlation_id,
+        payroll_event_type="reversal",
+    ).first()
+    if already_reversed is not None:
+        flash("That payroll entry has already been reversed.", "warning")
+        return redirect(url_for('admin.payroll_history'))
+
+    reason = (request.form.get("reason") or "").strip()
+
+    try:
+        record_payroll_reversal(
+            ctx=ctx,
+            target_seat_id=event.target_seat_id,
+            correlation_id=event.correlation_id,
+            idempotency_key=f"payroll_reversal:{class_id}:{event.id}",
+            mechanism="TEACHER",
+            summary_json={
+                "description": (
+                    f"Reversal of {event.payroll_event_type}"
+                    + (f": {reason}" if reason else "")
+                ),
+                "source": "admin_payroll_reversal",
+                "reversed_payroll_event_id": event.id,
+                "reason": reason or None,
+            },
+        )
+    except LookupError as exc:
+        # current_app.logger, not _log_api_client_error: that helper is defined in
+        # app/routes/api.py and this module neither defines nor imports it, so
+        # reaching either handler raised NameError and turned a handled refusal
+        # into an undiagnosed 500 -- an error path failing worse than the error it
+        # handles. Caught in review; the branch had no test exercising it.
+        current_app.logger.warning(
+            "Payroll reversal could not resolve its original entry: "
+            "event_id=%s class_id=%s error=%s",
+            event.id, class_id, exc,
+        )
+        flash(
+            "That payroll entry has no linked transaction to reverse, so there is "
+            "nothing to return.",
+            "warning",
+        )
+        return redirect(url_for('admin.payroll_history'))
+    except ValueError as exc:
+        current_app.logger.warning(
+            "Payroll reversal refused: event_id=%s class_id=%s error=%s",
+            event.id, class_id, exc,
+        )
+        flash("That payroll entry cannot be reversed.", "warning")
+        return redirect(url_for('admin.payroll_history'))
+
+    flash(
+        "Payroll entry reversed. The original entry and its reversal both remain "
+        "in the history, so the record shows what happened and why.",
+        "success",
+    )
+    return redirect(url_for('admin.payroll_history'))
 
 
 @admin_bp.route('/payroll-history')
@@ -7784,11 +8073,25 @@ def payroll_manual_payment():
                 )
                 applied_count += 1
 
-            message = f'Manual credit of ${amount:.2f} applied to {applied_count} student(s)!'
-            if save_action == 'save_and_apply':
-                message = f'Template saved and manual credit applied to {applied_count} student(s)!'
-
-            flash(message, 'success')
+            if applied_count == 0:
+                # The teacher deliberately selected students and none was paid,
+                # which is never a success. The usual cause is a stale tab: class
+                # context is one server-side value per teacher, so a second tab
+                # switching class leaves this page displaying a roster from a
+                # class the session is no longer in, and the loop above correctly
+                # skips every seat outside the selected class. The count was
+                # honest; the styling and the silence about the cause were not.
+                flash(
+                    'No students were paid. The selected students are not in your '
+                    'current class — your active class may have changed in another '
+                    'tab. Reload this page and try again.',
+                    'warning',
+                )
+            else:
+                message = f'Manual credit of ${amount:.2f} applied to {applied_count} student(s)!'
+                if save_action == 'save_and_apply':
+                    message = f'Template saved and manual credit applied to {applied_count} student(s)!'
+                flash(message, 'success')
 
         except HTTPException:
             raise
@@ -7942,7 +8245,12 @@ def export_students():
 
     # Write header
     writer.writerow([
-        'First Name', 'Last Name', 'Block', 'Checking Balance',
+        # "Block" is retired v1 vocabulary for what v2 calls `section`. No
+        # teacher-facing template renders the word any more, so a teacher who
+        # filled in "Section" downloaded a column labelled "Block". The value
+        # is legitimate -- section is display metadata and an export is a
+        # display surface -- and only the label was wrong.
+        'First Name', 'Last Name', 'Section', 'Checking Balance',
         'Savings Balance', 'Total Earnings', 'Insurance Plan',
         'Has Completed Setup'
     ])
@@ -9406,6 +9714,15 @@ def onboarding_status():
             'status': 'success',
             'dismissed': all(completion.values()),
             'completion': completion,
+            # Class context is ONE server-side value per teacher (INV-ARC-010
+            # makes the nav switcher its sole legal mutator), so a second tab
+            # switching class silently changes this tab's context while this tab
+            # goes on displaying the old class. No data crosses the boundary --
+            # writes are scoped and skip out-of-scope seats -- but the teacher is
+            # told "applied to 0 student(s)" with no cause named, and reasonably
+            # concludes the feature is broken. Every admin page already polls this
+            # endpoint, so returning the active class lets a stale page notice.
+            'active_class_id': active_class_id,
         })
 
     except Exception as e:
@@ -9584,9 +9901,25 @@ def _resolve_admin_payroll_settings_for_class_id(canonical_context, class_id: st
     V2 single-context invariant: a payroll resolution is always bound to one
     class_id. There is no teacher-wide fallback — with no class in scope there is
     no class whose payroll to resolve, so we return None.
+
+    ``class_id`` arrives from a request body and is therefore an assertion, not
+    authority; ``canonical_context`` is the authority. This function took both and
+    read only the assertion, returning None whenever the client omitted it — which
+    the economy validator always does, correctly, since the session already knows
+    the class. The endpoint then reported payroll as unconfigured for a class that
+    had payroll configured, and the rent page rendered "Recommendation unavailable
+    — insufficient data" above a printout of every operand it needed.
+
+    Falling back to the context is the narrower behaviour, not the looser one: a
+    supplied ``class_id`` is still honoured, and the fallback resolves a class the
+    session has already proven authority over rather than one the client named.
     """
-    if not class_id:
+    scoped_class_id = (class_id or "").strip() or (
+        getattr(canonical_context, "class_id", None) or ""
+    ).strip()
+    if not scoped_class_id:
         return None
+    class_id = scoped_class_id
 
     return (
         PayrollSettings.query.filter(
@@ -9773,6 +10106,23 @@ def api_economy_validate(feature):
         checker = EconomyBalanceChecker(user_id, class_id=getattr(payroll_settings, "class_id", None))
         # Use expected_weekly_hours from payroll_settings, not from request
         cwi_calc = checker.calculate_cwi(payroll_settings)
+        if cwi_calc is None:
+            # `calculate_cwi` returns None when expected weekly hours are
+            # configured on neither the parameter nor the EconomicEngine, and its
+            # docstring says callers must handle it. This one did not, so `.cwi`
+            # raised and the generic handler below turned a configuration gap into
+            # a 500 with no guidance. Unreachable until the payroll resolution
+            # above was corrected, because this endpoint previously returned the
+            # "configure payroll" warning before ever getting here.
+            return jsonify({
+                'status': 'warning',
+                'message': (
+                    'Set expected weekly hours on the Economic Engine to get '
+                    'pricing recommendations.'
+                ),
+                'is_valid': True,
+                'warnings': [],
+            })
         cwi = cwi_calc.cwi
         expected_weekly_hours = cwi_calc.expected_weekly_minutes / 60.0
 

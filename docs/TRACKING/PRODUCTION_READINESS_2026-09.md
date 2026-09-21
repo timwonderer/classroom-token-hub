@@ -1480,7 +1480,106 @@ before.
 
 ---
 
-## VII. Maintenance
+## VII. Live-Test Campaign (2026-09-19 →)
+
+First controlled deployment of v2 onto the deployment host, run against
+`SOP-DEP-001`. Full evidence in
+[`docs/ops/audits/LIVE_TEST_DEPLOYMENT_2026-09-19.md`](../ops/audits/LIVE_TEST_DEPLOYMENT_2026-09-19.md);
+this section carries only what bears on the launch decision.
+
+**Deployed SHA:** `8c5cff7c8`, tag `live-test/2026-09-19`. Single gunicorn
+worker, migration head `d9e1f3a5b7c9`, 44 tables, fresh database.
+
+### Status
+
+| | |
+|---|---|
+| §VI–§X (release gate, runtime, secrets, migration, health) | Complete, passed |
+| §XI (full-app browser test) | **In progress** — two sessions run, 38 findings |
+| §XIV (go/no-go decision) | Pending — §XI must complete first |
+| §XVI (completion condition) | Not met |
+
+**Current as of 2026-09-21.** The finding count below (23) reflects the first
+session. The second session took it to 38, and findings 21-35 are remediated on
+`codex/live-test-launch-readiness` (PR #1420), not yet merged or deployed. The
+live host still runs `8c5cff7c8`, so **every fix in that batch is absent from
+production**. This section remains the launch gate; for the current per-finding
+status and the untested inventory see
+[`docs/ops/audits/RESUME_2026-09-22.md`](../ops/audits/RESUME_2026-09-22.md).
+
+Open launch blocker unaffected by that batch: **finding 14**, the sysadmin
+dashboard 500 (`operational_events` was never created).
+
+### What the campaign has established
+
+**The economic core is sound.** Payroll, store purchase, insufficient-funds
+refusal, inventory exhaustion, transfers and scheduled settlement all reconcile
+to the cent, with debit and entitlement grant provably atomic (shared
+`correlation_id`, 12 ms apart) and no fee ever charged on a lateral transfer.
+
+**Class isolation holds.** All five isolation items pass, including a
+cross-boundary write attempted from a real stale browser tab — a class B session
+submitting a class A seat id wrote nothing. This is the shape of the original P0
+same-teacher multi-period leak, and it is the single most important thing the
+campaign has confirmed.
+
+**Every defect found in a money path was presentation or lifecycle sequencing.**
+None touched correctness of money, class scoping, or transactional atomicity.
+
+### What it has cost to learn
+
+23 findings across two sessions. 20 from session one, of which the functional
+ones were remediated in PR #1405 (merged 2026-09-20) with 74 regression tests,
+each confirmed failing against the pre-fix SHA.
+
+**Open, and required before launch:**
+
+| # | Finding | Why it blocks |
+|---|---|---|
+| 14 | Sysadmin dashboard 500s — `operational_events` dropped by migration, never created | §XI requires operations surfaces to load without 500. Needs a design decision, not a migration: the error path runs outside FEAT context by construction, so an ORM-written event would roll back with the failure it records. |
+
+**Open, not blocking:**
+
+| # | Finding | Kind |
+|---|---|---|
+| 1 | Icon font unsubsetted, 3.8 MB | Performance; needs a build step |
+| 2 | Static assets send `Cache-Control: no-cache` | Performance; needs asset versioning first |
+| 19 | Surviving v1 Grafana dashboards query labels v2 does not emit, and render as zeros | Monitoring; dashboards live in Grafana's own database, not the repo |
+| 21 | CSV export heads its section column "Block", the retired v1 name | Wording |
+| 22 | A second tab silently changes the first tab's class; the stale tab keeps showing the old one | Usability. No data crosses — writes are scoped — but the teacher is told "applied to 0 student(s)" in a success style with nothing naming the cause |
+| 23 | Seven `print()` calls in the canonical context resolver bypass structured logging | Hygiene; latent, none has fired |
+
+### Not yet exercised
+
+**Superseded in part by the second session.** Rent is no longer uncovered:
+reconciliation, genesis, advance, idempotency and policy binding were all
+exercised live, and the append-only policy invariant (B1) was re-verified under
+an adversarial attempt. Rent *payment* remains untested — the class's preview
+window does not open until 2026-09-29.
+
+**Insurance remains the only economic domain with zero coverage**, and it moves
+real money on a schedule. It is testable end-to-end with the waiting period set
+to zero, so nothing gates it but attention. Also still untested: the hall-pass
+verification page, passwordless enrollment, student-side add/switch class,
+recovery flows, and the three sweeps (Turnstile coverage on every configured
+route, PII in URLs/logs/errors, accessibility per INV-ARC-020).
+
+### Standing lesson for the ship gate
+
+Every one of the first session's 23 findings — and all fifteen the second
+session added — was invisible to the test suite and visible within minutes of a
+real browser. That is not an argument against the suite —
+it caught none of these because none was the kind of thing it was written to
+catch. It is an argument that **suite-green is not a launch signal on its own**,
+and that the §XI browser pass is load-bearing rather than ceremonial.
+
+`SOP-DEP-001` §XI.A now records the adversarial technique the second session
+developed, so the next operator does not have to rediscover that a negative
+result proves little without a prediction to compare it against.
+
+---
+
+## VIII. Maintenance
 
 Update this file when a track changes status or a finding is closed. Record closure with the commit
 SHA. Do not create a new dated tracking document for this sprint — amend this one. Historical

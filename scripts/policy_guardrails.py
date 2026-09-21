@@ -437,6 +437,120 @@ def check_no_unscoped_audit_emit(path: pathlib.Path, tree: ast.AST, text: str) -
     return findings
 
 
+
+# ---------------------------------------------------------------------------
+# CLASS_SCOPED_TEMPORAL_AUTHORITY
+#
+# SPEC-TIME-001 §I: ``canonical_temporal_resolver`` is the only public temporal
+# evaluation helper, and §CLE names the class-scoped evaluations whose authority
+# is the Canonical Class Timezone — obligation due dates, payroll, store expiry,
+# class-local day boundaries.
+#
+# The rule was written and nothing enforced it, so it regressed three times in
+# code by people who knew it: payroll's first_pay_date, the store's activation
+# and delist dates, and rent's first_rent_due_date — the last of these in a
+# remediation whose own commit message named the defect class. The three were not
+# missed by a guard that failed; they were never inspected. A naive
+# ``strptime`` assigned to a timezone-aware column type-checks, passes every
+# other guardrail, and silently stores the teacher's date in the wrong day.
+#
+# Patching site four leaves site five. This is rule ten.
+# ---------------------------------------------------------------------------
+
+# Columns that hold a class-scoped instant derived from a teacher-entered date or
+# a class-local schedule. Each must be produced by a CLE resolution.
+CLASS_SCOPED_TEMPORAL_COLUMNS = frozenset({
+    "first_rent_due_date",
+    "first_pay_date",
+    "next_payroll_date",
+    "activation_at",
+    "auto_delist_date",
+    "collective_goal_expires_at",
+    "cycle_boundary_at",
+    "grace_boundary_at",
+    "next_assessment_at",
+})
+
+# Constructions that cannot have consulted the class timezone. ``utc_now`` and
+# ``ensure_utc`` are absent deliberately: they are sanctioned helpers, and a
+# value that merely passes through them may still have been resolved by CLE.
+NAIVE_TEMPORAL_CALLS = frozenset({
+    "strptime",     # parses to a naive datetime; stored as the session's zone
+    "combine",      # date + time with no zone is the same defect, spelled longer
+    "today",        # the server's calendar day, not the class's
+    "now",          # datetime.now() — the server's clock
+    "utcnow",
+    "fromtimestamp",
+})
+
+
+def _naive_temporal_calls_in(node: ast.AST) -> list[tuple[str, int]]:
+    """Every forbidden temporal construction inside an expression."""
+    hits: list[tuple[str, int]] = []
+    for sub in ast.walk(node):
+        if not isinstance(sub, ast.Call):
+            continue
+        func = sub.func
+        if isinstance(func, ast.Attribute):
+            name = func.attr
+        elif isinstance(func, ast.Name):
+            name = func.id
+        else:
+            continue
+        if name in NAIVE_TEMPORAL_CALLS:
+            hits.append((name, getattr(sub, "lineno", getattr(node, "lineno", 1))))
+    return hits
+
+
+def _temporal_assignment_targets(tree: ast.AST):
+    """(column_name, value_node) for every write to a class-scoped temporal column.
+
+    Covers the three spellings these writes actually take: a dict literal built
+    as a FEAT payload, a keyword argument to a command, and an attribute
+    assignment onto a model instance.
+    """
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Dict):
+            for key, value in zip(node.keys, node.values):
+                if (
+                    isinstance(key, ast.Constant)
+                    and isinstance(key.value, str)
+                    and key.value in CLASS_SCOPED_TEMPORAL_COLUMNS
+                ):
+                    yield key.value, value
+        elif isinstance(node, ast.Call):
+            for kw in node.keywords:
+                if kw.arg in CLASS_SCOPED_TEMPORAL_COLUMNS:
+                    yield kw.arg, kw.value
+        elif isinstance(node, ast.Assign):
+            for target in node.targets:
+                name = (
+                    target.attr if isinstance(target, ast.Attribute)
+                    else target.id if isinstance(target, ast.Name)
+                    else None
+                )
+                if name in CLASS_SCOPED_TEMPORAL_COLUMNS:
+                    yield name, node.value
+
+
+def check_class_scoped_temporal_authority(path: pathlib.Path, tree: ast.AST) -> list[Finding]:
+    """SPEC-TIME-001 §CLE: class-scoped deadlines resolve in the class timezone."""
+    findings: list[Finding] = []
+    for column, value in _temporal_assignment_targets(tree):
+        for call_name, line in _naive_temporal_calls_in(value):
+            findings.append(Finding(
+                "CLASS_SCOPED_TEMPORAL_AUTHORITY",
+                path,
+                line,
+                f"`{column}` is assigned from `{call_name}(...)`, which cannot have "
+                f"consulted the class timezone. SPEC-TIME-001 §CLE requires a CLE "
+                f"resolution for class-scoped deadlines — resolve through "
+                f"canonical_temporal_resolver (or a helper that does, such as "
+                f"_class_local_date_start_utc) instead.",
+            ))
+    return findings
+
+
 def run_checks(no_waivers: bool, diff_base: str | None, diff_head: str) -> tuple[list[Finding], list[str]]:
     findings: list[Finding] = []
     warnings: list[str] = []
@@ -460,6 +574,7 @@ def run_checks(no_waivers: bool, diff_base: str | None, diff_head: str) -> tuple
         path_findings.extend(check_no_lineage_backfill_on_read(path, tree, text))
         path_findings.extend(check_no_direct_lineage_token_assignment(path, text))
         path_findings.extend(check_no_unscoped_audit_emit(path, tree, text))
+        path_findings.extend(check_class_scoped_temporal_authority(path, tree))
 
         waivers = collect_waivers(path, text)
         if line_map is not None:
