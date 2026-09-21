@@ -68,11 +68,37 @@ const config = {
             "assets/**",
             // The repository-side index; this site has its own landing page.
             "README.md",
-            // An operator's filled worksheet carries one run's host state. It is
-            // gitignored, but .gitignore only protects the repository — a site
-            // built from a working tree that still holds the file would publish
-            // it. Excluded here so the public build cannot reach it either.
+            // Operational records: one run of one production host, plus its
+            // raw test evidence. These describe an operation, not the software,
+            // and nothing in the public tree links to them.
+            "ops/**",
+            // docs/TRACKING/ is working state. Three documents there are durable
+            // enough to publish — the roadmap, the tracking README, and the plan
+            // template — and everything else is a dated snapshot of an
+            // in-progress decision. A filled worksheet is included in that:
+            // .gitignore keeps it out of the repository, but the site builds
+            // from the working tree, so the exclude list is the layer that
+            // actually governs what reaches the public site.
+            //
+            // This is a denylist, so a NEW file under TRACKING/ would default to
+            // published. tests/test_docs_site_publishes_no_working_state.py
+            // fails closed on exactly that.
             "TRACKING/PRODUCTION_FIRST_TEST_DEPLOYMENT_CHECKLIST_*.md",
+            // An index *into* the excluded working documents. Published on its
+            // own it is a table of contents whose entries 404.
+            "TRACKING/README_DOMAIN_TRACKING.md",
+            "TRACKING/ACCESSIBILITY_REVIEW_2026-09-03.md",
+            "TRACKING/BATCH-B_OPERATIONS_VERIFIER_POLICY_DECISION_PACKAGE_20260901.md",
+            "TRACKING/CI_CLASSIFIER_DESIGN_2026-08-26.md",
+            "TRACKING/CI_EVIDENCE_REUSE_MATRIX_2026-08-26.md",
+            "TRACKING/FEAT_REGISTRY_RECONCILIATION_2026-09-19.md",
+            "TRACKING/LEDGER_SERVICE_FEAT_CONSOLIDATION_20260904.md",
+            "TRACKING/PRODUCTION_READINESS_2026-09.md",
+            "TRACKING/PUBLIC_PRIVACY_DISTRICT_AUDIT_20260915.md",
+            "TRACKING/USER_GUIDE_COVERAGE_2026-09.md",
+            "TRACKING/USER_GUIDE_INVENTORY_2026-09.md",
+            "TRACKING/V2_INVARIANT_VERIFIER_RECONCILIATION_20260831.md",
+            "TRACKING/V2_LEDGER_BALANCE_CONTRACT_RESOLUTION_20260831.md",
           ],
           sidebarPath: require.resolve("./sidebars.js"),
           // Function form, not a string: the plugin reads from `../docs`, so a
