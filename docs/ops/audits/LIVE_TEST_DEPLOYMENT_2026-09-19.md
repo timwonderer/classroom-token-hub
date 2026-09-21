@@ -1155,6 +1155,10 @@ reading "applied to 0 student(s)"), and then the submission confirmed it. A pass
 observed without a prior expectation would not have distinguished "the guard
 fired" from "the request never arrived".
 
+That technique, and the others this session relied on, are now written up as
+`SOP-DEP-001` §XI.A so the next operator inherits the method rather than
+rediscovering it.
+
 Note also what did **not** happen: the write path did not move the active class.
 The operator's initial read was that the submit had switched back to class A and
 applied correctly; the log shows the switch was a separate, later
