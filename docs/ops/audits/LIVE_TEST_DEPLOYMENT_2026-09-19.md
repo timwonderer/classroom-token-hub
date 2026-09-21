@@ -2077,6 +2077,77 @@ have been lost during the v1→v2 migration, and that deserves investigation rat
 than a silent removal — deleting the module would erase the evidence that
 something went missing. This corrects the record in finding 27.
 
+**38. One reason code describes four different endings (spec question, NOT a defect)** — ESCALATED
+
+Found by verifying the daily-limit prediction against live data, and worth
+recording mainly for what it turned out *not* to be.
+
+**The mechanism is correct.** Seat 6 clocked in at `03:40:06.647847Z`; the
+scheduler wrote an `inactive` row at exactly `05:10:06.647847Z` — clock-in plus
+5400s to the microsecond, accumulating exactly the 5400s limit, `mechanism =
+system`. `DOM-PROD-001` §319's timestamp correction works: the student is not
+paid for the ~35 minutes between the cap being reached and the hourly job
+noticing.
+
+**The observation.** That row reads `reason_code = done_for_day` — the same code
+written when a student chooses to stop, when the class day ends on an open
+session, and when a hanging hall pass is closed out. Four events, one code. The
+scheduled job composes an explanatory string for two of them ("Daily limit
+reached (1.5h)", "Automatically closed at end of day") and passes it to a
+`reason` parameter that has **no column behind it**: `attendance_sessions` has
+`reason_code` and nothing else, so the text is built and discarded on every run.
+
+Why it seemed to matter: attendance rows are permanent and never corrected
+(§108), and the operator decision of 2026-09-21 makes payroll reversal the only
+remedy (§187). The row is therefore the evidence a teacher weighs when deciding
+whether to reverse. "Why did I stop at 22:10?" is answered by a code that reads
+as though the student chose to.
+
+**Why this is not a defect.** `DOM-PROD-001` mandates exactly this, in four
+places:
+
+| Clause | Requirement |
+|---|---|
+| §302 | ``reason_code`` — enumerated: ``hall_pass`` \| ``done_for_day`` \| ``start_work`` |
+| §316 | prior-session auto-close SHALL use ``reason_code = done_for_day`` |
+| §317 | end-of-day termination SHALL use ``reason_code = done_for_day`` |
+| §318 | hanging hall pass SHALL close with ``reason_code = done_for_day`` |
+| §319 | the daily limit SHALL generate an inactive row with ``reason_code = done_for_day`` |
+
+The enumeration is closed and the four closures are each specified by name. The
+implementation is not drifting from the contract; it is obeying it exactly.
+
+**An attempted fix was reverted, and the reversion is the useful record.** Two
+codes (`daily_limit_reached`, `end_of_day`) were added, the lockout queries
+widened to a terminal-code set, and the scheduled job taught to record which
+close it performed. Three constitutional tests failed immediately —
+`test_DOM_PROD_001__later_day_tap_in_closes_prior_session_at_its_own_day_end` and
+two in `test_stale_session_sweep.py` — which is what tests named for a rule are
+for: the failure said which law broke. The change was reverted in full.
+
+This is the direction-of-authority mistake the documentation hierarchy exists to
+prevent, committed while fixing findings that were themselves about rules without
+controls. The rule was reconstructed from the code and from reasoning about what
+the record *ought* to say, rather than read from the normative document first.
+`DOM-PROD-001` is the target state; the code was already there.
+
+**The question for the operator**, which only they can answer:
+
+> Given that attendance is never corrected and payroll reversal is the sole
+> remedy, is `done_for_day` sufficient evidence for a teacher deciding whether a
+> reversal is warranted — when it cannot distinguish a student who stopped from
+> one the system capped?
+
+If the answer is no, the work is an amendment to `DOM-PROD-001` §302 and
+§316-§319, and the code follows it. If the answer is yes, this finding closes as
+intended behaviour and should not be re-raised. Either way the remedy is not a
+code change made first.
+
+Worth noting separately and independently of the enumeration: the `reason`
+parameter has no persistence at all. Whether or not the codes change, an
+explanatory string is currently computed and thrown away on every automatic
+close, which is at best misleading to a future reader of the job.
+
 ## §XIV — Decision and Rollback
 
 Irreversible revisions, per `SOP-DEP-001` §XIV item 5: `c7a7b8c9d0e1`

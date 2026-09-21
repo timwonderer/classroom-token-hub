@@ -17,8 +17,6 @@ from app.models import (
     PolicyVersion,
     Seat,
     Transaction,
-
-    TERMINAL_DAY_REASON_CODES,
 )
 from app.payroll import get_pay_rate_for_class
 from app.services.context_resolver import CanonicalContext
@@ -313,7 +311,7 @@ def _record_attendance_session_impl(
         done_today = AttendanceSession.query.filter(
             AttendanceSession.target_seat_id == resolved_target_seat_id,
             AttendanceSession.class_id == ctx.class_id,
-            AttendanceSession.reason_code.in_(TERMINAL_DAY_REASON_CODES),
+            AttendanceSession.reason_code == AttendanceReasonCode.DONE_FOR_DAY.value,
             AttendanceSession.timestamp >= day_bounds.boundary_start_utc,
             AttendanceSession.timestamp < day_bounds.boundary_end_utc,
         ).first()
@@ -342,10 +340,7 @@ def _record_attendance_session_impl(
                 actor_seat_id=resolved_actor_seat_id,
                 class_id=existing_active.class_id,
                 status="inactive",
-                # DOM-PROD-001 §312: a session still open when its day ended is
-                # terminated at that day's boundary. That is the day ending, not
-                # the student deciding to stop, and the record now says so.
-                reason_code=AttendanceReasonCode.END_OF_DAY.value,
+                reason_code=AttendanceReasonCode.DONE_FOR_DAY.value,
                 timestamp=closing_timestamp,
                 mechanism=mechanism,
                 hall_pass_id=None,

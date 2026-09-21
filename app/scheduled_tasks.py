@@ -168,14 +168,6 @@ def enforce_daily_limits_job():
 
                         close_at_utc = None
                         reason = None
-                        # Which close this is, recorded rather than inferred. Both
-                        # branches previously wrote DONE_FOR_DAY, so the timeline
-                        # could not tell a student who hit the daily cap from one
-                        # the day simply ended on -- nor either from a student who
-                        # chose to stop. The explanatory `reason` string below is
-                        # composed and then dropped: attendance_sessions has no
-                        # column for it.
-                        close_reason_code = None
 
                         if daily_limit:
                             total_evaluation = canonical_temporal_resolver(
@@ -213,7 +205,6 @@ def enforce_daily_limits_job():
                                     )
                                     close_at_utc = close_evaluation.shifted_timestamp_utc
                                 reason = f"Daily limit reached ({daily_limit / 3600:.1f}h)"
-                                close_reason_code = AttendanceReasonCode.DAILY_LIMIT_REACHED
 
                         if close_at_utc is None and day_is_over:
                             # DOM-PROD-001 §312: terminate at end of day in the
@@ -222,7 +213,6 @@ def enforce_daily_limits_job():
                             # does not require a configured daily limit.
                             close_at_utc = day_end_utc
                             reason = "Automatically closed at end of day"
-                            close_reason_code = AttendanceReasonCode.END_OF_DAY
 
                         if close_at_utc is None:
                             # Still inside its own day and under the limit.
@@ -246,7 +236,7 @@ def enforce_daily_limits_job():
                             mechanism="system",
                             status="inactive",
                             reason=reason,
-                            reason_code=close_reason_code or AttendanceReasonCode.DONE_FOR_DAY,
+                            reason_code=AttendanceReasonCode.DONE_FOR_DAY,
                             idempotency_key=f"daily_limit:{class_id}:{seat_id}:{secrets.token_hex(12)}",
                             reference_time_utc=close_at_utc,
                         )

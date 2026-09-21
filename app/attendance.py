@@ -2,7 +2,7 @@ from types import SimpleNamespace
 from app.services.attendance_service import (
     calculate_unpaid_attendance_seconds as _calculate_unpaid_attendance_seconds,
 )
-from app.models import AttendanceReasonCode, AttendanceSession, PayrollEvent, TERMINAL_DAY_REASON_CODES
+from app.models import AttendanceReasonCode, AttendanceSession, PayrollEvent
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
     SYSTEM_LEVEL_EVALUATION,
@@ -176,7 +176,7 @@ def get_session_status(seat_id, class_id):
             AttendanceSession.target_seat_id == seat_id,
             AttendanceSession.class_id == class_id,
             AttendanceSession.status == "inactive",
-            AttendanceSession.reason_code.in_(TERMINAL_DAY_REASON_CODES),
+            AttendanceSession.reason_code == AttendanceReasonCode.DONE_FOR_DAY.value,
             AttendanceSession.timestamp >= day_bounds.boundary_start_utc,
             AttendanceSession.timestamp < day_bounds.boundary_end_utc,
         )
