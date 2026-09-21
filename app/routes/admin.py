@@ -5204,6 +5204,82 @@ def _calculate_base_rent_amount(rent_settings: RentSettings, current_year: int, 
     return base_amount
 
 
+def _resolve_rent_policy_deferral(class_id, pending_settings):
+    """Describe a saved rent policy that is not yet the one students are billed under.
+
+    ``rent_settings`` is append-only (DOM-POL-001 SS VI.1): a save inserts a new
+    immutable row and retires its predecessor. It does not reach into the open
+    rent cycle, which froze a ``policy_uuid`` when it was created and keeps
+    resolving that row (DOM-POL-001 SS VII). The terms a class is actually billed
+    under therefore do not move until ``reconcile_rent`` advances the cycle at
+    ``next_assessment_at`` and binds whatever policy is in force by then.
+
+    That deferral is the intended protection: a teacher cannot raise rent on a
+    period students are already living through. The page said nothing about it.
+    Both the "Current Rent Configuration" card and the settings form render the
+    newest ``IN_USE`` row, which after a mid-cycle save is the *pending* policy,
+    under a heading calling it current -- so a teacher who raised rent saw the
+    new figure echoed back with no indication that no student would be charged
+    it this cycle.
+
+    Returns ``None`` when nothing is deferred: no cycle has been established yet
+    (the first save is in force immediately), or the open cycle already carries
+    the newest policy.
+    """
+    if not class_id or pending_settings is None:
+        return None
+
+    cycle = obligations_service.get_latest_bill_cycle(f"rent:{class_id}")
+    if cycle is None or not cycle.policy_uuid:
+        return None
+    if cycle.policy_uuid == pending_settings.policy_uuid:
+        return None
+
+    enforced = RentSettings.query.filter_by(policy_uuid=cycle.policy_uuid).first()
+    if enforced is None:
+        return None
+
+    # The instant the successor cycle is minted is the instant the pending policy
+    # binds, so it -- not ``cycle_boundary_at`` -- is the effective date to show.
+    # A terminal cycle (``next_assessment_at IS NULL``) mints no successor, so
+    # there is no boundary at which the pending policy could take effect at all.
+    takes_effect_on = None
+    if cycle.next_assessment_at is not None:
+        # Class timezone, not UTC: this is a class-scoped deadline the teacher
+        # reasons about locally, and SPEC-TIME-001 SS CLE is the only authority
+        # that knows ``ClassEconomy.class_timezone``.
+        takes_effect_on = canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=_cle_context(class_id),
+            primitive="current_evaluation_day",
+            reference_time_utc=ensure_utc(cycle.next_assessment_at),
+        ).result["evaluation_date"]
+
+    def _terms(policy):
+        return {
+            'amount': f"${policy.rent_amount:.2f}",
+            'cadence': frequency_label(
+                policy.frequency_type,
+                custom_frequency_value=policy.custom_frequency_value,
+                custom_frequency_unit=getattr(policy, 'custom_frequency_unit', None),
+            ),
+            'grace_period_days': policy.grace_period_days,
+            'late_penalty': f"${policy.late_penalty_amount:.2f}",
+        }
+
+    return {
+        'cycle_number': cycle.cycle_number,
+        'is_terminal': cycle.next_assessment_at is None,
+        'takes_effect_on': takes_effect_on,
+        'display_takes_effect_on': (
+            takes_effect_on.strftime("%B %d, %Y") if takes_effect_on else ""
+        ),
+        'enforced': _terms(enforced),
+        'pending': _terms(pending_settings),
+        'amount_changed': enforced.rent_amount != pending_settings.rent_amount,
+    }
+
+
 @admin_bp.route('/rent-settings', methods=['GET', 'POST'])
 @admin_required
 def rent_settings():
@@ -5312,7 +5388,32 @@ def rent_settings():
         # of "rent items" that were synchronised into store rows after the
         # fact, and the two drifted apart in every direction they could.
         # Rent settings are canonical; no policy-version snapshotting in v2.
-        flash("Rent settings updated successfully!", "success")
+        #
+        # What the teacher just saved is not necessarily what the class is now
+        # billed: an open rent cycle keeps the policy_uuid it froze, so a
+        # mid-cycle save takes effect only when the cycle advances. Saying
+        # "updated successfully" and nothing else let a teacher believe a raise
+        # or a longer preview window was live when it was not.
+        deferral = _resolve_rent_policy_deferral(class_id, block_settings)
+        if deferral is None:
+            flash("Rent settings updated successfully!", "success")
+        elif deferral['is_terminal']:
+            flash(
+                "Rent settings saved, but no further rent cycle is scheduled. "
+                "Students stay on the terms already in force "
+                f"({deferral['enforced']['amount']} {deferral['enforced']['cadence']}) "
+                "until rent billing resumes.",
+                "warning",
+            )
+        else:
+            flash(
+                "Rent settings saved. They apply from the next rent cycle, on "
+                f"{deferral['display_takes_effect_on']}. Until then students stay "
+                "on the terms the current cycle was billed under "
+                f"({deferral['enforced']['amount']} {deferral['enforced']['cadence']}) "
+                "\u2014 a cycle already underway is never altered.",
+                "info",
+            )
         return redirect(url_for('admin.rent_settings'))
 
     # Use view model to get student obligation summary (encapsulates all aggregation)
@@ -5485,6 +5586,12 @@ def rent_settings():
             display_first_rent_due_date = settings.first_rent_due_date.strftime("%B %d, %Y")
             display_first_rent_due_date_iso = settings.first_rent_due_date.strftime("%Y-%m-%d")
 
+    # The banner that tells the teacher which policy the class is actually on.
+    # Resolved on every render, not only after a save, because the divergence
+    # persists for the whole remaining cycle and is not tied to the request
+    # that created it.
+    rent_policy_deferral = _resolve_rent_policy_deferral(class_id, settings)
+
     canonical_rent_band = None
     if settings and payroll_settings:
         try:
@@ -5541,6 +5648,7 @@ def rent_settings():
                           display_current_period_end=display_current_period_end,
                           display_next_due_date=display_next_due_date,
                           canonical_rent_band=canonical_rent_band,
+                          rent_policy_deferral=rent_policy_deferral,
                           current_period_start=current_period_start,
                           current_period_end=current_period_end,
                           next_due_date=next_due_date)

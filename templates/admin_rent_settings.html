@@ -2,6 +2,39 @@
 {% set page_title = "Rent Management" %}
 {% set current_page = "rent" %}
 {% import 'macros/cards.html' as cards %}
+
+{#- A rent policy saved while a cycle is open does not bill anyone until that
+    cycle advances (DOM-POL-001 SS VI.1/VII). Every field on this page renders the
+    newest saved policy, so without this notice the page states the pending terms
+    as the current ones. Rendered on both tabs: the Overview card is the claim
+    that needs qualifying, and the Settings form is where the teacher is about to
+    make the same assumption again. -#}
+{% macro rent_deferral_notice(deferral, body_class='mb-4') %}
+{% if deferral %}
+  {% if deferral.is_terminal %}
+    {% call cards.alert_card('warning', 'These rent terms are not in effect', icon='pause_circle', body_class=body_class, role='status') %}
+      No further rent cycle is scheduled for this class, so nothing is due to bind
+      the terms shown here. Students stay on
+      <strong>{{ deferral.enforced.amount }} {{ deferral.enforced.cadence }}</strong>,
+      the terms cycle {{ deferral.cycle_number }} was billed under, until rent
+      billing resumes.
+    {% endcall %}
+  {% else %}
+    {% call cards.alert_card('info', 'These rent terms start ' ~ deferral.display_takes_effect_on, icon='schedule', body_class=body_class, role='status') %}
+      A rent cycle is already underway, and a cycle underway is never altered.
+      Students are being billed
+      <strong>{{ deferral.enforced.amount }} {{ deferral.enforced.cadence }}</strong>{% if deferral.enforced.grace_period_days != deferral.pending.grace_period_days %},
+      with a {{ deferral.enforced.grace_period_days }}-day grace period{% endif %}
+      &mdash; the terms on this page take effect
+      <strong>{{ deferral.display_takes_effect_on }}</strong>, the next rent due date.
+      {%- if deferral.amount_changed %}
+      <br>Rent changes from {{ deferral.enforced.amount }} to
+      <strong>{{ deferral.pending.amount }} {{ deferral.pending.cadence }}</strong> then.
+      {%- endif %}
+    {% endcall %}
+  {% endif %}
+{% endif %}
+{% endmacro %}
 {% block title %}Rent Management{% endblock %}
 {% block page_icon %}home{% endblock %}
 {% block contextual_help_body %}
@@ -31,8 +64,11 @@
   <li><strong>Incremental payments:</strong> allows partial payments instead of a single full payment.</li>
   <li><strong>Block purchases when late:</strong> prevents store purchases if rent is overdue.</li>
 </ul>
-{% call cards.alert_card('info', 'Billing timing can change', icon='info', body_class='mt-3 mb-0') %}
-  <strong>Side effects:</strong> Changing frequency or due dates can shift when students are billed next.
+{% call cards.alert_card('info', 'Changes start at the next cycle', icon='info', body_class='mt-3 mb-0') %}
+  <strong>A rent period already underway is never altered.</strong> Whatever you save here
+  takes effect when the next rent cycle begins, and the page tells you the date. Until
+  then students stay on the terms they were billed under. Changing frequency or due
+  dates also shifts when that next cycle lands.
 {% endcall %}
 {% endcall %}
 
@@ -108,6 +144,8 @@
        not by rent_settings. This route hard-aborts 404 if the rent feature
        is disabled at the class-features level, so reaching this template
        implies rent is enabled. No local Enable toggle exists here. #}
+    {{ rent_deferral_notice(rent_policy_deferral) }}
+
     <!-- Status Summary Cards -->
     <div class="row">
       <div class="col-lg-6 col-md-12 mb-4">
@@ -141,7 +179,7 @@
     <!-- Current Settings Summary -->
     <div class="card shadow">
       <div class="card-header bg-primary text-white py-3">
-        <h5 class="mb-0 fw-bold text-white"><span class="material-symbols-outlined me-2 icon-text-bottom" aria-hidden="true">info</span>Current Rent Configuration</h5>
+        <h5 class="mb-0 fw-bold text-white"><span class="material-symbols-outlined me-2 icon-text-bottom" aria-hidden="true">info</span>{% if rent_policy_deferral %}Saved Rent Configuration{% else %}Current Rent Configuration{% endif %}</h5>
       </div>
       <div class="card-body">
         {# Rent is enabled by definition on this route (see comment above). #}
@@ -321,6 +359,8 @@
          column; any prior toggle here was dead UI. If rent is disabled at
          the class-features level, the /admin/rent-settings route
          hard-aborts 404 before this template is even rendered. #}
+
+      {{ rent_deferral_notice(rent_policy_deferral) }}
 
       <!-- Warning Banner (if applicable) -->
       {% if payroll_warning %}

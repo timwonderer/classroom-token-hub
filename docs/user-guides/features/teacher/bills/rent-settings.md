@@ -29,7 +29,7 @@ This guide covers the Overview tab and the first two Settings sections: how much
 
 Two cards head the tab: **Current on Rent** and **Behind on Rent**, each a headcount.
 
-**Current Rent Configuration** below them is read-only — it reflects what you saved, not somewhere to edit:
+**Current Rent Configuration** below them is read-only — it reflects what you saved, not somewhere to edit. When a rent change you saved has not started yet, this card is titled **Saved Rent Configuration** instead, and a notice above it tells you which terms students are on in the meantime (see [When a change takes effect](#when-a-change-takes-effect)):
 
 | Field | What it shows |
 | --- | --- |
@@ -43,6 +43,36 @@ Two cards head the tab: **Current on Rent** and **Behind on Rent**, each a headc
 Badges beneath show which behaviours are on: **Bill Preview** (with its day count when enabled), **Incremental Payment**, **Prevent Purchase When Late**, and **Total Students**. Green means on, grey means off.
 
 **Student Roster** splits the class into a green **Current** section and a red **Behind** section. Behind rows read *Behind by X cycle* or *Behind by X cycles* — cycles, not days, so a student two periods in arrears is visibly worse off than one who is a day late. With no students it reads *No students in class yet.*
+
+### When a change takes effect
+
+**A rent change never applies to a rent period already underway.** Once students
+have been billed for a period, the terms of that period are fixed — you cannot
+raise rent, shorten a grace period, or change a due date on a bill they are
+already living with. Your change takes effect at the **start of the next rent
+cycle**, and the page tells you the exact date.
+
+You will see this in three places:
+
+- **When you save**, the confirmation names the date your new terms start and the
+  terms students stay on until then.
+- **On the Overview tab**, a notice reads *These rent terms start [date]* for as
+  long as the change is waiting, and the configuration card is retitled **Saved
+  Rent Configuration** so it is clear you are looking at terms that are not yet
+  in force.
+- **On the Settings tab**, the same notice sits above the form.
+
+The notice states the amount students are actually being billed right now, so you
+can always tell the two apart. Once the next cycle begins, the notice disappears
+and the card goes back to reading **Current Rent Configuration**.
+
+If rent billing has been stopped for the class, the notice says so instead: your
+saved terms are recorded but nothing is scheduled to pick them up until billing
+resumes.
+
+This is the same rule that governs rent-linked store items, which also take
+effect from the next cycle. It exists so that a mid-period change of mind cannot
+land on students retroactively.
 
 ### Setting the amount and frequency
 
