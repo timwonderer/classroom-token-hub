@@ -23,7 +23,7 @@ markdown==3.10.3
 # - Markup.striptags() behavior may differ
 # Review Jinja2 compatibility before upgrading from 2.1.5 to 3.0.3
 MarkupSafe==2.1.5
-packaging==26.2
+packaging==26.3
 pluggy==1.6.0
 psycopg2-binary==2.9.13
 Pygments==2.21.0
