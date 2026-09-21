@@ -68,6 +68,11 @@ const config = {
             "assets/**",
             // The repository-side index; this site has its own landing page.
             "README.md",
+            // An operator's filled worksheet carries one run's host state. It is
+            // gitignored, but .gitignore only protects the repository — a site
+            // built from a working tree that still holds the file would publish
+            // it. Excluded here so the public build cannot reach it either.
+            "TRACKING/PRODUCTION_FIRST_TEST_DEPLOYMENT_CHECKLIST_*.md",
           ],
           sidebarPath: require.resolve("./sidebars.js"),
           // Function form, not a string: the plugin reads from `../docs`, so a
