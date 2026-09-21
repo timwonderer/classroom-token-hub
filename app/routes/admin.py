@@ -204,7 +204,7 @@ from app.utils.student_deletion import (
 from app.utils.seat_scope import seat_scoped_filter, transaction_scope_filter
 from app.feats.admin_adjustment_feat import execute_admin_adjustments
 from app.feats.identity_feat import remove_pending_student_seat
-from app.feats.prod import record_attendance_session, record_payroll_event
+from app.feats.prod import record_attendance_session, record_payroll_event, record_payroll_reversal
 from app.feats.complete_payroll_cycle import complete_payroll_cycle
 from app.services.payroll.cycle_completion import get_completed_cycle_window
 from app.feats.direct_entitlement_grant_feat import execute_direct_grant, execute_hall_pass_adjustment
@@ -7005,6 +7005,15 @@ def _build_payroll_event_display_rows(*, ctx, payroll_events, class_label=None):
         credit_tx = next((tx for tx in linked if Decimal(tx.amount or 0) > 0), None)
         return Decimal(credit_tx.amount) if credit_tx else Decimal("0.00")
 
+    # A lineage is reversed at most once. Resolved as a set for the whole page
+    # rather than per row, so rendering history stays one query.
+    reversed_correlation_ids = {
+        row[0] for row in db.session.query(PayrollEvent.correlation_id).filter(
+            PayrollEvent.class_id == ctx.class_id,
+            PayrollEvent.payroll_event_type == "reversal",
+        ).all()
+    }
+
     payroll_records = []
     for event in payroll_events:
         seat = seat_lookup.get(event.target_seat_id)
@@ -7031,9 +7040,114 @@ def _build_payroll_event_display_rows(*, ctx, payroll_events, class_label=None):
             'account_type': "checking",
             'notes': summary.get("description") or event.payroll_event_type,
             'is_reversal': event.payroll_event_type == "reversal",
-            'can_reverse': False,
+            # DOM-PROD-001 §187 names payroll reversal as THE remedy for an
+            # attendance row that produced a wrong payroll outcome. It was
+            # hardcoded False, so the remedy had no surface: `record_payroll_
+            # reversal` appeared exactly once in the repository -- its own
+            # definition -- while this template already rendered a REVERSAL
+            # badge. The read side anticipated rows the write side never made.
+            'can_reverse': (
+                event.payroll_event_type != "reversal"
+                and event.correlation_id not in reversed_correlation_ids
+            ),
         })
     return payroll_records
+
+
+@admin_bp.route('/payroll/event/<int:payroll_event_id>/reverse', methods=['POST'])
+@admin_required
+def reverse_payroll_event(payroll_event_id):
+    """Reverse a payroll event — the sole remedy for a wrong payroll outcome.
+
+    DOM-PROD-001 §185 forbids correcting payroll by mutating attendance history,
+    and §187 names this as the path instead. The path did not exist:
+    ``record_payroll_reversal`` appeared exactly once in the repository, in its
+    own definition, with no route, service or test reaching it — while the
+    payroll template already rendered a REVERSAL badge for rows nothing could
+    produce. A teacher wanting to make a student whole had to leave the dispute
+    and issue a manual credit, which records itself as ``manual_credit`` rather
+    than as a correction: the money moved and the business record did not say
+    why.
+
+    This surface is deliberately on Payroll rather than on the support ticket
+    that may have raised the dispute. A teacher can discover a payroll mistake
+    with no ticket in existence, and Support must not acquire a Productivity
+    remedy — cross-domain coordination belongs in the FEAT layer, not in another
+    domain's route. Support can deep-link here; it does not execute this.
+
+    No FEAT envelope is opened here. ``record_payroll_reversal`` carries
+    ``@requires_feat_context("FEAT-PROD-003")``, which OPENS a context, so a
+    route-level one would nest and fail — the defect this same batch fixed on
+    hall-pass approval. Driving the FEAT rather than the bare domain command is
+    what keeps the counter-entry and the payroll record one operation: the FEAT
+    inherits the original's ``policy_version_id`` and derives the amount as the
+    negation of the linked transaction, so the reversal is a compensating entry
+    with the provenance of what it compensates, never a deletion.
+    """
+    ctx = g.canonical_context
+    class_id = (getattr(ctx, "class_id", None) or "").strip()
+    if not class_id:
+        abort(404)
+
+    event = PayrollEvent.query.filter_by(
+        id=payroll_event_id, class_id=class_id
+    ).first()
+    if event is None:
+        # Scoped by class: an event id belonging to another class is not found,
+        # not forbidden, so the response reveals nothing about other classes.
+        abort(404)
+
+    if event.payroll_event_type == "reversal":
+        flash("That entry is already a reversal and cannot itself be reversed.", "warning")
+        return redirect(url_for('admin.payroll_history'))
+
+    already_reversed = PayrollEvent.query.filter_by(
+        class_id=class_id,
+        correlation_id=event.correlation_id,
+        payroll_event_type="reversal",
+    ).first()
+    if already_reversed is not None:
+        flash("That payroll entry has already been reversed.", "warning")
+        return redirect(url_for('admin.payroll_history'))
+
+    reason = (request.form.get("reason") or "").strip()
+
+    try:
+        record_payroll_reversal(
+            ctx=ctx,
+            target_seat_id=event.target_seat_id,
+            correlation_id=event.correlation_id,
+            idempotency_key=f"payroll_reversal:{class_id}:{event.id}",
+            mechanism="TEACHER",
+            summary_json={
+                "description": (
+                    f"Reversal of {event.payroll_event_type}"
+                    + (f": {reason}" if reason else "")
+                ),
+                "source": "admin_payroll_reversal",
+                "reversed_payroll_event_id": event.id,
+                "reason": reason or None,
+            },
+        )
+    except LookupError as exc:
+        _log_api_client_error("reverse_payroll_event", exc, extra=f"event_id={event.id}")
+        flash(
+            "That payroll entry has no linked transaction to reverse, so there is "
+            "nothing to return.",
+            "warning",
+        )
+        return redirect(url_for('admin.payroll_history'))
+    except ValueError as exc:
+        _log_api_client_error("reverse_payroll_event", exc, extra=f"event_id={event.id}")
+        flash("That payroll entry cannot be reversed.", "warning")
+        return redirect(url_for('admin.payroll_history'))
+
+    flash(
+        "Payroll entry reversed. The original entry and its reversal both remain "
+        "in the history, so the record shows what happened and why.",
+        "success",
+    )
+    return redirect(url_for('admin.payroll_history'))
 
 
 @admin_bp.route('/payroll-history')
