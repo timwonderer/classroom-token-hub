@@ -1272,12 +1272,13 @@
 
   async function deleteStudentsWithPreview(studentIds) {
     if (!studentIds.length) return;
-    const headers = {
-      'Content-Type': 'application/json',
-      'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-    };
+    // csrfFetch attaches X-CSRFToken itself. These two calls previously built a
+    // `headers` object by hand; that worked, but a hand-built object is opaque to
+    // the CSRF guard and is the shape an omission hides in -- see the hall-pass
+    // rotation defect, which was one such call written without the header.
+    const headers = {'Content-Type': 'application/json'};
     try {
-      const previewResponse = await fetch('/admin/students/deletion-preview', {
+      const previewResponse = await window.AppCore.csrfFetch('/admin/students/deletion-preview', {
         method: 'POST', headers, body: JSON.stringify({student_ids: studentIds})
       });
       if (!previewResponse.ok) throw new Error('Unable to verify the current roster. Refresh and try again.');
@@ -1288,7 +1289,7 @@
         warning: preview.warning, expectedPhrase: preview.expected_phrase,
       });
       if (!gate) return;
-      const response = await fetch('/admin/students/bulk-delete', {
+      const response = await window.AppCore.csrfFetch('/admin/students/bulk-delete', {
         method: 'POST', headers, body: JSON.stringify({student_ids: studentIds, ...gate})
       });
       const result = await response.json();

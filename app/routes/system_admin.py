@@ -453,7 +453,7 @@ def passkey_list():
         return jsonify({"error": "Failed to list passkeys"}), 500
 
 
-@sysadmin_bp.route('/passkey/<int:credential_id>/delete', methods=['POST'])
+@sysadmin_bp.route('/passkey/<int:credential_id>/delete', methods=['DELETE'])
 @system_admin_required
 @limiter.limit("10 per minute")
 def passkey_delete(credential_id):
