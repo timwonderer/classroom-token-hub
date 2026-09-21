@@ -1097,6 +1097,153 @@ PIN. The matrix had one violation in the server and one in the UI, and both were
 on hall passes — the one row of the table that is an exception to its own rule,
 which is exactly the row an implementer is most likely to get wrong.
 
+## §XI continued — 2026-09-20/21
+
+Testing resumed against the same deployment (`8c5cff7c8`) rather than a fresh
+one, deliberately: the remaining §XI items are in areas the remediation PR did
+not touch, so exercising them on the old build finds their defects in time to be
+fixed in one batch and deployed once. Every finding below is checked against
+current `main` before being recorded as work, since 53 commits have landed since
+this SHA.
+
+**Verified in this session**
+
+| Item | Evidence |
+|---|---|
+| `/docs` renders | `GET /docs` → 308 → `/docs/` → 200 (12,200 bytes). Operator confirmed from a mobile browser at 23:15:57Z; origin probe matches. The 308 is Werkzeug's `strict_slashes` redirect in the direction that works — the rule carries the trailing slash, unlike finding 15's Grafana mount. |
+| Teacher current-class switching | Second class created (`POST /admin/create-class` → 302), switched back (`POST /admin/current-class` → 200). Both canonical pointers moved together: `last_active_class_id` = class A and `last_active_seat_id` = 1, which is the teacher seat *in class A*. Updating one without the other is the failure the code at `admin.py` warns about, and it did not occur. Two teacher seats now exist, one per class, both with `claimed_at` NULL — correct, since that column is student-specific (DOM-IDEN-002 §Schema Contract). |
+| Roster upload into a second class | `POST /admin/upload-students` created 30 seats in one request. All 30 carry an `IdentityProfile`, `class_id`, `roster_fingerprint` and both claim hashes; none is bound to a user; no duplicate fingerprints. |
+| Selected-class export scopes to the session's class | Class A active → 1 row (the single claimed seat). Class B active → header only. The two classes differing in claimed count (1 and 0) makes this unusually legible: the export is specified to list claimed seats only, and it did. |
+
+**A query parameter does not choose the class — verified as a controlled
+comparison.** The same URL, carrying class A's id, was requested from both
+sessions:
+
+    02:48:19  actor class_id=6135423f (class A)  ?class_id=<A>  -> 200, 158 bytes  (1 row)
+    02:49:06  actor class_id=c20854ad (class B)  ?class_id=<A>  -> 200, 111 bytes  (header only)
+    02:49:22  actor class_id=c20854ad (class B)  ?class_id=<A>  -> 200, 111 bytes
+
+Identical input, different session context, different output — which is stronger
+evidence than a single empty file, because it rules out the export merely being
+broken or empty for an unrelated reason. The actor resolved to the class-local
+teacher seat each time (`teacher:b675e002…` for class A, `teacher:ff5176d7…` for
+class B), so context resolution and export scoping agree.
+
+**Class-scoped admin actions cannot cross the selected class boundary — verified
+against a real stale tab.**
+
+The strongest available form of this test, and it arose from the operator's own
+observation rather than a crafted request. Class context is one server-side value
+per teacher, so a second tab switching class changes the first tab's context
+while that tab still displays the old class (finding 22). Submitting the form
+already on screen therefore posts class A identifiers into a class B session —
+which is how this failure actually happens in a classroom, not as an attack but
+as two open tabs.
+
+    submit time   actor=teacher:ff5176d7…  class_id=c20854ad   (class B)
+    form carried  Alex Morgan's seat                            (class A)
+    result        POST /admin/payroll/manual-payment -> 302
+                  transactions for that seat: 7, unchanged, all from 2026-09-19
+
+Nothing was written. `payroll_manual_payment` resolves the scope from the session
+and skips any seat outside it (`if student is None or student.class_id !=
+selected_class_id: continue`), so the class A seat was passed over.
+
+Worth recording that this was a *prediction* before it was a result: the guard
+was read in the source first, the expected outcome stated (no ledger row, flash
+reading "applied to 0 student(s)"), and then the submission confirmed it. A pass
+observed without a prior expectation would not have distinguished "the guard
+fired" from "the request never arrived".
+
+Note also what did **not** happen: the write path did not move the active class.
+The operator's initial read was that the submit had switched back to class A and
+applied correctly; the log shows the switch was a separate, later
+`POST /admin/current-class` — their own use of the nav switcher, which
+INV-ARC-010 makes the sole legal way to change class.
+
+**All five isolation items now pass**: current-class switching, add/switch class
+(teacher side), export scoping by session, export ignoring a forced query
+parameter, and cross-boundary write refusal.
+
+**21. The student export labels `section` as "Block" (wording)**
+
+`app/routes/admin.py:7945` writes the CSV header as:
+
+    'First Name', 'Last Name', 'Block', 'Checking Balance', ...
+
+"Block" is the retired v1 name for what v2 calls `section`. The teacher-facing
+UI has already moved: `templates/admin_customizations.html:110` labels the field
+**Section**, and no teacher-facing template renders the word "Block" at all. The
+export is the last surface still using the old term, so a teacher who fills in
+"Section" downloads a column called "Block".
+
+The *value* is legitimate — `section` is display metadata and an export is a
+display surface, which is exactly where it is allowed to appear. Only the label
+is wrong.
+
+Present on current `main` (checked), so it is work rather than an artefact of the
+old build. Same family as finding 5's "Global Default": v1 vocabulary surviving
+on a surface the rest of the app has already renamed.
+
+**22. A second tab silently changes the first tab's class, which keeps showing the old one (correctness, usability)**
+
+Raised by the operator: open class A in one tab, switch to class B in a second
+tab, return to the first tab and refresh — it is now class B.
+
+The refresh behaviour is correct and follows from the design: class context is
+**one value per teacher, held server-side**. `resolve_canonical_context` reads
+`user.last_active_class_id` (`app/services/context_resolver.py:104`), not
+anything tab-scoped, so there is exactly one active class per teacher at a time.
+A second tab is not a second session.
+
+The hazard is the state *before* that refresh. Tab 1 keeps displaying class A —
+its roster, its students, its join code — while the session it posts into has
+become class B. Nothing on the page indicates the change. A teacher with two
+tabs open during a class period is an ordinary situation, not a contrived one.
+
+Every action taken from that stale view then targets class A identifiers under a
+class B context. **No data crosses the boundary** — the writes are scoped, and
+`payroll_manual_payment` skips any seat whose `class_id` differs from the
+selected scope (`admin.py`, `if student is None or student.class_id !=
+selected_class_id: continue`). The isolation holds. What fails is the
+explanation:
+
+* Manual credit reports **"Manual credit of $X applied to 0 student(s)!"**,
+  flashed as `success`, after the teacher deliberately selected a student.
+* Other routes hit `_admin_write_has_join_code_conflict` and return a mismatch
+  error that does not mention the second tab.
+
+The count is honest and the styling is not; more importantly nothing names the
+cause, so the likely conclusion is "this feature is broken" rather than "my
+context moved". The fix is not to make the context per-tab — one active class per
+teacher is a deliberate invariant (INV-ARC-010 makes the nav switcher the sole
+legal switcher). It is to make a stale view detectable: stamp the rendered class
+into the page and have a mismatch say so plainly.
+
+**23. Seven `print()` calls in the canonical context resolver (hygiene, latent)**
+
+`app/services/context_resolver.py` lines 108-134 emit seven `DEBUG:`-prefixed
+`print()` statements on identity-resolution failures, including one carrying
+identifiers:
+
+    print(f"DEBUG: Missing class_id! user_id={user_id}, last_active_class_id={...}")
+
+They bypass the application's logging entirely. The app has structured logging
+with correlation ids, actor and class context, and level filtering; `print()`
+goes to stdout, which gunicorn captures and promtail ships to Loki as
+unstructured text with none of that. These fire on precisely the conditions
+where a correlated log line would be most useful — a seat pointer that does not
+match its class, a seat that does not belong to the authenticated user.
+
+**Latent, not active: zero `DEBUG:` lines appear in the journal since
+2026-09-19.** None of the guarded conditions has occurred on this deployment, so
+nothing has been emitted. This is cleanup, not an incident.
+
+Scope checked and narrower than it first appeared: `grep` finds 30 `print(`
+matches under `app/`, but 7 are docstring `Example:` blocks in
+`class_configuration_query_service.py` and 7 more are legitimate CLI output in
+`cli_commands.py`. Only the context resolver's are executable application code.
+
 ### Status page — context and launch decisions
 
 **CORRECTION (2026-09-19).** An earlier revision of this section stated that
