@@ -923,9 +923,9 @@ only the byte-streaming differs. Omitting the nginx block did not harden
 anything — it stranded `grafana_auth_check` as dead code and sent traffic down a
 path that cannot serve HTML.
 
-The archived v1 runbook
-(`docs/archive/v1-docs/.../SOP-DEP-008_Grafana_Fix_Guide.md`) documents both
-options and names nginx "Recommended for Production", describing the Flask proxy
+The v1 runbook
+(`docs/archive/v1-docs/.../SOP-DEP-008_Grafana_Fix_Guide.md` — archived, cited as
+history) documents both options and names nginx "Recommended for Production", describing the Flask proxy
 as a "reliable fallback" — a characterisation the content-type allowlist
 contradicts for any UI traffic.
 
@@ -1247,6 +1247,562 @@ Scope checked and narrower than it first appeared: `grep` finds 30 `print(`
 matches under `app/`, but 7 are docstring `Example:` blocks in
 `class_configuration_query_service.py` and 7 more are legitimate CLI output in
 `cli_commands.py`. Only the context resolver's are executable application code.
+
+### Rent lifecycle — reconciliation verified
+
+Exercised by invoking `run_rent_reconciliation_job()` directly on the host rather
+than waiting for its schedule. Cycle genesis needs no waiting; the advance path
+was reached by backdating `next_assessment_at`. Row counts were snapshotted
+before each run so every write could be attributed.
+
+| Step | Result |
+|---|---|
+| Genesis | `reason=CREATED_INITIAL cycles=[1] assessments=1`. Cycle row carries the class, `internal_ref` `rent:<class_id>`, `policy_uuid`, and all three boundaries; the assessment carries seat, class, `bill_cycle_id`, and correlation `rent:<class>:<seat>:cycle:1`. |
+| Unclaimed-seat exclusion | **1** assessment for **30** student seats, because only one is claimed. Correct: an unclaimed seat takes part in no economic run. |
+| Idempotency | Second run wrote nothing — `bill_cycles` 1→1, `assessment_events` 1→1, `ledger_transaction` 7→7. |
+| Advance | `reason=ADVANCED cycles=[2] assessments=1`, with `cycle_number + 1`, its own assessment, and a distinct correlation. |
+| Catch-up bound | `_MAX_CATCHUP_CYCLES` caps the advance loop, so a long-dormant class cannot spin out unbounded cycles. |
+
+**One result looked like a defect and was not.** The advance produced a cycle 2
+whose boundary (Sep 20) preceded cycle 1's (Oct 19) — chronologically
+incoherent. The cause was the test, not the code: the successor's schedule is
+derived from the predecessor's `next_assessment_at`
+(`local_date_of_instant` → `resolve_cycle_schedule`), and the value backdated to
+make the advance fire was 2026-09-21 03:30 UTC, which is **Sep 20** 20:30 in the
+class's timezone. The system honoured exactly what it was given. Recorded because
+the raw output reads like a bug and would otherwise be re-investigated later.
+
+**Hardening note, not a finding.** Nothing asserts that a successor cycle's
+boundary follows its predecessor's. The advance loop trusts
+`next_assessment_at` unconditionally. That is safe while the value is only ever
+written by the scheduler, and this session did not establish whether a settings
+change mid-cycle can move it backwards; it is worth an ordering assertion on
+general principle rather than on evidence.
+
+**FEAT-OBL-002 runs without an idempotency key.** Every reconciliation logs
+`FEAT-INTEGRITY-WARNING: FEAT FEAT-OBL-002 (Blast=MED) missing idempotency_key`,
+and `execute_reconcile_rent` accepts an `idempotency_key` the scheduled caller
+never passes. The FEAT holds no row locks either.
+
+Concurrency safety is nonetheless real, but it comes from the database rather
+than from the designed mechanism: `bill_cycles` carries
+`uq_bill_cycles_ref_cycle (internal_ref, cycle_number)`, so two schedulers racing
+to create the same cycle would collide and one transaction would roll back.
+`assessment_events` has **no** unique constraint — it is protected only because
+assessments are written inside the same transaction as their cycle. That holds
+today, and it holds because of where the code happens to put the writes rather
+than because anything enforces it.
+
+This matters more after launch than now: a single gunicorn worker means one
+scheduler, which is why `-w 1` was chosen. Scaling to two workers without leader
+election would make the constraint the only thing standing between the app and
+duplicate cycles, and the warning that fires on every run is the one signal
+saying so.
+
+### Verified — rent policy changes cannot reach a cycle already assessed (B1)
+
+Tracker blocker **B1** ("Rent settings mutate in place, retroactively rewriting
+prior obligations", closed 2026-09-04) was re-verified live, and the
+circumstances make it stronger evidence than the regression test: the operator
+was not testing the invariant. They were trying to shorten their way to a
+payable rent bill by extending the bill-preview window, and the invariant
+refused.
+
+After two edits to rent settings:
+
+| id | policy_uuid | availability_state | bill_preview_days |
+|---|---|---|---|
+| 1 | `535435b4…` | RETIRED | 21 |
+| 2 | `8a4caa47…` | RETIRED | 30 |
+| 3 | `73103ce5…` | **IN_USE** | 30 |
+
+    bill_cycles: cycle 1 -> policy_uuid 535435b4…   (the original, now RETIRED)
+
+Every edit produced a **new row** and retired its predecessor; no row was
+mutated. Cycle 1 remained bound to the policy it was assessed under, so a student
+assessed on the original terms is not retroactively subject to terms written
+afterwards. The new settings take effect from cycle 2.
+
+This is the invariant behaving exactly as specified, and the operator's own
+framing is the best summary of why it exists: it prevents a teacher changing
+their mind halfway through and hurting students. It was inconvenient here for the
+same reason it is protective in a classroom — a cycle's terms are fixed once
+students are assessed against them.
+
+Recorded because an invariant that blocks a legitimate-looking action is
+indistinguishable, from the UI, from a change that silently failed to save. The
+database is what distinguishes them, and it says the change saved correctly and
+was correctly scoped forward.
+
+**24. Rent pricing recommendation is unavailable until rent is already configured (correctness, two causes)**
+
+First finding in the rent domain. On a class that has never configured rent, the
+Rent Settings page shows:
+
+> **Recommendation unavailable — insufficient data.**
+> *Calculation details:* Your current Classroom Wage Index (CWI) is **$405.00**
+> per week. You have selected the **Default** economic policy. Under this policy,
+> rent should fall between **35%** and **50%** of your CWI.
+
+The data is not insufficient. Every operand needed is printed directly beneath
+the message: CWI $405.00, policy Default, band 35-50%. The answer is
+$141.75-$202.50. After the teacher saves a rent amount, the same page renders
+the recommendation correctly ($616.36-$880.51 per month) with no other change —
+which is the confirmation that nothing was missing.
+
+**A recommendation exists to inform a decision that has not been made yet**, so
+being unavailable until after the decision is made inverts its purpose. A
+first-time teacher sees "insufficient data" precisely when they most need the
+number, then sees the number once they no longer do.
+
+Two independent causes, both required:
+
+**(a) The server-rendered band is gated on rent settings already existing.**
+`app/routes/admin.py` builds it under `if settings and payroll_settings:`, where
+`settings` is the class's existing `RentSettings` row. With no row, the template
+emits no `data-canonical-min`/`-max` on `#cwi-info`, and the client falls through
+to its async path. Verified live: payroll settings present, rent settings
+missing, CWI resolvable at 405.0, and `rent_band(cwi, 'daily')` returning
+`{'min': 20.25, 'max': 28.93}` when called directly — the band computes fine
+without any rent row.
+
+**(b) The async fallback cannot rescue it, because the validate endpoint resolves
+payroll only from a client-supplied `class_id`.**
+`/admin/api/economy/validate/rent` returned **200 with 111 bytes** on each
+pre-save attempt — the body
+`{"status":"warning","message":"Configure payroll first to get
+recommendations.","is_valid":true,"warnings":[]}` — although payroll *is*
+configured for that class.
+
+The cause is `_resolve_admin_payroll_settings_for_class_id(canonical_context,
+class_id)`, which takes the canonical context as its first argument and **never
+reads it**:
+
+    if not class_id:
+        return None
+
+`class_id` comes from `data.get('class_id')` in the request body, and
+`EconomyBalanceChecker.validate()` in `static/js/economy-balance.js` sends
+`{value, frequency, frequency_type, custom_*}` and no `class_id` — correctly, since
+the session already knows the class. So the resolver returns None, the endpoint
+reports payroll unconfigured, and the client renders "insufficient data".
+
+Worth noting the direction of the dependency: `.claude/rules/multi-tenancy.md`
+records that a client-supplied `class_id` is "an assertion, not authority". Here
+a server-side resolver is *depending* on that assertion and failing without it,
+while ignoring the authoritative context it was handed. The fix is to fall back
+to `canonical_context.class_id` — the parameter is already there.
+
+Each cause alone would be masked by the other working, which is why the symptom
+survived: (a) is why the band is missing at first render, (b) is why the retry
+does not supply it.
+
+Present on current `main` (both sites checked).
+
+**25. Rent's first due date is stored as UTC midnight — a SPEC-TIME-001 violation, and the third site of finding 6A (correctness)**
+
+The rent settings row written from the browser, and the cycle the reconciliation
+job then built from it:
+
+    first_rent_due_date   2026-10-20 00:00:00+00:00     <- UTC midnight
+    due_day_of_month      20
+
+    cycle_boundary_at     2026-10-19 07:00:00+00:00     = Oct 19 00:00 PDT
+    grace_boundary_at     2026-10-24 07:00:00+00:00     = Oct 24 00:00 PDT
+    next_assessment_at    2026-11-20 08:00:00+00:00     = Nov 20 00:00 PST
+
+The teacher entered October 20 and the page displays "First Due Date: October 20,
+2026". As UTC midnight that instant is **17:00 on October 19** in the class's
+timezone, so the cycle boundary landed on the **19th**. Rent closes a day before
+the date the teacher was shown.
+
+The two date fields in the same row now contradict each other:
+`cycle_boundary_at` derives from `first_rent_due_date` and says the 19th, while
+`next_assessment_at` derives from `due_day_of_month = 20` and correctly says the
+20th.
+
+**And the contradiction is user-visible on two live surfaces at once.** Observed
+in the browser on 2026-09-20:
+
+| Surface | Due date shown |
+|---|---|
+| Teacher — Rent Management, "First Due Date" | **October 20, 2026** |
+| Student — /student/rent, "Upcoming Due Date" | **October 19, 2026** |
+
+The teacher page formats the stored `first_rent_due_date` in UTC and prints the
+20th; the student page derives from `cycle_boundary_at`, which was computed from
+that same instant in class-local time and is the 19th. Two people looking at the
+same obligation are told different days, and the one the system will actually act
+on is the student's.
+
+This is worth recording as the concrete harm rather than the mechanism. A
+one-day storage offset sounds like a rounding detail; "the teacher and the
+student see different rent due dates" is the thing a classroom would notice, and
+it would be reported as a dispute about who was late.
+
+Cause, identical to finding 6A (`app/routes/admin.py`):
+
+    'first_rent_due_date': (
+        datetime.strptime(first_due_date_str, '%Y-%m-%d')
+        if first_due_date_str else None
+    ),
+
+**This violates an existing normative contract rather than revealing a missing
+one.** `SPEC-TIME-001` §CLE lists the class-scoped evaluations whose authority is
+the Canonical Class Timezone, and the list names these cases explicitly:
+
+> - productivity and payroll
+> - **obligation due dates**
+> - hall-pass timing
+> - **store item expiry**
+> - class-local day boundaries
+
+It goes further: "every CLE primitive evaluates in Canonical Class Timezone, even
+when the calculation would be mathematically equivalent in UTC", and callers
+"must not independently convert them to class-local time before calling the
+resolver."
+
+So every site of finding 6A — payroll first pay date, store activation and
+delist, rent due date — was already named in the spec as class-timezone
+territory. The rule was written; nothing enforced it.
+
+**The remediation missed this one for an instructive reason.** PR #1405 fixed 6A
+at the payroll and store call sites: the ones a browser session had exposed. Rent
+was never exercised, so its instance survived a remediation whose own commit
+message named the defect class. The class was understood and the search was not
+done. `grep -rn "strptime(.*'%Y-%m-%d')" app/` finds it in seconds.
+
+**The durable fix is a structural guard, not a fourth patch.** Per SOP-TEST-003
+§IX.A, a guard enumerating writes to class-scoped deadline columns and asserting
+each routes through CLE — shipped with a mutation proof feeding it a naive
+`strptime` — closes the class. Patching site four leaves site five.
+
+**Related and unassessed: the same primitive as a query boundary.** The same grep
+surfaces naive parses used as *filters* rather than stored values:
+
+    query = query.filter(Transaction.timestamp >= datetime.strptime(start_date, '%Y-%m-%d'))
+    end_date_inclusive = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
+
+`Transaction.timestamp` is timezone-aware, so a naive bound compares as UTC: a
+teacher filtering "September 20" gets 17:00 on the 19th through 17:00 on the
+20th in their own timezone. The edges of the day fall out of the report and the
+previous evening falls in. Same defect class, different consequence — a wrong
+report rather than a wrong charge. Further sites of this shape exist in
+`api.py` and `admin.py` (attendance, audit and payroll ranges) and need
+individual assessment.
+
+Present on current `main`.
+
+**26. No CI rule enforces SPEC-TIME-001, so every instance of finding 6A passed every gate (process, root cause)**
+
+Findings 6A and 25 are three instances of one defect, and the question worth
+answering is not why each was written but why none was stopped. Raised by the
+operator: time logic must use the canonical resolver and declare its evaluation
+mode, so anything else should fail CI.
+
+It should. It does not.
+
+`SPEC-TIME-001` §I is unambiguous about scope — the resolver is the object
+
+> "that all DOM specifications, FEAT specifications, runtime services, scheduled
+> jobs, route handlers, and tests must use"
+
+and "`canonical_temporal_resolver` is the only public temporal evaluation
+helper." §CLE then names the very cases involved: obligation due dates, store
+item expiry, payroll.
+
+The enforcement harness exists and runs. `.github/workflows/policy-guardrails.yml`
+invokes `scripts/policy_guardrails.py` on every pull request and push, with
+`--strict --no-waivers` on the protected path. That script is AST-based, has a
+waiver mechanism with expiry dates, and enforces nine rules:
+
+    check_route_commit                      check_no_audit_update_delete
+    check_write_on_get                      check_no_lineage_backfill_on_read
+    check_scope_fallback                    check_no_direct_lineage_token_assignment
+    check_student_context_fallback          check_no_unscoped_audit_emit
+    check_tap_event_null_scope
+
+**None of them is temporal.** A `datetime.strptime(value, '%Y-%m-%d')` assigned
+to a class-scoped deadline column passes every gate the project has: the
+guardrails ignore it, the type checker sees a valid `datetime`, and the test
+suite has no assertion about which authority produced it. The three instances
+were not missed by a guard that failed — they were never inspected.
+
+This is the difference between a rule and a control. INV-ARC-007 ("no writes on
+GET") is a rule *with* a control, so it cannot regress silently. SPEC-TIME-001 is
+a rule without one, and it regressed three times in code written by people who
+knew the rule — including, most recently, a remediation whose own commit message
+named the defect class.
+
+**The fix is rule ten, not patch four.** The guard's existing shape suits it: a
+check that enumerates assignments to class-scoped temporal columns and requires
+each to trace to a CLE resolution. The columns are enumerable —
+`first_rent_due_date`, `first_pay_date`, `next_payroll_date`, `activation_at`,
+`auto_delist_date`, `collective_goal_expires_at`, `cycle_boundary_at`,
+`grace_boundary_at`, `next_assessment_at` — and the forbidden constructions are
+few: naive `strptime`, `datetime.combine(..., tzinfo=timezone.utc)` on
+teacher-entered input, `date.today()`, `datetime.now()`/`utcnow()`, and
+`SYSTEM_LEVEL_EVALUATION` for a class-scoped concern.
+
+Per SOP-TEST-003 §IX.A it must ship with a mutation proof: feed the detector the
+exact line from `admin.py` that produced finding 25 and assert it is reported.
+Without that, the new guard would go green on a codebase already fixed and prove
+nothing about whether it detects anything.
+
+Worth stating plainly for the launch decision: **the defect class is closed by
+this guard, not by the three or four patches.** Patching the known sites leaves
+the next one to be found by a teacher whose rent closes a day early.
+
+**27. Attendance immutability is stated four times and enforced nowhere (correctness, control gap)**
+
+`DOM-PROD-001` is emphatic that attendance rows are permanent:
+
+> §108 "Once written, an `attendance_sessions` row is permanent. It SHALL NOT be
+> edited, deleted, soft-deleted, marked as deleted, hidden from payroll, or
+> corrected in place."
+> §176-177 "MUST be append-only" / "MUST treat every written attendance row as
+> immutable and permanent"
+> §184 "MUST NOT provide delete, soft-delete, mark-deleted, edit, or
+> correction-in-place behavior for attendance rows"
+> §185 "MUST NOT correct payroll outcomes by mutating attendance history"
+
+The database enforces none of it. `attendance_sessions` carries **no triggers**
+and no chain columns — no `previous_hash`, no `event_hash`. A direct `UPDATE`
+succeeds silently.
+
+Four other tables *are* protected:
+
+    audit_events         audit_events_no_update / no_delete
+    ledger_transaction   ledger_transaction_no_rewrite
+    economic_engine      economic_engine_no_update / no_delete
+    class_features       class_features_no_update / no_delete
+
+The asymmetry is the point. `ledger_transaction` — the *output* — cannot be
+rewritten. `attendance_sessions` — the input that justifies every dollar that
+output contains — can be. Payroll reads attendance; nothing else determines what
+a student is paid. The money is defended and the evidence for it is not.
+
+No application code violates the rule today. The only writes are class-scoped
+deletions during class and teacher destruction (`app/utils/deletion.py`,
+`app/services/teacher_destruction.py`), which is teardown rather than
+correction-in-place and is consistent with the rule's intent.
+
+So this is finding 26's shape again, in a different domain: a rule stated more
+emphatically than most, with no control behind it. The operator confirmed the
+intent independently — teachers are not permitted to correct attendance and no UI
+offers it — which removes the alternative reading that the absence of enforcement
+was a deliberate allowance for legitimate corrections.
+
+**28. The documented remedy for a disputed attendance row is unreachable (correctness)**
+
+`DOM-PROD-001` §187 names the correction path precisely:
+
+> "If a teacher believes an attendance row produced an incorrect payroll outcome,
+> the correction path is a payroll reversal through `FEAT-PROD-003`, not mutation
+> of the attendance row."
+
+That path does not exist in practice.
+
+`record_payroll_reversal` (`app/feats/prod.py:689`) appears **exactly once in the
+repository — its own definition.** No route calls it, no service calls it, no
+test covers it. The payroll template can *render* a reversal
+(`entry.is_reversal`, a `REVERSAL` badge in `admin_payroll.html`), so the read
+side anticipates rows the write side never produces.
+
+Meanwhile the dispute does reach a teacher. A student can report a specific
+attendance session (`/student/help-support/attendance-session/<id>/report`), and
+the ticket arrives with the attendance session as its subject. But an attendance
+issue carries no `related_transaction_id`, so the resolution control in
+`templates/admin_view_issue.html` offers exactly two options:
+
+* **Manual Adjustment (I'll handle it)** — which does nothing. The handler's own
+  comment reads "Owner/admin handles manually (no automatic action)"; it records
+  a resolution note and moves no money.
+* **Deny Issue**
+
+So a student can raise an attendance dispute, a teacher can acknowledge or deny
+it, and there is no mechanism to remedy it. A teacher wanting to make the student
+whole must leave the ticket and issue a manual credit from Payroll — a different
+operation with different provenance (`manual_credit`, not `reversal`), which is
+the one thing §185 warns against in spirit: correcting a payroll outcome by a
+route that does not record itself as a correction.
+
+Raised by the operator, who knew the dispute could be filed and did not know what
+could be done about it. The answer is nothing, and the reason is that the
+specified remedy was never wired up.
+
+### Decision — attendance is never corrected; payroll reversal is the only remedy
+
+**Operator decision, 2026-09-21**, in response to findings 27 and 28: do not build
+any attendance-correction capability. Tell the teacher plainly that a wrong
+attendance record is remedied by reversing the payroll it produced, and put the
+remaining effort into making that reversal actually work.
+
+This adopts `DOM-PROD-001` §187 as the implemented path rather than inventing
+policy, and it has a property worth stating: **if no correction surface exists,
+there is nothing to misuse.** The concern is not a teacher acting in bad faith;
+it is a well-meaning one "fixing" a record that payroll has already paid against,
+leaving the money and its justification permanently out of step.
+
+It also narrows the work. Instead of designing correction semantics — who may
+edit, what is preserved, how payroll re-derives — the task is to wire one
+existing FEAT to one surface.
+
+**What the wiring requires.** `record_payroll_reversal` resolves its target by
+`correlation_id`: it finds the `PayrollEvent` matching
+`(class_id, target_seat_id, correlation_id)`, inherits that event's
+`policy_version_id` ("a reversal carries the provenance of the event it
+compensates"), locates the linked `Transaction`, and negates its amount. Nothing
+is hand-entered, so a reversal cannot disagree with what was paid.
+
+**Two consequences the teacher-facing copy must carry:**
+
+1. **A reversal is whole-event, not per-row.** Payroll pays a cycle's aggregate
+   attendance as one event under one correlation, so reversing the payment a
+   disputed row contributed to reverses that seat's **entire cycle payment**. The
+   correct amount is then re-issued. This is right — the amount is derived rather
+   than typed — but a teacher expecting to claw back a few minutes will instead
+   see the whole payment reversed and replaced.
+
+2. **It requires payroll to have already run.** Before settlement there is no
+   `PayrollEvent` carrying that correlation, and the call raises `LookupError`.
+   A dispute filed mid-cycle cannot be remedied until the cycle pays out, so the
+   resolution control must either be unavailable with an explanation or the
+   ticket must be holdable until settlement.
+
+**Scope of the work this implies:**
+
+- A `reverse_payroll` resolution action on attendance issues in
+  `templates/admin_view_issue.html`, replacing the present choice between a
+  no-op and a denial.
+- Resolution of the disputed `attendance_session_id` to the payroll event that
+  paid for it, to supply the `correlation_id`. This mapping does not exist today
+  and is the only genuinely new logic required.
+- Re-issue of the corrected payment after reversal, so the student is not simply
+  left short.
+- Copy stating that the attendance record itself is permanent and why — the rule
+  is currently invisible to the teacher, who has no way to know that "fixing the
+  record" was never an option.
+- The immutability trigger from finding 27, so that the absence of a correction
+  surface is enforced rather than merely current. A decision not to build one
+  today does not stop someone building one later.
+
+**29. Hall-pass approval is completely broken: a FEAT nested inside itself (correctness, P0-shaped)**
+
+Approving a pending hall pass returns **500 on every attempt**. The teacher sees
+"Pending hall pass not updated — The pending hall pass could not be updated.
+Please try again", and retrying cannot succeed.
+
+    POST /api/hall-pass/request/<id>/approve -> 500
+    FEAT-ENTRY: feat=FEAT-PROD-002 | idempotency_key=hall_pass_approve:<class>:<id>
+    FEATContextError: FATAL: Nested FEAT context forbidden — exactly one FEAT
+    executes per request (INV-ARC-000 §VIII.2, INV-ARC-021 §V.2).
+    Active=FEAT-PROD-002, attempted=FEAT-PROD-002.
+
+`Active` and `attempted` are the same FEAT. `app/routes/api.py` opens the context
+and then calls a function that opens it again:
+
+    with FEATContext("FEAT-PROD-002", idempotency_key=idempotency_key):
+        record_hall_pass_log(...)          # @requires_feat_context("FEAT-PROD-002")
+
+`record_hall_pass_log` carries the decorator at `app/feats/prod.py:501`. Either
+the explicit context or the decorator is correct; both together cannot be.
+
+**The 500 rather than a handled error is a second defect in the same block.** The
+route catches `ValueError` and `SQLAlchemyError`. `FEATContextError` is neither,
+so it escapes to Flask's handler — which is why the operator saw a generic
+failure rather than a specific one, and why the response is 500 rather than the
+400 the route intended.
+
+**This is the third instance of the same pattern in this codebase**, which is
+what makes it worth more than a one-line fix:
+
+* `FEAT-PROD-001` executing itself made daily-limit auto tap-out silently
+  non-functional — tracker blocker **B9**, closed 2026-09-04.
+* `store_management` carried a `@requires_feat_context("FEAT-STOR-001")`
+  decorator while opening `FEAT-SETTINGS-001` inside, raising the same error;
+  fixed and documented in the route's own docstring.
+* This one.
+
+`tests/test_feat_no_nested_execution.py` exists. It did not catch this, so
+whatever it asserts does not cover a route that opens a context and calls a
+decorated function inside it. Worth reading before fixing, because the guard is
+the thing that should have made a third instance impossible — the same
+rule-versus-control gap as findings 26 and 27.
+
+**Impact.** Hall passes cannot be issued at all. A student can buy one, hold the
+balance, request it from the Break flow, and the teacher cannot approve it. The
+request stays pending forever; the pass is never consumed; no
+`hall_pass_logs` row is written and no attendance row records the student as out
+of the room. For a classroom tool, "the student cannot be let out of the room" is
+a launch blocker.
+
+Present on current `main` (both the nesting and the exception handling).
+
+Found by the operator while testing whether Alex could go to the bathroom.
+
+**30. The rent page presents the pending policy as the current one (correctness, misreport)** — FIXED
+
+Found as the direct consequence of the B1 verification above. The invariant is
+right; the page describing it was not.
+
+Two different questions resolve to two different rent policies, and the admin
+page only ever asked one of them:
+
+| Surface | Resolver | Answers |
+|---|---|---|
+| `/admin/rent-settings` | `get_rent_settings(class_id)` | newest `IN_USE` row |
+| `/student/rent` | `get_rent_settings_for_context` → cycle's `policy_uuid` | the row the open cycle froze |
+
+While a cycle is open those are the same row only until the teacher saves. After
+a mid-cycle save they diverge for the rest of the cycle, and the admin page went
+on rendering the newest row — the *pending* policy — under the heading **"Current
+Rent Configuration"**, with the settings form pre-filled from it and a flash
+reading "Rent settings updated successfully!".
+
+Every part of that is literally true and collectively misleading. The save did
+succeed. The row is the current policy *for new work*. But no student is billed
+under it, and nothing on the page said so. A teacher who raised rent from $50 to
+$75 saw $75 echoed back in a card labelled current, and would have had no reason
+to look further.
+
+**Why it matters more than a wording bug.** The deferral is the protection B1
+exists to provide — a cycle already underway is never altered. A protection the
+operator cannot see is one they will route around: the natural response to "my
+change didn't take" is to try something else, which is exactly the sequence that
+produced the attempted `UPDATE` on a RETIRED policy row during this session.
+Telling the teacher plainly what is happening is cheaper than defending against
+what they do when they are not told.
+
+The precedent already existed one accordion away. The Rent Benefits panel says a
+store-side change "applies from the **next** rent cycle, so a cycle already
+underway is never altered." The rent policy itself, the higher-stakes setting,
+said nothing.
+
+**Operator request, 2026-09-21:** surface it at save *and* as a standing alert
+whenever a policy is enforced, since the divergence outlives the request that
+created it.
+
+**Fix.** `_resolve_rent_policy_deferral` (`app/routes/admin.py`) compares the open
+cycle's frozen `policy_uuid` against the newest `IN_USE` row and, when they
+differ, returns both sets of terms plus the effective date. The effective instant
+is the cycle's **`next_assessment_at`**, not `cycle_boundary_at`: `reconcile_rent`
+mints the successor when `now >= next_assessment_at` and binds whatever policy is
+in force at that moment, so that is the instant the pending policy takes effect.
+It is rendered as a **class-local** date through CLE (SPEC-TIME-001 §CLE) — a UTC
+reading of the same instant shows the previous day for a US class, which is
+finding 25's defect in display form.
+
+Three surfaces now carry it: a standing alert on both tabs, the Overview card
+heading relabelled from "Current" to "Saved" while a policy is pending, and a
+flash at save that names the in-force terms and the date the new ones start. A
+terminal cycle (`next_assessment_at IS NULL`) gets its own wording, because the
+saved policy will not bind at all until billing resumes.
+
+`tests/test_rent_policy_deferral_notice.py` — 7 tests, including the no-divergence
+cases asserting the notice is **absent** and the heading still reads "Current".
+Mutation-proved per `SOP-TEST-003` §IX.A: forcing the resolver to return `None`
+turns the four positive tests red and leaves the three absence tests green.
 
 ### Status page — context and launch decisions
 
