@@ -24,9 +24,12 @@ Version 2.0 is a rewrite. Version 1.2 described the pre-v2 identity model
 (`ClassMembership`, `TeacherBlock`), a fixed 664-test baseline, a `join_code`
 form of the student switch-class route, a `/health/deep` endpoint, and record
 storage under `docs/LOGS/` — each of which is now false or prohibited. It was
-replaced rather than amended, using
-`docs/TRACKING/PRODUCTION_FIRST_TEST_DEPLOYMENT_CHECKLIST_2026-09.md` as the
-source of current host truth.
+replaced rather than amended, reconciled against the host state recorded at the
+time by the operator's working checklist. That checklist is deliberately not
+tracked: it carries live host state, and it duplicated §VI–§XVI of this document
+without their authority. **This document is the checklist.** §V below is the
+only record of environment truth, and an operator needing a worksheet copies
+this runbook rather than maintaining a parallel one.
 
 ## III. Authority Level
 
