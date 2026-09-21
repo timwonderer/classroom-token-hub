@@ -1169,7 +1169,7 @@ INV-ARC-010 makes the sole legal way to change class.
 (teacher side), export scoping by session, export ignoring a forced query
 parameter, and cross-boundary write refusal.
 
-**21. The student export labels `section` as "Block" (wording)**
+**21. The student export labels `section` as "Block" (wording)** — FIXED
 
 `app/routes/admin.py:7945` writes the CSV header as:
 
@@ -1189,7 +1189,7 @@ Present on current `main` (checked), so it is work rather than an artefact of th
 old build. Same family as finding 5's "Global Default": v1 vocabulary surviving
 on a surface the rest of the app has already renamed.
 
-**22. A second tab silently changes the first tab's class, which keeps showing the old one (correctness, usability)**
+**22. A second tab silently changes the first tab's class, which keeps showing the old one (correctness, usability)** — FIXED
 
 Raised by the operator: open class A in one tab, switch to class B in a second
 tab, return to the first tab and refresh — it is now class B.
@@ -1224,7 +1224,7 @@ teacher is a deliberate invariant (INV-ARC-010 makes the nav switcher the sole
 legal switcher). It is to make a stale view detectable: stamp the rendered class
 into the page and have a mismatch say so plainly.
 
-**23. Seven `print()` calls in the canonical context resolver (hygiene, latent)**
+**23. Seven `print()` calls in the canonical context resolver (hygiene, latent)** — FIXED
 
 `app/services/context_resolver.py` lines 108-134 emit seven `DEBUG:`-prefixed
 `print()` statements on identity-resolution failures, including one carrying
@@ -1334,7 +1334,7 @@ indistinguishable, from the UI, from a change that silently failed to save. The
 database is what distinguishes them, and it says the change saved correctly and
 was correctly scoped forward.
 
-**24. Rent pricing recommendation is unavailable until rent is already configured (correctness, two causes)**
+**24. Rent pricing recommendation is unavailable until rent is already configured (correctness, two causes)** — FIXED
 
 First finding in the rent domain. On a class that has never configured rent, the
 Rent Settings page shows:
@@ -1399,7 +1399,7 @@ does not supply it.
 
 Present on current `main` (both sites checked).
 
-**25. Rent's first due date is stored as UTC midnight — a SPEC-TIME-001 violation, and the third site of finding 6A (correctness)**
+**25. Rent's first due date is stored as UTC midnight — a SPEC-TIME-001 violation, and the third site of finding 6A (correctness)** — FIXED
 
 The rent settings row written from the browser, and the cycle the reconciliation
 job then built from it:
@@ -1493,7 +1493,7 @@ individual assessment.
 
 Present on current `main`.
 
-**26. No CI rule enforces SPEC-TIME-001, so every instance of finding 6A passed every gate (process, root cause)**
+**26. No CI rule enforces SPEC-TIME-001, so every instance of finding 6A passed every gate (process, root cause)** — FIXED
 
 Findings 6A and 25 are three instances of one defect, and the question worth
 answering is not why each was written but why none was stopped. Raised by the
@@ -1553,7 +1553,7 @@ Worth stating plainly for the launch decision: **the defect class is closed by
 this guard, not by the three or four patches.** Patching the known sites leaves
 the next one to be found by a teacher whose rent closes a day early.
 
-**27. Attendance immutability is stated four times and enforced nowhere (correctness, control gap)**
+**27. Attendance immutability is stated four times and enforced nowhere (correctness, control gap)** — FIXED
 
 `DOM-PROD-001` is emphatic that attendance rows are permanent:
 
@@ -1593,7 +1593,7 @@ intent independently — teachers are not permitted to correct attendance and no
 offers it — which removes the alternative reading that the absence of enforcement
 was a deliberate allowance for legitimate corrections.
 
-**28. The documented remedy for a disputed attendance row is unreachable (correctness)**
+**28. The documented remedy for a disputed attendance row is unreachable (correctness)** — FIXED
 
 `DOM-PROD-001` §187 names the correction path precisely:
 
@@ -1687,7 +1687,7 @@ is hand-entered, so a reversal cannot disagree with what was paid.
   surface is enforced rather than merely current. A decision not to build one
   today does not stop someone building one later.
 
-**29. Hall-pass approval is completely broken: a FEAT nested inside itself (correctness, P0-shaped)**
+**29. Hall-pass approval is completely broken: a FEAT nested inside itself (correctness, P0-shaped)** — FIXED
 
 Approving a pending hall pass returns **500 on every attempt**. The teacher sees
 "Pending hall pass not updated — The pending hall pass could not be updated.
@@ -1957,6 +1957,125 @@ bounded because `INV-ITR-015` already forbids Interpretation from consulting thi
 column at all — the codebase has effectively ruled the field untrustworthy for
 semantics. Should it ever need to carry meaning, it needs a closed vocabulary
 first.
+
+## §XII — Remediation batch, 2026-09-21
+
+Testing stopped and the round's findings were fixed in one batch on
+`codex/live-test-launch-readiness`, in six tranches. Every fix was
+mutation-proved: the change reverted, the new tests confirmed red, the change
+restored. Findings 30 and 21-29 are closed; 31-37 were found during this round
+or while fixing it.
+
+| Tranche | Findings | Commit |
+|---|---|---|
+| A | 29 hall-pass approval, 31 timeout 404, 32 rotate CSRF | `6718823b0` |
+| B | 33 CSRF guard, 34 sysadmin passkey | `d34ca2883` |
+| C | 25 rent CLE dates, 24 rent band, 35 unhandled CWI `None` | `d0e520775` |
+| D | 26 temporal guardrail (rule 10) | `4b17f18aa` |
+| E | 21 export label, 22 stale tab, 23 `print()` | `69587130c` |
+| F | 27 attendance triggers, 28 payroll reversal surface | `9c378ba52`, `918152945` |
+
+**31. A timed-out teacher gets a bare "Not Found" on the six pages they use most (correctness, misreport)** — FIXED
+
+Blueprint `before_request` hooks run before the view, and therefore before the
+view's own `@admin_required`. On an expired session `g.canonical_context` was
+not set yet, so every feature resolved `UNRESOLVED` and the fail-closed
+capability gate returned a 9-byte `"Not Found"` that short-circuited the request
+before the login redirect could happen. Payroll, store, banking, rent, insurance
+and hall pass all did this; every other admin page redirected correctly.
+
+The gate is right to fail closed — it was evaluating feature authority before
+authentication had been decided, and so could not distinguish "your session
+expired" from "this class does not have rent enabled". It picked the wrong one to
+say aloud. The page's own background poll meanwhile received the correct
+`401 authentication_required`, because `_is_background_request()` routes it past
+the gate: the AJAX call knew the session was dead while the page render said the
+URL did not exist.
+
+**32. The hall-pass verification link can never be rotated (correctness, security)** — FIXED
+
+`POST /api/hall-pass/verify-token/rotate` omitted `X-CSRFToken`, so Flask-WTF
+rejected every attempt with 400 before the route ran. Rotation is the documented
+remedy for a leaked or screenshotted link, and that token is the only control
+protecting a deliberately non-enumerable public page. Nine of the app's ten POST
+sites already route through `AppCore.csrfFetch`; this one reached past it.
+
+The refusal then came back as an HTML error page, so an unguarded `r.json()`
+threw into `.catch()` and announced **"Failed to contact the server"** — the one
+message that makes an operator retry rather than report. Same family as finding
+11: the error path telling the user something the server never said.
+
+**33. Nothing prevented a state-changing fetch from omitting its CSRF token (process, root cause)** — FIXED
+
+`conftest.py` sets `WTF_CSRF_ENABLED=False`, so a missing header is invisible to
+every one of the suite's ~3,400 tests. It surfaces only in a browser, as a 400
+the route never sees — the feature is disabled, not degraded. The helper existed
+and was used nine times out of ten; what was missing was anything that made the
+tenth fail. Now a source-level guard with mutation proofs for both shipped
+defects. Finding 26's shape, in a different domain.
+
+**34. Sysadmin passkey deletion is unreachable (correctness, two causes)** — FIXED
+
+Found by the CSRF guard before it was finished. The client sent `DELETE` to a
+route registered for `POST` only — 405 before CSRF was consulted — *and* carried
+no token, so correcting the verb alone would have produced 400. Two independent
+breakages, each sufficient, each masking the other's symptom. The teacher-side
+equivalent had both right: two implementations of one operation had drifted, and
+only the sysadmin copy was wrong.
+
+**35. The economy validator turns a configuration gap into a 500 (correctness)** — FIXED
+
+`calculate_cwi` returns `None` when expected weekly hours are configured nowhere,
+and its docstring says callers must handle it. `/admin/api/economy/validate/<f>`
+did not, so `.cwi` raised and the generic handler produced a 500 with no
+guidance. Unreachable until finding 24(b) was fixed, because the endpoint
+previously returned the "configure payroll" warning before reaching it. **Found
+by the regression test written for 24, not by review** — which is the argument
+for writing the test before trusting the fix.
+
+**36. The test database and production disagree about what a naive datetime means (process)** — OPEN
+
+| | DB session timezone |
+|---|---|
+| Test database | `America/Los_Angeles` |
+| Production | `Etc/UTC` |
+
+A naive datetime is resolved against a different zone in the two environments, so
+a timezone defect can pass locally and fail in production *by construction*. This
+is the structural reason the 6A family kept shipping: for a Pacific class the
+shipped naive parse produced the **correct instant in test and the wrong one in
+production**.
+
+Partly mitigated: `Pacific/Kiritimati` (UTC+14) is now a provisioned test
+classroom timezone, and the rent date assertions run against it. Its local
+midnight is the previous day in UTC and the day before that in a UTC−12 session —
+26 hours of civil-date separation, the widest the calendar allows, and almost all
+of it convention rather than distance, since Kiritimati and Baker Island lie
+2,129 km apart with the International Date Line between them. No host, server or
+database clock can make a naive parse land on it by accident.
+
+**Not yet done, and deliberately not bundled here:** running the full suite under
+an ambient `Etc/GMT+12`. That changes the footing under ~3,400 tests and answers a
+different question — *which tests or runtime paths accidentally depend on the
+environment's timezone* — so it is an experiment with results to classify, not a
+fix. `INV-ARC-015` gives the classification rule: SLE derives from UTC, CLE from
+the Canonical Class Timezone, and neither should derive from wherever the process
+happens to think it lives. Production-parity UTC testing remains separately
+useful; a hostile-time job would be an addition, not a replacement.
+
+**37. `app/utils/deletion.py` cannot be imported and nothing imports it (correctness, dead code)** — OPEN
+
+Recorded in finding 27 as one of the two legitimate attendance-teardown paths. It
+is not a path at all: it imports `StorePurchase`, `Entitlement`,
+`EntitlementConsumption` and `RedemptionEvent`, none of which exist in
+`app/models.py`, so importing the module raises `ImportError` — and nothing under
+`app/` imports it. `app/services/teacher_destruction.py` is the live destruction
+path, reached from `admin.py` and `teacher_lifecycle.py`.
+
+Left in place rather than deleted. `collapse_universe()` suggests a code path may
+have been lost during the v1→v2 migration, and that deserves investigation rather
+than a silent removal — deleting the module would erase the evidence that
+something went missing. This corrects the record in finding 27.
 
 ## §XIV — Decision and Rollback
 
