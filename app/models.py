@@ -70,10 +70,42 @@ def _current_utc_year():
 # -------------------- ENUMS --------------------
 
 class AttendanceReasonCode(str, enum.Enum):
-    """Reason codes for attendance session boundaries."""
+    """Reason codes for attendance session boundaries.
+
+    Three codes used to describe four events, because every terminal close wrote
+    ``done_for_day`` whether the student chose to stop, the system capped them at
+    the daily limit, or the system closed the day out. The two system cases were
+    indistinguishable from each other and read, in the timeline, as though the
+    student had decided to stop working.
+
+    That matters because attendance rows are permanent and are never corrected
+    (DOM-PROD-001 §108): the row IS the evidence a teacher weighs when deciding
+    whether to reverse the payroll it produced, which is the only remedy the
+    domain offers. "Why did I stop at 22:10?" deserves an answer the record can
+    give. The scheduled job already composed that answer — "Daily limit reached
+    (1.5h)" — and passed it to a ``reason`` parameter that has no column and was
+    silently dropped.
+    """
     HALL_PASS = 'hall_pass'
     DONE_FOR_DAY = 'done_for_day'
     START_WORK = 'start_work'
+    # The daily cap closed the session. The student did not choose to stop and is
+    # locked out for the remainder of the class day, exactly as if they had.
+    DAILY_LIMIT_REACHED = 'daily_limit_reached'
+    # The class day ended with the session still open (DOM-PROD-001 §312).
+    END_OF_DAY = 'end_of_day'
+
+
+# Every code that terminates a student's working day. A student holding any of
+# these for the current class day cannot start work again until the next one, so
+# any query enforcing that lockout MUST consider the whole set: matching only
+# `done_for_day` would let a student capped at the daily limit clock straight
+# back in and work past it.
+TERMINAL_DAY_REASON_CODES = frozenset({
+    AttendanceReasonCode.DONE_FOR_DAY.value,
+    AttendanceReasonCode.DAILY_LIMIT_REACHED.value,
+    AttendanceReasonCode.END_OF_DAY.value,
+})
 
 
 # Legacy tap reason enum removed; attendance is expressed through attendance_sessions (DOM-PROD-001).
