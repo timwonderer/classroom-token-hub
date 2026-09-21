@@ -317,6 +317,12 @@ _BANKING_REDIRECT_QUERY_KEYS = {
     "settings_block",
 }
 
+# The cadence the rent form shows before a policy exists. The frequency select
+# marks an option `selected` only from an existing RentSettings row, so with none
+# the browser selects the first option; the server-rendered pricing band must
+# describe that same cadence or it prices a period the page is not displaying.
+DEFAULT_RENT_FREQUENCY = "daily"
+
 ADMIN_FEATURE_ENDPOINTS = {
     "admin.payroll": "payroll",
     "admin.store_management": "store",
@@ -5381,10 +5387,16 @@ def rent_settings():
                     request.form.get('custom_frequency_unit', 'days')
                     if frequency_type == 'custom' else None
                 ),
-                'first_rent_due_date': (
-                    datetime.strptime(first_due_date_str, '%Y-%m-%d')
-                    if first_due_date_str else None
-                ),
+                # CLE, not a naive parse. `strptime` yields a naive midnight that a
+                # timezone=True column stores as midnight UTC, which for every class
+                # west of Greenwich is the PREVIOUS local day -- so a teacher who
+                # entered October 20 got a cycle boundary on the 19th, and the
+                # teacher page (formatting the stored instant) and the student page
+                # (deriving from cycle_boundary_at) showed different due dates for
+                # the same obligation. SPEC-TIME-001 §CLE names "obligation due
+                # dates" explicitly; this was the third site of the same defect,
+                # after payroll's first_pay_date and the store's activation dates.
+                'first_rent_due_date': _class_local_date_start_utc(first_due_date_str),
                 'due_day_of_month': int(request.form.get('due_day_of_month', 1)),
                 'grace_period_days': int(request.form.get('grace_period_days', 3)),
                 'late_penalty_amount': _quantize_currency(request.form.get('late_penalty_amount', '10.0')),
@@ -5603,8 +5615,16 @@ def rent_settings():
         display_rent_amount = f"${settings.rent_amount:.2f}"
         display_late_penalty_amount = f"${settings.late_penalty_amount:.2f}"
         if settings.first_rent_due_date:
-            display_first_rent_due_date = settings.first_rent_due_date.strftime("%B %d, %Y")
-            display_first_rent_due_date_iso = settings.first_rent_due_date.strftime("%Y-%m-%d")
+            # Read back through CLE for the same reason it is written through CLE.
+            # Formatting the stored instant directly renders it in UTC, which shows
+            # the previous local day for any class EAST of Greenwich -- the mirror
+            # image of the storage defect, and one that would have re-appeared the
+            # moment a non-US class used the app. The ISO form feeds the date input
+            # the teacher re-saves from, so a UTC reading there would walk the date
+            # backwards one day per edit.
+            _first_due_local = _class_local_date_of(settings.first_rent_due_date)
+            display_first_rent_due_date = _first_due_local.strftime("%B %d, %Y")
+            display_first_rent_due_date_iso = _first_due_local.strftime("%Y-%m-%d")
 
     # The banner that tells the teacher which policy the class is actually on.
     # Resolved on every render, not only after a save, because the divergence
@@ -5613,7 +5633,22 @@ def rent_settings():
     rent_policy_deferral = _resolve_rent_policy_deferral(class_id, settings)
 
     canonical_rent_band = None
-    if settings and payroll_settings:
+    # Gated on payroll only. This previously required `settings` as well — an
+    # existing rent policy — so the pricing recommendation was withheld from
+    # exactly the teacher who had not priced rent yet, and appeared only once
+    # they no longer needed it. A recommendation exists to inform a decision that
+    # has not been made; nothing about the band depends on the decision's outcome.
+    # CWI comes from payroll, and the band is a percentage of CWI.
+    if payroll_settings:
+        # With no policy yet, describe the cadence the form will show on first
+        # render: the frequency select marks an option `selected` only from
+        # `settings`, so with none the browser selects the first, "Per Day".
+        # Anything else would print a band for a cadence the page is not showing.
+        band_frequency = settings.frequency_type if settings else DEFAULT_RENT_FREQUENCY
+        band_frequency_value = settings.custom_frequency_value if settings else None
+        band_frequency_unit = (
+            getattr(settings, 'custom_frequency_unit', None) if settings else None
+        )
         try:
             rent_checker = EconomyBalanceChecker(
                 g.canonical_context.user_id,
@@ -5625,18 +5660,18 @@ def rent_settings():
             ).cwi
             rent_band = rent_checker.rent_band(
                 rent_cwi,
-                settings.frequency_type,
-                settings.custom_frequency_value,
-                getattr(settings, 'custom_frequency_unit', None),
+                band_frequency,
+                band_frequency_value,
+                band_frequency_unit,
             )
             canonical_rent_band = {
                 'cwi': float(rent_cwi),
                 'min': float(rent_band['min']),
                 'max': float(rent_band['max']),
                 'period_label': frequency_label(
-                    settings.frequency_type,
-                    custom_frequency_value=settings.custom_frequency_value,
-                    custom_frequency_unit=getattr(settings, 'custom_frequency_unit', None),
+                    band_frequency,
+                    custom_frequency_value=band_frequency_value,
+                    custom_frequency_unit=band_frequency_unit,
                 ),
             }
         except (TypeError, ValueError, AttributeError):
@@ -9712,9 +9747,25 @@ def _resolve_admin_payroll_settings_for_class_id(canonical_context, class_id: st
     V2 single-context invariant: a payroll resolution is always bound to one
     class_id. There is no teacher-wide fallback — with no class in scope there is
     no class whose payroll to resolve, so we return None.
+
+    ``class_id`` arrives from a request body and is therefore an assertion, not
+    authority; ``canonical_context`` is the authority. This function took both and
+    read only the assertion, returning None whenever the client omitted it — which
+    the economy validator always does, correctly, since the session already knows
+    the class. The endpoint then reported payroll as unconfigured for a class that
+    had payroll configured, and the rent page rendered "Recommendation unavailable
+    — insufficient data" above a printout of every operand it needed.
+
+    Falling back to the context is the narrower behaviour, not the looser one: a
+    supplied ``class_id`` is still honoured, and the fallback resolves a class the
+    session has already proven authority over rather than one the client named.
     """
-    if not class_id:
+    scoped_class_id = (class_id or "").strip() or (
+        getattr(canonical_context, "class_id", None) or ""
+    ).strip()
+    if not scoped_class_id:
         return None
+    class_id = scoped_class_id
 
     return (
         PayrollSettings.query.filter(
@@ -9901,6 +9952,23 @@ def api_economy_validate(feature):
         checker = EconomyBalanceChecker(user_id, class_id=getattr(payroll_settings, "class_id", None))
         # Use expected_weekly_hours from payroll_settings, not from request
         cwi_calc = checker.calculate_cwi(payroll_settings)
+        if cwi_calc is None:
+            # `calculate_cwi` returns None when expected weekly hours are
+            # configured on neither the parameter nor the EconomicEngine, and its
+            # docstring says callers must handle it. This one did not, so `.cwi`
+            # raised and the generic handler below turned a configuration gap into
+            # a 500 with no guidance. Unreachable until the payroll resolution
+            # above was corrected, because this endpoint previously returned the
+            # "configure payroll" warning before ever getting here.
+            return jsonify({
+                'status': 'warning',
+                'message': (
+                    'Set expected weekly hours on the Economic Engine to get '
+                    'pricing recommendations.'
+                ),
+                'is_valid': True,
+                'warnings': [],
+            })
         cwi = cwi_calc.cwi
         expected_weekly_hours = cwi_calc.expected_weekly_minutes / 60.0
 
