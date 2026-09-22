@@ -1,0 +1,21 @@
+[Unit]
+Description=Bounded CTH request telemetry sampler
+After=network.target
+
+[Service]
+Type=oneshot
+User=cth-status
+Group=www-data
+WorkingDirectory=/opt/cth-status-sampler
+ExecStart=/usr/bin/python3 -m status_service.log_sampler
+TimeoutStartSec=50
+StateDirectory=cth-status
+StateDirectoryMode=0750
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictAddressFamilies=AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=localhost

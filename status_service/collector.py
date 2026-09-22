@@ -1,39 +1,18 @@
-"""Collect bounded application health evidence outside the public GET path."""
-
+"""Transport closed numerical snapshots, never query or interpret domain state."""
 from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timedelta, timezone
-from urllib.error import HTTPError, URLError
+from datetime import datetime, timezone
+from urllib.error import HTTPError
 from urllib.request import HTTPRedirectHandler, Request, build_opener
-from uuid import uuid4
 
-from status.contracts import ExternalObservationRecord
-from status.projection import EpistemicState, EvidenceSource, ObservationClass, Outcome
-
+from status.measurements import parse_time, validate_fresh_snapshot, validate_snapshot
+from status.platform import PLATFORM_SCHEMA, validate_platform
 from .store import FirestoreNoticeStore
 
-
-APP_HEALTH_URL = "https://app.classroomtokenhub.com/health/status"
-PROBE_VERSION = "app-health-v2"
-SIGNALS = {
-    "login": ("capability", ObservationClass.READINESS),
-    "attendance": ("capability", ObservationClass.READINESS),
-    "payroll": ("capability", ObservationClass.READINESS),
-    "roster": ("capability", ObservationClass.READINESS),
-    "classroom_economy": ("capability", ObservationClass.READINESS),
-    "database": ("platform", ObservationClass.READINESS),
-    "background_jobs": ("platform", ObservationClass.READINESS),
-    "external_integrations": ("platform", ObservationClass.READINESS),
-    "monitoring_freshness": ("platform", ObservationClass.READINESS),
-    "invariant_verification": ("platform", ObservationClass.CORRECTNESS),
-}
-_DIAGNOSTIC_STATES = {
-    "CHECK_NOT_REGISTERED": (Outcome.UNKNOWN, EpistemicState.UNAVAILABLE),
-    "DATABASE_REACHABLE": (Outcome.PASS, EpistemicState.KNOWN),
-    "DATABASE_UNAVAILABLE": (Outcome.FAIL, EpistemicState.UNAVAILABLE),
-}
+TELEMETRY_URL = "https://app.classroomtokenhub.com/health/telemetry"
+PLATFORM_URL = "https://app.classroomtokenhub.com/health/status"
 
 
 class _NoRedirect(HTTPRedirectHandler):
@@ -41,126 +20,138 @@ class _NoRedirect(HTTPRedirectHandler):
         return None
 
 
-def fetch_app_health(client_id: str, client_secret: str) -> bytes:
+def _fetch_json(url: str, client_id: str, client_secret: str) -> bytes:
     if not client_id or not client_secret:
         raise ValueError("Both Cloudflare Access credentials are required")
-    request = Request(APP_HEALTH_URL, headers={
-        "CF-Access-Client-Id": client_id,
-        "CF-Access-Client-Secret": client_secret,
-        "Accept": "application/json",
-    })
+    request = Request(url, headers={"CF-Access-Client-Id": client_id,
+                      "CF-Access-Client-Secret": client_secret, "Accept": "application/json"})
     with build_opener(_NoRedirect()).open(request, timeout=10) as response:
         if response.status != 200 or "application/json" not in response.headers.get("Content-Type", ""):
-            raise ValueError("Health response was not JSON 200")
+            raise ValueError("Snapshot response was not JSON 200")
         body = response.read(16_385)
     if len(body) > 16_384:
-        raise ValueError("Health response exceeded bound")
+        raise ValueError("Snapshot exceeded response bound")
     return body
 
 
-def _signal_map(body: bytes, now: datetime) -> dict[str, tuple[Outcome, EpistemicState, str, datetime | None]]:
-    payload = json.loads(body)
-    if not isinstance(payload, dict) or set(payload) != {"observed_at", "signals"}:
-        raise ValueError("Unexpected health payload")
-    observed_at = datetime.fromisoformat(payload["observed_at"])
-    # The app and collector use separate clocks. Permit only a small positive
-    # clock skew, while still rejecting stale or materially future payloads.
-    if observed_at.tzinfo is None or not -timedelta(seconds=5) <= now - observed_at <= timedelta(minutes=2):
-        raise ValueError("Stale or future health payload")
-    if not isinstance(payload["signals"], list) or len(payload["signals"]) != len(SIGNALS):
-        raise ValueError("Incomplete health signal set")
-    mapped = {}
-    for signal in payload["signals"]:
-        if not isinstance(signal, dict) or set(signal) != {"key", "layer", "outcome", "epistemic_state", "diagnostic_code", "checked_at"}:
-            raise ValueError("Unexpected health signal shape")
-        key = signal["key"]
-        if key not in SIGNALS or key in mapped or signal["layer"] != SIGNALS[key][0]:
-            raise ValueError("Unknown, duplicate, or misclassified signal")
-        outcome = Outcome(signal["outcome"])
-        epistemic = EpistemicState(signal["epistemic_state"])
-        diagnostic = signal["diagnostic_code"]
-        if diagnostic not in _DIAGNOSTIC_STATES:
-            raise ValueError("Unregistered diagnostic code")
-        if (outcome, epistemic) != _DIAGNOSTIC_STATES[diagnostic]:
-            raise ValueError("Invalid health signal state")
-        if (key == "database") != diagnostic.startswith("DATABASE_"):
-            raise ValueError("Diagnostic does not match health signal")
-        checked_at_value = signal["checked_at"]
-        if checked_at_value is None:
-            if diagnostic != "CHECK_NOT_REGISTERED":
-                raise ValueError("Registered check requires checked_at")
-            checked_at = None
-        else:
-            if not isinstance(checked_at_value, str):
-                raise ValueError("Invalid checked_at")
-            if diagnostic == "CHECK_NOT_REGISTERED":
-                raise ValueError("Unregistered check cannot claim a check time")
-            checked_at = datetime.fromisoformat(checked_at_value)
-            if checked_at.tzinfo is None or observed_at - checked_at < -timedelta(seconds=5):
-                raise ValueError("Invalid or future checked_at")
-            if observed_at - checked_at > timedelta(minutes=5):
-                raise ValueError("Stale checked_at")
-        mapped[key] = (outcome, epistemic, diagnostic, checked_at)
-    return mapped
+def fetch_telemetry(client_id: str, client_secret: str) -> bytes:
+    return _fetch_json(TELEMETRY_URL, client_id, client_secret)
 
 
-def collect(store: FirestoreNoticeStore, *, client_id: str, client_secret: str, now: datetime | None = None, fetch=fetch_app_health) -> list[ExternalObservationRecord]:
-    observed_at = now or datetime.now(timezone.utc)
-    correlation_id = f"corr-{uuid4().hex}"
-    reachability = (Outcome.UNKNOWN, EpistemicState.UNAVAILABLE, "PROBE_UNAVAILABLE")
-    signals = {key: (Outcome.UNKNOWN, EpistemicState.UNAVAILABLE, "PROBE_UNAVAILABLE", None) for key in SIGNALS}
-    app_evidence_received = False
+def fetch_platform(client_id: str, client_secret: str) -> bytes:
+    return _fetch_json(PLATFORM_URL, client_id, client_secret)
+
+
+def _unique_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("Duplicate JSON key")
+        result[key] = value
+    return result
+
+
+def collect(store: FirestoreNoticeStore, *, client_id: str, client_secret: str, now: datetime | None = None, fetch=fetch_telemetry) -> dict | None:
+    snapshot = None
+    diagnostic = None
+    body = None
     try:
         body = fetch(client_id, client_secret)
-        observed_at = now if now is not None else datetime.now(timezone.utc)
-        reachability = (Outcome.PASS, EpistemicState.KNOWN, "HTTP_OK")
-        # Use the same receipt time for validation and persisted freshness.
-        signals = _signal_map(body, observed_at)
-        app_evidence_received = True
     except HTTPError as exc:
-        # Access denial is a monitor-credential problem, not evidence of app failure.
-        if exc.code not in (301, 302, 303, 307, 308, 401, 403):
-            reachability = (Outcome.FAIL, EpistemicState.UNAVAILABLE, "HTTP_UNAVAILABLE")
-    except (URLError, OSError, TimeoutError):
-        reachability = (Outcome.FAIL, EpistemicState.UNAVAILABLE, "NETWORK_UNAVAILABLE")
-    except (ValueError, TypeError, KeyError):
-        # A reachable but unusable payload establishes liveness only.
-        pass
-    records = []
-    states = [("public_service_reachability", ObservationClass.LIVENESS, (*reachability, observed_at))]
-    states.extend((key, kind, signals[key]) for key, (_, kind) in SIGNALS.items())
-    for key, kind, (outcome, epistemic, diagnostic, checked_at) in states:
-        record = ExternalObservationRecord(
-            observation_id=f"obs-{uuid4().hex}", observed_at=observed_at,
-            correlation_id=correlation_id,
-            source=(EvidenceSource.APPLICATION_RUNTIME_EVIDENCE
-                    if key != "public_service_reachability" and app_evidence_received
-                    else EvidenceSource.EXTERNAL_PROBE),
-            capability=key, observation_class=kind, outcome=outcome,
-            epistemic_state=epistemic, diagnostic_code=diagnostic,
-            latency_ms=None, probe_version=PROBE_VERSION,
-            freshness_class="REALTIME",
-            staleness_state_at_receipt=("UNKNOWN" if checked_at is None else "FRESH"),
-            evaluator_version=None, checked_at=checked_at,
-        )
-        record.validate()
-        records.append(record)
-    store.append_observations(records)
-    return records
+        diagnostic = "ACCESS_DENIED" if exc.code in (301, 302, 303, 307, 308, 401, 403) else "TRANSPORT_UNAVAILABLE"
+    except (OSError, TimeoutError):
+        diagnostic = "TRANSPORT_UNAVAILABLE"
+    except (ValueError, TypeError, KeyError, OverflowError):
+        diagnostic = "INVALID_SNAPSHOT"
+    # One completion clock governs freshness validation and persisted receipt.
+    received_at = now or datetime.now(timezone.utc)
+    if diagnostic is None:
+        try:
+            if not isinstance(body, bytes) or len(body) > 16_384:
+                raise ValueError("Invalid bounded body")
+            candidate = validate_snapshot(json.loads(body, object_pairs_hook=_unique_object))
+            try:
+                snapshot = validate_fresh_snapshot(candidate, received_at)
+            except ValueError:
+                diagnostic = "STALE_SNAPSHOT"
+        except (ValueError, TypeError, KeyError, OverflowError):
+            diagnostic = "INVALID_SNAPSHOT"
+
+    store.append_snapshot(snapshot, received_at, diagnostic=diagnostic)
+    return snapshot
+
+
+def collect_platform(store, *, client_id: str, client_secret: str,
+                     now: datetime | None = None, fetch=fetch_platform) -> dict:
+    """Keep the real SELECT1 result; discard every feature placeholder."""
+    body = None
+    transport = None
+    http_failure = False
+    try:
+        body = fetch(client_id, client_secret)
+    except HTTPError as exc:
+        if exc.code in (301, 302, 303, 307, 308, 401, 403):
+            transport = "ACCESS_DENIED"
+        else:
+            transport, http_failure = "TRANSPORT_UNAVAILABLE", True
+    except (OSError, TimeoutError):
+        transport = "TRANSPORT_UNAVAILABLE"
+    except (ValueError, TypeError, KeyError, OverflowError):
+        transport = "INVALID_RESPONSE"
+    received = now or datetime.now(timezone.utc)
+    stamp = received.isoformat()
+    endpoint = {"key": "endpoint", "outcome": "UNKNOWN" if transport else "PASS",
+                "checked_at": None if transport else stamp, "diagnostic": transport or "HTTP_OK"}
+    if http_failure:
+        endpoint.update(outcome="FAIL", checked_at=stamp, diagnostic="HTTP_UNAVAILABLE")
+    database = {"key": "database", "outcome": "UNKNOWN", "checked_at": None,
+                "diagnostic": transport or "INVALID_RESPONSE"}
+    if transport is None:
+        try:
+            if not isinstance(body, bytes) or len(body) > 16_384:
+                raise ValueError("Invalid bounded response")
+            payload = json.loads(body, object_pairs_hook=_unique_object)
+            if not isinstance(payload, dict) or set(payload) != {"observed_at", "signals"}:
+                raise ValueError("Invalid source response")
+            observed = parse_time(payload["observed_at"])
+            signals = payload["signals"]
+            if not isinstance(signals, list) or len(signals) > 64:
+                raise ValueError("Invalid signal list")
+            matches = [signal for signal in signals if isinstance(signal, dict) and signal.get("key") == "database"]
+            if len(matches) != 1:
+                raise ValueError("Database check missing or duplicated")
+            signal = matches[0]
+            if set(signal) != {"key", "layer", "outcome", "epistemic_state", "diagnostic_code", "checked_at"} or signal["layer"] != "platform":
+                raise ValueError("Invalid database check")
+            expected = {"DATABASE_REACHABLE": ("PASS", "KNOWN"), "DATABASE_UNAVAILABLE": ("FAIL", "UNAVAILABLE")}
+            diagnostic = signal["diagnostic_code"]
+            if not isinstance(diagnostic, str) or diagnostic not in expected or (signal["outcome"], signal["epistemic_state"]) != expected[diagnostic]:
+                raise ValueError("Unrecognized database evidence")
+            checked = parse_time(signal["checked_at"])
+            if checked > observed or observed > received:
+                raise ValueError("Future database evidence")
+            if (received - observed).total_seconds() > 300 or (received - checked).total_seconds() > 300:
+                database["diagnostic"] = "STALE_SOURCE"
+            else:
+                database.update(outcome=signal["outcome"], checked_at=signal["checked_at"], diagnostic=diagnostic)
+        except (ValueError, TypeError, KeyError, OverflowError):
+            database["diagnostic"] = "INVALID_RESPONSE"
+    record = validate_platform({"schema_version": PLATFORM_SCHEMA, "received_at": stamp,
+                                "checks": [endpoint, database]})
+    store.append_platform(record)
+    return record
 
 
 def main() -> None:
     from google.cloud import firestore
-
-    # Secret Manager values populated by a terminal pipeline may contain a final newline.
     client_id = os.environ.get("CF_ACCESS_CLIENT_ID", "").strip()
     client_secret = os.environ.get("CF_ACCESS_CLIENT_SECRET", "").strip()
     if not client_id or not client_secret:
         raise RuntimeError("Cloudflare Access credentials are required")
     store = FirestoreNoticeStore(firestore.Client(database=os.environ.get("FIRESTORE_DATABASE", "cth-status-prod")))
-    records = collect(store, client_id=client_id, client_secret=client_secret)
-    # No credentials, raw response, or tenant-linked data enter logs.
-    print(f"Stored {len(records)} bounded status observations")
+    snapshot = collect(store, client_id=client_id, client_secret=client_secret)
+    collect_platform(store, client_id=client_id, client_secret=client_secret)
+    print("Stored request telemetry and platform checks" if snapshot is not None else "Stored unavailable request telemetry and platform checks")
 
 
 if __name__ == "__main__":

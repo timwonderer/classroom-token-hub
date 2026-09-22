@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001      | 3.7     | 2026-09-21     | 3.6        | Normative |
+| SOP-DOC-001      | 3.8     | 2026-09-21     | 3.7        | Normative |
 
 ---
 

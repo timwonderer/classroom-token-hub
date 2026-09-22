@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-OPS-001      | 2.8     | 2026-09-21     | 2.7        | Normative       |
+| DOM-OPS-001      | 2.9     | 2026-09-21     | 2.8        | Normative       |
 
 ## 0. Authority Level and Dependencies
 
@@ -84,8 +84,11 @@ identify the measured request family; they do not establish domain truth or prov
 that a user journey completed. HTTP 404, 500 and 5xx rates and p80/p95 latency may
 be displayed with request counts, observation window, source freshness and coverage.
 
-The approved numerical contract is documented in `SPEC-OPS-006`. Automated wording
-is limited to observed errors, latency, traffic and monitoring availability. Missing,
+The approved numerical contract is documented in `SPEC-OPS-006`. Automated evidence is limited to observed errors, latency, traffic and monitoring
+availability. Teacher/student labels may summarize that evidence as `Yes`,
+`Probably not`, `Possibly down`, or `Not recently verified` using the versioned
+request-proxy mapping in SPEC-OPS-006. These public labels are estimates, not
+internal correctness certification. Missing,
 stale, failed or insufficient monitoring MUST NOT be represented as normal activity.
 Threshold crossings are observations, not canonical incidents or inferred causes.
 A normal measured window MUST NOT be described as proof of feature correctness.

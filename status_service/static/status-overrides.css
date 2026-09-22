@@ -17,3 +17,45 @@
 .capability-unknown-details summary:focus-visible{outline:3px solid var(--secondary);outline-offset:3px}
 .capability-unknown-details p{margin:.5rem 0 0!important;padding:0!important}
 .platform-row--available{border-left-color:var(--primary)}.platform-row--degraded,.platform-row--unavailable{border-left-color:var(--warning)}
+
+/* Measurement content composes the unchanged public status shell and cards. */
+.measurement-content{padding:.8rem 1rem 1rem;text-align:left}
+.working-section .capability-card .measurement-reason{padding:0 0 .6rem;font-size:.85rem;color:var(--text-secondary)}
+.measurement-values{display:grid;grid-template-columns:1fr 1fr;gap:.35rem;margin:.4rem 0 .8rem;font-size:.85rem}
+.measurement-values dd{margin:0;text-align:right;font-family:var(--font-data)}
+.request-distribution,.history-disclosure{margin-top:.75rem;font-size:.85rem}
+.request-distribution summary,.history-disclosure summary,.measurement-explanation summary{cursor:pointer;color:var(--primary);font-weight:700}
+.request-distribution summary:focus-visible,.history-disclosure summary:focus-visible,.measurement-explanation summary:focus-visible{outline:3px solid var(--secondary);outline-offset:3px}
+.working-section .capability-card .measurement-content details p{padding:.5rem 0 0;font-size:.85rem}
+.history-strip{display:flex;flex-wrap:wrap;gap:2px;margin-top:.5rem}
+.history-swatch{width:6px;min-height:20px;font-size:6px;text-align:center}
+.history-day--normal{background:var(--primary);color:var(--text-inverse)}
+.history-day--elevated{background:var(--warning);color:var(--alert-warning-text)}
+.history-day--gap{background:var(--neutral-200);color:var(--text-primary)}
+.history-table-scroll{overflow-x:auto}
+.history-table-scroll table{border-collapse:collapse;font-size:.8rem}
+.history-table-scroll th,.history-table-scroll td{border-bottom:1px solid var(--border-subtle);padding:.35rem}
+.measurement-explanation{margin-top:.5rem}
+
+
+.request-metrics-list{display:grid;gap:.75rem;max-width:900px;margin-top:.75rem}
+.request-metrics-content{width:100%;min-width:0}
+.request-metrics-content .measurement-content{padding:.75rem 0 0}
+.request-metrics-content .measurement-values{max-width:400px}
+.request-metrics-content .measurement-reason{font-size:.85rem}
+/* Keep the inherited warning fill while meeting contrast for simple estimates. */
+.working-section .capability-result--degraded,.working-section .capability-result--unavailable{color:var(--text-primary)}
+
+.status-support{margin:-1.8rem 0 2.5rem;text-align:right;font-size:.85rem}
+.status-support a{color:var(--steward-blue);text-decoration:underline}
+.working-section .capability-card h3{color:var(--steward-blue)}
+.happening-banner--investigating .happening-banner-body,.happening-banner--identified .happening-banner-body{background:var(--neutral-100)}
+.happening-banner--unavailable{border-top-color:var(--warning)}
+.happening-banner--unavailable .happening-banner-title{background:var(--warning);color:var(--text-primary)}
+.status-pill--unavailable::before{background:var(--warning);border-radius:var(--radius-xs)}
+
+.working-section .capability-result--unavailable{background:var(--danger);color:var(--text-inverse)}
+.status-pill--unavailable::before{background:var(--danger)}
+/* Keep compact result strips aligned when a neighboring question wraps. */
+.working-section .capability-card{display:flex;flex-direction:column}
+.working-section .capability-card .capability-result{margin-top:auto}

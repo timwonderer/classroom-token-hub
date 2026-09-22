@@ -2,22 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from uuid import uuid4
-
-from status.contracts import ExternalObservationRecord
-
-
-def _observation_order(document: dict) -> tuple:
-    """Prefer newer evidence; at equal time keep the least reassuring result."""
-    severity = {
-        ("PASS", "KNOWN"): 0,
-        ("UNKNOWN", "UNAVAILABLE"): 1,
-        ("FAIL", "UNAVAILABLE"): 2,
-        ("FAIL", "KNOWN"): 3,
-    }
-    return (document["observed_at"], severity[(document["outcome"], document["epistemic_state"])], document["observation_id"])
-
 
 class FirestoreNoticeStore:
     def __init__(self, client):
@@ -36,60 +22,114 @@ class FirestoreNoticeStore:
                 active.append({"id": snapshot.id, **snapshot.to_dict()})
         return sorted(active, key=lambda notice: notice["updated_at"], reverse=True)
 
-    def list_current_observations(self) -> dict[str, dict]:
-        """Read the replaceable bounded projection; never mutate during GET."""
-        snapshots = self.client.collection("external_status_current").stream()
-        return {snapshot.id: snapshot.to_dict() for snapshot in snapshots}
+    def current_snapshot(self) -> dict | None:
+        """Read persisted current attempt; callers evaluate freshness at render time."""
+        value = self.client.collection("telemetry_current").document("current").get()
+        return value.to_dict() if value.exists else None
 
-    def append_observations(self, records: list[ExternalObservationRecord]) -> None:
-        """Append evidence and advance current pointers in one serializable transaction."""
+    def current_platform(self) -> dict | None:
+        """Read the separate current endpoint/database check without mutations."""
+        value = self.client.collection("platform_current").document("current").get()
+        return value.to_dict() if value.exists else None
+
+    def append_platform(self, record: dict) -> None:
+        """Retain measured platform attempts independently of request snapshots."""
         from google.cloud import firestore
+        from status.measurements import parse_time
+        from status.platform import validate_platform
 
-        if not records:
-            return
-        documents = []
-        for record in records:
-            record.validate()
-            document = {
-                "observation_id": record.observation_id,
-                "observed_at": record.observed_at,
-                "checked_at": record.checked_at,
-                "correlation_id": record.correlation_id,
-                "source": record.source.value,
-                "capability": record.capability,
-                "observation_class": record.observation_class.value,
-                "outcome": record.outcome.value,
-                "epistemic_state": record.epistemic_state.value,
-                "diagnostic_code": record.diagnostic_code,
-                "latency_ms": record.latency_ms,
-                "probe_version": record.probe_version,
-                "freshness_class": record.freshness_class,
-                "staleness_state_at_receipt": record.staleness_state_at_receipt,
-                "evaluator_version": record.evaluator_version,
-            }
-            documents.append(document)
-
-        current_collection = self.client.collection("external_status_current")
-        observation_collection = self.client.collection("external_status_observations")
-        current_refs = {item["capability"]: current_collection.document(item["capability"]) for item in documents}
+        record = validate_platform(record)
+        received = parse_time(record["received_at"])
+        current_ref = self.client.collection("platform_current").document("current")
+        observation_ref = self.client.collection("platform_observations").document(uuid4().hex)
 
         @firestore.transactional
         def write(transaction):
-            # Firestore requires all transactional reads before the first write.
-            current = {key: snapshot.to_dict() if snapshot.exists else None
-                       for key, ref in current_refs.items()
-                       for snapshot in (ref.get(transaction=transaction),)}
-            winners = {}
-            for document in documents:
-                key = document["capability"]
-                previous = winners.get(key, current[key])
-                if previous is None or _observation_order(document) > _observation_order(previous):
-                    winners[key] = document
-            for document in documents:
-                transaction.create(observation_collection.document(document["observation_id"]), document)
-            for key, document in winners.items():
-                transaction.set(current_refs[key], document)
+            current_doc = current_ref.get(transaction=transaction)
+            previous = current_doc.to_dict() if current_doc.exists else None
+            # Append all attempts; a delayed delivery cannot rewind current state.
+            transaction.create(observation_ref, {**record, "expires_at": received + timedelta(days=7)})
+            if previous is None or received > parse_time(previous["received_at"]):
+                transaction.set(current_ref, record)
 
+        write(self.client.transaction())
+
+    def measurement_history(self, days: int = 90) -> list[dict]:
+        if not 1 <= days <= 90:
+            raise ValueError("History is bounded to 90 days.")
+        now = datetime.now(timezone.utc)
+        dates = [now.date() - timedelta(days=offset) for offset in range(days - 1, -1, -1)]
+        refs = [self.client.collection("telemetry_days").document(day.isoformat()) for day in dates]
+        records = {doc.id: doc.to_dict() for doc in self.client.get_all(refs) if doc.exists}
+        result = []
+        for day in dates:
+            item = records.get(day.isoformat(), {})
+            elapsed = 1440 if day < now.date() else now.hour * 60 + now.minute + 1
+            result.append({"date": day.isoformat(), "components": item.get("components", {}),
+                           "scheduled_minutes": elapsed})
+        return result
+
+    def append_snapshot(self, snapshot: dict | None, received_at: datetime,
+                        diagnostic: str | None = None) -> None:
+        """Atomically retain source minutes, history counters and latest attempt."""
+        from google.cloud import firestore
+        from status.measurements import (DIAGNOSTICS, classify_component,
+                                         parse_time, validate_fresh_snapshot)
+        if received_at.utcoffset() is None:
+            raise ValueError("Receipt time requires timezone.")
+        received_at = received_at.astimezone(timezone.utc)
+        if snapshot is None:
+            if diagnostic not in DIAGNOSTICS:
+                raise ValueError("A failed collection requires a closed diagnostic.")
+        else:
+            if diagnostic is not None:
+                raise ValueError("Source snapshots cannot carry transport failure.")
+            snapshot = validate_fresh_snapshot(snapshot, received_at)
+        wrapper = {"snapshot": snapshot, "received_at": received_at, "diagnostic": diagnostic}
+        current_ref = self.client.collection("telemetry_current").document("current")
+        sampled = parse_time(snapshot["sampled_at"]) if snapshot else None
+        minute_id = sampled.strftime("%Y%m%dT%H%MZ") if sampled else None
+        source_ref = self.client.collection("telemetry_snapshots").document(minute_id) if snapshot else None
+        day_ref = self.client.collection("telemetry_days").document(sampled.date().isoformat()) if snapshot else None
+        failure_ref = self.client.collection("telemetry_attempts").document(uuid4().hex) if snapshot is None else None
+
+        @firestore.transactional
+        def write(transaction):
+            previous_doc = current_ref.get(transaction=transaction)
+            previous = previous_doc.to_dict() if previous_doc.exists else None
+            source_doc = source_ref.get(transaction=transaction) if source_ref else None
+            day_doc = day_ref.get(transaction=transaction) if day_ref else None
+            # All reads precede writes, including duplicate-delivery reads.
+            if source_ref and not source_doc.exists:
+                day = day_doc.to_dict() if day_doc.exists else {"components": {}}
+                components = day.setdefault("components", {})
+                for component in snapshot["components"]:
+                    counters = components.setdefault(component["key"], dict.fromkeys(
+                        ("sampled", "measured", "normal", "elevated_errors", "high_latency", "other"), 0))
+                    state = classify_component(component, snapshot, now=sampled)["state"]
+                    counters["sampled"] += 1
+                    eligible = state in {"NORMAL", "ELEVATED_ERRORS", "HIGH_LATENCY"}
+                    counters["measured"] += int(eligible)
+                    counters[state.lower() if eligible else "other"] += 1
+                day["expires_at"] = datetime.combine(sampled.date() + timedelta(days=90),
+                                                      datetime.min.time(), timezone.utc)
+                transaction.create(source_ref, {**wrapper, "expires_at": sampled + timedelta(days=7)})
+                transaction.set(day_ref, day)
+            elif failure_ref:
+                transaction.create(failure_ref, {**wrapper, "expires_at": received_at + timedelta(days=7)})
+            # Do not let delayed or duplicate source evidence erase a newer failure,
+            # nor allow older source samples to move the successful pointer backward.
+            previous_received = previous.get("received_at") if previous else None
+            previous_source = previous.get("snapshot") if previous else None
+            advance = previous is None or received_at > previous_received
+            if snapshot and previous_source:
+                advance = advance and sampled > parse_time(previous_source["sampled_at"])
+            if snapshot and source_doc.exists:
+                advance = False
+            if snapshot and previous and previous_source is None:
+                advance = advance and sampled >= previous_received.replace(second=0, microsecond=0)
+            if advance:
+                transaction.set(current_ref, wrapper)
         write(self.client.transaction())
 
     def append_event(self, notice: dict, event_type: str, actor: str) -> str:

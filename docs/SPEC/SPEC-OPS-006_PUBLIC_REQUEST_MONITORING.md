@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| SPEC-OPS-006 | 1.0 | 2026-09-21 | N/A | Subordinate implementation contract |
+| SPEC-OPS-006 | 1.1 | 2026-09-21 | 1.0 | Subordinate implementation contract |
 
 ## I. Purpose
 
@@ -74,8 +74,8 @@ older than 180 seconds makes monitoring unavailable/stale rather than normal.
 Missing source freshness cannot prove current monitoring. Source future timestamps
 must not refresh evidence. The static telemetry endpoint polling request can keep the nginx stream active.
 Source recency measures nginx log-source activity only; it cannot certify complete
-ingestion, application readiness or feature correctness. No additional health
-probe is required.
+ingestion, application readiness or feature correctness. No new application health endpoint is required; the existing bounded platform
+health read remains authorized independently below.
 A successfully queried empty route group with a fresh
 source is `NO_TRAFFIC`; an unavailable source is `MONITOR_UNAVAILABLE`.
 A transport retry must preserve source timestamps. Receipt time is persisted
@@ -138,11 +138,26 @@ under their existing policy and never transformed into request history.
 
 ## VIII. Public interface and operator interpretation
 
-Cards show request volume, 404/500/5xx percentages, p80/p95, window/time/freshness,
-and observational state with visible threshold explanations. Do not label a
-normal observation as “Attendance works” or a 5xx anomaly as a proven feature
-outage. Historical bars expose text and keyboard/touch disclosure, not color or
-hover alone. Operator notices are independent, explicitly attributed human
+Public layout follows the shared public-page design in this order: overall status
+hero, operator incident/update banner, simple teacher/student service cards, and
+platform status with database reachability plus request measurements/history.
+
+Teacher/student cards ask whether the named service is working. Their labels are
+explicitly request-observation estimates: `Yes` for NORMAL, `Probably not` for
+ELEVATED_ERRORS or HIGH_LATENCY, and `Possibly down` when at least ten observed
+requests include 50% or more HTTP 5xx responses. Missing, stale, idle or low-traffic
+observations display `Not recently verified`. This is a public presentation mapping,
+not an internal correctness evaluator, universal guarantee or canonical incident.
+The same severity mapping may summarize current service observations in the hero;
+active operator notices remain visible and must prevent an unqualified reassuring
+summary. Database reachability alone cannot establish feature functionality.
+
+Counts, 404/500/5xx percentages, p80/p95, source timing and 90-day history appear in
+the lower platform section. Explain their scope and thresholds there, without long
+technical qualifications on every teacher card. Preserve the original public brand
+wordmark, hero composition, typography and status-card styling. Historical bars
+expose full text and keyboard/touch disclosure, not color or hover alone.
+Operator notices are independent, explicitly attributed human
 interpretation, with optional snapshot links and an investigation evidence note
 or reference when no automated snapshot is linked. They do not overwrite metrics.
 
@@ -154,6 +169,25 @@ bounded validated JSON atomically to `/var/lib/cth-status/telemetry.json`;
 Collector access uses the existing authorized service-token transport with timeout,
 response-size limit and no redirects. Grafana operator authentication is unchanged.
 Installing the sampler and endpoint is a separate reviewed deployment operation.
+
+### Independent platform checks
+
+Platform connectivity is persisted separately from request telemetry. Its record has
+exactly `schema_version: platform-check-v1`, UTC ISO `received_at`, and `checks`.
+Checks contain exactly one `endpoint` and one `database` result, each with `key`,
+`outcome` (PASS/FAIL/UNKNOWN), `checked_at` (UTC ISO or null), and a closed diagnostic.
+Endpoint HTTP_OK is PASS; HTTP_UNAVAILABLE is FAIL. Actual database
+DATABASE_REACHABLE is PASS and DATABASE_UNAVAILABLE is FAIL. ACCESS_DENIED,
+TRANSPORT_UNAVAILABLE and INVALID_RESPONSE are UNKNOWN for either check;
+STALE_SOURCE is additionally permitted for database UNKNOWN. UNKNOWN carries null
+checked_at; proven checks preserve their source timestamp, never later than receipt.
+Current results expire after 300 seconds; future or malformed evidence is unknown.
+A bounded read of the existing health endpoint may obtain these two actual checks
+without collecting its feature placeholders. This is connectivity, not domain proof.
+
+`platform_observations` retains append-only records for seven days using `expires_at`;
+`platform_current/current` is a monotonic replaceable projection. Reads are pure.
+These records do not contribute to request-window history or service-card proofs.
 
 ## IX. Validation
 
