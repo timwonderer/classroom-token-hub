@@ -60,11 +60,3 @@ def get_sysadmin_grafana_auth_check(client):
 def get_sysadmin_dashboard(client):
     """Fetch the sysadmin dashboard route."""
     return client.get("/sysadmin/dashboard")
-
-
-
-def set_maintenance_global_bypass(client) -> None:
-    """Mark the session as having maintenance bypass."""
-    with client.session_transaction() as sess:
-        sess["is_system_admin"] = True
-        sess["maintenance_global_bypass"] = True

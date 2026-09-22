@@ -471,114 +471,6 @@ def create_app():
     from app.utils.join_code import get_display_join_code
     app.jinja_env.globals['get_display_join_code'] = get_display_join_code
 
-    def is_maintenance_mode_enabled():
-        """Return True when maintenance mode is enabled via environment variable."""
-        return os.getenv("MAINTENANCE_MODE", "").lower() in {"1", "true", "yes", "on"}
-
-    def maintenance_context():
-        """Context for the maintenance page, sourced from environment variables."""
-        badge_type = os.getenv("MAINTENANCE_BADGE_TYPE", "maintenance")
-        badge_meta = {
-            "maintenance": ("construction", "Scheduled Maintenance"),
-            "bug": ("bug_report", "Bug Fix In Progress"),
-            "security": ("shield", "Security Patch"),
-            "update": ("system_update", "System Update"),
-            "feature": ("new_releases", "New Feature Deployment"),
-            "unavailable": ("cloud_off", "Server Unavailable"),
-            "error": ("error", "Unexpected Error"),
-        }
-        badge_icon, badge_text = badge_meta.get(badge_type, badge_meta["maintenance"])
-
-        return {
-            "message": os.getenv(
-                "MAINTENANCE_MESSAGE",
-                "We're performing scheduled maintenance to keep Classroom Economy running smoothly.",
-            ),
-            "expected_back": os.getenv("MAINTENANCE_EXPECTED_END", ""),
-            "contact_email": os.getenv("MAINTENANCE_CONTACT", os.getenv("SUPPORT_EMAIL", "")),
-            "badge_type": badge_type,
-            "badge_icon": badge_icon,
-            "badge_text": badge_text,
-            "status_description": os.getenv(
-                "MAINTENANCE_STATUS_DESCRIPTION",
-                "Unavailable"
-            ),
-        }
-
-    @app.before_request
-    def show_maintenance_page():
-        """Display a friendly maintenance page when maintenance mode is on."""
-        # If maintenance is not enabled, proceed normally.
-        if not is_maintenance_mode_enabled():
-            return None
-
-        # Always allow health check and static assets.
-        if request.endpoint in {"main.health_check"}:
-            return None
-        if request.path.startswith("/static/"):
-            return None
-
-        # Allow system admin login/logout routes so admins can establish a bypass session.
-        if request.endpoint in {
-            "sysadmin.login",
-            "sysadmin.logout",
-            "sysadmin.passkey_auth_start",
-            "sysadmin.passkey_auth_finish"
-        }:
-            return None
-
-        # --- Bypass Logic --------------------------------------------------
-        # Provide controlled access for sysadmin or via a token when maintenance
-        # mode is active, so production can be validated while end users see
-        # the maintenance page.
-        #
-        # Environment variables:
-        #   MAINTENANCE_SYSADMIN_BYPASS= true|1|yes|on   (allow system admin session)
-        #   MAINTENANCE_BYPASS_TOKEN= <string>           (query param maintenance_bypass=<token>)
-        #
-        # System admin detection is resolver-backed so session flags alone are not
-        # treated as authoritative.
-        sysadmin_bypass_enabled = os.getenv("MAINTENANCE_SYSADMIN_BYPASS", "").lower() in {"1","true","yes","on"}
-        bypass_token = os.getenv("MAINTENANCE_BYPASS_TOKEN", "")
-        provided_token = request.args.get("maintenance_bypass")
-
-        # Persistent session bypass for admin-enabled testing across other roles.
-        global_bypass = session.get("maintenance_global_bypass") is True
-        try:
-            from app.auth import get_current_user
-            from app.models import UserRole
-
-            _user = get_current_user()
-            is_sysadmin = _user is not None and getattr(_user.user_role, "value", _user.user_role) == UserRole.SYSADMIN.value
-        except Exception:
-            is_sysadmin = False
-        token_valid = bool(bypass_token and provided_token and provided_token == bypass_token)
-
-        # Allow if sysadmin bypass on and user is sysadmin
-        if sysadmin_bypass_enabled and is_sysadmin:
-            app.logger.debug("Maintenance bypass granted (sysadmin).")
-            # Promote to global bypass so teacher/student logins in same session do not need query param.
-            session.setdefault("maintenance_global_bypass", True)
-            g.maintenance_bypass_active = True
-            return None
-
-        # Allow if a prior sysadmin granted global bypass (sticky across role changes)
-        if global_bypass:
-            app.logger.debug("Maintenance bypass granted (global session).")
-            g.maintenance_bypass_active = True
-            return None
-
-        # Allow if valid token provided (works for any authenticated role once past initial page)
-        if token_valid:
-            app.logger.debug("Maintenance bypass granted (token).")
-            # Persist for remainder of session
-            session.setdefault("maintenance_global_bypass", True)
-            g.maintenance_bypass_active = True
-            return None
-
-        # Otherwise show maintenance page.
-        return render_template("maintenance.html", **maintenance_context()), 503
-
     @app.before_request
     def set_rls_tenant_context():
         """
@@ -686,20 +578,11 @@ def create_app():
     @app.context_processor
     def inject_global_settings():
         """Inject global settings into all templates."""
-        bypass_flag = getattr(g, 'maintenance_bypass_active', False)
-        if is_maintenance_mode_enabled() and not bypass_flag:
-            return {
-                'global_rent_enabled': False,
-                'turnstile_site_key': app.config.get('TURNSTILE_SITE_KEY'),
-                'maintenance_bypass_active': False,
-            }
-
         # Note: Rent settings are now per-teacher, so there's no global rent enabled flag
         # Templates should check rent settings for the specific teacher context
         return {
             'global_rent_enabled': False,  # Deprecated: rent is now per-teacher
             'turnstile_site_key': app.config.get('TURNSTILE_SITE_KEY'),
-            'maintenance_bypass_active': bypass_flag,
         }
 
     # inject_view_as_student_status — REMOVED (prohibited feature)
@@ -771,14 +654,13 @@ def create_app():
             from app.services.identity.builders import build_student_layout_context_view
             from app.utils.display_metadata import get_or_resolve_display_metadata
 
-            bypass_flag = getattr(g, 'maintenance_bypass_active', False)
 
             current_seat_ctx = get_current_seat()
             current_user = get_current_user()
             if not current_seat_ctx or not current_user:
                 return {
                     'student_layout_view': build_student_layout_context_view(
-                        None, is_maintenance_bypass_active=bypass_flag,
+                        None,
                     ),
                     'available_classes': [],
                 }
@@ -787,7 +669,7 @@ def create_app():
             if not context or not getattr(context, "class_id", None):
                 return {
                     'student_layout_view': build_student_layout_context_view(
-                        None, is_maintenance_bypass_active=bypass_flag,
+                        None,
                     ),
                     'available_classes': [],
                 }
@@ -796,12 +678,12 @@ def create_app():
             if display_metadata is None:
                 return {
                     'student_layout_view': build_student_layout_context_view(
-                        None, is_maintenance_bypass_active=bypass_flag,
+                        None,
                     ),
                     'available_classes': [],
                 }
             view = build_student_layout_context_view(
-                display_metadata, is_maintenance_bypass_active=bypass_flag,
+                display_metadata,
             )
             available_classes = [display_metadata.to_available_class_option()]
 
@@ -837,12 +719,11 @@ def create_app():
                 }
 
             cached_name = get_admin_display_name_cache(user_id=current_user.id)
-            bypass_flag = getattr(g, 'maintenance_bypass_active', False)
 
             context = resolve_canonical_context()
             if not context or not getattr(context, "class_id", None):
                 view = build_admin_layout_context_view(
-                    cached_name, None, is_maintenance_bypass_active=bypass_flag,
+                    cached_name, None,
                 )
                 return {
                     'admin_layout_view': view,
@@ -868,7 +749,7 @@ def create_app():
             resolved_teacher_name = teacher_profile.full_name if teacher_profile else ""
 
             view = build_admin_layout_context_view(
-                resolved_teacher_name, class_context, is_maintenance_bypass_active=bypass_flag,
+                resolved_teacher_name, class_context,
             )
             # Switcher must list EVERY class the teacher owns, not just the
             # active one. Sourcing it from the single current class_context made

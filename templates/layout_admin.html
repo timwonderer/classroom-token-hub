@@ -40,14 +40,8 @@
     {% block extra_head %}{% endblock %}
 </head>
 
-<body class="d-flex bg-background {% if maintenance_bypass_active %}maintenance-active{% endif %}">
+<body class="d-flex bg-background">
     <a href="#main-content" class="skip-link">Skip to main content</a>
-    {% if maintenance_bypass_active %}
-    <div class="maintenance-banner">
-        <span class="material-symbols-outlined icon-sm align-text-bottom me-1" aria-hidden="true">visibility</span>
-        Maintenance bypass active – end users still see maintenance page.
-    </div>
-    {% endif %}
 
     <div id="flashToastContainer" class="position-fixed bottom-0 end-0 p-3"></div>
 

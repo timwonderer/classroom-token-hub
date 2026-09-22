@@ -10,6 +10,8 @@ and this project follows semantic versioning principles.
 
 ### Operations
 
+- **Cloudflare Access replaces application maintenance gating (2026-09-21)** — Removed the application maintenance flag, page, query-token and persistent-session bypasses, bypass layout fields/banner styling, and toggle workflow. Cloudflare Access now owns restricted admission for both prelaunch and operational work; application sign-in and capability checks remain required. Updated runbooks and user guidance, and added the supplied logo at `github-pages/assets/cth-logo.svg` for the Access branding URL. Accessibility scope is removal of the maintenance screen and bypass banners, plus the updated help link; no accessibility improvement is claimed. Validation results and remaining coverage limits are recorded in the PR.
+
 - **Feature-health review completion (2026-09-20)** — Defined separate readiness/correctness reduction keys and a distinct capability projection, explicit per-feature freshness limits with independently aged audit-lineage proofs, and collector-owned bounded transport metadata. These are governing documentation changes; feature evaluators are not claimed implemented or deployed.
 
 - **Feature-health review clarifications (2026-09-19)** — The governing contracts now record evidence source, freshness class, and receipt-time staleness without treating a historical freshness result as current. External observations can transport CTH-produced results while preserving their source and owning evaluator version separately from collector protocol version. Login, attendance, and roster retain separate readiness and correctness dimensions; Productivity owns attendance-session verification.

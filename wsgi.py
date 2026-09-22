@@ -37,11 +37,6 @@ from app.extensions import db, migrate, csrf
 from app.feats.base import FEATContext
 
 
-def maintenance_mode_enabled():
-    """Return True when maintenance mode is enabled via environment variable."""
-    return os.getenv("MAINTENANCE_MODE", "").lower() in {"1", "true", "yes", "on"}
-
-
 def get_validated_status_page_url():
     """
     Return the STATUS_PAGE_URL if it's valid, otherwise None.
@@ -143,9 +138,6 @@ else:
 @app.context_processor
 def inject_payroll_status():
     """Make payroll settings status available in all templates."""
-    if maintenance_mode_enabled():
-        return dict(has_payroll_settings=False)
-
     # Context processors must be read-only; never trigger autoflush from pending session state.
     with db.session.no_autoflush:
         has_payroll_settings = PayrollSettings.query.first() is not None

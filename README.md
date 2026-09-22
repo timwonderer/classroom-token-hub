@@ -123,7 +123,6 @@ The app refuses to start without the six keys above. Everything else is optional
 | `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | Cloudflare Turnstile; verification is skipped when unset |
 | `PASSWORDLESS_API_KEY`, `PASSWORDLESS_API_PUBLIC`, `PASSWORDLESS_API_URL` | Passkey sign-in |
 | `REDIS_URL`, `RATELIMIT_STORAGE_URI`, `DEV_ENABLE_RATELIMIT` | Rate-limit storage; enable limits in development |
-| `MAINTENANCE_MODE`, `MAINTENANCE_BYPASS_TOKEN`, `MAINTENANCE_SYSADMIN_BYPASS`, `MAINTENANCE_EXPECTED_END`, `MAINTENANCE_CONTACT`, `MAINTENANCE_BADGE_TYPE` | Maintenance mode |
 | `EXTERNAL_DOCS_BASE_URL`, `MARKETING_SITE_URL`, `STATUS_PAGE_URL`, `GRAFANA_URL`, `SUPPORT_EMAIL` | External links |
 | `LOG_LEVEL`, `LOG_FILE` | Logging |
 
@@ -287,3 +286,7 @@ See [LICENSE](LICENSE) for complete terms. [Third-party notices](docs/user-guide
 - **Contact:** [dev@classroomtokenhub.com](mailto:dev@classroomtokenhub.com)
 
 This project is developed, deployed, maintained, operated, and tested by a single full-time high school teacher who lives by the motto of *"fine, I'll build one myself."*
+
+Application availability restrictions are managed through Cloudflare Access on the
+application hostname. The application has no maintenance-mode flag or bypass.
+See `docs/DOMAIN/DOM-OPS-001_OPERATIONS_DOMAIN.md` and the deployment runbooks.

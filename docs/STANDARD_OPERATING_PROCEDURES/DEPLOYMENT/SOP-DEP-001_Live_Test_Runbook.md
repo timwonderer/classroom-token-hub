@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-001      | 2.3     | 2026-09-21     | 2.2 | Normative |
+| SOP-DEP-001      | 2.4     | 2026-09-21     | 2.3 | Normative |
 
 ## I. Purpose
 
@@ -11,8 +11,8 @@ complete v2 application onto the deployment host, and for the live test that
 follows it.
 
 **This is not launch certification.** The goal is to prove that the application
-installs, boots, migrates, and can be exercised on the host under maintenance
-control. A successful boot, or a passing subset of routes, is not certification.
+installs, boots, migrates, and can be exercised on the host behind a restricted Cloudflare Access
+policy. A successful boot, or a passing subset of routes, is not certification.
 
 ## II. Scope
 
@@ -116,7 +116,7 @@ cannot prove what it deployed.
 
 ## VII. Runtime Preparation
 
-1. Put the domain in maintenance/holding mode and confirm the public response.
+1. Put the domain in a restricted Cloudflare Access policy and confirm the public response.
 2. Replace the existing checkout with the release tag from §VI.A — never a
    branch name:
 
@@ -144,6 +144,19 @@ git status --porcelain  # must be empty
 > treat single-runner enforcement as a prerequisite for any multi-worker
 > deployment.
 
+### Cloudflare Access gate verification
+
+Before a restricted work window, confirm an unauthenticated browser reaches Access,
+an unauthorized identity cannot enter, and an authorized operator can reach the
+normal application sign-in. Verify the origin cannot be reached around Cloudflare.
+Public health probes require authorized service-token headers; host-local probes
+do not traverse Access. Never record tokens in logs or deployment evidence.
+
+At the end of the window, change the Access policy only when public access is
+intended and release checks have passed. Deploying the app does not change that
+policy. Remove obsolete `MAINTENANCE_*` settings from deployment configuration;
+there is no application flag, sysadmin bypass, or query-token alternative.
+
 ## VIII. Environment and Secrets
 
 Provision through the approved secret-management path or a root-owned service
@@ -166,7 +179,7 @@ never print or commit values.
 - `CSRF_SECRET_KEY` where the security configuration requires it.
 - `SUPPORT_EMAIL`, `MARKETING_SITE_URL`, `EXTERNAL_DOCS_BASE_URL`, and the
   status/operations URLs.
-- Maintenance/status variables for the test window.
+- Status variables and Cloudflare Access policy for the test window.
 
 Then confirm: no test, development, or legacy database value is present; the
 service identity can read the environment and no other identity can; and the
@@ -193,7 +206,7 @@ flask db current
 
 ## X. Application Start and Health Checks
 
-1. Start the service under maintenance mode.
+1. Start the service under Cloudflare Access gating.
 2. Confirm `systemctl is-active classroom-economy`.
 3. Confirm the logs carry no missing-key, database, Redis, import, or migration
    errors.
@@ -212,7 +225,7 @@ flask db current
 
 ## XI. Full-App First Test
 
-Exercise these in a real browser while maintenance remains controlled. Each
+Exercise these in a real browser while the Cloudflare Access gate remains restricted. Each
 line records owner, timestamp, pass/fail/blocked, and notes or defect link.
 
 - `/admin/login` renders and submits.
@@ -348,7 +361,7 @@ output is advisory only and is **not** independent verification authority.
 ## XIV. Decision and Rollback
 
 1. The verifier reviews service, database, browser and security evidence.
-2. If migration or boot fails, keep maintenance active and stop. Do not retry
+2. If migration or boot fails, keep Cloudflare Access restricted and stop. Do not retry
    blindly.
 3. If the application fails after migration, choose fix-forward or restore on
    the evidence.

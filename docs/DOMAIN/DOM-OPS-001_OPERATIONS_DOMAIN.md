@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-OPS-001      | 2.6     | 2026-09-19     | 2.5        | Normative       |
+| DOM-OPS-001      | 2.7     | 2026-09-21     | 2.6        | Normative       |
 
 ## 0. Authority Level and Dependencies
 
@@ -55,6 +55,25 @@ This channel exists only to preserve useful public communication during canonica
 *   **Entitlement Balances**: It does not own the count of perks or items.
 *   **Economic Policy Truth**: It does not own `policy_versions` or `policy_transitions`. Class configuration and `economic-engine` are owned by `DOM-CLASS-001`; `policy_versions` and `policy_transitions` are owned by `DOM-CLASS-003`.
 *   **Operational Boundary Legality**: It does not determine whether a rent cycle has closed, an insurance period has expired, or an accrual rollover is lawful. Those determinations belong to the owning operational domain (see §8).
+
+### Application Availability Gate
+
+Cloudflare Access is the sole infrastructure gate for restricting access to the
+application hostname during prelaunch and operational work. It replaces the
+application maintenance page, environment flag, query-token bypass, and persistent
+session bypass. The application MUST NOT implement a parallel maintenance gate.
+
+Access admission does not establish an application principal, class scope, or
+capability. Normal Identity authentication and all INV/DOM/FEAT authorization
+checks remain required after admission. Access policy is managed outside the
+application; no application FEAT or sysadmin session may bypass it. Access login
+email is handled by Cloudflare, not requested or stored by the application.
+
+The origin must remain protected against paths around Cloudflare. Public health
+probes must use an explicitly authorized service token; local deployment probes
+remain independent. Gate messaging communicates an access restriction and MUST
+NOT be treated as evidence of application health or canonical incident state.
+Genuine service errors retain their normal HTTP error handling.
 
 ### Public Feature Health Facets
 

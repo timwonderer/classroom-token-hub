@@ -132,13 +132,10 @@ echo ""
 echo "1. ${YELLOW}.github/workflows/deploy.yml${NC}"
 echo "   - Replace with: ${GREEN}.github/workflows/deploy.yml.FIXED${NC}"
 echo ""
-echo "2. ${YELLOW}.github/workflows/toggle-maintenance.yml${NC}"
-echo "   - Replace with: ${GREEN}.github/workflows/toggle-maintenance.yml.FIXED${NC}"
 echo ""
 print_info "Or run the following commands:"
 echo ""
 echo "  ${YELLOW}cp .github/workflows/deploy.yml.FIXED .github/workflows/deploy.yml${NC}"
-echo "  ${YELLOW}cp .github/workflows/toggle-maintenance.yml.FIXED .github/workflows/toggle-maintenance.yml${NC}"
 echo ""
 
 # Step 6: Verification

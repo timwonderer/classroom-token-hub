@@ -417,9 +417,6 @@ DATABASE_URL=postgresql://user:password@host:port/dbname
 TURNSTILE_SITE_KEY=<cloudflare-turnstile-site-key>
 TURNSTILE_SECRET_KEY=<cloudflare-turnstile-secret>
 
-# Optional
-MAINTENANCE_MODE=false
-MAINTENANCE_BYPASS_TOKEN=<random-string>
 ```
 
 #### Generating Secure Keys

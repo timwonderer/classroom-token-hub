@@ -1685,36 +1685,6 @@ table.js-sortable thead th:hover .sort-indicator {
     top: 0;
 }
 
-/* Maintenance Banner */
-.maintenance-banner {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 2000;
-    background: var(--warning);
-    color: var(--neutral-900);
-    text-align: center;
-    padding: 0.4rem 1rem;
-    font-size: 0.85rem;
-    font-weight: 600;
-}
-
-body.maintenance-active .page-header,
-body.maintenance-active .sidebar {
-    margin-top: 2rem;
-    /* Push content down */
-}
-
-@media (min-width: 992px) {
-    body.maintenance-active .sidebar {
-        margin-top: 0;
-        /* Sidebar stays put on desktop usually, but if top banner spans full width it might need adjustment */
-        top: 34px;
-        /* Adjust sticky/fixed pos */
-    }
-}
-
 /* ─── Landing Page Styling ─── */
 
 /* The published site (github-pages/style.css) names this token

@@ -174,7 +174,6 @@ class GuardReason(Enum):
     IDEMPOTENCY_CONFLICT = auto()
     SYSTEM_MAINTENANCE = auto()
     LEGACY_VIOLATION = auto() # Used for temporary wrapping of old code
-    MAINTENANCE_MODE = auto()
 
 def guard_ok(): 
     """Return a successful guard response."""

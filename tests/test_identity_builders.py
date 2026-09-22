@@ -134,14 +134,6 @@ class TestAdminLayoutContextView:
         view = build_admin_layout_context_view("Teacher", ctx)
         assert view.class_timezone == ""
 
-    def test_maintenance_bypass_defaults_to_false(self):
-        view = build_admin_layout_context_view("Teacher", None)
-        assert view.is_maintenance_bypass_active is False
-
-    def test_maintenance_bypass_propagated_when_set(self):
-        view = build_admin_layout_context_view("Teacher", None, is_maintenance_bypass_active=True)
-        assert view.is_maintenance_bypass_active is True
-
     def test_all_display_fields_are_strings(self):
         ctx = {"class_identifier": "P1", "join_code": "JC1", "class_timezone": "US/Eastern"}
         view = build_admin_layout_context_view("Dr. Adams", ctx)
@@ -475,7 +467,6 @@ class TestNoORMLeakage:
         assert isinstance(view.class_timezone, str)
         assert isinstance(view.class_display_name, str)
         assert isinstance(view.class_join_code, str)
-        assert isinstance(view.is_maintenance_bypass_active, bool)
 
     def test_student_layout_view_contains_only_primitives(self):
         meta = SimpleNamespace(

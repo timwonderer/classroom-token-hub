@@ -89,13 +89,6 @@ class AdminLayoutContextView:
     Empty string if no class context.
     """
 
-    is_maintenance_bypass_active: bool
-    """Whether the maintenance mode bypass is active for this user.
-
-    Controls visibility of maintenance bypass banner. True indicates user has
-    permission to access system during maintenance window.
-    """
-
 
 @dataclass(frozen=True)
 class StudentLayoutContextView:
@@ -168,13 +161,6 @@ class StudentLayoutContextView:
 
     Example: "Mrs. Smith". Displayed in page header meta line.
     Empty string if no class context.
-    """
-
-    is_maintenance_bypass_active: bool
-    """Whether the maintenance mode bypass is active for this user.
-
-    Controls visibility of maintenance bypass banner. True indicates user has
-    permission to access system during maintenance window.
     """
 
 
@@ -470,8 +456,6 @@ class StudentClassSelectionView:
 def build_admin_layout_context_view(
     admin_display_name: Optional[str],
     class_context: Optional[dict],
-    *,
-    is_maintenance_bypass_active: bool = False,
 ) -> AdminLayoutContextView:
     """Build AdminLayoutContextView for layout_admin.html.
 
@@ -480,7 +464,6 @@ def build_admin_layout_context_view(
             Comes from get_admin_display_name_cache() in context processor.
         class_context: Raw class context dict from display_metadata.to_class_context()
             (may be None when no class is selected).
-        is_maintenance_bypass_active: Whether the maintenance bypass banner renders.
 
     Returns:
         AdminLayoutContextView with all fields pre-formatted.
@@ -523,14 +506,11 @@ def build_admin_layout_context_view(
         class_display_name=class_display_name,
         class_join_code=class_join_code,
         class_id=class_id,
-        is_maintenance_bypass_active=is_maintenance_bypass_active,
     )
 
 
 def build_student_layout_context_view(
     display_metadata,  # DisplayMetadata | None  (avoid circular import)
-    *,
-    is_maintenance_bypass_active: bool = False,
 ) -> StudentLayoutContextView:
     """Build StudentLayoutContextView for layout_student.html.
 
@@ -538,7 +518,6 @@ def build_student_layout_context_view(
         display_metadata: DisplayMetadata from get_or_resolve_display_metadata().
             Provides pre-decrypted student name fields and class context.
             May be None when no class is in session.
-        is_maintenance_bypass_active: Whether the maintenance bypass banner renders.
 
     Returns:
         StudentLayoutContextView with all name fields uppercase/pre-formatted.
@@ -558,7 +537,6 @@ def build_student_layout_context_view(
             class_join_code="",
             class_timezone="",
             teacher_display_name="",
-            is_maintenance_bypass_active=is_maintenance_bypass_active,
         )
 
     first = (display_metadata.student_first_name or "").strip()
@@ -584,7 +562,6 @@ def build_student_layout_context_view(
         class_join_code=class_join_code,
         class_timezone=class_timezone,
         teacher_display_name=teacher_name,
-        is_maintenance_bypass_active=is_maintenance_bypass_active,
     )
 
 
