@@ -4,6 +4,12 @@
 |---|---:|---|---|---|
 | BATCH-B-OPS-VERIFIER-POLICY | 1.5 | 2026-09-20 | 1.4 | Approved policy record |
 
+> Public-status scope supersession (2026-09-21): DOM-OPS-001 v2.9 and
+> SPEC-OPS-006 replace this package's public feature-card prerequisites and
+> availability projection with descriptive request monitoring. All internal scoped
+> verifier, affirmative correctness, lineage and freshness requirements remain.
+> SPEC-OPS-005 now governs internal assessments only.
+
 ## I. Purpose
 
 Present the remaining Operations policy choices required before implementing

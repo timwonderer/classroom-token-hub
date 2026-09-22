@@ -8,7 +8,13 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Accessibility
+
+- **Public monitoring history and restored status layout (2026-09-21)** — Restored the original public-page icon wordmark and compact mockup cards, separated platform measurements from teacher-facing estimates, and retained keyboard/touch history disclosures with daily text tables. Fixed warning-label contrast and aligned result bars when questions wrap. Final validation: 209 targeted tests passed, including 20 required accessibility tests. Twelve rendered desktop/mobile state combinations passed; after the final alignment correction, six populated/healthy/severe combinations were repeated with zero axe findings, no overflow, aligned bars, and correct platform outcomes. Original/canonical hero branding was visually and structurally compared. See `docs/ops/STATUS_SIMPLIFICATION_VALIDATION.md` for scope and limitations; this is not full accessibility certification.
+
 ### Operations
+
+- **Public request monitoring (2026-09-21)** — Separate objective request counts, 404/500/5xx rates and p80/p95 from operator impact notices. Preserve internal integrity verification while replacing public feature certification with bounded measured-window history and explicit monitoring gaps.
 
 - **Cloudflare Access replaces application maintenance gating (2026-09-21)** — Removed the application maintenance flag, page, query-token and persistent-session bypasses, bypass layout fields/banner styling, and toggle workflow. Cloudflare Access now owns restricted admission for both prelaunch and operational work; application sign-in and capability checks remain required. Updated runbooks and user guidance, and added the supplied logo at `github-pages/assets/cth-logo.svg` for the Access branding URL. Accessibility scope is removal of the maintenance screen and bypass banners, plus the updated help link; no accessibility improvement is claimed. Validation results and remaining coverage limits are recorded in the PR.
 

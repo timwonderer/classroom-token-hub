@@ -56,7 +56,9 @@ def setup(monkeypatch):
             updated_at=datetime.now(timezone.utc))
     store.list_notices = lambda: [dict(id=k, **deepcopy(v)) for k, v in data["external_status_notices"].items()]
     store.list_active_notices = lambda: [n for n in store.list_notices() if n["state"] != "RESOLVED"]
-    store.list_current_observations = lambda: {}
+    store.current_platform = lambda: None
+    store.current_snapshot = lambda: None
+    store.measurement_history = lambda: []
     monkeypatch.setenv("STATUS_SERVICE_MODE", "operator")
     monkeypatch.setenv("STATUS_SESSION_SECRET", "test-only")
     monkeypatch.setitem(sys.modules, "status_service.identity", SimpleNamespace(
@@ -96,7 +98,7 @@ def test_selected_issues_resolve_without_clearing_others(setup):
     assert len(data["external_status_notice_events"]) == 3
 
 
-@pytest.mark.parametrize("change", ["updated", "resolved", "missing", "unlinked", "no-source"])
+@pytest.mark.parametrize("change", ["updated", "resolved", "missing", "unlinked"])
 def test_stale_or_invalid_selection_is_atomic(setup, change):
     data, _, client, _ = setup
     csrf, tokens, _ = form(client)
@@ -105,7 +107,6 @@ def test_stale_or_invalid_selection_is_atomic(setup, change):
     if change == "resolved": notice["state"] = "RESOLVED"
     if change == "missing": del data["external_status_notices"]["two"]
     if change == "unlinked": del notice["incident_ref"]
-    if change == "no-source": notice["source_observation_ids"] = []
     before = deepcopy(data)
     assert client.post("/operator/notices/resolve", data={
         "csrf_token": csrf, "selected_issue": tokens[:2], "resolution_message": "Recovered"}).status_code == 409
@@ -148,4 +149,54 @@ def test_resolving_all_removes_notice_warning_but_does_not_invent_health(setup):
     client.application.config["STATUS_SERVICE_MODE"] = "public"
     page = client.get("/").get_data(as_text=True)
     assert "DETECTED PROBLEMS" not in page
-    assert "Current service health is not yet confirmed" in page
+    assert "Monitoring unavailable" in page
+
+
+def test_operator_investigation_can_resolve_without_automated_sources(setup):
+    data, _, client, _ = setup
+    for notice in data["external_status_notices"].values():
+        notice["source_observation_ids"] = []
+    csrf, tokens, _ = form(client)
+    assert len(tokens) == 3
+    assert client.post("/operator/notices/resolve", data={
+        "csrf_token": csrf, "selected_issue": tokens, "resolution_message": "Investigation confirmed recovery."}).status_code == 302
+
+
+def test_publish_investigated_notice_without_automated_source(setup):
+    _, store, client, _ = setup
+    csrf, _, _ = form(client)
+    published = []
+    store.append_event = lambda notice, *args: published.append(notice)
+    response = client.post("/operator/notices", data={
+        "csrf_token": csrf, "incident_ref": "investigation-123", "capability": "attendance",
+        "state": "INVESTIGATING", "impact_statement": "We reproduced a clock-in failure.",
+        "recommended_user_action": "Please wait for an update.", "recovery_state": "ESTIMATED",
+        "recovery_expectation": "2026-09-22T12:00", "next_update_at": "2026-09-22T11:00"})
+    assert response.status_code == 302
+    assert published[0]["source_observation_ids"] == ()
+    assert published[0]["recovery_expectation"] == datetime(2026, 9, 22, 12, tzinfo=timezone.utc)
+    assert published[0]["next_update_at"] == datetime(2026, 9, 22, 11, tzinfo=timezone.utc)
+
+
+@pytest.mark.parametrize("fields", [
+    {"recovery_state": "ESTIMATED"},
+    {"recovery_state": "UNAVAILABLE", "recovery_expectation": "2026-09-22T12:00"},
+    {"next_update_at": "not-a-time"},
+    {"state": "arbitrary"},
+    {"capability": "unregistered"},
+])
+def test_invalid_notice_fields_do_not_write(setup, fields):
+    _, store, client, _ = setup
+    csrf, _, _ = form(client)
+    published = []
+    store.append_event = lambda notice, *args: published.append(notice)
+    payload = dict(csrf_token=csrf, incident_ref="investigation-123", capability="attendance",
+                   state="INVESTIGATING", impact_statement="Investigating.", recommended_user_action="Wait.",
+                   recovery_state="UNAVAILABLE", next_update_unavailable="on")
+    payload.update(fields)
+    if "next_update_at" in fields: payload.pop("next_update_unavailable")
+    response = client.post("/operator/notices", data=payload)
+    assert response.status_code == 400
+    if fields.get("recovery_state") == "UNAVAILABLE":
+        assert "Clear the recovery time or select a known or estimated recovery state." in response.get_data(as_text=True)
+    assert not published

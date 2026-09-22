@@ -1,0 +1,7 @@
+{
+  "attendance": "/api/(tap|attendance/history|student-status)|/admin/(attendance-log|tap-in-students|tap-out-students)",
+  "payroll": "/admin/(run_payroll|payroll|payroll-history|payroll/settings|payroll/manual-payment|payroll/event/[^/]+/reverse|payroll/transactions/[^/]+/void|payroll/transactions/void-bulk)|/student/payroll",
+  "roster": "/admin/(students|students/[^/]+|students/bulk-delete|students/deletion-preview|student/(edit|unclaim|archive|delete|add-individual)|pending-students/(delete|bulk-delete)|upload-students|export-class-roster|export-students)",
+  "login": "/(admin|student)/login",
+  "classroom_economy": "/api/(purchase-item|use-item|approve-redemption|reject-redemption)|/student/(transfer|shop|rent|rent/pay/[^/]+|insurance|insurance/(purchase|cancel|claim|policy)/[^/]+)|/admin/(store|store/(edit|hard-delete)/[^/]+|rent-settings|rent-waiver/add|insurance|insurance/new|insurance/(edit|deactivate|reactivate|delete|claim)/[^/]+)"
+}

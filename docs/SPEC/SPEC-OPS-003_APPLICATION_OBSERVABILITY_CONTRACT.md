@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-OPS-003 | 1.1 | 2026-09-06 | SPEC-OPS-003 v1.0 | Normative |
+| SPEC-OPS-003 | 1.2 | 2026-09-21 | SPEC-OPS-003 v1.1 | Normative |
 
 > [!NOTE]
 > v1.1 (2026-09-06) is a conformance amendment only. It replaces a non-standard
@@ -57,6 +57,7 @@ Derived from the Batch B Operations Verifier Policy Decision Package.
 - `docs/DOMAIN/DOM-OPS-001_OPERATIONS_DOMAIN.md`
 - `docs/DOMAIN/DOM-OPS-002_AUDIT_LINEAGE_INTEGRITY.md`
 - `docs/SPEC/SPEC-OPS-002_EXTERNAL_STATUS_PERSISTENCE_MODEL.md`
+- `docs/SPEC/SPEC-OPS-006_PUBLIC_REQUEST_MONITORING.md`
 
 ## V. Capability boundary
 
@@ -77,6 +78,15 @@ The approved capability keys are:
 Internal-only routes and FEATs MAY emit telemetry for operator diagnosis, but
 MUST be marked non-public and MUST NOT be mapped to a public capability unless
 the capability registry authorizes that mapping.
+
+### Descriptive HTTP measurements
+
+SPEC-OPS-006 separately authorizes bounded response-code distributions, request
+counts and latency for the public route-group registry. These measurements describe
+HTTP observations only. An HTTP 500 count is not a classification of FEAT outcomes
+or proof of business-domain failure. The existing semantic outcome vocabulary,
+privacy restrictions and noninterference requirements below remain unchanged.
+Public request snapshots do not pass through the internal capability projection.
 
 ## VI. Operational outcome vocabulary
 
@@ -145,7 +155,7 @@ financial values, or tenant-specific business state.
 
 ## IX. Status eligibility
 
-Application telemetry is operational evidence only. It MUST flow through the
+Semantic application telemetry is operational evidence only. It MUST flow through the
 Grafana telemetry adapter as a bounded `Observation` with
 `EvidenceSource.GRAFANA_TELEMETRY` before it participates in a DOM-OPS
 projection.
