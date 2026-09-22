@@ -7,7 +7,7 @@ These notes orient future agents working on this repository—especially ongoing
 - **Branch:** work (current).
 - **Tests:** run `pytest -q` before committing; add focused tests for tenancy helpers when changing scoping logic.
 - **App entry:** `wsgi.py`; Flask app factory in `app/__init__.py`.
-- **Maintenance mode:** toggle via env flags (see `templates/maintenance.html`) to present the downtime page during risky migrations.
+- **Access gate:** Cloudflare Access manages restricted work windows. The app has no maintenance flag, page, or bypass (DOM-OPS-001).
 
 ## Database Migrations - CRITICAL FOR AGENTS
 
@@ -98,7 +98,7 @@ The repository has experienced recurring "multiple heads" errors during deployme
 - **Identity is resolved once at the decorator boundary** via `resolve_canonical_context()`, producing an immutable `CanonicalContext(user_id, class_id, seat_id, actor_role)` or `BoundaryContext(user_id, actor_role)` stored in `g.canonical_context`. No handler reads extinct session keys (`admin_id`, `student_id`, `sysadmin_id`).
 - **Teacher-to-class linkage** is through `ClassEconomy` (the `classes` table), not `ClassMembership` (deprecated).
 - Scoped query helpers and bridge functions were removed from `app/auth.py`; all routes use canonical context.
-- Maintenance page and middleware exist to keep downtime user-friendly during migrations.
+- Cloudflare Access provides the external gate; app authentication and class capability checks still apply.
 
 ## High-Priority Follow-Ups
 
@@ -113,7 +113,7 @@ The repository has experienced recurring "multiple heads" errors during deployme
    - Add shared-student coverage for payroll and attendance flows.
    - Add DB-level uniqueness test once constraint exists.
 4. **Operational docs**
-   - Write a runbook for the NOT NULL migration (pre/post checks, maintenance toggle, backfill verification).
+   - Write a runbook for the NOT NULL migration (pre/post checks, Cloudflare Access policy, backfill verification).
 
 ## PII/Privacy
 
@@ -128,7 +128,7 @@ The repository has experienced recurring "multiple heads" errors during deployme
 ## Checklist Before PR
 
 - Tests pass locally (`pytest -q`).
-- Migrations reviewed for safety (lock impact, backfill steps, maintenance banner plan).
+- Migrations reviewed for safety (lock impact, backfill steps, Access gate verification).
 - UI changes include screenshots when visually meaningful (if browser tool available).
 - Final summary cites files and commands per system instructions.
 

@@ -6,7 +6,7 @@ roles: [teacher, student]
 description: Install Classroom Token Hub to a phone or desktop, and understand why the app needs a live connection to do anything.
 keywords: [install, PWA, app, home screen, offline, service worker, connection, You are offline, add to home screen]
 related:
-  - user-guides/features/public/maintenance-page
+  - user-guides/features/public/access-gate
   - user-guides/diagnostics/error-pages
 ---
 
@@ -57,5 +57,5 @@ That page is the whole offline experience. Balances, payroll, the store, attenda
 
 ## Related guides
 
-- [Scheduled Maintenance](maintenance-page.md)
+- [Temporary Access Restrictions](access-gate.md)
 - [Error Pages](../../diagnostics/error-pages.md)

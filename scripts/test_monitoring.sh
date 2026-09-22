@@ -37,9 +37,9 @@ echo ""
 # Test 1: Basic health check
 echo -e "${BLUE}Test 1: Basic Health Check (/health)${NC}"
 echo "Testing: ${BASE_URL}/health"
-RESPONSE=$(curl -s -w "\n%{http_code}" "${AUTH_HEADERS[@]}" "${BASE_URL}/health")
+RESPONSE=$(curl -q -s -w "\n%{http_code}" "${AUTH_HEADERS[@]}" "${BASE_URL}/health")
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-BODY=$(echo "$RESPONSE" | head -n-1)
+BODY=$(echo "$RESPONSE" | sed '$d')
 
 if [ "$HTTP_CODE" = "200" ] && [ "$BODY" = "ok" ]; then
     echo -e "${GREEN}✓ PASSED${NC} - Health check returned 200 OK"
@@ -53,9 +53,9 @@ echo ""
 # Test 2: bounded status signals
 echo -e "${BLUE}Test 2: Status Signals (/health/status)${NC}"
 echo "Testing: ${BASE_URL}/health/status"
-RESPONSE=$(curl -s -w "\n%{http_code}" "${AUTH_HEADERS[@]}" "${BASE_URL}/health/status")
+RESPONSE=$(curl -q -s -w "\n%{http_code}" "${AUTH_HEADERS[@]}" "${BASE_URL}/health/status")
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-BODY=$(echo "$RESPONSE" | head -n-1)
+BODY=$(echo "$RESPONSE" | sed '$d')
 
 if [ "$HTTP_CODE" = "200" ]; then
     echo -e "${GREEN}✓ PASSED${NC} - Status signals returned 200 OK"
@@ -88,27 +88,30 @@ else
     echo "Verifying direct access to the endpoints..."
 fi
 
-# Test with explicit no-credentials
-RESPONSE=$(curl -s -w "\n%{http_code}" -H "Cookie: " "${AUTH_HEADERS[@]}" "${BASE_URL}/health")
-HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+# Disable curlrc processing and do not follow redirects or send service credentials.
+# Otherwise local curl defaults could silently authenticate the negative probe.
+for ENDPOINT in /health /health/status; do
+    RESPONSE=$(curl -q -s -o /dev/null -w '%{http_code}\n%{redirect_url}' -H "Cookie: " "${BASE_URL}${ENDPOINT}")
+    HTTP_CODE=$(printf '%s\n' "$RESPONSE" | head -n1)
+    REDIRECT_URL=$(printf '%s\n' "$RESPONSE" | sed -n '2p')
 
-if [ "$HTTP_CODE" = "200" ]; then
-    echo -e "${GREEN}✓ PASSED${NC} - /health accepted the configured access path"
-else
-    echo -e "${RED}✗ FAILED${NC} - /health endpoint may require authentication"
-    exit 1
-fi
-
-# Test /health/status with explicit no-credentials
-RESPONSE=$(curl -s -w "\n%{http_code}" -H "Cookie: " "${AUTH_HEADERS[@]}" "${BASE_URL}/health/status")
-HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-
-if [ "$HTTP_CODE" = "200" ]; then
-    echo -e "${GREEN}✓ PASSED${NC} - /health/status accepted the configured access path"
-else
-    echo -e "${RED}✗ FAILED${NC} - /health/status endpoint may require authentication"
-    exit 1
-fi
+    if [ -n "$CF_ACCESS_CLIENT_ID" ]; then
+        if [ "$HTTP_CODE" = "403" ] || {
+            [ "$HTTP_CODE" = "302" ] &&
+            [[ "$REDIRECT_URL" =~ ^https://[a-zA-Z0-9-]+\.cloudflareaccess\.com/cdn-cgi/access/login(/|\?) ]]
+        }; then
+            echo -e "${GREEN}✓ PASSED${NC} - ${ENDPOINT} rejected access without credentials"
+        else
+            echo -e "${RED}✗ FAILED${NC} - ${ENDPOINT} expected Access denial or login redirect without credentials, got $HTTP_CODE"
+            exit 1
+        fi
+    elif [ "$HTTP_CODE" = "200" ]; then
+        echo -e "${GREEN}✓ PASSED${NC} - ${ENDPOINT} accepted direct access"
+    else
+        echo -e "${RED}✗ FAILED${NC} - ${ENDPOINT} expected direct access, got $HTTP_CODE"
+        exit 1
+    fi
+done
 echo ""
 
 # Summary and UptimeRobot Configuration

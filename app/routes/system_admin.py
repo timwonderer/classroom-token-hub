@@ -217,8 +217,6 @@ def login():
                     user.current_session_nonce = nonce
                     session["sysadmin_auth_username"] = username
                     session['last_activity'] = utc_now().isoformat()
-                    # Establish global maintenance bypass for subsequent role testing.
-                    session['maintenance_global_bypass'] = True
                     flash("System admin login successful.")
                     next_url = request.args.get("next")
                     redirect_target = None
@@ -247,7 +245,6 @@ def logout():
     session.pop("sysadmin_auth_username", None)
     session.pop("passkey_sysadmin_auth_username", None)
     session.pop("force_sysadmin_username_migration", None)  # noqa: safety — no-op if key absent
-    # Intentionally DO NOT remove maintenance_global_bypass so admin can test other roles.
     flash("Logged out.")
     return redirect(url_for("sysadmin.login"))
 
@@ -412,7 +409,6 @@ def passkey_auth_finish():
             session.get("passkey_sysadmin_auth_username") or f"sysadmin_{user.id}"
         )
         session['last_activity'] = now.isoformat()
-        session['maintenance_global_bypass'] = True
 
         # Determine redirect URL
         next_url = request.args.get("next")

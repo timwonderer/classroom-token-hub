@@ -6,7 +6,7 @@ roles: [teacher, student]
 description: What each error number means, whether it is your problem or ours, and what to do next.
 keywords: [error, 400, 401, 403, 404, 500, 503, error id, bad request, forbidden, not found, server error]
 related:
-  - user-guides/features/public/maintenance-page
+  - user-guides/features/public/access-gate
   - user-guides/features/public/offline-and-install
 ---
 
@@ -45,7 +45,7 @@ The page shows an **Error ID**. It is logged automatically, but the ID is what l
 
 The 503 page refreshes itself and points at the status page for live updates. If it is still there after ten minutes, check the status page directly.
 
-A 503 that shows a badge and a timeline is not this page at all — that is planned work. See [Scheduled Maintenance](../features/public/maintenance-page.md).
+A Cloudflare Access email-code screen indicates an access restriction before the app. It is separate from an application 503 error. See [Temporary Access Restrictions](../features/public/access-gate.md).
 
 ## Important notes
 
@@ -63,5 +63,5 @@ A 503 that shows a badge and a timeline is not this page at all — that is plan
 
 ## Related guides
 
-- [Scheduled Maintenance](../features/public/maintenance-page.md)
+- [Temporary Access Restrictions](../features/public/access-gate.md)
 - [Installing the App and Working Offline](../features/public/offline-and-install.md)

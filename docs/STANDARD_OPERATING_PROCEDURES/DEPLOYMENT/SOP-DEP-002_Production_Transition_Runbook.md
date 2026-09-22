@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-002 | 1.4 | 2026-09-17 | 1.3 (issued as SOP-DEP-023) | Normative |
+| SOP-DEP-002 | 1.5 | 2026-09-21 | 1.4 | Normative |
 
 ## I. Purpose
 
@@ -10,7 +10,7 @@ Provide the explicit operator workflow for moving the current v2 branch from liv
 
 ## II. Scope
 
-Production transition work for `main` after successful live testing, including maintenance-mode usage, migration execution, post-deploy verification, rollback decision points, and operator sign-off.
+Production transition work for `main` after successful live testing, including Cloudflare Access gating, migration execution, post-deploy verification, rollback decision points, and operator sign-off.
 
 ## III. Authority Level
 
@@ -34,7 +34,7 @@ Normative (SOP Tier). Subordinate to `INV-CORE-000`.
 
 ## VI. Pre-Production Checklist
 
-1. Enable maintenance mode if the deployment requires a protected window.
+1. Enable Cloudflare Access gating if the deployment requires a protected window.
 2. Verify current production backup or snapshot and test restore instructions.
 3. Confirm migration head state and target revision.
 4. Confirm operator sign-off from engineering and operations.
@@ -42,7 +42,7 @@ Normative (SOP Tier). Subordinate to `INV-CORE-000`.
 
 Current branch verification references:
 
-- maintenance workflow: `.github/workflows/toggle-maintenance.yml`
+- access gate: Cloudflare Zero Trust policy for the application hostname
 - release workflow: `.github/workflows/release-v2.yml` (manual exact-SHA release)
 - deployment transport: GitHub Actions connects to the production host through
   Tailscale using `PRODUCTION_TAILSCALE_HOST`; public-IP SSH is not the
@@ -55,10 +55,23 @@ variable `V2_RELEASE_LINEAGE_REF`. A release request MUST provide a full
 40-character commit SHA that is an ancestor of that approved lineage. A branch
 name or moving branch tip is not itself a release artifact.
 
+### Cloudflare Access gate verification
+
+Before a restricted work window, confirm an unauthenticated browser reaches Access,
+an unauthorized identity cannot enter, and an authorized operator can reach the
+normal application sign-in. Verify the origin cannot be reached around Cloudflare.
+Public health probes require authorized service-token headers; host-local probes
+do not traverse Access. Never record tokens in logs or deployment evidence.
+
+At the end of the window, change the Access policy only when public access is
+intended and release checks have passed. Deploying the app does not change that
+policy. Remove obsolete `MAINTENANCE_*` settings from deployment configuration;
+there is no application flag, sysadmin bypass, or query-token alternative.
+
 ## VII. Upgrade Flow
 
-1. Put the environment into maintenance mode.
-2. Confirm the maintenance banner is active and operator messaging is correct.
+1. Restrict the application hostname using Cloudflare Access.
+2. Confirm the Access login is shown to an unauthenticated visitor, unauthorized admission is denied, and authorized operator access works.
 3. Confirm migration head state and run the migration safety check.
 4. Apply migrations.
 5. Deploy application code.
@@ -82,7 +95,7 @@ Verify:
 
 - If migration fails before app reopen, rollback to the pre-deploy backup/snapshot.
 - If post-deploy smoke checks fail and cannot be corrected within the maintenance window, rollback.
-- If migration is structurally successful but business behavior is incorrect, hold maintenance mode until rollback or fix-forward is approved.
+- If migration is structurally successful but business behavior is incorrect, keep Cloudflare Access restricted until rollback or fix-forward is approved.
 
 ### IX.1 Exact-SHA Release Failure Handling
 
@@ -95,7 +108,7 @@ operator and rollback approver select rollback or fix-forward.
 | Lineage, SHA, environment approval, Tailscale, or SSH preflight | No production mutation is authorized; correct the release request or transport configuration. |
 | Migration fails before restart | Keep the existing service running if possible, keep the maintenance window controlled, capture migration output, and stop for operator review. Do not retry blindly. |
 | Migration succeeds but restart fails | Keep the environment controlled, inspect service logs/status, and restore service using the approved operator procedure. Do not run an automatic downgrade. |
-| Restart succeeds but `/health` fails | Keep maintenance active, capture the exact deployed SHA and health/service evidence, then choose approved fix-forward or restore-from-backup. |
+| Restart succeeds but `/health` fails | Keep Cloudflare Access restricted, capture the exact deployed SHA and health/service evidence, then choose approved fix-forward or restore-from-backup. |
 | Non-backward-compatible migration requires rollback | Rollback MUST use the verified backup/restore procedure and named rollback approval; `alembic downgrade` is not an automatic production recovery mechanism. |
 
 Every failure record MUST include the requested SHA, approved lineage ref,
@@ -122,9 +135,9 @@ Pre-window confirmation
 - flask db current:
 - bash scripts/check-migrations.sh:
 
-Maintenance mode
+Cloudflare Access gate
 - Enable action:
-- Banner/message verified:
+- Access login, denial, and operator admission verified:
 
 Deployment
 - Migration result:
@@ -165,6 +178,8 @@ Record:
 
 - This runbook is limited to launch-critical transition steps and operator records.
 - Broader operational taxonomy changes, route-family cleanup, and post-port architecture alignment are deferred until after `../../SPECS/V2_ADMIN_ROUTE_REFACTOR.md` and `../../MAP/MAP-CLASS-002_CLASS_SCOPE_NORMALIZATION_TARGET.md`.
+
+
 
 ## XIII. Amendment
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.

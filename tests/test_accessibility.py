@@ -202,13 +202,6 @@ def _route_map(client) -> dict:
             username="example-student",
             context_builder=lambda: {"form": StudentPinPassphraseForm()},
         ),
-        "templates/maintenance.html": lambda: _render_direct(
-            "maintenance.html",
-            badge_icon="construction",
-            badge_text="Scheduled Maintenance",
-            title="Scheduled Maintenance",
-            subtitle="We're performing scheduled maintenance to keep Classroom Economy running smoothly.",
-        ),
     }
 
 

@@ -966,12 +966,14 @@ because the file was never deployed.
 This closes the static-site half of the question only; the application's own gating is answered
 separately, immediately below.
 
-**Application gating: Cloudflare Access, not maintenance mode — DECIDED 2026-09-07.** Pre-launch
+**Application gating: Cloudflare Access — UPDATED 2026-09-21.** Restricted
 access to `app.classroomtokenhub.com` is gated by a Cloudflare Access policy on the hostname, not by
 `MAINTENANCE_MODE` or per-route login checks. Access is enforced at the edge, before a request
 reaches Flask, so one policy covers every route — including ones nobody thought to audit — and the
-gate cannot be undone by a route that forgets to consult a flag. This is a pre-launch control and
-comes off at launch; it does not replace maintenance mode for operational use afterward.
+gate cannot be undone by a route that forgets to consult a flag. Cloudflare Access replaces application maintenance mode for both prelaunch and
+operational access restrictions. Its policy is managed at the edge; the app has no
+maintenance flag, custom bypass, or maintenance page. Admission still requires
+normal application authentication and capability checks (DOM-OPS-001).
 
 **Why the claim holds.** An edge policy on a hostname is only as good as the origin's unreachability
 around it, and this origin is unreachable: a DigitalOcean cloud firewall admits `80`/`443` only from
