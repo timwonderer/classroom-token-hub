@@ -43,3 +43,15 @@ def test_hall_pass_template_uses_canonical_temporal_filters():
 
     assert "format_datetime" not in source
     assert source.count("| fmt_timestamp }}") == 3
+
+
+def test_fmt_timestamp_accepts_iso_string_from_correlation_pack():
+    """TLCP correlation packs (DOM-OPS-001) freeze request-trace timestamps as
+    ISO strings inside a JSON column (tlcp.py: row.created_at.isoformat()).
+    sysadmin_view_issue.html renders trace.timestamp|fmt_timestamp directly on
+    that JSON value -- confirmed live as an AttributeError 500 on
+    /sysadmin/issues/<ref> for any ticket with a non-empty request trace.
+    """
+    iso_value = "2026-09-22T05:56:18.924000+00:00"
+
+    assert format_timestamp(iso_value, "America/New_York") == "Sep 22, 2026, 1:56 AM EDT"
