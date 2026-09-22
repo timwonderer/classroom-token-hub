@@ -10253,6 +10253,7 @@ def passkey_register_start():
 
 @admin_bp.route('/passkey/register/finish', methods=['POST'])
 @admin_required
+@requires_feat_context("FEAT-OPS-001")
 @limiter.limit("10 per minute")
 def passkey_register_finish():
     """
@@ -10415,6 +10416,7 @@ def passkey_list():
 
 @admin_bp.route('/passkey/<int:passkey_id>/delete', methods=['DELETE'])
 @admin_required
+@requires_feat_context("FEAT-OPS-001")
 @limiter.limit("10 per minute")
 def passkey_delete(passkey_id):
     """Delete a passkey."""

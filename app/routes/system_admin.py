@@ -288,6 +288,7 @@ def passkey_register_start():
 
 @sysadmin_bp.route('/passkey/register/finish', methods=['POST'])
 @system_admin_required
+@requires_feat_context("FEAT-OPS-001")
 @limiter.limit("10 per minute")
 def passkey_register_finish():
     """
@@ -451,6 +452,7 @@ def passkey_list():
 
 @sysadmin_bp.route('/passkey/<int:credential_id>/delete', methods=['DELETE'])
 @system_admin_required
+@requires_feat_context("FEAT-OPS-001")
 @limiter.limit("10 per minute")
 def passkey_delete(credential_id):
     """Delete a passkey."""
