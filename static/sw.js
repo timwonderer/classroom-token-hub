@@ -1,4 +1,11 @@
-const CACHE_NAME = 'classroom-token-hub-v9';
+// Bumped v9 -> v10 to ship the [hidden] fix in style.css.
+//
+// style.css is in STATIC_ASSETS and served cache-first, and the activate handler
+// deletes a cache only when this name changes. Editing a cached asset without
+// bumping this therefore ships nothing to anyone who has already loaded the app:
+// their service worker keeps answering from the old cache indefinitely. Any
+// change to a file listed in STATIC_ASSETS needs this bumped in the same commit.
+const CACHE_NAME = 'classroom-token-hub-v10';
 const STATIC_ASSETS = [
   '/static/manifest.json',
   '/static/images/icon-192.png',

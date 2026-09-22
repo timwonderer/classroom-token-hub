@@ -642,8 +642,30 @@ function rotateVerifyToken() {
             if (data.status === 'success') {
                 const newUrl = window.location.origin + '/verify/hallpass/' + data.token;
                 const btnLink = document.querySelector('a[href*="/verify/hallpass/"]');
-                if (btnLink) { btnLink.href = newUrl; }
-                announceHallPass('Verification link regenerated', 'Verification link regenerated. The current link is no longer valid. The new link is available in the Office Verification button.', 'success');
+                if (btnLink) {
+                    // A link already existed; swap it in place.
+                    btnLink.href = newUrl;
+                    announceHallPass(
+                        'Verification link regenerated',
+                        'The previous link no longer works. The Hall Pass Verification (Public) button now opens the new one.',
+                        'success'
+                    );
+                } else {
+                    // FIRST generation: the template renders the link button only
+                    // when verify_url exists, so on a class that had no token there
+                    // is no anchor to update and no button to point at. The old copy
+                    // said the link was "available in the Office Verification button"
+                    // regardless -- naming a control that was absent, and under a
+                    // label ("Office Verification") that does not match the one the
+                    // page actually renders. Nobody saw it because this success path
+                    // was unreachable until the CSRF token was attached.
+                    announceHallPass(
+                        'Verification link created',
+                        'Reloading so the Hall Pass Verification (Public) button appears.',
+                        'success'
+                    );
+                    setTimeout(function () { window.location.reload(); }, 1200);
+                }
             } else {
                 announceHallPass('Verification link not regenerated', data.message || 'Could not regenerate the verification link. Please try again.');
             }
