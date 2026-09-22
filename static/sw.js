@@ -1,11 +1,14 @@
-// Bumped v9 -> v10 to ship the [hidden] fix in style.css.
+// Bumped v10 -> v11 to ship the hanging-hall-pass fix in attendance.js.
 //
-// style.css is in STATIC_ASSETS and served cache-first, and the activate handler
-// deletes a cache only when this name changes. Editing a cached asset without
-// bumping this therefore ships nothing to anyone who has already loaded the app:
-// their service worker keeps answering from the old cache indefinitely. Any
-// change to a file listed in STATIC_ASSETS needs this bumped in the same commit.
-const CACHE_NAME = 'classroom-token-hub-v10';
+// The activate handler deletes a cache only when this name changes, and the
+// fetch handler's default strategy (cacheFirst, for anything not matched by an
+// earlier branch) caches ANY same-origin GET opportunistically at runtime --
+// not only the files explicitly listed in STATIC_ASSETS below. attendance.js
+// is one such runtime-cached file. Editing any cached asset without bumping
+// this ships nothing to anyone who has already loaded the app: their service
+// worker keeps answering from the old cache indefinitely. Any change to a
+// static JS/CSS/image file needs this bumped in the same commit.
+const CACHE_NAME = 'classroom-token-hub-v11';
 const STATIC_ASSETS = [
   '/static/manifest.json',
   '/static/images/icon-192.png',

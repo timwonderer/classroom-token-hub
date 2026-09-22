@@ -348,6 +348,49 @@ def _record_attendance_session_impl(
             db.session.add(closing_row)
             db.session.flush()
 
+        elif (
+            existing_active is not None
+            and existing_active.status == "inactive"
+            and existing_active.reason_code == AttendanceReasonCode.HALL_PASS.value
+        ):
+            # A "hanging hall pass" (DOM-PROD-001 §318): the seat's latest event
+            # is inactive/hall_pass, meaning the student is out of the room with
+            # no return recorded yet. Nothing distinguishes that from an ordinary
+            # break using only the seat's latest event, so a plain start_work call
+            # — one that names no hall_pass_id — was silently accepted here and
+            # overwrote the open-pass state with an unrelated active session. That
+            # desynchronized the hall-pass log's issued/out classification from
+            # ground truth: the teacher's page stopped showing the student as out,
+            # even though they still were, and there was no longer a "Return"
+            # control anywhere for either side to recover with — two extra
+            # teacher actions (re-mark left, then return) were needed to walk the
+            # state back to something coherent. Reproduced live on 2026-09-21.
+            #
+            # The legitimate return path IS a status="active" call while this
+            # branch is true — checkin_hall_pass and the teacher's "return" action
+            # both are — so the two are distinguished by whether the caller names
+            # the SAME pass it is returning from, not by status alone.
+            hall_pass_day_bounds = canonical_temporal_resolver(
+                CLASS_LEVEL_EVALUATION,
+                canonical_execution_context=ctx,
+                primitive="evaluation_day_boundaries",
+                reference_time_utc=existing_active.timestamp,
+            )
+            same_day_hanging_pass = (
+                hall_pass_day_bounds.boundary_start_utc
+                <= event_time
+                < hall_pass_day_bounds.boundary_end_utc
+            )
+            returning_from_this_pass = (
+                hall_pass_id is not None
+                and hall_pass_id == existing_active.hall_pass_id
+            )
+            if same_day_hanging_pass and not returning_from_this_pass:
+                raise ValueError(
+                    "Student is currently out on a hall pass and must check in "
+                    "before a new work session can start."
+                )
+
     resolved_reason_code = (
         reason_code.value if reason_code else AttendanceReasonCode.START_WORK.value
     ) if status == "active" else (

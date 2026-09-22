@@ -167,7 +167,11 @@ function updateAttendanceUI(isActive, duration, projectedPay, hallPass = null) {
     payCell.textContent = Number(projectedPay || 0).toFixed(2);
   }
 
-  if (startWorkBtn) startWorkBtn.disabled = isActive;
+  // "Start Work" must also be disabled while out on an open hall pass, not
+  // only while genuinely active. isActive is false in both cases, but only one
+  // of them should offer a fresh clock-in -- the other should offer "Return".
+  const onOpenHallPass = !!(hallPass && hallPass.status === 'left');
+  if (startWorkBtn) startWorkBtn.disabled = isActive || onOpenHallPass;
   configureBreakButton(breakWorkBtn, isActive, hallPass);
 
   // Handle hall pass overlay
@@ -176,8 +180,28 @@ function updateAttendanceUI(isActive, duration, projectedPay, hallPass = null) {
 
 function configureBreakButton(button, isActive, hallPass) {
   if (!button) return;
-  button.disabled = !isActive;
   button.classList.remove('btn-warning', 'btn-danger', 'btn-primary', 'btn-outline-warning');
+
+  // A hall pass the student has not yet returned from determines the primary
+  // action REGARDLESS of isActive. "left" means the seat's latest attendance
+  // event is inactive/hall_pass -- the student is out of the room -- and
+  // isActive is therefore false, exactly like an ordinary break. Checking
+  // hallPass BEFORE the isActive branch below is what previously let a
+  // genuinely open pass fall through unrecognised: with isActive false, this
+  // function returned a disabled, generically-labelled "Break" button before
+  // ever inspecting hallPass, leaving "Start Work" as the only enabled control
+  // while the student was still physically out of the room. Reproduced live
+  // on 2026-09-21: the resulting click wrote a plain new work session on top
+  // of the open pass and desynchronized the hall-pass log from the truth.
+  if (hallPass && hallPass.status === 'left') {
+    button.disabled = false;
+    button.dataset.state = 'return';
+    button.classList.add('btn-primary');
+    button.innerHTML = '<span class="material-symbols-outlined align-bottom me-1" aria-hidden="true">login</span> Return';
+    return;
+  }
+
+  button.disabled = !isActive;
 
   if (!isActive) {
     button.dataset.state = 'break';

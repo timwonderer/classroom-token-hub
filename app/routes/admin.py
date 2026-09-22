@@ -8520,18 +8520,32 @@ def tap_in_students():
                 already_active.append(name)
                 continue
 
-            record_attendance_session(
-                ctx=ctx,
-                target_seat_id=seat_id,
-                actor_seat_id=ctx.seat_id,
-                mechanism="teacher",
-                status="active",
-                reason="Teacher tap-in",
-                idempotency_key=f"admin_tap_in:{class_id}:{seat_id}:{secrets.token_hex(12)}",
-            )
-
             profile = IdentityProfile.query.filter_by(seat_id=seat_id).first()
             name = f"{profile.first_name} {profile.last_name}" if profile else f"Seat {seat_id}"
+
+            # A seat-level domain refusal (done-for-day locked, or currently out
+            # on a hall pass) must not abort the whole batch. Each seat's
+            # record_attendance_session call commits its own FEAT transaction
+            # independently, so seats processed earlier in this loop are
+            # already durably tapped in by the time a later seat's refusal is
+            # raised -- letting that propagate to the outer handler previously
+            # reported the ENTIRE request as a bare 500 "contact support," with
+            # no indication that some students had, in fact, just been tapped
+            # in. Caught here instead, per seat, with the actual reason.
+            try:
+                record_attendance_session(
+                    ctx=ctx,
+                    target_seat_id=seat_id,
+                    actor_seat_id=ctx.seat_id,
+                    mechanism="teacher",
+                    status="active",
+                    reason="Teacher tap-in",
+                    idempotency_key=f"admin_tap_in:{class_id}:{seat_id}:{secrets.token_hex(12)}",
+                )
+            except ValueError as exc:
+                errors.append(f"{name}: {exc}")
+                continue
+
             tapped_in.append(name)
 
             current_app.logger.info("Admin tapped in seat %s in class %s", seat_id, class_id)
