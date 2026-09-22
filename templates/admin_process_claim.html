@@ -108,10 +108,9 @@
           <dt class="col-sm-4">Current Status:</dt>
           <dd class="col-sm-8">
             <span class="badge
-              {% if claim.status == 'pending' %}bg-warning text-dark
-              {% elif claim.status == 'approved' %}bg-success
-              {% elif claim.status == 'rejected' %}bg-danger
-              {% elif claim.status == 'paid' %}bg-info
+              {% if claim.status|lower == 'submitted' %}bg-warning text-dark
+              {% elif claim.status|lower == 'approved' %}bg-success
+              {% elif claim.status|lower == 'rejected' %}bg-danger
               {% endif %}">
               {{ claim.status|title }}
             </span>
@@ -255,6 +254,16 @@
     <h5 class="mb-0">Process This Claim</h5>
   </div>
   <div class="card-body">
+    {% if claim.status|lower != 'submitted' %}
+      <p class="mb-0">
+        <span class="material-symbols-outlined me-1" style="font-size:1em;vertical-align:middle;">lock</span>
+        This claim was <strong>{{ claim.status|lower }}</strong>{% if claim.decided_at %} on {{ claim.decided_at | fmt_timestamp }}{% endif %}.
+        Decisions are final — no further changes can be made here.
+      </p>
+      {% if claim.decision_note %}
+      <div class="bg-light p-3 rounded mt-3">{{ claim.decision_note | markdown }}</div>
+      {% endif %}
+    {% else %}
     <form method="POST" action="{{ url_for('admin.process_claim', claim_id=claim.id) }}">
       {{ form.hidden_tag() }}
 
@@ -304,6 +313,7 @@
         <a href="{{ url_for('admin.insurance_management') }}" class="btn btn-secondary">Back to Insurance</a>
       </div>
     </form>
+    {% endif %}
   </div>
 </div>
 

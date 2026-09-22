@@ -6285,6 +6285,7 @@ def process_claim(claim_id):
         claim_amount=claim_basis.get('amount') or claim.result_amount,
         claim_item=None,
         filing_window_override_reason=claim.filing_window_override_reason,
+        decision_note=claim.decision_note,
     )
     # Only a TRANSACTION claim has a filing window at all (contract.filed_within_window
     # is None for PRODUCTIVITY/NON_MONETARY, or when the source transaction can't be
@@ -9697,7 +9698,7 @@ def onboarding_status():
         active_class_id = (getattr(g.canonical_context, "class_id", None) or "").strip() or None
 
         if not active_class_id:
-            roster_done = payroll_done = store_done = banking_done = rent_done = hall_pass_done = False
+            roster_done = payroll_done = store_done = banking_done = rent_done = hall_pass_done = insurance_done = False
         else:
             # The first required task is "Create a class". onboarding_status only
             # resolves an active_class_id when the teacher actually owns/occupies
@@ -9722,6 +9723,9 @@ def onboarding_status():
             hall_pass_done = HallPassSettings.query.filter(
                 HallPassSettings.class_id == active_class_id
             ).first() is not None
+            insurance_done = InsurancePolicy.query.filter(
+                InsurancePolicy.class_id == active_class_id
+            ).first() is not None
 
         completion = {
             'roster': roster_done,
@@ -9729,7 +9733,7 @@ def onboarding_status():
             'store': store_done,
             'banking': banking_done,
             'rent': rent_done,
-            'insurance': False,
+            'insurance': insurance_done,
             'hall_pass': hall_pass_done,
             'personalization': has_personalized_class(user_id),
             'passkey': admin_has_passkeys(user_id),
