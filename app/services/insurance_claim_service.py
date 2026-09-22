@@ -232,6 +232,7 @@ def decide_claim(
     approved: bool,
     decided_at: Optional[datetime] = None,
     decision_note: Optional[str] = None,
+    filing_window_override_reason: Optional[str] = None,
     result_amount: Optional[Decimal] = None,
     payroll_event_id: Optional[int] = None,
     ledger_transaction_id: Optional[int] = None,
@@ -242,7 +243,9 @@ def decide_claim(
     raises :class:`ClaimAlreadyDecided`. Downstream lineage references
     (``result_amount``, ``payroll_event_id``, ``ledger_transaction_id``) are only
     recorded on approval; they remain ``NULL`` for rejections and for claims that
-    have not yet been decided.
+    have not yet been decided. ``filing_window_override_reason`` is recorded when
+    given regardless of ``approved`` (the caller enforces when it is required —
+    see the approval gate in ``_resolve_insurance_claim_impl``).
     """
     claim = get_claim(claim_id, class_id=class_id)
     if claim is None:
@@ -256,6 +259,8 @@ def decide_claim(
     claim.decided_by_seat_id = decided_by_seat_id
     claim.decided_at = decided_at or utc_now()
     claim.decision_note = decision_note
+    if filing_window_override_reason:
+        claim.filing_window_override_reason = filing_window_override_reason
     if approved:
         claim.result_amount = result_amount
         claim.payroll_event_id = payroll_event_id

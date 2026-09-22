@@ -6284,28 +6284,38 @@ def process_claim(claim_id):
         filed_date=claim.submitted_at,
         claim_amount=claim_basis.get('amount') or claim.result_amount,
         claim_item=None,
+        filing_window_override_reason=claim.filing_window_override_reason,
     )
+    # Only a TRANSACTION claim has a filing window at all (contract.filed_within_window
+    # is None for PRODUCTIVITY/NON_MONETARY, or when the source transaction can't be
+    # resolved) — a claim already terminal keeps showing its own true disposition.
+    filing_window_exceeded = contract.filed_within_window is False
     if form.validate_on_submit():
         decision = (form.status.data or "").strip().lower()
         if decision == "approved":
-            resolve_insurance_claim(
+            result = resolve_insurance_claim(
                 canonical_context=g.canonical_context,
                 claim_id=claim.claim_id,
                 approved=True,
+                filing_window_override_reason=form.filing_window_override_reason.data,
                 idempotency_key=f"admin-insurance-approve:{claim.claim_id}",
             )
-            flash("Claim approved.", "success")
-            return redirect(url_for("admin.insurance_management"))
-        if decision == "rejected":
-            resolve_insurance_claim(
+            if result.success:
+                flash("Claim approved.", "success")
+                return redirect(url_for("admin.insurance_management"))
+            flash(result.error_message or "This claim could not be approved.", "danger")
+        elif decision == "rejected":
+            result = resolve_insurance_claim(
                 canonical_context=g.canonical_context,
                 claim_id=claim.claim_id,
                 approved=False,
                 override_reason=form.rejection_reason.data or form.teacher_notes.data,
                 idempotency_key=f"admin-insurance-reject:{claim.claim_id}",
             )
-            flash("Claim rejected.", "info")
-            return redirect(url_for("admin.insurance_management"))
+            if result.success:
+                flash("Claim rejected.", "info")
+                return redirect(url_for("admin.insurance_management"))
+            flash(result.error_message or "This claim could not be rejected.", "danger")
     return render_template(
         'admin_process_claim.html',
         current_page='insurance',
@@ -6323,6 +6333,7 @@ def process_claim(claim_id):
         contract_period_consumed=contract.period_consumed,
         contract_max_payout_per_period=contract.maximum_policy_payout,
         remaining_period_cap=contract.remaining_period_cap,
+        filing_window_exceeded=filing_window_exceeded,
         claims_stats=SimpleNamespace(
             pending=sum(1 for c in claims if getattr(c.status, "value", c.status) == "SUBMITTED"),
             approved=sum(1 for c in claims if getattr(c.status, "value", c.status) == "APPROVED"),

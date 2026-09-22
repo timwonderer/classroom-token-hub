@@ -297,6 +297,11 @@ class ClaimContractView:
     claim_window_days: Optional[int]
     maximum_policy_payout: Optional[Decimal]
     remaining_period_cap: Optional[Decimal]
+    # Whether THIS claim was filed within the policy's filing window, computed
+    # once here so every review surface asks the same question the same way.
+    # ``None`` for product types with no filing window (PRODUCTIVITY,
+    # NON_MONETARY) or when the source transaction cannot be resolved.
+    filed_within_window: Optional[bool]
 
 
 def describe_claim_contract(claim, *, canonical_context: CanonicalContext) -> ClaimContractView:
@@ -324,6 +329,7 @@ def describe_claim_contract(claim, *, canonical_context: CanonicalContext) -> Cl
     )
     maximum_payout = _maximum_policy_payout(policy)
 
+    filed_within_window: Optional[bool] = None
     if policy.insurance_type == _TRANSACTION_INSURANCE_TYPE:
         allowance_unit = "claim"
         per_week = policy.claims_per_week_equivalent or Decimal("0")
@@ -337,6 +343,17 @@ def describe_claim_contract(claim, *, canonical_context: CanonicalContext) -> Cl
         )
         claim_window_days = policy.claim_window_days
         remaining = maximum_payout - _sum_approved_payouts(class_id, claim.entitlement_id)
+
+        source_transaction_id = (claim.claim_basis or {}).get("transaction_id")
+        source_transaction = (
+            db.session.get(Transaction, source_transaction_id)
+            if source_transaction_id is not None else None
+        )
+        if source_transaction is not None and claim_window_days is not None:
+            deadline_end_utc = _filing_deadline_end_utc(
+                canonical_context, ensure_utc(source_transaction.timestamp), claim_window_days
+            )
+            filed_within_window = ensure_utc(claim.submitted_at) < deadline_end_utc
     elif policy.insurance_type == _PRODUCTIVITY_INSURANCE_TYPE:
         allowance_unit = "date"
         per_week = policy.claimable_dates_per_week_equivalent or Decimal("0")
@@ -364,6 +381,7 @@ def describe_claim_contract(claim, *, canonical_context: CanonicalContext) -> Cl
             claim_window_days=None,
             maximum_policy_payout=None,
             remaining_period_cap=None,
+            filed_within_window=None,
         )
 
     return ClaimContractView(
@@ -376,6 +394,7 @@ def describe_claim_contract(claim, *, canonical_context: CanonicalContext) -> Cl
         claim_window_days=claim_window_days,
         maximum_policy_payout=maximum_payout,
         remaining_period_cap=_quantize_currency(max(remaining, Decimal("0.00"))),
+        filed_within_window=filed_within_window,
     )
 
 
@@ -421,15 +440,21 @@ def _enforce_transaction_submission(
     policy_terms,
     granted_event: EntitlementEvent,
     claim_subject: dict,
-    submitted_at: datetime,
     replay_key: str,
 ) -> Optional["InsuranceClaimSubmissionResult"]:
     """Gate a TRANSACTION claim at submission.
 
-    Order (SPEC): eligible transaction → within filing window → claim allowance
+    Order (SPEC): eligible transaction → within coverage → claim allowance
     available → period payout capacity available. Returns a failure result on the
     first failed gate, or ``None`` when the claim may be created. All enforcement
     reads the policy_terms contract and immutable claim history — never the live policy.
+
+    The filing window is deliberately NOT enforced here. Operator decision
+    2026-09-21: a claim filed after the window closes should still reach
+    SUBMITTED — it is a teacher's judgment call at approval time (with a
+    required written override), not a submission-time rejection. See
+    ``describe_claim_contract``'s ``filed_within_window`` and the approval gate
+    in ``_resolve_insurance_claim_impl``.
     """
     entitlement_id = granted_event.entitlement_id
     class_id = canonical_context.class_id
@@ -460,22 +485,14 @@ def _enforce_transaction_submission(
         policy_terms=policy_terms, granted_event=granted_event, canonical_context=canonical_context
     )
 
-    # (b) Coverage interval + filing window (class-local calendar days).
+    # (b) Coverage interval. The filing window is NOT gated here — see the
+    # docstring above; it is surfaced and enforced at approval instead.
     source_ts_utc = ensure_utc(source_transaction.timestamp)
     if source_ts_utc < coverage_terms.coverage_start_utc:
         return InsuranceClaimSubmissionResult(
             success=False,
             error_code="TRANSACTION_OUTSIDE_COVERAGE",
             error_message="Source transaction predates the purchased coverage",
-        )
-    deadline_end_utc = _filing_deadline_end_utc(
-        canonical_context, source_ts_utc, policy_terms.claim_window_days
-    )
-    if ensure_utc(submitted_at) >= deadline_end_utc:
-        return InsuranceClaimSubmissionResult(
-            success=False,
-            error_code="CLAIM_WINDOW_EXCEEDED",
-            error_message="Filing window for this transaction has closed",
         )
 
     # (c) Claim-allowance — count EVERY claim lifecycle (SUBMITTED+APPROVED+REJECTED)
@@ -1152,7 +1169,6 @@ def _submit_insurance_claim_impl(
                 policy_terms=policy_terms,
                 granted_event=granted_event,
                 claim_subject=claim_subject,
-                submitted_at=now,
                 replay_key=replay_key,
             )
             if enforcement is not None:
@@ -1613,6 +1629,7 @@ def resolve_insurance_claim(
     claim_id: str,
     approved: bool,
     override_reason: str | None = None,
+    filing_window_override_reason: str | None = None,
     date_adjustments: dict | None = None,
     idempotency_key: str | None = None,
 ) -> InsuranceClaimResolutionResult:
@@ -1630,6 +1647,9 @@ def resolve_insurance_claim(
         claim_id: ID of the InsuranceClaim to adjudicate
         approved: True for approval, False for rejection
         override_reason: Optional decision note (recorded on the claim)
+        filing_window_override_reason: Required to approve a TRANSACTION claim
+            filed after its policy's filing window closed; ignored otherwise.
+            Refused with ``FILING_WINDOW_OVERRIDE_REQUIRED`` when needed and absent.
         date_adjustments: PRODUCTIVITY-only per-date teacher adjustments, keyed by
             ISO date string → {"hours": Decimal, "note": str}. A date whose approved
             hours differ from the submitted hours REQUIRES a note.
@@ -1643,6 +1663,7 @@ def resolve_insurance_claim(
         claim_id=claim_id,
         approved=approved,
         override_reason=override_reason,
+        filing_window_override_reason=filing_window_override_reason,
         date_adjustments=date_adjustments,
         idempotency_key=idempotency_key,
     )
@@ -1655,6 +1676,7 @@ def _resolve_insurance_claim_impl(
     claim_id: str,
     approved: bool,
     override_reason: str | None = None,
+    filing_window_override_reason: str | None = None,
     date_adjustments: dict | None = None,
     idempotency_key: str | None = None,
 ) -> InsuranceClaimResolutionResult:
@@ -1799,6 +1821,27 @@ def _resolve_insurance_claim_impl(
                     error_message=f"{verdict.reason_code}: {verdict.detail}",
                 )
 
+            # Filing window is a soft, teacher-overridable gate — checked HERE
+            # (approval), never at submission. Operator decision 2026-09-21: a
+            # late claim still reaches SUBMITTED; approving it anyway requires a
+            # written justification, permanently recorded on the claim.
+            if policy_terms.claim_window_days is not None:
+                deadline_end_utc = _filing_deadline_end_utc(
+                    canonical_context,
+                    ensure_utc(source_transaction.timestamp),
+                    policy_terms.claim_window_days,
+                )
+                filed_late = ensure_utc(claim.submitted_at) >= deadline_end_utc
+                if filed_late and not (filing_window_override_reason or "").strip():
+                    return InsuranceClaimResolutionResult(
+                        success=False,
+                        error_code="FILING_WINDOW_OVERRIDE_REQUIRED",
+                        error_message=(
+                            "This claim was filed outside the policy's filing window. "
+                            "Provide a written override reason to approve it anyway."
+                        ),
+                    )
+
             gross_loss = abs(source_transaction.amount or Decimal("0.00"))
             gross_reimbursement = _quantize_currency(
                 gross_loss * policy_terms.reimbursement_percentage / Decimal("100")
@@ -1876,6 +1919,7 @@ def _resolve_insurance_claim_impl(
                     decided_by_seat_id=teacher_seat.id,
                     approved=True,
                     decision_note=override_reason,
+                    filing_window_override_reason=filing_window_override_reason,
                     result_amount=reimbursement_amount,
                     ledger_transaction_id=ledger_transaction_id,
                 )

@@ -1826,6 +1826,11 @@ class InsuranceClaim(db.Model):
     # General decision annotation (approval or rejection). No distinct override
     # workflow exists, so this is a single free-text decision note.
     decision_note = db.Column(db.Text, nullable=True)
+    # Required, permanently-recorded justification for approving a TRANSACTION
+    # claim filed after the policy's filing window closed. Distinct from
+    # decision_note: approval of a late claim must be blocked on this field's
+    # absence specifically, so a generic note can't stand in for it.
+    filing_window_override_reason = db.Column(db.Text, nullable=True)
     result_amount = db.Column(db.Numeric(precision=12, scale=2), nullable=True)
 
     # Downstream lineage references — populated only on APPROVED. Nullable until then.
