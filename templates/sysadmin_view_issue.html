@@ -1,55 +1,43 @@
 {% extends "layout_system_admin.html" %}
 {% import "macros/cards.html" as cards %}
-{% set current_page = "issues" %}
+{% set current_page = "support_tickets" %}
 {% block page_icon %}support_agent{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
     <!-- Back Button -->
-    <a href="{{ url_for('sysadmin.support_tickets') }}?tab=issues" class="btn btn-outline-secondary mb-3">
-        <span class="material-symbols-outlined me-2" aria-hidden="true">arrow_back</span>Back to Escalated Issues
+    <a href="{{ url_for('sysadmin.support_tickets') }}" class="btn btn-outline-secondary mb-3">
+        <span class="material-symbols-outlined me-2" aria-hidden="true">arrow_back</span>Back to Support Tickets
     </a>
 
     <div class="row">
         <div class="col-lg-8">
-            <!-- Issue Details Card -->
+            <!-- Ticket Details Card -->
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-primary text-white">
                     <div class="d-flex justify-content-between align-items-center">
                         <h4 class="mb-0">
-                            <span class="material-symbols-outlined me-2" aria-hidden="true">flag</span>Issue {{ issue_ref[:12] }}...
+                            <span class="material-symbols-outlined me-2" aria-hidden="true">confirmation_number</span>Ticket {{ issue_ref[:12] }}...
                         </h4>
                         <span class="badge
                             {% if issue.status in ['ESCALATED_TO_DEV', 'elevated', 'developer_review'] %}bg-warning text-dark
-                            {% elif issue.status in ['DEV_RESOLVED', 'developer_resolved'] %}bg-success
-                            {% else %}bg-secondary{% endif %}">
-                            {{ issue.status|replace('_', ' ')|title }}
+                            {% elif issue.status in ['DEV_RESOLVED', 'developer_resolved'] %}bg-info
+                            {% elif issue.status == 'CLOSED' %}bg-secondary
+                            {% else %}bg-light text-dark{% endif %}">
+                            {{ issue.status_label }}
                         </span>
                     </div>
                 </div>
                 <div class="card-body">
-                    <!-- Teacher Info -->
+                    <!-- Reporter Reference -->
                     <div class="mb-3">
-                        <h6 class="text-muted mb-2">Escalated By</h6>
-                        <p class="mb-0">
-                            <span class="material-symbols-outlined me-2" aria-hidden="true">badge</span>
-                            <strong>{% if issue.reviewer_public_id %}{{ issue.reviewer_public_id[:8] }}...{% else %}Unattributed{% endif %}</strong>
-                            {% if issue.share_class_name_with_sysadmin and issue.class_label %}
-                            <span class="text-muted">| {{ issue.class_label }}</span>
-                            {% endif %}
-                        </p>
-                    </div>
-
-                    <hr>
-
-                    <!-- Seat Public Reference -->
-                    <div class="mb-3">
-                        <h6 class="text-muted mb-2">Seat Public Reference</h6>
+                        <h6 class="text-muted mb-2">Reporter Reference</h6>
                         <p class="mb-0">
                             <span class="material-symbols-outlined me-2" aria-hidden="true">tag</span>
                             <code>{{ issue.actor_public_id }}</code>
                             <small class="text-muted d-block mt-1">
-                                Deidentified class-scoped actor reference
+                                Deidentified class-scoped actor reference -- sysadmin sees only this,
+                                never a name or role, regardless of who filed the ticket.
                             </small>
                         </p>
                     </div>
@@ -63,14 +51,27 @@
                         <span class="badge bg-light text-dark ms-2">{{ issue.issue_type|title }}</span>
                     </div>
 
+                    {% if issue.reviewer_public_id or issue.escalation_reason %}
                     <hr>
 
-                    <!-- Escalation Reason -->
+                    <!-- Escalation Info (only present once a teacher has escalated this ticket) -->
+                    <div class="mb-3">
+                        <h6 class="text-muted mb-2">Escalated By</h6>
+                        <p class="mb-0">
+                            <span class="material-symbols-outlined me-2" aria-hidden="true">badge</span>
+                            <strong>{% if issue.reviewer_public_id %}{{ issue.reviewer_public_id[:8] }}...{% else %}Unattributed{% endif %}</strong>
+                            {% if issue.share_class_name_with_sysadmin and issue.class_label %}
+                            <span class="text-muted">| {{ issue.class_label }}</span>
+                            {% endif %}
+                        </p>
+                    </div>
+
+                    {% if issue.escalation_reason %}
                     {% call cards.alert_card('warning', 'Escalation reason', icon='arrow_circle_up', body_class='mb-3', heading_tag='h6') %}
                         <p class="mb-0 fw-bold">{{ issue.escalation_reason }}</p>
                     {% endcall %}
+                    {% endif %}
 
-                    <!-- Teacher Diagnostic Note -->
                     {% if issue.teacher_diagnostic_note %}
                     <div class="mb-3">
                         <h6 class="text-muted mb-2">Teacher's Diagnostic Notes</h6>
@@ -79,14 +80,17 @@
                         </div>
                     </div>
                     {% endif %}
+                    {% endif %}
 
                     <hr>
 
-                    <!-- Student Explanation -->
+                    <h5 class="mt-2 mb-3">{{ issue.title }}</h5>
+
+                    <!-- Original Report -->
                     <div class="mb-3">
-                        <h6 class="text-muted mb-2">Student's Original Report</h6>
+                        <h6 class="text-muted mb-2">Original Report</h6>
                         <div class="bg-light p-3 rounded">
-                            <p class="mb-0">{{ issue.student_explanation or 'The teacher has not shared the student’s report.' }}</p>
+                            <p class="mb-0">{{ issue.student_explanation or 'The teacher has not shared this report’s content.' }}</p>
                         </div>
                     </div>
 
@@ -101,8 +105,42 @@
 
                     <hr>
 
+                    <!-- Time display lens: presentation only, never authority (INV-ARC-022 SS V.3/V.4).
+                         Operations surfaces default to UTC (INV-ARC-015); this toggle lets an
+                         operator deliberately switch to the ticket's own class timezone when
+                         correlating a report like "I clicked at 8:03" against the record below. -->
+                    <div class="mb-3 d-flex align-items-center gap-2 flex-wrap">
+                        <span class="text-muted small">Time display:</span>
+                        <div class="btn-group btn-group-sm" role="group" aria-label="Time display">
+                            <a href="{{ url_for('sysadmin.view_issue', issue_ref=issue_ref, tz='utc') }}"
+                               class="btn {% if tz_mode == 'utc' %}btn-dark{% else %}btn-outline-secondary{% endif %}"
+                               {% if tz_mode == 'utc' %}aria-current="true"{% endif %}>UTC</a>
+                            <a href="{{ url_for('sysadmin.view_issue', issue_ref=issue_ref, tz='class') }}"
+                               class="btn {% if tz_mode == 'class' %}btn-dark{% else %}btn-outline-secondary{% endif %}"
+                               {% if not class_timezone %}disabled aria-disabled="true"{% endif %}
+                               {% if tz_mode == 'class' %}aria-current="true"{% endif %}>Class time</a>
+                        </div>
+                        <span class="text-muted small">
+                            {% if tz_mode == 'class' %}
+                                Showing class time ({{ class_timezone }}). Stored evidence is unchanged -- UTC.
+                            {% elif class_timezone %}
+                                Showing UTC. Class timezone is {{ class_timezone }}.
+                            {% else %}
+                                Showing UTC. This ticket has no resolvable class timezone.
+                            {% endif %}
+                        </span>
+                    </div>
+
                     <!-- Timestamps -->
                     <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <h6 class="text-muted mb-2">Submitted</h6>
+                            <p class="mb-0">
+                                <span class="material-symbols-outlined me-2" aria-hidden="true">schedule</span>
+                                {{ issue.submitted_at|fmt_timestamp }}
+                            </p>
+                        </div>
+                        {% if issue.escalated_at %}
                         <div class="col-md-6 mb-3">
                             <h6 class="text-muted mb-2">Escalated</h6>
                             <p class="mb-0">
@@ -110,6 +148,7 @@
                                 {{ issue.escalated_at|fmt_timestamp }}
                             </p>
                         </div>
+                        {% endif %}
                         {% if issue.sysadmin_reviewed_at %}
                         <div class="col-md-6 mb-3">
                             <h6 class="text-muted mb-2">Reviewed</h6>
@@ -119,9 +158,18 @@
                             </p>
                         </div>
                         {% endif %}
+                        {% if issue.sysadmin_resolved_at %}
+                        <div class="col-md-6 mb-3">
+                            <h6 class="text-muted mb-2">Resolved</h6>
+                            <p class="mb-0">
+                                <span class="material-symbols-outlined me-2" aria-hidden="true">check_circle</span>
+                                {{ issue.sysadmin_resolved_at|fmt_timestamp }}
+                            </p>
+                        </div>
+                        {% endif %}
                     </div>
 
-                    <!-- Sysadmin Notes (if resolved) -->
+                    <!-- Sysadmin Notes (if any decision has been recorded) -->
                     {% if issue.sysadmin_notes %}
                     <hr>
                     {% call cards.alert_card('success', 'Resolution notes', icon='task_alt', body_class='mb-3', heading_tag='h6') %}
@@ -337,7 +385,57 @@
                     </form>
                 </div>
             </div>
+            {% elif issue.status in ['OPEN', 'DEV_RESOLVED', 'CLOSED', 'submitted', 'developer_resolved'] %}
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">edit_square</span>Update Ticket</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('sysadmin.update_issue', issue_ref=issue_ref) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                        <div class="mb-3">
+                            <label for="status" class="form-label">Status</label>
+                            <select class="form-select" id="status" name="status" required>
+                                <option value="OPEN" {% if issue.status == 'OPEN' %}selected{% endif %}>Open</option>
+                                <option value="DEV_RESOLVED" {% if issue.status == 'DEV_RESOLVED' %}selected{% endif %}>Resolved</option>
+                                <option value="CLOSED" {% if issue.status == 'CLOSED' %}selected{% endif %}>Closed</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="admin_notes" class="form-label">Notes</label>
+                            <textarea class="form-control" id="admin_notes" name="admin_notes" rows="4"
+                                      placeholder="Add notes about this ticket...">{{ issue.sysadmin_notes or '' }}</textarea>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100">
+                            <span class="material-symbols-outlined me-2" aria-hidden="true">save</span>Update Ticket
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% else %}
+            <div class="card shadow-sm mb-4">
+                <div class="card-body text-muted small">
+                    <span class="material-symbols-outlined me-1 icon-middle" aria-hidden="true">lock</span>
+                    This ticket is with the teacher ({{ issue.status_label }}). No sysadmin action is available
+                    at this stage.
+                </div>
+            </div>
             {% endif %}
+
+            <!-- Reporter Stats -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">bar_chart</span>Reporter Stats</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-0">
+                        <strong>Total Tickets:</strong> {{ reporter_ticket_count }}
+                    </div>
+                </div>
+            </div>
 
             <!-- Status History -->
             {% if history %}

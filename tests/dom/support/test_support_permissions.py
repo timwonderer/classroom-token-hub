@@ -103,7 +103,7 @@ def test_alternate_operator_detail_cannot_bypass_report_permission(client):
     issue = _submit_issue(classroom, student, explanation='WITHHELD REPORT CONTENT')
     sysadmin = create_sysadmin(username='disclosure_operator')
     login_sysadmin(client, 'disclosure_operator', sysadmin.id)
-    response = client.get(f"/sysadmin/user-reports/{make_opaque_ref('report', issue.id)}")
+    response = client.get(f"/sysadmin/issues/{make_opaque_ref('issue', issue.id)}")
     assert response.status_code == 200
     assert 'WITHHELD REPORT CONTENT' not in response.text
 

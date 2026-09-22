@@ -711,10 +711,6 @@ def _resolve_issue_id_from_ref(issue_ref: str) -> int | None:
     return resolve_opaque_ref('issue', issue_ref)
 
 
-def _resolve_report_id_from_ref(report_ref: str) -> int | None:
-    return resolve_opaque_ref('report', report_ref)
-
-
 def _issue_to_view(issue):
     """Convert a raw Issue model to a template-safe dict (no SQLAlchemy models in templates).
 
@@ -740,12 +736,16 @@ def _issue_to_view(issue):
     return {
         'id': issue.id,
         'status': issue.status,
+        'status_label': issue.get_student_visible_status(),
         'actor_public_id': issue.actor_public_id,
         'reviewer_public_id': issue.reviewer_public_id,
+        'class_public_id': issue.class_public_id,
         'share_class_name_with_sysadmin': class_name_consented,
         'class_label': issue.class_label if class_name_consented else None,
         'category_name': issue.category.name if issue.category else 'Unknown',
         'issue_type': issue.issue_type,
+        'title': issue.title,
+        'submitted_at': issue.submitted_at,
         'escalation_reason': issue.escalation_reason,
         'teacher_diagnostic_note': issue.teacher_diagnostic_note,
         'student_explanation': report_text,
@@ -803,9 +803,10 @@ def support_tickets():
         SimpleNamespace(
             id=issue.id,
             status=issue.status,
+            status_label=issue.get_student_visible_status(),
             report_type=issue.category.name if issue.category else "unknown",
             submitted_at=issue.submitted_at,
-            title=_issue_to_view(issue)["student_expected_outcome"] or "Support issue",
+            title=issue.title or "Support issue",
             description=_issue_to_view(issue)["student_explanation"],
             anonymous_code=issue.actor_public_id,
             class_id=issue.class_public_id,
@@ -850,7 +851,6 @@ def support_tickets():
         new_reports=new_reports,
         reviewed_reports=reviewed_reports,
         issue_ref_for=lambda issue_id: make_opaque_ref('issue', issue_id),
-        report_ref_for=lambda report_id: make_opaque_ref('report', report_id),
         # Escalated issues
         issues_pending=issues_pending,
         issues_in_review=issues_in_review,
@@ -860,152 +860,130 @@ def support_tickets():
     )
 
 
-# -------------------- USER REPORTS --------------------
+# -------------------- TICKETS (unified Issue detail surface) --------------------
+#
+# A ticket is one Issue record regardless of who filed it or how far it has
+# moved through the lifecycle. Sysadmin sees only opaque public ids either
+# way (actor_public_id, reviewer_public_id) -- there is no principled reason
+# for a teacher-submitted, never-escalated ticket and a student-escalated one
+# to render on two different templates behind two different routes. They did,
+# historically (/user-reports/<ref> and /issues/<ref>), which duplicated
+# layout, disclosure logic, and would have duplicated the UTC/class-time
+# toggle a third time. One route, one template; the action panel varies by
+# the ticket's current lifecycle position, not by which door it came in.
 
-@sysadmin_bp.route('/user-reports')
+@sysadmin_bp.route('/issues/<issue_ref>')
 @system_admin_required
-def user_reports():
-    """View admin-submitted support issues with filtering."""
-    # Get filter parameters
-    status_filter = request.args.get('status', 'all')
-    report_type_filter = request.args.get('type', 'all')
-    
-    # Build query
-    query = Issue.query.filter(Issue.issue_type == 'general')
-    
-    # Apply filters
-    if status_filter != 'all':
-        query = query.filter(Issue.status == status_filter.upper())
-    if report_type_filter != 'all':
-        query = query.filter(Issue.category_id == int(report_type_filter) if report_type_filter.isdigit() else True)
+def view_issue(issue_ref):
+    """View a ticket at any point in its lifecycle."""
+    issue_id = _resolve_issue_id_from_ref(issue_ref)
+    if issue_id is None:
+        raise NotFound("Ticket not found")
+    issue = db.session.get(Issue, issue_id)
+    if not issue:
+        raise NotFound("Ticket not found")
 
-    reports = [
-        SimpleNamespace(
-            id=issue.id,
-            status=issue.status,
-            report_type=issue.category.name if issue.category else "unknown",
-            submitted_at=issue.submitted_at,
-            title=_issue_to_view(issue)["student_expected_outcome"] or "Support issue",
-            description=_issue_to_view(issue)["student_explanation"],
-            anonymous_code=issue.actor_public_id,
-            class_id=issue.class_public_id,
-        )
-        for issue in query.order_by(Issue.submitted_at.desc()).all()
+    history = [
+        _history_entry_to_view(entry)
+        for entry in IssueStatusHistory.query.filter_by(issue_id=issue.id)
+            .order_by(IssueStatusHistory.changed_at.desc()).all()
     ]
-    from sqlalchemy import func
-    status_counts = dict(
-        db.session.query(Issue.status, func.count(Issue.id))
-        .filter(Issue.issue_type == 'general')
-        .group_by(Issue.status)
-        .all()
-    )
-    new_count = status_counts.get('new', 0)
-    reviewed_count = status_counts.get('reviewed', 0)
-    closed_count = status_counts.get('closed', 0)
-    
+
+    # Operations surfaces default to UTC (INV-ARC-015 SLE authority). A
+    # sysadmin correlating this ticket against Grafana/logs/traces wants that
+    # UTC baseline; investigating a specific "I clicked at 8:03" report wants
+    # the class's own timezone instead. This is a display-only lens choice
+    # passed straight into the page view model -- it never grants the request
+    # canonical class context (INV-ARC-022 SS V.3 forbids sysadmin from holding
+    # one), and it never touches the stored Issue/correlation-pack data
+    # (INV-ARC-015 SS X.1: a Correlation Pack's artifacts keep their original
+    # temporal authority regardless of how they are displayed).
+    class_row = ClassEconomy.query.filter_by(class_public_id=issue.class_public_id).first()
+    class_timezone = class_row.class_timezone if class_row else None
+    tz_mode = request.args.get('tz')
+    if tz_mode == 'class' and class_timezone:
+        display_timezone = class_timezone
+    else:
+        tz_mode = 'utc'
+        display_timezone = 'UTC'
+
     return render_template(
-        'sysadmin_user_reports.html',
-        current_page='user_reports',
-        page_title='Teacher Issues',
-        reports=reports,
-        new_count=new_count,
-        reviewed_count=reviewed_count,
-        closed_count=closed_count,
-        status_filter=status_filter,
-        report_type_filter=report_type_filter,
-        report_ref_for=lambda report_id: make_opaque_ref('report', report_id),
+        'sysadmin_view_issue.html',
+        current_page='support_tickets',
+        page_title=f'Ticket #{issue.id}',
+        issue=_issue_to_view(issue),
+        issue_ref=issue_ref,
+        history=history,
+        correlation_pack=_correlation_pack_to_view(issue.correlation_pack),
+        reporter_ticket_count=Issue.query.filter_by(actor_public_id=issue.actor_public_id).count(),
+        tz_mode=tz_mode,
+        class_timezone=class_timezone,
+        display_timezone=display_timezone,
+        format_utc_iso=format_utc_iso,
     )
 
 
-@sysadmin_bp.route('/user-reports/<report_ref>')
-@system_admin_required
-def view_user_report(report_ref):
-    """View details of a specific admin issue report."""
-    report_id = _resolve_report_id_from_ref(report_ref)
-    if report_id is None:
-        raise NotFound("Report not found")
-    report = db.session.get(Issue, report_id)
-    if not report:
-        raise NotFound("Report not found")
-    
-    return render_template(
-        'sysadmin_user_report_detail.html',
-        current_page='user_reports',
-        page_title=f'Report #{report_id}',
-        report=SimpleNamespace(
-            title=report.title or 'Support issue', status=report.status,
-            class_label=_issue_to_view(report)['class_label'],
-            description=_issue_to_view(report)['student_explanation'],
-            expected_behavior=_issue_to_view(report)['student_expected_outcome'],
-            anonymous_code=report.actor_public_id,
-            report_type=report.category.name if report.category else 'general',
-            submitted_at=report.submitted_at, sysadmin_notes=report.sysadmin_notes,
-            admin_notes=report.sysadmin_notes, reviewed_at=report.sysadmin_reviewed_at,
-            page_url=(report.context_snapshot or {}).get('page_url'),
-            ip_address=(report.context_snapshot or {}).get('ip_address'),
-            user_agent=(report.context_snapshot or {}).get('user_agent'),
-            error_code=None, steps_to_reproduce=None,
-        ),
-        reporter_ticket_count=Issue.query.filter_by(actor_public_id=report.actor_public_id).count(),
-        report_ref=make_opaque_ref('report', report.id),
-    )
-
-
-@sysadmin_bp.route('/user-reports/<report_ref>/update', methods=['POST'])
+@sysadmin_bp.route('/issues/<issue_ref>/update', methods=['POST'])
 @system_admin_required
 @requires_feat_context("FEAT-OPS-001")
-def update_user_report(report_ref):
-    """Update an Operations-owned issue through the canonical FEAT boundary."""
-    report_id = _resolve_report_id_from_ref(report_ref)
-    if report_id is None:
-        raise NotFound("Report not found")
-    report = db.session.get(Issue, report_id)
-    if not report:
-        raise NotFound("Report not found")
-    
-    # Get form data
+def update_issue(issue_ref):
+    """Move a ticket through the direct, non-escalation lifecycle.
+
+    Owns exactly the three states a sysadmin may set without the
+    escalation/bug-bounty workflow (see resolve_escalated_issue for
+    ESCALATED_TO_DEV -> DEV_RESOLVED). A ticket already inside that workflow
+    (TEACHER_REVIEW, ESCALATED_TO_DEV, TEACHER_FINAL_REVIEW) must not be
+    dragged out of it by this form.
+    """
+    issue_id = _resolve_issue_id_from_ref(issue_ref)
+    if issue_id is None:
+        raise NotFound("Ticket not found")
+    issue = db.session.get(Issue, issue_id)
+    if not issue:
+        raise NotFound("Ticket not found")
+
     new_status = request.form.get('status')
     admin_notes = request.form.get('admin_notes', '').strip()
-    
+
     # Validate status. These three are the states this form owns; the Issue
     # lifecycle also has TEACHER_REVIEW, ESCALATED_TO_DEV and
     # TEACHER_FINAL_REVIEW, which move through the escalated-issue workflow.
     valid_statuses = [Issue.STATUS_OPEN, Issue.STATUS_DEV_RESOLVED, Issue.STATUS_CLOSED]
     if new_status not in valid_statuses:
         flash("Invalid status selected.", "error")
-        return redirect(url_for('sysadmin.view_user_report', report_ref=make_opaque_ref('report', report.id)))
+        return redirect(url_for('sysadmin.view_issue', issue_ref=issue_ref))
 
-    # A report already in one of the workflow states must not be dragged out of
+    # A ticket already in one of the workflow states must not be dragged out of
     # it by this form. The browser sends the selector's first option when nothing
-    # is selected, so without this guard an escalated report silently became OPEN
+    # is selected, so without this guard an escalated ticket silently became OPEN
     # on any notes-only save.
-    if report.status not in valid_statuses and new_status != report.status:
+    if issue.status not in valid_statuses and new_status != issue.status:
         flash(
-            "This report is in a workflow state that this page does not resolve. "
-            "Use the escalated-issue workflow to change its status.",
+            "This ticket is in a workflow state that this form does not resolve. "
+            "Use the technical-resolution action instead.",
             "error",
         )
-        return redirect(url_for('sysadmin.view_user_report', report_ref=make_opaque_ref('report', report.id)))
-    
+        return redirect(url_for('sysadmin.view_issue', issue_ref=issue_ref))
+
     try:
         update_issue_status(
-            report,
+            issue,
             new_status,
             changed_by_type='sysadmin',
             changed_by_public_id=None,
             notes=admin_notes or None,
         )
-        report.sysadmin_notes = admin_notes or None
-        report.sysadmin_reviewed_at = utc_now()
+        issue.sysadmin_notes = admin_notes or None
+        issue.sysadmin_reviewed_at = utc_now()
         # FEATContext.__exit__ owns the commit (INV-ARC FEAT atomicity). A direct
         # commit here trips enforce_feat_context_on_commit and rolls the update back.
-        flash(f"Report #{report_id} updated successfully.", "success")
+        flash(f"Ticket #{issue.id} updated successfully.", "success")
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error updating report {report_id}: {str(e)}")
-        flash("Error updating report. Please try again.", "error")
-    
-    return redirect(url_for('sysadmin.view_user_report', report_ref=make_opaque_ref('report', report.id)))
+        current_app.logger.error(f"Error updating ticket {issue_id}: {str(e)}")
+        flash("Error updating ticket. Please try again.", "error")
+
+    return redirect(url_for('sysadmin.view_issue', issue_ref=issue_ref))
 
 
 @sysadmin_bp.route('/grafana/auth-check', methods=['GET'])
@@ -1254,77 +1232,10 @@ def grafana_proxy(path):
 
 
 # ================== ESCALATED ISSUES ==================
-
-@sysadmin_bp.route('/issues')
-@system_admin_required
-def escalated_issues():
-    """
-    System admin view of all escalated issues from teacher users.
-    Shows issues that have been escalated for developer/sysadmin review.
-    """
-    # Get all escalated issues.
-    issues = Issue.query.filter(
-        Issue.status.in_([
-            Issue.STATUS_ESCALATED_TO_DEV,
-            Issue.STATUS_DEV_RESOLVED,
-            'elevated',
-            'developer_review',
-            'developer_resolved',
-        ])
-    ).order_by(Issue.escalated_at.desc()).all()
-
-    # Separate by status and convert to view dicts
-    pending_issues = [_issue_to_view(i) for i in issues if i.status in [Issue.STATUS_ESCALATED_TO_DEV, 'elevated']]
-    in_review_issues = [_issue_to_view(i) for i in issues if i.status == 'developer_review']
-    resolved_issues = [_issue_to_view(i) for i in issues if i.status in [Issue.STATUS_DEV_RESOLVED, 'developer_resolved']]
-
-    return render_template('sysadmin_escalated_issues.html',
-                         current_page='issues',
-                         page_title='Escalated Issues',
-                         pending_issues=pending_issues,
-                         in_review_issues=in_review_issues,
-                         resolved_issues=resolved_issues,
-                         issue_ref_for=lambda issue_id: make_opaque_ref('issue', issue_id),
-                         format_utc_iso=format_utc_iso)
-
-
-@sysadmin_bp.route('/issues/<issue_ref>')
-@system_admin_required
-def view_escalated_issue(issue_ref):
-    """View detailed information about a specific escalated issue."""
-    issue_id = _resolve_issue_id_from_ref(issue_ref)
-    if issue_id is None:
-        raise NotFound("Issue not found")
-    # Get the issue and verify it's escalated
-    issue = Issue.query.filter(
-        Issue.id == issue_id,
-        Issue.status.in_([
-            Issue.STATUS_ESCALATED_TO_DEV,
-            Issue.STATUS_DEV_RESOLVED,
-            'elevated',
-            'developer_review',
-            'developer_resolved',
-        ])
-    ).first_or_404()
-
-    # Get status history — convert to view dicts
-    history_query = IssueStatusHistory.query.filter_by(
-        issue_id=issue.id
-    ).order_by(IssueStatusHistory.changed_at.desc()).all()
-    history = [_history_entry_to_view(entry) for entry in history_query]
-
-    issue_view = _issue_to_view(issue)
-
-    return render_template('sysadmin_view_escalated_issue.html',
-                         current_page='issues',
-        page_title=f'Issue #{issue.id}',
-        issue=issue_view,
-        issue_ref=make_opaque_ref('issue', issue.id),
-        report_ref_for=lambda report_id: make_opaque_ref('report', report_id),
-        correlation_pack=_correlation_pack_to_view(issue.correlation_pack),
-        history=history,
-        format_utc_iso=format_utc_iso)
-
+# The list and detail GET routes that used to live here were superseded by
+# support_tickets() (the /support dashboard's "Escalated Issues" tab) and
+# view_issue() (the unified ticket detail surface) above. Only the two
+# escalation-specific POST actions remain — see the TICKETS section header.
 
 @sysadmin_bp.route('/issues/<issue_ref>/start-review', methods=['POST'])
 @system_admin_required
@@ -1339,7 +1250,7 @@ def start_review_escalated_issue(issue_ref):
     ).first_or_404()
 
     flash("Status remains Escalated to Developer until technical resolution is recorded.", "info")
-    return redirect(url_for('sysadmin.view_escalated_issue', issue_ref=make_opaque_ref('issue', issue.id)))
+    return redirect(url_for('sysadmin.view_issue', issue_ref=make_opaque_ref('issue', issue.id)))
 
 
 @sysadmin_bp.route('/issues/<issue_ref>/resolve', methods=['POST'])
@@ -1366,23 +1277,23 @@ def resolve_escalated_issue(issue_ref):
 
     if not resolution_note:
         flash("Resolution notes are required.", "error")
-        return redirect(url_for('sysadmin.view_escalated_issue', issue_ref=make_opaque_ref('issue', issue.id)))
+        return redirect(url_for('sysadmin.view_issue', issue_ref=make_opaque_ref('issue', issue.id)))
 
     try:
         reward_amount_value = None
         if eligible_for_reward:
             if not reward_amount_raw:
                 flash("Reward amount is required when bug bounty is selected.", "error")
-                return redirect(url_for('sysadmin.view_escalated_issue', issue_ref=make_opaque_ref('issue', issue.id)))
+                return redirect(url_for('sysadmin.view_issue', issue_ref=make_opaque_ref('issue', issue.id)))
             try:
                 from app.models import _quantize_currency
                 reward_amount_value = _quantize_currency(reward_amount_raw)
             except (ValueError, TypeError, InvalidOperation):
                 flash("Invalid reward amount.", "error")
-                return redirect(url_for('sysadmin.view_escalated_issue', issue_ref=make_opaque_ref('issue', issue.id)))
+                return redirect(url_for('sysadmin.view_issue', issue_ref=make_opaque_ref('issue', issue.id)))
             if reward_amount_value <= Decimal('0'):
                 flash("Reward amount must be greater than 0.", "error")
-                return redirect(url_for('sysadmin.view_escalated_issue', issue_ref=make_opaque_ref('issue', issue.id)))
+                return redirect(url_for('sysadmin.view_issue', issue_ref=make_opaque_ref('issue', issue.id)))
 
         old_status = issue.status
         issue.status = Issue.STATUS_DEV_RESOLVED
@@ -1408,7 +1319,7 @@ def resolve_escalated_issue(issue_ref):
             )
             if not reward_class or not reward_seat:
                 flash("Cannot issue reward: canonical class scope is unavailable.", "error")
-                return redirect(url_for('system_admin.view_issue', issue_id=issue.id))
+                return redirect(url_for('sysadmin.view_issue', issue_ref=make_opaque_ref('issue', issue.id)))
             reward_transaction = create_pending_transaction(
                 seat_id=reward_seat.id,
                 class_id=reward_class.class_id,
@@ -1462,4 +1373,4 @@ def resolve_escalated_issue(issue_ref):
         current_app.logger.error(f"Error resolving escalated issue {issue_id}: {e}")
         flash("An error occurred while resolving the issue.", "error")
 
-    return redirect(url_for('sysadmin.view_escalated_issue', issue_ref=make_opaque_ref('issue', issue.id)))
+    return redirect(url_for('sysadmin.view_issue', issue_ref=make_opaque_ref('issue', issue.id)))
