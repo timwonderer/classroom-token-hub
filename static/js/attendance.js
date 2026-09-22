@@ -15,7 +15,8 @@ document.addEventListener("DOMContentLoaded", () => {
         initialState.active,
         pickTimeToday(initialState),
         initialState.projected_pay,
-        initialState.hall_pass
+        initialState.hall_pass,
+        initialState.done
       );
     } catch (e) {
       console.error('Failed to parse initial attendance state', e);
@@ -96,9 +97,9 @@ function performTap(action, pin, reason = null) {
     .then(data => {
       if (!data) return; // Session expired, already redirecting
       if (data.status === "ok") {
-        const state = { active: data.active, duration: data.duration, duration_today: data.duration_today, projected_pay: data.projected_pay, hall_pass: data.hall_pass };
+        const state = { active: data.active, duration: data.duration, duration_today: data.duration_today, projected_pay: data.projected_pay, hall_pass: data.hall_pass, done: data.done };
         rememberAttendanceState(state);
-        updateAttendanceUI(state.active, pickTimeToday(state), state.projected_pay, state.hall_pass);
+        updateAttendanceUI(state.active, pickTimeToday(state), state.projected_pay, state.hall_pass, state.done);
         let message = `${action === "start_work" ? "Start Work" : "Break"} successful`;
         createToast(message);
       } else {
@@ -129,7 +130,7 @@ setInterval(() => {
       if (data.status === 'ok' && data.attendance_state) {
         const state = data.attendance_state;
         rememberAttendanceState(state);
-        updateAttendanceUI(state.active, pickTimeToday(state), state.projected_pay, state.hall_pass);
+        updateAttendanceUI(state.active, pickTimeToday(state), state.projected_pay, state.hall_pass, state.done);
       }
     })
     .catch(err => console.error("Status polling error:", err));
@@ -145,7 +146,7 @@ function pickTimeToday(state) {
   return state ? state.duration : 0;
 }
 
-function updateAttendanceUI(isActive, duration, projectedPay, hallPass = null) {
+function updateAttendanceUI(isActive, duration, projectedPay, hallPass = null, doneForDay = false) {
   const row = document.querySelector(".attendance-state-row");
   if (!row) return;
 
@@ -155,12 +156,16 @@ function updateAttendanceUI(isActive, duration, projectedPay, hallPass = null) {
   const startWorkBtn = row.querySelector("#startWork");
   const breakWorkBtn = row.querySelector("#breakWork");
 
-  rememberAttendanceState({ active: isActive, duration, projected_pay: projectedPay, hall_pass: hallPass });
+  rememberAttendanceState({ active: isActive, duration, projected_pay: projectedPay, hall_pass: hallPass, done: doneForDay });
 
-  statusCell.textContent = isActive ? "Active" : "Inactive";
-  statusCell.classList.toggle("attendance-status-active", isActive);
-  statusCell.classList.toggle("attendance-status-neutral", !isActive);
-  statusCell.classList.toggle("fw-bold", isActive);
+  // Done-for-day is a terminal state for the class-local day (server already
+  // refuses a same-day restart) -- it must read distinctly from a plain
+  // in-between "Inactive" (e.g. mid-break) so a student doesn't try Start
+  // Work expecting it to work.
+  statusCell.textContent = doneForDay ? "Done for Day" : (isActive ? "Active" : "Inactive");
+  statusCell.classList.toggle("attendance-status-active", isActive && !doneForDay);
+  statusCell.classList.toggle("attendance-status-neutral", !isActive || doneForDay);
+  statusCell.classList.toggle("fw-bold", isActive && !doneForDay);
 
   durationCell.textContent = formatDuration(duration);
   if (payCell) {
@@ -171,16 +176,26 @@ function updateAttendanceUI(isActive, duration, projectedPay, hallPass = null) {
   // only while genuinely active. isActive is false in both cases, but only one
   // of them should offer a fresh clock-in -- the other should offer "Return".
   const onOpenHallPass = !!(hallPass && hallPass.status === 'left');
-  if (startWorkBtn) startWorkBtn.disabled = isActive || onOpenHallPass;
-  configureBreakButton(breakWorkBtn, isActive, hallPass);
+  if (startWorkBtn) startWorkBtn.disabled = isActive || onOpenHallPass || doneForDay;
+  configureBreakButton(breakWorkBtn, isActive, hallPass, doneForDay);
 
   // Handle hall pass overlay
   updateHallPassOverlay(hallPass);
 }
 
-function configureBreakButton(button, isActive, hallPass) {
+function configureBreakButton(button, isActive, hallPass, doneForDay = false) {
   if (!button) return;
   button.classList.remove('btn-warning', 'btn-danger', 'btn-primary', 'btn-outline-warning');
+
+  // Terminal for the day -- takes priority over hall-pass/active state, which
+  // shouldn't be reachable once done_for_day is recorded anyway, but this
+  // keeps the button correct even if a stale hall-pass state lingers.
+  if (doneForDay) {
+    button.disabled = true;
+    button.dataset.state = 'done';
+    button.innerHTML = '<span class="material-symbols-outlined align-bottom me-1" aria-hidden="true">event_available</span> Done for Day';
+    return;
+  }
 
   // A hall pass the student has not yet returned from determines the primary
   // action REGARDLESS of isActive. "left" means the seat's latest attendance
@@ -390,7 +405,7 @@ function refreshUi() {
       if (statusData.status === 'ok' && statusData.attendance_state) {
         const state = statusData.attendance_state;
         rememberAttendanceState(state);
-        updateAttendanceUI(state.active, pickTimeToday(state), state.projected_pay, state.hall_pass);
+        updateAttendanceUI(state.active, pickTimeToday(state), state.projected_pay, state.hall_pass, state.done);
       }
     });
 }
