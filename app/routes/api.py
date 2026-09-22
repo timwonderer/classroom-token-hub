@@ -104,6 +104,7 @@ from app.services.attendance_service import (
     calculate_unpaid_attendance_seconds,
     calculate_worked_attendance_seconds_today,
     get_class_attendance_status,
+    is_done_for_day,
 )
 from app.services.ledger_posting_service import create_pending_transaction, create_pending_transaction_idempotent
 from app.services.ledger_balance_query_service import get_available_balances
@@ -1759,7 +1760,7 @@ def handle_tap():
 
     if normalized_action == "start_work" and currently_active:
         return jsonify({
-            "status": "ok", "active": True, "duration": 0,
+            "status": "ok", "active": True, "done": False, "duration": 0,
             "duration_today": calculate_worked_attendance_seconds_today(
                 seat_id, class_id, ctx=context
             ),
@@ -1767,7 +1768,9 @@ def handle_tap():
 
     if normalized_action == "stop_work" and not currently_active:
         return jsonify({
-            "status": "ok", "active": False, "duration": 0,
+            "status": "ok", "active": False,
+            "done": is_done_for_day(seat_id, class_id, ctx=context),
+            "duration": 0,
             "duration_today": calculate_worked_attendance_seconds_today(
                 seat_id, class_id, ctx=context
             ),
@@ -1842,6 +1845,7 @@ def handle_tap():
     return jsonify({
         "status": "ok",
         "active": is_active,
+        "done": is_done_for_day(seat_id, class_id, ctx=context),
         "duration": duration,
         "duration_today": duration_today,
         "projected_pay": float(projected_pay)

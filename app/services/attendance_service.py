@@ -238,6 +238,30 @@ def calculate_worked_attendance_seconds_today(seat_id: int, class_id: str, *, ct
     return _elapsed_seconds(ctx, intervals)
 
 
+def is_done_for_day(seat_id: int, class_id: str, *, ctx) -> bool:
+    """Whether the seat has already recorded ``done_for_day`` in the current
+    class-local day.
+
+    A terminal state for the day (DOM-PROD-001): once true, a fresh
+    ``start_work`` for this seat/class is refused server-side
+    (``_record_attendance_session_impl``) until the next canonical day. The
+    single computation shared by ``get_class_attendance_status`` (page render
+    and the polling endpoint) and the tap route (``/api/tap``'s own response),
+    which previously computed attendance facts independently and never
+    surfaced this one at all.
+    """
+    day_start_utc, day_end_utc = _current_evaluation_day_bounds(ctx)
+    rows = AttendanceSession.query.filter(
+        AttendanceSession.target_seat_id == seat_id,
+        AttendanceSession.class_id == class_id,
+        AttendanceSession.status == "inactive",
+        AttendanceSession.reason_code == AttendanceReasonCode.DONE_FOR_DAY.value,
+        AttendanceSession.timestamp >= day_start_utc,
+        AttendanceSession.timestamp < day_end_utc,
+    ).first()
+    return rows is not None
+
+
 def get_class_attendance_status(student, *, class_id: str, payroll_anchor_utc=None, ctx=None):
     """Return PROD attendance facts for one canonical class scope."""
     if not class_id:
@@ -265,13 +289,7 @@ def get_class_attendance_status(student, *, class_id: str, payroll_anchor_utc=No
     latest = rows[-1] if rows else None
     is_active = bool(latest and latest.status == "active")
 
-    day_start_utc, day_end_utc = _current_evaluation_day_bounds(ctx)
-    done = any(
-        row.status == "inactive"
-        and row.reason_code == AttendanceReasonCode.DONE_FOR_DAY.value
-        and day_start_utc <= row.timestamp < day_end_utc
-        for row in rows
-    )
+    done = is_done_for_day(seat.id, class_id, ctx=ctx)
     duration = calculate_unpaid_attendance_seconds(
         seat.id,
         class_id,
