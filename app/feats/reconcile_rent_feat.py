@@ -4,12 +4,20 @@ FEAT-OBL-002: Scheduled Rent Cycle — canonical rent reconciliation.
 This is the SINGLE mechanism that materializes the recurring rent lifecycle for a
 class. It is idempotent and safe to run repeatedly (on a schedule or on demand):
 
-  - First run for a rent-enabled class with no cycle yet: create cycle 1 and one
-    ASSESSMENT per claimed, non-exempt student seat.
+  - First run for a rent-enabled class with no cycle yet: create cycle 1.
   - Later runs: when the current cycle's ``next_assessment_at`` has been reached,
-    create the successor cycle, assess it, and expire the PRIOR cycle's PERK
-    hall passes at the rent boundary (DOM-OBL-001 §IX.9 / DOM-STORE-001 §VIII.6).
-  - Runs before the boundary, or for a disabled class, are no-ops.
+    create the successor cycle and expire the PRIOR cycle's PERK hall passes at
+    the rent boundary (DOM-OBL-001 §IX.9 / DOM-STORE-001 §VIII.6).
+  - Every run, regardless of the above: assess one RENT ASSESSMENT per claimed,
+    non-exempt student seat against whichever cycle is now current. A cycle's
+    frozen ``policy_uuid`` fixes its TERMS (amount, cadence, penalty, due
+    dates) only — never its roster. A seat claimed after the cycle's first
+    assessment pass is picked up here on the very next reconciliation, always
+    against the CURRENT cycle, never retroactively against one that already
+    advanced past before the seat was claimed. Idempotent per (seat, cycle),
+    so a roster with nothing new to assess costs nothing extra.
+  - Runs before the boundary with no roster change, or for a disabled class,
+    are no-ops.
 
 Layering (INV-ARC-006 / INV-ARC-021): reconciliation is a FEAT orchestrator. It
 reads schedule INTENT from RentSettings, resolves concrete instants through the
@@ -271,7 +279,6 @@ def reconcile_rent(
             ),
             context=None,
         )
-        result.assessments_created += _assess_cycle(settings, class_id, cycle)
         result.cycles_created.append(cycle.cycle_number)
         result.reason = "CREATED_INITIAL"
         latest = cycle
@@ -304,7 +311,6 @@ def reconcile_rent(
             ),
             context=None,
         )
-        result.assessments_created += _assess_cycle(settings, class_id, new_cycle)
 
         # Expire the prior cycle's rent PERK hall passes at the boundary.
         if actor_seat_id is None:
@@ -315,6 +321,24 @@ def reconcile_rent(
         if result.reason in ("NOOP",):
             result.reason = "ADVANCED"
         latest = new_cycle
+
+    # Roster assessment against the now-current cycle, uniform across genesis,
+    # advancement, and plain no-op runs (operator report, 2026-09-22): the
+    # frozen policy_uuid on a cycle fixes its TERMS (amount, cadence, penalty,
+    # due dates) — it must not also freeze its ROSTER. A seat claimed after
+    # the cycle's first assessment pass is picked up here on the very next
+    # reconciliation, always against the CURRENT open cycle only; a cycle that
+    # has already advanced past is never revisited for a late-claiming seat,
+    # so nobody is retroactively assessed for a period before they joined.
+    # `_assess_cycle` is idempotent per (seat, cycle_number), so re-running it
+    # against a cycle already assessed for the rest of the roster is a no-op
+    # for every seat it has already seen. If a teacher wants to give a
+    # late-joiner time before their first bill, that is what a waiver is for
+    # (DOM-OBL-001) -- this reconciliation must not make that call silently.
+    backfilled = _assess_cycle(settings, class_id, latest)
+    result.assessments_created += backfilled
+    if backfilled and result.reason == "NOOP":
+        result.reason = "ROSTER_BACKFILLED"
 
     # Late-fee accrual: assess penalties on any cycle whose grace boundary has
     # lapsed while its rent is still unsatisfied. Runs over every cycle (not just

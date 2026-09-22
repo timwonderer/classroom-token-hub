@@ -31,7 +31,7 @@ from decimal import Decimal
 
 from app.extensions import db
 from app.feats.base import FEATContext
-from app.models import BillCycle, ObligationAssessment, EntitlementEvent
+from app.models import BillCycle, ObligationAssessment, EntitlementEvent, Seat
 from app.feats.reconcile_rent_feat import execute_reconcile_rent
 from app.feats.rent_payment_feat import execute_rent_payment, execute_rent_bill_payment
 from app.services import obligations_service
@@ -247,6 +247,83 @@ class TestRentReconciliation:
             assert 2 in result.cycles_created
             assert result.perks_expired >= 2
             assert len(_active_perk_hall_passes(classroom.class_id, seat_id)) == 0
+
+
+class TestRentRosterBackfill:
+    """A cycle's frozen ``policy_uuid`` fixes its TERMS (amount, cadence,
+    penalty, due dates) -- it must not also freeze its ROSTER. A seat that
+    claims after the cycle's first assessment pass must be assessed for the
+    CURRENT open cycle on the next reconciliation, never for a cycle that
+    already advanced past before they joined, and never silently skipped
+    until the cycle after next just because reconciliation ran once already.
+
+    Reproduces a live-test report (2026-09-22): a student who claimed a
+    seat the day after rent's cycle 1 was first assessed showed no rent
+    obligation at all and would not have gotten one until the cycle
+    advanced a month later -- reconcile_rent's genesis/catch-up paths only
+    ever assessed the roster at the instant a cycle was created or
+    advanced, never on a plain re-run against an already-open cycle.
+    """
+
+    def test_seat_claimed_after_initial_reconcile_is_backfilled_into_the_open_cycle(self, app):
+        classroom = initialize("chemistry_p1", app)
+        with app.app_context():
+            _setup_rent_class(classroom)
+            late_seat_id = classroom.students[0].seat.id
+
+            # Simulate this seat not yet being claimed when cycle 1 was first
+            # assessed -- exactly what actually happened live (the seat was
+            # claimed one day after reconciliation, not before). Re-fetch the
+            # session-attached row rather than mutating the fixture's own
+            # ``ProvisionedStudent.seat`` reference, which is a detached
+            # snapshot captured at provisioning time -- mutating it silently
+            # touches nothing in the database.
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"unclaim:{late_seat_id}"):
+                Seat.query.filter_by(id=late_seat_id).update({"claimed_at": None})
+                db.session.flush()
+
+            initial = execute_reconcile_rent(classroom.class_id, reference_time_utc=_T_INITIAL)
+            assert initial.reason == "CREATED_INITIAL"
+            roster_size = len(classroom.students)
+            assessed_seat_ids = {a.seat_id for a in _rent_assessments(classroom.class_id)}
+            assert late_seat_id not in assessed_seat_ids
+            assert len(assessed_seat_ids) == roster_size - 1
+
+            # The seat claims now, still within cycle 1 (well before its
+            # next_assessment_at boundary).
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"claim:{late_seat_id}"):
+                Seat.query.filter_by(id=late_seat_id).update({"claimed_at": _T_BEFORE_BOUNDARY})
+                db.session.flush()
+
+            result = execute_reconcile_rent(
+                classroom.class_id, reference_time_utc=_T_BEFORE_BOUNDARY
+            )
+
+            assert result.reason == "ROSTER_BACKFILLED"
+            assert result.assessments_created == 1
+            assert result.cycles_created == []  # never mints a new cycle for this
+            assert len(_bill_cycles(classroom.class_id)) == 1
+
+            assessments = _rent_assessments(classroom.class_id)
+            assert len(assessments) == roster_size
+            late_assessment = next(a for a in assessments if a.seat_id == late_seat_id)
+            # Same cycle the rest of the roster was billed under -- not a new
+            # cycle, and not retroactively assessed for one that predates them.
+            assert late_assessment.correlation_id.endswith(":cycle:1")
+
+    def test_rerun_with_no_roster_change_stays_a_true_noop(self, app):
+        """The backfill pass must not turn every idle re-run into a false positive."""
+        classroom = initialize("chemistry_p1", app)
+        with app.app_context():
+            _setup_rent_class(classroom)
+            execute_reconcile_rent(classroom.class_id, reference_time_utc=_T_INITIAL)
+
+            result = execute_reconcile_rent(
+                classroom.class_id, reference_time_utc=_T_BEFORE_BOUNDARY
+            )
+
+            assert result.reason == "NOOP"
+            assert result.assessments_created == 0
 
 
 class TestRentPayment:
