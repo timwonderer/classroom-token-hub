@@ -139,6 +139,11 @@ from app.services.classroom_setup import (
 from app.services.payroll_settings_service import upsert_payroll_settings
 from app.services import store_service
 from app.services.entitlement_read_service import derive_display_status
+from app.services.hall_pass_status_service import (
+    HALL_PASS_STATUS_LEFT,
+    HALL_PASS_STATUS_RETURNED,
+    resolve_hall_pass_lifecycle_status,
+)
 from app.services.store import collective_goals
 from app.services.store_service import (
     publish_product,
@@ -6433,26 +6438,6 @@ def hall_pass():
         .order_by(HallPassLog.timestamp.asc(), HallPassLog.id.asc())
         .all()
     )
-    requested_seat_ids = {log.requested_by_seat_id for log in approved_logs}
-    latest_hall_pass_events = (
-        AttendanceSession.query
-        .filter(AttendanceSession.class_id == selected_class_id)
-        .filter(AttendanceSession.target_seat_id.in_(requested_seat_ids))
-        .filter(AttendanceSession.timestamp >= day_bounds.boundary_start_utc)
-        .filter(AttendanceSession.timestamp < day_bounds.boundary_end_utc)
-        .order_by(
-            AttendanceSession.target_seat_id.asc(),
-            AttendanceSession.timestamp.desc(),
-            AttendanceSession.id.desc(),
-        )
-        .all()
-        if requested_seat_ids
-        else []
-    )
-    latest_event_by_seat_id = {}
-    for event in latest_hall_pass_events:
-        latest_event_by_seat_id.setdefault(event.target_seat_id, event)
-
     def _hall_pass_display_row(log):
         seat = getattr(log, "requested_by_seat", None)
         profile = seat.identity_profile if seat and seat.identity_profile else None
@@ -6465,7 +6450,6 @@ def hall_pass():
             decision_time=log.timestamp,
             left_time=log.timestamp,
             period=section or "",
-            latest_event=latest_event_by_seat_id.get(log.requested_by_seat_id),
         )
 
     pending_requests = []
@@ -6483,17 +6467,33 @@ def hall_pass():
             period=section or "",
         ))
 
+    # A pass moves through exactly three states after approval -- approved,
+    # left, returned -- per resolve_hall_pass_lifecycle_status, the same
+    # resolver the public verification page uses. This page previously asked a
+    # cruder question (is the seat's single LATEST attendance event
+    # inactive/hall_pass?) with no representation of "returned" at all, so a
+    # pass that had completed a full round trip answered that question "no" --
+    # identically to a pass that had never been used -- and fell back into
+    # Issued forever, offering a "Left Class" button that would send an
+    # already-returned student back out if clicked. The v1 behaviour this page
+    # is meant to match treats Issued and Out as a temporary holding area, not
+    # a permanent record: once returned, a pass leaves both tabs and is only
+    # visible in History.
     issued_passes = []
     out_of_class = []
     for log in approved_logs:
         row = _hall_pass_display_row(log)
-        latest_event = row.latest_event
-        if (
-            latest_event
-            and latest_event.status == "inactive"
-            and latest_event.reason_code == AttendanceReasonCode.HALL_PASS.value
-        ):
-            row.left_time = latest_event.timestamp
+        lifecycle = resolve_hall_pass_lifecycle_status(
+            class_id=selected_class_id,
+            seat_id=log.requested_by_seat_id,
+            hall_pass_id=log.hall_pass_id,
+            day_boundary_start_utc=day_bounds.boundary_start_utc,
+            day_boundary_end_utc=day_bounds.boundary_end_utc,
+        )
+        if lifecycle.status == HALL_PASS_STATUS_RETURNED:
+            continue
+        if lifecycle.status == HALL_PASS_STATUS_LEFT:
+            row.left_time = lifecycle.left_row.timestamp
             out_of_class.append(row)
         else:
             issued_passes.append(row)

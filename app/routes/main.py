@@ -180,6 +180,7 @@ def verify_hall_pass(teacher_public_token):
     from app.models import AttendanceReasonCode, AttendanceSession, HallPassLog
     from app.services.class_configuration_query_service import get_all_classes_by_teacher, get_class_economy_by_join_code
     from app.services.identity_service import match_hall_pass_profiles
+    from app.services.hall_pass_status_service import resolve_hall_pass_lifecycle_status
 
     _GENERIC_UNAVAILABLE = "Verification page not available."
 
@@ -282,37 +283,16 @@ def verify_hall_pass(teacher_public_token):
     else:
         entry = matched[0]
         class_label = _class_display_label(selected_class_row)
-        attendance_rows = (
-            AttendanceSession.query.filter_by(
-                class_id=entry.class_id,
-                target_seat_id=entry.requested_by_seat_id,
-                hall_pass_id=entry.hall_pass_id,
-            )
-            .filter(
-                AttendanceSession.timestamp >= day_bounds.boundary_start_utc,
-                AttendanceSession.timestamp < day_bounds.boundary_end_utc,
-            )
-            .order_by(AttendanceSession.timestamp.asc(), AttendanceSession.id.asc())
-            .all()
+        lifecycle = resolve_hall_pass_lifecycle_status(
+            class_id=entry.class_id,
+            seat_id=entry.requested_by_seat_id,
+            hall_pass_id=entry.hall_pass_id,
+            day_boundary_start_utc=day_bounds.boundary_start_utc,
+            day_boundary_end_utc=day_bounds.boundary_end_utc,
         )
-        left_row = next(
-            (
-                row for row in attendance_rows
-                if row.status == "inactive"
-                and row.reason_code == AttendanceReasonCode.HALL_PASS.value
-            ),
-            None,
-        )
-        return_row = next(
-            (
-                row for row in attendance_rows
-                if left_row is not None
-                and row.status == "active"
-                and row.timestamp >= left_row.timestamp
-            ),
-            None,
-        )
-        status = "returned" if return_row else "left" if left_row else "approved"
+        left_row = lifecycle.left_row
+        return_row = lifecycle.return_row
+        status = lifecycle.status
         time_out_value = None
         elapsed_mins = None
         if left_row:
