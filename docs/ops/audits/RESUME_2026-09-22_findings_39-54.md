@@ -1,17 +1,41 @@
 # Resume point — live-test remediation, continued session of 2026-09-21/22
 
+**SESSION CLOSED.** This is the final state as of end-of-session
+2026-09-21/22. Everything in §2 is committed, tested, deployed, and the
+host restarted clean. Nothing is mid-flight except finding 66 (diagnosed,
+not yet coded) — see §6 for where to start tomorrow.
+
 **Branch:** `main` (direct commits, per operator instruction — this is live-test
 remediation, not the official production launch cycle; the full ~3,400-test
 suite is reserved for that transition, per `RESUME_2026-09-22.md` §1 and the
 operator's own restatement tonight).
-**Live server:** `182928a79`, tag `live-test/2026-09-21k` — deployed, migrated,
+**Live server:** `24bca2c8c`, tag `live-test/2026-09-21m` — deployed, migrated,
 service healthy. Local `main`, `origin/main`, and the host are confirmed at
-the identical SHA.
+the identical SHA. Full tag sequence tonight: `...21i` (start of this doc's
+window) → `...21j` → `...21k` (fmt_timestamp/TLCP-trace fix) → `...21l`
+(done_for_day) → `...21m` (TLCP invariant-violation noise, final).
 **Last recorded deploy before this doc:** `DEPLOY_2026-09-21_b4a639311.md`
 (tag `live-test/2026-09-21`). Findings 39-44 (hall-pass hotfixes) and the
 Cloudflare Access gate replacement were deployed under tags `...21b`
 through `...21f` without an individual audit entry each — this document
 is the first record of everything since `b4a639311`, catching the ledger up.
+
+## 0. Tonight in one paragraph
+
+Fixed and shipped 15 defects (findings 45-57, 14, 64, 65, 67), most already
+recorded before this final update; the last three were: the long-standing
+sysadmin-dashboard 500 (`operational_events` table never created, finding
+14), a second 500 it uncovered on ticket detail pages (`fmt_timestamp` choking
+on the JSON-sourced ISO-string timestamps in TLCP correlation packs, finding
+64), the `done_for_day` UI-blindness bug where a student who tapped "Done for
+the Day" still saw active Start Work/Break buttons (finding 65), and
+sysadmin's entire blueprint ERROR-logging a "missing canonical context"
+invariant violation on every single request, drowning real errors in noise
+(finding 67). Operator drove a full student → teacher → sysadmin ticket
+lifecycle live and it worked end-to-end, confirmed independently against the
+server log rather than taken on report. One thing diagnosed but not yet
+fixed: insurance-cancel-visibility (finding 66) — cancellation works
+correctly server-side, the student UI just doesn't show it.
 
 ---
 
@@ -21,10 +45,12 @@ is the first record of everything since `b4a639311`, catching the ledger up.
 cd classroom-economy
 git log --oneline b4a639311..HEAD --reverse   # full batch, in order
 git status                                     # expect clean
-flask db heads                                 # expect a3c7d9e1b204, single head
+flask db heads                                 # expect b8e1f4c2a5d9, single head
 ```
 
-Nothing is blocked on a redeploy right now — everything below is already live.
+Nothing is blocked on a redeploy right now — everything in §2 is already
+live at `24bca2c8c` / tag `live-test/2026-09-21m`. Start with finding 66
+(§4, §6) — it's the only diagnosed-but-uncoded item left.
 
 ---
 
@@ -53,6 +79,8 @@ during the live-test session and are not re-summarized here — see
 | 57 | Sysadmin navbar clock used `toLocaleDateString(undefined, ...)` — real browser-local-time detection — the one concrete violation found auditing sysadmin surfaces against the new INV-ARC-015 §X.2 rule | `1d6b25990` |
 | 14 | `operational_events` table (DOM-OPS-001 §5) was never created despite `operational_event_service.record()`/`get_recent_error_events()` referencing it since the migration that dropped its v1 predecessors — every `/sysadmin/dashboard` load 500'd. Long-standing launch blocker, carried across multiple sessions, finally root-caused and fixed. | `b7db24437` |
 | 64 | TLCP correlation packs (`tlcp.py`) freeze request-trace timestamps as ISO strings inside the JSON pack column; the new unified `sysadmin_view_issue.html` piped `trace.timestamp` straight through `fmt_timestamp`, which only accepted `datetime` — 500'd (`AttributeError: 'str' object has no attribute 'tzinfo'`) on any ticket with a non-empty request trace. Pre-existing bug (identical line in the pre-unification template); tonight's retest of finding 14 is what finally exercised it live. | `182928a79` |
+| 65 | Operator (as Jordan) used "Done for Day" on the student dashboard, then reloaded — the dashboard still showed "Active" with enabled Start Work/Break buttons. Server-side `done_for_day` was already correctly computed and enforced (`app/feats/prod.py` already refused a same-day restart, 409) but never exposed to any client code path — initial page render, the 10s poller, or the tap response. Presentation-only; no data corruption was ever possible. Fixed by extracting a shared `is_done_for_day()` helper, exposing `done` from `get_class_attendance_status()` and all 3 `handle_tap()` response points, and wiring `static/js/attendance.js` (`updateAttendanceUI()`/`configureBreakButton()`, all 4 call sites) to disable both buttons and show "Done for Day" when true. | `a9eba02f6` |
+| 67 | Every sysadmin request — dashboard, login, support, every ticket view, `/student/login` too — logged `TLCP-INVARIANT-VIOLATION: missing canonical context` at ERROR severity, forever, because sysadmin's permanent by-design absence of class context (INV-ARC-019) was never added to TLCP's exemption lists. Confirmed the noise doesn't reach `operational_events` (found while retesting finding 14, so it wasn't polluting the newly-fixed dashboard), but it drowns real errors in the same log stream. Fixed both directions of the sysadmin/class-context matrix: absent context on a sysadmin request is now silently expected; *present* context on a sysadmin request (which should never happen) now explicitly fails closed with its own invariant-violation log instead of being silently trusted. Verified live by curling `/sysadmin/login` directly on the host before/after and diffing the log. | `24bca2c8c` |
 
 **Features shipped (deliberate builds, not defects):**
 
@@ -109,10 +137,19 @@ test went red for that exact reason, restored) before being counted done.
   §5 for the unified ticket page's escalation/bug-bounty panel state; the
   direct Open/Resolved/Closed and read-only-with-teacher panel states were
   not specifically exercised by this run and remain unconfirmed.
+  **Cross-checked against the raw server log, not taken on operator report
+  alone** — traced every request in the window: 200s and 302s throughout,
+  zero 4xx/5xx besides one unrelated static-asset 404.
+- **TLCP invariant-violation noise gone for sysadmin** (finding 67) — curled
+  `/sysadmin/login` directly on the host before and after the fix and diffed
+  the log: the `ERROR`-level line fired on every hit before, is gone after.
+  This is host-log-verified, not exercised through an operator click in the
+  browser.
 
-Everything else in §2's finding table was confirmed only by the automated
-test suite, not by a fresh live click-through after the fix landed —
-see §5.
+Everything else in §2's finding table — including findings 14, 64, and 65's
+fix itself — was confirmed only by the automated test suite or (for 14/64/67)
+a direct log check, not by a fresh operator click-through after the fix
+landed. See §5.
 
 ---
 
@@ -136,8 +173,7 @@ New, found this session, not yet fixed:
 | 61 | Payroll → Manual Payments: `payment_type`/`account_type`/`save_action` are hardcoded hidden form inputs behind a UI element ("Action:") that visually resembles a live choice. Investigation was mid-flight (confirmed the client- and server-side hardcoding; had not finished reading `record_payroll_event`'s remaining arguments) when this thread moved to the passkey work. | investigation incomplete |
 | 62 | `/static/manifest.json` fetch is intercepted by Cloudflare Access and redirected to its own login page, tripping the page's own CSP (`default-src 'self'`) and producing a permanent `sw.js` cache-first failure loop on every navigation. Cosmetic/console-only — PWA installability and offline caching for that one asset, not a functional break. | not investigated further, deferred by operator |
 | 63 | Rent obligation summary showed only 1 of 2 claimed students (Jordan Lee excluded) in an earlier live test. Checked tonight: **zero `ObligationAssessment` rows exist for any student in this class**, including the one claimed since 2026-09-19 — so either the rent cycle genuinely has not run for anyone yet, or `build_class_obligation_summary`/`build_student_obligation_view` compute the widget live rather than from persisted assessments and this check is answering the wrong question. Root cause still not isolated. | operator asked to keep watching; re-check after the next rent cycle boundary |
-| 65 | Operator (as Jordan) used "Done for Day" on the student dashboard, then reloaded — the dashboard still showed "Active" with enabled Start Work/Break buttons. Server-side `done_for_day` is correctly computed (already guarded against a same-day restart in `app/feats/prod.py`) but was never exposed to any client code path — initial page render, the 10s poller, or the tap response. Presentation-only; no data corruption possible given the existing server-side guard. Root-caused; `app/services/attendance_service.py` (new shared `is_done_for_day()` helper) and `app/routes/api.py` (all 3 `handle_tap()` response points) updated to compute/expose `done` — **uncommitted**. `static/js/attendance.js` (`updateAttendanceUI()`, `configureBreakButton()`, and their 4 call sites) still needs to consume it. | fix in progress, not yet committed |
-| 66 | Operator cancelled both of Jordan's insurance policies; the student Insurance page still shows the "Cancel coverage" button/form even though a "This coverage is already set to not renew" banner is present — operator wants the button replaced with "Expires on [date]" once cancelled, for visibility. Confirmed at the data layer: `BillCycle.next_assessment_at IS NULL` on the terminal cycle for both policies, real expiry dates 2026-10-22 — cancellation genuinely took effect server-side; this is purely a display gap. No code changes made yet. | diagnosed, not fixed |
+| 66 | Operator cancelled both of Jordan's insurance policies; the student Insurance page still shows the "Cancel coverage" button/form even though a "This coverage is already set to not renew" banner is present — operator wants the button replaced with "Expires on [date]" once cancelled, for visibility. Confirmed at the data layer: `BillCycle.next_assessment_at IS NULL` on the terminal cycle for both policies, real expiry dates 2026-10-22 — cancellation genuinely took effect server-side; this is purely a display gap. No code changes made yet. | **diagnosed, not fixed — start here tomorrow** |
 
 ---
 
@@ -152,6 +188,11 @@ New, found this session, not yet fixed:
   not a fresh live checkin
 - Passkey timestamp now in class time instead of raw UTC (54) — registered
   before this fix landed
+- **`done_for_day` UI fix (65)** — the original symptom (buttons stayed
+  enabled after "Done for the Day") was seen live; the fix itself has only
+  been confirmed by the automated regression suite. Operator has not yet
+  reloaded the dashboard as a student after tapping "Done for the Day"
+  since this deployed.
 
 ### Brand new, zero live testing
 - Unified ticket page (`/sysadmin/issues/<ref>`): the escalation/bug-bounty
@@ -180,22 +221,29 @@ unknown — not touched this session)
 
 ## 6. Suggested order for next session
 
-1. Finish finding 65 (`done_for_day` UI blindness) — server side is
-   root-caused and written but not yet committed; wire
-   `static/js/attendance.js`, test, commit, deploy.
-2. Fix finding 66 (insurance-cancel visibility) — diagnosed, server-verified,
-   no code written yet.
-3. Live-verify the four "automated-tested only" items in §5 with a fresh
-   click-through (cheap, closes real risk from tonight's own fixes).
-4. Live-verify the remaining unified-ticket-page panel states
+1. **Fix finding 66 (insurance-cancel visibility)** — diagnosed, server-
+   verified, no code written yet. Add `cancelled`/`expires_at` to
+   `owned_coverage` in `app/routes/student.py` (query `BillCycle` by
+   `policy_uuid`+`class_id` for the terminal cycle's `cycle_boundary_at`),
+   swap the Cancel-coverage form for "Expires on [date]" in
+   `templates/student_insurance_marketplace.html` once cancelled.
+2. Live-verify the five "automated-tested only" items in §5 with a fresh
+   click-through, `done_for_day` (65) first since it's the newest and the
+   original symptom was seen live under the operator's own account.
+3. Live-verify the remaining unified-ticket-page panel states
    (Open/Resolved/Closed direct action, read-only-with-teacher) and the
    UTC/class-time toggle control itself.
-5. Finish the payroll Manual Payments investigation (61) — was interrupted
+4. Finish the payroll Manual Payments investigation (61) — was interrupted
    mid-read, not abandoned by decision.
-6. Fix 58 (PRODUCTIVITY description key) and 59/60 (fake insurance policy
-   fields) — same shape as fixes already shipped tonight, small and
+5. Fix 58 (PRODUCTIVITY description key) and 59/60 (fake insurance policy
+   fields) — same shape as fixes already shipped this session, small and
    well-scoped.
-7. Re-check finding 63 once the class's rent cycle has had a chance to run.
+6. Re-check finding 63 once the class's rent cycle has had a chance to run.
+7. Optional, low priority: `/health/status` logs the same
+   `TLCP-INVARIANT-VIOLATION` noise finding 67 fixed for sysadmin — spotted
+   in passing while verifying 67, explicitly deferred as out of scope for
+   that fix. Different endpoint, same underlying shape (a legitimately
+   context-free request TLCP doesn't know is legitimate).
 
 ---
 
