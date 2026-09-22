@@ -73,6 +73,10 @@ from app.services.class_configuration_query_service import (
     get_hall_pass_settings,
 )
 from app.services.entitlement_service import consume_entitlement, get_hall_pass_balance, grant_hall_passes
+from app.services.hall_pass_status_service import (
+    HALL_PASS_STATUS_RETURNED,
+    resolve_hall_pass_lifecycle_status,
+)
 from app.services.hall_pass_request_queue import (
     PendingHallPassRequest,
     clear_pending_hall_pass_requests_for_seat,
@@ -978,15 +982,17 @@ def checkin_hall_pass():
         return context_error
     
     try:
-        latest_event = (
-            AttendanceSession.query.filter_by(
-                target_seat_id=student.id,
-                class_id=log_entry.class_id,
-            )
-            .order_by(AttendanceSession.timestamp.desc(), AttendanceSession.id.desc())
-            .first()
+        # Scoped to THIS pass's own attendance sequence, not merely "is the
+        # seat's latest event active" -- an unrelated active row (an ordinary
+        # clock-in, say) sitting more recently than this pass's departure must
+        # not be read as "already checked in from this pass" (that read made
+        # checkin silently no-op and leave the pass stuck at "left" forever).
+        lifecycle = resolve_hall_pass_lifecycle_status(
+            class_id=log_entry.class_id,
+            seat_id=student.id,
+            hall_pass_id=log_entry.hall_pass_id,
         )
-        if latest_event and latest_event.status == "active":
+        if lifecycle.status == HALL_PASS_STATUS_RETURNED:
             return jsonify({"status": "success", "message": "You are already checked in."})
 
         record_attendance_session(
@@ -1174,38 +1180,16 @@ def hall_pass_history():
                 or "Unknown"
             )
             class_row = get_class_economy(record.class_id)
-            attendance_rows = (
-                AttendanceSession.query.filter_by(
-                    class_id=record.class_id,
-                    target_seat_id=record.requested_by_seat_id,
-                    hall_pass_id=record.hall_pass_id,
-                )
-                .order_by(AttendanceSession.timestamp.asc(), AttendanceSession.id.asc())
-                .all()
+            # Unbounded by day: a history record has no single "today" to scope
+            # to, unlike the two other callers of this resolver.
+            lifecycle = resolve_hall_pass_lifecycle_status(
+                class_id=record.class_id,
+                seat_id=record.requested_by_seat_id,
+                hall_pass_id=record.hall_pass_id,
             )
-            left_row = next(
-                (
-                    row for row in attendance_rows
-                    if row.status == "inactive"
-                    and row.reason_code == AttendanceReasonCode.HALL_PASS.value
-                ),
-                None,
-            )
-            return_row = next(
-                (
-                    row for row in attendance_rows
-                    if left_row is not None
-                    and row.status == "active"
-                    and row.timestamp >= left_row.timestamp
-                ),
-                None,
-            )
-            if return_row is not None:
-                status = "returned"
-            elif left_row is not None:
-                status = "left"
-            else:
-                status = "approved"
+            left_row = lifecycle.left_row
+            return_row = lifecycle.return_row
+            status = lifecycle.status
             records_data.append({
                 "id": record.id,
                 "student_name": student_name,

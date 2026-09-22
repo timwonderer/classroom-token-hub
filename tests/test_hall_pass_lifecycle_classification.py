@@ -26,7 +26,7 @@ from datetime import datetime, timezone
 from app.extensions import db
 from app.feats.base import FEATContext
 from app.feats.prod import record_attendance_session
-from app.models import HallPassLog, HallPassSettings
+from app.models import AttendanceSession, HallPassLog, HallPassSettings
 from app.services.context_resolver import CanonicalContext
 from app.services.entitlement_service import grant_hall_passes
 from app.services.hall_pass_request_queue import (
@@ -218,3 +218,62 @@ def test_a_pass_that_has_left_but_not_returned_is_in_out(app, client):
 
     assert f"handlePassAction({log_id}, 'return')" in page
     assert f"handlePassAction({log_id}, 'leave')" not in page
+
+
+# --------------------------------------------------------------------------
+# /api/hall-pass/history -- the third place this concept was computed
+# --------------------------------------------------------------------------
+
+def test_history_reports_returned_and_ignores_an_unrelated_stray_active_row(app, client):
+    """The exact shape of tonight's live incident (finding 42), for History.
+
+    /api/hall-pass/history duplicated the same left_row/return_row logic a
+    third time, independently of the admin Issued/Out classifier and the
+    public verification page -- it happened to be correct, but that is luck,
+    not a guarantee, and it is exactly the kind of duplication finding 44 grew
+    out of. Migrated to the shared resolver; this proves the migration is
+    behaviour-preserving even on a messy timeline like Alex's real one
+    tonight, which included a stray active row with no hall_pass_id wedged
+    between the real leave and the real return.
+    """
+    classroom = initialize_as_teacher("chemistry_p1", client, app)
+    student = classroom.students[0]
+    with app.app_context():
+        log = _approve_pass(app, client, classroom, student)
+        log_id = log.id
+    _leave(client, student, log)
+
+    # A stray, unrelated plain start_work row between the leave and the real
+    # return -- exactly Alex's real shape tonight. Inserted directly (not
+    # through record_attendance_session) because finding 42's own guard now
+    # correctly refuses to CREATE this shape through any domain entry point,
+    # including this one -- which is a second confirmation the fix holds. The
+    # row can still exist historically (it does, on the live host, from before
+    # that fix shipped), so history must resolve correctly around one anyway.
+    with app.app_context():
+        stray = AttendanceSession(
+            target_seat_id=student.seat.id,
+            actor_seat_id=student.seat.id,
+            class_id=classroom.class_id,
+            status="active",
+            reason_code="start_work",
+            mechanism="self",
+            hall_pass_id=None,
+        )
+        with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"stray:{student.seat.id}"):
+            db.session.add(stray)
+            db.session.flush()
+
+    _return(client, student, log)
+
+    login_teacher(client, classroom)
+    response = client.get(
+        "/api/hall-pass/history",
+        query_string={"start_date": "2026-09-21", "end_date": "2026-09-21"},
+    )
+    assert response.status_code == 200, response.data
+    payload = response.get_json()
+    record = next(r for r in payload["records"] if r["id"] == log_id)
+    assert record["status"] == "returned", record
+    assert record["left_time"] is not None
+    assert record["return_time"] is not None
