@@ -131,10 +131,17 @@
                    id="claimable_dates_per_week_equivalent" name="claimable_dates_per_week_equivalent" value="{{ cur('claimable_dates_per_week_equivalent') }}">
           </div>
 
-          <!-- NON_MONETARY only: waiting period -->
-          <div class="col-md-3 type-field" data-types="NON_MONETARY">
+          <!-- Waiting period: settable for every insurance type, per operator
+               decision 2026-09-21. It was previously restricted to NON_MONETARY by
+               a FEAT-layer forbidden-list and a matching DB CHECK constraint, both
+               citing "SPEC SS4.5.3-SS4.5.5" -- a section that does not exist anywhere
+               in docs/. No normative document restricts it; the restriction was
+               invented in the same commit as the schema itself. Only NON_MONETARY
+               currently uses it to gate claim eligibility (FEAT-STOR-003); the other
+               two types accept and store it without enforcing it yet. -->
+          <div class="col-md-3 type-field" data-types="TRANSACTION PRODUCTIVITY NON_MONETARY">
             <label class="form-label fw-bold" for="waiting_period_days">Waiting Period (days)</label>
-            <input class="form-control type-input" data-types="NON_MONETARY"
+            <input class="form-control type-input" data-types="TRANSACTION PRODUCTIVITY NON_MONETARY"
                    id="waiting_period_days" name="waiting_period_days" type="number" min="0" value="{{ cur('waiting_period_days') }}">
           </div>
 
