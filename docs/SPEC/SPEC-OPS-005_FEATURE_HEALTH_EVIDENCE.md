@@ -2,20 +2,24 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| SPEC-OPS-005 | 1.2 | 2026-09-20 | 1.1 | Normative |
+| SPEC-OPS-005 | 1.3 | 2026-09-21 | 1.2 | Normative |
+
+> Public request monitoring is governed by DOM-OPS-001 and SPEC-OPS-006.
+> This document retains internal integrity evaluator requirements only; those
+> evaluators are not prerequisites for publishing numerical request cards.
 
 ## I. Purpose
 
-Define how Operations evaluates public feature health from naturally occurring
+Define how Operations evaluates internal feature integrity from naturally occurring
 application activity without synthetic users, business mutations, or a second
-source of domain truth. A feature card describes **observed runtime integrity**
+source of domain truth. An internal assessment describes **observed runtime integrity**
 within a declared evidence window; it does not certify every user journey.
 
 ## II. Scope
 
-This contract governs the five public feature keys `login`, `attendance`,
+This contract governs the five internal feature keys `login`, `attendance`,
 `payroll`, `roster`, and `classroom_economy`, their bounded internal
-evidence, and their reduction to the application health endpoint. It does not
+evidence, and their optional reduction to an internal health endpoint. It does not
 define the underlying domain invariants, alter owning FEATs, create canonical
 incidents, or authorize external status infrastructure to read tenant state.
 
@@ -40,7 +44,7 @@ verification results; it does not reinterpret business rules or repair state.
 Each registered evaluator MUST declare its owning execution boundary, what
 counts as relevant real activity, the qualifying `SYSTEM_FAILURE` outcomes,
 the owning verifier for state and transition validity, the required lineage
-and reconciliation proof, its window and freshness class, and its public
+and reconciliation proof, its window and freshness class, and its internal
 wording. An undeclared or unevaluated dimension is missing evidence, not a
 passing check. The initial five keys and required evidence families are:
 
@@ -92,8 +96,8 @@ each dimension:
 Disagreement about the same condition is preserved as derived conflict,
 not encoded as a raw result or settled by choosing the passing source.
 
-The capability-level public projection is a separate step over the required
-dimension results, following Batch B §3.2 and `SPEC-OPS-002` §5.1. A fresh,
+The internal capability assessment is a separate step over the required
+dimension results, following the retained internal policy in Batch B §3.2. A fresh,
 proven failure remains visible even when the other dimension is unavailable;
 it supports `DEGRADED`, or `UNAVAILABLE` only with proof of unusability.
 `AVAILABLE` requires fresh affirmative results for both dimensions and no
@@ -112,12 +116,17 @@ required evidence prevents that dimension, and hence the capability, passing.
 An evaluator MUST NOT backdate a current result or substitute an old
 successful run for recent activity.
 
-## VII. Persistence and boundary
+## VII. Internal persistence and optional evidence transport
+
+The following bounded transport rules apply only where internal integrity evidence
+is explicitly transported. They do not require the public request collector to
+fetch or persist feature evaluator results. SPEC-OPS-006 is the sole numerical
+public monitoring contract; these assessments do not gate its cards or history.
 
 Application/Operations health evidence is append-only within its retention
-class. A replaceable current assessment MAY be derived from it. The public
+class. A replaceable current assessment MAY be derived from it. An internal
 health endpoint is a pure GET: it reads a bounded assessment and MUST NOT
-execute a FEAT, repair a record, or start a verifier. The external collector
+execute a FEAT, repair a record, or start a verifier. If internal results are transported, the authorized collector
 receives only capability key, observation class, lawful outcome/epistemic
 pair, checked-at time, a closed diagnostic code, and the bounded evaluator
 version when a registered feature evaluator ran. The collector derives the
@@ -158,15 +167,15 @@ provide a separately bounded and validated evaluator version in the
 application-to-collector signal before its result can be registered as `PASS`
 or `FAIL`. The external observation stores that version separately from
 `probe_version`. Until that producer and transport field are implemented,
-its public result remains `CHECK_NOT_REGISTERED` / `UNKNOWN`.
+its internal result remains `CHECK_NOT_REGISTERED` / `UNKNOWN`.
 
-## VIII. Public wording
+## VIII. Internal assessment wording
 
-The card headline MUST name the feature, not promise that every operation
+The internal assessment headline MUST name the feature, not promise that every operation
 works. A `PASS` detail may say, “Recent activity completed without detected
 integrity failures.” A `FAIL` detail says that a problem was detected,
 without exposing internal evidence. An `UNKNOWN` detail says, “Not enough
-recent evidence to verify.” The card MUST NOT say “Payroll works” from
+recent evidence to verify.” The assessment MUST NOT say “Payroll works” from
 silence or imply universal availability from one observed class.
 
 ## IX. Validation
@@ -174,14 +183,14 @@ silence or imply universal availability from one observed class.
 Targeted tests MUST cover each registered evaluator's real-activity
 threshold, qualifying system failure, expected denial, every required
 validity/lineage/reconciliation dimension, missing/stale evidence, conflict,
-one-class authorization, redaction at the external boundary, and public
+one-class authorization, redaction at the external boundary, and internal
 wording. An evaluator is not registered merely because a key appears in the
-status-page UI. Until its evidence producer and tests exist, its signal
+internal assessment UI. Until its evidence producer and tests exist, its signal
 remains `UNKNOWN/UNAVAILABLE` with `CHECK_NOT_REGISTERED`.
 
 ## X. Amendment
 
-Changing the closed keys, required evidence families, public meaning, or
+Changing the closed keys, required evidence families, internal assessment meaning, or
 cross-boundary payload requires a version increment and review against
 `DOM-OPS-001`, the owning domain/FEAT, `SPEC-OPS-002`, and
 `SOP-OPS-001`. Update the documentation index.

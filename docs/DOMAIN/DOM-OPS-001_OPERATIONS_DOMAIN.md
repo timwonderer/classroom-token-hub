@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-OPS-001      | 2.7     | 2026-09-21     | 2.6        | Normative       |
+| DOM-OPS-001      | 2.8     | 2026-09-21     | 2.7        | Normative       |
 
 ## 0. Authority Level and Dependencies
 
@@ -32,19 +32,19 @@ The Operations domain is the single authority over the **Operational Truth** of 
 *   **Status Page Publication State**: The public-facing representation of system health and incidents.
 *   **Retention Policy State**: The rules governing the lifespan of operational data.
 
-### External Publication During Canonical-Service Unavailability
+### Independent Operator Publication
 
-Independent status infrastructure MAY maintain and publish bounded external communication records when canonical Operations incident publication is unavailable.
+Independent status infrastructure MAY maintain and publish bounded operator communication records during normal operation and canonical-service unavailability. Operators may report independently investigated user impact and explicitly bounded guidance without requiring a fabricated automated observation or canonical incident.
 
 An `ExternalStatusNotice` is a communication artifact, not Operational Truth and not a canonical incident. It:
 
-*   may report only independently observed service conditions and explicitly bounded operator guidance;
-*   MUST NOT infer internal domain state, internal cause, or the existence of a canonical incident;
+*   may report independently observed service conditions, investigated user impact and explicitly bounded operator guidance;
+*   MUST NOT infer internal domain state, internal cause, or a canonical incident solely from telemetry; human interpretations must be grounded in the operator's investigation and identified as operator communication;
 *   MUST remain distinguishable from `incident_events` and `incident_summary`;
 *   MUST preserve its original observation and publication history without rewriting;
 *   MAY be reconciled with or linked to canonical incident lineage when canonical service becomes available, where applicable.
 
-This channel exists only to preserve useful public communication during canonical-service unavailability. It does not create a second Operations authority.
+An operator notice records its investigation evidence note or reference; links to automated snapshots are optional. This channel preserves useful independent public communication without creating a second Operations authority.
 
 ### Operations Explicitly DOES NOT Own:
 *   **Business Domain Truth**: It does not define what a balance is, whether a student is present, or if an item is purchased.
@@ -75,34 +75,33 @@ remain independent. Gate messaging communicates an access restriction and MUST
 NOT be treated as evidence of application health or canonical incident state.
 Genuine service errors retain their normal HTTP error handling.
 
-### Public Feature Health Facets
+### Public Request Monitoring
 
-In addition to the system-level capabilities in the Operations verifier
-policy, the closed public feature-health registry contains `login`,
-`attendance`, `payroll`, `roster`, and `classroom_economy`. Each is an
-Operations assessment of **observed runtime integrity**, not a claim that
-every user can complete every journey or that Operations owns the underlying
-domain truth.
+The public automated status surface reports bounded HTTP request measurements,
+not feature correctness certification. Its closed component registry is `service`,
+`login`, `attendance`, `payroll`, `roster`, and `classroom_economy`. Route groups
+identify the measured request family; they do not establish domain truth or prove
+that a user journey completed. HTTP 404, 500 and 5xx rates and p80/p95 latency may
+be displayed with request counts, observation window, source freshness and coverage.
 
-Feature assessments consume naturally occurring execution evidence and
-read-only, class-bound verification results from the owning domains. They
-MUST NOT create synthetic teacher/student identities, initiate attendance or
-payroll, or otherwise mutate business state to manufacture monitoring
-activity. A coordinator may aggregate only redacted, bounded outcomes from
-independently authorized one-class executions; it may not query tenant tables
-across classes. External status infrastructure receives no class or user
-identifier, credential, financial value, raw result, or mutation authority.
+The approved numerical contract is documented in `SPEC-OPS-006`. Automated wording
+is limited to observed errors, latency, traffic and monitoring availability. Missing,
+stale, failed or insufficient monitoring MUST NOT be represented as normal activity.
+Threshold crossings are observations, not canonical incidents or inferred causes.
+A normal measured window MUST NOT be described as proof of feature correctness.
 
-`PASS` requires fresh relevant real activity, no qualifying execution
-failures, and fresh affirmative state/transition/lineage/reconciliation
-checks for every dimension declared necessary by that evaluator. A proven
-execution, state, transition, lineage, or reconciliation failure is `FAIL`.
-Missing activity or missing, stale, skipped, failed-dispatch, or incomplete
-verification is `UNKNOWN`, not `PASS`. One database or HTTP ping never
-stands in for a feature assessment. These results are health evidence, not
-canonical incidents or corrections of domain facts. The read-only health
-endpoint may publish a bounded current assessment but MUST NOT perform
-mutations during GET.
+Public current cards and historical percentages do not depend on internal integrity
+evaluator registration. Internal readiness, correctness, lineage, reconciliation
+and single-class verification requirements remain unchanged; their results MUST NOT
+be inferred from HTTP response distributions. `SPEC-OPS-005` governs those internal
+assessments independently. Raw logs, tenant identifiers, credentials, financial
+values and arbitrary diagnostic payloads MUST NOT cross the public boundary.
+
+The status service receives only closed numerical snapshots from a read-only
+monitoring source. Firestore retains immutable snapshots and replaceable current
+and historical derivatives. History describes measured windows and explicitly shows
+coverage; gaps are not successful uptime. Public GET requests read persisted state
+and MUST NOT initiate queries, samplers, verifiers or mutations.
 
 ### Interactions:
 *   **Reads From**: All domains (Identity, Ledger, Obligations, Attendance, Store, Class Config) to evaluate invariants and health.
@@ -123,7 +122,7 @@ mutations during GET.
 | **Job Execution Event** | Authoritative Event | Append-only record of background work progress/outcome. |
 | **Trace / Correlation ID** | System Guard | The technical glue ensuring causality and traceability. |
 | **Incident Summary** | Cache | Projection derived from incident events for fast current-state lookup. |
-| **Status Page State** | Derived State | Calculated from active incidents and health events. |
+| **Status Page State** | Derived State | Separately presents automated request measurements, measured-window history and operator communication. |
 | **External Status Notice** | Non-authoritative Communication Artifact | Bounded public communication based on independent external observation; never a canonical incident. |
 | **Retention Policy State**| Authoritative Directive State | Defines the legal/technical lifespan of operational records. |
 
@@ -349,7 +348,7 @@ health event.
 4.  **Auto-Fixing**: No. Invariant runners detect. Remediation must be an explicit, auditable FEAT.
 5.  **Audit Requirements**: Mandatory for every Ledger mutation, Identity claim, Store purchase, and Class deletion.
 6.  **Incident Correlation**: Incidents must anchor at least one originating correlation context.
-7.  **Status Page State**: Derived from (1) active incidents in `incident_summary`, (2) latest `health_check_events`, and (3) severity mapping rules.
+7.  **Status Page State**: Independent public request measurements and their historical rollups remain separate from operator notices. Internal health/correctness results and canonical incidents retain their own authority; request telemetry does not replace them.
 8.  **Retention Enforcement**: Must be explicit, logged, and isolated by retention class.
 9.  **Repeated Failures**: Recorded as distinct events in `job_events`, `invariant_run_events`, or `health_check_events`.
 10. **Avoiding Analytics**: Operations stores diagnostic/correctness data only.

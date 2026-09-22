@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-OPS-002 | 1.4 | 2026-09-19 | 1.3 | Normative |
+| SPEC-OPS-002 | 1.5 | 2026-09-21 | 1.4 | Normative |
 
 ## I. Purpose
 
@@ -24,7 +24,11 @@ Normative (SPEC Tier). Subordinate to `INV-CORE-000`, `INV-CORE-001`, `INV-ARC-0
 
 ## V. Persistence Objects
 
-### 5.1 External Observation — append-only
+### 5.1 Internal/probe Evidence Observation — append-only
+
+This evidence schema remains distinct from public numerical request snapshots.
+It MUST NOT gate public request cards or be used to reinterpret HTTP measurements
+as domain correctness. New public request collection uses §5.5 exclusively.
 
 Records one bounded observation received by the independent status service for
 one public capability or infrastructure dependency. The condition may be
@@ -100,18 +104,27 @@ Required logical fields:
 - recovery expectation state: `KNOWN`, `ESTIMATED`, or `UNAVAILABLE`;
 - recovery expectation only when supported by the state;
 - next-update timestamp or explicit `NEXT_UPDATE_UNAVAILABLE` state;
-- source observation IDs and bounded author/provenance metadata;
+- optional source snapshot/observation IDs and bounded author/provenance metadata;
+- operator investigation evidence note or reference when no automated source is linked;
 - optional reconciliation reference.
 
 The notice is not a canonical incident. Its existence MUST NOT imply that a canonical incident exists.
 
 ### 5.3 Public Status Projection — replaceable derived state
 
-Contains the current public view derived from retained observations and notice publication events. It MAY be replaced or rebuilt. It MUST identify whether the current view is based on external observation, canonical publication, or an unresolved disagreement, and MUST NOT be treated as authoritative incident state.
+Contains separate current request measurements and operator notice publication events. It MAY be replaced or rebuilt. It MUST identify whether the current view is based on external observation, canonical publication, or an unresolved disagreement, and MUST NOT be treated as authoritative incident state.
 
 ### 5.4 Historical Rollup — optional derived state
 
-Aggregates system-level, non-tenant observations for availability and status-history presentation only. It is optional and must not be introduced until a concrete product need is identified. Rollups are replaceable derivatives, never source evidence.
+Aggregates non-tenant request snapshots for measured-window history under SPEC-OPS-006. The requested 90-day history is the concrete product need. Rollups are replaceable derivatives, never source evidence. Gaps, idle windows and monitoring failures must not be represented as successful uptime.
+
+### 5.5 Public Request Snapshot — append-only
+
+Use the closed schema, classification and history rules in SPEC-OPS-006. Persist
+source sampled time separately from collector receipt time. Append a source-minute
+snapshot once; atomically update its daily rollup and a monotonic current pointer.
+Retries must not inflate coverage. Older snapshots must not overwrite current data.
+Old evidence observations remain retained; do not convert them into request history.
 
 ## VI. Reconciliation
 
@@ -126,7 +139,7 @@ Do not copy canonical incident content into external storage. Do not require lin
 ## VII. Authority and Availability Rules
 
 - Firestore MUST NOT contain `canonical_incidents`, authoritative `incident_events`, or authoritative `incident_summary`.
-- External notices MAY be published while canonical incident publication is unavailable.
+- External notices MAY be published during normal operation or canonical-service unavailability under DOM-OPS-001.
 - When canonical publication is available, ordinary canonical incidents MUST NOT be duplicated automatically as external notices.
 - Conflicting external observations produce an explicit `CONFLICTING` state; nulls and free-form strings MUST NOT encode epistemic meaning.
 - No layer may infer internal cause or canonical domain state from external reachability alone.
