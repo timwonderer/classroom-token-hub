@@ -67,3 +67,23 @@ def test_a_deleted_passkey_stays_deleted_past_the_request(app, client):
     assert all(p["id"] != passkey_id for p in listing_after["passkeys"]), (
         "the deleted credential reappeared -- the delete was never committed"
     )
+
+
+def test_registered_and_last_used_times_show_class_timezone_not_utc(app, client):
+    """The Passkey Settings page rendered created_at/last_used with a bare
+    ``.strftime()`` -- the raw UTC instant, with no conversion and no timezone
+    label -- while every other timestamp in the app goes through the
+    ``fmt_timestamp`` filter (SPEC-TIME-001) to display in the class's own
+    timezone. Test classrooms default to America/Los_Angeles; a September
+    date there is Pacific Daylight Time.
+    """
+    initialize_as_teacher("chemistry_p1", client, app)
+    _register(client, "livetest1")
+
+    page = client.get("/admin/passkey/settings").data.decode()
+
+    assert "livetest1" in page
+    assert "PDT" in page or "PST" in page, (
+        "the passkey settings page is not converting to the class's timezone "
+        "(America/Los_Angeles) -- it shows the raw UTC instant instead"
+    )

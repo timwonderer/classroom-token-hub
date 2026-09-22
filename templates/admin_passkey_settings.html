@@ -76,12 +76,12 @@
                                     </div>
                                     <div class="text-muted small">
                                         <span class="material-symbols-outlined icon-middle icon-2xs" aria-hidden="true">calendar_today</span>
-                                        Registered: {{ cred.created_at.strftime('%B %d, %Y at %I:%M %p') if cred.created_at else 'Unknown' }}
+                                        Registered: {{ cred.created_at | fmt_timestamp if cred.created_at else 'Unknown' }}
                                     </div>
                                     {% if cred.last_used %}
                                     <div class="text-muted small">
                                         <span class="material-symbols-outlined icon-middle icon-2xs" aria-hidden="true">schedule</span>
-                                        Last used: {{ cred.last_used.strftime('%B %d, %Y at %I:%M %p') }}
+                                        Last used: {{ cred.last_used | fmt_timestamp }}
                                     </div>
                                     {% else %}
                                     <div class="text-muted small">
