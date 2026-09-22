@@ -59,9 +59,18 @@ INSURANCE_TYPES = frozenset({TRANSACTION, PRODUCTIVITY, NON_MONETARY})
 # by covered class-local days / 7; BIWEEKLY / SEMESTER are NOT lawful.
 CHARGE_FREQUENCIES = frozenset({"WEEKLY", "MONTHLY"})
 
-# Per-type structural contract (SPEC §4.5.3–§4.5.5; mirrors the
-# ck_insurance_policies_type_subset DB backstop). "required" fields MUST be
-# present & non-null; "forbidden" fields MUST be absent/null.
+# Per-type structural contract (mirrors the ck_insurance_policies_type_subset
+# DB backstop). "required" fields MUST be present & non-null; "forbidden"
+# fields MUST be absent/null.
+#
+# waiting_period_days was previously forbidden for TRANSACTION and PRODUCTIVITY,
+# citing "SPEC §4.5.3–§4.5.5" -- a section that does not exist in any document
+# under docs/. No normative document restricts it to NON_MONETARY; the
+# restriction was invented in the same commit that introduced this schema.
+# Operator decision 2026-09-21: settable on every type (not necessarily
+# enforced on every type -- only NON_MONETARY currently gates claim
+# eligibility on it, in FEAT-STOR-003), so it is required only where it is
+# actually used and forbidden nowhere.
 _TYPE_REQUIRED = {
     TRANSACTION: (
         "reimbursement_percentage",
@@ -82,12 +91,10 @@ _TYPE_REQUIRED = {
 _TYPE_FORBIDDEN = {
     TRANSACTION: (
         "claimable_dates_per_week_equivalent",
-        "waiting_period_days",
     ),
     PRODUCTIVITY: (
         "claims_per_week_equivalent",
         "claim_window_days",
-        "waiting_period_days",
     ),
     NON_MONETARY: (
         "reimbursement_percentage",

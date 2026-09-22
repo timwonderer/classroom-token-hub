@@ -137,6 +137,14 @@
         <h6>Teacher Notes:</h6>
         <div class="bg-info-subtle p-3 rounded">{{ claim.teacher_notes | markdown }}</div>
         {% endif %}
+
+        {% if claim.filing_window_override_reason %}
+        <h6>Filing Window Override:</h6>
+        <div class="alert alert-warning py-2 small">
+          <span class="material-symbols-outlined me-1" style="font-size:1em;vertical-align:middle;">edit_note</span>
+          {{ claim.filing_window_override_reason | markdown }}
+        </div>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -176,6 +184,23 @@
             No filing window for this product
           {% endif %}
         </p>
+
+        {% if contract_claim_window_days is not none %}
+        <p><strong>Validation Status:</strong><br>
+          {% if filing_window_exceeded %}
+            <span class="badge bg-warning text-dark">
+              <span class="material-symbols-outlined me-1" style="font-size:1em;vertical-align:middle;">schedule</span>
+              Filed outside the filing window
+            </span>
+            <div class="text-muted small mt-1">Override available — see form below.</div>
+          {% else %}
+            <span class="badge bg-success">
+              <span class="material-symbols-outlined me-1" style="font-size:1em;vertical-align:middle;">check_circle</span>
+              Filed within the filing window
+            </span>
+          {% endif %}
+        </p>
+        {% endif %}
 
         {% if contract_reimbursement_percentage is not none %}
           <p><strong>Reimbursement:</strong><br>
@@ -258,6 +283,22 @@
         {{ form.teacher_notes(class="form-control", rows=3) }}
       </div>
 
+      {% if filing_window_exceeded %}
+      <div class="mb-3 border border-warning rounded p-3 bg-warning-subtle">
+        <label class="form-label fw-bold text-warning-emphasis">
+          <span class="material-symbols-outlined me-1" style="font-size:1em;vertical-align:middle;">edit_note</span>
+          Filing Window Override Reason
+          <span class="badge bg-warning text-dark ms-1">Required to approve</span>
+        </label>
+        {{ form.filing_window_override_reason(class="form-control", rows=3,
+            placeholder="Explain why this claim should be approved despite being filed outside the policy's filing window...") }}
+        <small class="text-muted mt-1 d-block">
+          This claim was filed outside the policy's filing window. Provide a written explanation to
+          override the block and proceed with approval. Your reason will be permanently recorded on the claim.
+        </small>
+      </div>
+      {% endif %}
+
       <div class="d-flex gap-2">
         {{ form.submit(class="btn btn-primary") }}
         <a href="{{ url_for('admin.insurance_management') }}" class="btn btn-secondary">Back to Insurance</a>
@@ -292,6 +333,18 @@
         toolbar: ["bold", "italic", "|", "unordered-list", "ordered-list", "|", "link", "|", "preview"],
         status: false,
         placeholder: "Internal notes about this claim (Markdown supported)...",
+      });
+    }
+
+    const filingWindowOverrideField = document.getElementById('filing_window_override_reason');
+    if (filingWindowOverrideField) {
+      new EasyMDE({
+        element: filingWindowOverrideField,
+        spellChecker: false,
+        autoDownloadFontAwesome: false,
+        toolbar: ["bold", "italic", "|", "unordered-list", "ordered-list", "|", "link", "|", "preview"],
+        status: false,
+        placeholder: "Explain why this claim should be approved despite being filed late (Markdown supported)...",
       });
     }
   });

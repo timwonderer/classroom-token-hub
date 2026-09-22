@@ -31,6 +31,7 @@ from app.services.context_resolver import CanonicalContext
 from app.feats.insurance_claim_feat import (
     submit_insurance_claim,
     resolve_insurance_claim,
+    describe_claim_contract,
 )
 from app.utils import canonical_temporal_resolver as canonical_temporal_resolver_module
 from app.utils.canonical_temporal_resolver import (
@@ -365,8 +366,14 @@ class TestClaimWindow:
             )
             assert s.success is True, s.error_message
 
-    def test_transaction_past_window_is_rejected(self, app):
-        """One class-local day past the window (D + N < today) is too late."""
+    def test_transaction_past_window_is_still_submittable(self, app):
+        """One class-local day past the window (D + N < today) still files.
+
+        Operator decision 2026-09-21: the filing window is a soft,
+        teacher-overridable gate at APPROVAL, not a submission-time rejection —
+        see TestFilingWindowApprovalGate below. A student who files late must
+        still be able to reach a teacher for review.
+        """
         classroom = initialize("chemistry_p1", app)
         student = classroom.students[0]
 
@@ -391,5 +398,190 @@ class TestClaimWindow:
                 claim_subject={"transaction_id": loss},
                 correlation_id=f"corr_{uuid4().hex}",
             )
-            assert s.success is False
-            assert s.error_code == "CLAIM_WINDOW_EXCEEDED"
+            assert s.success is True, s.error_message
+
+    def test_filed_within_window_reflects_lateness(self, app):
+        """``describe_claim_contract().filed_within_window`` is the single source
+        the review screen and the approval gate both read -- prove it actually
+        distinguishes the two cases rather than always reporting one value."""
+        classroom = initialize("chemistry_p1", app)
+        student = classroom.students[0]
+        with app.app_context():
+            now_utc = _now_utc(classroom, student)
+
+            on_time_id = str(uuid4())
+            late_id = str(uuid4())
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key="econ-window-projection"):
+                _add_granted(
+                    classroom, student, on_time_id,
+                    claim_window_days=7, claims_per_week_equivalent="5",
+                    premium="100.00", payout_multiple="1",
+                    granted_at=now_utc - timedelta(days=30),
+                )
+                on_time_loss = _seed_loss(
+                    classroom, student, idem="win-proj-ontime", amount="-5.00",
+                    at=now_utc - timedelta(days=1),
+                ).id
+                _add_granted(
+                    classroom, student, late_id,
+                    claim_window_days=7, claims_per_week_equivalent="5",
+                    premium="100.00", payout_multiple="1",
+                    granted_at=now_utc - timedelta(days=30),
+                )
+                late_loss = _seed_loss(
+                    classroom, student, idem="win-proj-late", amount="-5.00",
+                    at=now_utc - timedelta(days=8),
+                ).id
+
+            s_on_time = submit_insurance_claim(
+                canonical_context=_student_ctx(classroom, student),
+                entitlement_id=on_time_id,
+                claim_subject={"transaction_id": on_time_loss},
+                correlation_id=f"corr_{uuid4().hex}",
+            )
+            s_late = submit_insurance_claim(
+                canonical_context=_student_ctx(classroom, student),
+                entitlement_id=late_id,
+                claim_subject={"transaction_id": late_loss},
+                correlation_id=f"corr_{uuid4().hex}",
+            )
+            assert s_on_time.success is True, s_on_time.error_message
+            assert s_late.success is True, s_late.error_message
+
+            from app.models import InsuranceClaim
+
+            on_time_claim = db.session.query(InsuranceClaim).filter_by(
+                claim_id=s_on_time.claim_id
+            ).one()
+            late_claim = db.session.query(InsuranceClaim).filter_by(
+                claim_id=s_late.claim_id
+            ).one()
+
+            on_time_contract = describe_claim_contract(
+                on_time_claim, canonical_context=_teacher_ctx(classroom)
+            )
+            late_contract = describe_claim_contract(
+                late_claim, canonical_context=_teacher_ctx(classroom)
+            )
+            assert on_time_contract.filed_within_window is True
+            assert late_contract.filed_within_window is False
+
+
+class TestFilingWindowApprovalGate:
+    """A late TRANSACTION claim reaches SUBMITTED; approving it needs a reason.
+
+    Restores a mechanism dropped in the 2026-08-28 insurance rewrite (present
+    pre-rewrite as ``time_limit_override_reason``, main_legacy_v1.10.0). Unlike
+    v1 -- which hard-blocked approval and clamped the payout on other gates --
+    here the filing window is the ONE soft gate: approval is blocked only
+    until a written reason is recorded, then proceeds normally. Rejection
+    never needs a reason; a late claim is not otherwise invalid.
+    """
+
+    def _late_claim(self, app, classroom, student):
+        now_utc = _now_utc(classroom, student)
+        entitlement_id = str(uuid4())
+        with FEATContext("FEAT-TEST-SETUP", idempotency_key="econ-window-gate"):
+            _add_granted(
+                classroom, student, entitlement_id,
+                claim_window_days=7, claims_per_week_equivalent="5",
+                premium="100.00", payout_multiple="1",
+                granted_at=now_utc - timedelta(days=30),
+            )
+            loss = _seed_loss(
+                classroom, student, idem="win-gate", amount="-5.00",
+                at=now_utc - timedelta(days=8),
+            ).id
+        s = submit_insurance_claim(
+            canonical_context=_student_ctx(classroom, student),
+            entitlement_id=entitlement_id,
+            claim_subject={"transaction_id": loss},
+            correlation_id=f"corr_{uuid4().hex}",
+        )
+        assert s.success is True, s.error_message
+        return s.claim_id
+
+    def test_approval_without_a_reason_is_refused(self, app):
+        classroom = initialize("chemistry_p1", app)
+        student = classroom.students[0]
+        with app.app_context():
+            claim_id = self._late_claim(app, classroom, student)
+            r = resolve_insurance_claim(
+                canonical_context=_teacher_ctx(classroom),
+                claim_id=claim_id,
+                approved=True,
+            )
+            assert r.success is False
+            assert r.error_code == "FILING_WINDOW_OVERRIDE_REQUIRED"
+
+            from app.services import insurance_claim_service
+            claim = insurance_claim_service.get_claim(claim_id, class_id=classroom.class_id)
+            assert claim.status == insurance_claim_service.SUBMITTED, (
+                "a refused approval must not silently leave the claim decided"
+            )
+
+    def test_approval_with_a_reason_succeeds_and_is_recorded(self, app):
+        classroom = initialize("chemistry_p1", app)
+        student = classroom.students[0]
+        with app.app_context():
+            claim_id = self._late_claim(app, classroom, student)
+            r = resolve_insurance_claim(
+                canonical_context=_teacher_ctx(classroom),
+                claim_id=claim_id,
+                approved=True,
+                filing_window_override_reason="Family emergency verified with front office.",
+            )
+            assert r.success is True, r.error_message
+            assert r.decision == "APPROVED"
+
+            from app.services import insurance_claim_service
+            claim = insurance_claim_service.get_claim(claim_id, class_id=classroom.class_id)
+            assert claim.status == insurance_claim_service.APPROVED
+            assert claim.filing_window_override_reason == (
+                "Family emergency verified with front office."
+            )
+
+    def test_rejection_of_a_late_claim_needs_no_reason(self, app):
+        classroom = initialize("chemistry_p1", app)
+        student = classroom.students[0]
+        with app.app_context():
+            claim_id = self._late_claim(app, classroom, student)
+            r = resolve_insurance_claim(
+                canonical_context=_teacher_ctx(classroom),
+                claim_id=claim_id,
+                approved=False,
+            )
+            assert r.success is True, r.error_message
+            assert r.decision == "REJECTED"
+
+    def test_claim_within_window_needs_no_reason_to_approve(self, app):
+        classroom = initialize("chemistry_p1", app)
+        student = classroom.students[0]
+        with app.app_context():
+            now_utc = _now_utc(classroom, student)
+            entitlement_id = str(uuid4())
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key="econ-window-ontime"):
+                _add_granted(
+                    classroom, student, entitlement_id,
+                    claim_window_days=7, claims_per_week_equivalent="5",
+                    premium="100.00", payout_multiple="1",
+                    granted_at=now_utc - timedelta(days=30),
+                )
+                loss = _seed_loss(
+                    classroom, student, idem="win-ontime", amount="-5.00",
+                    at=now_utc - timedelta(days=1),
+                ).id
+            s = submit_insurance_claim(
+                canonical_context=_student_ctx(classroom, student),
+                entitlement_id=entitlement_id,
+                claim_subject={"transaction_id": loss},
+                correlation_id=f"corr_{uuid4().hex}",
+            )
+            assert s.success is True, s.error_message
+
+            r = resolve_insurance_claim(
+                canonical_context=_teacher_ctx(classroom),
+                claim_id=s.claim_id,
+                approved=True,
+            )
+            assert r.success is True, r.error_message

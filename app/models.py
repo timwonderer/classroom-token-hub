@@ -1826,6 +1826,11 @@ class InsuranceClaim(db.Model):
     # General decision annotation (approval or rejection). No distinct override
     # workflow exists, so this is a single free-text decision note.
     decision_note = db.Column(db.Text, nullable=True)
+    # Required, permanently-recorded justification for approving a TRANSACTION
+    # claim filed after the policy's filing window closed. Distinct from
+    # decision_note: approval of a late claim must be blocked on this field's
+    # absence specifically, so a generic note can't stand in for it.
+    filing_window_override_reason = db.Column(db.Text, nullable=True)
     result_amount = db.Column(db.Numeric(precision=12, scale=2), nullable=True)
 
     # Downstream lineage references — populated only on APPROVED. Nullable until then.
@@ -2744,18 +2749,23 @@ class InsurancePolicy(db.Model):
             name='ck_insurance_policies_tier_level_nonneg',
         ),
         # --- Per-type structural subset (required present / forbidden null) --
+        # waiting_period_days is deliberately absent from every branch's
+        # exclusion list below except where a type's own presence requirement
+        # already covers it (NON_MONETARY). It was previously forbidden outside
+        # NON_MONETARY, citing "SPEC §4.5.3-§4.5.5" -- a section that exists in
+        # no document under docs/. Operator decision 2026-09-21: settable on
+        # every type, not necessarily enforced on every type.
         db.CheckConstraint(
             "("
             "  insurance_type = 'TRANSACTION' AND"
             "  reimbursement_percentage IS NOT NULL AND payout_multiple IS NOT NULL AND"
             "  claims_per_week_equivalent IS NOT NULL AND claim_window_days IS NOT NULL AND"
-            "  claimable_dates_per_week_equivalent IS NULL AND waiting_period_days IS NULL"
+            "  claimable_dates_per_week_equivalent IS NULL"
             ") OR ("
             "  insurance_type = 'PRODUCTIVITY' AND"
             "  reimbursement_percentage IS NOT NULL AND payout_multiple IS NOT NULL AND"
             "  claimable_dates_per_week_equivalent IS NOT NULL AND"
-            "  claims_per_week_equivalent IS NULL AND claim_window_days IS NULL AND"
-            "  waiting_period_days IS NULL"
+            "  claims_per_week_equivalent IS NULL AND claim_window_days IS NULL"
             ") OR ("
             "  insurance_type = 'NON_MONETARY' AND"
             "  claims_per_week_equivalent IS NOT NULL AND waiting_period_days IS NOT NULL AND"

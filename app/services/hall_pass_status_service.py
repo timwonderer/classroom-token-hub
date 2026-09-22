@@ -47,8 +47,8 @@ def resolve_hall_pass_lifecycle_status(
     class_id: str,
     seat_id: int,
     hall_pass_id: str,
-    day_boundary_start_utc,
-    day_boundary_end_utc,
+    day_boundary_start_utc=None,
+    day_boundary_end_utc=None,
 ) -> HallPassLifecycleStatus:
     """Resolve one pass's lifecycle state from its own attendance sequence.
 
@@ -60,20 +60,26 @@ def resolve_hall_pass_lifecycle_status(
     ``left_row`` is the first ``inactive``/``hall_pass`` row for this pass;
     ``return_row`` is the first ``active`` row at or after it. Both are ``None``
     for a pass that has been approved but not yet departed.
+
+    The day boundary is OPTIONAL. The two "what is happening right now" callers
+    (the public verification page, the teacher's Issued/Out tabs) scope to
+    today, since that is the only period either surface is asking about. A
+    History view has no such single day -- a caller there passes neither
+    boundary and gets the pass's full attendance sequence regardless of when
+    it falls, which is what a history record is for.
     """
-    attendance_rows = (
-        AttendanceSession.query.filter_by(
-            class_id=class_id,
-            target_seat_id=seat_id,
-            hall_pass_id=hall_pass_id,
-        )
-        .filter(
-            AttendanceSession.timestamp >= day_boundary_start_utc,
-            AttendanceSession.timestamp < day_boundary_end_utc,
-        )
-        .order_by(AttendanceSession.timestamp.asc(), AttendanceSession.id.asc())
-        .all()
+    query = AttendanceSession.query.filter_by(
+        class_id=class_id,
+        target_seat_id=seat_id,
+        hall_pass_id=hall_pass_id,
     )
+    if day_boundary_start_utc is not None:
+        query = query.filter(AttendanceSession.timestamp >= day_boundary_start_utc)
+    if day_boundary_end_utc is not None:
+        query = query.filter(AttendanceSession.timestamp < day_boundary_end_utc)
+    attendance_rows = query.order_by(
+        AttendanceSession.timestamp.asc(), AttendanceSession.id.asc()
+    ).all()
 
     left_row = next(
         (
