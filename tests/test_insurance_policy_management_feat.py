@@ -272,6 +272,40 @@ class TestRecommendationOverrideAllowed:
 
 
 # ---------------------------------------------------------------------------
+# waiting_period_days is settable-but-not-required on TRANSACTION/PRODUCTIVITY
+# (operator decision 2026-09-21, see the CHECK-constraint migration). The
+# per-type structural loop only threaded REQUIRED fields into the persisted
+# definition, so a value a teacher actually typed for one of these two types
+# was silently dropped -- observed live: set to 14, saved, came back 0.
+# ---------------------------------------------------------------------------
+class TestOptionalWaitingPeriodPersists:
+    def test_transaction_waiting_period_is_stored_when_submitted(self, app):
+        classroom = initialize("chemistry_p1", app)
+        with app.app_context():
+            row = _configure(
+                classroom,
+                _transaction_submission(waiting_period_days="14"),
+            )
+            assert row.waiting_period_days == 14
+
+    def test_productivity_waiting_period_is_stored_when_submitted(self, app):
+        classroom = initialize("chemistry_p1", app)
+        with app.app_context():
+            row = _configure(
+                classroom,
+                _productivity_submission(waiting_period_days="5"),
+            )
+            assert row.waiting_period_days == 5
+
+    def test_transaction_waiting_period_stays_null_when_not_submitted(self, app):
+        """Optional means optional -- omitting it must not raise or default."""
+        classroom = initialize("chemistry_p1", app)
+        with app.app_context():
+            row = _configure(classroom, _transaction_submission())
+            assert row.waiting_period_days is None
+
+
+# ---------------------------------------------------------------------------
 # Proof point 7: hard/structural violations fail BEFORE the POL write.
 # ---------------------------------------------------------------------------
 class TestHardViolationsFailClosed:

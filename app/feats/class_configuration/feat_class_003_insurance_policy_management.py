@@ -212,10 +212,19 @@ def _validate_and_build_definition(submission: dict) -> dict:
             )
 
     # --- coerce + hard-bound the economic fields that apply -----------------
+    # A field is written when it is REQUIRED for this type (already validated
+    # present above), or when it is merely PERMITTED (not forbidden) and the
+    # teacher actually supplied a value -- e.g. waiting_period_days on
+    # TRANSACTION/PRODUCTIVITY: settable everywhere, required only where a
+    # type's own submission gate reads it (NON_MONETARY). Skipping it here for
+    # every non-required field silently dropped whatever the teacher typed.
     for field in _ECONOMIC_FIELDS:
-        if field not in required:
+        if field in required:
+            raw = submission[field]
+        elif field not in forbidden and submission.get(field) not in (None, ""):
+            raw = submission[field]
+        else:
             continue
-        raw = submission[field]
         if field in _DECIMAL_FIELDS:
             val = _coerce_decimal(field, raw)
         else:
