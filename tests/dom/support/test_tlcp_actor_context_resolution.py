@@ -44,6 +44,20 @@ def test_DOM_SUP_001__resolve_actor_context_uses_teacher_canonical_context(app):
 
 
 def test_DOM_SUP_001__resolve_actor_context_sysadmin_session_returns_none(app):
+    """Sysadmins are structurally forbidden from holding class context
+    (INV-ARC-019), so every sysadmin request hits this ``context is None``
+    path forever -- it must not also log an ERROR-level
+    "missing canonical context" on every single one. Confirmed live:
+    /sysadmin/dashboard, /sysadmin/login, /sysadmin/support etc. all logged
+    TLCP-INVARIANT-VIOLATION on every hit before this endpoint set treated
+    the whole sysadmin blueprint as no-context by design.
+
+    This test previously asserted only ``context is None`` -- true before
+    and after the fix, since resolve_actor_context always returned None for
+    sysadmin -- and so never actually covered the log-noise defect.
+    """
+    from unittest.mock import patch
+
     sysadmin_id = 1
 
     with app.test_request_context("/sysadmin/dashboard", method="GET"):
@@ -51,9 +65,60 @@ def test_DOM_SUP_001__resolve_actor_context_sysadmin_session_returns_none(app):
         session["sysadmin_id"] = sysadmin_id
         session["user_id"] = sysadmin_id
 
-        context = resolve_actor_context(None)
+        with patch("app.services.tlcp.current_app.logger.error") as mock_error:
+            context = resolve_actor_context(None)
+            logged = [call.args[0] for call in mock_error.call_args_list]
 
     assert context is None
+    assert logged == []
+
+
+def test_DOM_SUP_001__resolve_actor_context_ignores_every_sysadmin_endpoint(app):
+    """The exemption is blueprint-wide, not a per-route allowlist entry --
+    covers a second sysadmin endpoint to prove it isn't special-cased to
+    just /sysadmin/dashboard.
+    """
+    from unittest.mock import patch
+
+    with app.test_request_context("/sysadmin/support", method="GET"):
+        with patch("app.services.tlcp.current_app.logger.error") as mock_error:
+            context = resolve_actor_context(None)
+            logged = [call.args[0] for call in mock_error.call_args_list]
+
+    assert context is None
+    assert logged == []
+
+
+def test_DOM_SUP_001__sysadmin_request_carrying_canonical_context_fails_closed(app):
+    """The other half of the sysadmin/context matrix: sysadmin absent-context
+    is expected (see the two tests above), but a sysadmin request that
+    somehow DOES carry a CanonicalContext is not a legitimate class-scoped
+    actor -- a sysadmin session should never produce one at all, so this
+    would itself be a scope leak. It must fail closed (return None) and log
+    an invariant violation, exactly like the teacher/student "context
+    absent" cell does -- not be silently trusted as though sysadmin were
+    class-scoped.
+    """
+    from unittest.mock import patch
+
+    classroom = initialize_support_teacher("chemistry_p1", app.test_client(), app)
+    leaked_context = CanonicalContext(
+        user_id=classroom.teacher_user.id,
+        class_id=classroom.class_id,
+        seat_id=classroom.teacher_seat.id,
+        actor_role="teacher",
+    )
+
+    with app.test_request_context("/sysadmin/dashboard", method="GET"):
+        with patch("app.services.tlcp.current_app.logger.error") as mock_error:
+            result = resolve_actor_context(leaked_context)
+            logged = [call.args[0] for call in mock_error.call_args_list]
+
+    assert result is None
+    assert any(
+        "TLCP-INVARIANT-VIOLATION: sysadmin request unexpectedly carries canonical class context" in msg
+        for msg in logged
+    )
 
 
 def test_DOM_SUP_001__resolve_actor_context_logs_missing_canonical_context(app):
@@ -77,6 +142,23 @@ def test_DOM_SUP_001__resolve_actor_context_ignores_admin_signup_path(app):
             logged = [call.args[0] for call in mock_error.call_args_list]
 
     assert context is None
+    assert logged == []
+
+
+def test_DOM_SUP_001__student_login_does_not_require_canonical_context(app):
+    """Symmetric with admin.login (already exempt): the student login page
+    is loaded and posted to before any session/context exists, so it must
+    not log an invariant violation either -- it previously wasn't in
+    DEFAULT_PUBLIC_ENDPOINTS even though admin.login was.
+    """
+    from unittest.mock import patch
+
+    client = app.test_client()
+    with patch("app.services.tlcp.current_app.logger.error") as mock_error:
+        response = client.get("/student/login")
+        logged = [call.args[0] for call in mock_error.call_args_list]
+
+    assert response.status_code == 200
     assert logged == []
 
 
