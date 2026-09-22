@@ -5254,8 +5254,12 @@ def _resolve_rent_policy_deferral(class_id, pending_settings):
     it this cycle.
 
     Returns ``None`` when nothing is deferred: no cycle has been established yet
-    (the first save is in force immediately), or the open cycle already carries
-    the newest policy.
+    (the first save is in force immediately), the open cycle already carries the
+    newest policy, or the latest cycle exists but has not actually started yet
+    (``cycle_boundary_at`` still in the future) -- nobody is "already living
+    through" a period that has not begun, so there is nothing to protect and a
+    save applies to that not-yet-started cycle rather than waiting for the one
+    after it.
     """
     if not class_id or pending_settings is None:
         return None
@@ -5265,7 +5269,8 @@ def _resolve_rent_policy_deferral(class_id, pending_settings):
         return None
     if cycle.policy_uuid == pending_settings.policy_uuid:
         return None
-
+    if cycle.cycle_boundary_at is not None and ensure_utc(cycle.cycle_boundary_at) > utc_now():
+        return None
     enforced = RentSettings.query.filter_by(policy_uuid=cycle.policy_uuid).first()
     if enforced is None:
         return None

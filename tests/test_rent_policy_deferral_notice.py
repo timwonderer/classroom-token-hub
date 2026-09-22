@@ -34,6 +34,14 @@ _FIRST_DUE = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
 _T_INITIAL = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
 _T_AFTER_BOUNDARY = datetime(2026, 2, 1, 12, 0, tzinfo=timezone.utc)
 
+# _resolve_rent_policy_deferral reads the real wall clock (utc_now()), not an
+# injected reference time -- it is resolved fresh on every page render, not
+# tied to a request (see its docstring). A "cycle established but not yet
+# started" test therefore needs a boundary that stays in the future relative
+# to whenever this suite actually runs, not just relative to another
+# injected instant.
+_FAR_FUTURE_FIRST_DUE = datetime(2999, 1, 1, 12, 0, tzinfo=timezone.utc)
+
 
 def _setup_rent_class(class_id, rent_amount=Decimal("50.00")):
     enable_class_feature(class_id=class_id, feature="rent")
@@ -56,6 +64,54 @@ def test_no_deferral_before_any_cycle_exists(app):
 
         assert BillCycle.query.filter_by(class_id=classroom.class_id).count() == 0
         assert _resolve_rent_policy_deferral(classroom.class_id, settings) is None
+
+
+def test_no_deferral_when_the_latest_cycle_has_not_started_yet(app):
+    """A cycle can be ESTABLISHED (materialized) with its first boundary still
+    in the future -- e.g. right after enabling rent with a first-due-date a
+    month out. Nobody is "already living through" a period that has not
+    begun, so a save made now must apply directly to that not-yet-started
+    cycle, not defer to the cycle after it.
+
+    Reproduces a live-test report (2026-09-22): the admin page claimed "A
+    rent cycle is already underway, and a cycle underway is never altered"
+    for a class whose first rent cycle would not start for another month --
+    directly contradicting the page's own "Not active yet" / "Not scheduled
+    yet" summary a few lines below, which correctly recognized nothing had
+    started. ``_resolve_rent_policy_deferral`` treated ANY existing
+    ``BillCycle`` row as proof a cycle was underway, without checking
+    whether its ``cycle_boundary_at`` had actually arrived.
+    """
+    classroom = initialize("chemistry_p1", app)
+    with app.app_context():
+        enable_class_feature(class_id=classroom.class_id, feature="rent")
+        customize_rent_settings(
+            classroom.class_id,
+            frequency_type="monthly",
+            due_day_of_month=1,
+            first_rent_due_date=_FAR_FUTURE_FIRST_DUE,
+            grace_period_days=3,
+            rent_amount=Decimal("50.00"),
+            late_penalty_amount=Decimal("0.00"),
+        )
+        execute_reconcile_rent(
+            classroom.class_id, reference_time_utc=_FAR_FUTURE_FIRST_DUE
+        )
+
+        cycle = BillCycle.query.filter_by(
+            internal_ref=f"rent:{classroom.class_id}"
+        ).one()
+        # Sanity: the established cycle's boundary is genuinely in the future
+        # relative to the real wall clock this test runs under, not just
+        # relative to the reconcile's own injected reference time.
+        assert cycle.cycle_boundary_at > datetime.now(timezone.utc)
+
+        pending = customize_rent_settings(
+            classroom.class_id, rent_amount=Decimal("75.00")
+        )
+        assert pending.policy_uuid != cycle.policy_uuid  # a real divergence exists
+
+        assert _resolve_rent_policy_deferral(classroom.class_id, pending) is None
 
 
 def test_no_deferral_when_the_open_cycle_already_carries_the_newest_policy(app):
