@@ -170,6 +170,63 @@ def test_file_claim_form_and_submission(app, client):
         assert claims == 1
 
 
+def test_transaction_claim_description_is_captured(app, client):
+    """The "Briefly describe what happened" field was rendered and submitted
+    but never read by the route -- the admin review page's Claim Description
+    was guaranteed blank for every TRANSACTION claim regardless of student input."""
+    with app.app_context():
+        classroom = provision_classroom("chemistry_p1")
+        enable_class_feature(class_id=classroom.class_id, feature="insurance")
+        policy_uuid = _make_policy(classroom)
+        student = classroom.students[0]
+        _fund(student.seat)
+        execute_purchase_insurance(
+            canonical_context=_student_ctx(classroom),
+            policy_uuid=policy_uuid, idempotency_key=f"ins:{uuid4().hex}")
+        db.session.commit()
+        txn_id = _make_claimable_txn(student.seat)
+        class_id, seat_id = classroom.class_id, student.seat.id
+        login_student(client, student)
+
+    resp = client.post(
+        f"/student/insurance/claim/{policy_uuid}",
+        data={"transaction_id": str(txn_id), "description": "The item arrived broken."},
+    )
+    assert resp.status_code in (200, 302)
+    with app.app_context():
+        claim = InsuranceClaim.query.filter_by(class_id=class_id, target_seat_id=seat_id).one()
+        assert claim.claim_basis.get("description") == "The item arrived broken."
+
+
+def test_already_claimed_transaction_is_excluded_from_the_dropdown(app, client):
+    """A transaction that already backs a claim must not be offered again --
+    the submission gate refuses it (DUPLICATE_CLAIM_SUBJECT) regardless, so
+    listing it just let a student pick it and be refused."""
+    with app.app_context():
+        classroom = provision_classroom("chemistry_p1")
+        enable_class_feature(class_id=classroom.class_id, feature="insurance")
+        policy_uuid = _make_policy(classroom)
+        student = classroom.students[0]
+        _fund(student.seat, "200.00")
+        execute_purchase_insurance(
+            canonical_context=_student_ctx(classroom),
+            policy_uuid=policy_uuid, idempotency_key=f"ins:{uuid4().hex}")
+        db.session.commit()
+        claimed_txn_id = _make_claimable_txn(student.seat)
+        still_eligible_txn_id = _make_claimable_txn(student.seat)
+        login_student(client, student)
+
+    client.post(f"/student/insurance/claim/{policy_uuid}",
+                data={"transaction_id": str(claimed_txn_id)})
+
+    resp = client.get(f"/student/insurance/claim/{policy_uuid}")
+    page = resp.data.decode()
+    assert f'value="{still_eligible_txn_id}"' in page
+    assert f'value="{claimed_txn_id}"' not in page, (
+        "an already-claimed transaction is still offered in the dropdown"
+    )
+
+
 def test_file_claim_fails_closed_without_coverage(app, client):
     with app.app_context():
         classroom = provision_classroom("chemistry_p1")

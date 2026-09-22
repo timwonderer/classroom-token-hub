@@ -1738,7 +1738,15 @@ def _active_insurance_entitlement_id(seat_id, class_id, policy_uuid):
 
 
 def _eligible_claim_transactions(seat_id, class_id, limit=25):
-    """Recent money-out transactions a TRANSACTION policy might cover (FEAT validates)."""
+    """Recent money-out transactions a TRANSACTION policy might cover (FEAT validates).
+
+    Excludes a transaction that already backs a claim of any status — a source
+    transaction may back at most one claim lifecycle, ever (FEAT-STOR-003's
+    DUPLICATE_CLAIM_SUBJECT gate at submission enforces this already). Listing
+    an already-claimed transaction here just let a student pick it and be
+    refused, so this reads the same fact the submission gate checks.
+    """
+    from app.models import InsuranceClaim
     from app.services.insurance_eligibility_contract import (
         TRANSFER_TYPES, OBLIGATION_TYPES, DISALLOWED_TRANSACTION_TYPES,
     )
@@ -1751,7 +1759,16 @@ def _eligible_claim_transactions(seat_id, class_id, limit=25):
         .limit(80)
         .all()
     )
-    return [t for t in rows if (t.type or "").lower() not in excluded][:limit]
+    already_claimed_txn_ids = {
+        (claim.claim_basis or {}).get("transaction_id")
+        for claim in InsuranceClaim.query.filter_by(
+            class_id=class_id, target_seat_id=seat_id,
+        ).all()
+    }
+    return [
+        t for t in rows
+        if (t.type or "").lower() not in excluded and t.id not in already_claimed_txn_ids
+    ][:limit]
 
 
 @student_bp.route('/insurance/claim/<policy_uuid>', methods=['GET', 'POST'])
@@ -1799,6 +1816,11 @@ def file_claim(policy_uuid):
         if is_transaction_type:
             tid = form.transaction_id.data
             claim_subject["transaction_id"] = int(tid) if tid not in (None, "") else None
+            # The "Briefly describe what happened" field was rendered and
+            # submitted but never read here, so it was silently dropped --
+            # the admin review page's "Claim Description" was guaranteed blank
+            # for every TRANSACTION claim regardless of what the student typed.
+            claim_subject["description"] = (form.description.data or "").strip() or None
         else:
             # PRODUCTIVITY: one or more class-local loss-dates, each with hours and
             # the student's own explanation (evidentiary; FEAT-STOR-003 validates).
