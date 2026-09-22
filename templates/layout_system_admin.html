@@ -164,13 +164,16 @@
     <script src="{{ static_url('js/mobile-sidebar-toggle.js') }}"></script>
     <script>
         function updateTime() {
+            // Operations surfaces speak UTC, always (INV-ARC-015 SS X.2) -- no
+            // browser-local detection. An explicit IANA zone is supplied to
+            // Intl, not inferred from the operator's machine.
             const now = new Date();
             const timeElement = document.getElementById('current-time');
             if (!timeElement) return;
-            const optionsDate = { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' };
-            const optionsTime = { hour: 'numeric', minute: 'numeric', hour12: true };
-            timeElement.textContent = now.toLocaleDateString(undefined, optionsDate) + ' ' +
-                now.toLocaleTimeString(undefined, optionsTime);
+            const optionsDate = { timeZone: 'UTC', weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' };
+            const optionsTime = { timeZone: 'UTC', hour: '2-digit', minute: '2-digit', hour12: false };
+            timeElement.textContent = now.toLocaleDateString('en-US', optionsDate) + ' ' +
+                now.toLocaleTimeString('en-US', optionsTime) + ' UTC';
         }
         setInterval(updateTime, 1000);
         updateTime();
