@@ -195,5 +195,8 @@ def test_invalid_notice_fields_do_not_write(setup, fields):
                    recovery_state="UNAVAILABLE", next_update_unavailable="on")
     payload.update(fields)
     if "next_update_at" in fields: payload.pop("next_update_unavailable")
-    assert client.post("/operator/notices", data=payload).status_code == 400
+    response = client.post("/operator/notices", data=payload)
+    assert response.status_code == 400
+    if fields.get("recovery_state") == "UNAVAILABLE":
+        assert "Clear the recovery time or select a known or estimated recovery state." in response.get_data(as_text=True)
     assert not published

@@ -230,6 +230,8 @@ def create_app(store=None) -> Flask:
             next_update = None if next_update_unavailable else parse_notice_time(payload.get("next_update_at"))
         except ValueError:
             abort(400, description="Enter a valid UTC time.")
+        if recovery_state == RecoveryExpectationState.UNAVAILABLE.value and recovery_value is not None:
+            abort(400, description="Clear the recovery time or select a known or estimated recovery state.")
         if recovery_state != RecoveryExpectationState.UNAVAILABLE.value and not recovery_value:
             abort(400)
         incident_ref = payload.get("incident_ref", "").strip()

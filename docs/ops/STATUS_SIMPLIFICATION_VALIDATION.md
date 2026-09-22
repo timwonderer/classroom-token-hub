@@ -4,31 +4,36 @@ This report covers the isolated `simplify-status-observations` worktree. It does
 
 ## Runtime and isolation
 
-Python 3.13 runtime: `/private/tmp/cth-status-test-runtime/bin/python`. A read-only `.pth` reuses existing application dependencies; pinned status dependencies were installed only in this temporary virtual environment. The configured application virtual environment was not modified.
+The verification used a temporary Python 3.13 virtual environment. A read-only `.pth` reuses existing application dependencies; pinned status dependencies were installed only in this temporary virtual environment. The configured application virtual environment was not modified.
 
-`/private/tmp/cth-status-test-runtime/run_isolated.py` reads only the dedicated `TEST_DATABASE_URL`, validates a loopback host and an explicitly named test database, rejects a worktree `.env`, and passes a clean environment. No production credentials or environment were copied. Local test database connectivity was verified with `SELECT 1`. Sandbox escalation was needed for localhost database/browser access. No full-suite tests were run.
+The temporary isolation wrapper read only the dedicated `TEST_DATABASE_URL`, validates a loopback host and an explicitly named test database, rejects a worktree `.env`, and passes a clean environment. No production credentials or environment were copied. Local test database connectivity was verified with `SELECT 1`. Sandbox escalation was needed for localhost database/browser access. No full-suite tests were run.
 
 ## Targeted tests
+
+The commands below are portable test invocations run from the repository root with
+the documented test dependencies and dedicated test database configured. During
+this verification they were launched through the temporary isolation wrapper
+described above. The wrapper is not a repository tool.
 
 Before status UI changes, the required accessibility files passed with **20 passed in 6.26 seconds**, no skips:
 
 ```sh
-/private/tmp/cth-status-test-runtime/bin/python /private/tmp/cth-status-test-runtime/run_isolated.py -m pytest -q tests/test_accessibility.py tests/test_axe_compliance.py
+python -m pytest -q tests/test_accessibility.py tests/test_axe_compliance.py
 ```
 
 Final combined verification passed with **209 passed in 29.38 seconds**, no skips or failures:
 
 ```sh
-/private/tmp/cth-status-test-runtime/bin/python /private/tmp/cth-status-test-runtime/run_isolated.py -m pytest -q tests/test_status_measurements.py tests/test_status_platform.py tests/test_status_store.py tests/test_status_page.py tests/test_status_sampler.py tests/test_status_identity.py tests/test_status_collector.py tests/test_status_resolution.py tests/test_status_deploy_workflow.py tests/dom/operation/test_health.py tests/test_accessibility.py tests/test_axe_compliance.py
+python -m pytest -q tests/test_status_measurements.py tests/test_status_platform.py tests/test_status_store.py tests/test_status_page.py tests/test_status_sampler.py tests/test_status_identity.py tests/test_status_collector.py tests/test_status_resolution.py tests/test_status_deploy_workflow.py tests/dom/operation/test_health.py tests/test_accessibility.py tests/test_axe_compliance.py
 ```
 
-The final run includes all platform checks, seven new mockup/order/state-mapping regressions, and the malformed Loki Boolean-value regression. Its 209 passing cases include all 20 mandatory accessibility cases. Earlier intermediate successful runs returned 185 and 202 passed; they are not the final verification count. Its worktree artifacts are:
+The final run includes all platform checks, seven new mockup/order/state-mapping regressions, and the malformed Loki Boolean-value regression. Its 209 passing cases include all 20 mandatory accessibility cases. Earlier intermediate successful runs returned 185 and 202 passed; they are not the final verification count. The run generated these repository-relative test artifact names:
 
 - `pytest_result/20260922_pytest_test_status_measurements_summary_7.md`
 - `pytest_result/20260922_pytest_test_status_measurements_results_7.csv`
 - `pytest_result/20260922_pytest_test_status_measurements_failures_7.log`
 
-An earlier integration run returned 167 passed and 14 failures. Every failure called the intentionally removed public `derive_overall_status` helper from superseded projection tests. Those tests and the obsolete public observation/projection modules were retired as part of the requested simplification; no legacy compatibility helper was restored. Relevant independent notice, timestamp, freshness, and pure-GET assertions are covered by the new page/store tests and retained notice tests. The earlier failures remain in the archived verification artifacts for traceability.
+An earlier integration run returned 167 passed and 14 failures. Every failure called the intentionally removed public `derive_overall_status` helper from superseded projection tests. Those tests and the obsolete public observation/projection modules were retired as part of the requested simplification; no legacy compatibility helper was restored. Relevant independent notice, timestamp, freshness, and pure-GET assertions are covered by the new page/store tests and retained notice tests. The earlier failure count is retained here for traceability; the temporary run artifacts are not published with this document.
 
 Independent review also reproduced malformed numerical and Loki-element failures; fixes and regressions are included in the passing final run. An additional transaction simulation confirmed that a different payload within an already persisted source minute cannot change its immutable snapshot, daily counters, or current pointer; all transactional reads preceded writes.
 
@@ -50,9 +55,7 @@ Synthetic platform times were also corrected to precede the render clock by five
 
 The mandatory accessibility files primarily audit application public/auth pages and published marketing pages; the separate rendered checks cover the changed standalone status surface. Axe and the bounded interaction checks are not comprehensive accessibility certification.
 
-Stable artifacts, outside the repository:
-
-`/Users/timothychang/.codex/.chatgpt-projects/g-p-67f9f510ad2481919e4e09b6a49d686d/artifacts/status-simplification-20260922/`
+Local verification artifact groups (not repository files or published attachments):
 
 - `brand-correction/`: original/canonical/corrected hero and viewport screenshots, computed properties, and `final-original-comparison.json`.
 - `mockup-final/`: ten initial final-mockup scenarios and `results.json`.
@@ -63,7 +66,10 @@ Stable artifacts, outside the repository:
 
 Final healthy desktop screenshot: `mockup-final-alignment/healthy-1280-viewport.png`; mobile counterpart: `mockup-final-alignment/healthy-390-viewport.png`. Populated and severe counterparts use the same filename pattern. Each also has full-page and hero PNGs.
 
-The temporary synthetic preview remains available while its process runs at `http://127.0.0.1:8767/?fixture=healthy`; other fixture values are `populated`, `idle`, `stale`, `unavailable`, and `severe`. Original and canonical visual references remain at `http://127.0.0.1:8768/` and `/reference/index.html`.
+The local synthetic preview used fixture names `healthy`, `populated`, `idle`,
+`stale`, `unavailable`, and `severe`. Separate local previews rendered the original
+status page and canonical marketing page. Those temporary preview servers are not
+durable review links; this report does not claim their availability.
 
 ## Read-only production checks
 

@@ -30,6 +30,7 @@ Normative (SOP Tier). Subordinate to `INV-CORE-000`, `INV-CORE-001`, `INV-ARC-00
 - `DOM-OPS-002_AUDIT_LINEAGE_INTEGRITY.md`
 - `SOP-CORE-000_Sop_Foundation.md`
 - `SOP-DOC-000_DOCUMENTATION_STANDARD.md`
+- `SPEC-OPS-006_PUBLIC_REQUEST_MONITORING.md`
 
 ## V. Operating Boundary
 

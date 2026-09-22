@@ -57,6 +57,7 @@ Derived from the Batch B Operations Verifier Policy Decision Package.
 - `docs/DOMAIN/DOM-OPS-001_OPERATIONS_DOMAIN.md`
 - `docs/DOMAIN/DOM-OPS-002_AUDIT_LINEAGE_INTEGRITY.md`
 - `docs/SPEC/SPEC-OPS-002_EXTERNAL_STATUS_PERSISTENCE_MODEL.md`
+- `docs/SPEC/SPEC-OPS-006_PUBLIC_REQUEST_MONITORING.md`
 
 ## V. Capability boundary
 
