@@ -1743,6 +1743,20 @@ party, a different threat that doesn't apply here. See
 Still untested: two of the three sweeps (Turnstile coverage on every
 configured route, accessibility per INV-ARC-020).
 
+**Amended 2026-09-23 — Turnstile sweep complete (`f1a62e0a8`).** A
+systematic pass over every unauthenticated route found three more gaps
+beyond the four already fixed: `/admin/login` (widget rendering via
+the global context processor, but never verified server-side),
+`/admin/resume-credentials` (no widget, no server check at all -- a
+bare 6-digit PIN with no session precondition, the single most
+guessable secret on the recovery surface), and
+`/verify/hallpass/<token>` (no widget, no server check -- the
+`(join_code, first_name, last_name)` match is guessable even though
+the URL token itself isn't). All three fixed and mutation-proofed. See
+`RESUME_2026-09-22_findings_39-54.md` §8 findings 75-77.
+
+Still untested: accessibility per INV-ARC-020.
+
 **Amended 2026-09-23 — full pre-launch suite run recorded.** First full
 (not targeted) `pytest` run since this live-test campaign began,
 against `a916bbfeb` (matches the currently deployed code —

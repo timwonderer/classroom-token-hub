@@ -582,3 +582,53 @@ Both fixes are unrelated to each other in cause (one is a genuine
 front-end regression, the other is a test-authoring defect with zero
 production impact) but shipped in the same commit since both were
 found investigating the same full-suite run.
+
+### Findings 75-77 — Turnstile sweep: three more gaps beyond the four already fixed
+
+**Domain:** Identity/Recovery, Attendance · **Severity:** High (75, 76),
+Medium (77) · **Commit:** `f1a62e0a8`
+
+Per operator direction, swept every unauthenticated route (not just the
+four flows already fixed) for guessable-data resolution with no
+Turnstile gate. A background agent found the candidates; each was
+independently re-verified by reading the route/template before fixing
+anything.
+
+- **Finding 75 — `/admin/login`.** The widget was already rendering
+  (`admin_login.html` calls the `turnstile()` macro, and
+  `turnstile_site_key` reaches every template via the global
+  `app.context_processor` in `app/__init__.py:585` — so nothing needed
+  to change in the template), but `login()` never called
+  `verify_turnstile_token` — confirmed by reading the whole function
+  body, zero occurrences. Username is guessable/enumerable, protected
+  only by a 10/min rate limit. Fixed by adding the same ingress-gate
+  check pattern used everywhere else this session.
+- **Finding 76 — `/admin/resume-credentials`.** Completely missing —
+  no macro import, no widget, no server check. `resume_credentials()`
+  passes a bare 6-digit `resume_pin` straight to `resume_attempt()`
+  with **no session precondition at all** (unlike every other recovery
+  step, which requires `session['recovery_request_id']` already set).
+  1,000,000 possible values, rate-limited only to 10/hour — the single
+  most guessable secret on the whole recovery surface. Added both the
+  widget (new macro import + script tag + call) and the server check.
+- **Finding 77 — `/verify/hallpass/<teacher_public_token>`.**
+  Completely missing. The route's own docstring correctly notes the
+  URL token is "non-enumerable (token-based)" — but the POST body
+  underneath resolves a `(join_code, first_name, last_name)` match
+  against a real roster, exactly the guessable-name-pair shape
+  Turnstile exists for. This page is a legitimate high-frequency
+  workflow for office staff, so a Turnstile failure re-renders the
+  *form* (with a dedicated `turnstile_failed` notice and a working
+  retry path) rather than reusing the page's existing "invalid token"
+  dead end, which has no way back to the form and would wrongly imply
+  the token itself was bad.
+
+Three new tests in `test_turnstile_ingress_coverage.py` follow the
+file's own established pattern exactly: assert the underlying
+state/session never advances when Turnstile fails (no session
+established, `resume_attempt` never called — proven by monkeypatching
+it to raise if invoked, not just checking flash text — no real hall-
+pass match logic reached), then confirm the identical request succeeds
+once Turnstile passes, proving each fixture was valid all along.
+Mutation-proofed: stashed all three fixes together, confirmed all 3 new
+tests fail for the right reason, restored, 8/8 in the file pass.
