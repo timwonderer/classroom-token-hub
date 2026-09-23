@@ -1726,8 +1726,22 @@ are now both closed (`195162a31`).**
   defect exactly via a fresh post-request DB read; mutation-proofed. See
   `RESUME_2026-09-22_findings_39-54.md` §8 finding 71.
 
-Still untested: the three sweeps (Turnstile coverage on every configured
-route, PII in URLs/logs/errors, accessibility per INV-ARC-020).
+**Amended 2026-09-23 — PII sweep complete (`a484bd6f4`).** URLs clean
+(code + 7 days of production access logs). One real logging leak found
+and fixed: `add_individual_student`'s idempotency key embedded the raw
+student name, written verbatim to the log on every FEAT-ENTRY;
+`dedupe_key` already HMAC-encodes the same identity, so the raw name
+was redundant as well as unsafe. Mutation-proofed regression test
+added. Four flash-message instances were flagged against the letter of
+the security doc's own example, then reconsidered and left alone —
+they're session-scoped and visible only to the teacher already looking
+at that exact student, so they don't actually expose anything; the
+doc's example is really about user-enumeration to an unauthorized
+party, a different threat that doesn't apply here. See
+`RESUME_2026-09-22_findings_39-54.md` §8 finding 72.
+
+Still untested: two of the three sweeps (Turnstile coverage on every
+configured route, accessibility per INV-ARC-020).
 
 ### Standing lesson for the ship gate
 

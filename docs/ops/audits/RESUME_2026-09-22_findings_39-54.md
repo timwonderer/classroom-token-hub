@@ -445,3 +445,57 @@ rather than passing against an already-mutated in-memory object.
 Mutation-proofed: fails with the fix stashed, passes restored. 76 tests
 across the affected surfaces (error handlers, accessibility, Turnstile
 ingress, class switching, teacher recovery, claim lifecycle) re-run green.
+
+### Finding 72 — PII sweep: student name logged via idempotency key
+
+**Domain:** Identity/Observability · **Severity:** High (real leak,
+zero live occurrences so far) · **Commit:** `a484bd6f4`
+
+Part of the pre-launch PII sweep (`SOP-DEP-001` §XI, "not yet exercised"
+item). Audited every read of `IdentityProfile.first_name` /
+`.last_name` / `.notes` across `app/routes`, `app/feats`,
+`app/services`, `app/utils`, and `wsgi.py` for the three things
+`.claude/rules/security.md` forbids: PII in URLs, PII in logs, PII in
+error/flash messages.
+
+**URLs: clean.** No name field or derived name variable ever reaches a
+`url_for`/`redirect`/query string. Independently confirmed against 7
+days of production access logs: no name-bearing query params, and two
+real students exercised live this week ("Jordan Lee", "Ava Chen") never
+appear anywhere in the logs.
+
+**Logs: one real bug, fixed.**
+`app/routes/admin.py:4221` (`add_individual_student`) built its
+`FEATContext` idempotency key as
+`f"...{class_id}:{first_name}:{last_name}:{dedupe_key}"`. That string
+is written verbatim to the `FEAT-ENTRY` line on every context entry
+(`app/feats/base.py`'s `log_event`, called unconditionally from
+`__enter__`), so every manual single-student add logged the student's
+plaintext name to the application log — persisted indefinitely,
+readable by anyone with server/log access, unlike a flash message
+scoped to the acting teacher's own session. Zero hits in 30 days of
+production logs (the flow hadn't fired live before this fix), so
+latent, not yet exploited. `dedupe_key` already HMAC-encodes
+`(class_id, first_name, last_name)`, so dropping the raw-name segment
+preserves idempotency semantics exactly. Regression test
+(`test_add_individual_student_does_not_log_the_students_name`) asserts
+neither name appears in `caplog.text` after the route runs;
+mutation-proofed — with the fix stashed, the captured log line reads
+`idempotency_key=admin:add-individual-student:...:Confidential:
+Surnametoshow:...` verbatim. 19/19 tests in the file re-run green.
+
+**Flash messages: flagged, then reconsidered — not a real finding.**
+Four instances in `admin.py` (hall-pass grant, recovery-code reset,
+student-edit confirmation, duplicate-add notice) echo a student's name
+back in a `flash()` call, matching the letter of the security doc's own
+example (`flash(f"...{student.first_name}...")` is its literal "wrong"
+case). On examination this doesn't hold up as an actual exposure:
+`flash()` is session-scoped, rendered only to the same authenticated
+teacher on their next request, never logged, never URL-carried. The
+security doc's example is really guarding against a *different* threat
+— confirming account existence to an unauthorized/anonymous party
+(user enumeration) — which doesn't apply here: the teacher already
+selected this exact student and already sees their name on the roster
+page in front of them. Left unchanged; a mechanical rule-text match
+isn't the same as a real security violation, and treating it as one
+here would have been the wrong call.
