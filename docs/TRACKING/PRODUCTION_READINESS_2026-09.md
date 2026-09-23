@@ -1632,8 +1632,19 @@ policies' terminal cycles, real expiry dates). See
 `RESUME_2026-09-22_findings_39-54.md` §2-3 for the evidence. **The actual gap
 is narrower:** every test policy used
 `waiting_period_days = 0`, so the waiting-period enforcement gate itself has
-never been exercised end-to-end, and no test has confirmed a claim's approval
-actually credits the ledger (as opposed to reaching `APPROVED` status).
+never been exercised end-to-end.
+
+**Corrected 2026-09-23 — the ledger-credit half of that gap is closed.**
+Queried production directly: two `insurance_claims` rows are `APPROVED`
+(`64bcf577…`, `22a04194…`), and both carry a populated
+`ledger_transaction_id` (19, 16) pointing to a real `ledger_transaction` row
+with `status='POSTED'`, `type='insurance_reimbursement'`, amount matching
+the claim's `result_amount` exactly ($3.00 and $18.00), for the correct
+`seat_id`/`class_id`, timestamped within ~6ms of the claim's `decided_at` —
+the same atomic-commit signature already established elsewhere in this
+campaign. Approval provably credits the ledger, not just reaches
+`APPROVED` status. **Still open:** the waiting-period enforcement gate
+itself (every test policy used `waiting_period_days = 0`).
 
 **Corrected 2026-09-22, twice more, same session — verify before asserting
 absence.** Two more items on this list were also already exercised and are
