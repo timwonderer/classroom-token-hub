@@ -2843,6 +2843,19 @@ def signup():
     if not is_totp_submission:
         form = AdminSignupForm()
         if form.validate_on_submit():
+            # Ingress gate: step 1's Turnstile pass only proves a human reached
+            # this session once. Nothing else re-checks it, so a session that
+            # cleared step 1 could otherwise loop this step to enumerate
+            # usernames indefinitely.
+            turnstile_token = request.form.get('cf-turnstile-response')
+            if not verify_turnstile_token(turnstile_token, get_real_ip()):
+                flash("Security verification failed. Please complete the check and try again.", "error")
+                return render_template(
+                    "admin_signup.html",
+                    form=form,
+                    turnstile_site_key=current_app.config.get("TURNSTILE_SITE_KEY"),
+                )
+
             username = normalize_auth_username(form.username.data)
 
             if _auth_username_exists(username):
@@ -2874,6 +2887,7 @@ def signup():
                 "admin_signup_totp.html",
                 form=totp_form,
                 totp_view=totp_view,
+                turnstile_site_key=current_app.config.get("TURNSTILE_SITE_KEY"),
             )
         # Invalid form submission — re-render step 2
         return render_template(
@@ -2896,10 +2910,8 @@ def signup():
         flash("Session expired. Please start over.", "error")
         return redirect(url_for("admin.signup"))
 
-    # Verify TOTP
-    totp = pyotp.TOTP(totp_secret)
-    if not totp.verify(totp_code):
-        flash("Invalid TOTP code. Please try again.", "error")
+    def _rerender_totp_step(flash_message):
+        flash(flash_message, "error")
         totp_uri = pyotp.totp.TOTP(totp_secret).provisioning_uri(name=username, issuer_name="Classroom Economy Admin")
         img = qrcode.make(totp_uri)
         buf = io.BytesIO()
@@ -2914,7 +2926,22 @@ def signup():
             "admin_signup_totp.html",
             form=totp_form,
             totp_view=totp_view,
+            turnstile_site_key=current_app.config.get("TURNSTILE_SITE_KEY"),
         )
+
+    # Ingress gate: this is the actual account-creation commit. Same reasoning
+    # as step 2 -- one upfront Turnstile pass must not license unlimited
+    # attempts at the terminal step of the flow. Re-render step 3 (not a
+    # redirect to step 1) so a failed check doesn't discard the username/TOTP
+    # progress already staged this session.
+    turnstile_token = request.form.get('cf-turnstile-response')
+    if not verify_turnstile_token(turnstile_token, get_real_ip()):
+        return _rerender_totp_step("Security verification failed. Please complete the check and try again.")
+
+    # Verify TOTP
+    totp = pyotp.TOTP(totp_secret)
+    if not totp.verify(totp_code):
+        return _rerender_totp_step("Invalid TOTP code. Please try again.")
 
     # Check ToS
     tos_agreed = request.form.get("tos_agreed") == "true"
@@ -2944,6 +2971,16 @@ def recover():
     from app.feats.teacher_recovery_feat import MIN_CLAIMED_STUDENTS_PER_CLASS, begin_attempt
     form = AdminRecoveryForm()
     if request.method == 'POST' and form.validate_on_submit():
+        # Ingress gate: (join_code, username) pairs are guessable/enumerable
+        # and this is the unauthenticated entry point of the whole recovery flow.
+        turnstile_token = request.form.get('cf-turnstile-response')
+        if not verify_turnstile_token(turnstile_token, get_real_ip()):
+            flash("Security verification failed. Please complete the check and try again.", "error")
+            return render_template(
+                'admin_recover.html', form=form,
+                recovery_min_students=MIN_CLAIMED_STUDENTS_PER_CLASS,
+                turnstile_site_key=current_app.config.get("TURNSTILE_SITE_KEY"),
+            )
         joins, usernames = request.form.getlist('join_code[]'), request.form.getlist('student_username[]')
         if joins and len(joins) == len(usernames):
             result = begin_attempt(pairs=list(zip(joins, usernames)),
@@ -2957,7 +2994,11 @@ def recover():
                     return redirect(url_for('admin.recovery_status'))
                 return render_template('admin_recovery_prepare.html', class_refs=result['class_refs'])
         flash('Unable to begin recovery. Check all entries or resume your existing recovery attempt.', 'error')
-    return render_template('admin_recover.html', form=form, recovery_min_students=MIN_CLAIMED_STUDENTS_PER_CLASS)
+    return render_template(
+        'admin_recover.html', form=form,
+        recovery_min_students=MIN_CLAIMED_STUDENTS_PER_CLASS,
+        turnstile_site_key=current_app.config.get("TURNSTILE_SITE_KEY"),
+    )
 
 
 @admin_bp.route('/recovery/select-class', methods=['POST'])

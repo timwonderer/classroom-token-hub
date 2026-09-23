@@ -1,11 +1,13 @@
 {% from "macros/auth_brand.html" import auth_brand %}
 {% import "macros/cards.html" as cards %}
+{% from "macros/turnstile.html" import turnstile %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Classroom Token Hub - Teacher Sign Up</title>
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     <link href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}">
 
@@ -43,6 +45,8 @@
                     <label for="username" class="form-label">Create Your Username </label>
                     <input id="username" name="username" type="text" required autocomplete="username" class="form-control" placeholder="Create a unique username">
                 </div>
+
+                {{ turnstile(turnstile_site_key) }}
 
                 <button type="submit" class="btn btn-primary w-100 btn-lg mb-4">Continue</button>
             </form>

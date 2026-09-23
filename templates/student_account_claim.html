@@ -1,5 +1,6 @@
 {% from "macros/auth_brand.html" import auth_brand %}
 {% import 'macros/cards.html' as cards %}
+{% from "macros/turnstile.html" import turnstile %}
 <!DOCTYPE html>
 <html lang="en">
 
@@ -7,6 +8,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Classroom Token Hub - Student Account Setup</title>
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     <link href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}">
 
@@ -86,6 +88,8 @@
                     <div class="text-danger small">{{ error }}</div>
                     {% endfor %}
                 </div>
+
+                {{ turnstile(turnstile_site_key) }}
 
                 <button type="submit" class="btn btn-primary w-100 btn-lg mb-4">Submit</button>
             </form>

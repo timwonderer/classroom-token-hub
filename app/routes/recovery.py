@@ -6,6 +6,8 @@ import hmac
 from app.extensions import db, limiter
 from app.models import Seat
 from app.auth import admin_required
+from app.utils.ip_handler import get_real_ip
+from app.utils.turnstile import verify_turnstile_token
 
 recovery_bp = Blueprint('recovery', __name__, url_prefix='/recovery')
 
@@ -78,6 +80,13 @@ def account_lookup():
             flash("Reset code is required.", "error")
             return redirect(url_for('recovery.account_lookup'))
 
+        # Ingress gate: the reset code is the only secret guarding this
+        # unauthenticated entry point, and this route has no other bot check.
+        turnstile_token = request.form.get('cf-turnstile-response')
+        if not verify_turnstile_token(turnstile_token, get_real_ip()):
+            flash("Security verification failed. Please complete the check and try again.", "error")
+            return redirect(url_for('recovery.account_lookup'))
+
         from app.feats.identity_feat import validate_recovery_code
 
         result = validate_recovery_code(
@@ -113,4 +122,7 @@ def account_lookup():
         flash("Recovery code verified. Please set up your new username and credentials.", "success")
         return redirect(url_for('student.create_username'))
 
-    return render_template('student/recovery/account_lookup.html')
+    return render_template(
+        'student/recovery/account_lookup.html',
+        turnstile_site_key=current_app.config.get("TURNSTILE_SITE_KEY"),
+    )

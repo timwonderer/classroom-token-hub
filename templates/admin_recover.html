@@ -1,11 +1,13 @@
 {% from "macros/auth_brand.html" import auth_brand %}
 {% import "macros/cards.html" as cards %}
+{% from "macros/turnstile.html" import turnstile %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Classroom Token Hub - Account Recovery</title>
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     <link href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}">
     <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
@@ -173,6 +175,8 @@
                 {% call cards.alert_card('danger', 'Duplicate student username', icon='error', body_class='mt-3 mb-0', role='alert', id='recovery-form-error', attrs='hidden') %}
                     <p class="mb-0" id="recovery-form-error-message"></p>
                 {% endcall %}
+
+                {{ turnstile(turnstile_site_key, "mt-4") }}
 
                 <button type="submit" class="btn btn-primary w-100 btn-lg mt-4 mb-4">Verify Identity</button>
             </form>

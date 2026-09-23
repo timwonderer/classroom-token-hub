@@ -542,6 +542,13 @@ def claim_account():
     form = StudentClaimAccountForm()
 
     if form.validate_on_submit():
+        # Ingress gate: join_code + name is guessable/enumerable, unauthenticated,
+        # and rate-limited by nothing else on this route.
+        turnstile_token = request.form.get('cf-turnstile-response')
+        if not verify_turnstile_token(turnstile_token, get_real_ip()):
+            flash("Security verification failed. Please complete the check and try again.", "claim")
+            return redirect(url_for('student.claim_account'))
+
         display_join_code = format_join_code(form.join_code.data)
         first_name = (form.first_name.data or "").strip()
         last_name = form.last_name.data.strip()
@@ -572,7 +579,11 @@ def claim_account():
 
         return redirect(url_for('student.create_username'))
 
-    return render_template('student_account_claim.html', form=form)
+    return render_template(
+        'student_account_claim.html',
+        form=form,
+        turnstile_site_key=current_app.config.get("TURNSTILE_SITE_KEY"),
+    )
 
 
 @student_bp.route('/create-username', methods=['GET', 'POST'])
