@@ -3337,8 +3337,12 @@ def select_class_context():
             )
 
         # Update canonical DB pointers so resolve_canonical_context() succeeds on next request.
-        linked_user.last_active_class_id = selected_class_id
-        linked_user.last_active_seat_id = selected_seat.id
+        from app.auth import switch_student_session_context
+        with FEATContext(
+            "FEAT-IDEN-005",
+            idempotency_key=f"feat:iden:select-class-context:{linked_user.id}:{selected_class_id}",
+        ):
+            switch_student_session_context(selected_seat, class_id=selected_class_id, seat_id=selected_seat.id)
 
         return redirect(url_for('student.dashboard'))
 

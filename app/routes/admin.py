@@ -2966,7 +2966,7 @@ def signup():
 
 
 @admin_bp.route('/recover', methods=['GET', 'POST'])
-@limiter.limit("5 per hour")
+@limiter.limit("5 per hour", methods=["POST"])  # GET only renders the form; only POST resolves guessable (join_code, username) pairs
 def recover():
     from app.feats.teacher_recovery_feat import MIN_CLAIMED_STUDENTS_PER_CLASS, begin_attempt
     form = AdminRecoveryForm()

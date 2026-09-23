@@ -18,7 +18,7 @@ from sqlalchemy.exc import SAWarning
 
 from app.extensions import db
 from app.feats.base import FEATContext
-from app.models import Seat
+from app.models import Seat, User
 from app.utils.canonical_temporal_resolver import canonical_temporal_resolver, SYSTEM_LEVEL_EVALUATION
 from tests.helpers.classroom_initializer import initialize, initialize_as_student, initialize_as_teacher
 from tests.helpers.canonical_classroom import login_student, provision_classroom, _provision_roster_seat
@@ -154,6 +154,43 @@ def test_dashboard_switcher_lists_every_claimed_class(client, app, multi_class_s
     assert 'Chemistry' in select_html
     assert 'AP CSP' in select_html
     assert 'Biology' in select_html
+
+
+def test_select_class_context_route_actually_commits_the_switch(client, app, multi_class_student):
+    """/student/select-class-context must commit the session-context switch,
+    not just redirect as if it had.
+
+    Same defect shape as finding 68 (/student/add-class): the route set
+    ``linked_user.last_active_class_id`` / ``last_active_seat_id`` directly
+    on the ORM object with no surrounding FEAT context and no explicit
+    commit -- silently discarded at request teardown, so a fresh read
+    (simulating the student's very next request) would still show the OLD
+    class despite the redirect implying success. Fixed the same way finding
+    68 was: route the write through the canonical
+    ``switch_student_session_context`` helper under its own FEAT context.
+    """
+    classrooms = multi_class_student["classrooms"]
+    student = multi_class_student["student"]
+    target_class_id = classrooms["B"].class_id
+
+    response = client.post(
+        '/student/select-class-context',
+        data={'class_id': target_class_id},
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    assert response.headers['Location'].endswith('/student/dashboard')
+
+    target_seat = Seat.query.filter_by(
+        class_id=target_class_id, user_id=student.user.id,
+    ).one()
+
+    # Force a genuinely fresh read -- an in-memory-only mutation would still
+    # pass an assertion against the same, already-mutated Python object.
+    db.session.expire_all()
+    refreshed_user = db.session.get(User, student.user.id)
+    assert refreshed_user.last_active_class_id == target_class_id
+    assert refreshed_user.last_active_seat_id == target_seat.id
 
 
 def test_switch_class_success(client, app, multi_class_student):

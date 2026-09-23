@@ -17,12 +17,26 @@ def test_rate_limited_request_renders_the_styled_429_page(client, app):
     try:
         response = None
         for _ in range(6):
-            response = client.get("/admin/recover")
+            response = client.post("/admin/recover", data={})
         assert response.status_code == 429
         html = response.data.decode()
         assert "429" in html
         assert "Too Many Requests" in html
         assert "Too many attempts" in html
         assert "5 per 1 hour" in html
+    finally:
+        app.config["RATELIMIT_ENABLED"] = False
+
+
+def test_recover_page_loads_are_not_rate_limited(client, app):
+    """GET only renders the form -- it must not share POST's guess-attempt
+    bucket, or a student reloading the page while their teacher fills it out
+    locks out the actual recovery attempt for no security benefit.
+    """
+    app.config["RATELIMIT_ENABLED"] = True
+    try:
+        for _ in range(10):
+            response = client.get("/admin/recover")
+            assert response.status_code == 200
     finally:
         app.config["RATELIMIT_ENABLED"] = False
