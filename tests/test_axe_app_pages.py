@@ -49,11 +49,14 @@ except ImportError:  # pragma: no cover - environment-dependent dependency
 from werkzeug.serving import make_server
 
 from app import app as flask_app
+from app.feats.base import FEATContext
 from app.hash_utils import hash_username_lookup
 from app.models import User
 from app.utils.canonical_temporal_resolver import utc_now
 from tests.helpers.canonical_session import set_canonical_context
+from tests.helpers.class_domain import enable_class_feature
 from tests.helpers.classroom_initializer import initialize_as_student, initialize_as_teacher
+from tests.helpers.store_products import publish_store_product
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 AXE_SOURCE = (REPO_ROOT / "tests" / "assets" / "axe-core.min.js").read_text(encoding="utf-8")
@@ -233,6 +236,64 @@ def test_no_axe_violations_across_pages_needing_no_domain_setup(app, client, wca
         ("/sysadmin/combined-logs", sysadmin_session),
         ("/sysadmin/support", sysadmin_session),
         ("/sysadmin/passkey/settings", sysadmin_session),
+    ]
+
+    with sync_playwright() as playwright:
+        try:
+            browser = playwright.chromium.launch(headless=True)
+        except Exception as exc:  # pragma: no cover - browser installation varies
+            pytest.skip(f"Chromium is unavailable: {exc}")
+
+        with browser:
+            failures: dict[str, list] = {}
+            for path, session_dict in pages:
+                page = _authenticated_page(browser, wcag_live_server, session_dict)
+                violations = _axe_violations(page, f"{wcag_live_server}{path}")
+                if violations:
+                    failures[path] = violations
+                page.context.close()
+
+            assert not failures, "\n\n".join(
+                f"{path}:\n" + "\n".join(
+                    f"  [{v['impact']}] {v['id']}: {v['help']}\n"
+                    + "\n".join(f"    - {n['target']}: {n['failureSummary']}" for n in v["nodes"])
+                    for v in violations
+                )
+                for path, violations in failures.items()
+            )
+
+
+@pytest.mark.skipif(sync_playwright is None, reason="Playwright Python package is unavailable")
+def test_no_axe_violations_across_feature_gated_pages(app, client, wcag_live_server):
+    """WCAG 2.1 A/AA audit of Group B: pages gated behind a class feature
+    that starts OFF by default (hall_pass, insurance, rent, store), plus the
+    two admin_edit_* pages that also need a real domain row to reach 200.
+    """
+    classroom = initialize_as_teacher("chemistry_p1", client, app)
+    for feature in ("hall_pass", "insurance", "rent", "store"):
+        enable_class_feature(class_id=classroom.class_id, feature=feature)
+
+    with FEATContext(
+        "FEAT-SETTINGS-001",
+        idempotency_key=f"axe-sweep:store-item:{classroom.class_id}",
+    ):
+        product = publish_store_product(
+            class_id=classroom.class_id,
+            entitlement_type="IMMEDIATE_USE",
+            name="Axe Sweep Test Item",
+            description="Fixture product for the accessibility sweep.",
+            price="5.00",
+        )
+
+    teacher_session = _teacher_session(client, classroom)
+
+    pages: list[tuple[str, dict | None]] = [
+        ("/admin/hall-pass", teacher_session),
+        ("/admin/insurance", teacher_session),
+        ("/admin/rent-settings", teacher_session),
+        ("/admin/store", teacher_session),
+        ("/admin/insurance/new", teacher_session),
+        (f"/admin/store/edit/{product.product_lineage_uuid}", teacher_session),
     ]
 
     with sync_playwright() as playwright:

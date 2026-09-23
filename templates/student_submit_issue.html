@@ -187,16 +187,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Server-side validation will still enforce the required field
         field.removeAttribute('required');
 
-        // EasyMDE hides the original <textarea> (with its <label for="...">)
-        // and replaces it with a CodeMirror editor whose own internal input
-        // proxy is what's actually focusable -- unlabeled, since the visible
-        // label was never associated with it. Carry the original label's
-        // text over as an aria-label on that real input (WCAG 4.1.2).
-        const inputField = editor.codemirror.getInputField();
-        const originalLabel = document.querySelector('label[for="' + field.id + '"]');
-        if (inputField && originalLabel) {
-            inputField.setAttribute('aria-label', originalLabel.textContent.trim());
-        }
+        // The real accessible-name fix (EasyMDE's CodeMirror input proxy has
+        // no label of its own) is handled generally, for every editor on the
+        // page, by static/js/easymde-a11y.js -- not per call site here.
 
         if (counter) {
             const updateCounter = function() {
