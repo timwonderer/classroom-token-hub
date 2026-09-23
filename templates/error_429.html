@@ -1,0 +1,76 @@
+{% import "macros/cards.html" as cards %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>429 - Too Many Requests</title>
+    <link href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}">
+
+    <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
+    <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
+    <style>
+        .error-message {
+            background: var(--warning-subtle);
+            border-left: 4px solid var(--warning);
+            padding: var(--space-4);
+            margin-bottom: var(--space-6);
+        }
+
+        .error-message h5 {
+            color: var(--text-primary);
+            margin-bottom: var(--space-2);
+        }
+
+        .error-message code {
+            color: var(--text-primary);
+            font-family: var(--font-data);
+        }
+    </style>
+</head>
+
+<body class="error-page">
+    <main id="main-content" aria-labelledby="error-heading">
+    <div class="error-container">
+        <div class="error-header">
+            <span class="material-symbols-outlined icon-2xl icon-middle mb-2" aria-hidden="true">hourglass_top</span>
+            <h1 id="error-heading">429</h1>
+            <p>Too Many Requests</p>
+        </div>
+
+        <div class="error-body">
+            {% call cards.alert_card('warning', 'Too many attempts', icon='timer', body_class='mb-4', role='alert', heading_tag='h2') %}
+                <p class="mb-0">This page limits how often it can be used in a short period, as a security measure. Please wait a moment and try again.</p>
+            {% endcall %}
+
+            {% if limit_description %}
+            <div class="error-message">
+                <h5>Limit</h5>
+                <code>{{ limit_description }}</code>
+            </div>
+            {% endif %}
+
+            {% call cards.alert_card('info', 'Steps you can try right now', icon='build_circle', body_class='mb-4', role='note', heading_tag='h2') %}
+                <ul class="mb-0 ps-4">
+                    <li>Wait a few minutes before trying again</li>
+                    <li>Avoid resubmitting the same form multiple times in a row</li>
+                    <li>If this keeps happening, ask your teacher or administrator for help</li>
+                </ul>
+            {% endcall %}
+
+            <div class="actions">
+                <button type="button" class="btn bg-primary text-white" onclick="history.back()">Go Back to Last Page</button>
+                <a href="/" class="btn bg-primary text-white">Return to Login Page</a>
+                <a href="https://status.classroomtokenhub.com" target="_blank" rel="noopener noreferrer" class="btn bg-secondary text-white">
+                    Check System Status <span class="visually-hidden">(opens in a new tab)</span> <span class="material-symbols-outlined icon-middle" aria-hidden="true">open_in_new</span>
+                </a>
+            </div>
+        </div>
+    </div>
+    <script>document.querySelectorAll('.material-symbols-outlined').forEach((icon) => icon.setAttribute('aria-hidden', 'true'));</script>
+    </main>
+</body>
+
+</html>

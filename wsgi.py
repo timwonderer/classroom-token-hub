@@ -351,6 +351,28 @@ def bad_request_error(error):
     ), 400
 
 
+@app.errorhandler(429)
+def too_many_requests_error(error):
+    """
+    Handle 429 Too Many Requests Error (Flask-Limiter).
+    Displays a user-friendly page instead of Flask-Limiter's bare default.
+    Logs to database to help spot limits that are too tight for real usage.
+    """
+    limit_description = str(error.description) if hasattr(error, 'description') else None
+    app.logger.warning(f"429 Too Many Requests: {request.url} - {limit_description}")
+
+    log_error_to_db(
+        error_type='429 Too Many Requests',
+        error_message=f"Rate limited on {request.path}: {limit_description}",
+        stack_trace=None
+    )
+
+    return render_template(
+        'error_429.html',
+        limit_description=limit_description
+    ), 429
+
+
 @app.errorhandler(503)
 def service_unavailable_error(error):
     """

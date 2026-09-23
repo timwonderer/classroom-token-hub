@@ -181,6 +181,7 @@ def _route_map(client) -> dict:
         "templates/admin_resume_credentials.html": lambda: _render_route(client, "/admin/resume-credentials"),
         "templates/admin_signup.html": lambda: _render_route(client, "/admin/signup"),
         "templates/error_400.html": lambda: _render_direct("error_400.html", error_message="Example request error."),
+        "templates/error_429.html": lambda: _render_direct("error_429.html", limit_description="5 per 1 hour"),
         "templates/error_500.html": lambda: _render_direct("error_500.html", error_id="ERR-TEST-500"),
         "templates/system_admin_login.html": lambda: _render_route(client, "/sysadmin/login"),
         "templates/system_admin_logs.html": lambda: _render_direct(

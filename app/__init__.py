@@ -685,7 +685,31 @@ def create_app():
             view = build_student_layout_context_view(
                 display_metadata,
             )
-            available_classes = [display_metadata.to_available_class_option()]
+            # Switcher must list EVERY class the student has claimed, not just
+            # the active one. Sourcing it from the single current
+            # display_metadata made the dropdown render exactly one option
+            # (the class you're already on), so a multi-class student could
+            # never switch -- confirmed live (2026-09-23): a student who had
+            # genuinely claimed two classes saw only the current one in the
+            # "Switch Class" list, with the other missing entirely. Same
+            # defect already fixed on the teacher sidebar below; this is the
+            # student-side twin, left unfixed until now.
+            from app.routes.student import _get_identity_bound_seat_options
+            from app.services.context_resolver import CanonicalContext
+
+            available_classes = []
+            for option in _get_identity_bound_seat_options(current_user.id):
+                if option["class_id"] == context.class_id:
+                    available_classes.append(display_metadata.to_available_class_option(is_current=True))
+                    continue
+                other_metadata = get_or_resolve_display_metadata(CanonicalContext(
+                    user_id=current_user.id,
+                    class_id=option["class_id"],
+                    seat_id=option["seat_id"],
+                    actor_role="student",
+                ))
+                if other_metadata is not None:
+                    available_classes.append(other_metadata.to_available_class_option(is_current=False))
 
             return {
                 'student_layout_view': view,
