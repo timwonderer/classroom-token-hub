@@ -1760,21 +1760,62 @@ as clean — none trace to this campaign's changes:
   `requirements.txt` and isn't installed in this venv), not a code
   defect. `test_status_page.py` last touched by `1023c5e76`, unrelated
   to this campaign.
-- **4 fails**: `test_design_token_contract.py::test_SPEC_DES_001__
-  templates_conform[R5]` (5 static inline `style=` attributes in
-  `templates/admin_process_claim.html`, pre-existing design-token debt,
-  last touched by unrelated commits); and three
-  `test_hall_pass_lifecycle_classification.py` failures
-  (`resolver_reports_left_after_departure`,
-  `resolver_reports_returned_after_the_full_round_trip`, and a
-  `StopIteration` in a third test) against
-  `app/services/hall_pass_status_service.py`, last touched by
-  `1e20214ed`/`dea06c1e6`/`db7079c7d` — none from this campaign.
 
-**Not yet fixed** — real, pre-existing defects surfaced by finally
-running the full suite rather than targeted files; worth triaging
-before the go/no-go decision even though this campaign didn't cause
-them.
+**Corrected 2026-09-23, same day — the "4 fails ... none from this
+campaign" claim above was wrong, and the operator caught it.** The
+check that produced it only asked "which commit last touched this
+file," not "did that commit land before or after the last known-clean
+full run" — and `b4a639311` (2026-09-21 22:01 UTC, the prior full run,
+0 fails/0 errors) turned out to predate every one of those commits,
+not postdate them. Verified properly with
+`git merge-base --is-ancestor b4a639311 <sha>`: `dea06c1e6`, `1e20214ed`
+(hall pass) and `ccfb989ee`, `7ee59c1b9`, `060f3989b` (claim page) all
+landed later that same evening (19:19–22:21 PDT = after the clean
+run's UTC timestamp), squarely inside this campaign.
+
+- **`test_design_token_contract.py::test_SPEC_DES_001__templates_conform[R5]`**
+  — a real regression. `git log -S` confirms `7ee59c1b9` (09-21) added
+  5 new `style="font-size:1em;vertical-align:middle;"` spans to
+  `templates/admin_process_claim.html` — a genuinely new static inline
+  style, not pre-existing debt. No sanctioned CSS class covered "size
+  an icon to match surrounding text" (the existing `.icon-xs`…`.icon-3xl`
+  tokens are all fixed rem sizes). Added `.icon-inherit { font-size: 1em; }`
+  to `static/css/style.css` alongside the existing token classes and
+  swapped all 5 spans to `class="... icon-inherit icon-middle"`.
+  Verified the swap is visually exact, not approximate: rendered both
+  the old inline style and the new classes against the real stylesheet
+  in a browser and diffed `getComputedStyle` — `fontSize` and
+  `verticalAlign` matched byte-for-byte. 49/49 `test_design_token_contract.py`
+  tests and 3/3 `test_accessibility.py` tests re-run green.
+
+- **The three `test_hall_pass_lifecycle_classification.py` failures**
+  — not a production regression at all, despite living in files this
+  campaign touched. `dea06c1e6` (which created this test file) and
+  `1e20214ed` hardcoded a literal day-boundary window
+  (`datetime(2026, 9, 21, 7, 0, ...)` to `datetime(2026, 9, 22, 7, 0, ...)`)
+  and a literal history-query date (`"2026-09-21"`) — both correct on
+  the day they were written, both silently expired the moment real
+  wall-clock time moved past them, since `_leave()`/`_return()` stamp
+  their attendance rows with genuine current time regardless of what
+  date the test asserts against. Confirmed this is test-only by reading
+  the real callers: `app/routes/admin.py`'s Issued/Out page and
+  `app/routes/api.py`'s checkin route both compute their day boundary
+  *dynamically* via `canonical_temporal_resolver(..., primitive=
+  "evaluation_day_boundaries")` at request time — never a hardcoded
+  literal. Fixed by making the test do the same (a new
+  `_todays_boundaries()` helper calling the identical production
+  primitive) and computing the history query's date at test-run time
+  instead of hardcoding it. **Mutation-proofed properly**: temporarily
+  broke `resolve_hall_pass_lifecycle_status` to always return
+  `"approved"`, confirmed 5 of the 7 tests in the file catch it (2 that
+  don't exercise any state transition can't, by construction), restored
+  the resolver untouched (`git diff` empty), reran clean — 7/7 pass.
+
+Both fixes committed together; see the RESUME audit doc §8 for the
+full writeup. **This correction stands as the record** — the file's
+own convention is to layer a dated amendment over a wrong claim, not
+silently rewrite it, so the retracted text above stays visible rather
+than being deleted.
 
 ### Standing lesson for the ship gate
 

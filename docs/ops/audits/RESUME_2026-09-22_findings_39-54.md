@@ -499,3 +499,86 @@ selected this exact student and already sees their name on the roster
 page in front of them. Left unchanged; a mechanical rule-text match
 isn't the same as a real security violation, and treating it as one
 here would have been the wrong call.
+
+### Findings 73/74 — the first full-suite run's 4 fails, corrected same day
+
+**Domain:** Attendance/Hall Pass, Templates · **Commits:** the 5-line
+CSS/template fix and the hall-pass test fix, committed together.
+
+The full-suite run recorded in `PRODUCTION_READINESS_2026-09.md` §VII
+(3597 tests, `a916bbfeb`) surfaced 4 fails beyond the 16 pre-existing
+`google.auth` errors. The first pass at explaining them was wrong, and
+the operator caught it directly: "How are they preexisting. We checked
+every full run and last full run was clean." The check behind the
+original claim only asked which commit last touched each file — it
+never asked whether that commit came *before or after* the last known-
+clean full run (`b4a639311`, 2026-09-21 22:01 UTC, 0 fails/0 errors,
+preserved at `docs/ops/audits/evidence/2026-09-21_full_b4a639311/`).
+Verified properly with `git merge-base --is-ancestor b4a639311 <sha>`:
+every implicated commit landed *after* it, the same evening, well
+inside this campaign.
+
+**Finding 73 — R5 design-token regression, real.**
+`git log -S'font-size:1em;vertical-align:middle'` confirms `7ee59c1b9`
+(09-21, "Show a claim's true status, terminate it once decided, fix
+onboarding") added 5 new `style="font-size:1em;vertical-align:middle;"`
+spans to `templates/admin_process_claim.html` — a genuinely new
+violation, not pre-existing debt as first claimed. No sanctioned class
+covered "icon sized to match surrounding body text" (`.icon-xs`
+through `.icon-3xl` in `static/css/style.css` are all fixed rem
+tokens, meant for standalone icons like headers/buttons, not inline
+ones that should scale with the paragraph they sit in). Added
+`.icon-inherit { font-size: 1em; }` alongside the existing token
+classes and swapped all 5 spans to `class="material-symbols-outlined
+me-1 icon-inherit icon-middle"`, dropping the inline style entirely.
+Verified the swap is exact, not approximate: injected both the old
+inline-style markup and the new class-based markup into a page loading
+the real `style.css` in a live browser and diffed `getComputedStyle` —
+`fontSize` (`16px`) and `verticalAlign` (`middle`) matched identically
+between old and new. 49/49 `test_design_token_contract.py` and 3/3
+`test_accessibility.py` (which already covered this page) re-run
+green.
+
+**Finding 74 — hall-pass "failures" were a test time bomb, not a
+production regression.** The 3 failing tests
+(`resolver_reports_left_after_departure`,
+`resolver_reports_returned_after_the_full_round_trip`, and a
+`StopIteration` in `test_history_reports_returned_and_ignores_an_
+unrelated_stray_active_row`) all trace to the same root cause: `dea06c1e6`
+(which introduced `test_hall_pass_lifecycle_classification.py`) and
+`1e20214ed` hardcoded a literal day-boundary window
+(`datetime(2026, 9, 21, 7, 0, tzinfo=timezone.utc)` through
+`datetime(2026, 9, 22, 7, 0, ...)`) and a literal history-query date
+(`"2026-09-21"`). Both were correct exactly on the day they were
+written and silently expired the instant real wall-clock time moved
+past them — `_leave()`/`_return()` stamp their attendance rows with
+genuine current time via the real checkout/checkin routes, regardless
+of what date the test's own assertions hardcode. By 2026-09-23 (two
+days later), every row landed outside the frozen window, so the
+resolver saw zero matching rows and reported `approved` no matter what
+had actually happened.
+
+Confirmed this was test-only, not a production defect, by reading the
+real callers before touching anything: `app/routes/admin.py`'s
+Issued/Out page and `app/routes/api.py`'s checkin route both compute
+their day boundary *dynamically*, via
+`canonical_temporal_resolver(..., primitive="evaluation_day_boundaries")`
+at actual request time — neither has ever hardcoded a literal date.
+Fixed the test to do the same: a new `_todays_boundaries()` helper
+calls the identical production primitive, and the history query's date
+is computed at test-run time instead of hardcoded.
+
+**Mutation-proofed properly, not just re-run to green:** temporarily
+rewrote `resolve_hall_pass_lifecycle_status` to unconditionally return
+`"approved"`, confirmed 5 of the file's 7 tests fail against that
+mutation (the 2 that don't exercise any state transition can't, by
+construction, and correctly didn't), restored the resolver from an
+untouched backup (`git diff` on it came back empty afterward,
+confirming nothing was accidentally left changed), then re-ran the
+full file clean — 7/7 pass. This proves the fixed tests are still a
+real safety net, not merely patched to stop failing.
+
+Both fixes are unrelated to each other in cause (one is a genuine
+front-end regression, the other is a test-authoring defect with zero
+production impact) but shipped in the same commit since both were
+found investigating the same full-suite run.

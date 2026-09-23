@@ -28,6 +28,7 @@ from app.feats.base import FEATContext
 from app.feats.prod import record_attendance_session
 from app.models import AttendanceSession, HallPassLog, HallPassSettings
 from app.services.context_resolver import CanonicalContext
+from app.utils.canonical_temporal_resolver import canonical_temporal_resolver, CLASS_LEVEL_EVALUATION
 from app.services.entitlement_service import grant_hall_passes
 from app.services.hall_pass_request_queue import (
     PendingHallPassRequest,
@@ -102,6 +103,25 @@ def _return(client, student, log):
     assert r.status_code == 200, r.data
 
 
+def _todays_boundaries(classroom, student):
+    """The same day-boundary primitive production routes use, evaluated for
+    right now -- a hardcoded literal date here would (and did: this test
+    file shipped with one) go stale the moment real wall-clock time moves
+    past it, since _leave()/_return() timestamp their attendance rows with
+    genuine current time, not any date the test asserts against.
+    """
+    ctx = CanonicalContext(
+        user_id=student.user.id, class_id=classroom.class_id,
+        seat_id=student.seat.id, actor_role="student",
+    )
+    evaluation = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=ctx,
+        primitive="evaluation_day_boundaries",
+    )
+    return evaluation.boundary_start_utc, evaluation.boundary_end_utc
+
+
 # --------------------------------------------------------------------------
 # The shared resolver, directly -- all three states
 # --------------------------------------------------------------------------
@@ -111,11 +131,12 @@ def test_resolver_reports_approved_before_any_departure(app, client):
     student = classroom.students[0]
     with app.app_context():
         log = _approve_pass(app, client, classroom, student)
+        boundary_start, boundary_end = _todays_boundaries(classroom, student)
         result = resolve_hall_pass_lifecycle_status(
             class_id=classroom.class_id, seat_id=student.seat.id,
             hall_pass_id=log.hall_pass_id,
-            day_boundary_start_utc=datetime(2026, 9, 21, 7, 0, tzinfo=timezone.utc),
-            day_boundary_end_utc=datetime(2026, 9, 22, 7, 0, tzinfo=timezone.utc),
+            day_boundary_start_utc=boundary_start,
+            day_boundary_end_utc=boundary_end,
         )
         assert result.status == HALL_PASS_STATUS_APPROVED
         assert result.left_row is None
@@ -129,11 +150,12 @@ def test_resolver_reports_left_after_departure(app, client):
         log = _approve_pass(app, client, classroom, student)
     _leave(client, student, log)
     with app.app_context():
+        boundary_start, boundary_end = _todays_boundaries(classroom, student)
         result = resolve_hall_pass_lifecycle_status(
             class_id=classroom.class_id, seat_id=student.seat.id,
             hall_pass_id=log.hall_pass_id,
-            day_boundary_start_utc=datetime(2026, 9, 21, 7, 0, tzinfo=timezone.utc),
-            day_boundary_end_utc=datetime(2026, 9, 22, 7, 0, tzinfo=timezone.utc),
+            day_boundary_start_utc=boundary_start,
+            day_boundary_end_utc=boundary_end,
         )
         assert result.status == HALL_PASS_STATUS_LEFT
         assert result.left_row is not None
@@ -148,11 +170,12 @@ def test_resolver_reports_returned_after_the_full_round_trip(app, client):
     _leave(client, student, log)
     _return(client, student, log)
     with app.app_context():
+        boundary_start, boundary_end = _todays_boundaries(classroom, student)
         result = resolve_hall_pass_lifecycle_status(
             class_id=classroom.class_id, seat_id=student.seat.id,
             hall_pass_id=log.hall_pass_id,
-            day_boundary_start_utc=datetime(2026, 9, 21, 7, 0, tzinfo=timezone.utc),
-            day_boundary_end_utc=datetime(2026, 9, 22, 7, 0, tzinfo=timezone.utc),
+            day_boundary_start_utc=boundary_start,
+            day_boundary_end_utc=boundary_end,
         )
         assert result.status == HALL_PASS_STATUS_RETURNED
         assert result.left_row is not None
@@ -267,9 +290,10 @@ def test_history_reports_returned_and_ignores_an_unrelated_stray_active_row(app,
     _return(client, student, log)
 
     login_teacher(client, classroom)
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     response = client.get(
         "/api/hall-pass/history",
-        query_string={"start_date": "2026-09-21", "end_date": "2026-09-21"},
+        query_string={"start_date": today, "end_date": today},
     )
     assert response.status_code == 200, response.data
     payload = response.get_json()

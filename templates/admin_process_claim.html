@@ -140,7 +140,7 @@
         {% if claim.filing_window_override_reason %}
         <h6>Filing Window Override:</h6>
         <div class="alert alert-warning py-2 small">
-          <span class="material-symbols-outlined me-1" style="font-size:1em;vertical-align:middle;" aria-hidden="true">edit_note</span>
+          <span class="material-symbols-outlined me-1 icon-inherit icon-middle" aria-hidden="true">edit_note</span>
           {{ claim.filing_window_override_reason | markdown }}
         </div>
         {% endif %}
@@ -188,13 +188,13 @@
         <p><strong>Validation Status:</strong><br>
           {% if filing_window_exceeded %}
             <span class="badge bg-warning text-dark">
-              <span class="material-symbols-outlined me-1" style="font-size:1em;vertical-align:middle;" aria-hidden="true">schedule</span>
+              <span class="material-symbols-outlined me-1 icon-inherit icon-middle" aria-hidden="true">schedule</span>
               Filed outside the filing window
             </span>
             <div class="text-muted small mt-1">Override available — see form below.</div>
           {% else %}
             <span class="badge bg-success">
-              <span class="material-symbols-outlined me-1" style="font-size:1em;vertical-align:middle;" aria-hidden="true">check_circle</span>
+              <span class="material-symbols-outlined me-1 icon-inherit icon-middle" aria-hidden="true">check_circle</span>
               Filed within the filing window
             </span>
           {% endif %}
@@ -256,7 +256,7 @@
   <div class="card-body">
     {% if claim.status|lower != 'submitted' %}
       <p class="mb-0">
-        <span class="material-symbols-outlined me-1" style="font-size:1em;vertical-align:middle;" aria-hidden="true">lock</span>
+        <span class="material-symbols-outlined me-1 icon-inherit icon-middle" aria-hidden="true">lock</span>
         This claim was <strong>{{ claim.status|lower }}</strong>{% if claim.decided_at %} on {{ claim.decided_at | fmt_timestamp }}{% endif %}.
         Decisions are final — no further changes can be made here.
       </p>
@@ -295,7 +295,7 @@
       {% if filing_window_exceeded %}
       <div class="mb-3 border border-warning rounded p-3 bg-warning-subtle">
         <label class="form-label fw-bold text-warning-emphasis">
-          <span class="material-symbols-outlined me-1" style="font-size:1em;vertical-align:middle;" aria-hidden="true">edit_note</span>
+          <span class="material-symbols-outlined me-1 icon-inherit icon-middle" aria-hidden="true">edit_note</span>
           Filing Window Override Reason
           <span class="badge bg-warning text-dark ms-1">Required to approve</span>
         </label>

@@ -1465,6 +1465,12 @@ table.js-sortable thead th:hover .sort-indicator {
     font-size: var(--icon-3xl);
 }
 
+/* For an icon that should match the size of the text it sits inline with,
+   rather than one of the fixed token sizes above. */
+.icon-inherit {
+    font-size: 1em;
+}
+
 .icon-2xs,
 .icon-xs,
 .icon-sm,
