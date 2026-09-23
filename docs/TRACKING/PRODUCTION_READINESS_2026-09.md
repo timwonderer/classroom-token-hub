@@ -1680,6 +1680,22 @@ finding a real defect.**
   `switch_student_session_context()` helper the dedicated
   `/student/switch-class/<class_id>` route already used correctly.
 
+**Amended 2026-09-23, again — the fix above did not resolve the live
+report; a second, unrelated defect did (`6dc09bbc8`).** After the
+`add_class` fix shipped, the reporting student (Jordan, two genuinely
+claimed seats) still could not switch classes — his "Switch Class" sidebar
+dropdown showed exactly one `<option>`, confirmed by two separate
+screenshots. Root cause: `inject_student_layout_view()`'s
+`available_classes` was hardcoded to a single-item list built from only the
+current class's display metadata, structurally incapable of ever listing a
+second class for any student. The teacher-side twin context processor had
+already been fixed for the identical defect shape. Fixed by sourcing the
+dropdown from the same all-claimed-seats query `select_class_context()`
+already used. Regression test added
+(`test_dashboard_switcher_lists_every_claimed_class`), 32 tests re-run
+green. **Confirmed complete live by the operator after deploy** — see
+`RESUME_2026-09-22_findings_39-54.md` §8 finding 69 for full detail.
+
 Still untested: the three sweeps (Turnstile coverage on every configured
 route, PII in URLs/logs/errors, accessibility per INV-ARC-020).
 

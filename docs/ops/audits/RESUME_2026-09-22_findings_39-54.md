@@ -344,3 +344,46 @@ correction and evidence:
 
 The canonical ship tracker (`PRODUCTION_READINESS_2026-09.md`) was updated
 in step with all of the above rather than left to drift further out of date.
+
+### Finding 69 — student "Switch Class" dropdown listed only the current class
+
+**Domain:** Identity · **Severity:** High (silent, user-facing) · **Commit:**
+`6dc09bbc8`
+
+After finding 68's fix shipped, the operator reported the underlying symptom
+was still live: Jordan (two genuinely claimed seats) still couldn't switch
+classes, confirmed by two separate screenshots of his dashboard sidebar
+showing a "SWITCH CLASS" dropdown with exactly one `<option>` — the class he
+was already on. This ruled out finding 68's persistence bug as the (sole)
+cause: there was nothing in the list to switch *to*, regardless of whether
+`/student/switch-class/<class_id>` itself worked.
+
+Root cause: `inject_student_layout_view()` (`app/__init__.py`) built
+`available_classes` from a single line —
+`[display_metadata.to_available_class_option()]` — sourced from only the
+*current* class's already-resolved display metadata. Structurally incapable
+of ever listing more than one class for any student, regardless of how many
+seats they'd actually claimed. The teacher-side twin context processor had
+already been fixed for the identical defect shape, with a comment
+describing it verbatim; the student side was left unfixed until this
+finding.
+
+Fixed by sourcing the dropdown from
+`_get_identity_bound_seat_options(user_id)` (the same canonical
+all-claimed-seats query `select_class_context()` already used) and
+resolving display metadata per option, marking the current class via
+`to_available_class_option(is_current=True)`. Regression test
+(`tests/dom/identity/test_class_context_and_switching.py::test_dashboard_switcher_lists_every_claimed_class`)
+reproduces the live report exactly: a 3-class student's dashboard `<select
+id="class-switcher-select">` must contain 3 `<option>` elements, not 1.
+Confirmed live by the operator after deploy: "jordan class switching
+complete."
+
+The same deploy also closed the one HTTP status with no styled error
+handler (429 — Flask-Limiter's bare default page was rendering instead of
+the branded pages every other status gets). Verified against a real
+production 429 on `/metrics`, not just a test: `curl` against the app
+directly on the host returned the styled `error_429.html` with the correct
+limit description ("500 per 1 day") rather than Werkzeug's default. Not a
+launch-readiness finding — recorded here only because it shipped in the
+same commit.
