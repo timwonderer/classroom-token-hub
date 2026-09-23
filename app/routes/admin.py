@@ -4218,7 +4218,10 @@ def add_individual_student():
             flash(f"Student {first_name} {last_name} is already in your class.", "info")
             return redirect(url_for('admin.students'))
 
-        with FEATContext("FEAT-IDEN-001", idempotency_key=f"admin:add-individual-student:{class_id}:{first_name}:{last_name}:{dedupe_key}"):
+        # dedupe_key already encodes (class_id, first_name, last_name) via HMAC --
+        # raw names must not appear here, since idempotency_key is written verbatim
+        # to the FEAT-ENTRY log line on every FEATContext entry (app/feats/base.py).
+        with FEATContext("FEAT-IDEN-001", idempotency_key=f"admin:add-individual-student:{class_id}:{dedupe_key}"):
             # Seat only — no User until student completes claim (DOM-IDEN-002 §VIII).
             profile = IdentityProfile(
                 profile_type='student',

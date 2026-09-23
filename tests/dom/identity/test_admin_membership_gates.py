@@ -223,6 +223,38 @@ def test_DOM_IDEN_007__add_individual_student_creates_single_student_seat_for_ne
     assert new_seat.dedupe_code is not None
 
 
+def test_add_individual_student_does_not_log_the_students_name(client, caplog):
+    """The idempotency_key passed to FEATContext is written verbatim to the
+    FEAT-ENTRY log line on every context entry (app/feats/base.py's
+    log_event). It must never embed raw PII -- a student's plaintext name
+    reaching the application log this way persists indefinitely and is
+    readable by anyone with server/log access, unlike a flash message scoped
+    to the acting teacher's own session. dedupe_key already encodes
+    (class_id, first_name, last_name) via HMAC, so it carries the same
+    uniqueness the raw names did without exposing them.
+    """
+    class_row = initialize("chemistry_p1", client.application)
+    admin = class_row.teacher_user
+    teacher_seat = _teacher_seat(class_row)
+    with client.session_transaction() as sess:
+        set_canonical_context(sess, user_id=admin.id, class_id=class_row.class_id, seat_id=teacher_seat.id, role="admin")
+
+    import logging
+    caplog.set_level(logging.INFO, logger="app.feats.base")
+
+    response = admin_add_individual_student(
+        client,
+        first_name="Confidential",
+        last_name="Surnametoshow",
+        dob="2010-01-02",
+        block_select="A",
+    )
+
+    assert response.status_code == 302
+    assert "Confidential" not in caplog.text
+    assert "Surnametoshow" not in caplog.text
+
+
 def test_DOM_IDEN_006__add_individual_student_uses_selected_class_when_block_has_other_scope(client):
     class_row_old = initialize("chemistry_p1", client.application)
     class_row_new = initialize("ap_csp_p3", client.application)
