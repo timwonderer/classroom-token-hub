@@ -18,6 +18,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.extensions import db, limiter
 from app.models import User, UserRole
 from app.utils.helpers import render_template_with_fallback as render_template, safe_redirect_target
+from app.utils.ip_handler import get_real_ip
+from app.utils.turnstile import verify_turnstile_token
 from app.utils.canonical_temporal_resolver import CLASS_LEVEL_EVALUATION, canonical_temporal_resolver
 
 # Create blueprint
@@ -225,6 +227,20 @@ def verify_hall_pass(teacher_public_token):
 
     first_name_norm = _normalize_first_name(raw_first_name)
     last_name_norm = _normalize_last_name(raw_last_name)
+
+    # Ingress gate: a (join_code, first_name, last_name) match against a real
+    # roster is exactly the guessable/enumerable shape Turnstile exists for,
+    # even though the token in the URL path is itself non-enumerable.
+    turnstile_token = request.form.get('cf-turnstile-response')
+    if not verify_turnstile_token(turnstile_token, get_real_ip()):
+        return render_template(
+            'hall_pass_verify.html',
+            unavailable=False,
+            token=teacher_public_token,
+            classes=classes,
+            result=None,
+            turnstile_failed=True,
+        )
 
     # Reject malformed input uniformly
     if not first_name_norm or not last_name_norm or not selected_join_code:

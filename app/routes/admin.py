@@ -2687,6 +2687,14 @@ def login():
     session.pop("last_activity", None)
     form = AdminLoginForm()
     if form.validate_on_submit():
+        # Ingress gate: username is guessable/enumerable and this is an
+        # unauthenticated entry point (widget was rendering here already via
+        # the global turnstile_site_key context processor, but nothing was
+        # ever verifying it server-side).
+        turnstile_token = request.form.get('cf-turnstile-response')
+        if not verify_turnstile_token(turnstile_token, get_real_ip()):
+            flash("Security verification failed. Please complete the check and try again.", "error")
+            return render_template("admin_login.html", form=form)
         username = normalize_auth_username(form.username.data)
         totp_code = form.totp_code.data.strip()
         user = find_canonical_user_by_auth_username(username, expected_role="teacher")
@@ -3128,6 +3136,14 @@ def resume_credentials():
     """
     if request.method == 'GET':
         # Show PIN entry form
+        return render_template("admin_resume_credentials.html")
+
+    # Ingress gate: a bare 6-digit PIN (1,000,000 combinations) with no
+    # session precondition is the single most guessable secret on the whole
+    # recovery surface -- this endpoint had no Turnstile at all before now.
+    turnstile_token = request.form.get('cf-turnstile-response')
+    if not verify_turnstile_token(turnstile_token, get_real_ip()):
+        flash("Security verification failed. Please complete the check and try again.", "error")
         return render_template("admin_resume_credentials.html")
 
     # POST: Verify PIN and load saved progress

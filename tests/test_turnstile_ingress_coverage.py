@@ -18,12 +18,25 @@ verify_turnstile_token to True purely to get past the existing gates --
 none of them assert the FALSE path actually blocks anything. These do,
 for every new gate, by checking the underlying state never changed, not
 just that a flash message appeared.
+
+Amended 2026-09-23: three more gaps found by an explicit sweep (not just
+the four flows named above) -- teacher login (/admin/login, widget was
+rendering via the global turnstile_site_key context processor but nothing
+ever verified it server-side), teacher resume-credentials (a bare 6-digit
+PIN with no session precondition -- no widget and no server check at
+all), and public hall-pass verification (/verify/hallpass/<token> resolves
+a (join_code, first_name, last_name) match against a real roster -- no
+widget and no server check, even though the URL token itself is
+non-enumerable by design).
 """
 from __future__ import annotations
+
+from types import SimpleNamespace
 
 import pyotp
 
 from app.extensions import db
+from app.feats.base import FEATContext
 from app.feats.teacher_signup_feat import read_signup
 from app.models import Seat, TeacherSignupAttempt, User
 from tests.dom.identity.helpers import admin_generate_recovery_code, student_lookup_recovery_code
@@ -180,3 +193,124 @@ def test_student_recovery_lookup_blocked_without_turnstile(client, monkeypatch):
     response = student_lookup_recovery_code(client, reset_code, follow_redirects=False)
     assert response.status_code == 302
     assert response.headers['Location'].endswith('/student/create-username')
+
+
+def test_admin_login_blocked_without_turnstile(client, monkeypatch):
+    """/admin/login must not establish a session when Turnstile fails, even
+    with an otherwise-correct username and TOTP code. The widget was already
+    rendering here (via the global turnstile_site_key context processor);
+    nothing was ever verifying it server-side.
+    """
+    class _DummyField:
+        def __init__(self, data):
+            self.data = data
+
+        def __call__(self, **_kw):
+            return ""
+
+    classroom = initialize("chemistry_p1", client.application)
+    form = SimpleNamespace(
+        validate_on_submit=lambda: True,
+        username=_DummyField("teacher.alice"),
+        totp_code=_DummyField("123456"),
+        hidden_tag=lambda: "",
+        submit=_DummyField(None),
+    )
+    monkeypatch.setattr("app.routes.admin.AdminLoginForm", lambda: form)
+    monkeypatch.setattr(
+        "app.routes.admin.find_canonical_user_by_auth_username",
+        lambda *_args, **_kwargs: classroom.teacher_user,
+    )
+    monkeypatch.setattr("app.routes.admin.decrypt_totp", lambda _value: "secret")
+    monkeypatch.setattr(
+        "app.routes.admin.pyotp.TOTP",
+        lambda _secret: SimpleNamespace(verify=lambda *_args, **_kwargs: True),
+    )
+
+    monkeypatch.setattr('app.routes.admin.verify_turnstile_token', lambda *a, **k: False)
+    response = client.post('/admin/login', follow_redirects=True)
+
+    assert response.status_code == 200
+    assert b"Security verification failed" in response.data
+    with client.session_transaction() as sess:
+        assert 'user_id' not in sess
+
+    # Confirm the fixture is otherwise valid: passing Turnstile now logs in.
+    monkeypatch.setattr('app.routes.admin.verify_turnstile_token', lambda *a, **k: True)
+    response = client.post('/admin/login', follow_redirects=False)
+    assert response.status_code == 302
+    with client.session_transaction() as sess:
+        assert sess.get('user_id') == classroom.teacher_user.id
+
+
+def test_resume_credentials_blocked_without_turnstile(client, monkeypatch):
+    """/admin/resume-credentials must never call resume_attempt (the
+    single most guessable secret on the recovery surface -- a bare 6-digit
+    PIN with no session precondition) when Turnstile fails.
+    """
+    def _resume_attempt_must_not_be_called(**_kwargs):
+        raise AssertionError("resume_attempt() must not run when Turnstile fails")
+
+    monkeypatch.setattr(
+        'app.feats.teacher_recovery_feat.resume_attempt',
+        _resume_attempt_must_not_be_called,
+    )
+    monkeypatch.setattr('app.routes.admin.verify_turnstile_token', lambda *a, **k: False)
+    response = client.post('/admin/resume-credentials', data={'resume_pin': '123456'})
+
+    assert response.status_code == 200
+    assert b"Security verification failed" in response.data
+    with client.session_transaction() as sess:
+        assert 'recovery_request_id' not in sess
+
+    # Confirm the fixture is otherwise valid: passing Turnstile now reaches
+    # resume_attempt (which fails on this fake PIN for an unrelated reason --
+    # the point is only that it was called at all, which the False path proved
+    # it wasn't).
+    monkeypatch.setattr(
+        'app.feats.teacher_recovery_feat.resume_attempt',
+        lambda **kwargs: {'id': 1, 'nonce': 'test-nonce'},
+    )
+    monkeypatch.setattr('app.routes.admin.verify_turnstile_token', lambda *a, **k: True)
+    response = client.post('/admin/resume-credentials', data={'resume_pin': '123456'}, follow_redirects=False)
+    assert response.status_code == 302
+    assert response.headers['Location'].endswith('/admin/recovery-status')
+    with client.session_transaction() as sess:
+        assert sess.get('recovery_request_id') == 1
+
+
+def test_hall_pass_verify_blocked_without_turnstile(client, monkeypatch):
+    """/verify/hallpass/<token> must not run the (join_code, name) match
+    when Turnstile fails, even though the token itself is non-enumerable.
+    """
+    classroom = initialize_as_teacher("chemistry_p1", client, client.application)
+    teacher = classroom.teacher_user
+    with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"hp-token:{teacher.id}"):
+        teacher.hall_pass_verify_token = "test-verify-token-12345"
+        db.session.flush()
+
+    with client.session_transaction() as sess:
+        sess.clear()  # public, unauthenticated entry point
+
+    monkeypatch.setattr('app.routes.main.verify_turnstile_token', lambda *a, **k: False)
+    response = client.post(
+        f'/verify/hallpass/{teacher.hall_pass_verify_token}',
+        data={'join_code': classroom.join_code, 'first_name': 'Anyone', 'last_name': 'Atall'},
+    )
+
+    assert response.status_code == 200
+    assert b"Security verification failed" in response.data
+    # The real matching outcomes ("No hall pass record found", a name/status
+    # table) must not appear -- proving the match logic never ran.
+    assert b"No hall pass record found" not in response.data
+
+    monkeypatch.setattr('app.routes.main.verify_turnstile_token', lambda *a, **k: True)
+    response = client.post(
+        f'/verify/hallpass/{teacher.hall_pass_verify_token}',
+        data={'join_code': classroom.join_code, 'first_name': 'Anyone', 'last_name': 'Atall'},
+    )
+    assert response.status_code == 200
+    assert b"Security verification failed" not in response.data
+    # No such student exists, so real matching logic correctly reaches
+    # "no match" -- proving Turnstile passing lets real logic execute.
+    assert b"No hall pass record found" in response.data
