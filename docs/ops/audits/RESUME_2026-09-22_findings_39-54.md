@@ -1,6 +1,12 @@
 # Resume point — live-test remediation, continued session of 2026-09-21/22
 
-**SESSION CLOSED.** This is the final state as of end-of-session
+**Superseded by §8.** The "SESSION CLOSED" note below described the state at
+end-of-day 2026-09-21/22. The session continued into 2026-09-23 (status
+telemetry deploy, two rent-correctness defects, teacher-recovery and
+add-class verification, finding 68). See §8 for what happened after this
+point; §0-§7 are left as written, per this doc's own method note.
+
+**SESSION CLOSED (as of the original writing).** This is the final state as of end-of-session
 2026-09-21/22. Everything in §2 is committed, tested, deployed, and the
 host restarted clean. Nothing is mid-flight except finding 66 (diagnosed,
 not yet coded) — see §6 for where to start tomorrow.
@@ -255,3 +261,86 @@ would; confirm at the data layer; record evidence, not verdict. Every fix
 in §2 was mutation-proofed. This document exists because relying on
 conversation memory across a compaction boundary is exactly the kind of
 un-recorded state this campaign's whole method exists to avoid.
+
+---
+
+## 8. Continued 2026-09-22/23 — past the original "session closed" point
+
+**Live server:** `2e5ebf0a2`, tag `live-test/2026-09-23a`.
+
+**Also landed this stretch, not part of the live-test surface but deployed
+alongside it:** the request-telemetry sampler for the status page
+(`docs/ops/STATUS_REQUEST_TELEMETRY_SETUP.md`) — new `cth-status` system
+user, `/opt/cth-status-sampler`, `cth-status-sampler.timer` (hourly →
+per-minute), and an nginx `location = /health/telemetry` block. Verified
+live: the timer fires on its own schedule (not just the manual test run),
+`/health/telemetry` serves bounded JSON with the right headers, POST is
+denied, and external unauthenticated access gets the same Cloudflare Access
+redirect as the existing `/health/status` — no separate Cloudflare
+configuration needed.
+
+### Two rent-correctness defects, found live and closed
+
+| # | Finding | Commit |
+|---|---|---|
+| — | A rent cycle's frozen `policy_uuid` correctly fixed its *terms* (amount, cadence, penalty, due dates) but was also accidentally fixing its *roster* — `reconcile_rent` only ever assessed the roster at the instant a cycle was created or advanced, never on a plain re-run. A seat claimed after that instant got no rent obligation at all until the cycle advanced, potentially over a month later. Reproduced live: a student claimed a seat the day after cycle 1's only assessment pass and had zero rent obligations. Fixed: roster assessment now runs against the current open cycle on every reconciliation, idempotent per (seat, cycle) — never retroactive against a cycle that already closed before the seat was claimed. | `ad4f69933` |
+| — | The admin rent page claimed "A rent cycle is already underway, and a cycle underway is never altered" for a cycle whose `cycle_boundary_at` was still a month in the future — directly contradicting the same page's own "Not active yet" / "Not scheduled yet" summary a few lines below. `_resolve_rent_policy_deferral` treated any existing `BillCycle` row as proof of "underway" without checking whether its boundary had actually arrived. Fixed: the deferral notice (and the append-only protection it describes) now only applies once the cycle has actually started. | `3210e8edd` |
+
+Both mutation-proofed (67 tests across `test_rent_lifecycle.py` +
+`test_rent_policy_deferral_notice.py` + the broader obligations/store suite,
+each new assertion confirmed to fail for the exact right reason before the
+fix).
+
+### Finding 68 — /student/add-class never committed the new active-class pointer
+
+**Domain:** Identity · **Severity:** High (silent, user-facing; no data
+corruption) · **Commit:** `2e5ebf0a2`
+
+Reported live: "Jordan Lee joined two different classes but he can't switch
+classes" — and separately, "he is visible on both teacher's rosters," ruling
+out "never actually joined" as the explanation. Confirmed at the data layer:
+Jordan (`user_id=4`) had two genuinely claimed seats under one account —
+seat 3 in the first class (claimed 2026-09-22) and seat 66 in a second class
+(claimed 2026-09-23) — but `User.last_active_class_id` still pointed at the
+first class after the second claim, and the server log showed zero hits to
+`/student/switch-class/<class_id>` (the dedicated, correctly-working route):
+the only route he'd used was `/student/add-class`.
+
+Root cause: `add_class()` set `user.last_active_class_id` /
+`last_active_seat_id` directly on the ORM object *after*
+`bind_authenticated_student_to_class`'s own `FEAT-IDEN-005` context had
+already closed — never inside any FEAT context, no explicit commit. The
+write was silently discarded at request teardown, the exact shape of finding
+53's passkey-commit bug. The route's own comment ("The IDENTITY FEAT owns
+the mutation transaction boundary") was false by the time that line ran.
+
+Fixed by routing through the same `switch_student_session_context()` helper
+the dedicated switch-class route already used correctly, under its own
+`FEAT-IDEN-005` context. Regression test
+(`tests/dom/identity/test_claim_lifecycle.py::test_add_class_route_actually_activates_the_new_class`)
+reproduces the defect precisely: without the fix, the dirty, never-committed
+`User` row sits unflushed until any later query autoflushes it, at which
+point the FEAT enforcement itself raises "Attempted to flush mutated state
+outside of a verified FEAT context" — independent proof the write was never
+legally guarded, not merely lost. 37 tests across the class-switching
+surface re-run green.
+
+### Two more "not yet exercised" corrections
+
+Both caught only because the operator pushed back on a stale claim rather
+than accepting it — see `PRODUCTION_READINESS_2026-09.md` §VII for the full
+correction and evidence:
+
+- **Hall-pass verification page** — real `hall_pass_logs` rows cross-referenced
+  against real GET/POST hits to `/verify/hallpass/<token>` in the server log,
+  with the POST response size changing across calls (state transitions, not
+  a static reload).
+- **Student-assisted teacher account recovery** — confirmed complete, not
+  just attempted: `recovery_requests.status='verified'` with a real
+  `completed_at`, the class challenge `satisfied_at`, and a
+  `student_recovery_codes` row with a genuine `verified_at`. Full request
+  chain independently visible in the server log on both the teacher and
+  student sides.
+
+The canonical ship tracker (`PRODUCTION_READINESS_2026-09.md`) was updated
+in step with all of the above rather than left to drift further out of date.

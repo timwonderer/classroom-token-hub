@@ -1655,9 +1655,33 @@ removed:
   `created_at` 04:35:55 and `last_used` 05:39:48 UTC (2026-09-22) — registered
   *and* later used to sign in, over an hour apart.
 
-Still untested: student-side add/switch class, recovery flows, and the three
-sweeps (Turnstile coverage on every configured route, PII in URLs/logs/errors,
-accessibility per INV-ARC-020).
+**Amended 2026-09-23 — two more items closed off this list, one of them by
+finding a real defect.**
+
+- **Student-assisted teacher account recovery** — exercised end-to-end and
+  confirmed complete at the database layer, not just attempted: a
+  `recovery_requests` row shows `status='verified'` with a real
+  `completed_at` (04:29:04 UTC), its `recovery_class_challenges` row shows
+  `satisfied_at` (04:28:25), and a `student_recovery_codes` row shows a real
+  `verified_at` (04:28:16) for the confirming student's seat. The server log
+  independently shows the full request chain: `/admin/recover` ->
+  `/admin/recovery/select-class` -> `/admin/recovery/submit-class-code` on
+  the teacher side, `/student/verify-recovery/<id>` on the student side, and
+  `/admin/recovery-status` confirming the result -- all 200s.
+- **Student-side add/switch class** — exercised live, and doing so found a
+  real defect, now fixed (`2e5ebf0a2`): `/student/add-class` set the new
+  active-class pointer directly on the ORM object after its own FEAT context
+  had already closed, with no commit -- silently discarded at request
+  teardown, same shape as finding 53's passkey bug. A student who joined a
+  second class saw "This class is now your active class" but the switch
+  never stuck; confirmed live via a real account with two genuinely claimed
+  seats whose `last_active_class_id` still pointed at the first class after
+  adding the second. Fixed by routing through the same
+  `switch_student_session_context()` helper the dedicated
+  `/student/switch-class/<class_id>` route already used correctly.
+
+Still untested: the three sweeps (Turnstile coverage on every configured
+route, PII in URLs/logs/errors, accessibility per INV-ARC-020).
 
 ### Standing lesson for the ship gate
 
