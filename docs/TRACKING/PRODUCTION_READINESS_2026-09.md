@@ -1497,7 +1497,7 @@ worker, migration head `d9e1f3a5b7c9`, 44 tables, fresh database.
 | | |
 |---|---|
 | §VI–§X (release gate, runtime, secrets, migration, health) | Complete, passed |
-| §XI (full-app browser test) | **In progress** — two sessions run, 38 findings |
+| §XI (full-app browser test) | **In progress** — three sessions run, 67 findings (38 through 2026-09-21, 39-67 the 2026-09-21/22 session) |
 | §XIV (go/no-go decision) | Pending — §XI must complete first |
 | §XVI (completion condition) | Not met |
 
@@ -1510,7 +1510,56 @@ status and the untested inventory see
 [`docs/ops/audits/RESUME_2026-09-22.md`](../ops/audits/RESUME_2026-09-22.md).
 
 Open launch blocker unaffected by that batch: **finding 14**, the sysadmin
-dashboard 500 (`operational_events` was never created).
+dashboard 500 (`operational_events` was never created). **Closed 2026-09-22 —
+see the amendment below.**
+
+**Amended 2026-09-22.** Live host is now `3210e8edd`, tag `live-test/2026-09-22a`
+— a continuous direct-to-`main` live-test session spanning 2026-09-21/22 (per
+operator instruction: hotfix-and-deploy for live-test purposes, full suite
+reserved for the official production launch transition). Full per-finding
+detail is in
+[`docs/ops/audits/RESUME_2026-09-22_findings_39-54.md`](../ops/audits/RESUME_2026-09-22_findings_39-54.md),
+which continues from the `RESUME_2026-09-22.md` linked above and now covers
+findings 39-67. Highlights relevant to the launch decision:
+
+- **Finding 14 is CLOSED** (`b7db24437`) — `operational_events` (DOM-OPS-001 §5)
+  was never created, despite live code referencing it since the migration that
+  dropped its v1 predecessors. Verified live, not just by the automated suite:
+  curled the endpoint directly and diffed the server log before/after.
+- **Finding 64** (found while retesting 14) — the same sysadmin surface's
+  unified ticket-detail page 500'd separately on `fmt_timestamp` choking on
+  ISO-string timestamps inside TLCP correlation packs. Closed (`182928a79`),
+  verified live end-to-end: operator drove a real ticket from student
+  submission through teacher escalation to sysadmin resolution.
+- **Finding 65** — a student who tapped "Done for the Day" still saw active
+  Start Work/Break buttons; server-side enforcement was already correct
+  (`app/feats/prod.py` already refused a same-day restart), the UI just never
+  read the fact. Closed (`a9eba02f6`), automated-tested only, not yet
+  reconfirmed by an operator click-through since deploy.
+- **Finding 67** — every sysadmin request logged an ERROR-level
+  "missing canonical context" invariant violation, forever, because
+  sysadmin's permanent structural lack of class context (INV-ARC-019) was
+  never added to TLCP's exemption lists — alarm-fatigue noise that could mask
+  a genuine violation in the same log stream. Closed (`24bca2c8c`), verified
+  live by diffing the log across the fix.
+- **Two rent-correctness defects, found live and closed same session**
+  (`ad4f69933`, `3210e8edd`): (a) a cycle's frozen `policy_uuid` was correctly
+  fixing its *terms* but was also accidentally fixing its *roster* — a student
+  who claimed a seat after a cycle's first assessment pass got no rent
+  obligation at all until the cycle advanced, potentially over a month later;
+  reconciliation now assesses the current cycle's roster on every run, never
+  retroactively against a cycle that already closed before the seat was
+  claimed. (b) the admin rent page claimed "a rent cycle is already underway"
+  for a cycle whose `cycle_boundary_at` was still a month in the future —
+  directly contradicting the same page's own "Not active yet" summary a few
+  lines below. Both automated-tested (67 passing tests across the affected
+  areas) but not yet reconfirmed by a fresh operator click-through.
+
+**Open, and required before launch: none, by this table's own bar** (a launch
+blocker here is an operations surface that hard-crashes; see the updated table
+below). Findings 65 and 67 above, plus 58-63 and 66 (insurance-cancel
+visibility — diagnosed, not yet fixed) in the RESUME doc, are real defects but
+none 500s — they are tracked as non-blocking until reclassified.
 
 ### What the campaign has established
 
@@ -1534,11 +1583,11 @@ None touched correctness of money, class scoping, or transactional atomicity.
 ones were remediated in PR #1405 (merged 2026-09-20) with 74 regression tests,
 each confirmed failing against the pre-fix SHA.
 
-**Open, and required before launch:**
+**Open, and required before launch:** none — the sole entry below closed 2026-09-22.
 
-| # | Finding | Why it blocks |
-|---|---|---|
-| 14 | Sysadmin dashboard 500s — `operational_events` dropped by migration, never created | §XI requires operations surfaces to load without 500. Needs a design decision, not a migration: the error path runs outside FEAT context by construction, so an ORM-written event would roll back with the failure it records. |
+| # | Finding | Why it blocks | Status |
+|---|---|---|---|
+| ~~14~~ | Sysadmin dashboard 500s — `operational_events` dropped by migration, never created | §XI requires operations surfaces to load without 500. Needs a design decision, not a migration: the error path runs outside FEAT context by construction, so an ORM-written event would roll back with the failure it records. | **CLOSED `b7db24437`, 2026-09-22 — verified live** (see the amendment above; also uncovered finding 64 on the same surface, also closed) |
 
 **Open, not blocking:**
 
@@ -1551,20 +1600,44 @@ each confirmed failing against the pre-fix SHA.
 | 22 | A second tab silently changes the first tab's class; the stale tab keeps showing the old one | Usability. No data crosses — writes are scoped — but the teacher is told "applied to 0 student(s)" in a success style with nothing naming the cause |
 | 23 | Seven `print()` calls in the canonical context resolver bypass structured logging | Hygiene; latent, none has fired |
 
+**This table is frozen at the second live-test session (2026-09-21).** Findings
+39-67 from the continuing 2026-09-21/22 session — including 58-63 and 66,
+non-blocking by the same bar — are tracked in the RESUME doc linked above, not
+duplicated here, to keep one current list rather than two that can drift.
+
 ### Not yet exercised
 
 **Superseded in part by the second session.** Rent is no longer uncovered:
 reconciliation, genesis, advance, idempotency and policy binding were all
 exercised live, and the append-only policy invariant (B1) was re-verified under
 an adversarial attempt. Rent *payment* remains untested — the class's preview
-window does not open until 2026-09-29.
+window does not open until 2026-09-29. **Amended 2026-09-22:** two further rent
+defects surfaced live this session and are closed — a cycle's frozen
+`policy_uuid` was correctly fixing its terms but was also accidentally fixing
+its roster (a late-claimed seat got no obligation until the cycle advanced),
+and the admin page falsely claimed a cycle was "already underway" a month
+before its boundary. Both are the kind of thing the standing lesson below
+describes: found by an operator's real click-through, not by the suite.
 
-**Insurance remains the only economic domain with zero coverage**, and it moves
-real money on a schedule. It is testable end-to-end with the waiting period set
-to zero, so nothing gates it but attention. Also still untested: the hall-pass
-verification page, passwordless enrollment, student-side add/switch class,
-recovery flows, and the three sweeps (Turnstile coverage on every configured
-route, PII in URLs/logs/errors, accessibility per INV-ARC-020).
+**Corrected 2026-09-22 — "Insurance remains the only economic domain with zero
+coverage" was wrong even as of the session that wrote it, and should not have
+been asserted without checking the campaign's own record.** Insurance policy
+purchase, waiting-period configuration (including making it settable on every
+policy type), claim submission, teacher review, approve/reject, the
+filing-window override gate, and cancellation have all been exercised live
+across the campaign — the claim-review, filing-window, and cancellation work
+specifically in the 2026-09-21/22 session, confirmed by screenshot and by
+direct database query (`BillCycle.next_assessment_at IS NULL` on the cancelled
+policies' terminal cycles, real expiry dates). See
+`RESUME_2026-09-22_findings_39-54.md` §2-3 for the evidence. **The actual gap
+is narrower:** every test policy used
+`waiting_period_days = 0`, so the waiting-period enforcement gate itself has
+never been exercised end-to-end, and no test has confirmed a claim's approval
+actually credits the ledger (as opposed to reaching `APPROVED` status). Also
+still untested: the hall-pass verification page, passwordless enrollment,
+student-side add/switch class, recovery flows, and the three sweeps (Turnstile
+coverage on every configured route, PII in URLs/logs/errors, accessibility per
+INV-ARC-020).
 
 ### Standing lesson for the ship gate
 
