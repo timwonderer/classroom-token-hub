@@ -1633,11 +1633,31 @@ policies' terminal cycles, real expiry dates). See
 is narrower:** every test policy used
 `waiting_period_days = 0`, so the waiting-period enforcement gate itself has
 never been exercised end-to-end, and no test has confirmed a claim's approval
-actually credits the ledger (as opposed to reaching `APPROVED` status). Also
-still untested: the hall-pass verification page, passwordless enrollment,
-student-side add/switch class, recovery flows, and the three sweeps (Turnstile
-coverage on every configured route, PII in URLs/logs/errors, accessibility per
-INV-ARC-020).
+actually credits the ledger (as opposed to reaching `APPROVED` status).
+
+**Corrected 2026-09-22, twice more, same session — verify before asserting
+absence.** Two more items on this list were also already exercised and are
+removed:
+
+- **Hall-pass verification page** (`main.verify_hall_pass`,
+  `/verify/hallpass/<token>`) — the positive path this tracker's own earlier
+  entry called untestable "because no `hall_pass_logs` row could exist" is no
+  longer blocked: two real `hall_pass_logs` rows exist (Bathroom @ 00:45:37,
+  Water Fountain @ 02:04:41 UTC, 2026-09-22), and the server log shows GET/POST
+  hits to the verification page from a real browser bracketing each one
+  (00:43-00:46 and 02:07), with the POST response body size changing across
+  repeated calls (2119 → 2788 → 2787 → 2767 bytes) — consistent with real
+  `approved → left → returned` state transitions, not a static reload.
+- **Passwordless enrollment** — already recorded in
+  `RESUME_2026-09-22_findings_39-54.md` §3 (finding 53's fix: operator
+  registered a passkey, it persisted, sign-in succeeded), and confirmed again
+  here directly against the database: one `passkey_credentials` row exists,
+  `created_at` 04:35:55 and `last_used` 05:39:48 UTC (2026-09-22) — registered
+  *and* later used to sign in, over an hour apart.
+
+Still untested: student-side add/switch class, recovery flows, and the three
+sweeps (Turnstile coverage on every configured route, PII in URLs/logs/errors,
+accessibility per INV-ARC-020).
 
 ### Standing lesson for the ship gate
 
