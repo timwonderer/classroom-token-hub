@@ -387,3 +387,61 @@ directly on the host returned the styled `error_429.html` with the correct
 limit description ("500 per 1 day") rather than Werkzeug's default. Not a
 launch-readiness finding — recorded here only because it shipped in the
 same commit.
+
+### Finding 70 — /admin/recover rate limit shared one bucket across GET and POST
+
+**Domain:** Identity/Recovery · **Severity:** Medium (availability, not a
+security gap) · **Commit:** `195162a31`
+
+Reported live via a real browser 429 on `/admin/recover`. Investigated
+before changing anything, per explicit instruction: confirmed GET and POST
+shared one `"5 per hour"` bucket (no `per_method`), and that Flask-Limiter
+consumes from that bucket in its own `before_request` hook, before the view
+(and therefore before the in-view Turnstile check) ever runs. GET only
+renders the form and resolves no guessable data — the actual sensitive
+action, resolving `(join_code, username)` pairs, happens exclusively in the
+POST branch. A teacher reloading the page, or a student watching them fill
+it out, could exhaust the shared budget through page views alone, before a
+single real recovery attempt.
+
+Fixed by scoping the limit to POST only
+(`methods=["POST"]`), matching the precedent already in use at
+`system_admin.py`'s login route. This is a pure availability fix, not a
+security relaxation: GET carries no guessable-data resolution, so removing
+its rate limit narrows nothing an attacker could exploit, while POST keeps
+its original "5 per hour" threshold undisturbed.
+
+Verified live post-deploy (not just in tests, which run with CSRF
+disabled): 8 consecutive GETs all returned 200, then a POST sequence with a
+real CSRF token (extracted from a live GET, since production has
+`WTF_CSRF_ENABLED=True`) hit `429` exactly on the 5th attempt, rendering
+the styled `error_429.html` with `limit_description="5 per 1 hour"`.
+
+### Finding 71 — select_class_context() had the same unguarded-write shape as finding 68
+
+**Domain:** Identity · **Severity:** High (silent, user-facing) · **Commit:**
+`195162a31`
+
+Not reported live — found while auditing for other instances of finding
+68's defect shape after fixing it. `select_class_context()`
+(`app/routes/student.py`) is the fallback gate `app/auth.py:127` redirects
+to when no valid canonical context exists at all (a narrower trigger than
+`add_class`'s, and distinct from finding 69's dropdown-listing bug). Its
+POST branch set `linked_user.last_active_class_id` /
+`last_active_seat_id` directly on the ORM object, with no FEAT context and
+no explicit commit — silently discarded at request teardown, same shape as
+findings 53 and 68. Unlike `add_class`, this route is deliberately not
+decorated with `@login_required` (it exists precisely for the case where
+`resolve_canonical_context()` would raise), so the fix could not simply
+reuse `add_class`'s decorator-adjacent pattern; the mutation is wrapped
+inline in its own `FEAT-IDEN-005` context instead, calling the same
+`switch_student_session_context()` helper.
+
+Regression test
+(`test_select_class_context_route_actually_commits_the_switch`) reproduces
+the defect precisely: POSTs a valid class selection, then forces a fresh
+`db.session.expire_all()` read to prove the switch actually persisted
+rather than passing against an already-mutated in-memory object.
+Mutation-proofed: fails with the fix stashed, passes restored. 76 tests
+across the affected surfaces (error handlers, accessibility, Turnstile
+ingress, class switching, teacher recovery, claim lifecycle) re-run green.

@@ -1696,6 +1696,25 @@ already used. Regression test added
 green. **Confirmed complete live by the operator after deploy** — see
 `RESUME_2026-09-22_findings_39-54.md` §8 finding 69 for full detail.
 
+**Amended 2026-09-23, again — the two threads left open after finding 69
+are now both closed (`195162a31`).**
+
+- **`/admin/recover` rate-limit fine-tuning** — confirmed before changing
+  anything: GET and POST shared one "5 per hour" bucket, so page loads
+  alone (no guessable-data resolution) could exhaust the budget for the
+  actual sensitive action. Scoped the limit to POST only, leaving its
+  threshold untouched — an availability fix, not a security relaxation.
+  Verified live: 8 GETs all 200, then a real POST sequence with a valid
+  CSRF token hit 429 exactly on the 5th attempt. See
+  `RESUME_2026-09-22_findings_39-54.md` §8 finding 70.
+- **`select_class_context()`** — carried the same unguarded-write shape as
+  finding 68 (raw ORM assignment, no FEAT context, no commit), reachable
+  via the no-canonical-context fallback path rather than `add_class`'s
+  trigger. Fixed via an inline `FEAT-IDEN-005` context calling
+  `switch_student_session_context()`. Regression test reproduces the
+  defect exactly via a fresh post-request DB read; mutation-proofed. See
+  `RESUME_2026-09-22_findings_39-54.md` §8 finding 71.
+
 Still untested: the three sweeps (Turnstile coverage on every configured
 route, PII in URLs/logs/errors, accessibility per INV-ARC-020).
 
