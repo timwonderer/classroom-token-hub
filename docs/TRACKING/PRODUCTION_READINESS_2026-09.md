@@ -1743,6 +1743,39 @@ party, a different threat that doesn't apply here. See
 Still untested: two of the three sweeps (Turnstile coverage on every
 configured route, accessibility per INV-ARC-020).
 
+**Amended 2026-09-23 — full pre-launch suite run recorded.** First full
+(not targeted) `pytest` run since this live-test campaign began,
+against `a916bbfeb` (matches the currently deployed code —
+`live-test/2026-09-23e` is one commit earlier, doc-only diff).
+3597 tests recorded: 3561 pass, 16 error, 4 fail, 16 skip (99.00%).
+Evidence preserved verbatim at
+[`docs/ops/audits/evidence/2026-09-23_pytest-full_a916bbfeb/`](../ops/audits/evidence/2026-09-23_pytest-full_a916bbfeb/)
+per `SOP-DEP-001` §XV.
+
+Investigated every non-pass outcome individually before accepting this
+as clean — none trace to this campaign's changes:
+- **16 errors**, all `tests/test_status_page.py`, all
+  `ModuleNotFoundError: No module named 'google.auth'` — a missing
+  local dev dependency (`google-auth`/`google-cloud-*` isn't in
+  `requirements.txt` and isn't installed in this venv), not a code
+  defect. `test_status_page.py` last touched by `1023c5e76`, unrelated
+  to this campaign.
+- **4 fails**: `test_design_token_contract.py::test_SPEC_DES_001__
+  templates_conform[R5]` (5 static inline `style=` attributes in
+  `templates/admin_process_claim.html`, pre-existing design-token debt,
+  last touched by unrelated commits); and three
+  `test_hall_pass_lifecycle_classification.py` failures
+  (`resolver_reports_left_after_departure`,
+  `resolver_reports_returned_after_the_full_round_trip`, and a
+  `StopIteration` in a third test) against
+  `app/services/hall_pass_status_service.py`, last touched by
+  `1e20214ed`/`dea06c1e6`/`db7079c7d` — none from this campaign.
+
+**Not yet fixed** — real, pre-existing defects surfaced by finally
+running the full suite rather than targeted files; worth triaging
+before the go/no-go decision even though this campaign didn't cause
+them.
+
 ### Standing lesson for the ship gate
 
 Every one of the first session's 23 findings — and all fifteen the second
