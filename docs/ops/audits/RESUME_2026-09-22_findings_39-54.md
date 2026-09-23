@@ -752,3 +752,52 @@ All fixes verified against the real rendered page (`getComputedStyle`
 diffs, direct contrast computation) before being accepted, not merely
 "axe stopped complaining." 34/34 pages in Groups A/C/E/F/G/H now pass
 axe-core's WCAG 2 A/AA ruleset with zero violations.
+
+**Extended same session to Group B** (`db1cddec5`): the feature-gated
+pages (hall_pass, insurance, rent, store -- all OFF by default on a
+fresh class) plus `admin_edit_item.html`/`admin_edit_insurance_policy.html`,
+which need a real product/policy row to reach 200. Found the identical
+critical missing-label EasyMDE defect a second time, on the store item
+edit page -- confirming it as systemic rather than a `student_submit_issue.html`
+one-off. Replaced that page's individual patch with
+`static/js/easymde-a11y.js` (a `MutationObserver`, matching the
+`table-responsive-focus.js` precedent), which labels every
+`.EasyMDEContainer` on the page generally rather than requiring each
+of the 4 template call sites (5 editor instances) to remember to do it
+themselves. Also found and fixed a second, EasyMDE-independent defect
+while tracing `admin_process_claim.html`'s fields: the filing-window-
+override `<label>` had neither a `for` attribute nor wrapped its
+input -- genuinely unlabeled regardless of the editor. 6/6 pages in
+Group B now pass with zero violations.
+
+**Current total: 40 of 88 real page templates (Groups A/B/C/E/F/G/H)
+verified against real WCAG 2 A/AA with zero violations, 10 genuine
+defects found and fixed** (2 of them shared/systemic fixes covering
+every current and future page that has the pattern, not one-off
+patches). Remaining, tracked as follow-up scope, not yet started:
+
+- **Group D** — pages needing a real claim/issue/policy row via a
+  FEAT chain (`admin_process_claim.html`'s own render, `admin_view_issue.html`,
+  `sysadmin_view_issue.html`, `student_file_claim.html`,
+  `student_view_policy.html`, `admin_announcement_form.html` edit mode,
+  `student_detail.html`'s signed nav token).
+- **Group I** — 6 templates with zero `render_template()` references
+  anywhere in `app/` (confirmed dead code by the mapping agent, not
+  merely unexercised): `admin_view_student_policy.html`, three
+  `student/recovery/*.html` client-redirect stubs, and two retired
+  sysadmin pages (`system_admin_error_logs.html`,
+  `system_admin_logs_testing.html`, `system_admin_network_activity.html`)
+  whose routes now just redirect to `combined-logs`.
+- **Group J** — `admin_recovery_prepare.html`/`admin_recovery_status.html`,
+  reachable only via a real teacher-recovery FEAT chain
+  (`begin_attempt` → `select_class_recipients`) bypassing Turnstile at
+  the FEAT layer rather than the HTTP layer.
+- **Group L** — `student_verify_recovery.html`, the most complex
+  single setup in the mapping (needs the Group J chain, then a
+  `student_recovery_codes` row scoped to a specific randomly-selected
+  seat, then logging in as exactly that seat).
+
+None of these four groups is reachable with the `initialize_as_teacher`/
+`initialize_as_student` + `enable_class_feature` pattern the harness
+already has — each needs its own FEAT-level setup recipe, already
+documented in the mapping this finding is built from.

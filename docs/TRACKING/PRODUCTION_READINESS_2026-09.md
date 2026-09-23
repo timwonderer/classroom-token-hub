@@ -1831,6 +1831,36 @@ own convention is to layer a dated amendment over a wrong claim, not
 silently rewrite it, so the retracted text above stays visible rather
 than being deleted.
 
+**Amended 2026-09-23, again — accessibility per INV-ARC-020, in
+progress.** Per operator direction ("all pages... minimum ADA
+requirements"), built the real WCAG-level infrastructure this campaign
+was missing (`tests/test_axe_app_pages.py`, commits `b11a4f6ea` and
+`db1cddec5`) rather than another manual pass: a throwaway `werkzeug`
+server + headless Chromium via Playwright, running the actual axe-core
+engine's WCAG 2 A/AA ruleset against real, authenticated,
+server-rendered pages — the app's own axe harness previously only ever
+covered the 4 static marketing pages, and even that wasn't running
+locally (Playwright was in `requirements.txt` but not installed on
+`PATH`; the project's own `venv/` had it all along).
+
+A companion mapping (background agent, 2026-09-23) classified all 88
+real page templates into 12 groups by what's needed to reach a 200
+response. **40 of 88 (Groups A/B/C/E/F/G/H) now verified against real
+WCAG 2 A/AA with zero violations**, after finding and fixing 10 genuine
+defects — full detail in `RESUME_2026-09-22_findings_39-54.md` §8
+finding 78. Two were shared/systemic fixes (a sidebar sign-out button
+contrast bug affecting every teacher+sysadmin page; an EasyMDE
+markdown-editor missing-label bug affecting 4 templates/5 editor
+instances, fixed once via a `MutationObserver` rather than patched per
+call site) rather than one-off patches.
+
+**Still open:** Groups D/I/J/L (~20-24 templates: pages needing a real
+claim/issue/policy row via a FEAT chain, 6 confirmed-dead templates, and
+the teacher-recovery flow's own pages) — none reachable with the
+harness's current `initialize_as_teacher`/`enable_class_feature`
+pattern; each needs its own FEAT-level setup, already recipe'd in the
+mapping. Not yet started.
+
 ### Standing lesson for the ship gate
 
 Every one of the first session's 23 findings — and all fifteen the second
