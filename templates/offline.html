@@ -47,11 +47,34 @@
             background-color: var(--primary) !important;
             border: none !important;
         }
+
+        /* This page deliberately doesn't load style.css (offline-safe: only
+           what's inlined/cached here is guaranteed available), so the real
+           .skip-link rule never applies and the link fell back to the
+           browser's default blue-on-white -- 4.12:1, short of WCAG AA's
+           4.5:1. A same-named selector here would collide with style.css's
+           own .skip-link rule (SPEC-DES-001 R7), so this is its own name,
+           mirroring that rule's intent (--primary bg, inverse text) rather
+           than its exact selector. */
+        .offline-skip-link {
+            position: fixed;
+            top: -100px;
+            left: 0;
+            background: var(--primary);
+            color: var(--text-inverse);
+            padding: var(--space-2) var(--space-4);
+            z-index: 9999;
+            text-decoration: none;
+        }
+
+        .offline-skip-link:focus {
+            top: 0;
+        }
     </style>
 </head>
 
 <body class="offline-page">
-    <a href="#offline-main" class="skip-link">Skip to main content</a>
+    <a href="#offline-main" class="offline-skip-link">Skip to main content</a>
     <main id="offline-main">
     <div class="offline-container">
         <div class="icon">

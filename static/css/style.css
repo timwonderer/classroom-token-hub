@@ -733,6 +733,14 @@ a:hover {
     background-color: rgba(255, 255, 255, 0.1);
 }
 
+/* `.sidebar a` dims to 85% opacity white for ordinary nav links (by design --
+   full contrast is reserved for :hover/.active). A solid-color .btn-* anchor
+   (e.g. Sign Out) is not a nav link and must not inherit that dimming: on a
+   --danger background it measured 4.33:1, short of WCAG AA's 4.5:1. */
+.sidebar a.btn {
+    color: var(--text-inverse);
+}
+
 .sidebar a.active {
     background-color: var(--secondary);
     color: var(--secondary-text);
@@ -1034,10 +1042,15 @@ a:hover {
 }
 
 .student-content .badge.text-muted,
-.student-content .badge.bg-secondary,
 .student-content .badge.bg-secondary.text-muted {
     color: var(--text-inverse) !important;
 }
+
+/* .badge.bg-secondary alone (no .text-muted) is excluded above: it's a solid
+   gold (--secondary) background, and forcing white text on it measured
+   2.2:1 -- below WCAG AA. --secondary-text (from the base .bg-secondary
+   rule this was overriding) is the color already defined for text on this
+   exact background and clears 8.1:1. */
 
 .student-shell .sidebar a.active,
 .student-sidebar .student-nav a.active {
@@ -1169,7 +1182,12 @@ body.sysadmin-shell .eyebrow {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    color: var(--sysadmin-accent);
+    /* --sysadmin-accent (aliased to --secondary, #D4A857) measured 2.2:1 on
+       white -- no gold in this palette clears 4.5:1 as text-on-light; the
+       accent is a background/border/icon color here, not a text color.
+       --text-muted matches the non-sysadmin .page-header .eyebrow rule and
+       clears 7.8:1. */
+    color: var(--text-muted);
     margin-bottom: 0.25rem;
 }
 

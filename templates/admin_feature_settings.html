@@ -111,7 +111,13 @@
       </div>
     {% endcall %}
     {% endif %}
-    <div class="d-flex flex-column gap-2 {% if not view.cwi_ready %}opacity-50{% endif %}">
+    {# opacity-50 previously dimmed this whole block when payroll/CWI isn't
+       ready yet -- CSS opacity compounds into every descendant and can't be
+       reversed by a child rule, so the feature name/description text (both
+       already contrast-safe on their own) failed WCAG AA at half strength.
+       The disabled toggle, its tooltip, and the warning banner above already
+       communicate "not available yet" without needing the card dimmed. #}
+    <div class="d-flex flex-column gap-2">
       {% for feat in view.pricing_features %}
       <div class="card h-100">
         <div class="card-body py-3 d-flex align-items-center justify-content-between gap-3">

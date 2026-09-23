@@ -30,7 +30,12 @@
         #flashToastContainer { z-index: 1100; }
         .sysadmin-accent-icon { color: var(--sysadmin-accent); }
         .sysadmin-accent-icon-bright { color: var(--sysadmin-accent-bright); }
-        .sysadmin-identity-role { color: color-mix(in srgb, var(--secondary) 60%, transparent); }
+        /* Full opacity, not diluted: at 60% this measured 3.24:1 on the dark
+           sidebar (#2c2c2c) -- below WCAG AA's 4.5:1. Diluting a text color
+           to suggest a resting/secondary state is the same defect the
+           sign-out link comment in tokens.css warns against; --secondary at
+           full strength clears 6.3:1 here. */
+        .sysadmin-identity-role { color: var(--secondary); }
     </style>
 
     {% block extra_head %}{% endblock %}
@@ -162,6 +167,7 @@
     <script src="{{ url_for('static', filename='vendor/bootstrap/bootstrap.bundle.min.js') }}"></script>
     <script src="{{ static_url('js/app-core.js') }}"></script>
     <script src="{{ static_url('js/mobile-sidebar-toggle.js') }}"></script>
+    <script src="{{ static_url('js/table-responsive-focus.js') }}"></script>
     <script>
         function updateTime() {
             // Operations surfaces speak UTC, always (INV-ARC-015 SS X.2) -- no

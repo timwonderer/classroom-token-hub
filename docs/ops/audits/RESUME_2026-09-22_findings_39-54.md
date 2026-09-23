@@ -632,3 +632,123 @@ pass match logic reached), then confirm the identical request succeeds
 once Turnstile passes, proving each fixture was valid all along.
 Mutation-proofed: stashed all three fixes together, confirmed all 3 new
 tests fail for the right reason, restored, 8/8 in the file pass.
+
+### Finding 78 — real WCAG 2.1 A/AA audit of live application pages, 8 genuine defects found and fixed
+
+**Domain:** Accessibility (INV-ARC-020) · **Severity:** High (real WCAG
+AA failures, several affecting every page of a given role) · **Commit:**
+pending
+
+Per operator direction ("all pages should be fully checked... has to
+meet minimum ADA requirements"), built the infrastructure this campaign
+was missing rather than another manual pass: `tests/test_accessibility.py`
+checks a hand-rolled subset of INV-ARC-020 (labels, alt text, unique
+IDs, one h1) against server-rendered HTML with BeautifulSoup, which
+cannot see computed CSS and so has nothing to say about contrast, ARIA
+validity, or keyboard focus; `tests/test_axe_compliance.py` runs the
+real axe-core engine but only against the 4 static marketing pages, not
+the application itself — and even that wasn't running locally (Playwright
+was declared in `requirements.txt` but not installed in the ad-hoc
+`pytest` on `PATH`; the project's own `venv/` had it all along).
+
+**New harness** (`tests/test_axe_app_pages.py`): a throwaway `werkzeug`
+server bound to the same Flask app object the test suite configures,
+driven by a real headless Chromium via Playwright, running axe-core's
+actual WCAG 2 A/AA ruleset against real, authenticated, server-rendered
+pages — not a static export, not a BeautifulSoup approximation.
+Authentication is a real, signature-valid session cookie built via
+`flask_app.session_interface.get_signing_serializer(flask_app)` (the
+same mechanism `client.session_transaction()` uses), handed to
+Playwright's cookie jar — not a bypass of the auth boundary, since the
+server verifies the signature exactly as it would a real login's cookie.
+This lets one test drive many pages per role without paying for a real
+TOTP/form-fill login on each one.
+
+A companion audit (background agent, `docs/ops/audits/` mapping,
+2026-09-23) read every route in `app/routes/*.py` and classified all 88
+real page templates into 12 groups by what's needed to reach a 200
+response — auth, feature-flag state, a specific domain row. This
+finding covers Groups A/C/E/F/G/H (34 pages needing no more than a
+freshly-provisioned classroom); Groups B/D/I/J/L (feature-gated pages,
+pages needing a real claim/issue/policy/recovery-flow row, and a few
+dead templates) are tracked separately as follow-up scope.
+
+**Every one of these 8 was a real, confirmed defect** — verified via
+`getComputedStyle`/DOM inspection against the live rendered page before
+writing any fix, then re-verified via axe after:
+
+1. **Sign-out button, teacher + sysadmin sidebars** (`static/css/style.css`)
+   — `.sidebar a` dims nav links to 85% opacity white (by design, full
+   contrast on hover/active); a solid-color `.btn-danger` anchor is not
+   a nav link and inherited the dimming anyway, measuring 4.33:1 against
+   its red background. Added `.sidebar a.btn { color: var(--text-inverse); }`
+   to except any button-styled anchor from the ambient dimming — fixes
+   the pattern generally, not just this one instance, and affects
+   *every* authenticated teacher and sysadmin page (both layouts carry
+   the `.sidebar` class; the student layout uses a different class name
+   and was already unaffected).
+2. **Dashboard tooltip trigger** (`templates/admin_dashboard.html`) — a
+   bare `<span>` with `aria-label` has no ARIA role that permits it
+   (`aria-prohibited-attr`). Added `role="group"`, the minimal
+   spec-compliant fix for an icon+text pairing.
+3. **Sysadmin "eyebrow" label, every sysadmin page** (`static/css/style.css`)
+   — `body.sysadmin-shell .eyebrow` used `--sysadmin-accent`
+   (aliases `--secondary`, gold `#D4A857`) at 2.2:1 on white. No gold
+   variant in the palette clears 4.5:1 as text-on-light (`--secondary`
+   2.2:1, `--secondary-hover` 2.69:1, the brighter `--sysadmin-accent-bright`
+   *worse* at 1.84:1 — brighter is lighter, not higher-contrast, against
+   white). Switched to `--text-muted` (7.8:1), matching the non-sysadmin
+   `.page-header .eyebrow` rule it was overriding.
+4. **Sysadmin sidebar "System Administrator" role label**
+   (`templates/layout_system_admin.html`) — `color-mix(in srgb,
+   var(--secondary) 60%, transparent)` measured 3.24:1 on the dark
+   sidebar. Removed the dilution; full-strength `--secondary` clears
+   6.3:1 there (confirmed by direct computation before touching
+   anything, not by re-running axe until it happened to pass).
+5. **Student payroll status badge** (`static/css/style.css`) — a
+   `.student-content` override forced white text on *every*
+   `.badge.bg-secondary` (including the plain gold one, not just
+   `.text-muted` combinations) with `!important`, measuring 2.2:1. A
+   sibling comment already documented the identical bug once fixed for
+   the teacher theme ("Fix hardcoded text-white on bg-secondary (Gold in
+   Teacher theme)") — the student override had reintroduced it.
+   Excluded plain `.badge.bg-secondary` from the override so it falls
+   through to the base rule's `--secondary-text` (8.1:1).
+6. **EasyMDE markdown editor, issue-submission form**
+   (`templates/student_submit_issue.html`) — **critical** severity.
+   EasyMDE hides the original labeled `<textarea>` and replaces it with
+   a CodeMirror-managed proxy input that has no label of its own —
+   completely unlabeled to assistive tech. Set `aria-label` on
+   `editor.codemirror.getInputField()` from the original label's text,
+   for both markdown fields on the page.
+7. **Every scrollable data table, site-wide** — `.table-responsive`
+   (25 templates, no shared macro) is not in the tab order, so a
+   keyboard-only user cannot reach or scroll it. Rather than editing 25
+   templates, added `static/js/table-responsive-focus.js` (matching the
+   existing `offcanvas-aria.js` precedent: small, single-purpose,
+   loaded from all three layouts) that gives every `.table-responsive`
+   `tabindex="0"` + `role="region"` + a label derived from its
+   `<caption>` or nearest heading — so new tables are covered without
+   further template edits.
+8. **Disabled-feature cards** (`templates/admin_feature_settings.html`)
+   — `opacity-50` on the whole card halved the contrast of its
+   already-safe text (`--text-muted` alone is 7.8:1). CSS `opacity`
+   compounds into every descendant and cannot be reversed by a child
+   rule, so the only real fix was removing it from the wrapper — the
+   disabled toggle, its tooltip, and the warning banner above already
+   communicate "not available yet" without dimming the text past
+   legibility.
+9. **Offline fallback page skip-link** (`templates/offline.html`) —
+   this page deliberately doesn't load `style.css` (offline-safe: only
+   inlined/cached content is guaranteed available), so the real
+   `.skip-link` rule never applied and the link fell back to Bootstrap's
+   default blue-on-white, 4.12:1. Mirrored the rule inline instead of
+   reusing its selector name (which would have collided with
+   `SPEC-DES-001` R7's no-duplicate-selector rule) as `.offline-skip-link`,
+   and used `--space-2`/`--space-4` tokens rather than literal padding
+   (R6).
+
+All fixes verified against the real rendered page (`getComputedStyle`
+diffs, direct contrast computation) before being accepted, not merely
+"axe stopped complaining." 34/34 pages in Groups A/C/E/F/G/H now pass
+axe-core's WCAG 2 A/AA ruleset with zero violations.
