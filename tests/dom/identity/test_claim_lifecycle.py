@@ -3,8 +3,9 @@ import pytest
 
 from app.extensions import db
 from app.feats.identity_feat import bind_authenticated_student_to_class, resolve_seat_claim
-from app.models import Seat, IdentityProfile
-from tests.helpers.classroom_initializer import initialize, initialize_as_teacher
+from app.models import Seat, IdentityProfile, User
+from tests.helpers.classroom_initializer import initialize, initialize_as_student, initialize_as_teacher
+from tests.helpers.canonical_classroom import login_student
 
 
 def assert_claim_cleared(seat):
@@ -89,6 +90,61 @@ def test_batch_namesakes_get_system_codes_and_bind(client):
     assert_claim_cleared(db.session.get(Seat, result.seat_id))
     pending = Seat.query.filter_by(class_id=target.class_id, dedupe_code=codes[-1]).one()
     assert pending.claim_first_name_hash is not None
+
+
+def test_add_class_route_actually_activates_the_new_class(client):
+    """/student/add-class must commit the session-context switch, not just claim
+    the seat.
+
+    Reproduces a live-test report (2026-09-22): a student who joined a second
+    class saw "You're in! This class is now your active class." but the
+    switch never stuck -- the route set ``user.last_active_class_id`` /
+    ``last_active_seat_id`` directly on the ORM object, outside any FEAT
+    context, with no explicit commit. That write is discarded at request
+    teardown -- the same shape as finding 53's passkey-commit bug -- so a
+    fresh read (simulating the student's very next request) still shows the
+    OLD class. The route now uses the same canonical
+    ``switch_student_session_context`` helper the dedicated
+    ``/student/switch-class/<class_id>`` route already uses correctly, under
+    its own FEAT context.
+    """
+    # Ava Chen is claimed in chemistry_p1. duplicate_names is an unrelated
+    # class (different teacher, no name collision) that gets a fresh,
+    # unclaimed "Ava Chen" seat added to it via the ordinary roster-upload
+    # path -- exactly the "same student, second class" shape being
+    # reproduced, built the same way test_import_matching_claimed_name_
+    # creates_new_seat above builds its own unclaimed-seat fixture.
+    first_classroom, ava = initialize_as_student('chemistry_p1', client, client.application)
+    second_classroom = initialize_as_teacher('duplicate_names', client, client.application)
+    upload = client.post('/admin/upload-students', json={'students': [
+        {'first_name': 'Ava', 'last_name': 'Chen'},
+    ]})
+    assert upload.status_code == 200 and upload.json['created'] == 1
+
+    # Switch the client's session back to Ava before she adds the class.
+    login_student(client, ava)
+
+    response = client.post('/student/add-class', data={
+        'join_code': second_classroom.join_code,
+        'first_name': 'Ava',
+        'last_name': 'Chen',
+        'dedupe_code': '',
+    }, follow_redirects=False)
+
+    assert response.status_code == 302, response.get_data(as_text=True)
+    assert response.headers['Location'].endswith('/student/dashboard')
+
+    new_seat = Seat.query.filter_by(
+        class_id=second_classroom.class_id, user_id=ava.user.id,
+    ).one()
+    assert new_seat.claimed_at is not None
+
+    # Force a genuinely fresh read -- an in-memory-only mutation would still
+    # pass an assertion against the same, already-mutated Python object.
+    db.session.expire_all()
+    refreshed_user = db.session.get(User, ava.user.id)
+    assert refreshed_user.last_active_class_id == second_classroom.class_id
+    assert refreshed_user.last_active_seat_id == new_seat.id
 
 
 def test_name_edits_only_change_profiles(client):

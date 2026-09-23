@@ -772,13 +772,21 @@ def add_class():
             flash(result.error_message, category)
             return redirect(_get_return_target())
 
-        # Switch context to the newly claimed class.
-        # The IDENTITY FEAT owns the mutation transaction boundary.
+        # Switch context to the newly claimed class. bind_authenticated_student_to_class's
+        # own FEAT-IDEN-005 context already closed by this point -- a bare
+        # attribute set here was never inside any FEAT context and was silently
+        # discarded at request teardown (same shape as finding 53's passkey
+        # bug), so the class was claimed but never actually became active. Use
+        # the same canonical helper the dedicated /switch-class route uses,
+        # under its own FEAT context, so the write actually commits.
         new_seat = db.session.get(Seat, result.seat_id)
         if new_seat:
-            user = db.session.get(User, context.user_id)
-            user.last_active_class_id = new_seat.class_id
-            user.last_active_seat_id = new_seat.id
+            from app.auth import switch_student_session_context
+            with FEATContext(
+                "FEAT-IDEN-005",
+                idempotency_key=f"feat:iden:activate-added-class:{context.user_id}:{new_seat.class_id}",
+            ):
+                switch_student_session_context(student, class_id=new_seat.class_id, seat_id=new_seat.id)
 
         flash("You're in! This class is now your active class.", "success")
         return redirect(url_for('student.dashboard'))
