@@ -1501,6 +1501,38 @@ worker, migration head `d9e1f3a5b7c9`, 44 tables, fresh database.
 | §XIV (go/no-go decision) | Pending — §XI must complete first |
 | §XVI (completion condition) | Not met |
 
+**Amended 2026-09-23 — §XI evidence is now indexed.** Every §XI checklist line
+has been mapped to its supporting citation in
+[`docs/ops/audits/LIVE_TEST_XI_EVIDENCE_INDEX.md`](../ops/audits/LIVE_TEST_XI_EVIDENCE_INDEX.md).
+**All 17 lines are evidenced**; no line is unsupported. The index exists
+because the evidence is spread across three documents in prose that does not
+match the checklist's wording — a reviewer searching for the literal route
+path `/admin/export-students` found nothing and wrongly reported that line as
+unevidenced, when it was fully documented as "Selected-class export." The
+index is a derived lookup surface, not an authority; the three source records
+remain authoritative and unmodified.
+
+Two shortfalls remain, both inside the "attendance, productivity, payroll,
+obligations, ledger and store paths" line, and both narrower than their
+summaries below suggest:
+
+- **Rent payment** — a wait, not a task; the preview window opens 2026-09-29.
+- **Insurance waiting-period gate** — **mis-stated below as untested; it is
+  unreachable.** The gate applies only to NON_MONETARY, and NON_MONETARY
+  claims cannot be filed: `app/routes/student.py:1860` is the only caller of
+  `submit_insurance_claim` and is gated behind
+  `claimable = is_transaction_type or is_productivity_type`. It carries four
+  passing FEAT-level unit tests and zero production reachability. Verified at
+  the code layer 2026-09-23; see the index's Gap 2 for the full chain.
+  Reclassifying it is an operator decision and has not been made.
+
+The index also records one adjacent defect found while verifying that gap:
+`admin_process_claim.html` tells a reviewing teacher "claimable from `<date>`"
+for *any* policy with a nonzero waiting period, including the two types where
+enforcement ignores it. Latent today (no production policy sets one), live the
+first time a teacher uses the field the 2026-09-21 change enabled. Unfixed,
+pending direction.
+
 **Current as of 2026-09-21.** The finding count below (23) reflects the first
 session. The second session took it to 38, and findings 21-35 are remediated on
 `codex/live-test-launch-readiness` (PR #1420), not yet merged or deployed. The
