@@ -115,7 +115,7 @@ def record(
 
 def _row_to_error_view(row) -> dict[str, Any]:
     """Project one operational_events row into the shape the error-list
-    templates (system_admin_dashboard.html, system_admin_logs_testing.html)
+    templates (system_admin_dashboard.html, sysadmin_combined_logs.html)
     already expect: error_type, error_message, request_method, request_path,
     timestamp. Those templates predate this table's existence and were never
     updated to the id/created_at/level/message/payload columns this service
