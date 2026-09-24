@@ -1943,6 +1943,44 @@ defects found and fixed earlier in the campaign and zero new ones in
 Groups D/J/L). INV-ARC-020's accessibility requirement is now backed by
 real, verified coverage rather than a partial pass.
 
+**Amended 2026-09-23 — insurance has no recurring-premium executor (open, launch-relevant).**
+Insurance purchase writes bill cycle 1 with a `next_assessment_at` one period out, and nothing in `app/`
+consumes that date to assess premium #2. Verified by search rather than by reading the summaries above:
+`app/feats/` holds `purchase_insurance_feat`, `cancel_insurance_feat` and `insurance_claim_feat` and no premium
+assessment or recurrence FEAT; the only scheduled insurance job, `run_insurance_expiry_job`
+(`app/scheduled_tasks.py:607`), enumerates **terminal** cycles only (`next_assessment_at IS NULL`); and
+`app/scheduled_tasks.py:12-13` still carries `# TODO (Phase 4): insurance_billing deleted; move to Obligations
+domain`. Consequence, as far as the code shows: an insurance lineage that is never cancelled is charged once and
+then neither billed again nor expired.
+
+- **Why no test or live session has seen it.** Recurrence only matters once a lineage ages past its first
+  period, and none has. The production snapshot's only insurance lineages (2, both seat 3) were both cancelled
+  during live testing (cycle 2, `next_assessment_at` NULL); no live, uncancelled lineage exists. A lineage
+  bought today first comes due one period later. This is an aging-state gap, the same class as rent payment
+  (blocked to 2026-09-29): success paths pass, and the defect only exists after time passes.
+- **The expiry job's stated triggers are partly fictional.** Its docstring says a lineage terminates via
+  "FEAT-OBL-005 cancellation, teacher offering-cancel, or nonpayment non-renewal". `terminate_bill_cycle` has
+  exactly one caller (`cancel_insurance_feat`); the other two have none. Nonpayment non-renewal cannot exist
+  without an executor that detects nonpayment.
+- **Lineage identity is not stable.** `purchase_insurance_feat.py:124` builds
+  `internal_ref = f"insurance:{seat_id}:{policy_uuid}:{idempotency_key}"`, embedding the purchase command's
+  execution identity in the domain identity of a lineage that is meant to recur. Nothing exposes this today
+  only because nothing ever has to reconstruct that key.
+- **Registry drift, noted not resolved.** `FEAT_REGISTRY` names `FEAT-OBL-003` "Scheduled Insurance Cycle"
+  (`app/feats/base.py:249`); the FEAT document of that number is *Satisfy Obligation*.
+
+**Boundary, stated so it is not lost:** do not migrate insurance onto canonical bill-cycle succession until the
+recurring-premium lifecycle and a stable lineage identity are ratified. Migrating rent first is unaffected.
+
+**What V1 contributes, and its limits.** [`V1_INSURANCE_LIFECYCLE_TRACE_2026-09-23.md`](../ops/audits/V1_INSURANCE_LIFECYCLE_TRACE_2026-09-23.md)
+records what V1 insurance did, transition by transition, with 30 prediction-first probes. It is non-normative
+evidence, not a specification. V1's recurring unit was the enrollment row: the same row was re-charged at its
+frozen premium and its due date advanced, until cancelled; the "renewal" builder was never called in
+production. Two cautions on treating it as a target: its billing job is young (added 2026-04-20, eight weeks
+before the freeze) with tests that contradict one another, and several of its behaviors are product decisions
+rather than obviously correct ones (one period charged however late, daily autopay retry as the only
+recovery, no late fee, no expiration). Those need an owner decision before any of them is ported.
+
 ### Standing lesson for the ship gate
 
 Every one of the first session's 23 findings — and all fifteen the second
