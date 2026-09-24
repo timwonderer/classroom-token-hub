@@ -21,6 +21,7 @@ import pytest
 
 from app.extensions import db
 from app.feats.establish_bill_cycle_feat import execute_establish_bill_cycle
+from app.feats.schedule_next_bill_cycle_feat import execute_schedule_next_bill_cycle
 from app.utils.canonical_temporal_resolver import utc_now
 from tests.helpers.canonical_classroom import login_student, provision_classroom
 from tests.helpers.class_domain import customize_rent_settings, enable_class_feature
@@ -41,12 +42,13 @@ def test_rent_nav_survives_an_insurance_bill_cycle(client, app):
 
         now = utc_now()
 
-        execute_establish_bill_cycle(
+        execute_schedule_next_bill_cycle(
             class_id=class_id,
             internal_ref=f"rent:{class_id}",
             cycle_boundary_at=now,
             next_assessment_at=now + timedelta(days=7),
             policy_uuid=rent_policy_uuid,
+            idempotency_key=f"rent-nav:{class_id}:succession:1",
         )
         db.session.commit()
 

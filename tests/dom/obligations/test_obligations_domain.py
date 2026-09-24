@@ -11,8 +11,7 @@ from app.extensions import db
 from app.models import ObligationAssessment, BillCycle
 from app.services import obligations_service
 from app.feats.assess_obligation_feat import execute_assess_obligation
-from app.feats.advance_bill_cycle_feat import execute_advance_bill_cycle
-from app.feats.establish_bill_cycle_feat import execute_establish_bill_cycle
+from app.feats.schedule_next_bill_cycle_feat import execute_schedule_next_bill_cycle
 from app.feats.satisfy_obligation_feat import execute_satisfy_obligation_waiver
 from app.utils.canonical_temporal_resolver import (
     canonical_temporal_resolver,
@@ -48,7 +47,9 @@ class TestObligationsServiceReads:
         with app.app_context():
             assert not obligations_service.check_idempotency_assessment("ref", "corr")
             assert not obligations_service.check_idempotency_satisfaction("corr", "PAYMENT")
-            assert not obligations_service.check_idempotency_bill_cycle("ref", 1)
+            assert obligations_service.get_obligation_command_reservation(
+                "class", "schedule_next_bill_cycle", "key"
+            ) is None
 
 
 class TestAssessObligation:
@@ -122,11 +123,16 @@ class TestAssessObligation:
             assert assessment2.id == id1
 
 
-class TestAdvanceBillCycle:
-    """Test FEAT-OBL-002: Advance Bill Cycle."""
+class TestScheduleNextBillCycle:
+    """Test FEAT-OBL-002: bill-cycle succession (DOM-OBL-001 §V.7).
 
-    def test_create_bill_cycle_creates_reminder_state(self, app):
-        """Create bill cycle creates reminder state per DOM-OBL-001."""
+    The full succession contract (eligibility, replay, races) is held by
+    tests/dom/obligations/test_bill_cycle_succession.py; these are the domain
+    reconstruction smoke checks.
+    """
+
+    def test_succession_creates_reminder_state(self, app):
+        """Succession of an empty lineage creates cycle 1 reminder state per DOM-OBL-001."""
         classroom = initialize("chemistry_p1", app)
 
         with app.app_context():
@@ -143,13 +149,14 @@ class TestAdvanceBillCycle:
             cycle_boundary_at = now_utc + timedelta(days=30)
             next_assessment_at = now_utc + timedelta(days=60)
 
-            # Genesis: cycle 1 is established via the dedicated genesis command
-            # (identity-blind temporal reminder, class-scoped per INV-CORE-000).
-            cycle = execute_establish_bill_cycle(
+            # The domain derives cycle 1 from the empty lineage (identity-blind
+            # temporal reminder, class-scoped per INV-CORE-000).
+            cycle = execute_schedule_next_bill_cycle(
                 class_id=classroom.class_id,
                 internal_ref="rent:cycle:2026-08",
                 cycle_boundary_at=cycle_boundary_at,
                 next_assessment_at=next_assessment_at,
+                idempotency_key="obl-domain:succession:1",
             )
 
             db.session.commit()
@@ -158,12 +165,14 @@ class TestAdvanceBillCycle:
             assert cycle.internal_ref == "rent:cycle:2026-08"
             assert cycle.cycle_number == 1
 
-    def test_advance_bill_cycle_idempotent_by_cycle_number(self, app):
-        """Replaying an advancement returns the existing successor row (idempotent)."""
+    def test_succession_replays_by_command_identity_not_row_shape(self, app):
+        """Replaying a succession returns its own cycle; a different command that
+        finds the lineage not yet due is refused, not treated as a replay."""
         classroom = initialize("chemistry_p1", app)
 
         with app.app_context():
             from datetime import timedelta
+            from app.services.obligations_service import SuccessionNotDueError
             ctx = _TemporalContext(class_id=classroom.class_id)
             now_eval = canonical_temporal_resolver(
                 CLASS_LEVEL_EVALUATION,
@@ -174,38 +183,29 @@ class TestAdvanceBillCycle:
 
             cycle_boundary_at = now_utc + timedelta(days=30)
             next_assessment_at = now_utc + timedelta(days=60)
-
-            # Genesis establishes cycle 1 first (advancement is not genesis).
-            execute_establish_bill_cycle(
+            terms = dict(
                 class_id=classroom.class_id,
                 internal_ref="rent:cycle:2026-08",
                 cycle_boundary_at=cycle_boundary_at,
                 next_assessment_at=next_assessment_at,
             )
+
+            cycle1_a = execute_schedule_next_bill_cycle(**terms, idempotency_key="obl-domain:replay:1")
             db.session.commit()
 
-            # Advance to the successor cycle 2.
-            cycle2_a = execute_advance_bill_cycle(
-                class_id=classroom.class_id,
-                internal_ref="rent:cycle:2026-08",
-                cycle_number=2,
-                cycle_boundary_at=next_assessment_at + timedelta(days=30),
-                next_assessment_at=next_assessment_at + timedelta(days=60),
-            )
+            # Same command identity, same terms: the original cycle, no new row.
+            cycle1_b = execute_schedule_next_bill_cycle(**terms, idempotency_key="obl-domain:replay:1")
             db.session.commit()
-            id2 = cycle2_a.id
+            assert cycle1_b.id == cycle1_a.id
 
-            # Replay the same advancement — returns the same successor row.
-            cycle2_b = execute_advance_bill_cycle(
-                class_id=classroom.class_id,
-                internal_ref="rent:cycle:2026-08",
-                cycle_number=2,
-                cycle_boundary_at=next_assessment_at + timedelta(days=30),
-                next_assessment_at=next_assessment_at + timedelta(days=60),
-            )
-            db.session.commit()
+            # Same terms under a different identity is a different command. The
+            # lineage is not due, so it is refused rather than "replayed".
+            with pytest.raises(SuccessionNotDueError):
+                execute_schedule_next_bill_cycle(**terms, idempotency_key="obl-domain:replay:2")
 
-            assert cycle2_b.id == id2
+            assert [c.cycle_number for c in obligations_service.get_bill_cycles_for_internal_ref(
+                "rent:cycle:2026-08"
+            )] == [1]
 
 
 class TestSatisfyObligation:

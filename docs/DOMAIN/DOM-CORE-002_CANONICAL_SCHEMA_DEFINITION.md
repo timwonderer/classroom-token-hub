@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-CORE-002     | 1.9     | 2026-09-17     | 1.8        | Constitutional |
+| DOM-CORE-002     | 1.10    | 2026-09-24     | 1.9        | Constitutional |
 
 ---
 
@@ -208,6 +208,9 @@ Policy definition tables — `rent_settings`, `payroll_settings`, `payroll_rewar
 - `bill_cycles`
 - `assessment_events`
 - `obligation_satisfaction`
+- `obligation_command_reservation`
+
+`obligation_command_reservation` records bill-cycle succession command identity (DOM-OBL-001 §V.7): one row per executed `schedule_next_bill_cycle` command, scoped by `class_id` and command identity, carrying the request fingerprint it was accepted under and the `bill_cycles` row it produced. It is execution/replay state, not domain state; `bill_cycles` carries no command identity, so replay by command identity requires it (added in 1.10).
 
 ---
 

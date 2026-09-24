@@ -1,10 +1,14 @@
 """
-Bill-cycle genesis — the Obligations command that establishes the FIRST cycle.
+Bill-cycle genesis — INTERIM, insurance purchase only.
 
-Genesis and advancement are distinct Obligations mutations (DOM-OBL-001):
-
-    genesis:      nothing  -> cycle 1     (establish_bill_cycle, this module)
-    advancement:  cycle N  -> cycle N+1   (advance_bill_cycle, FEAT-OBL-002)
+DOM-OBL-001 v3.1 §V.7 has no separate genesis command: the first cycle is created
+by ``schedule_next_bill_cycle`` succeeding an empty lineage, and rent already does
+so. This module survives only because insurance purchase
+(``purchase_insurance_feat``) still calls it. Insurance stays on this path until
+its recurring-premium lifecycle is ratified and its lineage is keyed by
+``entitlement_id`` (docs/TRACKING/PRODUCTION_READINESS_2026-09.md, "insurance has
+no recurring-premium executor"); then insurance moves to succession and this
+module is deleted. Do not add callers.
 
 `cycle_number` is NOT caller-selected here — genesis inherently produces cycle 1.
 The precondition is that no prior cycle exists for the lineage; a second genesis
@@ -14,8 +18,7 @@ idempotency protects retries of a command, it does not license a second cycle 1.
 This is a domain command, not a user-facing FEAT: it carries no FEAT-registry
 number of its own. It executes under the shared bill-cycle mutation-authority tag
 `FEAT-OBL-002` (the same coarse authority under which rent reconciliation and
-advancement already run) — the genesis-vs-advancement distinction lives in the
-command contracts, not the authority tag.
+succession run).
 """
 
 from __future__ import annotations
@@ -68,7 +71,7 @@ def establish_bill_cycle(
         raise BillCycleLifecycleError(
             f"establish_bill_cycle requires no prior cycle for lineage "
             f"'{request.internal_ref}'; a cycle already exists. Use "
-            f"advance_bill_cycle (FEAT-OBL-002) to progress an existing lineage."
+            f"schedule_next_bill_cycle (FEAT-OBL-002) to progress an existing lineage."
         )
 
     if request.next_assessment_at <= request.cycle_boundary_at:

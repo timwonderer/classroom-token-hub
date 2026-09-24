@@ -1711,6 +1711,35 @@ class BillCycle(db.Model):
     )
 
 
+class ObligationCommandReservation(db.Model):
+    """Command identity for bill-cycle succession replay — DOM-OBL-001 §V.7.
+
+    Execution/replay state, not domain state: it records that a succession command
+    with this identity already ran, under which request fingerprint, and which
+    ``bill_cycles`` row it produced. Owned solely by ``schedule_next_bill_cycle``.
+    ``internal_ref`` is recorded for lookup and audit and participates in the
+    fingerprint; it is not part of the identity scope.
+    """
+    __tablename__ = 'obligation_command_reservation'
+
+    id = db.Column(db.Integer, primary_key=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
+    command_name = db.Column(db.String(100), nullable=False)
+    idempotency_key = db.Column(db.String(255), nullable=False)
+    internal_ref = db.Column(db.String(200), nullable=False)
+    replay_fingerprint = db.Column(db.String(128), nullable=False)
+    fingerprint_version = db.Column(db.Integer, nullable=False)
+    bill_cycle_id = db.Column(db.Integer, db.ForeignKey('bill_cycles.id', ondelete='CASCADE'), nullable=False, index=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            'class_id', 'command_name', 'idempotency_key',
+            name='uq_obligation_command_reservation_identity',
+        ),
+    )
+
+
 
 
 # ---- Store/Entitlements Domain Models (DOM-STORE-001 v3.0) ----

@@ -31,7 +31,9 @@ from decimal import Decimal
 
 from app.extensions import db
 from app.feats.base import FEATContext
-from app.models import BillCycle, ObligationAssessment, EntitlementEvent, Seat
+from app.models import (
+    BillCycle, ObligationAssessment, ObligationCommandReservation, EntitlementEvent, Seat,
+)
 from app.feats.reconcile_rent_feat import execute_reconcile_rent
 from app.feats.rent_payment_feat import execute_rent_payment, execute_rent_bill_payment
 from app.services import obligations_service
@@ -177,6 +179,43 @@ class TestRentReconciliation:
             assert second.assessments_created == 0
             assert len(_bill_cycles(classroom.class_id)) == first_cycles
             assert len(_rent_assessments(classroom.class_id)) == first_assessments
+
+    def test_reconcile_requests_each_cycle_as_its_own_succession_command(self, app):
+        """Rent creates every cycle through schedule_next_bill_cycle (DOM-OBL-001
+        §V.7), cycle 1 included. Each succession is a distinct command named by the
+        run (class + reference instant) and the cycle it was evaluated against."""
+        classroom = initialize("chemistry_p1", app)
+        with app.app_context():
+            _setup_rent_class(classroom)
+            class_id = classroom.class_id
+
+            execute_reconcile_rent(class_id, reference_time_utc=_T_INITIAL)
+            result = execute_reconcile_rent(class_id, reference_time_utc=_T_AFTER_BOUNDARY)
+            assert result.cycles_created == [2]
+
+            reservations = (
+                ObligationCommandReservation.query.filter_by(class_id=class_id)
+                .order_by(ObligationCommandReservation.id.asc())
+                .all()
+            )
+            assert [r.idempotency_key for r in reservations] == [
+                f"rent-reconcile:{class_id}:{_T_INITIAL.isoformat()}:after:0",
+                f"rent-reconcile:{class_id}:{_T_AFTER_BOUNDARY.isoformat()}:after:1",
+            ]
+            cycles = _bill_cycles(class_id)
+            assert [r.bill_cycle_id for r in reservations] == [c.id for c in cycles]
+
+    def test_reconcile_uses_a_caller_supplied_run_identity(self, app):
+        classroom = initialize("chemistry_p1", app)
+        with app.app_context():
+            _setup_rent_class(classroom)
+            execute_reconcile_rent(
+                classroom.class_id, reference_time_utc=_T_INITIAL, idempotency_key="rent-run:1"
+            )
+            [reservation] = ObligationCommandReservation.query.filter_by(
+                class_id=classroom.class_id
+            ).all()
+            assert reservation.idempotency_key == "rent-run:1:after:0"
 
     def test_settings_change_does_not_move_existing_cycle_boundaries(self, app):
         """A later RentSettings change must not retroactively move cycle 1 boundaries."""

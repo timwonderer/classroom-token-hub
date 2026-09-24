@@ -1979,6 +1979,12 @@ command identity (the idempotency key) does not participate in billing-lineage i
 treating `internal_ref` as opaque. This settles the identity half of the boundary above. Not yet carried into a
 normative document or into `purchase_insurance_feat.py`.
 
+**Succession primitive landed 2026-09-24 (rent only).** `schedule_next_bill_cycle` with command-identity replay
+(`obligation_command_reservation`) now creates every rent cycle; see CHANGELOG "Bill-cycle succession is one command".
+Insurance still creates cycle 1 through the interim `establish_bill_cycle` and has no successor path. What remains
+for insurance is the bounded integration: key `internal_ref` on `entitlement_id`, add the recurring-premium
+executor, and move cycle 1 onto succession, after the two decisions below.
+
 **Still open after that ratification — two product decisions, neither settled by existing code:**
 
 - *Nonpayment.* When a recurring premium reaches its due boundary and cannot be paid, what happens to the

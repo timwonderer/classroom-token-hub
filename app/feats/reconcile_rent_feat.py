@@ -4,10 +4,11 @@ FEAT-OBL-002: Scheduled Rent Cycle — canonical rent reconciliation.
 This is the SINGLE mechanism that materializes the recurring rent lifecycle for a
 class. It is idempotent and safe to run repeatedly (on a schedule or on demand):
 
-  - First run for a rent-enabled class with no cycle yet: create cycle 1.
-  - Later runs: when the current cycle's ``next_assessment_at`` has been reached,
-    create the successor cycle and expire the PRIOR cycle's PERK hall passes at
-    the rent boundary (DOM-OBL-001 §IX.9 / DOM-STORE-001 §VIII.6).
+  - While Obligations reports the ``rent:{class_id}`` lineage eligible for
+    succession (empty, or its current cycle's ``next_assessment_at`` reached),
+    request the next cycle through ``schedule_next_bill_cycle`` (DOM-OBL-001
+    §V.7); for every successor after cycle 1, expire the PRIOR cycle's PERK hall
+    passes at the rent boundary (DOM-OBL-001 §IX.9 / DOM-STORE-001 §VIII.6).
   - Every run, regardless of the above: assess one RENT ASSESSMENT per claimed,
     non-exempt student seat against whichever cycle is now current. A cycle's
     frozen ``policy_uuid`` fixes its TERMS (amount, cadence, penalty, due
@@ -21,8 +22,8 @@ class. It is idempotent and safe to run repeatedly (on a schedule or on demand):
 
 Layering (INV-ARC-006 / INV-ARC-021): reconciliation is a FEAT orchestrator. It
 reads schedule INTENT from RentSettings, resolves concrete instants through the
-Rent schedule producer, and drives the Obligations domain (via the assess /
-advance-cycle FEATs) and the Store domain (via entitlement expiry). Each domain
+Rent schedule producer, and drives the Obligations domain (via the assess and
+bill-cycle succession commands) and the Store domain (via entitlement expiry). Each domain
 still owns its own mutation; the FEAT only coordinates them under one transaction.
 
 Lineage conventions (greenfield):
@@ -48,8 +49,10 @@ from app.feats.base import requires_feat_context, FEATContext
 # Obligations DOMAIN commands (plain functions), invoked within THIS FEAT's single
 # context — never the execute_* FEAT wrappers (INV-ARC-000 / -021 / -006).
 from app.feats.assess_obligation_feat import assess_obligation, AssessmentRequest
-from app.feats.advance_bill_cycle_feat import advance_bill_cycle, AdvanceBillCycleRequest
-from app.feats.establish_bill_cycle_feat import establish_bill_cycle, EstablishBillCycleRequest
+from app.feats.schedule_next_bill_cycle_feat import (
+    schedule_next_bill_cycle, ScheduleNextBillCycleRequest,
+)
+from app.services.obligations_service import SuccessionEligibility
 from app.utils.canonical_temporal_resolver import ensure_utc, utc_now
 
 
@@ -68,6 +71,7 @@ class ReconcileRentRequest:
     """Input contract for rent reconciliation."""
     class_id: str
     reference_time_utc: datetime | None = None  # 'now'; defaults to system UTC
+    idempotency_key: str | None = None  # names this run; defaults to class + reference instant
 
 
 @dataclass
@@ -256,71 +260,70 @@ def reconcile_rent(
     internal_ref_cycle = f"rent:{class_id}"
 
     result = ReconcileRentResult(reason="NOOP")
-    latest = obligations_service.get_latest_bill_cycle(internal_ref_cycle)
 
-    if latest is None:
-        # First cycle for this class — genesis, not advancement. Establishes
-        # cycle 1 via the dedicated Obligations genesis command (never
-        # advance_bill_cycle, which is advancement-only).
-        due_local = rent_schedule_service.first_due_local_date(
-            settings, context=ctx, reference_time_utc=now
+    # Command identity for each succession this run requests. A caller-supplied
+    # key names the run; otherwise the run is identified by its class and the
+    # reference instant it reconciles to, so a retry of the same run replays
+    # rather than racing itself. Each succession step appends the cycle it was
+    # evaluated against, which keeps distinct steps of one run distinct commands.
+    run_identity = request.idempotency_key or f"rent-reconcile:{class_id}:{now.isoformat()}"
+
+    # Succession, repeated while Obligations says the lineage is due. Eligibility
+    # is the domain's determination (DOM-OBL-001 §V.7); this loop only asks. The
+    # first cycle is not a separate command: an EMPTY lineage is succeeded to 1.
+    actor_seat_id = None
+    iterations = 0
+    while True:
+        eligibility, latest = obligations_service.get_succession_eligibility(
+            class_id, internal_ref_cycle, reference_time_utc=now
         )
+        if eligibility not in (SuccessionEligibility.EMPTY, SuccessionEligibility.DUE):
+            break
+        if latest is not None:
+            iterations += 1
+            if iterations > _MAX_CATCHUP_CYCLES:
+                result.reason = "CATCHUP_BOUND_EXCEEDED"
+                break
+
+        if latest is None:
+            due_local = rent_schedule_service.first_due_local_date(
+                settings, context=ctx, reference_time_utc=now
+            )
+        else:
+            # Successor due date is the class-local date of the resolved next_assessment_at.
+            due_local = rent_schedule_service.local_date_of_instant(
+                ctx, latest.next_assessment_at
+            )
         schedule = rent_schedule_service.resolve_cycle_schedule(
             settings, due_local_date=due_local, context=ctx
         )
-        cycle = establish_bill_cycle(
-            EstablishBillCycleRequest(
+        evaluated_against = latest.cycle_number if latest is not None else 0
+        new_cycle = schedule_next_bill_cycle(
+            ScheduleNextBillCycleRequest(
                 class_id=class_id,
                 internal_ref=internal_ref_cycle,
                 cycle_boundary_at=schedule.cycle_boundary_at,
                 next_assessment_at=schedule.next_assessment_at,
                 grace_boundary_at=schedule.grace_boundary_at,
                 policy_uuid=settings.policy_uuid,
+                idempotency_key=f"{run_identity}:after:{evaluated_against}",
+                reference_time_utc=now,
             ),
             context=None,
         )
-        result.cycles_created.append(cycle.cycle_number)
-        result.reason = "CREATED_INITIAL"
-        latest = cycle
+        result.cycles_created.append(new_cycle.cycle_number)
 
-    # Catch-up: advance while the current cycle's assessment boundary has arrived.
-    actor_seat_id = None
-    iterations = 0
-    while now >= ensure_utc(latest.next_assessment_at):
-        iterations += 1
-        if iterations > _MAX_CATCHUP_CYCLES:
-            result.reason = "CATCHUP_BOUND_EXCEEDED"
-            break
-
-        # Successor due date is the class-local date of the resolved next_assessment_at.
-        next_due_local = rent_schedule_service.local_date_of_instant(
-            ctx, latest.next_assessment_at
-        )
-        schedule = rent_schedule_service.resolve_cycle_schedule(
-            settings, due_local_date=next_due_local, context=ctx
-        )
-        new_cycle = advance_bill_cycle(
-            AdvanceBillCycleRequest(
-                class_id=class_id,
-                internal_ref=internal_ref_cycle,
-                cycle_number=latest.cycle_number + 1,
-                cycle_boundary_at=schedule.cycle_boundary_at,
-                next_assessment_at=schedule.next_assessment_at,
-                grace_boundary_at=schedule.grace_boundary_at,
-                policy_uuid=settings.policy_uuid,
-            ),
-            context=None,
-        )
+        if latest is None:
+            result.reason = "CREATED_INITIAL"
+            continue
 
         # Expire the prior cycle's rent PERK hall passes at the boundary.
         if actor_seat_id is None:
             actor_seat_id = resolve_teacher_seat_for_class(class_id).id
         result.perks_expired += _expire_prior_cycle_perks(class_id, latest, actor_seat_id)
 
-        result.cycles_created.append(new_cycle.cycle_number)
         if result.reason in ("NOOP",):
             result.reason = "ADVANCED"
-        latest = new_cycle
 
     # Roster assessment against the now-current cycle, uniform across genesis,
     # advancement, and plain no-op runs (operator report, 2026-09-22): the
@@ -368,5 +371,6 @@ def execute_reconcile_rent(
     request = ReconcileRentRequest(
         class_id=class_id,
         reference_time_utc=reference_time_utc,
+        idempotency_key=idempotency_key,
     )
     return reconcile_rent(request, context=None)

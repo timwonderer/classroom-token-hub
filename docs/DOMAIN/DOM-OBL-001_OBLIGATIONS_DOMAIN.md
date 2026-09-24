@@ -185,6 +185,7 @@ This domain is the sole schema and mutation authority over:
 
 - `assessment_events`
 - `bill_cycles`
+- `obligation_command_reservation` — succession command identity for the replay contract in §V.7; execution state, not domain state
 
 `DOM-CORE-002_CANONICAL_SCHEMA_DEFINITION.md` is authoritative for the exact target table set. This document defines the obligations-side meaning of those tables.
 

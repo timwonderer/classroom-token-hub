@@ -7,23 +7,49 @@ Does not perform writes; FEATs own all mutation.
 
 from __future__ import annotations
 
+import enum
 from datetime import datetime
 from dataclasses import dataclass
 from decimal import Decimal
+from types import SimpleNamespace
 from typing import NamedTuple, Optional
 
 from app.extensions import db
-from app.models import ObligationAssessment, BillCycle, LedgerMechanism, Transaction
-from app.utils.canonical_temporal_resolver import ensure_utc
+from app.models import (
+    ObligationAssessment, BillCycle, LedgerMechanism, ObligationCommandReservation, Transaction,
+)
+from app.utils.canonical_temporal_resolver import (
+    CLASS_LEVEL_EVALUATION, canonical_temporal_resolver, ensure_utc,
+)
 
 
 class BillCycleLifecycleError(Exception):
-    """Raised when a bill-cycle mutation violates the genesis/advancement lifecycle.
+    """Raised when a bill-cycle mutation violates the lifecycle (DOM-OBL-001 §V.7).
 
-    Genesis (`establish_bill_cycle`) requires that no prior cycle exists for the
-    lineage; advancement (`advance_bill_cycle`) requires an existing current cycle
-    and a strictly sequential successor. These are distinct Obligations commands
-    (DOM-OBL-001) and neither may perform the other's transition.
+    Succession (`schedule_next_bill_cycle`) is lawful only for an empty lineage or
+    a non-terminal latest cycle whose ``next_assessment_at`` has arrived. The
+    interim insurance genesis command (`establish_bill_cycle`) raises this when the
+    lineage is not empty.
+    """
+
+
+class SuccessionNotDueError(BillCycleLifecycleError):
+    """Succession requested before the latest cycle's ``next_assessment_at``."""
+
+
+class SuccessionAfterTerminalError(BillCycleLifecycleError):
+    """Succession requested for a lineage whose latest cycle is terminal."""
+
+
+class SuccessionReplayMismatchError(Exception):
+    """DOM-OBL-001 §V.7 case 2: a known command identity presented with different terms."""
+
+
+class SuccessionConflictError(Exception):
+    """DOM-OBL-001 §V.7 case 3: a different command created the derived successor.
+
+    Never a replay and never a generic uniqueness failure. The command does not
+    re-derive against the advanced lineage.
     """
 
 
@@ -504,22 +530,75 @@ def check_idempotency_satisfaction(
     return existing is not None
 
 
-def check_idempotency_bill_cycle(
-    internal_ref: str,
-    cycle_number: int,
-) -> bool:
-    """
-    Check if a bill cycle already exists.
+class SuccessionEligibility(enum.Enum):
+    """Succession eligibility of a bill-cycle lineage (DOM-OBL-001 §V.7)."""
+    EMPTY = "EMPTY"  # no cycle yet: succession creates cycle 1
+    DUE = "DUE"  # non-terminal latest cycle whose next_assessment_at has arrived
+    NOT_DUE = "NOT_DUE"  # non-terminal latest cycle, next_assessment_at still ahead
+    TERMINAL = "TERMINAL"  # latest cycle is terminal: succession is unlawful
 
-    Per FEAT-OBL-002: advancement must be idempotent by (internal_ref, cycle_number).
-    Returns True if already exists.
+
+def get_succession_eligibility(
+    class_id: str,
+    internal_ref: str,
+    *,
+    reference_time_utc: datetime | None = None,
+) -> tuple[SuccessionEligibility, BillCycle | None]:
+    """Whether a lineage may lawfully be succeeded at the reference time.
+
+    The single authoritative answer, used by ``schedule_next_bill_cycle`` itself
+    and by any caller that needs to know before asking (INV-ARC-009 §V: callers
+    do not reconstruct domain eligibility). "Arrived" is evaluated through the
+    canonical temporal resolver (INV-ARC-015 §VII). Returns the latest cycle read,
+    so the caller derives from the same state it evaluated.
     """
-    existing = (
+    latest = (
         db.session.query(BillCycle)
-        .filter_by(internal_ref=internal_ref, cycle_number=cycle_number)
+        .filter_by(class_id=class_id, internal_ref=internal_ref)
+        .order_by(BillCycle.cycle_number.desc())
         .first()
     )
-    return existing is not None
+    if latest is None:
+        return SuccessionEligibility.EMPTY, None
+    if latest.next_assessment_at is None:
+        return SuccessionEligibility.TERMINAL, latest
+    ctx = SimpleNamespace(class_id=class_id)
+    reference = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=ctx,
+        primitive="current_time",
+        reference_time_utc=reference_time_utc,
+    ).canonical_now_utc
+    not_yet = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=ctx,
+        primitive="later_than",
+        reference_time_utc=reference,
+        candidate=latest.next_assessment_at,
+        reference=reference,
+    ).is_later
+    return (SuccessionEligibility.NOT_DUE if not_yet else SuccessionEligibility.DUE), latest
+
+
+def get_obligation_command_reservation(
+    class_id: str,
+    command_name: str,
+    idempotency_key: str,
+) -> ObligationCommandReservation | None:
+    """Look up a recorded Obligations command by its identity (DOM-OBL-001 §V.7).
+
+    Replay is decided by command identity, never by whether a bill-cycle row of
+    a given shape exists.
+    """
+    return (
+        db.session.query(ObligationCommandReservation)
+        .filter_by(
+            class_id=class_id,
+            command_name=command_name,
+            idempotency_key=idempotency_key,
+        )
+        .one_or_none()
+    )
 
 
 # ---- Rent-specific read models (domain-aware projections) ----

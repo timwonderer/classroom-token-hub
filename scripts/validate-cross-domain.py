@@ -57,6 +57,7 @@ TABLE_DOMAIN = {
     "bill_cycles": "DOM-OBL",
     "assessment_events": "DOM-OBL",
     "obligation_satisfaction": "DOM-OBL",
+    "obligation_command_reservation": "DOM-OBL",
     # DOM-LED-001 — monetary truth
     "ledger_transaction": "DOM-LED",
     "ledger_balance_snapshot": "DOM-LED",

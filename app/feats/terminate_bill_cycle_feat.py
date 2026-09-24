@@ -1,12 +1,14 @@
 """
 Bill-cycle termination — the Obligations command that STOPS a recurring lineage.
 
-Genesis, advancement, and termination are the three distinct bill-cycle
-mutations (DOM-OBL-001):
+Succession and termination are the two bill-cycle operations (DOM-OBL-001 §V.7):
 
-    genesis:      nothing  -> cycle 1        (establish_bill_cycle)
-    advancement:  cycle N  -> cycle N+1      (advance_bill_cycle, FEAT-OBL-002)
-    termination:  cycle N  -> cycle N+1*     (this module)  *terminal, no recurrence
+    succession:   nothing -> cycle 1, cycle N -> cycle N+1  (schedule_next_bill_cycle)
+    termination:  cycle N -> cycle N+1*   (this module)  *terminal, no recurrence
+
+Termination is cessation, not succession, so it does not route through
+``schedule_next_bill_cycle``. (Insurance purchase still creates its cycle 1 through
+the interim ``establish_bill_cycle`` until the insurance lineage migrates.)
 
 A terminal cycle row carries ``next_assessment_at = NULL``: the lineage produces
 no further recurring assessment (DOM-OBL-001 §160, §241). It does NOT rewrite
@@ -22,7 +24,7 @@ without revoking, refunding, or early-expiring the paid coverage
 
 This is a domain command, not a user-facing FEAT: it carries no FEAT-registry
 number of its own and executes under the shared bill-cycle mutation-authority tag
-``FEAT-OBL-002`` (the same coarse authority as genesis/advancement). The
+``FEAT-OBL-002`` (the same coarse authority as succession). The
 termination distinction lives in the command contract, not the authority tag.
 """
 

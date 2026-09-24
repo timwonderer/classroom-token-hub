@@ -1,16 +1,16 @@
-# FEAT-OBL-002: Advance Bill Cycle
+# FEAT-OBL-002: Schedule Next Bill Cycle
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-OBL-002 | 1.1 | 2026-09-01 | 1.0 | Normative |
+| FEAT-OBL-002 | 2.0 | 2026-09-24 | 1.1 | Normative |
 
 ---
 
 ## I. Purpose
 
-This FEAT advances a recurring obligation source **from its existing current cycle to the next lawful bill cycle** (`cycle N → cycle N+1`).
+This FEAT records the **next lawful bill cycle** for a recurring obligation lineage through the Obligations succession command `schedule_next_bill_cycle` (DOM-OBL-001 §V.7).
 
-Advancement is **not genesis.** Establishing the first cycle where none exists (`nothing → cycle 1`) is a distinct Obligations command, `establish_bill_cycle`; this FEAT requires that a current lawful cycle already exist and SHALL NOT create cycle 1. The lawful successor number is derived from authoritative Obligations state (`current + 1`), not trusted from the caller.
+There is no separate genesis command. The domain derives the cycle number from authoritative Obligations state: `1` where the lineage has no cycle, otherwise `current + 1`. The caller requests succession for a lineage and never supplies or asserts a cycle number.
 
 The bill cycle is identity-blind temporal reminder state. It does not determine business meaning, amount, class, seat, or contract authority. It only records that a continuing internal reference must be reconsidered at a lawful boundary.
 
@@ -51,11 +51,12 @@ Required canonical context:
 - `internal_ref`
 - `seat_id` when the source is seat-scoped
 - `actor_seat_id`
-- `current_cycle_number`
-- `next_assessment_at`
-- `idempotency_key`
+- `cycle_boundary_at` and `next_assessment_at` for the requested cycle
+- `policy_uuid` in force for the requested cycle
+- `idempotency_key` — the command identity (DOM-OBL-001 §V.7), scoped to `class_id`
+- the canonically resolved reference time (execution context; not part of the command's terms)
 
-The lawful caller SHALL provide the upstream authority reference and version snapshot needed to validate the successor cycle.
+The request carries no cycle number. The lawful caller SHALL provide the upstream authority reference and version snapshot needed to validate the requested cycle.
 
 ---
 
@@ -63,21 +64,21 @@ The lawful caller SHALL provide the upstream authority reference and version sna
 
 ### 1. Verification
 
-1. Verify a current lawful cycle already exists for the lineage. If none exists, advancement is unlawful (genesis is `establish_bill_cycle`, not this FEAT).
-2. Verify the recurring source still lawfully exists.
-3. Verify the current cycle has reached the lawful advancement boundary.
-4. Verify the requested successor is the strict successor (`current_cycle_number + 1`) derived from authoritative state; reject any non-sequential successor.
-5. Resolve the lawful version snapshot that governs the successor cycle.
+1. Look up the command identity. If it was already executed with the same terms, return that execution's cycle (exact replay); if with different terms, fail closed (replay mismatch). Replay is decided before eligibility.
+2. Verify succession eligibility from authoritative Obligations state (DOM-OBL-001 §V.7): the lineage is empty, or its latest cycle is non-terminal and its `next_assessment_at` has arrived at the reference time, evaluated through the Canonical Temporal Evaluation helper (INV-ARC-015 §VII). Succession after a terminal cycle, or before `next_assessment_at`, is unlawful.
+3. Verify `next_assessment_at` is strictly later than `cycle_boundary_at` (DOM-OBL-001 §VII.2).
+4. Derive the cycle number once from the state read in step 2.
+5. Verify the recurring source still lawfully exists, and resolve the lawful version snapshot that governs the cycle.
 
 ### 2. Mutation
 
-1. Create the successor `bill_cycles` row.
-2. Record the next assessment boundary for the same `internal_ref`.
+1. Create the `bill_cycles` row and record the command identity (`obligation_command_reservation`: identity, request fingerprint, produced cycle) in the same transaction.
+2. If a different command created the derived cycle first, fail with a succession conflict. Do not replay it and do not re-derive a later cycle (DOM-OBL-001 §V.7 case 3).
 3. Emit any resulting lawful obligation assessment through the canonical obligations FEAT surface.
 
 ### 3. Terminal case
 
-If the authoritative source has terminated, no successor cycle is created.
+If the authoritative source has terminated, no successor cycle is created. Termination itself is a separate command (`terminate_bill_cycle`) and is not routed through succession.
 
 ---
 
@@ -87,8 +88,9 @@ If the authoritative source has terminated, no successor cycle is created.
 2. `bill_cycles` SHALL NOT store business meaning for the source.
 3. `bill_cycles` SHALL NOT store class/seat identity when that identity belongs upstream.
 4. A terminated recurring relationship produces no successor cycle.
-5. Bill cycle advancement MUST be idempotent for the same lawful lineage and boundary.
-6. Advancement requires a prior cycle and never creates cycle 1; genesis is `establish_bill_cycle`. The successor number is derived (`current + 1`), never an arbitrary caller value.
+5. Succession is idempotent on command identity, never on the shape of the row it would write. Two distinct commands deriving the same cycle are two commands: exactly one creates it and the other receives a succession conflict.
+6. The cycle number is derived (`1` for an empty lineage, otherwise `current + 1`) and is never caller-supplied.
+7. Succession is lawful only for an empty lineage or a non-terminal latest cycle whose `next_assessment_at` has arrived. A caller's own scheduling predicate does not substitute for this check.
 
 ---
 
@@ -98,4 +100,4 @@ If the authoritative source has terminated, no successor cycle is created.
 - `docs/DOMAIN/DOM-CLASS-001_CLASS_CONFIGURATION_DOMAIN.md`
 - `docs/DOMAIN/DOM-STORE-001_STORE_AND_ENTITLEMENTS_DOMAIN.md`
 - `docs/FEATURE-EXECUTION/FEAT-OBLI-001_ASSESS_OBLIGATION.md`
-- `establish_bill_cycle` (Obligations bill-cycle genesis command; DOM-OBL-001 §VII.2)
+- `schedule_next_bill_cycle` (Obligations bill-cycle succession command; DOM-OBL-001 §V.7, §VII.2)

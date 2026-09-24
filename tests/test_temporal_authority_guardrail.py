@@ -129,7 +129,7 @@ row.cycle_boundary_at = bounds.boundary_start_utc
 
 def test_accepts_a_value_passed_through():
     """A resolved instant handed on from a schedule service is not a new parse."""
-    fixed = "establish_bill_cycle(cycle_boundary_at=schedule.cycle_boundary_at)"
+    fixed = "schedule_next_bill_cycle(cycle_boundary_at=schedule.cycle_boundary_at)"
     assert _findings(fixed) == []
 
 
