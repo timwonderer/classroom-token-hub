@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-OBL-001 | 3.0 | 2026-07-28 | 2.6 | Constitutional |
+| DOM-OBL-001 | 3.1 | 2026-09-23 | 3.0 | Constitutional |
 
 ---
 
@@ -153,11 +153,29 @@ Bill cycle does not know the teacher's intent beyond the persisted policy UUID a
 
 Bill cycle may carry the exact `policy_uuid` that it invokes.
 
-The bill-cycle lifecycle has three distinct transitions, each an explicit command:
+The bill-cycle lifecycle has two operations, each an explicit command. Position in history is authoritative state, not API surface.
 
-- **Genesis** (`nothing → cycle 1`): `establish_bill_cycle` establishes the first cycle where none exists for the lineage. `cycle_number = 1` is intrinsic, never caller-selected. A second genesis for the same lineage is unlawful — idempotency protects retries of a command, it does not license a second cycle 1.
-- **Advancement** (`cycle N → cycle N+1`): FEAT-OBL-002 creates the strict successor from an existing current cycle; the successor number is derived from authoritative state. Advancement requires a prior cycle and never creates cycle 1.
-- **Termination**: a terminal cycle row with `next_assessment_at = NULL` (see §VII.2) stops future recurrence; the lawful cancellation/termination authority performs it. It does not rewrite prior obligation events (§IX.7).
+- **Succession** (`schedule_next_bill_cycle`): records the next lawful schedule row for a lineage. The domain derives the cycle number from authoritative Obligations state — `1` where no cycle exists for the lineage, otherwise `current + 1`. The cycle number is never caller-selected and never caller-supplied, per `INV-ARC-009` §V (only domain queries may define authoritative state). A caller requests succession for a lineage; it does not assert the lineage's position.
+- **Termination**: a terminal cycle row with `next_assessment_at = NULL` (see §VII.2) stops future recurrence; the lawful cancellation/termination authority performs it. Termination is cessation, not succession — it writes no next assessment boundary — so it remains a separate command and is not routed through succession. It does not rewrite prior obligation events (§IX.7).
+
+**Succession eligibility.** Succession is lawful only when one of the following holds for the lineage, as read from authoritative Obligations state:
+
+- the lineage has no cycle; or
+- the latest cycle is non-terminal and its `next_assessment_at` has arrived at the canonically resolved reference time.
+
+Succession is unlawful for a lineage whose latest cycle is terminal, and unlawful before the latest cycle's `next_assessment_at`. "Has arrived" is evaluated through the Canonical Temporal Evaluation helper (`INV-ARC-015` §VII) against the reference time resolved for the command, never against a command-local current-time read or a direct datetime comparison. Eligibility is a domain determination; callers do not reconstruct it (`INV-ARC-009` §V). A caller's own scheduling predicate does not substitute for this rule.
+
+There is no separate genesis command. "First cycle" is a property of the lineage's state at the moment of succession, not a distinct operation.
+
+**Replay identity.** Succession is idempotent on **command identity**, not on the shape of the row it would write. The governing question is whether this command has already executed, never whether a row with this `(internal_ref, cycle_number)` already exists. Two unrelated commands that independently derive the same successor are two commands, not a replay. Three cases, and only these:
+
+1. **Exact replay** — same command identity, matching request fingerprint: the original execution's outcome is returned. The existing row is not mutated and no second row is written.
+2. **Identity match, fingerprint mismatch** — the same command identity presented with different terms: the command fails closed with a replay-mismatch result. No write, no mutation, no silent acceptance.
+3. **Distinct commands racing for the same derived successor** — exactly one may create it. Every other command fails closed with a **succession conflict**: the successor it derived was created by a different command. The conflict is determined after the identity lookup — a command that finds its own identity already recorded is in case (1) or (2), never case 3. Reporting a conflict as a successful replay is unlawful, as is reporting it as a generic uniqueness failure. A command derives its successor once, from the lineage state it evaluated; on conflict it MUST NOT re-evaluate against the advanced lineage and create a later successor instead.
+
+The `(internal_ref, cycle_number)` uniqueness constraint is the integrity backstop for case 3. It is not the idempotency mechanism and must not be used as one.
+
+This clause is built to match the replay model ratified for Ledger commands in `SPEC-LED-002` §VI, so that the two domains do not drift into different replay semantics. `SPEC-LED-002` §II scopes itself to Ledger paths creating monetary effects and does not govern Obligations; it is the model here, not the authority (`INV-ARC-021`).
 
 ---
 
@@ -237,7 +255,8 @@ Rules:
 - bill cycles do not store business meaning for the reference;
 - bill cycles are only lawful when they point to a currently continuing relationship;
 - the latest bill cycle that invoked assessment establishes the current policy UUID in force for the lineage;
-- **genesis** (`establish_bill_cycle`) creates `cycle_number = 1` and is lawful only when no cycle exists for the lineage; **advancement** (FEAT-OBL-002) creates the strict successor (`current + 1`) from an existing cycle and never creates cycle 1;
+- **succession** (`schedule_next_bill_cycle`) creates the next lawful cycle for the lineage, with the cycle number derived from authoritative state (`1` when the lineage is empty, otherwise `current + 1`) and never supplied by the caller; succession is lawful only under the eligibility rule in §V.7 (empty lineage, or a non-terminal latest cycle whose `next_assessment_at` has arrived), and never after a terminal row; **termination** writes a terminal row that stops future recurring assessment and is not a succession;
+- for a non-terminal cycle, `next_assessment_at` MUST be strictly later than `cycle_boundary_at`;
 - a terminal bill-cycle row with `next_assessment_at = NULL` stops future recurring assessment for the lineage;
 - when the helper is late, the next scheduled run processes the due cycle if it still exists and has not been superseded.
 
