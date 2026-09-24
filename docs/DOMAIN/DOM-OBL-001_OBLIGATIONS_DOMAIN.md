@@ -157,7 +157,7 @@ The bill-cycle lifecycle has three distinct transitions, each an explicit comman
 
 - **Genesis** (`nothing → cycle 1`): `establish_bill_cycle` establishes the first cycle where none exists for the lineage. `cycle_number = 1` is intrinsic, never caller-selected. A second genesis for the same lineage is unlawful — idempotency protects retries of a command, it does not license a second cycle 1.
 - **Advancement** (`cycle N → cycle N+1`): FEAT-OBL-002 creates the strict successor from an existing current cycle; the successor number is derived from authoritative state. Advancement requires a prior cycle and never creates cycle 1.
-- **Termination**: a terminal cycle row with `assessment_at = NULL` (see §VII.2) stops future recurrence; the lawful cancellation/termination authority performs it. It does not rewrite prior obligation events (§IX.7).
+- **Termination**: a terminal cycle row with `next_assessment_at = NULL` (see §VII.2) stops future recurrence; the lawful cancellation/termination authority performs it. It does not rewrite prior obligation events (§IX.7).
 
 ---
 
@@ -227,7 +227,7 @@ Key fields:
 - `internal_ref` - for specific assessment_event referencing and advancement
 - `cycle_number` - for advancement tracking
 - `policy_uuid` - current rent policy locator
-- `assessment_at` - due boundary for invoking assessment
+- `cycle_boundary_at` - due boundary for invoking assessment
 - `next_assessment_at` - next lawful boundary for the continuing rent cycle
 
 Rules:
@@ -238,7 +238,7 @@ Rules:
 - bill cycles are only lawful when they point to a currently continuing relationship;
 - the latest bill cycle that invoked assessment establishes the current policy UUID in force for the lineage;
 - **genesis** (`establish_bill_cycle`) creates `cycle_number = 1` and is lawful only when no cycle exists for the lineage; **advancement** (FEAT-OBL-002) creates the strict successor (`current + 1`) from an existing cycle and never creates cycle 1;
-- a terminal bill-cycle row with `assessment_at = NULL` stops future recurring assessment for the lineage;
+- a terminal bill-cycle row with `next_assessment_at = NULL` stops future recurring assessment for the lineage;
 - when the helper is late, the next scheduled run processes the due cycle if it still exists and has not been superseded.
 
 ---
