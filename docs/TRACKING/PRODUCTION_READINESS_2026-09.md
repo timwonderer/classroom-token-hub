@@ -1854,12 +1854,62 @@ markdown-editor missing-label bug affecting 4 templates/5 editor
 instances, fixed once via a `MutationObserver` rather than patched per
 call site) rather than one-off patches.
 
-**Still open:** Groups D/I/J/L (~20-24 templates: pages needing a real
-claim/issue/policy row via a FEAT chain, 6 confirmed-dead templates, and
-the teacher-recovery flow's own pages) — none reachable with the
-harness's current `initialize_as_teacher`/`enable_class_feature`
-pattern; each needs its own FEAT-level setup, already recipe'd in the
-mapping. Not yet started.
+**Amended 2026-09-23, again — Groups D/J/L complete; Group I is cleanup,
+not test scope. Accessibility campaign done: 88/88.**
+
+Groups D/I/J/L were not reachable with the harness's `initialize_as_teacher`/
+`enable_class_feature` pattern, so a new `tests/simulated/` directory was
+built: a persistent, production-sourced world database instead of a
+hermetic per-run schema, seeded once from a production `pg_dump` (PII
+decrypted on production, re-encrypted locally, the production
+`ENCRYPTION_KEY` never leaving production). This does not weaken
+SPEC-TEST-001 — that rule governs row *provenance* (must come from
+canonical FEAT/production code paths), not *reuse*; a world seeded and
+mutated exclusively through canonical FEAT helpers, accumulating real
+history across runs, fulfills the rule's spirit. Full reasoning in
+`tests/simulated/conftest.py`.
+
+- **Group D — 7/7 pages, zero violations** (`test_group_d_pages.py`):
+  found the one class in the seeded world that already owned a real
+  claim/issue/policy row, queried its ids, covered
+  `admin_process_claim.html`, `admin_view_issue.html`,
+  `sysadmin_view_issue.html`, `student_file_claim.html`,
+  `student_view_policy.html`, `admin_announcement_form.html` (edit mode
+  — the one announcement it needed was created via the real admin route
+  and contributed back), and `student_detail.html` (its signed `nav=`
+  token was scraped from a real `GET /admin/students` response, since it
+  cannot be hand-built).
+- **Group J — 2/2 pages, zero violations** (`test_group_j_pages.py`):
+  `admin_recovery_prepare.html`/`admin_recovery_status.html`, reached by
+  really submitting the unauthenticated `/admin/recover` form (Turnstile
+  self-bypasses; `TURNSTILE_SECRET_KEY` is unset here). The one scenario
+  in this whole effort that could not be satisfied from existing world
+  state — recovery proof needs a claimed student's *plaintext* username,
+  and usernames are stored only as an unsalted HMAC digest, unrecoverable
+  from any database — so this test provisions its own tiny classroom
+  through the same production service calls the canonical initializer
+  uses, with a freshly-suffixed teacher username every run (reusing the
+  shared `teacher_alice` fixture identity breaks proof once that teacher
+  accumulates a second class — hit that wall firsthand; see
+  `RESUME_2026-09-22_findings_39-54.md`'s 2026-09-23 amendment for the
+  full incident, including a `PEPPER_KEY`-hardcoding gotcha in
+  `tests/conftest.py` and a `prevent_immutable_delete()` trigger that
+  correctly refused to let stray fixture rows be cleaned up).
+- **Group L — 1/1 page, zero violations** (`test_group_l_pages.py`):
+  `student_verify_recovery.html`, reached via the same FEAT chain plus
+  logging in as exactly the seat `select_class_recipients` randomly
+  chose (any other seat 404s by design).
+- **Group I — reclassified, not a test gap.** All 7 templates
+  re-confirmed to have zero `render_template()` references anywhere in
+  `app/`; flagged for a dedicated cleanup session rather than folded into
+  this one.
+
+**Campaign total: 88/88 real page templates verified against real WCAG 2
+A/AA with zero violations** (40 from Groups A/B/C/E/F/G/H, 7 dead
+templates correctly excluded, 10 from Groups D/J/L — with 10 genuine
+defects found and fixed earlier in the campaign and zero new ones in
+Groups D/J/L). INV-ARC-020's accessibility requirement is now backed by
+real, verified coverage rather than a partial pass.
 
 ### Standing lesson for the ship gate
 

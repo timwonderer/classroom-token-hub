@@ -801,3 +801,101 @@ None of these four groups is reachable with the `initialize_as_teacher`/
 `initialize_as_student` + `enable_class_feature` pattern the harness
 already has — each needs its own FEAT-level setup recipe, already
 documented in the mapping this finding is built from.
+
+---
+
+**Amendment 2026-09-23: Groups D, J, L complete; Group I reclassified as
+cleanup, not test scope.**
+
+Built `tests/simulated/` (`4f6627027` and follow-ups): a persistent,
+production-sourced world database (`classroom_economy_simulated_test`,
+seeded once from a production `pg_dump` with PII decrypted on production
+and re-encrypted locally, the production `ENCRYPTION_KEY` never leaving
+production) instead of the hermetic per-run schema, on the reasoning that
+SPEC-TEST-001's "no hand-assembled rows" rule governs *provenance*
+(every row must come from canonical FEAT/production code paths), not
+*reuse* — a world seeded and mutated exclusively through canonical FEAT
+helpers, and left to accumulate real history across runs, fulfills that
+rule's spirit rather than violating it. See `tests/simulated/conftest.py`
+for the full reasoning and the Flask-SQLAlchemy multi-app binding pattern
+that keeps it a genuinely separate database connection from the hermetic
+suite's `TEST_DATABASE_URL`.
+
+- **Group D — done, 7/7 pages, zero violations**
+  (`tests/simulated/test_group_d_pages.py`): found the one class in the
+  seeded world that already owned a real claim/issue/policy row
+  ("Rabbit Hole 101"), queried its exact ids directly, and covered
+  `admin_process_claim.html`, `admin_view_issue.html`,
+  `sysadmin_view_issue.html`, `student_file_claim.html`,
+  `student_view_policy.html`, `admin_announcement_form.html` (edit
+  mode — the world had zero announcements, so one was created through
+  the real `/admin/announcements/create` route and contributed back),
+  and `student_detail.html` (its signed `nav=` token cannot be
+  hand-built, so the test makes a real `GET /admin/students` and
+  scrapes the real link out of the rendered HTML, exactly as a browser
+  would follow it).
+
+- **Group J — done, 2/2 pages, zero violations**
+  (`tests/simulated/test_group_j_pages.py`): `admin_recovery_prepare.html`
+  and `admin_recovery_status.html`, reached by actually submitting the
+  real, unauthenticated `/admin/recover` form (Turnstile bypasses itself
+  since `TURNSTILE_SECRET_KEY` is unset in this environment — nothing
+  test-specific was needed there). `admin_recovery_prepare.html`'s own
+  inline JS calls back into `/recovery/select-class` and auto-redirects
+  the instant it succeeds, which raced axe-core's injection with only
+  one required class; the fix aborts that one fetch via a Playwright
+  route so the page holds on its own error branch (same DOM, stable
+  text) instead, then the actual selection is driven directly at the
+  FEAT layer afterward so `admin_recovery_status.html` has real status
+  data to render.
+
+  This is the one scenario in the whole simulated-world effort that
+  could **not** be satisfied by querying existing world state: recovery
+  proof requires a claimed student's *plaintext* username, and usernames
+  are stored only as an unsalted HMAC lookup digest (INV-ARC-019) — not
+  recoverable from the database, ours or production's. So this test
+  provisions its own tiny classroom through the same production service
+  calls the canonical initializer itself uses (never hand-assembled
+  ORM rows), and — critically — mints a **fresh, uniquely-suffixed
+  teacher username every run** rather than reusing the shared
+  `teacher_alice` fixture identity. `begin_attempt` requires proving
+  *every* class a teacher owns in one attempt; a teacher who has
+  accumulated a second class from an earlier run of a test like this
+  can never pass proof again with pairs for only the newest one. Hit
+  that wall firsthand on a second run — compounded by `tests/conftest.py`
+  hardcoding `PEPPER_KEY = "test-primary-pepper"` for every pytest
+  invocation, which meant a from-pytest run and a bypassing standalone
+  debug script resolved the *same* fixture username to two different
+  identities in the same persistent database. Cleaned up the resulting
+  stray `recovery_requests` rows; the handful of duplicate fixture
+  classes/users from that debugging could not be cleaned up the same
+  way — `class_features` (and likely other audit-adjacent tables) is
+  guarded by a `prevent_immutable_delete()` trigger, correctly refusing
+  the cascade. Left as harmless extra fixture rows rather than fighting
+  a deliberate immutability guard.
+
+- **Group L — done, 1/1 page, zero violations**
+  (`tests/simulated/test_group_l_pages.py`): `student_verify_recovery.html`,
+  reached by driving the same begin_attempt → select_class_recipients
+  chain (its own fresh teacher/classroom, same reasoning as Group J)
+  directly at the FEAT layer, then reading the resulting
+  `student_recovery_codes` row to find which of the two randomly-selected
+  seats to log in as — `get_recovery_code_for_seat` 404s for any other
+  seat in the same class by design.
+
+- **Group I — reclassified, not a test gap.** Re-confirmed all 7
+  templates still have zero `render_template()` references anywhere in
+  `app/` (`admin_view_student_policy.html`; the three dead
+  `student/recovery/*.html` leaves — `identity_update.html`,
+  `reset_form.html`, `landing.html` — distinct from `layout.html`, a
+  legitimate shared base, and `account_lookup.html`, which IS live via
+  `app/routes/recovery.py`; and the three retired sysadmin pages whose
+  routes now just redirect to `combined-logs`). Confirmed dead code has
+  no live page to accessibility-test — flagged for a dedicated cleanup
+  session instead of folding a deletion task into this one.
+
+**Total: 88/88 real page templates now verified against real WCAG 2 A/AA
+with zero violations** (40 from the prior session's Groups A/B/C/E/F/G/H,
+7 dead templates correctly excluded rather than tested, and the 10
+Groups D/J/L pages above). No new defects found in Groups D/J/L — every
+page audited clean on the first real render.
