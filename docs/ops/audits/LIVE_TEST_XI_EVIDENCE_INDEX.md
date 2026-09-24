@@ -78,12 +78,13 @@ been exercised end-to-end." That is true but reads as a testing gap someone
 could close. It cannot be closed, because the gate is unreachable in
 production. Verified 2026-09-23 at the code layer:
 
-1. `waiting_period_days` is settable on all three policy types — operator
-   decision 2026-09-21, recorded at
-   `app/feats/class_configuration/feat_class_003_insurance_policy_management.py:66-73`,
-   which states it is "settable on every type (not necessarily enforced on
-   every type — only NON_MONETARY currently gates claim eligibility on it)."
-2. Enforcement matches that decision: only `_enforce_non_monetary_submission`
+1. `waiting_period_days` is settable on all three policy types. The code comment
+   at `feat_class_003_insurance_policy_management.py:66-73` attributes this to an
+   "Operator decision 2026-09-21" holding it "settable on every type (not
+   necessarily enforced on every type)". **That attribution is false — the
+   operator states they never made that decision** (2026-09-23). See the root
+   cause below; a code comment is descriptive and was never authority for it.
+2. Enforcement follows that invented rule: only `_enforce_non_monetary_submission`
    (`app/feats/insurance_claim_feat.py:401`) applies the waiting period.
    TRANSACTION and PRODUCTIVITY gate against `coverage_terms.coverage_start_utc`,
    which is the raw grant timestamp (`:221`) with no waiting period applied.
@@ -98,6 +99,38 @@ with no filing UI. It holds four passing FEAT-level unit tests
 (`tests/test_insurance_claim_feat.py::TestNonMonetaryWaitingPeriod`, including
 the inside/after/boundary/zero cases) and has no production reachability.
 Reclassifying this tracker item is an operator decision and has not been made.
+
+### Root cause of the invented rule — a stale cross-reference
+
+The restriction has no normative basis, and the "operator decision" that
+replaced it was invented on the strength of a citation typo:
+
+1. `economic_engine.py:114` and the insurance schema cite "SPEC §4.5.3 /
+   §4.5.4 / §4.5.5". Those were the correct insurance sections **when written**.
+2. `9bdeccdab` (2026-09-12, "reorganize insurance section and update
+   numbering") renumbered insurance §4.5.x → **§4.4.x**. Verified against
+   `git show 9bdeccdab^`: the pre-renumber doc has "#### 4.5.3 `TRANSACTION`
+   Insurance". The code citations were never updated and now point at §4.5
+   *Fines*, which has no §4.5.3.
+3. On 2026-09-21 someone resolved those citations, correctly found nothing,
+   and concluded "No normative document restricts it to NON_MONETARY" — never
+   reaching `SPEC-ECON-003` §4.4.3–§4.4.5, one digit away, which does govern
+   insurance coverage parameters.
+4. They then invented "settable but not necessarily enforced" and recorded it
+   as an operator decision.
+
+**What the governing spec actually says.** `SPEC-ECON-003` §4.4.1 lists waiting
+period among the tier-controlled coverage-axis values that "*Depending on
+product type … MAY include*", and its axis-separation rule names waiting period
+as a coverage parameter economic mode must not change — both stated generally,
+for no particular product. Nothing forbids a waiting period on TRANSACTION or
+PRODUCTIVITY. What the spec does **not** provide is *preset values* for those
+two products: §4.4.3 (TRANSACTION) and §4.4.4 (PRODUCTIVITY) carry no
+waiting-period row, while §4.4.5 (NON_MONETARY) does (3/7/3/0 days, range 0–7).
+"No preset given" was over-read as "forbidden", then re-invented as "settable
+but unenforced". Operator direction 2026-09-23 is that it should be settable on
+**all** insurance; the preset values for the two uncovered products are a
+genuine gap in the spec, not in the code.
 
 ### Adjacent defect found while verifying Gap 2 (reachable, currently latent)
 
