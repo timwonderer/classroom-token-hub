@@ -161,12 +161,13 @@ identity. No separate `system_admins`, `admin_credentials`, or
 `system_admin_credentials` are migration artifacts only. They do not define runtime
 authority in v2 and must not be treated as canonical schema surfaces.
 
-**Recovery and authentication tables** (owned by DOM-IDEN-003):
+**Recovery, authentication and provisioning-staging tables** (owned by DOM-IDEN-003):
 
 - `recovery_requests` — teacher credential recovery lifecycle; at most one pending per user
 - `student_recovery_codes` — per-student verification codes; child of `recovery_requests`, CASCADE-deleted
 - `recovery_class_challenges` — per-class proof and confirmation state for one teacher recovery attempt; child of `recovery_requests`, CASCADE-deleted (DOM-IDEN-003 §IX)
 - `passkey_credentials` — WebAuthn/FIDO2 credential bindings; owned by `users.id`
+- `teacher_signup_attempts` — encrypted, expiring staging record for initial teacher provisioning; grants no authority; consumed atomically by provisioning (DOM-IDEN-003 §V, §VII; registered in 1.10)
 
 ---
 
@@ -177,11 +178,12 @@ authority in v2 and must not be treated as canonical schema surfaces.
 **Tables:**
 
 - `class_features`
-- `economic-engine` — class-level economic configuration and projection state
+- `economic_engine` — class-level economic configuration and projection state
+- `feature_settings` — per-class economy policy configuration that applies when a feature is enabled; enablement itself stays in `class_features` (DOM-CLASS-001 §VI; DOM-POL-001A §IV; registered in 1.10)
 
-Policy definition tables — `rent_settings`, `payroll_settings`, `payroll_rewards`, `payroll_fines`, `hall_pass_settings`, `store_items`, `store_item_visibility`, and insurance policy definitions — are **not** Class Configuration authority. They are stored in the Policies repository (`DOM-POL-001`) as immutable, append-only version rows. Policies does not originate mutations; the domain that initiates a change (Class Config UI submissions, insurance authoring, store curation, etc.) submits a new definition and Policies records it under a new `policy_uuid`. The consuming operational domain — `DOM-OBL-001` for rent, `DOM-PROD-001` for payroll and hall-pass, `DOM-STORE-001` for store/entitlements, the Insurance operational flow for insurance — reads the current `policy_uuid` and owns only the operational facts that result (bill cycles, payroll events, hall-pass logs, entitlement events, etc.). See `DOM-POL-001` §V and §X.
+Policy definition tables — `rent_settings`, `payroll_settings`, `payroll_rewards`, `payroll_fines`, `hall_pass_settings`, `store_products`, `store_item_visibility`, and `insurance_policies` — are **not** Class Configuration authority. They are stored in the Policies repository (`DOM-POL-001`) as immutable, append-only version rows. Policies does not originate mutations; the domain that initiates a change (Class Config UI submissions, insurance authoring, store curation, etc.) submits a new definition and Policies records it under a new `policy_uuid`. The consuming operational domain — `DOM-OBL-001` for rent, `DOM-PROD-001` for payroll and hall-pass, `DOM-STORE-001` for store/entitlements, the Insurance operational flow for insurance — reads the current `policy_uuid` and owns only the operational facts that result (bill cycles, payroll events, hall-pass logs, entitlement events, etc.). See `DOM-POL-001` §V and §X.
 
-`banking_settings` (savings APY, overdraft fees, interest calculation, disbursement schedule) is **not** a policy repository concern. Its content is inherently Class Configuration → `economic-engine` business, governed by `DOM-CLASS-001` (schema ownership) and `DOM-CLASS-002` (economy governance: interest formulas, overdraft behavior). Class-level economic evolution is versioned under `DOM-CLASS-003` (policy_versions / policy_transitions), not through the Policies repository.
+`banking_settings` (savings APY, overdraft fees, interest calculation, disbursement schedule) is **not** a policy repository concern. Its content is inherently Class Configuration → `economic_engine` business, governed by `DOM-CLASS-001` (schema ownership) and `DOM-CLASS-002` (economy governance: interest formulas, overdraft behavior). Class-level economic evolution is versioned under `DOM-CLASS-003` (policy_versions / policy_transitions), not through the Policies repository.
 
 **Prohibited:** No persisted compute-result caches (e.g., `payroll_cache`). Computed values are derived on read from authoritative event tables or recomputed by services.
 
@@ -196,6 +198,7 @@ Policy definition tables — `rent_settings`, `payroll_settings`, `payroll_rewar
 - `attendance_sessions`
 - `hall_pass_logs`
 - `payroll_event`
+- `payroll_cycle_completion` — the persistent completion anchor for a class-level payroll run, resolved before any work on replay so a replay returns the original `payroll_cycle_id` (DOM-PROD-001 §XV; FEAT-PROD-004; registered in 1.10)
 
 ---
 
@@ -316,12 +319,12 @@ The former `interpretation_snapshots` (cache) and `interpretation_annotations` t
 - `rent_settings` — rent policy definitions (rate, cycle length, effective boundaries) as append-only version rows; consumed by `DOM-OBL-001`
 - `payroll_settings`, `payroll_rewards`, `payroll_fines` — payroll policy definitions (wage rate, frequency, reward/fine catalog); `payroll_settings.pay_rate` stores the normalized per-minute rate as `NUMERIC(18,8)` so conversions from teacher-entered hourly or daily rates retain sub-cent precision; consumed by `DOM-PROD-001`
 - `hall_pass_settings` — hall-pass policy definitions (allowed destinations, limits); consumed by `DOM-PROD-001` at grant time
-- `store_items`, `store_item_visibility` — purchasable / rent-linked entitlement offering definitions and per-class visibility; consumed by `DOM-STORE-001`
-- Insurance policy definitions (see Insurance-domain specs for exact table); consumed by the Insurance operational flow
+- `store_products`, `store_item_visibility` — purchasable / rent-linked entitlement offering definitions and per-class visibility; consumed by `DOM-STORE-001`. `store_products` is the single versioned product table that replaced `store_items` and the earlier `store_products` (migration `b7c41e9a2f30`); renamed here in 1.10
+- `insurance_policies` — immutable insurance definition rows (`DOM-POL-001` §X "insurance definitions -> Policies"; `DOM-POL-001A` §D); consumed by the insurance entitlement lifecycle (`DOM-STORE-001`); named here in 1.10
 
 **Not in this repository:**
 
-- `banking_settings` — Class Configuration → `economic-engine` concern (interest, overdraft). See `DOM-CLASS-001` and `DOM-CLASS-002`.
+- `banking_settings` — Class Configuration → `economic_engine` concern (interest, overdraft). See `DOM-CLASS-001` and `DOM-CLASS-002`.
 
 **Boundary notes:**
 

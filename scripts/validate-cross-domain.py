@@ -44,15 +44,18 @@ TABLE_DOMAIN = {
     "student_recovery_codes": "DOM-IDEN",
     "recovery_class_challenges": "DOM-IDEN",
     "passkey_credentials": "DOM-IDEN",
+    "teacher_signup_attempts": "DOM-IDEN",
     # DOM-CLASS-001 / -003 — class directives and their version lifecycle
     "class_features": "DOM-CLASS",
     "economic_engine": "DOM-CLASS",
+    "feature_settings": "DOM-CLASS",
     "policy_versions": "DOM-CLASS",
     "policy_transitions": "DOM-CLASS",
     # DOM-PROD-001 — productivity and payroll facts
     "attendance_sessions": "DOM-PROD",
     "hall_pass_logs": "DOM-PROD",
     "payroll_event": "DOM-PROD",
+    "payroll_cycle_completion": "DOM-PROD",
     # DOM-OBL-001 — seat-scoped debt lifecycle
     "bill_cycles": "DOM-OBL",
     "assessment_events": "DOM-OBL",
@@ -91,8 +94,9 @@ TABLE_DOMAIN = {
     "payroll_rewards": "DOM-POL",
     "payroll_fines": "DOM-POL",
     "hall_pass_settings": "DOM-POL",
-    "store_items": "DOM-POL",
     "store_item_visibility": "DOM-POL",
+    "store_products": "DOM-POL",
+    "insurance_policies": "DOM-POL",
 }
 
 # INV-ARC-021 §V.7 enumerates these and only these as legal cross-domain

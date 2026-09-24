@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-IDEN-003 | 2.8 | 2026-09-17 | 2.7 | Constitutional |
+| DOM-IDEN-003 | 2.9 | 2026-09-24 | 2.8 | Constitutional |
 
 ---
 
@@ -75,6 +75,10 @@ Key fields: `id`, `recovery_request_id` (FK, CASCADE), `seat_id` (FK to `seats` 
 
 Teacher passkey credential metadata. Owned by `users.id` (per INV-ARC-019 §XI). This unified table is the canonical passkey store for teacher and sysadmin principals.
 
+**`teacher_signup_attempts`**
+
+The encrypted, expiring staging record for initial teacher provisioning (§VII Account Provisioning; FEAT-IDEN-101 executes it). Key fields: `nonce_hash` (primary key; purpose-separated SHA-256 verifier of the browser's random signup nonce), `payload_encrypted` (pending class/display metadata, username and pending credential; INV-ARC-018 temporary signup inventory), `expires_at`.
+
 ### Schema Contract
 
 Teacher-specific fields on `users`: `totp_secret_encrypted`.
@@ -84,6 +88,7 @@ Teacher-specific fields on `users`: `totp_secret_encrypted`.
 - `recovery_requests`: At most one `status = 'pending'` row per user at any time. `expires_at` is a hard TTL (5 days). Rows past `expires_at` are inert regardless of status. `partial_codes` and `resume_new_username` must be cleared when `status` transitions to `verified` or `expired`.
 - `student_recovery_codes`: One row per selected student seat per recovery request. `code_hash` is `HMAC(6-digit-code, b'')`. Plaintext code is never stored. `code_hash` is set to NULL and `verified_at` is cleared on any failed submission (all-or-nothing invalidation per §IX invariant 6). Rows become inert when the parent `recovery_request.expires_at` passes.
 - `passkey_credentials`: Passwordless external IDs use `user_<User.id>`. Legacy external IDs such as `admin_<id>` are invalid v2 principals. Passkey metadata does not authorize class access, seat access, recovery, or economic actions.
+- `teacher_signup_attempts`: Temporary state only. It references no `users`, `classes` or `seats` row and grants no identity, lookup or classroom authority. The plaintext nonce is never stored. A row past `expires_at` is inert and is removed by cleanup; a restart deletes the previous attempt; successful provisioning deletes the attempt in the same transaction that creates the `User`, `Class`, `Seat` and `IdentityProfile`, so a replay cannot provision a second account.
 
 ### Derived / Cross-Domain Rules
 
