@@ -2007,6 +2007,58 @@ before the freeze) with tests that contradict one another, and several of its be
 rather than obviously correct ones (one period charged however late, daily autopay retry as the only
 recovery, no late fee, no expiration). Those need an owner decision before any of them is ported.
 
+### Amended 2026-09-24 — insurance claims run against a FEAT that contradicts its governing DOM (open, launch-relevant)
+
+**Status: STOP.** Nothing touching claims (runtime or either document) changes until this is resolved. The operator
+decides which representation survives, and first which domain owns claim truth at all.
+
+**The conflict.** Both documents are Normative; DOM outranks FEAT, and FEAT-STOR-003 §XIX (Amendment) says revisions "must
+remain consistent with `DOM-STORE-001`".
+
+- `DOM-STORE-001` v5.0 §VI lists "`insurance_claims` as a separate mutable workflow table" among superseded
+  concepts. §VIII.E.1 (Insurance): claims are represented through `pending_actions` before resolution; on resolution the
+  entitlement records a terminal `CONSUMED` event carrying the claimed subject and decision; claims "MAY be repeated
+  against the same entitlement" (§VIII.B, Consumption semantics, lets a type allow further terminal facts after `CONSUMED`).
+- `FEAT-STOR-003` v1.2 §XVII prohibits writing `CONSUMED` for a filed or approved claim, and prohibits "modelling the
+  claim lifecycle on `PendingAction` (or any generic action queue) instead of the dedicated `InsuranceClaim` record,
+  which is the sole owner of claim existence, status, basis, decision, and correlation."
+- Runtime follows the FEAT: `insurance_claims` and `insurance_claim_productivity_dates` exist
+  (`app/services/insurance_claim_service.py`, `app/feats/insurance_claim_feat.py`); no claim writes `pending_actions`
+  or `CONSUMED`. Both tables are the only two ORM tables still unregistered in DOM-CORE-002 (1.10), deliberately.
+
+**Provenance (git).**
+
+| Date | Commit | DOM-STORE-001 | FEAT-STOR-003 |
+| :--- | :--- | :--- | :--- |
+| 2026-07-22 | `5b6c2b464`, `6e4c22804` | v3.0: Store is "sole schema and mutation authority" over `entitlements`, `entitlement_consumptions`, **`insurance_claims`** | v1.0: first-class claim; bans `CONSUMED` on file/approve |
+| 2026-08-03 | `184910af8` "Store foundation" (demolition plan) | v5.0 (effective 07-28): event model, `entitlement_events` + `pending_actions` only; `insurance_claims` superseded | v2.0 (effective 07-27): `pending_actions` row + `CONSUMED` on resolution — aligned with the DOM |
+| 2026-08-28 | `02d412e6b` "complete insurance architecture" | **not touched** | rewritten (395 lines) as **"v1.1, supersedes 1.0"**: first-class `InsuranceClaim` restored, `PendingAction` banned; migrations create `insurance_claims` |
+| 2026-09-01 | `4dea11a11` | — | v1.2: claim terms resolved from the immutable policy by `policy_uuid` |
+
+**What the trace shows, and what it does not.**
+
+- The DOM moved away from a claims table deliberately, as part of a planned whole-domain move to an event model.
+  The FEAT moved back without amending the DOM, and its version went *backwards* (2.0 → "1.1 supersedes 1.0"). Its
+  revision note mentions only the allowance rule, not abandoning `pending_actions`. That pattern fits text edited from
+  the v1.0 base, not a recorded supersession of v2.0. It is the same failure shape as bill-cycle genesis: a lower
+  document changed architecture without propagating upward.
+- It does not show the FEAT was wrong. Its code gives a substantive reason: the entitlement "stays GRANTED until its
+  real coverage boundary, so multiple claims may be filed under one active policy". DOM v5 can support repeated
+  claims only through the §VIII.B exception, which it states thinly. A first-class record also holds claim state the
+  event model spreads across payloads (status, basis, per-date productivity evidence, decision, source-transaction
+  uniqueness). Neither side's reasoning was written down at the time.
+
+**The prior question (operator).** What domain truth does an insurance claim represent, and which domain owns it?
+DOM-STORE-001 §II (Scope) already hedges: "an insurance entitlement is granted here, while claim execution may coordinate with
+Ledger and a *claim-specific domain*." A claim touches entitlement state (Store), policy terms and waiting periods
+(Policies), productivity dates (Productivity), and reimbursement (Ledger). Store owning the entitlement a claim is made
+against does not by itself make Store the owner of the claim lifecycle; that assignment may be another artifact of
+insurance being built through Store.
+
+**Resolution paths, not chosen:** (a) amend DOM-STORE-001 to ratify a first-class claim record (in Store or a claims
+owner) and register the tables; (b) bring runtime back to `pending_actions` + `CONSUMED`; (c) reassign claim
+ownership first, then choose the representation inside the owning domain.
+
 ### Standing lesson for the ship gate
 
 Every one of the first session's 23 findings — and all fifteen the second
