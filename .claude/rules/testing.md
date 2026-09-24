@@ -155,7 +155,7 @@ Two classes, one query, assert the other class is invisible:
 ```python
 def test_transactions_scoped_by_class(client, app):
     first, alice = initialize_as_student("chemistry_p1", client, app)
-    second, bob = initialize_as_student("chemistry_p2", client, app)
+    second, bob = initialize_as_student("ap_csp_p3", client, app)
 
     with app.app_context():
         rows = Transaction.query.filter_by(class_id=first.class_id).all()
@@ -353,7 +353,7 @@ def test_get_seats(client, app):
 # GOOD — two classes exist, and only one is visible
 def test_seats_scoped_by_class(client, app):
     first, _ = initialize_as_student("chemistry_p1", client, app)
-    second, bob = initialize_as_student("chemistry_p2", client, app)
+    second, bob = initialize_as_student("ap_csp_p3", client, app)
 
     seats = Seat.query.filter_by(class_id=first.class_id, role="student").all()
     assert bob.seat.id not in {s.id for s in seats}
