@@ -1972,6 +1972,26 @@ then neither billed again nor expired.
 **Boundary, stated so it is not lost:** do not migrate insurance onto canonical bill-cycle succession until the
 recurring-premium lifecycle and a stable lineage identity are ratified. Migrating rent first is unaffected.
 
+**Lineage identity — ratified by the operator 2026-09-23.** One insurance entitlement constitutes one recurring
+billing lineage. A subsequent purchase creates a new entitlement and therefore a new billing lineage. Purchase
+command identity (the idempotency key) does not participate in billing-lineage identity. The Obligations
+`internal_ref` for an insurance lineage derives from the `entitlement_id` alone; the succession primitive keeps
+treating `internal_ref` as opaque. This settles the identity half of the boundary above. Not yet carried into a
+normative document or into `purchase_insurance_feat.py`.
+
+**Still open after that ratification — two product decisions, neither settled by existing code:**
+
+- *Nonpayment.* When a recurring premium reaches its due boundary and cannot be paid, what happens to the
+  obligation, to coverage, and to the next billing boundary? This one answer decides whether missed premiums
+  accumulate, whether and how retry happens, when coverage ceases, and whether another premium can fall due.
+  Cancellation expiry (EXPIRED at the cycle boundary) is ratified; nonpayment behavior is not, and the two are
+  separate questions.
+- *What "monthly" means.* No normative document defines insurance cadence. V1 used 28 days. V2 uses calendar
+  months but labels it "INTERIM BINDING: DOM-POL does not yet designate a canonical cadence field"
+  (`purchase_insurance_feat.py:81`), and its two call sites disagree: purchase adds a calendar month to the UTC
+  instant (`relativedelta(months=1)`), while claims count class-local calendar days to the next calendar month
+  (`insurance_claim_feat.py:194`). Neither V1's nor V2's current behavior carries authority.
+
 **What V1 contributes, and its limits.** [`V1_INSURANCE_LIFECYCLE_TRACE_2026-09-23.md`](../ops/audits/V1_INSURANCE_LIFECYCLE_TRACE_2026-09-23.md)
 records what V1 insurance did, transition by transition, with 30 prediction-first probes. It is non-normative
 evidence, not a specification. V1's recurring unit was the enrollment row: the same row was re-charged at its
