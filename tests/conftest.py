@@ -31,6 +31,17 @@ test_database_url = (
 if not test_database_url:
     raise RuntimeError("TEST_DATABASE_URL must be set in .env for tests.")
 
+# tests/simulated/ needs a persistent, local-only seeded database
+# (SIMULATED_DB_URL) that CI never configures -- a bare `pytest` (as
+# .github/workflows/full-suite.yml runs) must not even descend into that
+# directory when it is absent, since importing its own conftest.py to skip
+# gracefully from *inside* still aborts the whole collection (pytest.skip()
+# during conftest import raises Skipped uncaught, unlike inside a test
+# module). collect_ignore_glob, checked here in the parent conftest before
+# ever entering the subdirectory, is the mechanism that actually works.
+if not (dotenv_config.get("SIMULATED_DB_URL") or os.environ.get("SIMULATED_DB_URL")):
+    collect_ignore_glob = ["simulated"]
+
 # Override env vars for testing
 os.environ["SECRET_KEY"] = "test-secret"
 os.environ["TEST_DATABASE_URL"] = test_database_url
