@@ -243,6 +243,7 @@ Records recurring temporal progression for any continuing obligation-producing r
 Key fields:
 
 - `id`
+- `class_id` - FK to `classes`; the tenant isolation boundary (`INV-CORE-000` §1, `DOM-CORE-002` §IV.1), not a business subject
 - `internal_ref` - for specific assessment_event referencing and advancement
 - `cycle_number` - for advancement tracking
 - `policy_uuid` - current rent policy locator
@@ -251,7 +252,7 @@ Key fields:
 
 Rules:
 
-- bill cycles do not store class identity or seat identity;
+- bill cycles carry `class_id` as their tenant isolation boundary and no other class or seat identity: they do not record which class or seat a charge is about (that lives in the opaque `internal_ref` and in the assessments), and they store no `seat_id`;
 - bill cycles do not store amount;
 - bill cycles do not store business meaning for the reference;
 - bill cycles are only lawful when they point to a currently continuing relationship;

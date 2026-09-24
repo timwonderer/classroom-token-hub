@@ -222,6 +222,9 @@ Policy definition tables — `rent_settings`, `payroll_settings`, `payroll_rewar
 
 - `ledger_transaction`
 - `ledger_balance_snapshot`
+- `ledger_command_reservation`
+
+`ledger_command_reservation` is the physical representation currently in use for the Ledger command reservation defined in `DOM-LED-001` §VII.1: identity `(class_id, feat_code, idempotency_key)`, the replay fingerprint, and the effects it produced (`ledger_transaction.command_reservation_id`). `DOM-LED-001` §VII.1 defers the choice of representation; this entry registers the one that exists and does not settle that choice (registered in 1.10).
 
 **Constraints:**
 

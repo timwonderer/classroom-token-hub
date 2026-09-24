@@ -61,6 +61,7 @@ TABLE_DOMAIN = {
     # DOM-LED-001 — monetary truth
     "ledger_transaction": "DOM-LED",
     "ledger_balance_snapshot": "DOM-LED",
+    "ledger_command_reservation": "DOM-LED",
     # DOM-STORE-001 — entitlement grant and exercise lineage
     "entitlement_events": "DOM-STORE",
     "pending_actions": "DOM-STORE",
@@ -125,8 +126,6 @@ BASELINE_FOREIGN_KEYS = {
     "insurance_claim_productivity_dates has no domain attribution in DOM-CORE-002 §V",
     "insurance_claim_productivity_dates.claim_id -> insurance_claims.claim_id: "
     "insurance_claims has no domain attribution in DOM-CORE-002 §V",
-    "ledger_transaction.command_reservation_id -> ledger_command_reservation.id: "
-    "ledger_command_reservation has no domain attribution in DOM-CORE-002 §V",
 }
 
 
