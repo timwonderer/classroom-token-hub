@@ -21,7 +21,7 @@ def test_admin_creates_insurance_policy_via_route(app, client):
         login_teacher(client, classroom)
 
     resp = client.post("/admin/insurance/new", data={
-        "insurance_type": "TRANSACTION", "premium": "5.00", "charge_frequency": "WEEKLY",
+        "insurance_type": "TRANSACTION", "premium": "5.00", "charge_frequency": "WEEKLY", "bill_preview_days": "3", "nonpayment_mode": "ACCUMULATE",
         "reimbursement_percentage": "80", "payout_multiple": "3",
         "claims_per_week_equivalent": "1", "claim_window_days": "7",
         "title": "Attendance Insurance", "description": "Covers lost tokens",
@@ -38,7 +38,7 @@ def test_admin_creates_insurance_policy_via_route(app, client):
 
 def _tier_post(client, group, level, *, group_new=None, title="Tier"):
     data = {
-        "insurance_type": "TRANSACTION", "premium": "5.00", "charge_frequency": "WEEKLY",
+        "insurance_type": "TRANSACTION", "premium": "5.00", "charge_frequency": "WEEKLY", "bill_preview_days": "3", "nonpayment_mode": "ACCUMULATE",
         "reimbursement_percentage": "80", "payout_multiple": "3",
         "claims_per_week_equivalent": "1", "claim_window_days": "7",
         "title": title, "tier_group": group, "tier_level": str(level),
@@ -85,7 +85,7 @@ def test_admin_duplicate_rank_in_group_rejected_via_route(app, client):
 
 def _create_policy(client, title="Attendance Insurance"):
     return client.post("/admin/insurance/new", data={
-        "insurance_type": "TRANSACTION", "premium": "5.00", "charge_frequency": "WEEKLY",
+        "insurance_type": "TRANSACTION", "premium": "5.00", "charge_frequency": "WEEKLY", "bill_preview_days": "3", "nonpayment_mode": "ACCUMULATE",
         "reimbursement_percentage": "80", "payout_multiple": "3",
         "claims_per_week_equivalent": "1", "claim_window_days": "7",
         "title": title,

@@ -145,6 +145,37 @@
                    id="waiting_period_days" name="waiting_period_days" type="number" min="0" value="{{ cur('waiting_period_days') }}">
           </div>
 
+          <!-- Recurring billing (DOM-POL-001A §V.E) — every insurance type. -->
+          <div class="col-12">
+            <hr class="my-2">
+            <h3 class="h6 fw-bold mb-1">Recurring billing</h3>
+            <div class="form-text mb-2">
+              Each period's premium is billed a few days before the period starts and paid
+              automatically when the student has the funds. Coverage for a period is usable only
+              once every premium due so far is paid.
+            </div>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label fw-bold" for="bill_preview_days">Bill ahead (days)</label>
+            <input class="form-control" id="bill_preview_days" name="bill_preview_days" type="number"
+                   min="1" max="27" required value="{{ cur('bill_preview_days', '3') }}">
+            <div class="form-text">At least 1; under 7 for weekly, under 28 for monthly.</div>
+          </div>
+          {% set current_nonpay = cur('nonpayment_mode', 'ACCUMULATE')|trim %}
+          <div class="col-md-6">
+            <label class="form-label fw-bold" for="nonpayment_mode">If a premium goes unpaid</label>
+            <select class="form-select" id="nonpayment_mode" name="nonpayment_mode">
+              {% for value, label in nonpayment_mode_choices %}
+              <option value="{{ value }}" {% if current_nonpay == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-3" id="cancel_after_days_wrap">
+            <label class="form-label fw-bold" for="cancel_after_days">Cancel after (days unpaid)</label>
+            <input class="form-control" id="cancel_after_days" name="cancel_after_days" type="number"
+                   min="1" value="{{ cur('cancel_after_days') }}">
+          </div>
+
           <!-- Tier grouping ------------------------------------------------- -->
           <div class="col-12">
             <hr class="my-2">
@@ -223,6 +254,22 @@
 
     typeSelect.addEventListener('change', applyTypeVisibility);
     applyTypeVisibility();
+  })();
+
+  // --- Nonpayment mode: cancel_after_days applies only to CANCEL_AFTER_X_DAYS -- //
+  (function () {
+    var modeSel = document.getElementById('nonpayment_mode');
+    var wrap = document.getElementById('cancel_after_days_wrap');
+    var input = document.getElementById('cancel_after_days');
+    if (!modeSel || !wrap || !input) return;
+    function applyMode() {
+      var cancels = modeSel.value === 'CANCEL_AFTER_X_DAYS';
+      wrap.hidden = !cancels;
+      input.disabled = !cancels;
+      input.required = cancels;
+    }
+    modeSel.addEventListener('change', applyMode);
+    applyMode();
   })();
 
   // --- Tier grouping ------------------------------------------------------- //
