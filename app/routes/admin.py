@@ -4318,6 +4318,37 @@ def _class_local_date_of(instant):
     ).result["evaluation_date"]
 
 
+def _rent_cycles(class_id):
+    """(current, upcoming) rent bill cycles, as Obligations resolves them.
+
+    ``current`` is the period in effect now (DOM-OBL-001 §V.7: temporal, not
+    merely the latest row). ``upcoming`` is an already-issued period that has
+    not begun (advance assessment), else ``None``.
+    """
+    ref = f"rent:{class_id}"
+    current = obligations_service.get_current_bill_cycle(class_id, ref)
+    latest = obligations_service.get_latest_bill_cycle(ref)
+    upcoming = None
+    if (
+        latest is not None
+        and latest.next_assessment_at is not None
+        and (current is None or latest.id != current.id)
+        and latest.class_id == class_id
+    ):
+        upcoming = latest
+    return current, upcoming
+
+
+def _next_rent_boundary_date(class_id):
+    """Class-local date of the next rent coverage boundary, or ``None``."""
+    current, upcoming = _rent_cycles(class_id)
+    if upcoming is not None:
+        return _class_local_date_of(upcoming.cycle_boundary_at)
+    if current is not None and current.next_assessment_at is not None:
+        return _class_local_date_of(current.next_assessment_at)
+    return None
+
+
 def _class_local_today():
     """The class's current local date, for form validation of teacher-entered dates."""
     return canonical_temporal_resolver(
@@ -4521,21 +4552,10 @@ def _validate_rent_link_effective_date(form, class_id: str) -> None:
     settings = get_rent_settings(class_id)
     if settings is None:
         raise ValueError('Rent settings are required for a rent-linked item.')
-    from app.routes.student import _calculate_rent_timeline
-    timeline = _calculate_rent_timeline(settings, utc_now())
-    next_cycle = timeline.get('upcoming_due_date')
-    # Both sides of this comparison are calendar dates the teacher reasons about
-    # locally, so both are resolved in the class timezone. `utc_now().date()`
-    # rolls over hours before the teacher's own midnight, which rejected a start
-    # date of their current day; taking `.date()` off the cycle boundary reads it
-    # in UTC for the same reason. The form's own validator was already corrected
-    # to `local_today`, and this second check would otherwise have refused what
-    # the first one allowed.
-    next_cycle_date = (
-        _class_local_date_of(next_cycle)
-        if hasattr(next_cycle, 'tzinfo') and next_cycle is not None
-        else next_cycle
-    )
+    # Both sides are class-local calendar dates; the boundary is read from the
+    # rent bill cycles Obligations has scheduled, never re-derived from policy
+    # settings (DOM-OBL-001 §V.7).
+    next_cycle_date = _next_rent_boundary_date(class_id)
     effective_date = form.activation_date.data
     if effective_date < _class_local_today() or (next_cycle_date and effective_date > next_cycle_date):
         raise ValueError('Rent-link effective date must be between today and the next rent-cycle start date.')
@@ -5313,24 +5333,29 @@ def _resolve_rent_policy_deferral(class_id, pending_settings):
     new figure echoed back with no indication that no student would be charged
     it this cycle.
 
+    A period is bound to its policy when it is assessed, not when it begins
+    (DOM-OBL-001 §V.7 advance assessment), so a billed period that has not begun
+    is deferred past too; ``billed_period_started`` tells the page which wording
+    applies.
+
     Returns ``None`` when nothing is deferred: no cycle has been established yet
-    (the first save is in force immediately), the open cycle already carries the
-    newest policy, or the latest cycle exists but has not actually started yet
-    (``cycle_boundary_at`` still in the future) -- nobody is "already living
-    through" a period that has not begun, so there is nothing to protect and a
-    save applies to that not-yet-started cycle rather than waiting for the one
-    after it.
+    (the first save is in force immediately) or the latest billed cycle already
+    carries the newest policy.
     """
     if not class_id or pending_settings is None:
         return None
 
+    # The latest cycle is the latest period whose bills are ISSUED: a policy
+    # binds when a period is assessed (DOM-OBL-001 §V.7 advance assessment), so
+    # a save cannot reach a period that is already billed, even one that has not
+    # begun. The pending policy first binds to the period after it.
     cycle = obligations_service.get_latest_bill_cycle(f"rent:{class_id}")
     if cycle is None or not cycle.policy_uuid:
         return None
     if cycle.policy_uuid == pending_settings.policy_uuid:
         return None
-    if cycle.cycle_boundary_at is not None and ensure_utc(cycle.cycle_boundary_at) > utc_now():
-        return None
+    current = obligations_service.get_current_bill_cycle(class_id, f"rent:{class_id}")
+    period_started = current is not None and current.id == cycle.id
     enforced = RentSettings.query.filter_by(policy_uuid=cycle.policy_uuid).first()
     if enforced is None:
         return None
@@ -5366,6 +5391,7 @@ def _resolve_rent_policy_deferral(class_id, pending_settings):
     return {
         'cycle_number': cycle.cycle_number,
         'is_terminal': cycle.next_assessment_at is None,
+        'billed_period_started': period_started,
         'takes_effect_on': takes_effect_on,
         'display_takes_effect_on': (
             takes_effect_on.strftime("%B %d, %Y") if takes_effect_on else ""
@@ -5615,34 +5641,28 @@ def rent_settings():
                 quantity=benefit['quantity'],
             ))
 
-    # Calculate current rent period dates for settings summary
-    rent_active_for_period = False
+    # Current rent period for the settings summary, read from the bill cycles
+    # Obligations has scheduled. The period is half-open [boundary, next
+    # boundary): its final covered day, which is also the payment deadline to
+    # avoid a lapse, is the day before the next boundary.
     current_period_start = None
     current_period_end = None
     next_due_date = None
-    current_coverage_due_date = None
-    upcoming_coverage_due_date = None
-
     if settings:
-        now_utc = utc_now()
-        from app.routes.student import (
-            _calculate_rent_coverage_due_date,
-            _calculate_rent_deadlines,
-            _calculate_upcoming_rent_due_date,
+        current_cycle, upcoming_cycle = _rent_cycles(class_id)
+        if current_cycle is not None:
+            current_period_start = _class_local_date_of(current_cycle.cycle_boundary_at)
+            if current_cycle.next_assessment_at is not None:
+                current_period_end = (
+                    _class_local_date_of(current_cycle.next_assessment_at) - timedelta(days=1)
+                )
+        next_boundary = (
+            upcoming_cycle.cycle_boundary_at
+            if upcoming_cycle is not None
+            else (current_cycle.next_assessment_at if current_cycle is not None else None)
         )
-
-        # Current selected-class period card data (for settings summary display)
-        selected_coverage_due = _calculate_rent_coverage_due_date(settings, now_utc)
-        selected_due_date, _ = _calculate_rent_deadlines(settings, now_utc)
-        selected_next_due = _calculate_upcoming_rent_due_date(settings, selected_due_date, selected_coverage_due)
-        if selected_coverage_due and selected_next_due:
-            current_period_start = selected_coverage_due + timedelta(days=1)
-            current_period_end = selected_next_due
-            next_due_date = selected_next_due
-
-        # Coverage dates for waiver form state
-        current_coverage_due_date = selected_coverage_due
-        upcoming_coverage_due_date = selected_next_due
+        if next_boundary is not None:
+            next_due_date = _class_local_date_of(next_boundary) - timedelta(days=1)
 
     # Determine period label based on frequency type
     period_label = "Month"  # Default
@@ -5763,7 +5783,6 @@ def rent_settings():
                           payroll_settings=payroll_settings,
                           expected_weekly_hours=_resolve_expected_weekly_hours(payroll_settings) if payroll_settings else None,
                           rent_items=rent_items,
-                          rent_active_for_period=rent_active_for_period,
                           period_label=period_label,
                           display_rent_amount=display_rent_amount,
                           display_late_penalty_amount=display_late_penalty_amount,

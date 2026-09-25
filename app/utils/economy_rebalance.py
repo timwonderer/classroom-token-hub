@@ -70,13 +70,18 @@ def _parse_dt(value: str | None) -> datetime | None:
 
 
 def _get_rent_effective_at(settings, reference_time: datetime) -> datetime:
-    from app.routes.student import _add_rent_period, _calculate_rent_timeline, _get_rent_period_delta
+    """Start of the first rent period a policy saved now would bind to.
 
-    timeline = _calculate_rent_timeline(settings, reference_time)
-    upcoming_due_date = timeline.get("upcoming_due_date")
-    if upcoming_due_date is None:
+    A policy binds when a period is assessed (DOM-OBL-001 §V.7), so every
+    period already issued keeps its terms; the first unissued period begins at
+    the latest issued cycle's end. With no cycle yet, the save is in force now.
+    """
+    from app.services.obligations_service import get_latest_bill_cycle
+
+    latest = get_latest_bill_cycle(f"rent:{settings.class_id}")
+    if latest is None or latest.next_assessment_at is None:
         return reference_time
-    return _add_rent_period(upcoming_due_date, _get_rent_period_delta(settings))
+    return ensure_utc(latest.next_assessment_at)
 
 
 def prepare_scheduled_rebalance_changes(change_plan, *, rent_settings=None, insurance_policies=None, reference_time=None):

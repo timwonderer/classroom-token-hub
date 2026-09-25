@@ -2107,6 +2107,16 @@ FEAT-CLASS-004 1.1, and the new FEAT-STOR-007 (Insurance Coverage Renewal). Comm
    at the termination instant; claim filing gated on the Obligations read; claim allowance/payout per period;
    remove `payment_current` view shims (`student.py:1984`, `admin.py:3573`).
 
+**Status:** slice 1 `3791c49d0`; slice 2 `f4c2c1372` (one canonical obligation-state derivation) and `c2e198442`
+(WITHDRAWN, assessment point, current cycle, termination instant); slice 3 landed with
+`tests/dom/obligations/test_rent_disablement_surviving_state.py` — its tests found that the student blueprint's
+feature gate 404'd `/rent` before the route's surviving-state check ran, and that succession requiring rent "enabled
+at the successor boundary" would never resume a lineage after re-enablement; both fixed (a successor is refused only
+for a recorded disablement in force at a boundary not yet reached). Slice 3 also deleted the route-local rent
+schedule (`_calculate_rent_timeline` and ~14 helpers, most already dead); the student dashboard's `rent_status` was
+computed and never rendered. Waiver-history expansion still steps periods from policy settings (display only,
+follow-up). Slice 4 in progress.
+
 **Required tests beyond the ratification's list:** disable rent with no surviving state (no assessments); with old
 unpaid rent (still viewable and payable); with delinquent rent (late fees continue under the frozen contract);
 during preview untouched (`WITHDRAWN`), partly paid (committed, remainder payable, late fees continue), fully paid

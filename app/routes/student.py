@@ -311,6 +311,10 @@ def enforce_student_feature_gates():
         return None
 
     if not is_feature_enabled(feature_name):
+        # Disabling rent stops new rent; it never makes existing rent unreachable
+        # (DOM-OBL-001 §IX.16), so its pages stay open while any survives.
+        if feature_name == 'rent' and _has_surviving_rent_state(context):
+            return None
         abort(404)
     return None
 
@@ -429,8 +433,17 @@ def get_rent_settings_for_context(context):
     # bill_cycles carries every obligation family, discriminated by internal_ref.
     # Selecting the class's newest cycle row picks up insurance cycles too, and
     # their policy_uuid names an InsurancePolicy that no rent lookup can resolve.
-    from app.services.obligations_service import get_latest_bill_cycle
-    current_cycle = get_latest_bill_cycle(f"rent:{class_id}")
+    # The governing policy is the one frozen on the period in effect now; the
+    # latest cycle may be an already-billed future period (DOM-OBL-001 §V.7:
+    # the latest cycle is not necessarily current). Before the first period
+    # begins, the latest billed cycle is the one whose terms students face.
+    from app.services.obligations_service import (
+        get_current_bill_cycle,
+        get_latest_bill_cycle,
+    )
+    current_cycle = get_current_bill_cycle(class_id, f"rent:{class_id}") or get_latest_bill_cycle(
+        f"rent:{class_id}"
+    )
     if not current_cycle or not current_cycle.policy_uuid:
         # Fallback: no BillCycle yet. `rent_settings` is append-only, so this
         # resolves the class's newest IN_USE policy, not an arbitrary row.
@@ -448,16 +461,6 @@ def _support_actor_public_id(class_context):
         seat_id = getattr(class_context, 'seat_id', None)
     seat = db.session.get(Seat, seat_id) if seat_id else None
     return seat.public_id if seat else None
-
-
-def _get_rent_coverage_window(settings, coverage_due_date):
-    """Return canonical [start, end) coverage window for a rent cycle."""
-    if not settings or not coverage_due_date:
-        return (None, None)
-    start = ensure_utc(coverage_due_date)
-    period_delta = _get_rent_period_delta(settings)
-    end = _add_rent_period(start, period_delta)
-    return (start, end)
 
 
 def get_feature_settings_for_student():
@@ -483,13 +486,30 @@ def get_feature_settings_for_student():
         # A Rent link is reachable only when the class has both the feature flag
         # and the required rent configuration. Keep navigation truthful when a
         # teacher has enabled the flag but has not configured rent yet.
-        features["rent_enabled"] = bool(features.get("rent_enabled") and get_rent_settings_for_context(context))
+        features["rent_enabled"] = bool(
+            (features.get("rent_enabled") and get_rent_settings_for_context(context))
+            or _has_surviving_rent_state(context)
+        )
         return features
 
     # Return system defaults
     features = ClassFeature.defaults_dict()
     features["rent_enabled"] = bool(features.get("rent_enabled") and get_rent_settings_for_context(context))
     return features
+
+
+def _has_surviving_rent_state(context) -> bool:
+    """Whether the seat still has rent to view or pay (DOM-OBL-001 §IX.16).
+
+    Disabling rent stops new rent; it never makes existing rent unreachable.
+    """
+    class_id = getattr(context, "class_id", None) if context else None
+    seat_id = getattr(context, "seat_id", None) if context else None
+    if not class_id or not seat_id:
+        return False
+    from app.services.obligations_service import seat_has_surviving_obligations
+
+    return seat_has_surviving_obligations(class_id, seat_id, ("RENT", "LATE_FEE"))
 
 
 def is_feature_enabled(feature_name):
@@ -956,73 +976,6 @@ def dashboard():
     class_id = scope.class_id
     active_insurance = None
 
-    rent_status = None
-    rent_settings = get_rent_settings_for_context(context)
-    if rent_settings:
-        now = utc_now()
-        timeline = _calculate_rent_timeline(rent_settings, now)
-        due_date = timeline['due_date']
-        grace_end_date = timeline['grace_end_date']
-        coverage_due_date = timeline['coverage_due_date']
-        upcoming_due_date = timeline['upcoming_due_date']
-        preview_start_date = timeline['preview_start_date']
-        rent_is_active = timeline['rent_is_active']
-        is_preview_period = timeline['is_preview_period_candidate']
-
-        # Calculate coverage period for pre-paid system
-        if is_preview_period:
-            coverage_month = upcoming_due_date.month
-            coverage_year = upcoming_due_date.year
-            grace_end_date_for_status = upcoming_due_date + timedelta(days=rent_settings.grace_period_days)
-        else:
-            coverage_month = coverage_due_date.month if coverage_due_date else upcoming_due_date.month
-            coverage_year = coverage_due_date.year if coverage_due_date else upcoming_due_date.year
-            grace_end_date_for_status = (coverage_due_date + timedelta(days=rent_settings.grace_period_days)) if coverage_due_date else grace_end_date
-
-        from app.services.obligations_service import (
-            get_assessment_events_for_seat_class,
-            get_satisfaction_events,
-        )
-        from app.services.obligation_view_model import get_total_paid_for_obligation
-
-        seat_ids = [scope.seat_id]
-
-        # Check rent for current class only (v2 canonical scoping via class_id)
-        # Per DOM-OBL-001, get all RENT ASSESSMENT events for this seat
-        all_assessments = get_assessment_events_for_seat_class(
-            scope.seat_id,
-            class_id,
-            obligation_type='RENT',
-        )
-
-        # Filter to only unsatisfied assessments (no PAYMENT or WAIVED)
-        assessments = []
-        for assessment in all_assessments:
-            satisfaction = get_satisfaction_events(assessment.correlation_id)
-            if not satisfaction:  # No PAYMENT or WAIVED = unsatisfied
-                assessments.append(assessment)
-
-        # Calculate total paid from PAYMENT events via Ledger (canonical amounts source)
-        total_paid = Decimal('0.00')
-        for assessment in assessments:
-            status = get_total_paid_for_obligation(assessment.correlation_id, class_id)
-            if status:
-                total_paid += status.total_paid
-
-        # Use v2 version which correctly computes grace period payments from canonical PAYMENT events
-        paid_by_grace = _total_paid_by_grace(assessments, grace_end_date_for_status)
-        late_fee = Decimal('0.00')
-        if rent_is_active and now > grace_end_date_for_status and paid_by_grace < rent_settings.rent_amount:
-            late_fee = rent_settings.late_fee
-        total_due = rent_settings.rent_amount + late_fee if rent_is_active else Decimal('0.00')
-        all_paid = total_paid >= total_due if rent_is_active else False
-
-        rent_status = {
-            'is_active': rent_is_active,
-            'is_paid': all_paid if rent_is_active else False,
-            'is_preview': is_preview_period
-        }
-
     dashboard_time = canonical_temporal_resolver(
         CLASS_LEVEL_EVALUATION,
         canonical_execution_context=scope,
@@ -1183,7 +1136,6 @@ def dashboard():
         savings_payout_frequency=savings_policy.payout_frequency,
         recent_deposit=recent_deposit,
         active_insurance=active_insurance,
-        rent_status=rent_status,
         unpaid_seconds=total_unpaid_seconds,
         projected_pay=float(attendance_state.get("projected_pay") or 0),
         total_unpaid_elapsed=total_unpaid_elapsed,
@@ -2087,19 +2039,13 @@ def shop():
         seat_id = context.seat_id
         rent_settings = get_rent_settings_for_context(context)
         if rent_settings:
-            now = utc_now()
-
-            # Calculate current coverage period (pre-paid system)
-            coverage_due_date = _calculate_rent_coverage_due_date(rent_settings, now)
-
-
-            if coverage_due_date and seat_id:
-                has_paid_rent = _is_student_coverage_period_paid(
-                    rent_settings,
-                    seat_id,
-                    class_id,
-                    coverage_due_date,
-                    include_waivers=False,
+            # Paid (not waived) for the rent period in effect now, as Obligations
+            # derives it (DOM-OBL-001 §VIII); a billed future period does not count.
+            if seat_id:
+                from app.services.obligations_service import get_seat_current_period_state
+                period_state = get_seat_current_period_state(class_id, f"rent:{class_id}", seat_id)
+                has_paid_rent = bool(
+                    period_state and period_state.is_satisfied and not period_state.is_waived
                 )
 
             # Which products this class's rent currently grants on payment.
@@ -2204,155 +2150,6 @@ def shop():
 # -------------------- RENT --------------------
 
 
-def _get_rent_timezone(class_id: str):
-    """
-    Return the class-authoritative timezone used for rent schedule semantics.
-
-    Rent is a class-level evaluation and must use the class timezone
-    established on ClassEconomy. If the class cannot be resolved, fail closed.
-    """
-    if not class_id:
-        raise ValueError("Rent timezone resolution requires class_id")
-    from app.utils.canonical_temporal_resolver import (
-        CLASS_LEVEL_EVALUATION,
-        canonical_temporal_resolver,
-    )
-
-    class _TemporalContext:
-        def __init__(self, class_id: str):
-            self.class_id = class_id
-
-    evaluation = canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=_TemporalContext(class_id=class_id),
-        primitive="current_time",
-    )
-    return evaluation.canonical_now.tzinfo
-
-
-def _calculate_rent_deadlines(settings, reference_date=None):
-    """Return the due date and grace end date for the active month."""
-    class_id = getattr(settings, "class_id", None)
-    teacher_tz = _get_rent_timezone(class_id)
-    reference_utc = ensure_utc(reference_date) if reference_date else utc_now()
-    reference_local = reference_utc.astimezone(teacher_tz)
-
-    def _local_due_to_utc(
-        year: int,
-        month: int,
-        day: int,
-        hour: int = 0,
-        minute: int = 0,
-        second: int = 0,
-    ) -> datetime:
-        local_due = teacher_tz.localize(datetime(year, month, day, hour, minute, second))
-        return local_due.astimezone(timezone.utc)
-
-    # If first_rent_due_date is set and we haven't reached it yet, return it
-    if settings.first_rent_due_date:
-        first_due = ensure_utc(settings.first_rent_due_date)
-        first_due_local = first_due.astimezone(teacher_tz) if first_due else None
-        if (
-            first_due
-            and first_due.hour == 0
-            and first_due.minute == 0
-            and first_due.second == 0
-            and first_due.microsecond == 0
-        ):
-            # Preserve day-only anchors that were stored as UTC midnight.
-            first_due_local = teacher_tz.localize(datetime(first_due.year, first_due.month, first_due.day, 0, 0, 0))
-            first_due = first_due_local.astimezone(timezone.utc)
-        # If we're before the first due date, return the first due date
-        if first_due_local and reference_local < first_due_local:
-            grace_end_date = first_due + timedelta(days=settings.grace_period_days)
-            return first_due, grace_end_date
-
-        # Calculate due date based on frequency from first_rent_due_date
-        if settings.frequency_type == 'monthly':
-            # Calculate how many months have passed since first due date
-            months_diff = (reference_local.year - first_due_local.year) * 12 + (reference_local.month - first_due_local.month)
-            # Calculate the due date for the current period
-            target_year = first_due_local.year + (first_due_local.month + months_diff - 1) // 12
-            target_month = (first_due_local.month + months_diff - 1) % 12 + 1
-            last_day_of_month = monthrange(target_year, target_month)[1]
-            due_day = min(first_due_local.day, last_day_of_month)
-            due_date = _local_due_to_utc(
-                target_year,
-                target_month,
-                due_day,
-                first_due_local.hour,
-                first_due_local.minute,
-                first_due_local.second,
-            )
-        else:
-            # Calculate due date based on frequency
-            freq_delta = None
-            if settings.frequency_type == 'daily':
-                freq_delta = timedelta(days=1)
-            elif settings.frequency_type == 'weekly':
-                freq_delta = timedelta(weeks=1)
-            elif settings.frequency_type == 'custom':
-                if settings.custom_frequency_unit == 'days':
-                    freq_delta = timedelta(days=settings.custom_frequency_value)
-                elif settings.custom_frequency_unit == 'weeks':
-                    freq_delta = timedelta(weeks=settings.custom_frequency_value)
-                elif settings.custom_frequency_unit == 'months':
-                    # Custom monthly logic (Every X months)
-                    # Calculate how many months have passed since first due date
-                    months_diff = (reference_local.year - first_due_local.year) * 12 + (reference_local.month - first_due_local.month)
-
-                    # Calculate the number of full periods passed
-                    # We use integer division to find the start of the current cycle
-                    periods = months_diff // settings.custom_frequency_value
-                    total_months_add = periods * settings.custom_frequency_value
-
-                    target_year = first_due_local.year + (first_due_local.month + total_months_add - 1) // 12
-                    target_month = (first_due_local.month + total_months_add - 1) % 12 + 1
-
-                    last_day_of_month = monthrange(target_year, target_month)[1]
-                    due_day = min(first_due_local.day, last_day_of_month)
-                    due_date = _local_due_to_utc(
-                        target_year,
-                        target_month,
-                        due_day,
-                        first_due_local.hour,
-                        first_due_local.minute,
-                        first_due_local.second,
-                    )
-
-            if freq_delta:
-                # Calculate periods passed for fixed time deltas
-                time_diff = reference_date - first_due
-                periods = time_diff // freq_delta
-                due_date = first_due + (periods * freq_delta)
-
-            use_fallback = False
-            if not freq_delta and settings.frequency_type != 'custom':
-                # Fallback for unknown frequency types
-                use_fallback = True
-            elif settings.frequency_type == 'custom' and settings.custom_frequency_unit not in ['days', 'weeks', 'months']:
-                 # Fallback for unknown custom units
-                use_fallback = True
-
-            if use_fallback:
-                current_year = reference_local.year
-                current_month = reference_local.month
-                last_day_of_month = monthrange(current_year, current_month)[1]
-                due_day = min(settings.due_day_of_month, last_day_of_month)
-                due_date = _local_due_to_utc(current_year, current_month, due_day)
-
-    else:
-        # No first_rent_due_date set, use traditional monthly logic
-        current_year = reference_local.year
-        current_month = reference_local.month
-        last_day_of_month = monthrange(current_year, current_month)[1]
-        due_day = min(settings.due_day_of_month, last_day_of_month)
-        due_date = _local_due_to_utc(current_year, current_month, due_day)
-
-    grace_end_date = due_date + timedelta(days=settings.grace_period_days)
-    return due_date, grace_end_date
-
-
 def _get_rent_period_delta(settings):
     """Return a timedelta/relativedelta representing one rent period."""
     if settings.frequency_type == 'daily':
@@ -2379,518 +2176,6 @@ def _add_rent_period(dt, delta):
     return dt + delta
 
 
-def _calculate_due_dates(settings, now):
-    """Return the current and next due dates for rent-linked expiry calculations."""
-    first_due = ensure_utc(settings.first_rent_due_date)
-    if not first_due:
-        return (None, None)
-
-    delta = _get_rent_period_delta(settings)
-    if now < first_due:
-        return (first_due, _add_rent_period(first_due, delta))
-
-    current_due = first_due
-    next_due = _add_rent_period(first_due, delta)
-    while next_due and next_due <= now:
-        current_due = next_due
-        next_due = _add_rent_period(next_due, delta)
-
-    return (current_due, next_due)
-
-
-def _calculate_upcoming_rent_due_date(settings, due_date, coverage_due_date):
-    """
-    Return the next due date students can preview/pay toward.
-
-    For monthly schedules without first_rent_due_date, derive next due date using
-    _calculate_rent_deadlines to preserve due_day_of_month clamping (e.g., 31st).
-    """
-    if not coverage_due_date:
-        return due_date
-
-    if settings.frequency_type == 'monthly' and not settings.first_rent_due_date:
-        reference_date = coverage_due_date + relativedelta(months=1)
-        next_due, _ = _calculate_rent_deadlines(settings, reference_date)
-        return next_due
-
-    period_delta = _get_rent_period_delta(settings)
-    return _add_rent_period(coverage_due_date, period_delta)
-
-
-def _calculate_rent_timeline(settings, now):
-    """Compute due-date timeline and activation flags used by rent views/payments."""
-    due_date, grace_end_date = _calculate_rent_deadlines(settings, now)
-    coverage_due_date = _calculate_rent_coverage_due_date(settings, now)
-    upcoming_due_date = _calculate_upcoming_rent_due_date(settings, due_date, coverage_due_date)
-
-    preview_start_date = None
-    if settings.bill_preview_enabled and settings.bill_preview_days:
-        preview_start_date = upcoming_due_date - timedelta(days=settings.bill_preview_days)
-
-    rent_is_active = False
-    is_preview_period_candidate = False
-    if coverage_due_date and now >= coverage_due_date:
-        rent_is_active = True
-    if preview_start_date and now >= preview_start_date and now < upcoming_due_date:
-        rent_is_active = True
-        is_preview_period_candidate = True
-
-    return {
-        'due_date': due_date,
-        'grace_end_date': grace_end_date,
-        'coverage_due_date': coverage_due_date,
-        'upcoming_due_date': upcoming_due_date,
-        'preview_start_date': preview_start_date,
-        'rent_is_active': rent_is_active,
-        'is_preview_period_candidate': is_preview_period_candidate,
-    }
-
-
-def _total_paid_by_grace(assessments, grace_end_date):
-    """Sum Ledger amounts for PAYMENT events on or before grace end date — DOM-OBL-001.
-
-    Args:
-        assessments: List of ASSESSMENT events (from get_assessment_events_for_seat_class)
-        grace_end_date: Datetime boundary for on-time payments
-
-    Returns:
-        Total amount paid on time (sum of PAYMENT event ledger amounts)
-    """
-    from app.models import Transaction
-
-    if not assessments or not grace_end_date:
-        return Decimal('0.00')
-    grace_end_date = ensure_utc(grace_end_date)
-
-    total = Decimal('0.00')
-
-    for assessment in assessments:
-        if not assessment.internal_ref:
-            continue
-
-        # Get all PAYMENT events for this assessment
-        from app.services.obligations_service import get_payment_events_for_assessment
-
-        payment_events = get_payment_events_for_assessment(assessment.id, assessment.class_id)
-
-        for payment_event in payment_events:
-            # Only count payments made by grace end date
-            # (Per DOM-OBL-001 §VII.1, canonical event time is `timestamp`.)
-            if payment_event.timestamp and ensure_utc(payment_event.timestamp) <= grace_end_date:
-                if payment_event.ledger_transaction_id:
-                    txn = db.session.get(Transaction, payment_event.ledger_transaction_id)
-                    if txn and txn.type == 'credit':
-                        total += txn.amount
-
-    return total
-
-
-def _get_locked_rent_amount_for_class_cycle(class_id, coverage_due_date):
-    """Return the policy-defined rent amount for a class coverage cycle."""
-    from app.services.obligations_service import get_cycle_rent_amount
-
-    if not class_id or not coverage_due_date:
-        return None
-    return get_cycle_rent_amount(class_id, coverage_due_date.month, coverage_due_date.year)
-
-
-def _get_effective_rent_amount_for_coverage_period(
-    settings,
-    assessments,
-    coverage_due_date,
-    class_id=None,
-    locked_amount=None,
-):
-    """
-    Return the effective base rent for the coverage period.
-
-    If the class rate changed mid-cycle, lock to the first valid payer's base
-    amount for that class. As a fallback, keep a student's earlier paid
-    base amount when the setting update happened after their first payment.
-
-    Per DOM-OBL-001, uses PAYMENT events (canonical payment records) instead of
-    removed satisfaction relationship.
-    """
-    from app.services.obligations_service import get_payment_events_for_assessment
-
-    current_amount = settings.rent_amount or Decimal('0.00')
-
-    if locked_amount is None:
-        locked_amount = _get_locked_rent_amount_for_class_cycle(class_id, coverage_due_date)
-    if locked_amount is not None:
-        return locked_amount
-
-    if assessments:
-        updated_at = getattr(settings, 'updated_at', None)
-        if updated_at:
-            # Collect payment timestamps from PAYMENT events (canonical source)
-            payment_dates = []
-            for assessment in assessments:
-                payment_events = get_payment_events_for_assessment(assessment.id, class_id)
-                payment_dates.extend([p.timestamp for p in payment_events if p.timestamp])
-
-            if payment_dates:
-                earliest = min(payment_dates)
-                if ensure_utc(updated_at) > ensure_utc(earliest):
-                    # Settings changed after first payment; use current settings
-                    return current_amount
-
-    return current_amount
-
-
-def _match_valid_rent_payments(payments, candidate_txns):
-    """Match payments to non-void rent transactions using existing tolerance rules."""
-    if not payments:
-        return []
-    txns_by_amount = {}
-    for txn in candidate_txns:
-        txns_by_amount.setdefault(txn.amount, []).append(txn)
-
-    used_txn_ids = set()
-    valid_payments = []
-    for payment in payments:
-        candidates = txns_by_amount.get(-payment.amount_paid, [])
-        for txn in candidates:
-            if txn.id in used_txn_ids or txn.status == TransactionStatus.VOID:
-                continue
-            if not txn.timestamp or not payment.payment_date:
-                continue
-            if abs((ensure_utc(txn.timestamp) - ensure_utc(payment.payment_date)).total_seconds()) > RENT_PAYMENT_MATCH_TOLERANCE_SECONDS:
-                continue
-            used_txn_ids.add(txn.id)
-            valid_payments.append(payment)
-            break
-
-    return valid_payments
-
-
-def _build_rent_coverage_context(
-    settings,
-    *,
-    class_id,
-    seat_ids,
-    coverage_due_date,
-    include_waivers=True,
-):
-    """
-    Preload rent facts for a single class + coverage period.
-
-    Callers can pass this to _is_student_coverage_period_paid(...) to avoid
-    repeating equivalent queries for every student in the same request.
-
-    Returns canonical ``ObligationAssessment`` rows (ASSESSMENT events) grouped by seat.
-    Payment amounts are derived from PAYMENT events via the Ledger domain (per DOM-OBL-001).
-    Use get_total_paid_for_obligation() from obligation_view_model to calculate paid amounts for each assessment.
-    """
-    from app.services.obligations_service import (
-        get_assessment_events_for_seat_class,
-        get_satisfaction_events,
-    )
-
-    if not settings or not class_id or not coverage_due_date or not seat_ids:
-        return None
-
-    valid_seats = (
-        db.session.query(Seat.id)
-        .filter(Seat.class_id == class_id, Seat.id.in_(seat_ids))
-        .all()
-    )
-    valid_seat_ids = [s.id for s in valid_seats]
-    if not valid_seat_ids:
-        return None
-
-    # Get all RENT assessments for valid seats
-    waived_seat_ids = set()
-    assessments = []
-    for seat_id in valid_seat_ids:
-        seat_assessments = get_assessment_events_for_seat_class(
-            seat_id,
-            class_id,
-            obligation_type='RENT',
-        )
-        for assessment in seat_assessments:
-            satisfaction = get_satisfaction_events(assessment.correlation_id)
-            # Check if waived
-            if include_waivers:
-                for event in satisfaction:
-                    if event.event_type == 'WAIVED':
-                        waived_seat_ids.add(seat_id)
-                        break
-            # Include all assessments (satisfied or not)
-            assessments.append(assessment)
-
-    assessments_by_seat: dict[int, list] = defaultdict(list)
-    for a in assessments:
-        assessments_by_seat[a.seat_id].append(a)
-
-    return {
-        "class_id": class_id,
-        "coverage_due_date": ensure_utc(coverage_due_date),
-        "waived_seat_ids": waived_seat_ids,
-        "valid_payments_by_seat": dict(assessments_by_seat),
-        "locked_rent_amount": _get_locked_rent_amount_for_class_cycle(class_id, coverage_due_date),
-    }
-
-
-def _is_coverage_period_paid(
-    settings,
-    assessments,
-    coverage_due_date,
-    include_late_fee=True,
-    class_id=None,
-    locked_amount=None,
-):
-    """
-    Return True when a coverage period is fully paid.
-
-    Per DOM-OBL-001, ``assessments`` is a list of canonical ``ObligationAssessment``
-    rows (ASSESSMENT events). Total paid is calculated from PAYMENT events via Ledger.
-
-    When include_late_fee is True (default), late fee is required when rent
-    was not fully paid by grace. When False, this checks base-rent coverage
-    only (used by hall-pass perk restoration).
-    """
-    from app.services.obligation_view_model import get_total_paid_for_obligation
-
-    if not settings or not coverage_due_date:
-        return False
-    effective_rent_amount = _get_effective_rent_amount_for_coverage_period(
-        settings,
-        assessments,
-        coverage_due_date,
-        class_id=class_id,
-        locked_amount=locked_amount,
-    )
-    if effective_rent_amount <= Decimal('0.00'):
-        return True
-    if not assessments:
-        return False
-
-    # Calculate total paid from PAYMENT events via Ledger (canonical amounts source)
-    total_paid = Decimal('0.00')
-    for assessment in assessments:
-        status = get_total_paid_for_obligation(assessment.correlation_id, class_id)
-        if status:
-            total_paid += status.total_paid
-
-    grace_for_coverage = coverage_due_date + timedelta(days=settings.grace_period_days)
-    # Use v2 version which works with canonical PAYMENT events from Ledger
-    paid_by_grace = _total_paid_by_grace(assessments, grace_for_coverage)
-
-    required_total = effective_rent_amount
-    if include_late_fee and paid_by_grace < effective_rent_amount:
-        required_total += settings.late_fee
-
-    return total_paid >= required_total
-
-
-def _get_active_rent_waiver_v2(seat_id, class_id, coverage_due_date):
-    """Return the canonical WAIVED assessment for the given coverage period, if any."""
-    from app.services.obligations_service import (
-        get_rent_waivers_for_seat,
-        resolve_assessment_due_at,
-    )
-
-    if not seat_id or not class_id or not coverage_due_date:
-        return None
-
-    # Per DOM-OBL-001 §VII, a WAIVED event's coverage period is derived
-    # from its linked bill_cycle (not stored on the event). Match by
-    # month/year against the resolved due boundary.
-    waivers = get_rent_waivers_for_seat(seat_id, class_id)
-    for waiver in waivers:
-        waiver_due_at = resolve_assessment_due_at(waiver)
-        if waiver_due_at:
-            if (waiver_due_at.month == coverage_due_date.month and
-                waiver_due_at.year == coverage_due_date.year):
-                return waiver
-
-    return None
-
-
-def _has_active_rent_waiver_v2(seat_id, class_id, coverage_due_date):
-    """Return True when a waiver covers the given coverage period."""
-    return _get_active_rent_waiver_v2(seat_id, class_id, coverage_due_date) is not None
-
-
-def _iter_rent_waiver_coverage_dates(settings, waiver):
-    """Expand a waiver row into the individual coverage due dates it covers."""
-    if not settings or not waiver:
-        return []
-
-    delta = _get_rent_period_delta(settings)
-    dates = []
-    current = ensure_utc(getattr(waiver, "coverage_start_time", None))
-    end = ensure_utc(getattr(waiver, "coverage_end_time", None))
-
-    while current and end and current <= end:
-        dates.append(current)
-        next_date = _add_rent_period(current, delta)
-        if next_date <= current:
-            break
-        current = next_date
-
-    return dates
-
-
-def _get_rent_coverage_label(coverage_due_date):
-    if not coverage_due_date:
-        return "Unknown"
-    return (ensure_utc(coverage_due_date) + timedelta(days=1)).strftime('%b %Y')
-
-
-def _expand_rent_waiver_history(settings, waivers, *, now=None):
-    """Return one waiver-history row per covered rent period."""
-    now = ensure_utc(now or utc_now())
-    current_coverage_due_date = _calculate_rent_coverage_due_date(settings, now) if settings else None
-    entries = []
-
-    for waiver in waivers or []:
-        for coverage_due_date in _iter_rent_waiver_coverage_dates(settings, waiver):
-            coverage_day = ensure_utc(coverage_due_date).date()
-            current_day = ensure_utc(current_coverage_due_date).date() if current_coverage_due_date else None
-            seat = getattr(waiver, "seat", None)
-            student = _get_canonical_student_from_context() if seat else None
-
-            if current_day is None or coverage_day > current_day:
-                status = 'upcoming'
-                status_label = 'Upcoming'
-                cancellable = True
-            elif current_day and coverage_day == current_day:
-                status = 'current'
-                status_label = 'Current'
-                cancellable = False
-            else:
-                status = 'used'
-                status_label = 'Used'
-                cancellable = False
-
-            entries.append({
-                'waiver': waiver,
-                'student': student,
-                'coverage_due_date': coverage_due_date,
-                'coverage_label': _get_rent_coverage_label(coverage_due_date),
-                'status': status,
-                'status_label': status_label,
-                'is_cancellable': cancellable,
-                'created_at': ensure_utc(getattr(waiver, "assessed_at", None)) if getattr(waiver, "assessed_at", None) else None,
-            })
-
-    status_rank = {'current': 0, 'upcoming': 1, 'used': 2}
-    entries.sort(
-        key=lambda item: (
-            status_rank.get(item['status'], 3),
-            -(item['coverage_due_date'].timestamp() if item['coverage_due_date'] else 0),
-            -(item['created_at'].timestamp() if item['created_at'] else 0),
-        )
-    )
-    return entries
-
-
-def _is_student_coverage_period_paid(
-    settings,
-    seat_id,
-    class_id,
-    coverage_due_date,
-    include_late_fee=True,
-    include_waivers=True,
-    coverage_context=None,
-):
-    """
-    Return True when a student's specific coverage period is fully paid or waived.
-    """
-    if not settings:
-        return False
-    if not coverage_due_date or not class_id:
-        return False
-
-    context_applies = False
-    if coverage_context:
-        context_class_id = coverage_context.get("class_id")
-        context_coverage_due = ensure_utc(coverage_context.get("coverage_due_date"))
-        context_applies = (
-            context_class_id == class_id
-            and context_coverage_due == ensure_utc(coverage_due_date)
-        )
-
-    locked_amount = None
-    if context_applies:
-        locked_amount = coverage_context.get("locked_rent_amount")
-        if include_waivers and seat_id in (coverage_context.get("waived_seat_ids") or set()):
-            return True
-    else:
-        if include_waivers:
-            if _has_active_rent_waiver_v2(seat_id, class_id, coverage_due_date):
-                return True
-
-    if context_applies:
-        assessments = (coverage_context.get("valid_payments_by_seat") or {}).get(seat_id, [])
-    else:
-        from app.services.obligations_service import (
-            get_assessment_events_for_seat_class,
-            get_satisfaction_events,
-        )
-        all_assessments = get_assessment_events_for_seat_class(
-            seat_id,
-            class_id,
-            obligation_type='RENT',
-        )
-        assessments = []
-        for assessment in all_assessments:
-            satisfaction = get_satisfaction_events(assessment.correlation_id)
-            if not satisfaction:
-                assessments.append(assessment)
-    return _is_coverage_period_paid(
-        settings,
-        assessments,
-        coverage_due_date,
-        include_late_fee=include_late_fee,
-        class_id=class_id,
-        locked_amount=locked_amount,
-    )
-
-
-def _calculate_rent_coverage_due_date(settings, reference_date=None):
-    """
-    Return the most recently passed due date for coverage tracking.
-
-    If we're before the current due date, this returns the previous due date.
-    """
-    reference_date = ensure_utc(reference_date) if reference_date else utc_now()
-    if settings.first_rent_due_date:
-        first_due = ensure_utc(settings.first_rent_due_date)
-        if first_due and reference_date < first_due:
-            return None
-    current_due_date, _ = _calculate_rent_deadlines(settings, reference_date)
-    if not current_due_date:
-        return None
-
-    if reference_date >= current_due_date:
-        return current_due_date
-
-    # If we're before the current due date, compute the previous due date.
-    # For monthly settings without a first_rent_due_date, compute the prior
-    # month explicitly to preserve the configured day-of-month.
-    if settings.frequency_type == 'monthly' and not settings.first_rent_due_date:
-        teacher_tz = _get_rent_timezone(getattr(settings, "class_id", None))
-        current_due_local = ensure_utc(current_due_date).astimezone(teacher_tz)
-        prev_year = current_due_local.year
-        prev_month = current_due_local.month - 1
-        if prev_month == 0:
-            prev_month = 12
-            prev_year -= 1
-
-        _, last_day = monthrange(prev_year, prev_month)
-        due_day = settings.due_day_of_month or last_day
-        due_day = min(due_day, last_day)
-        previous_due_local = teacher_tz.localize(datetime(prev_year, prev_month, due_day, current_due_local.hour, current_due_local.minute, current_due_local.second))
-        return previous_due_local.astimezone(timezone.utc)
-
-    delta = _get_rent_period_delta(settings)
-    return current_due_date - delta
-
-
-
 @student_bp.route('/rent')
 @login_required
 def rent():
@@ -2903,8 +2188,9 @@ def rent():
     - View model contains all aggregation and derivation logic
     - Template receives only the view model, no raw queries
     """
-    # Check if rent feature is enabled
-    if not is_feature_enabled('rent'):
+    # Rent is reachable while enabled, and while the seat still has rent to
+    # view or pay after it is disabled (DOM-OBL-001 §IX.16).
+    if not is_feature_enabled('rent') and not _has_surviving_rent_state(resolve_canonical_context()):
         abort(404)
 
     # Resolve canonical context (MAP-UI-002 requirement)
@@ -3046,10 +2332,11 @@ def rent_pay(period):
         return redirect(url_for('student.rent'))
 
     # Prefer the bill (rent correlation) posted by the pay form; validate it is
-    # one of this seat's rent obligations. Fall back to the most recent bill (the
-    # "current period" surfaced by the rent view).
+    # one of this seat's rent obligations. With no selection, pay the OLDEST bill
+    # that still has a balance (DOM-OBL-001 §VIII default payment target) — never
+    # the latest, which under advance assessment may be next period's bill while
+    # an older one is still owed. A late fee points at the rent bill it arose from.
     posted_correlation = (request.form.get('correlation_id') or '').strip()
-    target = None
     if posted_correlation:
         target = next(
             (a for a in assessments if a.correlation_id == posted_correlation),
@@ -3058,10 +2345,29 @@ def rent_pay(period):
         if target is None:
             flash("That rent bill is no longer available.", "info")
             return redirect(url_for('student.rent'))
+        correlation_id = target.correlation_id
     else:
-        target = assessments[-1]
+        from app.services.obligations_service import get_default_payment_target
 
-    correlation_id = target.correlation_id
+        candidates = [
+            state
+            for state in (
+                get_default_payment_target(class_id, f"rent:{class_id}:{seat_id}"),
+                get_default_payment_target(class_id, f"rent:{class_id}:{seat_id}:late"),
+            )
+            if state is not None
+        ]
+        if not candidates:
+            flash("You have no rent to pay right now.", "info")
+            return redirect(url_for('student.rent'))
+        oldest = min(candidates, key=lambda st: st.due_at)
+        if oldest.obligation_type == 'LATE_FEE':
+            from app.services.obligations_service import get_assessment_for_correlation
+
+            fee = get_assessment_for_correlation(oldest.correlation_id)
+            correlation_id = fee.source_correlation_id or oldest.correlation_id
+        else:
+            correlation_id = oldest.correlation_id
 
     # Command-owned idempotency: the pay form carries a per-render nonce that
     # identifies THIS payment command. It is stable across a resubmit of the same

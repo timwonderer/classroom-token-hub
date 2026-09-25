@@ -51,9 +51,6 @@ from app.feats.attendance import (
 from app.feats.prod import record_attendance_session, record_hall_pass_log
 from app.routes.student import (
     get_feature_settings_for_student,
-    get_rent_settings_for_context,
-    _calculate_rent_coverage_due_date,
-    _is_student_coverage_period_paid,
 )
 from app.services.context_resolver import resolve_canonical_context, ContextResolutionError
 from app.feats.base import FEATContext, FEATContextError

@@ -21,7 +21,11 @@
     {% endcall %}
   {% else %}
     {% call cards.alert_card('info', 'These rent terms start ' ~ deferral.display_takes_effect_on, icon='schedule', body_class=body_class, role='status') %}
+      {% if deferral.billed_period_started %}
       A rent cycle is already underway, and a cycle underway is never altered.
+      {% else %}
+      The next rent period has already been billed, and a billed period is never altered.
+      {% endif %}
       Students are being billed
       <strong>{{ deferral.enforced.amount }} {{ deferral.enforced.cadence }}</strong>{% if deferral.enforced.grace_period_days != deferral.pending.grace_period_days %},
       with a {{ deferral.enforced.grace_period_days }}-day grace period{% endif %}

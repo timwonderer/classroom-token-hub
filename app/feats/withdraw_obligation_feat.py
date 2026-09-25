@@ -41,9 +41,10 @@ class WithdrawAssessmentRequest:
 def withdraw_assessment(request: WithdrawAssessmentRequest) -> ObligationAssessment:
     """Append ``WITHDRAWN`` for an untouched advance assessment. Idempotent.
 
-    Lawful only when the assessment is bound to a bill cycle whose period has
-    not begun at the reference time, and no ``PAYMENT`` or ``WAIVED`` has been
-    recorded against it. The ``ASSESSMENT`` row itself is never altered.
+    Lawful only when the assessment is bound to a bill cycle whose period
+    begins at or after the reference time (the cancelling instant: a period
+    whose boundary equals it is prevented, per DOM-OBL-001 §IX.15), and no
+    ``PAYMENT`` or ``WAIVED`` has been recorded against it. The ``ASSESSMENT`` row itself is never altered.
 
     Raises ``ObligationNotWithdrawableError`` otherwise.
     """
@@ -62,18 +63,22 @@ def withdraw_assessment(request: WithdrawAssessmentRequest) -> ObligationAssessm
         raise ObligationNotWithdrawableError(
             f"{request.correlation_id!r} is not bound to a scheduled period"
         )
-    period_not_begun = canonical_temporal_resolver(
+    # The period must begin at or after the cancelling instant (the reference
+    # time): a period whose boundary equals that instant is prevented, not begun.
+    ctx = SimpleNamespace(class_id=request.class_id)
+    cancelling_instant = canonical_temporal_resolver(
         CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=SimpleNamespace(class_id=request.class_id),
-        primitive="later_than",
+        canonical_execution_context=ctx,
+        primitive="current_time",
         reference_time_utc=request.reference_time_utc,
-        candidate=cycle.cycle_boundary_at,
-        reference=canonical_temporal_resolver(
-            CLASS_LEVEL_EVALUATION,
-            canonical_execution_context=SimpleNamespace(class_id=request.class_id),
-            primitive="current_time",
-            reference_time_utc=request.reference_time_utc,
-        ).canonical_now_utc,
+    ).canonical_now_utc
+    period_not_begun = not canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=ctx,
+        primitive="later_than",
+        reference_time_utc=cancelling_instant,
+        candidate=cancelling_instant,
+        reference=cycle.cycle_boundary_at,
     ).is_later
     if not period_not_begun:
         raise ObligationNotWithdrawableError(

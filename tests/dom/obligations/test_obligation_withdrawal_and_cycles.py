@@ -227,7 +227,15 @@ def test_withdrawal_is_refused_once_the_period_has_begun(app, advance):
     classroom, _, _, _, _, _, second = advance
     with app.app_context():
         with pytest.raises(ObligationNotWithdrawableError, match="began"):
-            _withdraw(classroom, second, FEB_1)
+            _withdraw(classroom, second, FEB_1 + timedelta(seconds=1))
+
+
+def test_withdrawal_at_exactly_the_boundary_prevents_the_period(app, advance):
+    """§IX.15: a cancellation effective AT the boundary prevents that period."""
+    classroom, _, _, _, _, _, second = advance
+    with app.app_context():
+        _withdraw(classroom, second, FEB_1)
+        assert obligations_service.get_obligation_state(second).is_withdrawn
 
 
 def test_withdrawal_is_refused_once_any_payment_is_applied(app, advance):

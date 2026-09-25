@@ -832,6 +832,78 @@ def are_required_obligations_satisfied(
     return True
 
 
+def get_seat_current_period_state(
+    class_id: str,
+    internal_ref: str,
+    seat_id: int,
+    *,
+    reference_time_utc: datetime | None = None,
+) -> ObligationState | None:
+    """One seat's obligation for the period in effect now, or ``None``.
+
+    The period is the lineage's current cycle (temporal, never merely the
+    latest). ``None`` when no period is in effect or the seat was not assessed
+    for it. Consumers ask "has this seat paid for the current period" here
+    rather than re-deriving a period from policy settings.
+    """
+    cycle = get_current_bill_cycle(class_id, internal_ref, reference_time_utc=reference_time_utc)
+    if cycle is None:
+        return None
+    assessment = (
+        db.session.query(ObligationAssessment)
+        .filter_by(
+            class_id=class_id,
+            bill_cycle_id=cycle.id,
+            seat_id=seat_id,
+            event_type="ASSESSMENT",
+        )
+        .order_by(ObligationAssessment.id.asc())
+        .first()
+    )
+    if assessment is None:
+        return None
+    return get_obligation_state(assessment.correlation_id)
+
+
+def seat_has_surviving_obligations(
+    class_id: str,
+    seat_id: int,
+    obligation_types: tuple[str, ...],
+    *,
+    reference_time_utc: datetime | None = None,
+) -> bool:
+    """Whether a seat has obligation state that still needs to be resolvable.
+
+    True when any of the seat's assessments of these types is OUTSTANDING, or is
+    bound to a period that has not yet ended (a current or committed period).
+    Disabling the creation of new obligations never makes such state
+    unreachable (DOM-OBL-001 §IX.16).
+    """
+    reference = _reference_now(class_id, reference_time_utc)
+    assessments = (
+        db.session.query(ObligationAssessment)
+        .filter(
+            ObligationAssessment.class_id == class_id,
+            ObligationAssessment.seat_id == seat_id,
+            ObligationAssessment.event_type == "ASSESSMENT",
+            ObligationAssessment.obligation_type.in_(obligation_types),
+        )
+        .all()
+    )
+    for assessment in assessments:
+        state = get_obligation_state(assessment.correlation_id)
+        if state is None or state.is_withdrawn:
+            continue
+        if state.is_outstanding:
+            return True
+        cycle = db.session.get(BillCycle, assessment.bill_cycle_id) if assessment.bill_cycle_id else None
+        if cycle is not None and cycle.next_assessment_at is not None and _is_later(
+            class_id, cycle.next_assessment_at, reference
+        ):
+            return True
+    return False
+
+
 def get_default_payment_target(class_id: str, internal_ref: str) -> ObligationState | None:
     """The obligation a payment settles when none is selected (DOM-OBL-001 §VIII).
 

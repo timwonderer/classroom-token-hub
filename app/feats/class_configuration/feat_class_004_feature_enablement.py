@@ -148,6 +148,45 @@ def execute_disable_feature(
     )
 
 
+def _withdraw_untouched_advance_rent(class_id: str, effective_at) -> None:
+    """Withdraw every untouched advance rent assessment disabling rent prevents.
+
+    DOM-OBL-001 §V.8, §IX.15: an assessment for a rent period beginning at or
+    after ``effective_at`` with no satisfaction never becomes owed. One with any
+    satisfaction is committed for its seat and is left alone. Composes the
+    Obligations withdrawal command inside this FEAT's transaction.
+    """
+    from app.feats.withdraw_obligation_feat import WithdrawAssessmentRequest, withdraw_assessment
+    from app.models import BillCycle, ObligationAssessment
+    from app.services import obligations_service
+
+    future_cycles = (
+        db.session.query(BillCycle)
+        .filter(
+            BillCycle.class_id == class_id,
+            BillCycle.internal_ref == f"rent:{class_id}",
+            BillCycle.next_assessment_at.isnot(None),
+            BillCycle.cycle_boundary_at >= effective_at,
+        )
+        .all()
+    )
+    for cycle in future_cycles:
+        assessments = (
+            db.session.query(ObligationAssessment)
+            .filter_by(bill_cycle_id=cycle.id, event_type="ASSESSMENT", obligation_type="RENT")
+            .all()
+        )
+        for assessment in assessments:
+            if obligations_service.get_satisfaction_events(assessment.correlation_id):
+                continue  # committed for this seat
+            withdraw_assessment(WithdrawAssessmentRequest(
+                class_id=class_id,
+                correlation_id=assessment.correlation_id,
+                reference_time_utc=effective_at,
+                notes="Rent disabled before this period began",
+            ))
+
+
 @requires_feat_context("FEAT-CLASS-004")
 def _execute_enable_feature_impl(
     *,
@@ -512,6 +551,9 @@ def _execute_disable_feature_impl(
     )
     db.session.add(class_feature)
     db.session.flush()
+
+    if feature == "rent":
+        _withdraw_untouched_advance_rent(class_id, effective_at_ts)
 
     return FeatureDisablementResult(
         success=True,

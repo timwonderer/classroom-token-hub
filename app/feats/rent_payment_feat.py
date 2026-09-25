@@ -36,6 +36,7 @@ import hashlib
 import logging
 from dataclasses import dataclass, field
 from decimal import Decimal
+from types import SimpleNamespace
 
 from app.models import ObligationAssessment, Seat, RentSettings
 from app.services import obligations_service
@@ -48,6 +49,7 @@ from app.services.class_configuration_query_service import get_rent_settings
 from app.feats.base import get_active_feat_name, requires_feat_context, FEATContext
 from app.feats.satisfy_obligation_feat import satisfy_obligation, SatisfyObligationRequest
 from app.utils.transaction_idempotency import get_idempotent_transaction
+from app.utils.canonical_temporal_resolver import CLASS_LEVEL_EVALUATION, canonical_temporal_resolver
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +77,38 @@ class RentPaymentRequest:
     correlation_id: str  # The specific rent obligation (seat + cycle) to satisfy
     idempotency_key: str  # Identifies THIS payment command; stable on replay
     payment_amount: Decimal | None = None  # None → pay full remaining principal
+
+
+def perks_already_granted(class_id: str, correlation_id: str) -> bool:
+    """Whether a rent obligation's satisfaction perks were already granted."""
+    from app.models import EntitlementEvent
+
+    return (
+        EntitlementEvent.query.filter_by(
+            class_id=class_id,
+            correlation_id=correlation_id,
+            acquisition_type="PERK",
+            event_type="GRANTED",
+        ).first()
+        is not None
+    )
+
+
+def _period_has_begun(class_id: str, state) -> bool:
+    """Whether the obligation's period has begun (its due boundary has arrived)."""
+    if state.due_at is None:
+        return True
+    return not canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=SimpleNamespace(class_id=class_id),
+        primitive="later_than",
+        candidate=state.due_at,
+        reference=canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=SimpleNamespace(class_id=class_id),
+            primitive="current_time",
+        ).canonical_now_utc,
+    ).is_later
 
 
 def _award_satisfaction_perks(settings: RentSettings, seat: Seat, correlation_id: str) -> int:
@@ -373,9 +407,14 @@ def pay_rent(
     fully_paid = (paid_before + this_payment) >= assessed_amount
     newly_fully_paid = fully_paid and (paid_before < assessed_amount) and _created
     # Satisfaction PERKs are a RENT benefit only; settling a LATE_FEE grants none.
+    # A period paid in advance grants nothing before it begins (DOM-OBL-001
+    # §IX.13); reconciliation grants its perks once the period is current.
     passes_awarded = (
         _award_satisfaction_perks(settings, seat, correlation_id)
-        if newly_fully_paid and assessment.obligation_type == "RENT" else 0
+        if newly_fully_paid
+        and assessment.obligation_type == "RENT"
+        and _period_has_begun(class_id, state)
+        else 0
     )
 
     remaining_after = max(Decimal("0.00"), assessed_amount - (paid_before + this_payment))

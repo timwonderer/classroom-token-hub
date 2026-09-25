@@ -8,6 +8,10 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Obligations
+
+- **Rent advance billing and disablement conformance (2026-09-24)** — Rent periods are now read from Obligations' bill cycles everywhere (settings summary, rent-link effective-date check, rebalance effective date, shop "paid rent" check, student policy lookup), replacing route-local schedule arithmetic. Disabling rent withdraws untouched advance rent, keeps partly or fully paid future periods committed, and never strands surviving rent: `/rent` stays reachable (the student feature gate previously 404'd it) and late fees keep accruing. Perks for a period paid in advance are granted when that period begins. The rent-settings deferral notice now distinguishes a billed-but-not-started period from one underway (DOM-OBL-001 §V.7–§V.8, §IX.15–16).
+
 ### Accessibility
 
 - **Full WCAG 2.1 A/AA coverage of all 88 real page templates (2026-09-23)** — Completed the axe-core/Playwright accessibility campaign started in `tests/test_axe_app_pages.py`: added `tests/simulated/`, a persistent production-sourced world database, to reach the ten remaining pages that need a real pre-existing claim, issue, insurance policy, announcement, or teacher-recovery row rather than a freshly-provisioned classroom (`admin_process_claim.html`, `admin_view_issue.html`, `sysadmin_view_issue.html`, `student_file_claim.html`, `student_view_policy.html`, `admin_announcement_form.html` edit mode, `student_detail.html`, `admin_recovery_prepare.html`, `admin_recovery_status.html`, `student_verify_recovery.html`). All ten pass with zero violations. Seven further templates were confirmed to have no live route rendering them at all (`admin_view_student_policy.html`, three dead `student/recovery/*.html` leaves, and three retired sysadmin log pages) and are excluded from accessibility scope as dead code rather than tested.

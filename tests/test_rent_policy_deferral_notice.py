@@ -66,12 +66,18 @@ def test_no_deferral_before_any_cycle_exists(app):
         assert _resolve_rent_policy_deferral(classroom.class_id, settings) is None
 
 
-def test_no_deferral_when_the_latest_cycle_has_not_started_yet(app):
+def test_a_billed_period_that_has_not_started_still_defers_a_new_policy(app):
     """A cycle can be ESTABLISHED (materialized) with its first boundary still
     in the future -- e.g. right after enabling rent with a first-due-date a
-    month out. Nobody is "already living through" a period that has not
-    begun, so a save made now must apply directly to that not-yet-started
-    cycle, not defer to the cycle after it.
+    month out. Its bills are already issued under the policy it froze, so a
+    save cannot reach them: a policy binds when a period is assessed
+    (DOM-OBL-001 v3.2 §V.7, operator-ratified 2026-09-24). The deferral is
+    reported, worded as "already billed" rather than "underway".
+
+    Originally (live-test report 2026-09-22) this returned None, because the
+    page said "a rent cycle is already underway" for a cycle that had not
+    started. That wording is what was wrong; suppressing the notice made the
+    page claim the new policy applied while students were billed the old one.
 
     Reproduces a live-test report (2026-09-22): the admin page claimed "A
     rent cycle is already underway, and a cycle underway is never altered"
@@ -111,7 +117,9 @@ def test_no_deferral_when_the_latest_cycle_has_not_started_yet(app):
         )
         assert pending.policy_uuid != cycle.policy_uuid  # a real divergence exists
 
-        assert _resolve_rent_policy_deferral(classroom.class_id, pending) is None
+        deferral = _resolve_rent_policy_deferral(classroom.class_id, pending)
+        assert deferral is not None
+        assert deferral["billed_period_started"] is False
 
 
 def test_no_deferral_when_the_open_cycle_already_carries_the_newest_policy(app):
