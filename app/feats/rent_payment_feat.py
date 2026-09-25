@@ -193,7 +193,7 @@ def pay_rent(
         )
 
     # A waiver fully closes the obligation regardless of payment.
-    if obligations_service.check_idempotency_satisfaction(correlation_id, "WAIVED"):
+    if obligations_service.get_obligation_state(correlation_id).is_waived:
         return RentPaymentResult(
             success=True, correlation_id=correlation_id, already_satisfied=True,
             fully_paid=True,
@@ -444,11 +444,7 @@ def pay_rent_bill(
     slices = []
     group_remaining = Decimal("0.00")
     for ob in obligations:
-        assessed = obligations_service.resolve_assessment_amount(ob)
-        paid = obligations_service.get_paid_magnitude(ob.correlation_id)
-        remaining = assessed - paid
-        if remaining < Decimal("0.00"):
-            remaining = Decimal("0.00")
+        remaining = obligations_service.get_obligation_state(ob.correlation_id).remaining_amount
         slices.append((ob, remaining))
         group_remaining += remaining
 

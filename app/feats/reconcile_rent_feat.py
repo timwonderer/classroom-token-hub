@@ -195,15 +195,9 @@ def _assess_late_fees(settings: RentSettings, class_id: str, cycle, now) -> int:
         if rent_assessment is None:
             continue
 
-        # No new penalties once the rent principal is satisfied (paid or waived).
-        # Satisfaction is measured against the paid MAGNITUDE (rent payments post
-        # as negative debits) plus any waiver — never the raw signed ledger sum.
-        assessed_amount = obligations_service.resolve_assessment_amount(rent_assessment)
-        paid_magnitude = obligations_service.get_paid_magnitude(rent_correlation_id)
-        waived = obligations_service.check_idempotency_satisfaction(
-            rent_correlation_id, "WAIVED"
-        )
-        if waived or paid_magnitude >= assessed_amount:
+        # No new penalties once the rent principal is no longer outstanding
+        # (paid or waived), per the canonical Obligations state.
+        if not obligations_service.get_obligation_state(rent_correlation_id).is_outstanding:
             continue
 
         late_internal_ref = f"rent:{class_id}:{seat.id}:late"

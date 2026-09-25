@@ -17,6 +17,7 @@ from typing import NamedTuple, Optional
 from app.extensions import db
 from app.models import (
     ObligationAssessment, BillCycle, LedgerMechanism, ObligationCommandReservation, Transaction,
+    TransactionStatus,
 )
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION, canonical_temporal_resolver, ensure_utc,
@@ -224,10 +225,19 @@ def resolve_assessment_amount(assessment: ObligationAssessment) -> Decimal:
         if rent and rent.late_penalty_amount is not None:
             return Decimal(str(rent.late_penalty_amount))
 
-    # INSURANCE / IMMEDIATE / other types: their upstream contract lives
-    # in domain-specific tables not yet centralized here. Callers that
-    # need a non-zero amount for those types must resolve upstream and
-    # pass explicitly. Returning 0 is safe per the note above.
+    if obligation_type == 'INSURANCE_PREMIUM' and policy_uuid:
+        # The premium is the frozen per-period contract amount of the exact
+        # policy version the assessment carries (DOM-POL-001 §VII, frozen by
+        # reference; SPEC-ECON-003 §4.4.2). It does not scale with period length.
+        from app.services.insurance_definition_service import get_insurance_definition
+        policy = get_insurance_definition(policy_uuid, class_id=assessment.class_id)
+        if policy is not None and policy.premium is not None:
+            return Decimal(str(policy.premium))
+
+    # IMMEDIATE / other types: their upstream contract lives in
+    # domain-specific tables not yet centralized here. Callers that need a
+    # non-zero amount for those types must resolve upstream and pass
+    # explicitly.
     return Decimal('0.00')
 
 
@@ -263,21 +273,44 @@ def resolve_assessment_due_at(assessment: ObligationAssessment) -> datetime | No
     return assessment.timestamp
 
 
-@dataclass(frozen=True)
-class ObligationStatus:
-    """Derived obligation status (read-only projection over immutable facts)."""
-    correlation_id: str
-    seat_id: int
-    class_id: str
-    obligation_type: str
-    event_type: str  # ASSESSMENT | PAYMENT | WAIVED
+class ObligationStatusCode(str, enum.Enum):
+    """Derived status of one assessed obligation (DOM-OBL-001 §VIII)."""
+    OUTSTANDING = "OUTSTANDING"
+    SATISFIED = "SATISFIED"
 
-    # Derived facts (never persisted per DOM-OBL-001 §VIII)
-    is_satisfied: bool
-    is_outstanding: bool
-    due_at: datetime | None  # Caller can compare against current time if needed
-    amount_paid: float  # Sum of Ledger amounts from PAYMENT events
-    amount_waived: bool  # True if any WAIVED event exists
+
+@dataclass(frozen=True)
+class ObligationState:
+    """The authoritative derived state of one assessed obligation (DOM-OBL-001 §VIII).
+
+    This is the single derivation of paid / outstanding / waived for an
+    obligation. Consumers read it (or a narrower read built on it); they do not
+    recompute it from assessment events or Ledger rows (INV-ARC-009 §V).
+    """
+    correlation_id: str
+    class_id: str
+    seat_id: int
+    obligation_type: str
+    internal_ref: str
+    bill_cycle_id: int | None
+    assessed_amount: Decimal
+    satisfied_amount: Decimal  # paid magnitude, excluding voided payments
+    remaining_amount: Decimal  # zero unless OUTSTANDING
+    is_waived: bool
+    status: ObligationStatusCode
+    due_at: datetime | None
+
+    @property
+    def is_satisfied(self) -> bool:
+        return self.status is ObligationStatusCode.SATISFIED
+
+    @property
+    def is_outstanding(self) -> bool:
+        return self.status is ObligationStatusCode.OUTSTANDING
+
+    @property
+    def is_payable(self) -> bool:
+        return self.status is ObligationStatusCode.OUTSTANDING
 
 
 def get_assessment_for_correlation(correlation_id: str) -> ObligationAssessment | None:
@@ -328,6 +361,16 @@ def get_satisfaction_events(correlation_id: str) -> list[ObligationAssessment]:
     )
 
 
+def payment_event_magnitude(event: ObligationAssessment) -> Decimal:
+    """The amount one PAYMENT event applied: its Ledger magnitude, or zero if voided."""
+    if event.event_type != "PAYMENT" or not event.ledger_transaction_id:
+        return Decimal("0.00")
+    txn = db.session.get(Transaction, event.ledger_transaction_id)
+    if txn is None or txn.amount is None or txn.status == TransactionStatus.VOID:
+        return Decimal("0.00")
+    return abs(Decimal(str(txn.amount)))
+
+
 def get_paid_magnitude(correlation_id: str) -> Decimal:
     """Canonical paid amount for an obligation: sum of PAYMENT ledger MAGNITUDES.
 
@@ -335,15 +378,12 @@ def get_paid_magnitude(correlation_id: str) -> Decimal:
     PAYMENT events sharing this correlation. Rent payments are posted as NEGATIVE
     debits, so the magnitude (abs) is applied toward the obligation. Multiple
     PAYMENT events (partial payments) accumulate here under one correlation.
+    A voided payment applies nothing: its money was reversed.
     """
-    from app.models import Transaction
-    total = Decimal('0.00')
-    for event in get_satisfaction_events(correlation_id):
-        if event.event_type == 'PAYMENT' and event.ledger_transaction_id:
-            txn = db.session.get(Transaction, event.ledger_transaction_id)
-            if txn is not None and txn.amount is not None:
-                total += abs(Decimal(str(txn.amount)))
-    return total
+    return sum(
+        (payment_event_magnitude(event) for event in get_satisfaction_events(correlation_id)),
+        Decimal("0.00"),
+    )
 
 
 def get_paid_magnitude_through_event(
@@ -386,59 +426,84 @@ def get_payment_event_by_ledger(
     )
 
 
-def get_obligation_status(correlation_id: str) -> ObligationStatus | None:
-    """
-    Derive obligation status from immutable facts.
+def get_obligation_state(
+    correlation_id: str,
+    *,
+    as_of: datetime | None = None,
+) -> ObligationState | None:
+    """Derive the authoritative state of one obligation (DOM-OBL-001 §VIII).
 
-    Per DOM-OBL-001 §VIII, satisfaction is computed as:
-    - paid_amount = sum(Ledger amounts from PAYMENT events)
-    - has_waiver = exists(WAIVED event)
-    - if paid_amount >= assessed_amount: SATISFIED
-    - elif has_waiver: SATISFIED
-    - else: OUTSTANDING
-
-    Past due = OUTSTANDING and now > due_at
+    ``as_of`` limits the satisfaction facts to those recorded at or before it;
+    omitted, every recorded fact counts. Voided payments never count.
     """
     assessment = get_assessment_for_correlation(correlation_id)
-    if not assessment:
+    if assessment is None:
         return None
 
-    satisfaction_events = get_satisfaction_events(correlation_id)
+    satisfied_amount = Decimal("0.00")
+    is_waived = False
+    cutoff = ensure_utc(as_of) if as_of is not None else None
+    for event in get_satisfaction_events(correlation_id):
+        if cutoff is not None and ensure_utc(event.timestamp) > cutoff:
+            continue
+        if event.event_type == "PAYMENT":
+            satisfied_amount += payment_event_magnitude(event)
+        elif event.event_type == "WAIVED":
+            is_waived = True
 
-    # Compute paid amount from Ledger references
-    amount_paid = 0.0
-    has_waiver = False
+    assessed_amount = resolve_assessment_amount(assessment)
+    if is_waived or satisfied_amount >= assessed_amount:
+        status = ObligationStatusCode.SATISFIED
+        remaining = Decimal("0.00")
+    else:
+        status = ObligationStatusCode.OUTSTANDING
+        remaining = assessed_amount - satisfied_amount
 
-    for event in satisfaction_events:
-        if event.event_type == 'PAYMENT' and event.ledger_transaction_id:
-            # Read Ledger amount through the FK relationship
-            txn = db.session.get(db.Model.__class__, event.ledger_transaction_id)
-            if txn and hasattr(txn, 'amount'):
-                amount_paid += float(txn.amount)
-        elif event.event_type == 'WAIVED':
-            has_waiver = True
-
-    # Derive satisfaction per DOM-OBL-001 §VIII
-    # Note: assessed_amount defaults to 0 (no amount stored in assessment_events per DOM-OBL-001 v2.5)
-    # Caller should use get_obligation_payment_status() from obligation_view_model.py to provide assessed_amount
-    assessed_amount = 0.0  # Default; caller should pass actual amount
-    is_satisfied = has_waiver or (amount_paid >= assessed_amount)
-    is_outstanding = not is_satisfied
-
-    # Per DOM-OBL-001 v2.5: due_at should come from bill_cycles, not assessment_events
-    # This legacy function defaults to None; use get_obligation_payment_status() for complete status
-    return ObligationStatus(
+    return ObligationState(
         correlation_id=correlation_id,
-        seat_id=assessment.seat_id,
         class_id=assessment.class_id,
+        seat_id=assessment.seat_id,
         obligation_type=assessment.obligation_type,
-        event_type=assessment.event_type,
-        is_satisfied=is_satisfied,
-        is_outstanding=is_outstanding,
-        due_at=None,  # Per DOM-OBL-001 v2.5: use bill_cycles for due dates
-        amount_paid=amount_paid,
-        amount_waived=has_waiver,
+        internal_ref=assessment.internal_ref,
+        bill_cycle_id=assessment.bill_cycle_id,
+        assessed_amount=assessed_amount,
+        satisfied_amount=satisfied_amount,
+        remaining_amount=remaining,
+        is_waived=is_waived,
+        status=status,
+        due_at=resolve_assessment_due_at(assessment),
     )
+
+
+def is_obligation_past_due(
+    state: ObligationState,
+    *,
+    reference_time_utc: datetime | None = None,
+) -> bool:
+    """Past due = OUTSTANDING and the reference time is after ``due_at``.
+
+    "After" is evaluated through the canonical temporal resolver in the class's
+    authority (INV-ARC-015 §VII), never against a database or process clock.
+    """
+    if not state.is_outstanding or state.due_at is None:
+        return False
+    return canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=SimpleNamespace(class_id=state.class_id),
+        primitive="later_than",
+        reference_time_utc=reference_time_utc,
+        candidate=_current_reference(state.class_id, reference_time_utc),
+        reference=state.due_at,
+    ).is_later
+
+
+def _current_reference(class_id: str, reference_time_utc: datetime | None) -> datetime:
+    return canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=SimpleNamespace(class_id=class_id),
+        primitive="current_time",
+        reference_time_utc=reference_time_utc,
+    ).canonical_now_utc
 
 
 def get_assessment_events_for_seat_class(

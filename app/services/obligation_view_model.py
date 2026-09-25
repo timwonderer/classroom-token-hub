@@ -23,109 +23,20 @@ from app.extensions import db
 from app.models import ObligationAssessment, Transaction, BillCycle, Seat, ClassEconomy, IdentityProfile, RentSettings
 
 
-@dataclass(frozen=True)
-class ObligationPaymentStatus:
-    """Complete payment status derived from Obligations + Ledger facts."""
-    correlation_id: str
-    is_satisfied: bool
-    is_outstanding: bool
-    is_past_due: bool
-    total_paid: Decimal
-    amount_waived: bool
-
-
-def get_obligation_payment_status(
-    correlation_id: str,
-    class_id: str,
-    assessed_amount: Decimal | None = None,
-) -> ObligationPaymentStatus | None:
-    """
-    Derive complete payment status by composing Obligations and Ledger truth.
-
-    Per DOM-OBL-001 §VIII:
-    - Retrieves PAYMENT events from assessment_events (Obligations domain)
-    - Reads Transaction amounts from Ledger domain via ledger_transaction_id FK
-    - Sums authoritative Ledger amounts to compute total_paid
-    - Derives satisfaction: (paid_amount >= assessed_amount) OR (has_waiver)
-
-    Args:
-        correlation_id: Identifies the individual liability
-        class_id: Scope for multi-tenancy
-        assessed_amount: If provided, used for satisfaction computation
-
-    Returns:
-        Complete payment status, or None if assessment not found
-    """
-    from app.services import obligations_service
-
-    # Step 1: Retrieve the ASSESSMENT event from Obligations domain
-    assessment = obligations_service.get_assessment_for_correlation(correlation_id)
-    if not assessment:
-        return None
-
-    # Step 2: Retrieve all PAYMENT and WAIVED events from Obligations domain
-    satisfaction_events = obligations_service.get_satisfaction_events(correlation_id)
-
-    # Step 3: Compose with Ledger domain - sum authoritative Transaction amounts
-    total_paid = Decimal('0.00')
-    has_waiver = False
-
-    for event in satisfaction_events:
-        if event.event_type == 'PAYMENT' and event.ledger_transaction_id:
-            # CROSS-DOMAIN READ: Ledger provides authoritative monetary truth
-            # (per DOM-OBL-001 §XI: Obligations consumes Ledger for settlement truth)
-            txn = db.session.get(Transaction, event.ledger_transaction_id)
-            if txn and txn.status != 'void':
-                # A PAYMENT is posted as a NEGATIVE debit; the MAGNITUDE is what
-                # was applied toward the obligation. Summing the raw signed amount
-                # made total_paid negative and left paid obligations reading as
-                # unsatisfied (matches get_paid_magnitude / the view builder).
-                total_paid += abs(Decimal(str(txn.amount)))
-        elif event.event_type == 'WAIVED':
-            has_waiver = True
-
-    # Step 4: Derive satisfaction per DOM-OBL-001 §VIII
-    if assessed_amount is None:
-        assessed_amount = Decimal('0.00')
-
-    is_satisfied = has_waiver or (total_paid >= assessed_amount)
-    is_outstanding = not is_satisfied
-    # Per DOM-OBL-001 §VII.2, due_at is derived from the linked bill_cycle
-    # (or from assessment.timestamp for immediate charges).
-    from app.services.obligations_service import resolve_assessment_due_at
-    due_at = resolve_assessment_due_at(assessment)
-    is_past_due = bool(
-        is_outstanding
-        and due_at
-        and db.session.query(db.func.now()).scalar() > due_at
-    )
-
-    return ObligationPaymentStatus(
-        correlation_id=correlation_id,
-        is_satisfied=is_satisfied,
-        is_outstanding=is_outstanding,
-        is_past_due=is_past_due,
-        total_paid=total_paid,
-        amount_waived=has_waiver,
-    )
-
-
 def get_total_paid_for_obligation(
     correlation_id: str,
     class_id: str,
 ) -> Decimal:
-    """
-    Convenience: get just the total paid amount for an obligation.
+    """Total applied to one obligation, from the canonical Obligations state.
 
-    Routes that only need payment total (not full status) can call this
-    instead of get_obligation_payment_status and extracting the amount.
-
-    Returns 0.00 if obligation not found.
+    Returns 0.00 if the obligation is not found in ``class_id``.
     """
-    status = get_obligation_payment_status(correlation_id, class_id)
-    if not status:
+    from app.services import obligations_service
+
+    state = obligations_service.get_obligation_state(correlation_id)
+    if state is None or state.class_id != class_id:
         return Decimal('0.00')
-    return status.total_paid
+    return state.satisfied_amount
 
 
 # ============================================================================
@@ -300,22 +211,15 @@ def _build_late_fee_rows(seat_id: int, class_id: str, now_utc) -> tuple[list, De
     rows: list = []
     total_outstanding = Decimal('0.00')
     for assessment in fee_assessment_events:
-        amount_due = obligations_service.resolve_assessment_amount(assessment)
-        status = get_obligation_payment_status(
-            assessment.correlation_id, class_id, assessed_amount=amount_due
+        state = obligations_service.get_obligation_state(assessment.correlation_id)
+        amount_due = state.assessed_amount
+        amount_paid = state.satisfied_amount
+        is_paid = state.is_satisfied
+        remaining = state.remaining_amount
+        due_date = state.due_at
+        is_past_due = obligations_service.is_obligation_past_due(
+            state, reference_time_utc=now_utc
         )
-        amount_paid = status.total_paid if status else Decimal('0.00')
-        is_paid = bool(status.is_satisfied) if status else False
-        remaining = amount_due - amount_paid
-        if remaining < Decimal('0.00'):
-            remaining = Decimal('0.00')
-
-        bill_cycle = (
-            db.session.get(BillCycle, assessment.bill_cycle_id)
-            if assessment.bill_cycle_id else None
-        )
-        due_date = bill_cycle.cycle_boundary_at if bill_cycle else assessment.timestamp
-        is_past_due = bool(due_date and now_utc and due_date <= now_utc and not is_paid)
 
         if not is_paid:
             total_outstanding += remaining
@@ -466,25 +370,16 @@ def build_student_obligation_view(
         current_rent_settings = _resolve_rent_settings_for_policy_uuid(current_assessment.bill_cycle.policy_uuid)
 
     for idx, assessment in enumerate(assessment_events):
-        # Get satisfaction events for this assessment
-        satisfaction_events = obligations_service.get_satisfaction_events(assessment.correlation_id)
+        # Paid / waived come from the canonical Obligations state (DOM-OBL-001
+        # §VIII); the event walk below only lists history rows for display.
+        state = obligations_service.get_obligation_state(assessment.correlation_id)
+        total_paid = state.satisfied_amount
+        has_waiver = state.is_waived
 
-        # Compute total_paid from PAYMENT events via Ledger
-        total_paid = Decimal('0.00')
-        has_waiver = False
-        payment_events_for_assessment = []
-
-        for event in satisfaction_events:
-            if event.event_type == 'PAYMENT' and event.ledger_transaction_id:
-                txn = db.session.get(Transaction, event.ledger_transaction_id)
-                if txn and txn.status != 'void':
-                    # A rent PAYMENT is posted to the ledger as a negative debit
-                    # (e.g. -50.00). The magnitude is what was applied toward the
-                    # obligation, so count its absolute value; summing the raw
-                    # signed amount made total_paid negative and left paid
-                    # obligations reading as unsatisfied.
-                    paid_magnitude = abs(Decimal(str(txn.amount)))
-                    total_paid += paid_magnitude
+        for event in obligations_service.get_satisfaction_events(assessment.correlation_id):
+            if event.event_type == 'PAYMENT':
+                paid_magnitude = obligations_service.payment_event_magnitude(event)
+                if paid_magnitude > Decimal('0.00'):
                     payment_history_all.append({
                         'date': event.timestamp,
                         'amount': paid_magnitude,
@@ -492,9 +387,7 @@ def build_student_obligation_view(
                         'status': 'completed',
                         'correlation_id': assessment.correlation_id,
                     })
-                    payment_events_for_assessment.append(event)
             elif event.event_type == 'WAIVED':
-                has_waiver = True
                 total_waived_count += 1
                 active_waivers.append(event)
                 payment_history_all.append({
@@ -931,45 +824,24 @@ def get_rent_assessments_for_seat_class(
         if assessment.event_type != 'ASSESSMENT':
             continue
 
-        # Get satisfaction events for this assessment
-        satisfaction_events = obligations_service.get_satisfaction_events(assessment.correlation_id)
-
-        # Compute paid amount from PAYMENT events via Ledger
-        total_paid = Decimal('0.00')
+        # Paid / waived / due come from the canonical Obligations state
+        # (DOM-OBL-001 §VIII); this view does not recompute them.
+        state = obligations_service.get_obligation_state(assessment.correlation_id)
         payment_events = []
-        has_waiver = False
         waiver_event = None
-
-        for event in satisfaction_events:
-            if event.event_type == 'PAYMENT' and event.ledger_transaction_id:
-                # Read Ledger truth via FK
-                txn = db.session.get(Transaction, event.ledger_transaction_id)
-                if txn and txn.status != 'void':
-                    total_paid += Decimal(str(txn.amount))
+        for event in obligations_service.get_satisfaction_events(assessment.correlation_id):
+            if event.event_type == 'PAYMENT':
                 payment_events.append(event)
             elif event.event_type == 'WAIVED':
-                has_waiver = True
                 waiver_event = event
 
-        # Derive satisfaction per DOM-OBL-001 §V.1, §VII.1, §VIII: no
-        # amount or due-boundary is persisted on assessment_events. Amount
-        # comes from the upstream policy (RentSettings via policy_uuid);
-        # due_at is derived from the linked bill_cycle.
-        from app.services.obligations_service import (
-            resolve_assessment_amount,
-            resolve_assessment_due_at,
-        )
-        assessed_amount = resolve_assessment_amount(assessment)
-        due_at = resolve_assessment_due_at(assessment)
-        is_satisfied = has_waiver or (total_paid >= assessed_amount)
-        is_outstanding = not is_satisfied
-
-        # Temporal check for past-due
-        is_past_due = bool(
-            is_outstanding
-            and due_at
-            and db.session.query(db.func.now()).scalar() > due_at
-        )
+        assessed_amount = state.assessed_amount
+        due_at = state.due_at
+        is_satisfied = state.is_satisfied
+        is_outstanding = state.is_outstanding
+        total_paid = state.satisfied_amount
+        has_waiver = state.is_waived
+        is_past_due = obligations_service.is_obligation_past_due(state)
 
         view = RentAssessmentView(
             correlation_id=assessment.correlation_id,
