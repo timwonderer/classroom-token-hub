@@ -3570,7 +3570,13 @@ def student_detail_public(actor_public_id):
                 if policy_uuid else None
             )
             if policy:
-                active_insurance = SimpleNamespace(policy=policy, payment_current=True)
+                # Derived from the Obligations read, never a cached flag
+                # (DOM-STORE-001 §VIII.E.1, FEAT-STOR-007 §X).
+                from app.services.insurance_coverage_service import are_premiums_current
+                active_insurance = SimpleNamespace(
+                    policy=policy,
+                    premiums_current=are_premiums_current(class_id, grant.entitlement_id),
+                )
                 break
 
     # CRITICAL: Get scoped balances for current class_id + seat_id only.

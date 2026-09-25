@@ -7,8 +7,7 @@ Succession and termination are the two bill-cycle operations (DOM-OBL-001 §V.7)
     termination:  cycle N -> cycle N+1*   (this module)  *terminal, no recurrence
 
 Termination is cessation, not succession, so it does not route through
-``schedule_next_bill_cycle``. (Insurance purchase still creates its cycle 1 through
-the interim ``establish_bill_cycle`` until the insurance lineage migrates.)
+``schedule_next_bill_cycle``.
 
 A terminal cycle row carries ``next_assessment_at = NULL``: the lineage produces
 no further recurring assessment. Its ``cycle_boundary_at`` is the termination

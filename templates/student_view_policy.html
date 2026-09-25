@@ -65,10 +65,10 @@
                             {% endif %}
                         </p>
                         <p><strong>Payment Status:</strong>
-                            {% if enrollment.payment_current %}
+                            {% if enrollment.premiums_current %}
                             <span class="badge bg-success">Current</span>
                             {% else %}
-                            <span class="badge bg-danger">Overdue {{ enrollment.days_unpaid }} days</span>
+                            <span class="badge bg-danger">Premium overdue &mdash; coverage paused</span>
                             {% endif %}
                         </p>
                     </div>
@@ -107,10 +107,14 @@
                             <li>Frequency: {{ enrollment.policy.charge_frequency|title }}</li>
                             <li>Autopay: {{ 'Yes' if enrollment.policy.autopay else 'No' }}</li>
                             {% if enrollment.next_payment_due %}
-                            <li>Next payment: {{ enrollment.next_payment_due | fmt_date }}</li>
+                            <li>Current period ends: {{ enrollment.next_payment_due | fmt_date }}</li>
                             {% endif %}
+                            {% if enrollment.policy.auto_cancel_nonpay_days %}
                             <li>Auto-cancel after {{ enrollment.policy.auto_cancel_nonpay_days }} days of non-payment
                             </li>
+                            {% else %}
+                            <li>Unpaid premiums accumulate; coverage resumes once all are paid</li>
+                            {% endif %}
                         </ul>
                     </div>
                 </div>

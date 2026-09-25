@@ -285,8 +285,13 @@ def grant_insurance_entitlement(
     *,
     actor_seat_id: int | None = None,
     correlation_id: str | None = None,
+    granted_at=None,
 ) -> str:
     """Grant one INSURANCE coverage entitlement (acquisition_type=PURCHASE).
+
+    ``granted_at`` is the purchase instant the coordinating FEAT resolved
+    canonically (the start of the first coverage period, DOM-STORE-001
+    §VIII.E.1); omitted, the canonical current time.
 
     The immutable insurance definition is referenced by ``policy_uuid`` carried in
     the event payload — ``EntitlementEvent.product_id`` names a *store* product
@@ -334,7 +339,7 @@ def grant_insurance_entitlement(
             "source": "grant_insurance_entitlement",
             "policy_uuid": policy_uuid,
         },
-        timestamp=_current_utc(),
+        timestamp=granted_at or _current_utc(),
     )
     db.session.add(event)
     db.session.flush()
@@ -507,8 +512,15 @@ def expire_entitlement(
     acquisition_type: str,
     correlation_id: str,
     payload: dict | None = None,
+    effective_at=None,
 ) -> EntitlementEvent:
     """Record an EXPIRED terminal event for an entitlement (FEAT-STOR-002 §VIII/§XV).
+
+    ``effective_at`` is the lawful boundary the expiry takes effect at (an
+    insurance termination instant or nonpayment deadline, which a scheduled job
+    may reach late); the event is stamped with it so usability "at or before a
+    reference time" reads the boundary, not the moment the job ran. Omitted,
+    the canonical current time.
 
     Expiration is the lawful terminal disposition when a coverage/validity boundary
     has been reached. Proving the boundary was reached is the caller's
@@ -531,7 +543,7 @@ def expire_entitlement(
             f"{existing.event_type}"
         )
 
-    now = _current_utc()
+    now = effective_at or _current_utc()
     event = EntitlementEvent(
         class_id=class_id,
         target_seat_id=target_seat_id,

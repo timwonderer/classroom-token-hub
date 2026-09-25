@@ -55,6 +55,7 @@ from app.feats.insurance_claim_feat import (
 )
 from tests.helpers.ledger import create_ledger_idempotent_transaction
 from tests.helpers.classroom_initializer import initialize
+from tests.helpers.insurance_domain import establish_paid_premium_lineage
 from app.services import insurance_definition_service as insurance_defs
 
 
@@ -80,7 +81,7 @@ def _make_transaction_policy(
         definition={
             "insurance_type": "TRANSACTION",
             "premium": premium,
-            "charge_frequency": "WEEKLY",
+            "charge_frequency": "WEEKLY", "bill_preview_days": 3, "nonpayment_mode": "ACCUMULATE",
             "reimbursement_percentage": str(reimbursement_percentage),
             "payout_multiple": payout_multiple,
             "claims_per_week_equivalent": claims_per_week_equivalent,
@@ -123,6 +124,13 @@ def _add_granted_event(
     )
     db.session.add(granted_event)
     db.session.flush()
+    # A real purchase gives the entitlement a paid premium lineage; without one
+    # it has no coverage period and is not usable (DOM-STORE-001 §VIII.E.1).
+    establish_paid_premium_lineage(
+        class_id=classroom.class_id, seat_id=student.seat.id,
+        entitlement_id=entitlement_id, policy_uuid=real_policy_uuid,
+        start_utc=granted_event.timestamp,
+    )
     return granted_event
 
 
@@ -782,7 +790,7 @@ def _make_productivity_policy(
         definition={
             "insurance_type": "PRODUCTIVITY",
             "premium": premium,
-            "charge_frequency": "WEEKLY",
+            "charge_frequency": "WEEKLY", "bill_preview_days": 3, "nonpayment_mode": "ACCUMULATE",
             "reimbursement_percentage": str(reimbursement_percentage),
             "payout_multiple": payout_multiple,
             "claimable_dates_per_week_equivalent": claimable_dates_per_week_equivalent,
@@ -894,6 +902,13 @@ def _add_productivity_granted_event(
         granted_event.timestamp = granted_at
     db.session.add(granted_event)
     db.session.flush()
+    # A real purchase gives the entitlement a paid premium lineage; without one
+    # it has no coverage period and is not usable (DOM-STORE-001 §VIII.E.1).
+    establish_paid_premium_lineage(
+        class_id=classroom.class_id, seat_id=student.seat.id,
+        entitlement_id=entitlement_id, policy_uuid=real_policy_uuid,
+        start_utc=granted_event.timestamp,
+    )
     return granted_event
 
 
@@ -1948,7 +1963,7 @@ def _make_non_monetary_policy(classroom, *, waiting_period_days: int) -> str:
         definition={
             "insurance_type": "NON_MONETARY",
             "premium": "10.00",
-            "charge_frequency": "WEEKLY",
+            "charge_frequency": "WEEKLY", "bill_preview_days": 3, "nonpayment_mode": "ACCUMULATE",
             "claims_per_week_equivalent": "3",
             "waiting_period_days": waiting_period_days,
             "title": "Homework Pass Coverage",
@@ -1977,6 +1992,13 @@ def _grant_non_monetary(classroom, student, entitlement_id, *, waiting_period_da
     )
     db.session.add(granted_event)
     db.session.flush()
+    # A real purchase gives the entitlement a paid premium lineage; without one
+    # it has no coverage period and is not usable (DOM-STORE-001 §VIII.E.1).
+    establish_paid_premium_lineage(
+        class_id=classroom.class_id, seat_id=student.seat.id,
+        entitlement_id=entitlement_id, policy_uuid=policy_uuid,
+        start_utc=granted_event.timestamp,
+    )
     return granted_event
 
 

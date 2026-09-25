@@ -14,8 +14,14 @@ revoke or refund. Authority (EXPIRED-only model, confirmed against the docs):
   prior obligation events.
 
 What this FEAT does (and only this):
-- resolve the seat's ACTIVE recurring `INSURANCE_PREMIUM` lineage for the policy,
-- terminate that lineage's bill cycle (no further premiums will be assessed).
+- resolve the seat's ACTIVE insurance entitlement for the policy and its premium
+  lineage ``insurance:{entitlement_id}`` (DOM-OBL-001 §II.B),
+- terminate that lineage at the end of the last committed period
+  (DOM-OBL-001 §V.7; DOM-STORE-001 §VIII.E.1 "Stopping renewal"): the current
+  period is committed; an advance-assessed next period is committed once any
+  payment has been applied to its premium, and otherwise its premium is
+  withdrawn in the same transaction (§V.8) and coverage ends at the current
+  period's end.
 
 What this FEAT explicitly does NOT do:
 - it writes NO `REVOKED` and NO early `EXPIRED` entitlement event, and moves NO
@@ -39,6 +45,8 @@ from datetime import datetime
 
 from app.services import obligations_service
 from app.services.context_resolver import CanonicalContext
+from app.services.entitlement_read_service import get_active_insurance_grant
+from app.services.insurance_coverage_service import premium_lineage_ref
 from app.feats.base import requires_feat_context
 from app.feats.terminate_bill_cycle_feat import (
     terminate_bill_cycle,
@@ -83,6 +91,7 @@ def execute_cancel_insurance(
     idempotency_key: str,
     target_seat_id: int | None = None,
     correlation_id: str | None = None,
+    reference_time_utc: datetime | None = None,
 ) -> InsuranceCancellationResult:
     """Cancel (stop future premiums on) a seat's active insurance coverage.
 
@@ -103,41 +112,47 @@ def execute_cancel_insurance(
             error_message="cancellation requires a resolved seat and class",
         )
 
-    refs = _resolve_premium_lineages(seat_id, class_id, policy_uuid)
-    if not refs:
-        return InsuranceCancellationResult(
-            success=False, correlation_id=correlation_id,
-            error_code="COVERAGE_NOT_FOUND",
-            error_message=(
-                f"no INSURANCE_PREMIUM lineage for seat {seat_id} / policy "
-                f"{policy_uuid} in class {class_id}"
-            ),
+    # The seat's active coverage for the policy is one entitlement, and its
+    # premium lineage derives from that entitlement alone.
+    grant = get_active_insurance_grant(seat_id, class_id, policy_uuid)
+    active_ref = premium_lineage_ref(grant.entitlement_id) if grant is not None else None
+    latest = obligations_service.get_latest_bill_cycle(active_ref) if active_ref else None
+
+    if latest is None or latest.next_assessment_at is None:
+        refs = [active_ref] if latest is not None else _resolve_premium_lineages(
+            seat_id, class_id, policy_uuid
         )
-
-    # The active lineage is the one whose latest cycle is non-terminal. Under the
-    # §114 single-active-coverage invariant there is at most one.
-    active_ref = None
-    latest_seen = None
-    for ref in refs:
-        latest = obligations_service.get_latest_bill_cycle(ref)
-        if latest is None:
-            continue
         latest_seen = latest
-        if latest.next_assessment_at is not None:
-            active_ref = ref
-            break
-
-    if active_ref is None:
-        # Every lineage is already terminal — coverage renewal is already stopped.
+        for ref in refs:
+            candidate = obligations_service.get_latest_bill_cycle(ref)
+            if candidate is not None:
+                latest_seen = candidate
+        if latest_seen is None:
+            return InsuranceCancellationResult(
+                success=False, correlation_id=correlation_id,
+                error_code="COVERAGE_NOT_FOUND",
+                error_message=(
+                    f"no INSURANCE_PREMIUM lineage for seat {seat_id} / policy "
+                    f"{policy_uuid} in class {class_id}"
+                ),
+            )
+        # Renewal is already stopped (or the coverage already ended).
         return InsuranceCancellationResult(
             success=True, already_cancelled=True, correlation_id=correlation_id,
-            internal_ref=(latest_seen.internal_ref if latest_seen else None),
-            terminal_cycle_id=(latest_seen.id if latest_seen else None),
-            coverage_boundary_at=(latest_seen.cycle_boundary_at if latest_seen else None),
+            internal_ref=latest_seen.internal_ref,
+            terminal_cycle_id=latest_seen.id,
+            coverage_boundary_at=latest_seen.cycle_boundary_at,
         )
 
+    # Stop-renewal: the domain derives the termination instant (the end of the
+    # last committed period) as of the resolved reference time and withdraws an
+    # untouched advance premium in the same transaction.
     terminal = terminate_bill_cycle(
-        TerminateBillCycleRequest(class_id=class_id, internal_ref=active_ref),
+        TerminateBillCycleRequest(
+            class_id=class_id,
+            internal_ref=active_ref,
+            reference_time_utc=reference_time_utc,
+        ),
         context=None,
     )
     return InsuranceCancellationResult(

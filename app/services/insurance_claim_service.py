@@ -124,6 +124,15 @@ def _validate_active_insurance_entitlement(
     return granted_event
 
 
+def _filter_filed_in_period(query, submitted_from, submitted_before):
+    """Narrow a claim query to claims filed in the half-open period ``[from, before)``."""
+    if submitted_from is not None:
+        query = query.filter(InsuranceClaim.submitted_at >= submitted_from)
+    if submitted_before is not None:
+        query = query.filter(InsuranceClaim.submitted_at < submitted_before)
+    return query
+
+
 def create_claim(
     *,
     class_id: str,
@@ -204,17 +213,24 @@ def list_claims_for_entitlement(
     entitlement_id: str,
     target_seat_id: Optional[int] = None,
     statuses: Optional[Iterable[str]] = None,
+    submitted_from: Optional[datetime] = None,
+    submitted_before: Optional[datetime] = None,
 ) -> list[InsuranceClaim]:
     """List claims for one entitlement lineage, newest first.
 
     Optionally narrowed to a target seat and/or a set of lifecycle states. This
     read is the basis for later derived projections (weekly claimed hours,
     payouts, remaining allowance) — all computed from immutable claim history.
+
+    ``submitted_from`` / ``submitted_before`` narrow to the claims FILED in one
+    coverage period ``[from, before)``: a claim draws on the period containing
+    its filing time (FEAT-STOR-003 §XII).
     """
     query = db.session.query(InsuranceClaim).filter(
         InsuranceClaim.class_id == class_id,
         InsuranceClaim.entitlement_id == entitlement_id,
     )
+    query = _filter_filed_in_period(query, submitted_from, submitted_before)
     if target_seat_id is not None:
         query = query.filter(InsuranceClaim.target_seat_id == target_seat_id)
     if statuses is not None:
@@ -375,23 +391,33 @@ def list_productivity_dates_for_claim(
 
 
 def list_productivity_dates_for_entitlement(
-    *, class_id: str, entitlement_id: str
+    *,
+    class_id: str,
+    entitlement_id: str,
+    submitted_from: Optional[datetime] = None,
+    submitted_before: Optional[datetime] = None,
 ) -> list[InsuranceClaimProductivityDate]:
     """All asserted date rows across every claim under one entitlement lineage.
 
     The basis for derived projections (date-allowance used, weekly claimed hours,
     period recognized-payout consumption) — always computed from history, never a
-    stored counter.
+    stored counter. ``submitted_from`` / ``submitted_before`` narrow to the dates
+    of claims FILED in one coverage period (FEAT-STOR-003 §XII).
     """
-    return (
-        db.session.query(InsuranceClaimProductivityDate)
-        .filter(
-            InsuranceClaimProductivityDate.class_id == class_id,
-            InsuranceClaimProductivityDate.entitlement_id == entitlement_id,
-        )
-        .order_by(InsuranceClaimProductivityDate.claim_date.asc())
-        .all()
+    query = db.session.query(InsuranceClaimProductivityDate).filter(
+        InsuranceClaimProductivityDate.class_id == class_id,
+        InsuranceClaimProductivityDate.entitlement_id == entitlement_id,
     )
+    if submitted_from is not None or submitted_before is not None:
+        query = _filter_filed_in_period(
+            query.join(
+                InsuranceClaim,
+                InsuranceClaimProductivityDate.claim_id == InsuranceClaim.claim_id,
+            ),
+            submitted_from,
+            submitted_before,
+        )
+    return query.order_by(InsuranceClaimProductivityDate.claim_date.asc()).all()
 
 
 class ProductivityDateWithStatus:
@@ -449,16 +475,24 @@ def list_productivity_dates_with_status_for_entitlement(
 
 
 def sum_recognized_payout_for_entitlement(
-    *, class_id: str, entitlement_id: str
+    *,
+    class_id: str,
+    entitlement_id: str,
+    submitted_from: Optional[datetime] = None,
+    submitted_before: Optional[datetime] = None,
 ) -> Decimal:
     """Σ of persisted ``recognized_payout`` across the entitlement's date history.
 
     Period payout consumption for PRODUCTIVITY is the sum of immutable recognized
-    payouts, never a reconstruction from live pay rate.
+    payouts, never a reconstruction from live pay rate. The period bounds narrow
+    it to claims filed in one coverage period.
     """
     total = Decimal("0.00")
     for row in list_productivity_dates_for_entitlement(
-        class_id=class_id, entitlement_id=entitlement_id
+        class_id=class_id,
+        entitlement_id=entitlement_id,
+        submitted_from=submitted_from,
+        submitted_before=submitted_before,
     ):
         if row.recognized_payout is not None:
             total += row.recognized_payout
