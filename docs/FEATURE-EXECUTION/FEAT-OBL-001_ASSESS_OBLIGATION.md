@@ -1,8 +1,8 @@
-# FEAT-OBLI-001: Assess Obligation
+# FEAT-OBL-001: Assess Obligation
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-OBLI-001 | 1.1 | 2026-07-24 | 1.0 | Normative |
+| FEAT-OBL-001 | 1.2 | 2026-09-23 | 1.1 | Normative |
 
 ---
 
@@ -44,7 +44,7 @@ This FEAT orchestrates lawful obligation creation. It creates the immutable obli
 2. **Fulfillment Attempt**:
     * If the lawful caller requests settlement in the same workflow, delegate to `FEAT-OBL-003`.
 3. **Audit Trace**:
-    * Emit `ACT-OBLI-001` via `DOM-OPS` with mandatory `correlation_id`.
+    * Emit `ACT-OBL-001` via `DOM-OPS` with mandatory `correlation_id`.
 
 ---
 

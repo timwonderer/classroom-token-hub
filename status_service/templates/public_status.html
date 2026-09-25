@@ -2,26 +2,167 @@
 {% block title %}Classroom Token Hub — Service Status{% endblock %}
 {% block content %}
 <main class="status-mockup-page">
-  <section class="landing-hero"><div class="landing-shell landing-hero-grid"><div class="landing-brand"><div class="landing-brand-row"><span class="material-symbols-outlined" aria-hidden="true">local_atm</span><span>CLASSROOM</span></div><div class="landing-brand-row"><span class="material-symbols-outlined" aria-hidden="true">store</span><span>TOKEN</span></div><div class="landing-brand-row"><span class="material-symbols-outlined" aria-hidden="true">finance_mode</span><span>HUB</span></div></div><div class="landing-welcome"><h1>Is Classroom Token Hub Working?</h1><div class="hero-status-line"><span class="status-subtitle">CURRENT STATUS</span><span class="status-pill status-pill--hero status-pill--{{ overall_status.state }}">{{ overall_status.label }}</span></div><p class="status-last-checked">Last checked: {{ snapshot.sampled_at|status_time if snapshot else "awaiting monitoring evidence" }}</p></div></div></section>
-  <section class="status-main"><div class="landing-shell status-main-shell">
-    <section aria-labelledby="happening-heading"><h2 id="happening-heading">What’s happening?</h2>
-    {% for notice in notices %}<article class="happening-banner happening-banner--{{ notice.state|lower }}"><div class="happening-banner-title"><span class="material-symbols-outlined" aria-hidden="true">{{ "info" if notice.state == "MONITORING" else "warning" }}</span><strong>{{ notice.capability|replace('_',' ')|title }} — {{ notice.state|lower }}</strong></div><div class="happening-banner-body"><p>{{ notice.impact_statement }}</p><p><strong>What to do:</strong> {{ notice.recommended_user_action }}<br><strong>Updated by CTH Operations:</strong> {{ notice.updated_at|status_time }}<br><strong>Investigation:</strong> {{ notice.incident_ref }}{% if notice.recovery_expectation %}<br><strong>Recovery {{ notice.recovery_state|lower }}:</strong> {{ notice.recovery_expectation|status_time }}{% else %}<br>No recovery estimate available.{% endif %}{% if notice.next_update_at %}<br><strong>Next update:</strong> {{ notice.next_update_at|status_time }}{% else %}<br>Next update time unavailable.{% endif %}</p></div></article>
-    {% else %}<article class="happening-banner happening-banner--{{ overall_status.state }}"><div class="happening-banner-title"><span class="material-symbols-outlined" aria-hidden="true">{{ "check_circle" if overall_status.state == "available" else "warning" if overall_status.state in ["degraded", "unavailable"] else "help" }}</span><strong>{{ "Everything is looking good." if overall_status.state == "available" else "Heads up! Some services may not be working right now." if overall_status.state in ["degraded", "unavailable"] else "Current service status is not recently verified." }}</strong></div></article>{% endfor %}
-    </section>
-    <p class="status-support">If you can’t sign in to report an issue, please email <a href="mailto:support@classroomtokenhub.com">support@classroomtokenhub.com</a>.</p>
-    <section class="working-section" aria-labelledby="working-heading"><h2 id="working-heading">What’s working?</h2><div class="capability-grid">{% for card in capability_cards %}<article class="capability-card capability-card--{{ card.state }}"><h3>{{ card.name }}</h3><p>{{ card.question }}</p><div class="capability-result capability-result--{{ card.state }}">{{ card.label }}</div></article>{% endfor %}</div></section>
-    <section class="platform-section" aria-labelledby="platform-heading"><h2 id="platform-heading">Platform status</h2><div class="platform-list">
-    {% if platform_checks is defined %}{% for check in platform_checks %}<article class="platform-row platform-row--{{ "available" if check.state == "PASS" else "degraded" if check.state == "FAIL" else "unknown" }}"><div><h3>{{ check.name }}</h3><p>{{ check.detail }}{% if check.checked_at %} Checked {{ check.checked_at|status_time }}.{% endif %}</p></div><span class="platform-state">{{ check.label }}</span></article>{% endfor %}{% endif %}
-    <article class="platform-row platform-row--unknown"><div><h3>Monitoring source</h3><p>Last seen: {{ snapshot.source_latest_at|status_time if snapshot else "No current source measurement" }}. Log recency does not prove complete logging or application readiness.</p></div><span class="platform-state">Request evidence</span></article>
-    <article class="platform-row platform-row--unknown"><div><h3>What the numbers mean</h3><details class="measurement-explanation"><summary>How service estimates and measurements work</summary><p>Service cards are estimates from recent requests: Yes means observations are within thresholds; Probably not means elevated errors or latency; Possibly down means at least ten requests with 50% or more HTTP 5xx. Missing or limited evidence remains Not recently verified. These estimates do not test every classroom action.</p><p>Elevated server-error responses means more than 2% returned HTTP 5xx. Elevated not-found responses means more than 5% returned HTTP 404; an expected missing resource can also cause a 404. High latency means p95 exceeds 1,500 ms. Crossings are shown even with limited traffic; within expected range requires at least 20 requests.</p><p>p80 and p95 are the response times below which 80% and 95% of measured requests fall. Application requests include health polling. Route groups cover selected endpoints; classroom economy does not represent every economic operation.</p><p>History shows eligible five-minute windows within thresholds, sampled once per minute. Windows overlap. It is not uptime or request success. Low/no traffic and missing or stale monitoring are excluded. Coverage compares eligible measured windows with scheduled minutes. Dates use UTC.</p></details></div></article>
+  <section class="landing-hero">
+    <div class="landing-shell landing-hero-grid">
+      <div class="landing-brand">
+        <div class="landing-brand-row"><span class="material-symbols-outlined"
+            aria-hidden="true">local_atm</span><span>CLASSROOM</span></div>
+        <div class="landing-brand-row"><span class="material-symbols-outlined"
+            aria-hidden="true">store</span><span>TOKEN</span></div>
+        <div class="landing-brand-row"><span class="material-symbols-outlined"
+            aria-hidden="true">finance_mode</span><span>HUB</span></div>
+      </div>
+      <div class="landing-welcome">
+        <h1>Is Classroom Token Hub Working?</h1>
+        <div class="hero-status-line"><span class="status-subtitle">CURRENT STATUS</span><span
+            class="status-pill status-pill--hero status-pill--{{ overall_status.state }}">{{ overall_status.label
+            }}</span></div>
+        <p class="status-last-checked">Last checked: {{ snapshot.sampled_at|status_time if snapshot else "awaiting
+          monitoring evidence" }}</p>
+      </div>
     </div>
-    <div class="request-metrics-list">{% for card in measurements %}<article class="platform-row request-metrics-row"><div class="request-metrics-content"><h3>{{ card.name }}</h3><p>{{ card.label }} · Five-minute request window</p><div class="measurement-content">
-    {% for reason in card.reasons %}<p class="measurement-reason">{{ reason }}</p>{% endfor %}
-<dl class="measurement-values"><dt>Requests</dt><dd>{{ card.request_count if card.request_count is not none else 'Unavailable' }}</dd>{% for label, value in [('HTTP 404', card.http_404_percent), ('HTTP 500', card.http_500_percent), ('HTTP 5xx', card.http_5xx_percent)] %}<dt>{{ label }}</dt><dd>{{ ('%.1f%%'|format(value)) if value is not none else 'Unavailable' }}</dd>{% endfor %}{% for label, value in [('p80', card.p80_ms), ('p95', card.p95_ms)] %}<dt>{{ label }}</dt><dd>{{ ('%.0f ms'|format(value)) if value is not none else 'Unavailable' }}</dd>{% endfor %}</dl>
-<details class="request-distribution"><summary>Response counts</summary><p>{% for family in ['1xx','2xx','3xx','4xx','5xx'] %}{{ family }}: {{ card['http_' ~ family ~ '_count'] if card['http_' ~ family ~ '_count'] is not none else 'unavailable' }}{% if not loop.last %} · {% endif %}{% endfor %}</p><p>4xx responses may represent expected denials or missing resources.</p></details>
-<details class="history-disclosure"><summary>90-day measured history<span class="history-strip" aria-hidden="true">{% for day in card.history %}<span class="history-swatch history-day--{{ 'gap' if day.percent is none else 'normal' if day.percent == 100 else 'elevated' }}">{{ '—' if day.percent is none else '✓' if day.percent == 100 else '!' }}</span>{% endfor %}</span></summary><p>Oldest to newest · ✓ within thresholds · ! elevated · — no eligible measurements</p><div class="history-table-scroll"><table><caption>{{ card.name }} — daily observed windows</caption><thead><tr><th scope="col">UTC date</th><th scope="col">Within thresholds</th><th scope="col">Coverage</th><th scope="col">Eligible / sampled</th></tr></thead><tbody>{% for day in card.history %}<tr><th scope="row">{{ day.date }}</th><td>{{ ('%.1f%%'|format(day.percent)) if day.percent is not none else 'No eligible measurements' }}</td><td>{{ '%.1f%%'|format(day.coverage) }}</td><td>{{ day.measured|default(0) }} / {{ day.sampled|default(0) }}</td></tr>{% endfor %}</tbody></table></div></details></div></div></article>{% endfor %}</div>
-    </section>
-  </div></section>
-  <footer class="landing-footer"><div class="landing-shell landing-footer-meta"><p>Classroom Token Hub</p><p>Independent service status communication for teachers and students.</p></div></footer>
+  </section>
+  <section class="status-main">
+    <div class="landing-shell status-main-shell">
+      <section aria-labelledby="happening-heading">
+        <h2 id="happening-heading">What’s happening?</h2>
+        {% for notice in notices %}<article class="happening-banner happening-banner--{{ notice.state|lower }}">
+          <div class="happening-banner-title"><span class="material-symbols-outlined" aria-hidden="true">{{ "info" if
+              notice.state == "MONITORING" else "warning" }}</span><strong>{{ notice.capability|replace('_',' ')|title
+              }} — {{ notice.state|lower }}</strong></div>
+          <div class="happening-banner-body">
+            <p>{{ notice.impact_statement }}</p>
+            <p><strong>What to do:</strong> {{ notice.recommended_user_action }}<br><strong>Updated by CTH
+                Operations:</strong> {{ notice.updated_at|status_time }}<br><strong>Investigation:</strong> {{
+              notice.incident_ref }}{% if notice.recovery_expectation %}<br><strong>Recovery {{
+                notice.recovery_state|lower }}:</strong> {{ notice.recovery_expectation|status_time }}{% else %}<br>No
+              recovery estimate available.{% endif %}{% if notice.next_update_at %}<br><strong>Next update:</strong> {{
+              notice.next_update_at|status_time }}{% else %}<br>Next update time unavailable.{% endif %}</p>
+          </div>
+        </article>
+        {% else %}<article class="happening-banner happening-banner--{{ overall_status.state }}">
+          <div class="happening-banner-title"><span class="material-symbols-outlined" aria-hidden="true">{{
+              "check_circle" if overall_status.state == "available" else "warning" if overall_status.state in
+              ["degraded", "unavailable"] else "help" }}</span><strong>{{ "Everything is looking good." if
+              overall_status.state == "available" else "Heads up! Some services may not be working right now." if
+              overall_status.state in ["degraded", "unavailable"] else "Current service status is not recently
+              verified." }}</strong></div>
+        </article>{% endfor %}
+      </section>
+      <p class="status-support">If you can’t sign in to report an issue, please email <a
+          href="mailto:support@classroomtokenhub.com">support@classroomtokenhub.com</a>.</p>
+      <section class="working-section" aria-labelledby="working-heading">
+        <h2 id="working-heading">What’s working?</h2>
+        <div class="capability-grid">{% for card in capability_cards %}<article
+            class="capability-card capability-card--{{ card.state }}">
+            <h3>{{ card.name }}</h3>
+            <p>{{ card.question }}</p>
+            <div class="capability-result capability-result--{{ card.state }}">{{ card.label }}</div>
+          </article>{% endfor %}</div>
+      </section>
+      <section class="platform-section" aria-labelledby="platform-heading">
+        <h2 id="platform-heading">Platform status</h2>
+        <div class="platform-list">
+          {% if platform_checks is defined %}{% for check in platform_checks %}<article
+            class="platform-row platform-row--{{ " available" if check.state=="PASS" else "degraded" if
+            check.state=="FAIL" else "unknown" }}">
+            <div>
+              <h3>{{ check.name }}</h3>
+              <p>{{ check.detail }}{% if check.checked_at %} Checked {{ check.checked_at|status_time }}.{% endif %}</p>
+            </div><span class="platform-state">{{ check.label }}</span>
+          </article>{% endfor %}{% endif %}
+          <article class="platform-row platform-row--unknown">
+            <div>
+              <h3>Monitoring source</h3>
+              <p>Last seen: {{ snapshot.source_latest_at|status_time if snapshot else "No current source measurement"
+                }}. Log recency does not prove complete logging or application readiness.</p>
+            </div><span class="platform-state">Request evidence</span>
+          </article>
+          <article class="platform-row platform-row--unknown">
+            <div>
+              <h3>What the numbers mean</h3>
+              <details class="measurement-explanation">
+                <summary>How service estimates and measurements work</summary>
+                <p>Service cards are estimates from recent requests: Yes means observations are within thresholds;
+                  Probably not means elevated errors or latency; Possibly down means at least ten requests with 50% or
+                  more HTTP 5xx. Missing or limited evidence remains Not recently verified. These estimates do not test
+                  every classroom action.</p>
+                <p>Elevated server-error responses means more than 2% returned HTTP 5xx. Elevated not-found responses
+                  means more than 5% returned HTTP 404; an expected missing resource can also cause a 404. High latency
+                  means p95 exceeds 1,500 ms. Crossings are shown even with limited traffic; within expected range
+                  requires at least 20 requests.</p>
+                <p>p80 and p95 are the response times below which 80% and 95% of measured requests fall. Application
+                  requests include health polling. Route groups cover selected endpoints; classroom economy does not
+                  represent every economic operation.</p>
+                <p>History shows eligible five-minute windows within thresholds, sampled once per minute. Windows
+                  overlap. It is not uptime or request success. Low/no traffic and missing or stale monitoring are
+                  excluded. Coverage compares eligible measured windows with scheduled minutes. Dates use UTC.</p>
+              </details>
+            </div>
+          </article>
+        </div>
+        <div class="request-metrics-list">{% for card in measurements %}<article
+            class="platform-row request-metrics-row">
+            <div class="request-metrics-content">
+              <h3>{{ card.name }}</h3>
+              <p>{{ card.label }} · Five-minute request window</p>
+              <div class="measurement-content">
+                {% for reason in card.reasons %}<p class="measurement-reason">{{ reason }}</p>{% endfor %}
+                <dl class="measurement-values">
+                  <dt>Requests</dt>
+                  <dd>{{ card.request_count if card.request_count is not none else 'Unavailable' }}</dd>{% for label,
+                  value in [('HTTP 404', card.http_404_percent), ('HTTP 500', card.http_500_percent), ('HTTP 5xx',
+                  card.http_5xx_percent)] %}<dt>{{ label }}</dt>
+                  <dd>{{ ('%.1f%%'|format(value)) if value is not none else 'Unavailable' }}</dd>{% endfor %}{% for
+                  label, value in [('p80', card.p80_ms), ('p95', card.p95_ms)] %}<dt>{{ label }}</dt>
+                  <dd>{{ ('%.0f ms'|format(value)) if value is not none else 'Unavailable' }}</dd>{% endfor %}
+                </dl>
+                <details class="request-distribution">
+                  <summary>Response counts</summary>
+                  <p>{% for family in ['1xx','2xx','3xx','4xx','5xx'] %}{{ family }}: {{ card['http_' ~ family ~
+                    '_count'] if card['http_' ~ family ~ '_count'] is not none else 'unavailable' }}{% if not loop.last
+                    %} · {% endif %}{% endfor %}</p>
+                  <p>4xx responses may represent expected denials or missing resources.</p>
+                </details>
+                <details class="history-disclosure">
+                  <summary>90-day measured history<span class="history-strip" aria-hidden="true">{% for day in
+                      card.history %}<span
+                        class="history-swatch history-day--{{ 'gap' if day.percent is none else 'normal' if day.percent == 100 else 'elevated' }}">{{
+                        '—' if day.percent is none else '✓' if day.percent == 100 else '!' }}</span>{% endfor %}</span>
+                  </summary>
+                  <p>Oldest to newest · ✓ within thresholds · ! elevated · — no eligible measurements</p>
+                  <div class="history-table-scroll">
+                    <table>
+                      <caption>{{ card.name }} — daily observed windows</caption>
+                      <thead>
+                        <tr>
+                          <th scope="col">UTC date</th>
+                          <th scope="col">Within thresholds</th>
+                          <th scope="col">Coverage</th>
+                          <th scope="col">Eligible / sampled</th>
+                        </tr>
+                      </thead>
+                      <tbody>{% for day in card.history %}<tr>
+                          <th scope="row">{{ day.date }}</th>
+                          <td>{{ ('%.1f%%'|format(day.percent)) if day.percent is not none else 'No eligible
+                            measurements' }}</td>
+                          <td>{{ '%.1f%%'|format(day.coverage) }}</td>
+                          <td>{{ day.measured|default(0) }} / {{ day.sampled|default(0) }}</td>
+                        </tr>{% endfor %}</tbody>
+                    </table>
+                  </div>
+                </details>
+              </div>
+            </div>
+          </article>{% endfor %}</div>
+      </section>
+    </div>
+  </section>
+  <footer class="landing-footer">
+    <div class="landing-shell landing-footer-meta">
+      <p>Classroom Token Hub</p>
+      <p>Independent service status communication for teachers and students.</p>
+    </div>
+  </footer>
 </main>
 {% endblock %}
