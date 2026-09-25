@@ -37,6 +37,7 @@
                 <div class="card-body">
                     <p class="text-muted">Use this form to submit a support ticket as a teacher. This form should only be used for issues encountered by teacher users, not students.</p>
                     <p class="text-muted">If you want to report a student issue, your student must initiate the ticket first before you can elevate it to our support team.</p>
+                    <p class="text-muted">Something down for the whole class? Check the <a href="https://status.classroomtokenhub.com" target="_blank" rel="noopener noreferrer" class="text-decoration-underline">status page <span class="visually-hidden">(opens in a new tab)</span></a> for known outages first.</p>
 
                     <form method="POST" action="{{ url_for('admin.help_support') }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
