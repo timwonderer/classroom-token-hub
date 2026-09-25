@@ -48,7 +48,7 @@ def _make_policy(*, class_id, teacher_user_id, teacher_seat_id, premium="10.00")
     row = configure_insurance_definition(
         class_id=class_id,
         submission=dict(
-            insurance_type="TRANSACTION", premium=premium, charge_frequency="WEEKLY",
+            insurance_type="TRANSACTION", premium=premium, charge_frequency="WEEKLY", bill_preview_days=3, nonpayment_mode="ACCUMULATE",
             reimbursement_percentage="80", payout_multiple="3",
             claims_per_week_equivalent="5", claim_window_days="7",
             title="Basic Cover",

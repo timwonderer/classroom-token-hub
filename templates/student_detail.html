@@ -225,7 +225,7 @@
                                 <td>
                                     {% if active_insurance %}
                                     <span class="badge bg-info">{{ active_insurance.policy.title }}</span>
-                                    {% if not active_insurance.payment_current %}
+                                    {% if not active_insurance.premiums_current %}
                                     <span class="badge bg-danger ms-1">Overdue</span>
                                     {% endif %}
                                     {% else %}

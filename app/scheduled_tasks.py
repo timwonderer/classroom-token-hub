@@ -625,10 +625,14 @@ def run_insurance_expiry_job():
     """
     from app.extensions import db
     from app.feats.base import FEATContext
-    from app.models import BillCycle, ObligationAssessment
+    from app.models import BillCycle
     from app.services import entitlement_service
-    from app.services.entitlement_read_service import get_active_insurance_grant
     from app.services.identity_service import resolve_teacher_seat_for_class
+    from app.services.insurance_coverage_service import (
+        entitlement_id_for_premium_lineage,
+        get_insurance_grant,
+        get_terminal_event,
+    )
     from app.utils.canonical_temporal_resolver import ensure_utc, utc_now
 
     logger = logging.getLogger('scheduled_tasks')
@@ -655,29 +659,23 @@ def run_insurance_expiry_job():
     failed = 0
     for cycle in terminal_cycles:
         try:
-            # Resolve the seat/policy binding, which lives on the INSURANCE_PREMIUM
-            # assessment the cycle drives (bill cycles are seat-blind). A cycle with
-            # no insurance assessment is some other lineage (e.g. rent) — skip.
-            assessment = (
-                ObligationAssessment.query
-                .filter_by(
-                    internal_ref=cycle.internal_ref,
-                    obligation_type="INSURANCE_PREMIUM",
-                )
-                .first()
+            # The premium lineage names its entitlement (DOM-OBL-001 §II.B:
+            # ``insurance:{entitlement_id}``). Any other lineage (e.g. rent) is
+            # skipped. Resolving by entitlement — not by seat + policy — means a
+            # repurchase of the same policy is never expired by its predecessor's
+            # terminal row.
+            entitlement_id = entitlement_id_for_premium_lineage(cycle.internal_ref)
+            grant = (
+                get_insurance_grant(cycle.class_id, entitlement_id)
+                if entitlement_id else None
             )
-            if assessment is None:
+            if grant is None or get_terminal_event(cycle.class_id, entitlement_id) is not None:
+                # Not insurance, or already expired (e.g. at a nonpayment deadline).
                 skipped += 1
                 continue
 
-            grant = get_active_insurance_grant(
-                assessment.seat_id, assessment.class_id, assessment.policy_uuid
-            )
-            if grant is None:
-                # Already expired (or no active coverage for this lineage).
-                skipped += 1
-                continue
-
+            # EXPIRED takes effect at the termination instant (the end of the last
+            # committed period, DOM-OBL-001 §V.7), not when this job happened to run.
             boundary = ensure_utc(cycle.cycle_boundary_at)
             idempotency_key = (
                 f"insurance-expiry:{grant.entitlement_id}:{boundary.isoformat()}"
@@ -685,17 +683,18 @@ def run_insurance_expiry_job():
             with FEATContext("FEAT-STOR-002", idempotency_key=idempotency_key):
                 entitlement_service.expire_entitlement(
                     entitlement_id=grant.entitlement_id,
-                    class_id=assessment.class_id,
-                    target_seat_id=assessment.seat_id,
-                    actor_seat_id=resolve_teacher_seat_for_class(assessment.class_id).id,
+                    class_id=cycle.class_id,
+                    target_seat_id=grant.target_seat_id,
+                    actor_seat_id=resolve_teacher_seat_for_class(cycle.class_id).id,
                     product_id=grant.product_id,
                     entitlement_type="INSURANCE",
                     acquisition_type=grant.acquisition_type,
                     correlation_id=idempotency_key,
                     payload={
                         "source": "run_insurance_expiry_job",
-                        "policy_uuid": assessment.policy_uuid,
+                        "policy_uuid": (grant.payload or {}).get("policy_uuid"),
                     },
+                    effective_at=boundary,
                 )
             expired += 1
         except Exception:
@@ -709,6 +708,59 @@ def run_insurance_expiry_job():
     logger.info(
         "Insurance boundary-expiry job completed. Expired %s, skipped %s, failed %s",
         expired, skipped, failed,
+    )
+
+
+def run_insurance_renewal_job():
+    """Insurance coverage renewal (FEAT-STOR-007) for every active insurance entitlement.
+
+    For each entitlement without a terminal event: apply the purchased
+    version's nonpayment behavior, then — while the lineage's assessment point
+    has arrived — schedule the next coverage period, assess its premium, and
+    attempt automatic payment. Each entitlement runs under its OWN top-level
+    FEAT-STOR-007 context (a plain loop, no shared FEAT context), so one
+    entitlement's failure cannot roll back or block another. Idempotent: a
+    rerun finds every step already recorded and writes nothing.
+    """
+    from app.extensions import db
+    from app.feats.insurance_coverage_renewal_feat import (
+        execute_insurance_coverage_renewal,
+        list_renewable_insurance_entitlements,
+    )
+
+    logger = logging.getLogger('scheduled_tasks')
+    logger.info("Starting scheduled insurance coverage-renewal job")
+
+    try:
+        work = list_renewable_insurance_entitlements()
+    except Exception:
+        db.session.rollback()
+        logger.exception("Insurance renewal job could not enumerate entitlements")
+        return
+
+    renewed = 0
+    terminated = 0
+    failed = 0
+    for class_id, entitlement_id in work:
+        try:
+            result = execute_insurance_coverage_renewal(
+                class_id=class_id,
+                entitlement_id=entitlement_id,
+                idempotency_key=f"FEAT-STOR-007:renew:{entitlement_id}",
+            )
+            if result.cycles_scheduled:
+                renewed += 1
+            if result.terminated_for_nonpayment:
+                terminated += 1
+        except Exception:
+            failed += 1
+            db.session.rollback()
+            logger.exception("Insurance renewal failed for entitlement %s", entitlement_id)
+            continue
+
+    logger.info(
+        "Insurance coverage-renewal job completed. Renewed %s, terminated for nonpayment %s, failed %s",
+        renewed, terminated, failed,
     )
 
 
@@ -1026,6 +1078,16 @@ SCHEDULED_JOB_SPECS: tuple[ScheduledJobSpec, ...] = (
         id='automatic_payroll',
         name='Automatic payroll (due classes)',
         func=run_automatic_payroll_job,
+        trigger='interval',
+        trigger_kwargs={'hours': 1},
+    ),
+    # Hourly, so each coverage period's premium is assessed (and autopaid) at
+    # its bill-preview point and a CANCEL_AFTER_X_DAYS deadline is applied
+    # promptly across timezones. Idempotent per entitlement and period.
+    ScheduledJobSpec(
+        id='insurance_renewal',
+        name='Insurance coverage renewal',
+        func=run_insurance_renewal_job,
         trigger='interval',
         trigger_kwargs={'hours': 1},
     ),

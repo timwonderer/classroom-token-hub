@@ -2718,6 +2718,13 @@ class InsurancePolicy(db.Model):
     claimable_dates_per_week_equivalent = db.Column(db.Numeric(6, 3), nullable=True)   # PRODUCTIVITY
     waiting_period_days = db.Column(db.Integer, nullable=True)                         # NON_MONETARY
 
+    # Recurring billing terms (DOM-POL-001A §V.E), frozen with this version.
+    # Nullable in the database; FEAT-CLASS-003 requires them on every new
+    # definition and the purchase fails closed without them.
+    bill_preview_days = db.Column(db.Integer, nullable=True)   # 0 < preview < minimum_period_duration(cadence)
+    nonpayment_mode = db.Column(db.String(24), nullable=True)  # ACCUMULATE | CANCEL_AFTER_X_DAYS
+    cancel_after_days = db.Column(db.Integer, nullable=True)   # > 0 iff CANCEL_AFTER_X_DAYS
+
     # Presentation metadata (never claim-time economic truth).
     title = db.Column(db.String(120), nullable=True)
     description = db.Column(db.Text, nullable=True)

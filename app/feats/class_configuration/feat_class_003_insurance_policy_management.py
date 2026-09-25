@@ -47,6 +47,7 @@ from app.feats.base import requires_feat_context
 from app.models import InsurancePolicy, Seat
 from app.services import insurance_definition_service as defs
 from app.services import economic_engine as ee
+from app.services.policy_reference_service import insurance_recurring_terms_violation
 
 
 # Canonical insurance taxonomy (SPEC-ECON-003 §4.5).
@@ -237,6 +238,32 @@ def _validate_and_build_definition(submission: dict) -> dict:
         if field == "reimbursement_percentage" and val > 100:
             raise InsuranceContractViolation("reimbursement_percentage must be <= 100")
         definition[field] = val
+
+    # --- recurring billing terms (DOM-POL-001A §V.E) --------------------------
+    # Required on every definition: the bill preview interval (strictly inside
+    # the shortest period of the cadence, per the resolver), the nonpayment
+    # mode, and cancel_after_days iff CANCEL_AFTER_X_DAYS.
+    raw_preview = submission.get("bill_preview_days")
+    bill_preview_days = (
+        None if raw_preview in (None, "") else _coerce_int("bill_preview_days", raw_preview)
+    )
+    raw_mode = submission.get("nonpayment_mode")
+    nonpayment_mode = (str(raw_mode).strip().upper() if raw_mode not in (None, "") else None)
+    raw_cancel = submission.get("cancel_after_days")
+    cancel_after_days = (
+        None if raw_cancel in (None, "") else _coerce_int("cancel_after_days", raw_cancel)
+    )
+    violation = insurance_recurring_terms_violation(
+        charge_frequency=charge_frequency,
+        bill_preview_days=bill_preview_days,
+        nonpayment_mode=nonpayment_mode,
+        cancel_after_days=cancel_after_days,
+    )
+    if violation is not None:
+        raise InsuranceContractViolation(violation)
+    definition["bill_preview_days"] = bill_preview_days
+    definition["nonpayment_mode"] = nonpayment_mode
+    definition["cancel_after_days"] = cancel_after_days
 
     # --- optional presentation / provenance metadata ------------------------
     if submission.get("tier_level") not in (None, ""):

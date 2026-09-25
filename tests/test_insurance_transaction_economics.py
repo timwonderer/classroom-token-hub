@@ -41,6 +41,7 @@ from app.utils.canonical_temporal_resolver import (
 )
 from tests.helpers.ledger import create_ledger_idempotent_transaction
 from tests.helpers.classroom_initializer import initialize
+from tests.helpers.insurance_domain import establish_paid_premium_lineage
 
 
 def _frozen(
@@ -54,7 +55,7 @@ def _frozen(
     return {
         "insurance_type": "TRANSACTION",
         "premium": premium,
-        "charge_frequency": "WEEKLY",
+        "charge_frequency": "WEEKLY", "bill_preview_days": 3, "nonpayment_mode": "ACCUMULATE",
         "reimbursement_percentage": reimbursement_percentage,
         "payout_multiple": payout_multiple,
         "claims_per_week_equivalent": claims_per_week_equivalent,
@@ -92,6 +93,13 @@ def _add_granted(classroom, student, entitlement_id, *, granted_at=None, **froze
         ev.timestamp = granted_at
     db.session.add(ev)
     db.session.flush()
+    # A real purchase gives the entitlement a paid premium lineage; without one
+    # it has no coverage period and is not usable (DOM-STORE-001 §VIII.E.1).
+    establish_paid_premium_lineage(
+        class_id=classroom.class_id, seat_id=student.seat.id,
+        entitlement_id=entitlement_id, policy_uuid=policy.policy_uuid,
+        start_utc=ev.timestamp,
+    )
     return ev
 
 

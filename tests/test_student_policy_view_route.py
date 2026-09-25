@@ -49,7 +49,7 @@ def _make_non_monetary_policy(classroom, *, waiting_period_days, title):
     row = configure_insurance_definition(
         class_id=classroom.class_id,
         submission=dict(
-            insurance_type="NON_MONETARY", premium="10.00", charge_frequency="WEEKLY",
+            insurance_type="NON_MONETARY", premium="10.00", charge_frequency="WEEKLY", bill_preview_days=3, nonpayment_mode="ACCUMULATE",
             claims_per_week_equivalent="2",
             waiting_period_days=str(waiting_period_days), title=title,
         ),

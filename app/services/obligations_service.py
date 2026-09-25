@@ -28,9 +28,8 @@ class BillCycleLifecycleError(Exception):
     """Raised when a bill-cycle mutation violates the lifecycle (DOM-OBL-001 §V.7).
 
     Succession (`schedule_next_bill_cycle`) is lawful only for an empty lineage or
-    a non-terminal latest cycle whose ``next_assessment_at`` has arrived. The
-    interim insurance genesis command (`establish_bill_cycle`) raises this when the
-    lineage is not empty.
+    a non-terminal latest cycle whose assessment point has arrived; termination
+    raises it for a lineage that does not exist or is out of class scope.
     """
 
 

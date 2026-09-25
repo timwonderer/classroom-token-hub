@@ -28,7 +28,7 @@ def _make_transaction_policy(classroom):
     configure_insurance_definition(
         class_id=classroom.class_id,
         submission=dict(
-            insurance_type="TRANSACTION", premium="10.00", charge_frequency="WEEKLY",
+            insurance_type="TRANSACTION", premium="10.00", charge_frequency="WEEKLY", bill_preview_days=3, nonpayment_mode="ACCUMULATE",
             reimbursement_percentage="80", payout_multiple="3",
             claims_per_week_equivalent="1", claim_window_days="7",
             title="Basic Cover",

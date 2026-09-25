@@ -81,6 +81,7 @@ from app.services.entitlement_read_service import (
 )
 from app.services.insurance_policy_service import list_insurance_policy_versions
 from app.services import insurance_definition_service as insurance_defs
+from app.services import insurance_coverage_service as insurance_coverage
 from app.services.entitlement_read_service import (
     has_active_insurance_coverage,
     has_active_coverage_in_group,
@@ -1913,13 +1914,24 @@ def view_policy(policy_uuid):
         max_claims_count=policy.claims_per_week_equivalent,
         claim_type=normalize_insurance_type(policy.insurance_type),
         autopay=True,
-        auto_cancel_nonpay_days=0,
+        auto_cancel_nonpay_days=policy.cancel_after_days,
         entitlement_item_id=policy.policy_uuid,
         payload={},
     )
     purchase_date = None
     coverage_start_date = None
+    # Derived from the Obligations read every render (DOM-STORE-001 §VIII.E.1);
+    # never a cached payment flag (FEAT-STOR-007 §X).
+    premiums_current = False
+    next_payment_due = None
     if entitlement is not None:
+        premiums_current = insurance_coverage.are_premiums_current(
+            context.class_id, entitlement.entitlement_id
+        )
+        current_period = insurance_coverage.get_coverage_period(
+            context.class_id, entitlement.entitlement_id
+        )
+        next_payment_due = current_period.end_utc if current_period else None
         purchase_date = ensure_utc(entitlement.timestamp)
         _, coverage_start_date = coverage_effective_start_utc(
             context,
@@ -1933,10 +1945,9 @@ def view_policy(policy_uuid):
         contract_description=placeholder_policy.description,
         purchase_date=purchase_date,
         coverage_start_date=coverage_start_date,
-        payment_current=entitlement is not None,
-        days_unpaid=0,
+        premiums_current=premiums_current,
         status="active" if entitlement is not None else "inactive",
-        next_payment_due=None,
+        next_payment_due=next_payment_due,
         contract_claim_time_limit_days=int(policy.claim_window_days or 0),
         contract_max_claim_amount=None,
         contract_max_claims_count=policy.claims_per_week_equivalent,

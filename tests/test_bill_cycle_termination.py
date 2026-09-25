@@ -1,26 +1,25 @@
-"""Interim insurance genesis and bill-cycle termination (DOM-OBL-001 §V.7).
+"""Bill-cycle termination (DOM-OBL-001 §V.7).
 
-DOM-OBL-001 v3.1 has two bill-cycle operations, succession and termination.
-Succession (``schedule_next_bill_cycle``) is held by
-tests/dom/obligations/test_bill_cycle_succession.py.
-
-``establish_bill_cycle`` survives only as insurance purchase's interim genesis
-path, until the insurance lineage migrates to succession. These tests keep that
-interim command honest while it exists: it produces cycle 1 and refuses to run
-twice for one lineage. Termination, the second operation, appends a terminal row.
+DOM-OBL-001 has two bill-cycle operations, succession and termination.
+Succession (``schedule_next_bill_cycle``) — including cycle 1 of an empty
+lineage; there is no separate genesis command — is held by
+tests/dom/obligations/test_bill_cycle_succession.py. Termination, the second
+operation, appends a terminal row; these tests hold it, with each lineage's
+cycle 1 created through succession.
 """
 
 from __future__ import annotations
 
 from datetime import timedelta
+from uuid import uuid4
 
 import pytest
 
 from app.extensions import db
-from app.models import BillCycle
 from app.services import obligations_service
 from app.services.obligations_service import BillCycleLifecycleError
-from app.feats.establish_bill_cycle_feat import execute_establish_bill_cycle
+from app.feats.schedule_next_bill_cycle_feat import execute_schedule_next_bill_cycle
+from app.feats.terminate_bill_cycle_feat import execute_terminate_bill_cycle
 from app.utils.canonical_temporal_resolver import utc_now
 from tests.helpers.classroom_initializer import initialize
 
@@ -32,80 +31,21 @@ def _boundaries(offset_days=0):
     return cycle_boundary_at, next_assessment_at
 
 
-# --------------------------------------------------------------------------- #
-# Genesis                                                                      #
-# --------------------------------------------------------------------------- #
-
-
-def test_genesis_establishes_cycle_1(app):
-    """establish_bill_cycle creates cycle 1 for a fresh lineage."""
-    classroom = initialize("chemistry_p1", app)
-    with app.app_context():
-        cb, na = _boundaries()
-        cycle = execute_establish_bill_cycle(
-            class_id=classroom.class_id,
-            internal_ref="insurance:seat-1:policy-x",
-            cycle_boundary_at=cb,
-            next_assessment_at=na,
-        )
-        db.session.commit()
-        assert cycle.cycle_number == 1
-        assert cycle.internal_ref == "insurance:seat-1:policy-x"
-
-
-def test_second_genesis_fails_regardless_of_idempotency(app):
-    """A second genesis for the same lineage fails even as a fresh invocation.
-
-    Each call to execute_establish_bill_cycle opens its own FEAT context (a
-    distinct invocation with its own implicit idempotency scope). The genesis
-    invariant is enforced against authoritative Obligations state, so the second
-    attempt raises rather than manufacturing another cycle 1.
-    """
-    classroom = initialize("chemistry_p1", app)
-    with app.app_context():
-        cb, na = _boundaries()
-        execute_establish_bill_cycle(
-            class_id=classroom.class_id,
-            internal_ref="insurance:seat-1:policy-x",
-            cycle_boundary_at=cb,
-            next_assessment_at=na,
-        )
-        db.session.commit()
-
-        with pytest.raises(BillCycleLifecycleError, match="no prior cycle"):
-            execute_establish_bill_cycle(
-                class_id=classroom.class_id,
-                internal_ref="insurance:seat-1:policy-x",
-                cycle_boundary_at=cb,
-                next_assessment_at=na,
-            )
-
-        # Still exactly one cycle for the lineage.
-        cycles = obligations_service.get_bill_cycles_for_internal_ref(
-            "insurance:seat-1:policy-x"
-        )
-        assert [c.cycle_number for c in cycles] == [1]
-
-
-def test_genesis_rejects_bad_temporal_ordering(app):
-    """next_assessment_at must be after cycle_boundary_at."""
-    classroom = initialize("chemistry_p1", app)
-    with app.app_context():
-        now = utc_now()
-        with pytest.raises(ValueError, match="next_assessment_at"):
-            execute_establish_bill_cycle(
-                class_id=classroom.class_id,
-                internal_ref="insurance:seat-2:policy-x",
-                cycle_boundary_at=now + timedelta(days=60),
-                next_assessment_at=now + timedelta(days=30),  # before boundary
-            )
+def execute_establish_first_cycle(*, class_id, internal_ref, cycle_boundary_at,
+                                  next_assessment_at, policy_uuid=None):
+    """Cycle 1 of an empty lineage, through succession (no genesis command)."""
+    return execute_schedule_next_bill_cycle(
+        class_id, internal_ref,
+        cycle_boundary_at=cycle_boundary_at,
+        next_assessment_at=next_assessment_at,
+        policy_uuid=policy_uuid,
+        idempotency_key=f"termination-test:{uuid4().hex}",
+    )
 
 
 # --------------------------------------------------------------------------- #
 # Termination (insurance cancellation stops recurrence)                       #
 # --------------------------------------------------------------------------- #
-
-from app.feats.terminate_bill_cycle_feat import execute_terminate_bill_cycle  # noqa: E402
 
 
 def test_terminate_appends_terminal_cycle_with_null_next_assessment(app):
@@ -114,7 +54,7 @@ def test_terminate_appends_terminal_cycle_with_null_next_assessment(app):
     classroom = initialize("chemistry_p1", app)
     with app.app_context():
         cb, na = _boundaries()
-        execute_establish_bill_cycle(
+        execute_establish_first_cycle(
             class_id=classroom.class_id,
             internal_ref="insurance:seat-t1:policy-x",
             cycle_boundary_at=cb,
@@ -146,7 +86,7 @@ def test_terminate_is_idempotent_no_second_terminal_row(app):
     classroom = initialize("chemistry_p1", app)
     with app.app_context():
         cb, na = _boundaries()
-        execute_establish_bill_cycle(
+        execute_establish_first_cycle(
             class_id=classroom.class_id,
             internal_ref="insurance:seat-t2:policy-x",
             cycle_boundary_at=cb,
@@ -186,7 +126,7 @@ def test_terminate_rejects_class_scope_mismatch(app):
     classroom = initialize("chemistry_p1", app)
     with app.app_context():
         cb, na = _boundaries()
-        execute_establish_bill_cycle(
+        execute_establish_first_cycle(
             class_id=classroom.class_id,
             internal_ref="insurance:seat-t3:policy-x",
             cycle_boundary_at=cb,
@@ -205,7 +145,7 @@ def test_terminate_does_not_rewrite_prior_cycles(app):
     classroom = initialize("chemistry_p1", app)
     with app.app_context():
         cb, na = _boundaries()
-        genesis = execute_establish_bill_cycle(
+        genesis = execute_establish_first_cycle(
             class_id=classroom.class_id,
             internal_ref="insurance:seat-t4:policy-x",
             cycle_boundary_at=cb,

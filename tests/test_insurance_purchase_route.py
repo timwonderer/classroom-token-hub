@@ -37,7 +37,7 @@ def _make_policy(classroom, premium="10.00"):
     row = configure_insurance_definition(
         class_id=classroom.class_id,
         submission=dict(
-            insurance_type="TRANSACTION", premium=premium, charge_frequency="WEEKLY",
+            insurance_type="TRANSACTION", premium=premium, charge_frequency="WEEKLY", bill_preview_days=3, nonpayment_mode="ACCUMULATE",
             reimbursement_percentage="80", payout_multiple="3",
             claims_per_week_equivalent="1", claim_window_days="7",
             title="Basic Cover",
@@ -246,7 +246,7 @@ def _make_productivity_policy(classroom):
     row = configure_insurance_definition(
         class_id=classroom.class_id,
         submission=dict(
-            insurance_type="PRODUCTIVITY", premium="10.00", charge_frequency="WEEKLY",
+            insurance_type="PRODUCTIVITY", premium="10.00", charge_frequency="WEEKLY", bill_preview_days=3, nonpayment_mode="ACCUMULATE",
             reimbursement_percentage="80", payout_multiple="5",
             claimable_dates_per_week_equivalent="5", title="Productivity Cover",
         ),
@@ -294,7 +294,7 @@ def _make_tier(classroom, group, level, premium="10.00"):
     row = configure_insurance_definition(
         class_id=classroom.class_id,
         submission=dict(
-            insurance_type="TRANSACTION", premium=premium, charge_frequency="WEEKLY",
+            insurance_type="TRANSACTION", premium=premium, charge_frequency="WEEKLY", bill_preview_days=3, nonpayment_mode="ACCUMULATE",
             reimbursement_percentage="80", payout_multiple="3",
             claims_per_week_equivalent="1", claim_window_days="7",
             title=f"{group} {level}", tier_group=group, tier_level=str(level),

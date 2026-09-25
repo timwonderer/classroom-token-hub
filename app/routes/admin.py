@@ -3570,7 +3570,13 @@ def student_detail_public(actor_public_id):
                 if policy_uuid else None
             )
             if policy:
-                active_insurance = SimpleNamespace(policy=policy, payment_current=True)
+                # Derived from the Obligations read, never a cached flag
+                # (DOM-STORE-001 §VIII.E.1, FEAT-STOR-007 §X).
+                from app.services.insurance_coverage_service import are_premiums_current
+                active_insurance = SimpleNamespace(
+                    policy=policy,
+                    premiums_current=are_premiums_current(class_id, grant.entitlement_id),
+                )
                 break
 
     # CRITICAL: Get scoped balances for current class_id + seat_id only.
@@ -5967,6 +5973,10 @@ _INSURANCE_TYPE_CHOICES = (
     ("NON_MONETARY", "Non-monetary"),
 )
 _CHARGE_FREQUENCY_CHOICES = (("WEEKLY", "Weekly"), ("MONTHLY", "Monthly"))
+_NONPAYMENT_MODE_CHOICES = (
+    ("ACCUMULATE", "Keep billing; coverage pauses until every premium is paid"),
+    ("CANCEL_AFTER_X_DAYS", "Cancel coverage after a number of days unpaid"),
+)
 
 
 def _insurance_definition_view(row):
@@ -5984,6 +5994,9 @@ def _insurance_definition_view(row):
         claim_window_days=row.claim_window_days,
         claimable_dates_per_week_equivalent=row.claimable_dates_per_week_equivalent,
         waiting_period_days=row.waiting_period_days,
+        bill_preview_days=row.bill_preview_days,
+        nonpayment_mode=row.nonpayment_mode,
+        cancel_after_days=row.cancel_after_days,
         tier_level=row.tier_level,
         tier_name=row.tier_name,
         tier_group=row.tier_group,
@@ -6022,6 +6035,15 @@ def _insurance_submission_from_form(form):
         "claim_window_days": _v("claim_window_days"),
         "claimable_dates_per_week_equivalent": _v("claimable_dates_per_week_equivalent"),
         "waiting_period_days": _v("waiting_period_days"),
+        "bill_preview_days": _v("bill_preview_days"),
+        "nonpayment_mode": _v("nonpayment_mode"),
+        # cancel_after_days is only lawful with CANCEL_AFTER_X_DAYS; a value left
+        # in the hidden field after switching modes is not submitted.
+        "cancel_after_days": (
+            _v("cancel_after_days")
+            if (_v("nonpayment_mode") or "").upper() == "CANCEL_AFTER_X_DAYS"
+            else None
+        ),
         "tier_level": _v("tier_level"),
         "tier_name": _v("tier_name"),
         "tier_group": tier_group,
@@ -6046,6 +6068,9 @@ def _insurance_submission_from_row(row):
         "claim_window_days": row.claim_window_days,
         "claimable_dates_per_week_equivalent": row.claimable_dates_per_week_equivalent,
         "waiting_period_days": row.waiting_period_days,
+        "bill_preview_days": row.bill_preview_days,
+        "nonpayment_mode": row.nonpayment_mode,
+        "cancel_after_days": row.cancel_after_days,
         "tier_level": row.tier_level,
         "tier_name": row.tier_name,
         "tier_group": row.tier_group,
@@ -6152,6 +6177,7 @@ def new_insurance_policy():
                 current_page="insurance",
                 insurance_type_choices=_INSURANCE_TYPE_CHOICES,
                 charge_frequency_choices=_CHARGE_FREQUENCY_CHOICES,
+                nonpayment_mode_choices=_NONPAYMENT_MODE_CHOICES,
                 tier_groups=_existing_tier_groups(class_id),
             )
         flash(f"Insurance policy '{row.title or row.policy_uuid}' created.", "success")
@@ -6165,6 +6191,7 @@ def new_insurance_policy():
         current_page="insurance",
         insurance_type_choices=_INSURANCE_TYPE_CHOICES,
         charge_frequency_choices=_CHARGE_FREQUENCY_CHOICES,
+        nonpayment_mode_choices=_NONPAYMENT_MODE_CHOICES,
         tier_groups=_existing_tier_groups(class_id),
     )
 
@@ -6207,6 +6234,7 @@ def edit_insurance_policy(policy_uuid):
                 current_page="insurance",
                 insurance_type_choices=_INSURANCE_TYPE_CHOICES,
                 charge_frequency_choices=_CHARGE_FREQUENCY_CHOICES,
+                nonpayment_mode_choices=_NONPAYMENT_MODE_CHOICES,
                 tier_groups=_existing_tier_groups(class_id),
             )
         flash(f"Insurance policy '{new_row.title or new_row.policy_uuid}' updated (new version).", "success")
@@ -6220,6 +6248,7 @@ def edit_insurance_policy(policy_uuid):
         current_page="insurance",
         insurance_type_choices=_INSURANCE_TYPE_CHOICES,
         charge_frequency_choices=_CHARGE_FREQUENCY_CHOICES,
+        nonpayment_mode_choices=_NONPAYMENT_MODE_CHOICES,
         tier_groups=_existing_tier_groups(class_id),
     )
 

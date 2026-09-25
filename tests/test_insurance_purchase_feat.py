@@ -54,6 +54,7 @@ def _submission(**overrides):
         insurance_type="TRANSACTION", premium="10.00", charge_frequency="WEEKLY",
         reimbursement_percentage="80", payout_multiple="3",
         claims_per_week_equivalent="1", claim_window_days="7",
+        bill_preview_days="3", nonpayment_mode="ACCUMULATE",
         title="Basic Transaction Cover",
     )
     s.update(overrides)
