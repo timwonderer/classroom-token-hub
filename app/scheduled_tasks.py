@@ -711,6 +711,59 @@ def run_insurance_expiry_job():
     )
 
 
+def run_insurance_renewal_job():
+    """Insurance coverage renewal (FEAT-STOR-007) for every active insurance entitlement.
+
+    For each entitlement without a terminal event: apply the purchased
+    version's nonpayment behavior, then — while the lineage's assessment point
+    has arrived — schedule the next coverage period, assess its premium, and
+    attempt automatic payment. Each entitlement runs under its OWN top-level
+    FEAT-STOR-007 context (a plain loop, no shared FEAT context), so one
+    entitlement's failure cannot roll back or block another. Idempotent: a
+    rerun finds every step already recorded and writes nothing.
+    """
+    from app.extensions import db
+    from app.feats.insurance_coverage_renewal_feat import (
+        execute_insurance_coverage_renewal,
+        list_renewable_insurance_entitlements,
+    )
+
+    logger = logging.getLogger('scheduled_tasks')
+    logger.info("Starting scheduled insurance coverage-renewal job")
+
+    try:
+        work = list_renewable_insurance_entitlements()
+    except Exception:
+        db.session.rollback()
+        logger.exception("Insurance renewal job could not enumerate entitlements")
+        return
+
+    renewed = 0
+    terminated = 0
+    failed = 0
+    for class_id, entitlement_id in work:
+        try:
+            result = execute_insurance_coverage_renewal(
+                class_id=class_id,
+                entitlement_id=entitlement_id,
+                idempotency_key=f"FEAT-STOR-007:renew:{entitlement_id}",
+            )
+            if result.cycles_scheduled:
+                renewed += 1
+            if result.terminated_for_nonpayment:
+                terminated += 1
+        except Exception:
+            failed += 1
+            db.session.rollback()
+            logger.exception("Insurance renewal failed for entitlement %s", entitlement_id)
+            continue
+
+    logger.info(
+        "Insurance coverage-renewal job completed. Renewed %s, terminated for nonpayment %s, failed %s",
+        renewed, terminated, failed,
+    )
+
+
 def run_collective_goal_expiry_job():
     """Sweep lapsed collective goals: EXPIRE the unmet ones and refund their buy-ins.
 
@@ -1025,6 +1078,16 @@ SCHEDULED_JOB_SPECS: tuple[ScheduledJobSpec, ...] = (
         id='automatic_payroll',
         name='Automatic payroll (due classes)',
         func=run_automatic_payroll_job,
+        trigger='interval',
+        trigger_kwargs={'hours': 1},
+    ),
+    # Hourly, so each coverage period's premium is assessed (and autopaid) at
+    # its bill-preview point and a CANCEL_AFTER_X_DAYS deadline is applied
+    # promptly across timezones. Idempotent per entitlement and period.
+    ScheduledJobSpec(
+        id='insurance_renewal',
+        name='Insurance coverage renewal',
+        func=run_insurance_renewal_job,
         trigger='interval',
         trigger_kwargs={'hours': 1},
     ),
