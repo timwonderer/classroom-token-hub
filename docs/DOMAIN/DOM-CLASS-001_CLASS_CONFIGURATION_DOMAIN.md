@@ -143,7 +143,7 @@ Rules:
 - `economic_engine` is a projection of class-level configuration and must not become independent policy truth.
 - `economic_engine` must not be treated as an immutable legacy schema contract while reconstruction is in progress.
 - Class creation and class deletion are class-level mutation workflows.
-- Disabling a feature changes access and display state only; it does not rewrite downstream facts.
+- Disabling a feature changes access and display state for new use only; it does not rewrite downstream facts, and it does not remove the access needed to resolve surviving downstream state (for rent, `DOM-OBL-001` §IX.16).
 
 ## X. Amendment
 
