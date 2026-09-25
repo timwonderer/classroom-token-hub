@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-ECON-003    |  2.0    |     2026-09-13 |        1.5 |       Normative |
+| SPEC-ECON-003    |  2.1    |     2026-09-24 |        2.0 |       Normative |
 
 ---
 
@@ -259,12 +259,21 @@ Weekly coverage has a `coverage_week_equivalent` of exactly `1`.
 Period-normalized values then derive from the actual duration, e.g.:
 
 ```text
-period_premium        = weekly_equivalent_premium × coverage_week_equivalent
+period_allowance      = ceil(weekly_allowance × coverage_week_equivalent)   # § 4.4.8
 maximum_policy_payout = period_premium × payout_multiple      # where applicable
 ```
 
 Example: a policy renewing August 25 → September 25 covers 31 class-local days, so
 `coverage_week_equivalent = 31 / 7 ≈ 4.4286`.
+
+**The premium is the exception.** The premium charged for each billing period is the
+frozen contractual amount of the purchased policy version. It does not scale with the
+number of days in any particular period: a monthly policy charges the same premium
+for a 28-day period and a 31-day period, as a real insurance contract does.
+`period_premium` in the formulas of this section denotes that frozen per-period
+premium. The per-week envelope and `coverage_week_equivalent` inform the Economic
+Engine Helper's premium *recommendation* while a policy is being authored (§ 4.9);
+once authored, the premium is fixed for every period of that policy version.
 
 Covered-day derivation and renewal boundaries MUST use canonical class-local temporal
 resolution — never elapsed seconds — so that DST or timezone transitions do not distort the
@@ -536,6 +545,10 @@ coverage_week_equivalent = covered_class_local_calendar_days / 7   # half-open [
 
 period_premium = CWI × recommended_premium_rate × coverage_week_equivalent
 ```
+
+This is the Helper's premium **recommendation** while a policy is authored. The teacher's
+authored premium is then frozen with the policy version and charged unchanged for every
+billing period, whatever that period's length (§ 4.4.2).
 
 For monetary products (`TRANSACTION`, `PRODUCTIVITY`):
 
@@ -1002,6 +1015,10 @@ Revisions to this document must:
 
 ### Revision history
 
+- **2.1 (2026-09-24)** — The premium charged each billing period is the frozen
+  contractual amount of the purchased policy version and does not scale with that
+  period's length (§ 4.4.2); `period_premium` denotes it, and § 4.4.8's scaled formula
+  is the authoring recommendation. Claim allowance and payout formulas are unchanged.
 - **2.0 (2026-09-13)** — Preserves the complete v2 Economic Engine model and adds a
   unified CWI Helper contract, finite consequence primitives, consistent surface
   mapping, explicit non-prediction semantics, Collective Goal per-student and

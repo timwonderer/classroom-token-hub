@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-OBL-002 | 2.0 | 2026-09-24 | 1.1 | Normative |
+| FEAT-OBL-002 | 2.1 | 2026-09-24 | 2.0 | Normative |
 
 ---
 
@@ -65,7 +65,7 @@ The request carries no cycle number. The lawful caller SHALL provide the upstrea
 ### 1. Verification
 
 1. Look up the command identity. If it was already executed with the same terms, return that execution's cycle (exact replay); if with different terms, fail closed (replay mismatch). Replay is decided before eligibility.
-2. Verify succession eligibility from authoritative Obligations state (DOM-OBL-001 §V.7): the lineage is empty, or its latest cycle is non-terminal and its `next_assessment_at` has arrived at the reference time, evaluated through the Canonical Temporal Evaluation helper (INV-ARC-015 §VII). Succession after a terminal cycle, or before `next_assessment_at`, is unlawful.
+2. Verify succession eligibility from authoritative Obligations state (DOM-OBL-001 §V.7): the lineage is empty, or its latest cycle is non-terminal and its assessment point has arrived at the reference time, evaluated through the Canonical Temporal Evaluation helper (INV-ARC-015 §VII). The assessment point is `next_assessment_at − preview`, where `preview` is the bill preview interval of the immutable policy referenced by that cycle's own `policy_uuid`, obtained through the Policies read (DOM-POL-001A §V.E); a preview of `0` places it at `next_assessment_at`. Succession after a terminal cycle, or before the assessment point, is unlawful.
 3. Verify `next_assessment_at` is strictly later than `cycle_boundary_at` (DOM-OBL-001 §VII.2).
 4. Derive the cycle number once from the state read in step 2.
 5. Verify the recurring source still lawfully exists, and resolve the lawful version snapshot that governs the cycle.
@@ -90,7 +90,8 @@ If the authoritative source has terminated, no successor cycle is created. Termi
 4. A terminated recurring relationship produces no successor cycle.
 5. Succession is idempotent on command identity, never on the shape of the row it would write. Two distinct commands deriving the same cycle are two commands: exactly one creates it and the other receives a succession conflict.
 6. The cycle number is derived (`1` for an empty lineage, otherwise `current + 1`) and is never caller-supplied.
-7. Succession is lawful only for an empty lineage or a non-terminal latest cycle whose `next_assessment_at` has arrived. A caller's own scheduling predicate does not substitute for this check.
+7. Succession is lawful only for an empty lineage or a non-terminal latest cycle whose assessment point has arrived. A caller's own scheduling predicate does not substitute for this check. A later policy submission cannot move an existing cycle's assessment point.
+8. The latest cycle is not the current cycle: under advance assessment it is routinely an upcoming cycle whose period has not begun. Callers that need the current cycle use the period-containment query (DOM-OBL-001 §V.7).
 
 ---
 

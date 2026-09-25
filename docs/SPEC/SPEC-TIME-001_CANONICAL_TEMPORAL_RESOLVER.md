@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-TIME-001 | 1.0 | 2026-07-20 | `V2_Temporal_Architecture_Rebuild_Plan.md` | Implementation Spec |
+| SPEC-TIME-001 | 1.1 | 2026-09-24 | 1.0 | Implementation Spec |
 
 ---
 
@@ -189,6 +189,8 @@ Permitted primitive names:
 - `evaluation_period_boundaries`
 - `elapsed_duration`
 - `shift_timestamp`
+- `anchored_recurrence_boundary`
+- `minimum_period_duration`
 
 The resolver must not expose additional public temporal primitives without amending this spec.
 
@@ -500,6 +502,70 @@ Rules:
 - Callers must not derive week or month boundaries independently.
 - The resolver does not decide whether a weekly or monthly period has business meaning.
 
+### 12. `anchored_recurrence_boundary`
+
+Purpose:
+
+Derive the n-th boundary of a recurrence anchored to a calendar date, such as a recurring billing period that repeats on the anchor day each month or every seven days.
+
+Accepts:
+
+| Input | Required | Notes |
+| --- | --- | --- |
+| `anchor_date` | Yes | Calendar date in the resolved authority that anchors the recurrence |
+| `cadence` | Yes | `week` or `month` |
+| `index` | Yes | Integer `n ≥ 0`; `0` returns the anchor itself |
+| `overflow` | For `month` | `roll_forward` or `clamp`; how to treat an anchor day that does not exist in the target month |
+
+Returns:
+
+| Result Field | Meaning |
+| --- | --- |
+| `boundary_date` | Calendar date of the n-th boundary in the resolved authority |
+| `boundary_start` | Start of that date (00:00) in the resolved authority |
+| `boundary_start_utc` | Same instant in UTC, for persistence and comparison |
+
+Rules:
+
+- Every boundary is derived independently from `anchor_date` and `index`. It is never derived from a previously returned boundary, so a rolled or clamped boundary never changes the anchor or drifts later boundaries.
+- `week`: the boundary date is `anchor_date + 7 × index` calendar days. It is not `168 × index` elapsed hours; DST transitions do not move it off midnight.
+- `month`: the target month is `index` calendar months after the anchor's month. If the anchor's day exists in the target month, that date is the boundary. Otherwise:
+  - `roll_forward`: the boundary is the first day of the following month (the next date that exists);
+  - `clamp`: the boundary is the last day of the target month.
+- Boundaries are at `00:00` in the resolved authority. Periods between consecutive boundaries are half-open `[boundary_n, boundary_{n+1})`.
+- The caller chooses `overflow`. The resolver performs calendar arithmetic only and does not know which business rule a product has ratified.
+
+Required example (`anchor_date` = January 31, `month`, `roll_forward`), indexes 0–11 of a non-leap year:
+
+```text
+1/31 → 3/1 → 3/31 → 5/1 → 5/31 → 7/1 → 7/31 → 8/31 → 10/1 → 10/31 → 12/1 → 12/31
+```
+
+In a leap year index 1 is still March 1 (February 31 does not exist; February 29 is not the anchor day).
+
+### 13. `minimum_period_duration`
+
+Purpose:
+
+Report the shortest possible period between consecutive boundaries of a cadence, so that product rules bounded by period length (for example a bill preview interval) are validated against the calendar rather than a constant copied into each product.
+
+Accepts:
+
+| Input | Required | Notes |
+| --- | --- | --- |
+| `cadence` | Yes | `week` or `month` |
+
+Returns:
+
+| Result Field | Meaning |
+| --- | --- |
+| `minimum_calendar_days` | `7` for `week`; `28` for `month` |
+
+Rules:
+
+- The value is the minimum over every anchor day and every month under either overflow rule. For `month` the minimum is a February period, 28 days.
+- A product rule of the form `0 < x < minimum_period_duration(cadence)` holds for every period of that cadence.
+
 ---
 
 ## X. Browser Timezone Contract
@@ -640,6 +706,10 @@ Targeted tests must prove:
 18. Payroll-style rounding is not performed by the resolver.
 19. Browser display timezone is `UTC` for SLE.
 20. Browser display timezone is Canonical Class Timezone for CLE.
+21. `anchored_recurrence_boundary` reproduces the required day-31 `roll_forward` sequence, in a leap and a non-leap year.
+22. `anchored_recurrence_boundary` distinguishes itself from a fixed-duration period, from end-of-month clamping (under `roll_forward`), and from deriving each boundary from the previous result.
+23. `anchored_recurrence_boundary` weekly boundaries stay at class-local midnight across a DST transition.
+24. `minimum_period_duration` returns 7 for `week` and 28 for `month`.
 
 Recommended test file:
 

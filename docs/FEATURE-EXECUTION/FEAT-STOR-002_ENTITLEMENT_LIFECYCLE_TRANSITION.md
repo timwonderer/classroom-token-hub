@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-STOR-002 | 2.0 | 2026-07-27 | 1.0 | Normative |
+| FEAT-STOR-002 | 2.1 | 2026-09-24 | 2.0 | Normative |
 
 ## I. Purpose
 
@@ -132,11 +132,16 @@ Expiration SHALL NOT rewrite the grant.
 
 Insurance entitlements may be exercised multiple times during an active coverage cycle according to policy and claim rules.
 
-When the coverage boundary is reached, the insurance entitlement terminates through:
+When a lawful coverage-end boundary is reached, the insurance entitlement terminates through:
 
 - `event_type = EXPIRED`.
 
-Teacher cancellation of an insurance offering is prospective and SHALL NOT cause early expiration of existing coverage.
+The lawful coverage-end boundaries are (`DOM-STORE-001` §VIII.C, §VIII.E.1):
+
+- the end of the last covered period, when renewal has stopped;
+- the nonpayment deadline of a `CANCEL_AFTER_X_DAYS` policy, when the triggering premium is still unsatisfied. This expiry carries a nonpayment cause in its payload and coordinates termination of the premium lineage in the same transaction.
+
+Teacher cancellation of an insurance offering is prospective and SHALL NOT cause early expiration of existing coverage. Nonpayment expiry is not a revocation, is not a refund, and does not reverse or forgive any assessed premium.
 
 ## IX. Revocation
 
@@ -178,7 +183,7 @@ A lawfully purchased insurance entitlement SHALL NOT be revoked or refunded.
 
 Teacher cancellation affects future acquisition or renewal only.
 
-Existing coverage remains valid until its configured coverage boundary and then expires normally.
+Existing coverage remains valid until its configured coverage boundary and then expires normally. Nonpayment expiry (§VIII) is an expiry at a lawful coverage-end boundary, not a revocation.
 
 ### D. Obligations-derived perks
 

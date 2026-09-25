@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-OBL-001 | 3.1 | 2026-09-23 | 3.0 | Constitutional |
+| DOM-OBL-001 | 3.2 | 2026-09-24 | 3.1 | Constitutional |
 
 ---
 
@@ -43,7 +43,7 @@ Rent is a homegrown obligation lifecycle owned by Obligations. It is configured 
 
 ### B. Insurance
 
-Insurance is not owned by Obligations as a product lifecycle. Store and Entitlements owns the insurance entitlement / coverage lifecycle, and Policies owns the insurance definition. Obligations may service recurring insurance premiums as debt lifecycle, but only with lawful inputs supplied by the owning authority.
+Insurance is not owned by Obligations as a product lifecycle. Store and Entitlements owns the insurance entitlement / coverage lifecycle, and Policies owns the insurance definition. Obligations may service recurring insurance premiums as debt lifecycle, but only with lawful inputs supplied by the owning authority. One insurance entitlement is one premium lineage: its `internal_ref` derives from the `entitlement_id` alone and never from a purchase command's idempotency key, so a repurchase is a new entitlement and a new lineage.
 
 ### C. Immediate Charges
 
@@ -147,11 +147,17 @@ A waiver MAY carry a teacher-entered note explaining the reason. The note is opt
 
 ### 7. Bill Cycle
 
-A bill cycle is a recurring temporal instruction that says which policy UUID is current for a continuing obligation-producing relationship and when that cycle must be assessed again. It serves any recurring obligation lineage (rent per class, and insurance premiums per seat), distinguished by `internal_ref` and `obligation_type`.
+A bill cycle is a recurring temporal instruction that says which policy UUID is current for a continuing obligation-producing relationship and when that cycle must be assessed again. It serves any recurring obligation lineage (rent per class, and insurance premiums per insurance entitlement), distinguished by `internal_ref` and `obligation_type`.
 
 Bill cycle does not know the teacher's intent beyond the persisted policy UUID and the next assessment boundary.
 
-Bill cycle may carry the exact `policy_uuid` that it invokes.
+Bill cycle may carry the exact `policy_uuid` that it invokes. That reference freezes the cycle's terms by reference (`DOM-POL-001` §VII): every term the cycle depends on, its amount and its scheduling terms alike, resolves from that exact immutable version and never from the family's current or latest row.
+
+**Period.** A cycle's period is the half-open interval `[cycle_boundary_at, next_assessment_at)`. `cycle_boundary_at` is the cycle's coverage/due boundary, where its period begins; `next_assessment_at` is where it ends and where the successor's period begins. The calendar day before `next_assessment_at` is the period's final covered day and its payment deadline; it is never itself called a boundary.
+
+**Current cycle.** The current cycle of a lineage at a reference time is the cycle whose period contains that time: `cycle_boundary_at ≤ reference_time < next_assessment_at`. The highest cycle number, or the most recently created cycle, MUST NOT be used as a proxy for the current cycle. Under advance assessment the latest cycle is routinely an upcoming one whose period has not begun.
+
+**Advance assessment.** A successor is assessed before its period begins, at `next_assessment_at − preview`, where `preview` is the bill preview interval of the immutable policy referenced by the predecessor's `policy_uuid`, obtained through the Policies read (`DOM-POL-001A` §V.E). Obligations does not read policy tables or branch on the policy family. A preview of `0` assesses the successor at its own boundary. Assessment availability and the due boundary are separate temporal concepts: early assessment permits early satisfaction, and it does not advance delinquency, grace, late-fee, or coverage-boundary semantics, all of which remain anchored to the cycle's `cycle_boundary_at`.
 
 The bill-cycle lifecycle has two operations, each an explicit command. Position in history is authoritative state, not API surface.
 
@@ -161,9 +167,9 @@ The bill-cycle lifecycle has two operations, each an explicit command. Position 
 **Succession eligibility.** Succession is lawful only when one of the following holds for the lineage, as read from authoritative Obligations state:
 
 - the lineage has no cycle; or
-- the latest cycle is non-terminal and its `next_assessment_at` has arrived at the canonically resolved reference time.
+- the latest cycle is non-terminal and its assessment point (`next_assessment_at − preview`, preview resolved from that cycle's own `policy_uuid`) has arrived at the canonically resolved reference time.
 
-Succession is unlawful for a lineage whose latest cycle is terminal, and unlawful before the latest cycle's `next_assessment_at`. "Has arrived" is evaluated through the Canonical Temporal Evaluation helper (`INV-ARC-015` §VII) against the reference time resolved for the command, never against a command-local current-time read or a direct datetime comparison. Eligibility is a domain determination; callers do not reconstruct it (`INV-ARC-009` §V). A caller's own scheduling predicate does not substitute for this rule.
+Succession is unlawful for a lineage whose latest cycle is terminal, and unlawful before the latest cycle's assessment point. A later policy submission in the same family cannot move an existing cycle's assessment point, because that point resolves only from the cycle's own `policy_uuid`. "Has arrived" is evaluated through the Canonical Temporal Evaluation helper (`INV-ARC-015` §VII) against the reference time resolved for the command, never against a command-local current-time read or a direct datetime comparison. Eligibility is a domain determination; callers do not reconstruct it (`INV-ARC-009` §V). A caller's own scheduling predicate does not substitute for this rule.
 
 There is no separate genesis command. "First cycle" is a property of the lineage's state at the moment of succession, not a distinct operation.
 
@@ -238,7 +244,7 @@ Notes column contract:
 
 ### 2. `bill_cycles`
 
-Records recurring temporal progression for any continuing obligation-producing relationship (rent per class; insurance premiums per seat), distinguished by `internal_ref` and the driven assessments' `obligation_type`.
+Records recurring temporal progression for any continuing obligation-producing relationship (rent per class; insurance premiums per insurance entitlement), distinguished by `internal_ref` and the driven assessments' `obligation_type`.
 
 Key fields:
 
@@ -246,9 +252,9 @@ Key fields:
 - `class_id` - FK to `classes`; the tenant isolation boundary (`INV-CORE-000` §1, `DOM-CORE-002` §IV.1), not a business subject
 - `internal_ref` - for specific assessment_event referencing and advancement
 - `cycle_number` - for advancement tracking
-- `policy_uuid` - current rent policy locator
-- `cycle_boundary_at` - due boundary for invoking assessment
-- `next_assessment_at` - next lawful boundary for the continuing rent cycle
+- `policy_uuid` - the immutable policy version in force for this cycle, frozen by reference
+- `cycle_boundary_at` - where this cycle's period begins: its coverage/due boundary
+- `next_assessment_at` - where this cycle's period ends and the successor's begins; the successor is assessed at `next_assessment_at − preview` (§V.7)
 
 Rules:
 
@@ -256,8 +262,8 @@ Rules:
 - bill cycles do not store amount;
 - bill cycles do not store business meaning for the reference;
 - bill cycles are only lawful when they point to a currently continuing relationship;
-- the latest bill cycle that invoked assessment establishes the current policy UUID in force for the lineage;
-- **succession** (`schedule_next_bill_cycle`) creates the next lawful cycle for the lineage, with the cycle number derived from authoritative state (`1` when the lineage is empty, otherwise `current + 1`) and never supplied by the caller; succession is lawful only under the eligibility rule in §V.7 (empty lineage, or a non-terminal latest cycle whose `next_assessment_at` has arrived), and never after a terminal row; **termination** writes a terminal row that stops future recurring assessment and is not a succession;
+- the current cycle, and therefore the policy UUID in force at a reference time, is the cycle whose period contains that time (§V.7); the latest cycle MUST NOT be used as a proxy for it;
+- **succession** (`schedule_next_bill_cycle`) creates the next lawful cycle for the lineage, with the cycle number derived from authoritative state (`1` when the lineage is empty, otherwise `current + 1`) and never supplied by the caller; succession is lawful only under the eligibility rule in §V.7 (empty lineage, or a non-terminal latest cycle whose assessment point has arrived), and never after a terminal row; **termination** writes a terminal row that stops future recurring assessment and is not a succession;
 - for a non-terminal cycle, `next_assessment_at` MUST be strictly later than `cycle_boundary_at`;
 - a terminal bill-cycle row with `next_assessment_at = NULL` stops future recurring assessment for the lineage;
 - when the helper is late, the next scheduled run processes the due cycle if it still exists and has not been superseded.
@@ -295,6 +301,10 @@ else:
     status = OUTSTANDING
 ```
 
+An assessment bound to a bill cycle is due at that cycle's `cycle_boundary_at`, regardless of when it was assessed.
+
+For one lineage at a reference time, **required obligations satisfied** is derived as: every assessment on the lineage that is due at or before the reference time is SATISFIED by facts recorded at or before that time. Assessments not yet due, including advance-assessed ones, are not required yet. This is the product-blind domain read other domains consume; they MUST NOT inspect obligation tables or reconstruct payment status. It evaluates persisted obligations only and never synthesizes a hypothetical liability from `next_assessment_at`.
+
 Past due is derived as:
 
 ```text
@@ -307,18 +317,21 @@ status == OUTSTANDING and canonical_now > due_at
 
 1. All obligation mutation SHALL occur through the canonical business operations owned by this domain.
 2. GET and read-time logic SHALL remain pure.
-3. A bill cycle boundary does not itself mutate canonical truth; it only makes a lawful assessment opportunity eligible.
+3. Neither a cycle's assessment point nor its boundary mutates canonical truth by itself. The assessment point makes succession and assessment eligible (§V.7); the boundary makes the period's consequences eligible (coverage, grace, late fees, period benefits).
 4. Assessment creation must remain idempotent for the same lawful lineage and correlation.
 5. A lawful assessment SHALL NOT be deleted, reversed, or retroactively rewritten.
 6. Monetary correction after settlement SHALL occur through Ledger, not by editing obligation history.
 7. Insurance cancellation or termination prevents future recurring assessments; it does not rewrite prior obligation events.
 8. Rent waiver is lawful only for rent assessments.
 9. At a rent boundary, previously granted rent perks expire regardless of whether the current policy UUID remains the same.
-10. Current rent is determined by the latest bill cycle that invoked assessment, not by a mutable current flag.
+10. Current rent is determined by the cycle whose period contains the reference time (§V.7), not by the latest cycle and not by a mutable current flag.
 11. A qualifying rent outcome MAY coordinate a Store entitlement grant, but the
     grant is a separate cross-domain effect with `acquisition_type = GRANT`.
     Obligations does not create, count, expire, or otherwise mutate the Store
     entitlement lifecycle.
+12. A coordinating FEAT MAY attempt satisfaction of an obligation immediately upon assessment. A failed attempt leaves the obligation OUTSTANDING; it remains satisfiable by any later lawful payment, before or after its due boundary.
+13. A benefit granted for satisfying a period's obligation belongs to that period. Satisfying it early grants nothing before the period begins; the benefit is granted when the period takes effect.
+14. Termination of a lineage stops future assessment only. Obligations already assessed remain due and satisfiable; satisfying one after termination settles that obligation and nothing else.
 
 ---
 

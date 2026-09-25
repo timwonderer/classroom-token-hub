@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-STORE-001 | 5.1 | 2026-09-24 | 5.0 | Normative |
+| DOM-STORE-001 | 5.2 | 2026-09-24 | 5.1 | Normative |
 
 ## I. Purpose
 
@@ -308,6 +308,8 @@ An individual insurance claim is not a consumption event (§VIII.E.1). No except
 
 Rent-granted entitlements expire at the rent-period boundary. Purchased rent-linked entitlements do not automatically expire just because the rent cycle rolled unless the product contract explicitly says so.
 
+For insurance, the lawful coverage-end boundaries are the end of the last period when renewal stops, and the nonpayment deadline of a `CANCEL_AFTER_X_DAYS` policy (§VIII.E.1). An expiry at the nonpayment deadline is recorded as `EXPIRED` with a nonpayment cause in its payload. It is not a revocation.
+
 ### D. Revocation semantics
 
 `REVOKED` records that an otherwise-valid entitlement was lawfully withdrawn through an authorized revocation path.
@@ -337,7 +339,29 @@ An `INSURANCE` entitlement records no `CONSUMED` event.
 
 Multiple claims MAY reference the same entitlement while its coverage is lawful, as the governing policy terms permit (claim allowance and payout capacity, FEAT-STOR-003 §XII).
 
-The insurance entitlement terminates only through its coverage lifecycle: `EXPIRED` at the coverage boundary (FEAT-STOR-002). Claim activity never produces a terminal entitlement event.
+The insurance entitlement terminates only through its coverage lifecycle: `EXPIRED` at a lawful coverage-end boundary (§VIII.C; FEAT-STOR-002). Claim activity never produces a terminal entitlement event.
+
+**Coverage periods.** The entitlement's premium lineage (`DOM-OBL-001` §II.B, one lineage per entitlement) defines its coverage periods: each bill cycle's half-open period `[cycle_boundary_at, next_assessment_at)`. The first period begins at the purchase instant and is never backdated to midnight; the purchase's class-local calendar date anchors the cadence, and every later boundary is class-local midnight on an anchored date (`SPEC-TIME-001` §IX.12, cadence and overflow per `DOM-POL-001A` §V.E). At a boundary the previous period ends unconditionally and can no longer authorize a claim.
+
+**Usability.** An insurance entitlement is usable at a reference time only when all of the following hold:
+
+- it was granted, and no `EXPIRED` or `REVOKED` event takes effect at or before that time;
+- Obligations reports the required obligations of its lineage satisfied at that time (`DOM-OBL-001` §VIII).
+
+Store consumes that answer as a boolean. It does not inspect obligation tables, reconstruct payment status, or persist a cached `SUSPENDED`, `payment_current`, or similar authorization state. Because the answer covers every required obligation on the lineage, paying only the newest premium does not restore usability while an older one is outstanding.
+
+**Advance premium and rollover.** Each period's premium is assessed at the bill preview point before the period begins (`DOM-OBL-001` §V.7), and the coordinating FEAT attempts automatic satisfaction from available funds when it is assessed. A failed attempt leaves the premium outstanding; the student may satisfy it manually before or after the boundary. At the boundary, a satisfied premium makes the new period usable immediately, giving continuous coverage; an unsatisfied premium leaves the new period gated.
+
+**Prospective restoration.** Usability is evaluated from facts recorded at or before the reference time. Satisfying a premium late restores usability from the moment of satisfaction forward; it never retroactively restores the gated interval. A claim's eligibility is fixed at filing (§IX, `FEAT-STOR-003`), so a claim filed while gated is not validated by a later payment, and a claim filed while usable is not invalidated by a later lapse, expiry, or termination.
+
+**Nonpayment.** The policy version's frozen `nonpayment_mode` (`DOM-POL-001A` §V.E) governs an unsatisfied premium:
+
+- `ACCUMULATE` — Premiums continue to be assessed on cadence and may accumulate as outstanding obligations. The entitlement stays gated until every required premium is satisfied, and then becomes usable again for the then-current period, provided it has not otherwise terminated. Nonpayment alone never terminates it.
+- `CANCEL_AFTER_X_DAYS` — The nonpayment deadline is the coverage boundary at which the earliest outstanding required premium lapsed, plus `cancel_after_days` class-local calendar days. Later assessments do not reset it. `cancel_after_days` may exceed one period, so further premiums may lawfully be assessed before the deadline. If that premium is still unsatisfied at the deadline, the entitlement records `EXPIRED` with a nonpayment cause, effective at the deadline, and its premium lineage is terminated (`DOM-OBL-001` §V.7). No premium is assessed for any period after termination. The interval before the deadline is not free coverage: the entitlement is gated throughout.
+
+**Debt survives termination.** Termination, whether by nonpayment or by stopping renewal, does not erase, forgive, reverse, or void a premium already assessed (`DOM-OBL-001` §IX.14). Satisfying one after termination settles that obligation only and does not resurrect the entitlement. Coverage after termination requires a new purchase, which creates a new entitlement and a new premium lineage.
+
+**Claim periods.** Claim allowance and payout capacity are scoped to one coverage period of the entitlement and reset with each period. A claim draws on the period containing its filing time (`FEAT-STOR-003` §XII).
 
 Resolution of a pending action, the lifecycle of a claim, and termination of an entitlement are independent lifecycle events. Completing one does not complete another.
 

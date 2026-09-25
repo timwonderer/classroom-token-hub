@@ -2,7 +2,13 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-STOR-003 | 1.3 | 2026-09-24 | 1.2 | Normative |
+| FEAT-STOR-003 | 1.4 | 2026-09-24 | 1.3 | Normative |
+
+> **1.4 revision note.** Recurring coverage (`DOM-STORE-001` v5.2 §VIII.E.1). A claim
+> may be filed only while the entitlement is usable, which includes Obligations
+> reporting its required premiums satisfied; eligibility is fixed at filing. Claim
+> allowance and payout capacity are scoped to the coverage period containing the
+> filing time and reset each period. The allowance and payout formulas are unchanged.
 
 > **1.3 revision note.** Conformance with `DOM-STORE-001` v5.1, which now governs the
 > claim representation this FEAT already executed. v1.1 (2026-08-28) restored a
@@ -111,13 +117,13 @@ Before submission, the FEAT SHALL establish:
 1. the referenced `entitlement_id` exists;
 2. the entitlement belongs to the target seat and class;
 3. the entitlement references a configured insurance capability;
-4. the coverage cycle is currently active under canonical temporal resolution;
-5. no terminal `EXPIRED` event or other authoritative termination exists;
-6. configured claim allowance remains available.
+4. the entitlement is usable at the filing time (`DOM-STORE-001` §VIII.E.1): no `EXPIRED` or `REVOKED` event has taken effect, and Obligations reports the required premiums of its lineage satisfied at that time;
+5. the coverage period containing the filing time is identified; it scopes the allowance and payout capacity for this claim (§XII);
+6. configured claim allowance remains available in that period.
 
 Teacher cancellation of the insurance offering SHALL NOT invalidate an already-active entitlement.
 
-An active entitlement remains eligible for claim submission until its configured coverage boundary.
+An entitlement remains eligible for claim submission while it is usable. Eligibility is evaluated once, at filing. A claim filed while the entitlement was usable remains adjudicable after a later lapse, expiry, nonpayment, or termination; a claim cannot be filed while the entitlement is gated, and a later payment does not retroactively validate the gated interval.
 
 ## V. Claim Submission
 
@@ -335,7 +341,7 @@ After cancellation:
 - covered students may continue submitting claims while coverage remains active;
 - teachers may continue approving or rejecting those claims.
 
-When the coverage boundary is reached:
+When a lawful coverage-end boundary is reached (the end of the last period after renewal stops, or a `CANCEL_AFTER_X_DAYS` nonpayment deadline):
 
 - `FEAT-STOR-002` records `EXPIRED` for the insurance entitlement.
 
@@ -346,6 +352,11 @@ Insurance claim activity never creates the terminal entitlement event.
 A monetary insurance entitlement meters two **independent** resources over each
 coverage period. Both are computed from the **frozen purchased contract** and
 canonical claim history — never from live policy edits or a mutable counter.
+
+**The period.** A claim belongs to the coverage period containing its filing time
+(`DOM-STORE-001` §VIII.E.1). Both resources are counted per period and reset at each
+coverage boundary. A claim filed in one period and decided in a later one draws on
+the period in which it was filed. `week_equivalent` below is that period's length.
 
 **Resource 1 — period claim-count allowance.** The maximum number of claim
 lifecycles that may be *filed* in the period:
