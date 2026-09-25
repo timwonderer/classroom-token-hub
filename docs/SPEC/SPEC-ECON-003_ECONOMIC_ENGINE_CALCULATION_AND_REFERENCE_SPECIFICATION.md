@@ -550,6 +550,13 @@ This is the Helper's premium **recommendation** while a policy is authored. The 
 authored premium is then frozen with the policy version and charged unchanged for every
 billing period, whatever that period's length (§ 4.4.2).
 
+**Monthly authoring normalization.** No concrete period exists while a monthly policy is
+authored, so the recommendation uses a fixed normalization of **30** class-local calendar
+days: `coverage_week_equivalent = 30 / 7` for a `MONTHLY` recommendation. This constant
+applies to authoring recommendations only. It never defines a billing period (periods come
+from anchored recurrence, `SPEC-TIME-001` § IX.12), and it never replaces the actual
+covered-day count used for claim allowances and payout-period scaling.
+
 For monetary products (`TRANSACTION`, `PRODUCTIVITY`):
 
 ```text
@@ -1018,7 +1025,8 @@ Revisions to this document must:
 - **2.1 (2026-09-24)** — The premium charged each billing period is the frozen
   contractual amount of the purchased policy version and does not scale with that
   period's length (§ 4.4.2); `period_premium` denotes it, and § 4.4.8's scaled formula
-  is the authoring recommendation. Claim allowance and payout formulas are unchanged.
+  is the authoring recommendation, normalized to 30 days for `MONTHLY`. Claim allowance
+  and payout formulas are unchanged.
 - **2.0 (2026-09-13)** — Preserves the complete v2 Economic Engine model and adds a
   unified CWI Helper contract, finite consequence primitives, consistent surface
   mapping, explicit non-prediction semantics, Collective Goal per-student and
