@@ -18,10 +18,22 @@ tests/test_axe_app_pages.py does for the hermetic groups.
 from __future__ import annotations
 
 import re
+from decimal import Decimal
+from uuid import uuid4
 
 import pytest
 
-from app.models import Announcement
+from app.extensions import db
+from app.feats.base import FEATContext
+from app.feats.class_configuration import configure_insurance_definition
+from app.feats.insurance_claim_feat import (
+    InsuranceClaimPolicyError,
+    describe_claim_contract,
+    submit_insurance_claim,
+)
+from app.feats.purchase_insurance_feat import execute_purchase_insurance
+from app.models import Announcement, InsuranceClaim, InsurancePolicy
+from app.services.context_resolver import CanonicalContext
 from app.utils.opaque_refs import make_opaque_ref
 from tests.helpers.axe_wcag import (
     assert_no_violations,
@@ -32,6 +44,7 @@ from tests.helpers.axe_wcag import (
     student_session as _build_student_session,
     wcag_live_server,  # noqa: F401 -- fixture, used via pytest injection
 )
+from tests.helpers.ledger import create_ledger_idempotent_transaction
 from tests.helpers.support_domain import create_class_announcement
 
 CLASS_ID = "6135423f-80cf-43ec-9ce3-4e05ffb98fad"
@@ -40,7 +53,6 @@ TEACHER_SEAT_ID = 1
 STUDENT_USER_ID = 4
 STUDENT_SEAT_ID = 3
 STUDENT_PUBLIC_ID = "a8eff5cf-ac8a-41a9-9ab4-2c40c22515da"
-CLAIM_ID = "22a04194-19f6-4a0b-813b-7569019d3c10"
 ISSUE_ID = 1
 # The entitlement backing this policy for seat 3 (hpent_Fjx8DFhYIabfFF8sHRMdJQ)
 # has a GRANTED event with no CONSUMED/EXPIRED/REVOKED terminal event, i.e. it
@@ -74,6 +86,105 @@ def _find_or_create_announcement(client) -> int:
     return created.id
 
 
+# A policy this file adds to the world when no reviewable claim exists yet.
+FIXTURE_POLICY_TITLE = "Group D Accessibility Fixture Cover"
+
+
+def _teacher_ctx() -> CanonicalContext:
+    return CanonicalContext(
+        user_id=TEACHER_USER_ID, class_id=CLASS_ID, seat_id=TEACHER_SEAT_ID, actor_role="teacher",
+    )
+
+
+def _student_ctx() -> CanonicalContext:
+    return CanonicalContext(
+        user_id=STUDENT_USER_ID, class_id=CLASS_ID, seat_id=STUDENT_SEAT_ID, actor_role="student",
+    )
+
+
+def _is_reviewable(claim) -> bool:
+    """Whether the admin review page can resolve this claim's contract.
+
+    Claims filed before insurance premiums were keyed by entitlement
+    (FEAT-STOR-007) have no coverage period to be judged in, so the review
+    page refuses them. Only claims filed under the current model qualify.
+    """
+    try:
+        describe_claim_contract(claim, canonical_context=_teacher_ctx())
+    except InsuranceClaimPolicyError:
+        return False
+    return True
+
+
+def _fixture_policy_uuid() -> str:
+    existing = InsurancePolicy.query.filter_by(
+        class_id=CLASS_ID, title=FIXTURE_POLICY_TITLE
+    ).first()
+    if existing is not None:
+        return existing.policy_uuid
+    policy_uuid = configure_insurance_definition(
+        class_id=CLASS_ID,
+        submission=dict(
+            insurance_type="TRANSACTION", premium="1.00", charge_frequency="WEEKLY",
+            reimbursement_percentage="100", payout_multiple="5",
+            claims_per_week_equivalent="1", claim_window_days="7",
+            bill_preview_days=3, nonpayment_mode="ACCUMULATE", title=FIXTURE_POLICY_TITLE,
+        ),
+        canonical_context=_teacher_ctx(),
+        correlation_id=f"corr_{uuid4().hex}",
+        idempotency_key=f"FEAT-CLASS-003:configure:{uuid4().hex}",
+    ).policy_uuid
+    db.session.commit()
+    return policy_uuid
+
+
+def _find_or_create_claim() -> str:
+    """A pending claim the admin review page can render, created via FEATs if none exists.
+
+    Created once: buy the fixture policy for the anchor student, record a loss,
+    and file a TRANSACTION claim against it. The claim stays reviewable on every
+    later run, because the coverage period it was filed in is recorded history.
+    """
+    for claim in (
+        InsuranceClaim.query.filter_by(class_id=CLASS_ID, target_seat_id=STUDENT_SEAT_ID)
+        .order_by(InsuranceClaim.submitted_at.desc())
+        .all()
+    ):
+        if _is_reviewable(claim):
+            return claim.claim_id
+
+    policy_uuid = _fixture_policy_uuid()
+    with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"groupd:fund:{uuid4().hex}"):
+        create_ledger_idempotent_transaction(
+            idempotency_key=f"groupd:fund:{uuid4().hex}", seat_id=STUDENT_SEAT_ID,
+            class_id=CLASS_ID, amount=Decimal("5.00"), account_type="checking",
+            type="payroll", description="Group D fixture: premium funding",
+        )
+    db.session.commit()
+    purchase = execute_purchase_insurance(
+        canonical_context=_student_ctx(), policy_uuid=policy_uuid,
+        idempotency_key=f"groupd:buy:{uuid4().hex}",
+    )
+    db.session.commit()
+    assert purchase.success, purchase.error_message
+
+    with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"groupd:loss:{uuid4().hex}"):
+        loss, _ = create_ledger_idempotent_transaction(
+            idempotency_key=f"groupd:loss:{uuid4().hex}", seat_id=STUDENT_SEAT_ID,
+            class_id=CLASS_ID, amount=Decimal("-2.00"), account_type="checking",
+            type="purchase", description="Group D fixture: covered loss",
+        )
+        loss_id = loss.id
+    db.session.commit()
+    filed = submit_insurance_claim(
+        canonical_context=_student_ctx(), entitlement_id=purchase.entitlement_id,
+        claim_subject={"transaction_id": loss_id}, correlation_id=f"claim:{uuid4().hex}",
+    )
+    db.session.commit()
+    assert filed.success, filed.error_message
+    return filed.claim_id
+
+
 def _scrape_student_detail_url(client) -> str:
     """The student-detail route requires a server-signed ``nav`` token minted
     per-request by the admin.students page itself (app/routes/admin.py's
@@ -103,6 +214,7 @@ def test_no_axe_violations_across_group_d_pages(app, client, wcag_live_server):
     )
 
     announcement_id = _find_or_create_announcement(client)
+    claim_id = _find_or_create_claim()
     student_detail_path = _scrape_student_detail_url(client)
     # admin.view_issue accepts either a plain numeric id or the encrypted
     # opaque ref; sysadmin.view_issue accepts only the opaque ref (its own
@@ -124,7 +236,7 @@ def test_no_axe_violations_across_group_d_pages(app, client, wcag_live_server):
     )
 
     pages: list[tuple[str, dict | None]] = [
-        (f"/admin/insurance/claim/{CLAIM_ID}", teacher_session),
+        (f"/admin/insurance/claim/{claim_id}", teacher_session),
         (f"/admin/issues/{issue_ref}", teacher_session),
         (student_detail_path, teacher_session),
         (f"/admin/announcements/edit/{announcement_id}", teacher_session),
