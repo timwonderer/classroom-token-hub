@@ -854,7 +854,10 @@ def create_app():
     from app.observability import metrics_payload, record_request
 
     @app.get("/metrics")
+    @limiter.exempt
     def prometheus_metrics():
+        # Exempt from the per-client default limits: only a local scraper can
+        # reach it, and a one-minute scrape alone exceeds "500 per day".
         if request.remote_addr not in {"127.0.0.1", "::1"}:
             return "Not Found", 404
         return metrics_payload(), 200, {"Content-Type": "text/plain; version=0.0.4; charset=utf-8"}
