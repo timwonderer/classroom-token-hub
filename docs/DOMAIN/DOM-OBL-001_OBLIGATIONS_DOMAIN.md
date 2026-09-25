@@ -168,7 +168,7 @@ The bill-cycle lifecycle has two operations, each an explicit command. Position 
 
   The terminal row's `cycle_boundary_at` is the **termination instant**, set by the terminating authority:
 
-  - when renewal is stopped, it is the end of the last committed period. The current period is committed. An upcoming, not-yet-begun period is committed only if its obligation was satisfied in advance; then the lineage terminates at that period's end, and otherwise at the current period's end;
+  - when renewal is stopped, it is the end of the last committed period. The current period is committed. An upcoming, not-yet-begun period becomes committed once any lawful satisfaction has been applied to its assessment, in full or in part; then the lineage terminates at that period's end, and otherwise at the current period's end;
   - when an owning domain terminates for nonpayment, it is that domain's lawful deadline, which may fall inside a period.
 
   In every case, each unsatisfied advance assessment for a period beginning at or after the termination instant is withdrawn (§V.8) in the same transaction, and every assessment for a period that began before the termination instant remains due. The termination instant may therefore precede the latest scheduled cycle's `next_assessment_at`.
@@ -194,7 +194,7 @@ This clause is built to match the replay model ratified for Ledger commands in `
 
 ### 8. Withdrawal
 
-A withdrawal is the immutable fact that an advance assessment never became owed, because the future period it was assessed for was lawfully cancelled before it began.
+A withdrawal is the immutable fact that an advance assessment never became owed, because the future period it was assessed for ceased to be lawful before it became effective and before any satisfaction occurred.
 
 It exists for one reason: **advance assessment MUST NOT make a future liability survive an action that, absent advance assessment, would have prevented that liability from ever arising.** A bill preview interval changes when a liability becomes payable; it never changes whether the liability exists.
 
@@ -210,6 +210,8 @@ Effects:
 - the assessment is not outstanding, not satisfied, not required, never past due, never delinquent, never gating, and ineligible for late fees or any other derived penalty;
 - a withdrawn assessment cannot later be satisfied;
 - a withdrawal creates no Ledger movement.
+
+**Commitment.** Withdrawal is lawful only while the advance assessment is economically untouched. Once any lawful satisfaction has been applied to it, in full or in part, the future period it belongs to is **committed** for that seat: the action that cancels future periods does not withdraw the assessment or reverse its payments, the committed period becomes effective and runs through its ordinary boundary with its ordinary benefits, and any unpaid remainder stays owed under the ordinary satisfaction and late-fee rules. A committed period never causes a successor to be scheduled; the cancelling action still governs every later period. Reversing money applied to a committed period would require its own explicit refund contract, with counter-entries (`INV-CORE-000`).
 
 A withdrawal is not a waiver. A waiver forgives a liability that was owed (§V.6, rent-only); a withdrawal records that a liability was never owed. Withdrawal is product-blind: any lineage whose future period is lawfully cancelled uses it.
 
@@ -369,7 +371,7 @@ status == OUTSTANDING and canonical_now > due_at
 12. A coordinating FEAT MAY attempt satisfaction of an obligation immediately upon assessment. A failed attempt leaves the obligation OUTSTANDING; it remains satisfiable by any later lawful payment, before or after its due boundary.
 13. A benefit granted for satisfying a period's obligation belongs to that period. Satisfying it early grants nothing before the period begins; the benefit is granted when the period takes effect.
 14. Termination of a lineage stops future assessment only. Obligations already assessed remain due and satisfiable, except an unpaid advance assessment for a period that never becomes effective, which is withdrawn (§V.8); satisfying one after termination settles that obligation and nothing else.
-15. An advance rent assessment is lawful only if rent is enabled at that period's `cycle_boundary_at` according to the class feature timeline known when it is assessed. A later disablement of rent that takes effect at or before that boundary withdraws the assessment if it is unsatisfied; the disabling FEAT coordinates the withdrawal (§V.8).
+15. Rent succession and advance rent assessment are lawful only if rent is enabled at the successor period's `cycle_boundary_at` according to the class feature timeline known at that time. When rent is disabled effective at or before the boundary of an already-assessed future period, the outcome is decided per seat (§V.8): an assessment with no satisfaction is withdrawn, and that seat has no rent for the period; an assessment with any satisfaction is committed, and that seat's period takes effect with its ordinary benefits (granted when the period begins, under the existing satisfaction requirements) and any unpaid remainder stays owed. The disabling FEAT coordinates the withdrawals. No later rent period is scheduled for any seat while rent is disabled.
 
 ---
 

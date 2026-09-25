@@ -361,8 +361,8 @@ Store consumes that answer as a boolean. It does not inspect obligation tables, 
 
 **Stopping renewal.** Stopping renewal ends coverage at the end of the last committed period (`DOM-OBL-001` §V.7), and the entitlement records `EXPIRED` then:
 
-- if the next period's premium was already paid in advance, that period was purchased: it takes effect, stays usable through its end, and no withdrawal or refund occurs;
-- if the next period's premium was assessed but not paid, coverage ends at the current period's end and that premium is withdrawn (`DOM-OBL-001` §V.8): it never becomes owed.
+- if any payment has been applied to the next period's premium, that period is committed (`DOM-OBL-001` §V.8): it takes effect and coverage ends at its end, with no withdrawal and no refund. Its usability still follows the ordinary rule, so a partly paid premium gates it until fully satisfied, and the remainder stays owed;
+- if nothing has been paid on the next period's premium, coverage ends at the current period's end and that premium is withdrawn: it never becomes owed.
 
 "Cancel" means stop renewal after the coverage already purchased. It never undoes a completed purchase; a refund would be its own explicit contract.
 

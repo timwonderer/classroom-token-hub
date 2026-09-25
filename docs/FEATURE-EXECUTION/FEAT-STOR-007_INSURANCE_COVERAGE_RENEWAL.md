@@ -66,7 +66,7 @@ The purchased policy version's `nonpayment_mode` governs.
 
 It SHALL NOT void, reverse, waive, or forgive a premium for any period that began before the deadline. Payment after termination settles the obligation and does not resurrect the entitlement.
 
-**Stopping renewal.** Stopping renewal is not this FEAT's action, but its effect on an advance-assessed period follows the same rules (`DOM-STORE-001` §VIII.E.1): a period whose premium was paid in advance is committed and runs to its end; an unpaid advance premium is withdrawn (`DOM-OBL-001` §V.8) in the same transaction that terminates the lineage at the current period's end. This FEAT SHALL NOT assess a premium for any period at or after a termination instant.
+**Stopping renewal.** Stopping renewal is not this FEAT's action, but its effect on an advance-assessed period follows the same rules (`DOM-STORE-001` §VIII.E.1): a period with any payment applied to its premium is committed and runs to its end (usable once fully satisfied); an advance premium with nothing paid is withdrawn (`DOM-OBL-001` §V.8) in the same transaction that terminates the lineage at the current period's end. This FEAT SHALL NOT assess a premium for any period at or after a termination instant.
 
 ## VIII. Idempotency and Replay
 
