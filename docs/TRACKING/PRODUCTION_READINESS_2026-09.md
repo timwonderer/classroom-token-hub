@@ -2078,6 +2078,42 @@ unregistered ORM tables. Runtime already conformed; the dead `derive_claim_allow
 events as claims used, is deleted. Out of scope and unchanged: claim calculation, payout, premiums, cadence,
 nonpayment.
 
+### Amended 2026-09-24 — recurring premiums and advance billing: ratified, implementation in progress
+
+The two open insurance decisions (nonpayment, "monthly") are ratified and encoded, together with real advance
+billing for rent: DOM-OBL-001 3.2, DOM-POL-001 2.2 / 001A 2.1, DOM-STORE-001 5.2, DOM-CLASS-001 3.4,
+SPEC-TIME-001 1.1, SPEC-ECON-003 2.1, FEAT-OBL-002 2.1, FEAT-STOR-002 2.1, FEAT-STOR-003 1.4, FEAT-POL-001 2.1,
+FEAT-CLASS-004 1.1, and the new FEAT-STOR-007 (Insurance Coverage Renewal). Commits `098581a12` … `3aea2abf3`.
+
+**Implementation slices, in dependency order:**
+
+1. Temporal: `anchored_recurrence_boundary`, `minimum_period_duration` (SPEC-TIME-001 §IX.12–13).
+2. Obligations core: `WITHDRAWN` (§V.8) in derived status and satisfaction; current-cycle query (period
+   containment, excluding cycles at/after a termination instant); "required obligations satisfied" read; default
+   payment target (oldest outstanding); Policies read of the preview interval by `policy_uuid`; succession at the
+   assessment point; `terminate_bill_cycle` at the termination instant with withdrawal of untouched advance
+   assessments.
+3. Rent conformance: advance assessment in reconciliation; succession only while rent is enabled at the successor
+   boundary; the disabled path settles existing state (late fees) and never creates; roster backfill against the
+   current (and already-assessed upcoming) cycle; perk expiry at the boundary and perk grant at period start;
+   `/rent` available while surviving rent state exists; payment default oldest outstanding; rent policy lookups
+   by current cycle (`student.py:433`, `admin.py:1807`); pending-policy save (`admin.py:5327`) binds at assessment;
+   replace route-local schedule math (`_calculate_rent_timeline` in `student.py`, used by the student dashboard,
+   `admin.py:4525`, `economy_rebalance.py:75`) with Obligations' current/upcoming cycles; rent disable withdraws
+   untouched advance rent (FEAT-CLASS-004).
+4. Insurance: policy fields and migration (`bill_preview_days`, `nonpayment_mode`, `cancel_after_days`); purchase
+   keyed by `entitlement_id` and moved onto succession (delete `establish_bill_cycle`); FEAT-STOR-007 executor and
+   scheduled job (advance assessment, auto-pay, ACCUMULATE, CANCEL_AFTER_X_DAYS, nonpayment `EXPIRED`); stop-renewal
+   at the termination instant; claim filing gated on the Obligations read; claim allowance/payout per period;
+   remove `payment_current` view shims (`student.py:1984`, `admin.py:3573`).
+
+**Required tests beyond the ratification's list:** disable rent with no surviving state (no assessments); with old
+unpaid rent (still viewable and payable); with delinquent rent (late fees continue under the frozen contract);
+during preview untouched (`WITHDRAWN`), partly paid (committed, remainder payable, late fees continue), fully paid
+(committed, perks at period start, no successor); reconciliation while disabled never creates a period;
+paying the last surviving obligation while disabled does not re-enable rent or create a successor (mutation-test);
+a policy-B preview change does not move a cycle created under policy A (mutation-test).
+
 ### Standing lesson for the ship gate
 
 Every one of the first session's 23 findings — and all fifteen the second
