@@ -144,8 +144,7 @@
                       </thead>
                       <tbody>{% for day in card.history %}<tr>
                           <th scope="row">{{ day.date }}</th>
-                          <td>{{ ('%.1f%%'|format(day.percent)) if day.percent is not none else 'No eligible
-                            measurements' }}</td>
+                          <td>{{ ('%.1f%%'|format(day.percent)) if day.percent is not none else 'No eligible measurements' }}</td>
                           <td>{{ '%.1f%%'|format(day.coverage) }}</td>
                           <td>{{ day.measured|default(0) }} / {{ day.sampled|default(0) }}</td>
                         </tr>{% endfor %}</tbody>
