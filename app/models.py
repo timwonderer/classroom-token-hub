@@ -1641,7 +1641,7 @@ class ObligationAssessment(db.Model):
     # source obligation's correlation_id. NULL for primary obligations. This is an
     # explicit persisted relationship — never inferred by parsing correlation strings.
     source_correlation_id = db.Column(db.String(200), nullable=True, index=True)
-    event_type = db.Column(db.String(20), nullable=False, index=True)  # ASSESSMENT | PAYMENT | WAIVED (per DOM-OBL-001)
+    event_type = db.Column(db.String(20), nullable=False, index=True)  # ASSESSMENT | PAYMENT | WAIVED | WITHDRAWN (per DOM-OBL-001)
 
     obligation_type = db.Column(db.String(30), nullable=False, index=True)  # RENT, INSURANCE_PREMIUM
     policy_uuid = db.Column(db.String(36), nullable=True, index=True)

@@ -192,8 +192,16 @@ def pay_rent(
             error_message="Assessment does not belong to this seat/class",
         )
 
+    state = obligations_service.get_obligation_state(correlation_id)
+    # A withdrawn assessment never became owed; it is not payable (DOM-OBL-001 §V.8).
+    if state.is_withdrawn:
+        return RentPaymentResult(
+            success=False, correlation_id=correlation_id,
+            error_code="WITHDRAWN",
+            error_message="This bill was withdrawn before its period began and is not owed",
+        )
     # A waiver fully closes the obligation regardless of payment.
-    if obligations_service.get_obligation_state(correlation_id).is_waived:
+    if state.is_waived:
         return RentPaymentResult(
             success=True, correlation_id=correlation_id, already_satisfied=True,
             fully_paid=True,

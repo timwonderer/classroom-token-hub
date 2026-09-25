@@ -348,8 +348,13 @@ def build_student_obligation_view(
     if not assessments:
         return None
 
-    # Step 3: Separate into ASSESSMENT and (PAYMENT/WAIVED) events
-    assessment_events = [a for a in assessments if a.event_type == 'ASSESSMENT']
+    # Step 3: Separate into ASSESSMENT and (PAYMENT/WAIVED) events. A withdrawn
+    # assessment never became owed (DOM-OBL-001 §V.8) and is not shown as a bill.
+    assessment_events = [
+        a for a in assessments
+        if a.event_type == 'ASSESSMENT'
+        and obligations_service.get_withdrawal_event(a.correlation_id) is None
+    ]
     if not assessment_events:
         return None
 
