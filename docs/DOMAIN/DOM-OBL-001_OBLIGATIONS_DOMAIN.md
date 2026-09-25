@@ -13,7 +13,7 @@ This document defines the Obligations domain as the canonical authority over ins
 Obligations owns:
 
 - the existence of a liability after it has been lawfully assessed;
-- the lifecycle of that liability through payment, waiver, or teacher-directed termination;
+- the lifecycle of that liability through payment or waiver, or its withdrawal before it ever became owed (§V.8);
 - recurring bill-cycle state for liabilities that must be reconsidered at a later boundary;
 - the current rent cycle that is in force for the class.
 
@@ -77,7 +77,7 @@ It is subordinate to:
 The Obligations domain is the sole business authority responsible for:
 
 - lawful assessment of monetary liabilities;
-- lawful satisfaction of assessed liabilities through payment, waiver, or teacher-directed termination;
+- lawful resolution of assessed liabilities through payment or waiver, and lawful withdrawal of an advance assessment that never became owed (§V.8);
 - recurring bill-cycle progression;
 - the current rent cycle that is currently in force;
 - derived status over obligation facts;
@@ -155,7 +155,9 @@ Bill cycle may carry the exact `policy_uuid` that it invokes. That reference fre
 
 **Period.** A cycle's period is the half-open interval `[cycle_boundary_at, next_assessment_at)`. `cycle_boundary_at` is the cycle's coverage/due boundary, where its period begins; `next_assessment_at` is where it ends and where the successor's period begins. The calendar day before `next_assessment_at` is the period's final covered day and its payment deadline; it is never itself called a boundary.
 
-**Current cycle.** The current cycle of a lineage at a reference time is the cycle whose period contains that time: `cycle_boundary_at ≤ reference_time < next_assessment_at`. The highest cycle number, or the most recently created cycle, MUST NOT be used as a proxy for the current cycle. Under advance assessment the latest cycle is routinely an upcoming one whose period has not begun.
+**Current cycle.** The current cycle of a lineage at a reference time is the non-terminal cycle whose period contains that time, `cycle_boundary_at ≤ reference_time < next_assessment_at`, provided no terminal row of the lineage takes effect at or before that time. The highest cycle number, or the most recently created cycle, MUST NOT be used as a proxy for the current cycle. Under advance assessment the latest cycle is routinely an upcoming one whose period has not begun.
+
+**Scheduled is not effective.** A cycle row records that a period was scheduled. Whether the period ever becomes effective is decided by termination (below): a scheduled cycle whose `cycle_boundary_at` is at or after the lineage's termination instant never becomes effective. Its row is not altered; it remains evidence that the period was scheduled.
 
 **Advance assessment.** A successor is assessed before its period begins, at `next_assessment_at − preview`, where `preview` is the bill preview interval of the immutable policy referenced by the predecessor's `policy_uuid`, obtained through the Policies read (`DOM-POL-001A` §V.E). Obligations does not read policy tables or branch on the policy family. A preview of `0` assesses the successor at its own boundary. Assessment availability and the due boundary are separate temporal concepts: early assessment permits early satisfaction, and it does not advance delinquency, grace, late-fee, or coverage-boundary semantics, all of which remain anchored to the cycle's `cycle_boundary_at`.
 
@@ -163,6 +165,13 @@ The bill-cycle lifecycle has two operations, each an explicit command. Position 
 
 - **Succession** (`schedule_next_bill_cycle`): records the next lawful schedule row for a lineage. The domain derives the cycle number from authoritative Obligations state — `1` where no cycle exists for the lineage, otherwise `current + 1`. The cycle number is never caller-selected and never caller-supplied, per `INV-ARC-009` §V (only domain queries may define authoritative state). A caller requests succession for a lineage; it does not assert the lineage's position.
 - **Termination**: a terminal cycle row with `next_assessment_at = NULL` (see §VII.2) stops future recurrence; the lawful cancellation/termination authority performs it. Termination is cessation, not succession — it writes no next assessment boundary — so it remains a separate command and is not routed through succession. It does not rewrite prior obligation events (§IX.7).
+
+  The terminal row's `cycle_boundary_at` is the **termination instant**, set by the terminating authority:
+
+  - when renewal is stopped, it is the end of the last committed period. The current period is committed. An upcoming, not-yet-begun period is committed only if its obligation was satisfied in advance; then the lineage terminates at that period's end, and otherwise at the current period's end;
+  - when an owning domain terminates for nonpayment, it is that domain's lawful deadline, which may fall inside a period.
+
+  In every case, each unsatisfied advance assessment for a period beginning at or after the termination instant is withdrawn (§V.8) in the same transaction, and every assessment for a period that began before the termination instant remains due. The termination instant may therefore precede the latest scheduled cycle's `next_assessment_at`.
 
 **Succession eligibility.** Succession is lawful only when one of the following holds for the lineage, as read from authoritative Obligations state:
 
@@ -182,6 +191,27 @@ There is no separate genesis command. "First cycle" is a property of the lineage
 The `(internal_ref, cycle_number)` uniqueness constraint is the integrity backstop for case 3. It is not the idempotency mechanism and must not be used as one.
 
 This clause is built to match the replay model ratified for Ledger commands in `SPEC-LED-002` §VI, so that the two domains do not drift into different replay semantics. `SPEC-LED-002` §II scopes itself to Ledger paths creating monetary effects and does not govern Obligations; it is the model here, not the authority (`INV-ARC-021`).
+
+### 8. Withdrawal
+
+A withdrawal is the immutable fact that an advance assessment never became owed, because the future period it was assessed for was lawfully cancelled before it began.
+
+It exists for one reason: **advance assessment MUST NOT make a future liability survive an action that, absent advance assessment, would have prevented that liability from ever arising.** A bill preview interval changes when a liability becomes payable; it never changes whether the liability exists.
+
+A withdrawal is lawful only when all of the following hold:
+
+- the assessment is bound to a bill cycle whose period has not begun at the reference time;
+- no satisfaction of any kind (`PAYMENT` or `WAIVED`) has been recorded against it;
+- it is recorded atomically with the action that makes that future period no longer lawful (termination of the lineage, or disablement of the capability that the period depends on).
+
+Effects:
+
+- the original `ASSESSMENT` is untouched (§IX.5); the withdrawal is an appended `WITHDRAWN` event for the same correlation;
+- the assessment is not outstanding, not satisfied, not required, never past due, never delinquent, never gating, and ineligible for late fees or any other derived penalty;
+- a withdrawn assessment cannot later be satisfied;
+- a withdrawal creates no Ledger movement.
+
+A withdrawal is not a waiver. A waiver forgives a liability that was owed (§V.6, rent-only); a withdrawal records that a liability was never owed. Withdrawal is product-blind: any lineage whose future period is lawfully cancelled uses it.
 
 ---
 
@@ -217,7 +247,7 @@ Key fields:
 - `class_id` - FK to `classes`
 - `internal_ref` - stable lineage key for the continuing obligation-producing relationship
 - `correlation_id` - identifier for this individual liability instance
-- `event_type` - `ASSESSMENT` | `PAYMENT` | `WAIVED`
+- `event_type` - `ASSESSMENT` | `PAYMENT` | `WAIVED` | `WITHDRAWN`
 - `obligation_type` - closed enum of lawful assessment categories
 - `policy_uuid` - lawful source policy locator
 - `bill_cycle_id` - nullable FK to `bill_cycles`
@@ -229,13 +259,14 @@ Rules:
 - exactly one `ASSESSMENT` exists per individual liability instance;
 - `PAYMENT` may occur multiple times for the same assessment;
 - `WAIVED` is rent-only;
+- `WITHDRAWN` is lawful only under §V.8, and no `PAYMENT` or `WAIVED` may follow it;
 - no amount is persisted here;
 - no paid/unpaid/overdue/satisfied/reversed flag is persisted here;
 - an assessment is immutable once lawfully written.
 
 Notes column contract:
 
-- `notes` is optional free-text metadata attached to any event row (`ASSESSMENT`, `PAYMENT`, or `WAIVED`).
+- `notes` is optional free-text metadata attached to any event row (`ASSESSMENT`, `PAYMENT`, `WAIVED`, or `WITHDRAWN`).
 - `notes` is set at insert time by the FEAT that writes the event, from an actor-supplied string (typically a teacher's reason for a waiver, an admin's justification for a manual adjustment, etc.).
 - `notes` is immutable after insert, consistent with the general event immutability rule above.
 - `notes` is NOT authoritative business truth. No derived satisfaction rule (§VIII), no cross-domain contract, and no operational legality check MAY read `notes` to decide behavior. Its purpose is human-audit visibility only.
@@ -265,7 +296,8 @@ Rules:
 - the current cycle, and therefore the policy UUID in force at a reference time, is the cycle whose period contains that time (§V.7); the latest cycle MUST NOT be used as a proxy for it;
 - **succession** (`schedule_next_bill_cycle`) creates the next lawful cycle for the lineage, with the cycle number derived from authoritative state (`1` when the lineage is empty, otherwise `current + 1`) and never supplied by the caller; succession is lawful only under the eligibility rule in §V.7 (empty lineage, or a non-terminal latest cycle whose assessment point has arrived), and never after a terminal row; **termination** writes a terminal row that stops future recurring assessment and is not a succession;
 - for a non-terminal cycle, `next_assessment_at` MUST be strictly later than `cycle_boundary_at`;
-- a terminal bill-cycle row with `next_assessment_at = NULL` stops future recurring assessment for the lineage;
+- a terminal bill-cycle row with `next_assessment_at = NULL` stops future recurring assessment for the lineage; its `cycle_boundary_at` is the termination instant (§V.7), which may precede the latest scheduled cycle's `next_assessment_at`;
+- a scheduled cycle whose `cycle_boundary_at` is at or after the termination instant never becomes effective; its row is not altered;
 - when the helper is late, the next scheduled run processes the due cycle if it still exists and has not been superseded.
 
 ---
@@ -292,8 +324,11 @@ For one assessment:
 ```text
 paid_amount = sum(authoritative Ledger amounts referenced by PAYMENT events for the same correlation_id)
 has_waiver = exists(WAIVED for the same correlation_id)
+is_withdrawn = exists(WITHDRAWN for the same correlation_id)
 
-if paid_amount >= assessed_amount:
+if is_withdrawn:
+    status = WITHDRAWN
+elif paid_amount >= assessed_amount:
     status = SATISFIED
 elif has_waiver:
     status = SATISFIED
@@ -303,7 +338,9 @@ else:
 
 An assessment bound to a bill cycle is due at that cycle's `cycle_boundary_at`, regardless of when it was assessed.
 
-For one lineage at a reference time, **required obligations satisfied** is derived as: every assessment on the lineage that is due at or before the reference time is SATISFIED by facts recorded at or before that time. Assessments not yet due, including advance-assessed ones, are not required yet. This is the product-blind domain read other domains consume; they MUST NOT inspect obligation tables or reconstruct payment status. It evaluates persisted obligations only and never synthesizes a hypothetical liability from `next_assessment_at`.
+For one lineage at a reference time, **required obligations satisfied** is derived as: every assessment on the lineage that is due at or before the reference time is SATISFIED by facts recorded at or before that time. Assessments not yet due, including advance-assessed ones, are not required yet, and a `WITHDRAWN` assessment is never required. This is the product-blind domain read other domains consume; they MUST NOT inspect obligation tables or reconstruct payment status. It evaluates persisted obligations only and never synthesizes a hypothetical liability from `next_assessment_at`.
+
+**Default payment target.** When a payment is requested against a lineage without selecting a specific assessment, the target is the oldest OUTSTANDING assessment on that lineage, by due boundary. An explicitly selected assessment is honored when it is lawfully payable. This is a domain read; callers do not order assessments themselves.
 
 Past due is derived as:
 
@@ -331,7 +368,8 @@ status == OUTSTANDING and canonical_now > due_at
     entitlement lifecycle.
 12. A coordinating FEAT MAY attempt satisfaction of an obligation immediately upon assessment. A failed attempt leaves the obligation OUTSTANDING; it remains satisfiable by any later lawful payment, before or after its due boundary.
 13. A benefit granted for satisfying a period's obligation belongs to that period. Satisfying it early grants nothing before the period begins; the benefit is granted when the period takes effect.
-14. Termination of a lineage stops future assessment only. Obligations already assessed remain due and satisfiable; satisfying one after termination settles that obligation and nothing else.
+14. Termination of a lineage stops future assessment only. Obligations already assessed remain due and satisfiable, except an unpaid advance assessment for a period that never becomes effective, which is withdrawn (§V.8); satisfying one after termination settles that obligation and nothing else.
+15. An advance rent assessment is lawful only if rent is enabled at that period's `cycle_boundary_at` according to the class feature timeline known when it is assessed. A later disablement of rent that takes effect at or before that boundary withdraws the assessment if it is unsatisfied; the disabling FEAT coordinates the withdrawal (§V.8).
 
 ---
 

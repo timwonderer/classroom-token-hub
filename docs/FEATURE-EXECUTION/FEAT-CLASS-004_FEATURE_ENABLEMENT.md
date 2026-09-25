@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| FEAT-CLASS-004 | 1.0 | 2026-08-09 | N/A | Normative |
+| FEAT-CLASS-004 | 1.1 | 2026-09-24 | 1.0 | Normative |
 
 ---
 
@@ -125,6 +125,7 @@ Primary Key: `(class_id, feature, effective_at)`
 - Query `get_class_feature(class_id, feature, effective_at)` returns None for queries at or after disablement time
 - Prior active version remains in table with deleted_at=NULL (audit trail)
 - Soft deletion preserves referential integrity (INV-ARC-016)
+- For `rent`: in the same transaction, every unsatisfied advance rent assessment whose period begins at or after `effective_at` is withdrawn through the Obligations withdrawal (`DOM-OBL-001` §V.8, §IX.15). Advance assessment must not make rent owed for a period that disabling rent prevents. Existing assessed rent for periods that began before `effective_at` is untouched.
 
 **Failure contract:**
 - `FEATURE_NOT_ENABLED`: No active version found

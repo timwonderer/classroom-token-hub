@@ -62,9 +62,11 @@ The purchased policy version's `nonpayment_mode` governs.
 **`CANCEL_AFTER_X_DAYS`.** The nonpayment deadline is the coverage boundary at which the earliest outstanding required premium lapsed, plus `cancel_after_days` class-local calendar days. Later assessments do not reset it. §V continues until the deadline, so further premiums may be assessed while the delinquency is unresolved. When the deadline is reached and that premium is still unsatisfied, the FEAT SHALL, in one transaction:
 
 1. record `EXPIRED` for the insurance entitlement with a nonpayment cause, effective at the deadline (`FEAT-STOR-002`);
-2. terminate the premium lineage through the Obligations termination command, so that no later period is assessed.
+2. terminate the premium lineage through the Obligations termination command with the deadline as its termination instant, so that no later period is assessed; any unpaid advance premium for a period beginning at or after the deadline is withdrawn in the same transaction (`DOM-OBL-001` §V.8).
 
-It SHALL NOT void, reverse, waive, or forgive any assessed premium. Payment after termination settles the obligation and does not resurrect the entitlement.
+It SHALL NOT void, reverse, waive, or forgive a premium for any period that began before the deadline. Payment after termination settles the obligation and does not resurrect the entitlement.
+
+**Stopping renewal.** Stopping renewal is not this FEAT's action, but its effect on an advance-assessed period follows the same rules (`DOM-STORE-001` §VIII.E.1): a period whose premium was paid in advance is committed and runs to its end; an unpaid advance premium is withdrawn (`DOM-OBL-001` §V.8) in the same transaction that terminates the lineage at the current period's end. This FEAT SHALL NOT assess a premium for any period at or after a termination instant.
 
 ## VIII. Idempotency and Replay
 
@@ -84,14 +86,14 @@ A run that finds nothing due for an entitlement writes nothing.
 - resolving premium, cadence, preview, or nonpayment terms from any policy row other than the exact `policy_uuid` the entitlement and its cycles carry;
 - scaling the premium by the length of a period;
 - restoring coverage retroactively for a gated interval;
-- recording nonpayment termination as `REVOKED`, or voiding assessed premiums on termination;
+- recording nonpayment termination as `REVOKED`, or withdrawing an assessed premium except under `DOM-OBL-001` §V.8;
 - insurance-specific succession, scheduling, or replay machinery parallel to the Obligations commands.
 
 ## XI. Postconditions
 
 - After an assessment point: exactly one successor cycle and one premium assessment exist for the next period, and a satisfaction exists if and only if automatic payment succeeded.
 - After a boundary: the entitlement is usable if and only if Obligations reports its required premiums satisfied and it has not expired.
-- After a nonpayment deadline under `CANCEL_AFTER_X_DAYS` with the triggering premium unsatisfied: the entitlement is `EXPIRED` with a nonpayment cause, the lineage is terminated, every previously assessed premium is still outstanding or satisfied as before, and no later premium is ever assessed.
+- After a nonpayment deadline under `CANCEL_AFTER_X_DAYS` with the triggering premium unsatisfied: the entitlement is `EXPIRED` with a nonpayment cause, the lineage is terminated at the deadline, every premium for a period that began before the deadline is still outstanding or satisfied as before, any unpaid advance premium for a later period is withdrawn, and no later premium is ever assessed.
 
 ## XII. Dependencies
 
