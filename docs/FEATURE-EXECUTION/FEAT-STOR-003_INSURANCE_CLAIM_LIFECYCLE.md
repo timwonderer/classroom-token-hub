@@ -2,8 +2,18 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-STOR-003 | 1.2 | 2026-09-01 | 1.1 | Normative |
+| FEAT-STOR-003 | 1.3 | 2026-09-24 | 1.2 | Normative |
 
+> **1.3 revision note.** Conformance with `DOM-STORE-001` v5.1, which now governs the
+> claim representation this FEAT already executed. v1.1 (2026-08-28) restored a
+> first-class claim record while `DOM-STORE-001` v5.0 still routed claims through
+> `pending_actions` and a `CONSUMED` entitlement event; the domain document was
+> never amended to match. v5.1 settles it: `insurance_claims` and
+> `insurance_claim_productivity_dates` are durable Store-owned claim state; a pending
+> action MAY carry an unresolved claim request but is never the claim record; an
+> insurance entitlement is reusable coverage and records no `CONSUMED`. No runtime
+> behavior of this FEAT changes.
+>
 > **1.2 revision note.** Claim-time authority is the **immutable `insurance_policies`
 > definition**, resolved via the GRANTED entitlement's `policy_uuid`, not a
 > `frozen_contract` payload snapshot. Because a policy edit mints a *new*
@@ -46,7 +56,7 @@ remain owned by the Insurance Management workflow.
 
 ## II. Authority
 
-Store and Entitlements owns:
+Store and Entitlements owns (as durable claim state in `insurance_claims` and `insurance_claim_productivity_dates`, `DOM-STORE-001` §VII.C–D):
 
 - existence of the insurance claim;
 - claim status;
@@ -310,7 +320,7 @@ Rejection does not revoke, consume, or expire the insurance entitlement.
 Rejected claims **do** consume the period **claim-count allowance** (see §XII, the
 two-resource rule): every submitted claim lifecycle — `SUBMITTED`, `APPROVED`, or
 `REJECTED` — draws one slot against the period allowance. A rejected claim creates
-no `CONSUMED` event and no monetary effect, so it does **not** consume period
+no monetary effect, so it does **not** consume period
 **payout capacity**. Both quantities are derived from canonical claim history; the
 claim table SHALL NOT maintain a mutable remaining-count field.
 
@@ -454,9 +464,15 @@ The following are prohibited:
 - mutating historical productivity to justify compensation;
 - storing mutable `claims_remaining`;
 - allowing a decided claim to return to `SUBMITTED`;
-- modelling the claim lifecycle on `PendingAction` (or any generic action queue)
-  instead of the dedicated `InsuranceClaim` record, which is the sole owner of
-  claim existence, status, basis, decision, and correlation.
+- treating a `PendingAction` (or any generic action queue) as the claim record, or
+  leaving claim-specific structured data permanently in a pending-action payload.
+  A pending action MAY carry an unresolved claim request (`DOM-STORE-001` §VII.B);
+  the `InsuranceClaim` record is the sole durable owner of claim existence, status,
+  basis, decision, and correlation, and resolving a pending action never deletes or
+  rewrites it;
+- writing `CONSUMED`, `EXPIRED`, or `REVOKED` for the insurance entitlement because a
+  claim was filed, approved, rejected, or fulfilled; the entitlement terminates only
+  through its coverage lifecycle (`DOM-STORE-001` §VIII.E.1).
 
 ## XVIII. Postconditions
 

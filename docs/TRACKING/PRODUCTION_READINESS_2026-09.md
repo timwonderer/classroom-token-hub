@@ -2059,6 +2059,25 @@ insurance being built through Store.
 owner) and register the tables; (b) bring runtime back to `pending_actions` + `CONSUMED`; (c) reassign claim
 ownership first, then choose the representation inside the owning domain.
 
+**Resolved 2026-09-24 — path (a), Store as owner (operator).** Every normative ownership assignment already named
+Store (FEAT-STOR-003 §II, DOM-STORE-001 §IV, DOM-STORE-001 v3.0), so no new domain was created; the "claim-specific
+domain" hedge in §II is removed. What was wrong was the representation, not the owner. `DOM-STORE-001` v5.1:
+
+- `insurance_claims` and `insurance_claim_productivity_dates` are durable Store-owned claim state (§VII.C–D).
+- `pending_actions` is in-flight work: it MAY carry an unresolved claim request, is never durable claim truth, must
+  not hold claim-specific structured data permanently, and resolving it never deletes or rewrites the claim (§VII.B).
+- An insurance entitlement is reusable coverage. Filing, approving, rejecting or fulfilling a claim writes no
+  `CONSUMED`, `EXPIRED` or `REVOKED`; an `INSURANCE` entitlement records no `CONSUMED` at all; it terminates only
+  through its coverage lifecycle. An individual claim is not a consumption event, so no exception to §VIII.B's
+  terminality rules was needed.
+- Resolution of a pending action, the lifecycle of a claim, and termination of an entitlement are independent
+  lifecycle events (§VIII.E.1).
+
+`FEAT-STOR-003` v1.3 conforms (no runtime behavior change). DOM-CORE-002 1.10 registers both tables, leaving zero
+unregistered ORM tables. Runtime already conformed; the dead `derive_claim_allowance`, which counted `CONSUMED`
+events as claims used, is deleted. Out of scope and unchanged: claim calculation, payout, premiums, cadence,
+nonpayment.
+
 ### Standing lesson for the ship gate
 
 Every one of the first session's 23 findings — and all fifteen the second

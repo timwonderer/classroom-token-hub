@@ -240,12 +240,14 @@ Policy definition tables — `rent_settings`, `payroll_settings`, `payroll_rewar
 
 ### 6. Store & Redemption (DOM-STORE-001)
 
-**Purpose:** Manage entitlement grant lineage, entitlement exercise lineage, and pending entitlement actions.
+**Purpose:** Manage entitlement grant lineage, entitlement exercise lineage, pending entitlement actions, and insurance claims.
 
 **Tables:**
 
 - `entitlement_events`
 - `pending_actions`
+- `insurance_claims` — durable insurance claim truth: one claim filed under one insurance entitlement, never an entitlement event (DOM-STORE-001 §VII.C, §VIII.E.1; registered in 1.10)
+- `insurance_claim_productivity_dates` — structured per-date evidence for a PRODUCTIVITY claim; child of `insurance_claims`, CASCADE-deleted (DOM-STORE-001 §VII.D; registered in 1.10)
 
 ---
 

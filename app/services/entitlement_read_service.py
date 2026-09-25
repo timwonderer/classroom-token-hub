@@ -353,60 +353,6 @@ def list_entitlements_for_seat(
 
 
 # ---------------------------------------------------------------------------
-# Claim Allowance Derivation (Insurance-Specific)
-# ---------------------------------------------------------------------------
-
-
-def derive_claim_allowance(
-    entitlement_id: str,
-    class_id: str,
-    policy_config: dict,
-    reference_time_utc: datetime,
-) -> int:
-    """
-    Derive remaining claims allowed from policy config + EntitlementEvent history.
-
-    INVARIANT: Do NOT query a persisted claims_remaining counter.
-    Always derive from policy rules + immutable event history.
-
-    Preconditions:
-    - entitlement_id must exist with entitlement_type='INSURANCE'
-    - class_id must be valid
-    - policy_config must have 'max_claims_per_month' key
-    - reference_time_utc must be valid datetime
-
-    Args:
-        entitlement_id: Insurance entitlement lineage
-        class_id: Class scope
-        policy_config: Dict with claim limits (e.g., {"max_claims_per_month": 3})
-        reference_time_utc: Current time for period calculation (TODO: not yet used for filtering)
-
-    Returns:
-        Remaining claims allowed (e.g., 2 if max is 3 and 1 already used)
-
-    Purity: Pure (read-only query, deterministic derivation)
-
-    Note: Period filtering (e.g., "within current month") not yet implemented.
-          Currently counts all CONSUMED events without time window.
-    """
-    # Get all CONSUMED events for this entitlement (represent claims used)
-    used_count = (
-        EntitlementEvent.query.filter(
-            EntitlementEvent.entitlement_id == entitlement_id,
-            EntitlementEvent.class_id == class_id,
-            EntitlementEvent.event_type == "CONSUMED",
-        ).count()
-    )
-
-    # TODO: Apply period filters (e.g., within current month) based on policy_config
-    # For MVP, return max_claims - used_count
-
-    max_claims = policy_config.get("max_claims_per_month", 3)
-
-    return max(0, max_claims - used_count)
-
-
-# ---------------------------------------------------------------------------
 # Entitlement Status Derivation
 # ---------------------------------------------------------------------------
 
@@ -473,8 +419,9 @@ def has_active_insurance_coverage(
 
     Effective coverage = a GRANTED insurance event referencing ``policy_uuid``
     (carried in the grant payload) whose entitlement lineage has no terminal
-    EXPIRED or REVOKED event. A CONSUMED event represents a resolved claim and
-    does NOT end coverage, so it is not treated as terminal here.
+    EXPIRED or REVOKED event. Coverage ends only through the coverage lifecycle;
+    an INSURANCE entitlement records no CONSUMED event, because claims are
+    durable claim state, not entitlement events (DOM-STORE-001 §VIII.E.1).
 
     This is the derivation behind FEAT-OBL-004's POLICY_ALREADY_HELD invariant:
     a seat may not acquire a second concurrently effective grant for the same
@@ -516,8 +463,8 @@ def get_active_insurance_grant(
     """The seat's concurrently-effective INSURANCE GRANT for a policy, if any.
 
     Same derivation as ``has_active_insurance_coverage`` (a GRANTED insurance event
-    referencing ``policy_uuid`` whose lineage has no EXPIRED/REVOKED terminal —
-    CONSUMED is a resolved claim, not a coverage terminal), but returns the grant
+    referencing ``policy_uuid`` whose lineage has no EXPIRED/REVOKED terminal;
+    insurance records no CONSUMED, DOM-STORE-001 §VIII.E.1), but returns the grant
     event so callers (e.g. the boundary-expiry job) can act on it. Under
     FEAT-OBL-004 §114 there is at most one.
 

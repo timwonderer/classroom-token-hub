@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-STORE-001 | 5.0 | 2026-07-28 | 4.0 | Normative |
+| DOM-STORE-001 | 5.1 | 2026-09-24 | 5.0 | Normative |
 
 ## I. Purpose
 
@@ -25,7 +25,7 @@ The domain ends where another domain owns the authoritative business fact produc
 Examples:
 
 - a late-use entitlement is granted and later consumed entirely inside Store and Entitlements;
-- an insurance entitlement is granted here, while claim execution may coordinate with Ledger and a claim-specific domain;
+- an insurance entitlement is granted here, and each claim made under it is recorded here as durable claim state (§VII.C); claim execution coordinates Ledger and Productivity and Payroll through FEAT;
 - a hall pass entitlement is granted here, but the authoritative consumption event may be recorded by another domain;
 - a pending delayed-use redemption is preserved here until the lawful FEAT resolves it.
 
@@ -52,7 +52,10 @@ The Store and Entitlements domain is the sole business authority over:
 - entitlement exercise lineage when Store and Entitlements owns the exercise;
 - entitlement lifecycle facts for all entitlement types the domain owns;
 - pending entitlement actions awaiting authoritative resolution;
-- whether a granted entitlement remains currently exercisable.
+- whether a granted entitlement remains currently exercisable;
+- the insurance claim lifecycle: claim existence, status, submitted basis and structured evidence, teacher decision, and claim correlation (§VII.C).
+
+Owning both entitlements and claims does not make a claim an entitlement event. An entitlement, a claim, and a pending action are different objects with independent lifecycles inside one domain.
 
 The domain does not own:
 
@@ -90,6 +93,7 @@ This domain owns the following permanent truths:
 9. The pending action preserves the canonical submission timestamp and the authoritative FEAT that must resolve it.
 10. The canonical payload for an entitlement event records the type-specific facts necessary to interpret that event.
 11. A rent-granted entitlement may expire at the rent-period boundary even when the underlying policy UUID remains current for later cycles.
+12. An insurance claim was filed under a specific insurance entitlement, with its submitted basis and structured evidence, and was or was not decided by a lawful teacher decision.
 
 ### B. Cross-domain truth
 
@@ -122,12 +126,15 @@ This domain is the sole schema and mutation authority over:
 
 - `entitlement_events`
 - `pending_actions`
+- `insurance_claims`
+- `insurance_claim_productivity_dates`
+
+`insurance_claims` was listed as superseded in v4.0–v5.0, which routed claim truth through `pending_actions` and a `CONSUMED` entitlement event. v5.1 reverses that: claim truth is durable claim state (§VII.C), not entitlement history and not pending-action payload.
 
 The following legacy or superseded persistence concepts are not part of the v5 canonical Store and Entitlements contract:
 
 - `entitlements` as a mutable grant table separate from lifecycle facts;
 - `entitlement_consumptions` as a separate terminal-history table;
-- `insurance_claims` as a separate mutable workflow table;
 - `store_purchases`;
 - `redemption_events`;
 - domain-owned `store_items`;
@@ -199,7 +206,7 @@ Rules:
 
 ### B. `pending_actions`
 
-`pending_actions` is the durable unresolved entitlement-action table.
+`pending_actions` holds in-flight work: entitlement actions submitted and not yet resolved. It is persisted (no generic TTL) but transient: a row exists only while its action is unresolved, and it is never authoritative durable state for any record the work produces.
 
 One row represents one submitted entitlement action that has not yet reached canonical resolution.
 
@@ -222,8 +229,48 @@ Rules:
 - `submitted_at` is authoritative and SHALL be preserved.
 - No generic TTL may delete pending actions.
 - A pending action is not canonical entitlement history.
-- A successful resolution SHALL atomically write the canonical entitlement event(s) and delete the pending action.
+- `payload` MAY carry a domain-specific request (for example an unresolved insurance-claim request) while the work is in transit. Claim-specific structured data SHALL NOT live permanently in `payload`; it belongs in claim-owned relational state (§VII.C).
+- A successful resolution SHALL atomically write the canonical durable record(s) the action produces (entitlement event(s), or claim state under §VII.C) and delete the pending action.
+- Resolving or deleting a pending action SHALL NOT delete or rewrite any durable record the work produced.
 - A failed resolution SHALL leave the pending action intact.
+
+### C. `insurance_claims`
+
+Durable insurance claim truth. One row is one claim, filed under one insurance entitlement.
+
+Key fields:
+
+- `claim_id` — primary key
+- `class_id` — FK to `classes`; canonical class boundary
+- `entitlement_id` — the insurance entitlement lineage the claim is made under; a soft reference (entitlements are event-sourced, so there is no row to reference), validated through this domain
+- `target_seat_id` — FK to `seats`; the covered seat
+- `actor_seat_id` — FK to `seats`; the seat that filed the claim
+- `status` — `SUBMITTED` | `APPROVED` | `REJECTED`
+- `correlation_id` — unique; idempotent submission lineage
+- `claim_basis` — the product-specific facts the student submitted, never frozen policy terms
+- `submitted_at` — canonical submission timestamp; authoritative for submission-time rules
+- `decided_by_seat_id`, `decided_at`, `decision_note`, `filing_window_override_reason`, `result_amount` — the decision
+- `payroll_event_id`, `ledger_transaction_id` — downstream lineage, populated only on approval
+
+Rules:
+
+- a claim references the insurance entitlement; it is not an entitlement event and never writes one;
+- `SUBMITTED` is the only non-terminal status; `APPROVED` and `REJECTED` are terminal and immutable;
+- policy terms are resolved from the immutable policy the entitlement references, not copied onto the claim;
+- no mutable remaining-count, allowance, or payout-capacity field is stored; those are derived from claim history (§XI);
+- the claim does not duplicate monetary truth; any Ledger or Payroll effect remains that domain's authority.
+
+### D. `insurance_claim_productivity_dates`
+
+Structured evidence for a `PRODUCTIVITY` claim: one row per asserted class-local loss date, child of `insurance_claims` (CASCADE).
+
+Key fields: `id`, `claim_id`, `entitlement_id`, `class_id`, `claim_date`, `student_claimed_hours`, `student_explanation`, `teacher_approved_hours`, `adjustment_note`, `recognized_payout`.
+
+Rules:
+
+- a date may be claimed at most once per claim and at most once per entitlement;
+- the student's submitted hours and explanation are immutable; the teacher's adjudication is recorded alongside them, not over them;
+- this evidence is relational claim state, never an opaque list in the claim basis or a pending-action payload.
 
 ## VIII. Entitlement Semantics
 
@@ -253,6 +300,8 @@ For entitlement types where the exercise is repeatable, multiple `CONSUMED` rows
 
 For entitlement types where the exercise is terminal, `CONSUMED` ends the entitlement lifecycle unless the type explicitly allows further terminal facts.
 
+An individual insurance claim is not a consumption event (§VIII.E.1). No exception to the rules above is needed for insurance, because insurance records no `CONSUMED` at all.
+
 ### C. Expiration semantics
 
 `EXPIRED` records that the entitlement ceased to be exercisable because the configured validity period or goal boundary ended without further lawful exercise.
@@ -273,23 +322,26 @@ Insurance is a continuing entitlement lifecycle.
 
 An insurance purchase SHALL create an entitlement grant and may coordinate an initial obligation assessment/payment lifecycle in the lawful Obligations and Ledger paths.
 
-Insurance claims SHALL be represented through the `pending_actions` path before resolution.
+An insurance entitlement is reusable coverage. It is referenced by claims and is not consumed by any of them.
 
-When an insurance claim is adjudicated, both accepted and rejected claims SHALL record a canonical claim resolution event in entitlement history.
+Claims are durable claim state (§VII.C and §VII.D), not entitlement events. The claimed subject, decision, and outcome that later eligibility checks depend on are read from claim history.
 
-The entitlement event payload SHALL preserve the claimed subject and canonical outcome data required for future eligibility checks.
+A claim request MAY travel through `pending_actions` while unresolved (§VII.B). The pending action is never the claim record, and resolving it does not delete or rewrite the claim.
 
-The entitlement event SHALL NOT duplicate Ledger monetary truth.
+Filing, approving, rejecting, or fulfilling a claim SHALL NOT:
 
-The corresponding Ledger event, when any, SHALL remain Ledger authority.
+- write `CONSUMED`, `EXPIRED`, or `REVOKED` for the insurance entitlement;
+- otherwise alter the insurance entitlement.
 
-Upon lawful resolution of an insurance claim:
+An `INSURANCE` entitlement records no `CONSUMED` event.
 
-- the insurance entitlement SHALL record a terminal `CONSUMED` event for the resolved claim;
-- the event payload SHALL preserve the claimed subject and any canonical result data required by future eligibility checks, including the decision outcome;
-- the pending action SHALL be removed.
+Multiple claims MAY reference the same entitlement while its coverage is lawful, as the governing policy terms permit (claim allowance and payout capacity, FEAT-STOR-003 §XII).
 
-Insurance claims MAY be repeated against the same entitlement until the governing policy or cycle boundaries are reached.
+The insurance entitlement terminates only through its coverage lifecycle: `EXPIRED` at the coverage boundary (FEAT-STOR-002). Claim activity never produces a terminal entitlement event.
+
+Resolution of a pending action, the lifecycle of a claim, and termination of an entitlement are independent lifecycle events. Completing one does not complete another.
+
+Any Ledger or Payroll effect of a claim remains that domain's authority; claim state does not duplicate it.
 
 #### 2. Privilege
 
@@ -360,7 +412,7 @@ The `submitted_at` timestamp is authoritative for any rule that depends on submi
 
 Examples:
 
-- an insurance claim submitted while coverage is valid remains eligible even if coverage expires before review;
+- an insurance claim submitted while coverage is valid remains eligible even if coverage expires before review (the claim's own `submitted_at` governs; §VII.C);
 - a delayed-use redemption submitted before expiration remains governed by the submission timestamp where the policy requires that boundary;
 - a hall-pass request remains pending until the authoritative FEAT resolves it.
 
@@ -438,6 +490,7 @@ Store and Entitlements may lawfully read that authoritative record for availabil
 Availability, remaining uses, remaining claim counts, and display status SHALL be derived from:
 
 - canonical entitlement event history;
+- insurance claim history, for claim allowance and payout capacity (§VII.C);
 - lawful pending action state;
 - governing policy or product version;
 - canonical temporal context;
@@ -467,6 +520,7 @@ This domain guarantees:
 
 - entitlement facts are immutable;
 - pending actions preserve unresolved user intent without pretending to be canonical outcome history;
+- insurance coverage is not consumed by claims, and claim truth outlives the pending work that carried it;
 - product rules are consumed from Policies, not recreated in Store and Entitlements;
 - monetary truth remains Ledger-owned;
 - other domains retain authority over their own exercise or settlement records;

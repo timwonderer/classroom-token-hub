@@ -481,6 +481,82 @@ class TestInsuranceClaimSubmission:
             assert r1.claim_id != r2.claim_id
             assert _terminal_events(classroom.class_id, entitlement_id) == []
 
+    def test_entitlement_stays_reusable_after_claims_are_decided_and_paid(self, app):
+        """DOM-STORE-001 §VIII.E.1: filing, approving (with a monetary payout) and
+        rejecting claims never consume the insurance entitlement, so a new claim can
+        still be filed under it afterwards. The entitlement's only event stays GRANTED."""
+        from app.services.entitlement_read_service import has_active_insurance_coverage
+
+        classroom = initialize("chemistry_p1", app)
+        teacher = classroom.teacher_seat
+        student = classroom.students[0]
+
+        with app.app_context():
+            entitlement_id = str(uuid4())
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key="insurance-claim:reusable"):
+                grant = _add_granted_event(classroom, student, entitlement_id)
+                policy_uuid = grant.payload["policy_uuid"]
+                source_ids = [
+                    _seed_source_loss(classroom, student, idem=f"reusable-{n}").id
+                    for n in range(3)
+                ]
+
+            student_context = CanonicalContext(
+                user_id=student.user.id, class_id=classroom.class_id,
+                seat_id=student.seat.id, actor_role="student",
+            )
+            teacher_context = CanonicalContext(
+                user_id=teacher.user_id, class_id=classroom.class_id,
+                seat_id=teacher.id, actor_role="teacher",
+            )
+
+            def file(source_id):
+                result = submit_insurance_claim(
+                    canonical_context=student_context,
+                    entitlement_id=entitlement_id,
+                    claim_subject={"transaction_id": source_id},
+                    correlation_id=f"corr_{uuid4().hex}",
+                )
+                assert result.success is True, result.error_message
+                return result.claim_id
+
+            def still_reusable():
+                assert _terminal_events(classroom.class_id, entitlement_id) == []
+                assert has_active_insurance_coverage(student.seat.id, classroom.class_id, policy_uuid)
+
+            paid = file(source_ids[0])
+            still_reusable()
+            approval = resolve_insurance_claim(
+                canonical_context=teacher_context, claim_id=paid, approved=True,
+            )
+            assert approval.success is True, approval.error_message
+            assert approval.ledger_transaction_id is not None  # monetary claim fulfilled
+            still_reusable()
+
+            denied = file(source_ids[1])
+            rejection = resolve_insurance_claim(
+                canonical_context=teacher_context, claim_id=denied, approved=False,
+                override_reason="Not a covered loss",
+            )
+            assert rejection.success is True, rejection.error_message
+            still_reusable()
+
+            pending = file(source_ids[2])
+            still_reusable()
+
+            statuses = {
+                claim.claim_id: claim.status
+                for claim in db.session.query(InsuranceClaim).filter_by(entitlement_id=entitlement_id)
+            }
+            assert statuses == {paid: "APPROVED", denied: "REJECTED", pending: "SUBMITTED"}
+            event_types = [
+                event.event_type
+                for event in db.session.query(EntitlementEvent).filter_by(
+                    class_id=classroom.class_id, entitlement_id=entitlement_id
+                )
+            ]
+            assert event_types == ["GRANTED"]
+
 
 class TestInsuranceClaimResolution:
     """Tests for FEAT-STOR-003-RESOLVE on the InsuranceClaim lifecycle."""

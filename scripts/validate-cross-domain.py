@@ -68,6 +68,8 @@ TABLE_DOMAIN = {
     # DOM-STORE-001 — entitlement grant and exercise lineage
     "entitlement_events": "DOM-STORE",
     "pending_actions": "DOM-STORE",
+    "insurance_claims": "DOM-STORE",
+    "insurance_claim_productivity_dates": "DOM-STORE",
     # DOM-OPS-001 — operational truth and audit trace
     "operational_events": "DOM-OPS",
     "audit_events": "DOM-OPS",
@@ -124,12 +126,6 @@ BASELINE_FOREIGN_KEYS = {
     "issue_resolution_actions.related_transaction_id -> ledger_transaction.id (DOM-SUP -> DOM-LED)",
     "ledger_transaction.lineage_event_id -> audit_events.id (DOM-LED -> DOM-OPS)",
     "payroll_event.policy_version_id -> policy_versions.id (DOM-PROD -> DOM-CLASS)",
-    # Tables with no attribution in DOM-CORE-002 §V. Ownership cannot be judged
-    # until the schema definition is amended to name their owning domain.
-    "insurance_claim_productivity_dates.claim_id -> insurance_claims.claim_id: "
-    "insurance_claim_productivity_dates has no domain attribution in DOM-CORE-002 §V",
-    "insurance_claim_productivity_dates.claim_id -> insurance_claims.claim_id: "
-    "insurance_claims has no domain attribution in DOM-CORE-002 §V",
 }
 
 
