@@ -286,6 +286,7 @@ STUDENT_FEATURE_ENDPOINTS = {
     'student.purchase_insurance': 'insurance',
     'student.cancel_insurance': 'insurance',
     'student.file_claim': 'insurance',
+    'student.pay_insurance_premium': 'insurance',
     'student.view_policy': 'insurance',
     'student.shop': 'store',
     'student.rent': 'rent',
@@ -312,9 +313,12 @@ def enforce_student_feature_gates():
         return None
 
     if not is_feature_enabled(feature_name):
-        # Disabling rent stops new rent; it never makes existing rent unreachable
-        # (DOM-OBL-001 §IX.16), so its pages stay open while any survives.
+        # Disabling a feature stops new obligations; it never makes existing
+        # ones unreachable (DOM-OBL-001 §IX.16), so the pages that view and pay
+        # them stay open while any survives.
         if feature_name == 'rent' and _has_surviving_rent_state(context):
+            return None
+        if endpoint in _SURVIVING_PREMIUM_ENDPOINTS and _has_surviving_premium_state(context):
             return None
         abort(404)
     return None
@@ -497,6 +501,20 @@ def get_feature_settings_for_student():
     features = ClassFeature.defaults_dict()
     features["rent_enabled"] = bool(features.get("rent_enabled") and get_rent_settings_for_context(context))
     return features
+
+
+_SURVIVING_PREMIUM_ENDPOINTS = {'student.view_policy', 'student.pay_insurance_premium'}
+
+
+def _has_surviving_premium_state(context) -> bool:
+    """Whether the seat still has an insurance premium to view or pay (§IX.16)."""
+    class_id = getattr(context, "class_id", None) if context else None
+    seat_id = getattr(context, "seat_id", None) if context else None
+    if not class_id or not seat_id:
+        return False
+    from app.services.obligations_service import seat_has_surviving_obligations
+
+    return seat_has_surviving_obligations(class_id, seat_id, ("INSURANCE_PREMIUM",))
 
 
 def _has_surviving_rent_state(context) -> bool:
@@ -1691,6 +1709,81 @@ def cancel_insurance(policy_uuid):
     else:
         flash(result.error_message or "Cancellation could not be completed.", "error")
     return redirect(url_for('student.student_insurance'))
+
+
+@student_bp.route('/insurance/policy/<policy_uuid>/pay-premium', methods=['POST'])
+@login_required
+def pay_insurance_premium(policy_uuid):
+    """Pay the oldest outstanding premium on the student's coverage for a policy.
+
+    FEAT-STOR-007 §V: a premium whose automatic payment failed stays outstanding
+    and the student may pay it at any later time, before or after its boundary.
+    Payment after coverage ended settles that premium only and never resurrects
+    the coverage (DOM-STORE-001 §VIII.E.1). Passphrase-confirmed (FEAT-IDEN-002).
+    """
+    context = resolve_canonical_context()
+    if not context:
+        flash("No class selected. Please select a class to continue.", "error")
+        return redirect(url_for('student.student_insurance'))
+
+    passphrase = request.form.get('passphrase', '')
+    user = get_current_user()
+    if not user or not user.passphrase_hash or not verify_password(passphrase, user.passphrase_hash):
+        flash("Enter your passphrase to confirm the payment.", "error")
+        return redirect(url_for('student.view_policy', policy_uuid=policy_uuid))
+
+    from app.feats.insurance_premium_payment_feat import execute_insurance_premium_payment
+
+    entitlement_id = _insurance_entitlement_owing_premium(context.seat_id, context.class_id, policy_uuid)
+    if entitlement_id is None:
+        flash("You have no unpaid premium on this policy.", "info")
+        return redirect(url_for('student.view_policy', policy_uuid=policy_uuid))
+
+    result = execute_insurance_premium_payment(
+        class_id=context.class_id,
+        seat_id=context.seat_id,
+        entitlement_id=entitlement_id,
+        idempotency_key=f"inspay:{uuid.uuid4().hex}",
+    )
+    if result.success:
+        flash(f"Premium of ${result.amount_paid:.2f} paid.", "success")
+    elif result.error_code == "INSUFFICIENT_FUNDS":
+        flash("You don't have enough in checking to pay this premium.", "error")
+    elif result.error_code in ("NOTHING_TO_PAY", "NOT_PAYABLE"):
+        flash("You have no unpaid premium on this policy.", "info")
+    else:
+        flash(result.error_message or "The payment could not be completed.", "error")
+    return redirect(url_for('student.view_policy', policy_uuid=policy_uuid))
+
+
+def _insurance_entitlement_owing_premium(seat_id, class_id, policy_uuid):
+    """The seat's insurance entitlement for this policy with an unpaid premium, else None.
+
+    Includes ended coverage: premium debt for periods that began before the end
+    survives it (DOM-STORE-001 §VIII.E.1). Oldest grant first.
+    """
+    from app.models import EntitlementEvent
+    from app.services import obligations_service
+    from app.services.insurance_coverage_service import premium_lineage_ref
+
+    grants = (
+        EntitlementEvent.query.filter_by(
+            class_id=class_id,
+            target_seat_id=seat_id,
+            entitlement_type="INSURANCE",
+            event_type="GRANTED",
+        )
+        .order_by(EntitlementEvent.timestamp.asc(), EntitlementEvent.event_id.asc())
+        .all()
+    )
+    for grant in grants:
+        if (grant.payload or {}).get("policy_uuid") != policy_uuid:
+            continue
+        if obligations_service.get_default_payment_target(
+            class_id, premium_lineage_ref(grant.entitlement_id)
+        ) is not None:
+            return grant.entitlement_id
+    return None
 
 
 def _active_insurance_entitlement_id(seat_id, class_id, policy_uuid):

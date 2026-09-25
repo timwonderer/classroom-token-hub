@@ -71,6 +71,14 @@
                             <span class="badge bg-danger">Premium overdue &mdash; coverage paused</span>
                             {% endif %}
                         </p>
+                        {% if not enrollment.premiums_current %}
+                        <form action="{{ url_for('student.pay_insurance_premium', policy_uuid=enrollment.id) }}" method="POST" class="mt-2">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <label for="premium-passphrase" class="form-label">Passphrase</label>
+                            <input type="password" id="premium-passphrase" name="passphrase" class="form-control mb-2" autocomplete="current-password" required>
+                            <button type="submit" class="btn btn-primary">Pay overdue premium</button>
+                        </form>
+                        {% endif %}
                     </div>
                 </div>
             </div>
