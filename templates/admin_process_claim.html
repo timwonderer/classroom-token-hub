@@ -145,9 +145,11 @@
             <dd class="col-5 text-end mb-1">{{ '%g'|format(reimbursement_percentage|float) }}%</dd>
             <dt class="col-7 fw-normal" data-out="cap-note" hidden>Limited to benefits remaining</dt>
             <dd class="col-5 text-end mb-1" data-out="cap-value" hidden></dd>
-            <dt class="col-7 border-top pt-2">Payout</dt>
-            <dd class="col-5 text-end border-top pt-2 mb-0 h5" data-out="payout">{% if estimated_payout is not none %}${{ '%.2f'|format(estimated_payout) }}{% endif %}</dd>
           </dl>
+          <div class="d-flex justify-content-between align-items-baseline border-top mt-2 pt-2">
+            <span class="fw-bold">Payout</span>
+            <span class="h5 mb-0" data-out="payout">{% if estimated_payout is not none %}${{ '%.2f'|format(estimated_payout) }}{% endif %}</span>
+          </div>
           {% endif %}
           {% if claim.additional_information %}
           <h3 class="h6 mt-3">Anything else the student added</h3>
@@ -358,7 +360,7 @@
     const breakdown = document.getElementById('claim-breakdown');
     const submit = document.getElementById('claim-submit');
     const money = function (n) { return '$' + n.toFixed(2); };
-    const out = function (name) { return breakdown ? breakdown.querySelector('[data-out="' + name + '"]') : null; };
+    const out = function (name) { return document.querySelector('[data-out="' + name + '"]'); };
 
     function refresh() {
       let hours = 0;
