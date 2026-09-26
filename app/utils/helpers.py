@@ -111,7 +111,7 @@ USER_GUIDES_DIR = "user-guides"
 
 # Endpoints of the in-app help centre itself. They are pages, not documents, so
 # they are never forwarded to the technical site.
-APP_OWNED_DOCS_ROUTES = frozenset({"search", "timeline"})
+APP_OWNED_DOCS_ROUTES = frozenset({"search"})
 
 
 def is_user_guide_doc_path(doc_path=None):

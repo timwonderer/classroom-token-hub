@@ -410,11 +410,10 @@ def index():
 
 @docs_bp.route('/timeline')
 def timeline():
-    """Interactive project development timeline."""
-    if should_redirect_public_docs('timeline'):
-        return _redirect_to_public_docs('timeline')
+    """The project timeline lives on the public site beside the learn-more page."""
+    from app.routes.main import _marketing_site_redirect
 
-    return render_template_with_fallback('docs/timeline.html')
+    return _marketing_site_redirect('timeline.html')
 
 
 @docs_bp.route('/<path:doc_path>')

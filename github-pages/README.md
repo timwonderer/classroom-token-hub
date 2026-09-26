@@ -7,6 +7,9 @@ which is where the footer's "Developer Documentation" link goes.
 
 - `index.html` — the v2 landing page, carrying the three sign-in entry points.
 - `learnmore.html` — the supporting learn-more page, linked from `index.html`.
+- `timeline.html` — the project timeline, linked from `learnmore.html`. The application's
+  `/docs/timeline` redirects here. Its v1 entries came from the retired in-app page; the v2 era is
+  sourced from git history, CHANGELOG, and `docs/TRACKING/`.
 - `district.html`, `privacy.html`, `terms.html` — the district brief and legal pages. The
   application redirects `/district`, `/privacy`, and `/terms` here.
 - `style.css` — shared stylesheet.

@@ -33,10 +33,11 @@ AXE_SOURCE = (REPO_ROOT / "tests" / "assets" / "axe-core.min.js").read_text(enco
 # Every page published to GitHub Pages. On `main`, `index.html` is the holding
 # page and there is no learn-more page; this branch replaces the former with the
 # landing page and adds the latter, and the equality assertion below is what
-# requires `learnmore.html` to be listed here when it returns.
+# requires `learnmore.html` and `timeline.html` to be listed here when they return.
 PUBLIC_PAGES = [
     "index.html",
     "learnmore.html",
+    "timeline.html",
     "district.html",
     "privacy.html",
     "terms.html",
