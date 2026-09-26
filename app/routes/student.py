@@ -1134,6 +1134,7 @@ def dashboard():
 
     # Get active announcements for this student
     from app.models import Announcement
+    from app.services import obligations_service
 
     announcements = Announcement.query.filter(
         Announcement.is_active.is_(True),
@@ -1143,6 +1144,12 @@ def dashboard():
         ),
         Announcement.class_id == scope.class_id,
     ).order_by(Announcement.created_at.desc()).all()
+    for announcement in announcements:
+        # The last class day it shows (it is stored as that day's exclusive end).
+        announcement.expires_on = (
+            obligations_service.last_class_day_before(scope.class_id, announcement.expires_at)
+            if announcement.expires_at else None
+        )
 
     return render_template(
         'student_dashboard.html',
@@ -1975,7 +1982,13 @@ def file_claim(policy_uuid):
         is_productivity_type=is_productivity_type,
         claimable=claimable,
         prior_claims=prior_claims,
-        now=utc_now(),
+        # The class's today, the latest day a claim may name: the UTC date is
+        # yesterday there all morning in any class east of Greenwich.
+        class_today=canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=context,
+            primitive="current_evaluation_day",
+        ).evaluation_date,
     )
 
 

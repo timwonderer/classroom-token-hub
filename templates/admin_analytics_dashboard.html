@@ -118,7 +118,7 @@
         {% for summary in view.history %}
         <option value="{{ summary.payroll_cycle_id }}"
                 {% if summary.payroll_cycle_id == view.selected_cycle_id %}selected{% endif %}>
-          Cycle completed {{ summary.cycle_completed_at.strftime('%b %d, %Y') }}
+          Cycle completed {{ summary.cycle_completed_at | fmt_date }}
         </option>
         {% endfor %}
       </select>
@@ -129,7 +129,7 @@
   {% if cycle %}
   <p class="itr-cycle-meta">
     Interpretation of the cycle completed
-    {{ cycle.cycle.cycle_completed_at.strftime('%b %d, %Y') }}. These are the
+    {{ cycle.cycle.cycle_completed_at | fmt_date }}. These are the
     observations CTH recorded when this cycle closed.
   </p>
 

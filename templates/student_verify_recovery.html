@@ -89,7 +89,7 @@
 
                 <div class="mb-3 p-3 recovery-expiry-panel">
                     <h6><span class="material-symbols-outlined icon-middle" aria-hidden="true">schedule</span> This request expires on:</h6>
-                    <p class="mb-0"><strong>{{ recovery_code.recovery_request.expires_at.strftime('%B %d, %Y at %I:%M %p') }}</strong></p>
+                    <p class="mb-0"><strong>{{ recovery_code.recovery_request.expires_at | fmt_timestamp }}</strong></p>
                 </div>
 
                 <form method="POST">

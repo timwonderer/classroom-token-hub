@@ -35,7 +35,7 @@ An announcement is visible to a student only when all three of these are true: i
    | High | *High - Important Notice* |
    | Urgent | *Urgent - Critical Alert* |
 
-6. Optionally set an **Expiration Date (optional)**. *Leave blank for no expiration. Expired announcements will be hidden automatically.*
+6. Optionally set an **Expiration Date (optional)**. *Leave blank for no expiration. Expired announcements will be hidden automatically.* The date is the last day students see it: it stays up through the end of that day in your class's time zone.
 7. Leave **Display to Students** ticked, or clear it to save without publishing. *Inactive announcements are hidden from students.*
 8. Choose **Save Announcement**.
 
@@ -53,7 +53,7 @@ Each card carries three controls:
 | **Edit** | Reopens the form. Editing shows a **Preview** card underneath so you can see how it will read. |
 | **Delete** | Removes it permanently, after a confirmation. |
 
-Beneath the message body, each card shows *Created:* with the date and time, and *Expires:* when a date is set.
+Beneath the message body, each card shows *Created:* with the date and time, and *Expires:* when a date is set. Both are in your class's time zone.
 
 With nothing posted the page reads *No announcements yet. Create your first announcement to communicate with students in the active class.*
 

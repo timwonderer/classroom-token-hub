@@ -65,7 +65,7 @@
             <h1 id="recovery-saved-heading" class="status-header"><span class="material-symbols-outlined me-2" aria-hidden="true">check_circle</span>Progress Saved!</h1>
 
             {% call cards.alert_card('success', 'Your recovery attempt can be resumed', icon='check_circle', body_class='mb-3', heading_tag='h2') %}
-                <p class="mb-0">Your code-entry receipts and private class confirmations stay with this attempt. No code validity is revealed. You can come back anytime before {{ recovery_request.expires_at.strftime('%B %d, %Y at %I:%M %p') }} to continue.</p>
+                <p class="mb-0">Your code-entry receipts and private class confirmations stay with this attempt. No code validity is revealed. You can come back anytime before {{ recovery_request.expires_at | fmt_timestamp }} to continue.</p>
             {% endcall %}
 
             <div class="resume-pin-display">
@@ -77,7 +77,7 @@
                 <ul class="mb-0">
                     <li>Write down this PIN immediately - it will NOT be shown again</li>
                     <li>You'll need this PIN to resume your recovery later</li>
-                    <li>This PIN expires on {{ recovery_request.expires_at.strftime('%B %d, %Y at %I:%M %p') }}</li>
+                    <li>This PIN expires on {{ recovery_request.expires_at | fmt_timestamp }}</li>
                 </ul>
             {% endcall %}
 

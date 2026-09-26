@@ -278,7 +278,7 @@
                     <div class="col-md-4">
                         <div class="text-center p-3 bg-light rounded">
                             <h6 class="text-muted mb-1">Last Payment Date</h6>
-                            <h5 class="mb-0">{{ last_payroll_event.recorded_at.strftime('%b %d, %Y') }}</h5>
+                            <h5 class="mb-0">{{ last_payroll_event.recorded_at | fmt_date }}</h5>
                         </div>
                     </div>
                     <div class="col-md-4">

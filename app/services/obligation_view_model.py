@@ -17,10 +17,31 @@ from __future__ import annotations
 
 from decimal import Decimal
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
+from types import SimpleNamespace
 
 from app.extensions import db
 from app.models import ObligationAssessment, Transaction, BillCycle, Seat, ClassEconomy, IdentityProfile, RentSettings
+from app.utils.canonical_temporal_resolver import CLASS_LEVEL_EVALUATION, canonical_temporal_resolver
+
+
+def _cle(class_id: str, primitive: str, **inputs):
+    """One Class-Level Evaluation (SPEC-TIME-001): every temporal read in this
+    module is class time, so the class is the only context it needs."""
+    return canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=SimpleNamespace(class_id=class_id),
+        primitive=primitive,
+        **inputs,
+    )
+
+
+def _is_later(class_id: str, candidate, reference) -> bool:
+    return _cle(class_id, "later_than", candidate=candidate, reference=reference).is_later
+
+
+def _class_date_of(class_id: str, instant):
+    return _cle(class_id, "current_evaluation_day", reference_time_utc=instant).evaluation_date
 
 
 def get_total_paid_for_obligation(
@@ -127,31 +148,30 @@ class ClassObligationSummary:
 def build_rent_policy_projection(
     settings: RentSettings | None,
     *,
+    class_id: str,
     due_date,
-    coverage_due_date=None,
-    upcoming_due_date=None,
-    now_utc: datetime | None = None,
+    grace_boundary_at,
+    now_utc: datetime,
     total_paid: Decimal = Decimal('0.00'),
     has_waiver: bool = False,
-    grace_end_override=None,
 ) -> dict:
-    """Compute the shared rent projection used by the view and payment route.
+    """Compute the rent projection the student view shows for one bill.
 
-    When ``grace_end_override`` is supplied (the cycle's persisted
-    ``grace_boundary_at``), it is used verbatim so a later RentSettings change
-    cannot retroactively move an already-materialized cycle's grace boundary
-    (INV-CORE-000 non-retroactivity). Otherwise the boundary is derived from the
-    current ``grace_period_days`` as a fallback.
+    ``grace_boundary_at`` is the cycle's persisted boundary, the same instant
+    ``reconcile_rent_feat`` charges a late fee after (``now > grace_boundary_at``),
+    so the page cannot disagree with when the fee is actually charged. It is
+    never re-derived from ``grace_period_days``: counting 24-hour days from a
+    class-local midnight lands at 23:00 the day before once a DST fall-back
+    intervenes, and a later settings change must not move an already
+    materialized boundary (INV-CORE-000). ``None`` means the cycle has no grace
+    boundary, so reconciliation never charges a late fee and the bill is never
+    late.
     """
-    now_utc = now_utc or datetime.now(timezone.utc)
     amount_due = Decimal(str(settings.rent_amount)) if settings and settings.rent_amount is not None else Decimal('0.00')
-    grace_period_days = int(settings.grace_period_days) if settings and settings.grace_period_days is not None else 0
-    if grace_end_override is not None:
-        grace_end = grace_end_override
-    else:
-        grace_end = due_date + timedelta(days=grace_period_days) if due_date else None
+    grace_end = grace_boundary_at
+    past_grace = bool(grace_end) and _is_later(class_id, now_utc, grace_end)
     late_fee = Decimal('0.00')
-    if grace_end and now_utc > grace_end and total_paid < amount_due:
+    if past_grace and total_paid < amount_due:
         late_fee = Decimal(str(settings.late_penalty_amount)) if settings and settings.late_penalty_amount is not None else Decimal('0.00')
     # Satisfaction and the payable amount track the ASSESSED principal ONLY.
     # The v2 rent payment path (FEAT-OBL-001 / DOM-OBL-001 §V.1) satisfies the
@@ -162,20 +182,15 @@ def build_rent_policy_projection(
     # `late_fee`/`total_due` remain available for informational display only.
     total_due = amount_due + late_fee
     remaining_amount = max(Decimal('0.00'), amount_due - total_paid)
-    rent_is_active = bool(coverage_due_date and now_utc >= coverage_due_date)
-    if not rent_is_active and upcoming_due_date and settings and settings.bill_preview_enabled and settings.bill_preview_days:
-        preview_start = upcoming_due_date - timedelta(days=settings.bill_preview_days)
-        rent_is_active = now_utc >= preview_start and now_utc < upcoming_due_date
     is_satisfied = has_waiver or (total_paid >= amount_due)
-    is_past_due = (not is_satisfied) and bool(grace_end and now_utc > grace_end)
-    is_preview = (not is_satisfied) and bool(due_date and now_utc < due_date)
+    is_past_due = (not is_satisfied) and past_grace
+    is_preview = (not is_satisfied) and bool(due_date) and _is_later(class_id, due_date, now_utc)
     return {
         'amount_due': amount_due,
         'grace_end': grace_end,
         'late_fee': late_fee,
         'total_due': total_due,
         'remaining_amount': remaining_amount,
-        'rent_is_active': rent_is_active,
         'is_satisfied': is_satisfied,
         'is_past_due': is_past_due,
         'is_preview': is_preview,
@@ -311,7 +326,7 @@ def build_empty_student_obligation_view(
     )
 
 
-def _select_current_assessment(class_id, assessment_events, late_fee_sources_due, obligations_service):
+def _select_current_assessment(class_id, assessment_events, late_fee_sources_due, obligations_service, now_utc):
     """The bill a student is shown first; see ``build_student_obligation_view``."""
     if not assessment_events:
         return None
@@ -331,7 +346,9 @@ def _select_current_assessment(class_id, assessment_events, late_fee_sources_due
     latest = assessment_events[-1]
     latest_cycle = db.session.get(BillCycle, latest.bill_cycle_id) if latest.bill_cycle_id else None
     if latest_cycle is not None:
-        current_cycle = obligations_service.get_current_bill_cycle(class_id, latest_cycle.internal_ref)
+        current_cycle = obligations_service.get_current_bill_cycle(
+            class_id, latest_cycle.internal_ref, reference_time_utc=now_utc
+        )
         if current_cycle is not None:
             for assessment in assessment_events:
                 if assessment.bill_cycle_id == current_cycle.id:
@@ -344,6 +361,8 @@ def build_student_obligation_view(
     class_id: str,
     obligation_type: str,
     current_block: str = 'A',  # Period identifier
+    *,
+    reference_time_utc: datetime | None = None,
 ) -> StudentObligationView | None:
     """
     Construct a complete obligation view for one student, any obligation type.
@@ -354,6 +373,9 @@ def build_student_obligation_view(
     - Bill cycles for temporal boundaries
     - ClassConfig for grace_period
     - Ledger for authoritative payment amounts
+
+    ``reference_time_utc`` is the evaluation instant ("now"); omitted, the
+    resolver reads the clock. Tests inject it (SPEC-TIME-001 §XII).
 
     Returns None if no assessments found.
     """
@@ -367,20 +389,7 @@ def build_student_obligation_view(
     # Canonical class-local "now" (SPEC-TIME-001). Resolved once and reused for
     # every temporal derivation below (projection, days-until-due, days-overdue)
     # so the view is internally consistent and free of raw datetime.now() reads.
-    from app.utils.canonical_temporal_resolver import (
-        canonical_temporal_resolver,
-        CLASS_LEVEL_EVALUATION,
-    )
-
-    class _TemporalContext:
-        def __init__(self, class_id: str):
-            self.class_id = class_id
-
-    now_utc = canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=_TemporalContext(class_id=class_id),
-        primitive="current_time",
-    ).canonical_now_utc
+    now_utc = _cle(class_id, "current_time", reference_time_utc=reference_time_utc).canonical_now_utc
 
     # Step 2: Get all assessments for this (seat, class, obligation_type)
     assessments = obligations_service.get_assessment_events_for_seat_class(
@@ -425,7 +434,7 @@ def build_student_obligation_view(
             row.get('source_correlation_id') for row in fee_rows if not row['is_paid']
         }
     current_assessment = _select_current_assessment(
-        class_id, assessment_events, late_fee_sources_due, obligations_service
+        class_id, assessment_events, late_fee_sources_due, obligations_service, now_utc
     )
     current_rent_settings = None
     if current_assessment and current_assessment.bill_cycle:
@@ -478,16 +487,12 @@ def build_student_obligation_view(
         rent_settings = _resolve_rent_settings_for_policy_uuid(getattr(bill_cycle, 'policy_uuid', None))
         projection = build_rent_policy_projection(
             rent_settings if obligation_type == 'RENT' else None,
+            class_id=class_id,
             due_date=due_date,
-            # An ASSESSMENT event only exists once the cycle boundary has arrived,
-            # so the obligation is live/payable from its own due date onward. Pass
-            # coverage_due_date=due_date so rent_is_active reflects the assessed
-            # bill rather than defaulting to False (which suppressed the pay form).
-            coverage_due_date=due_date,
+            grace_boundary_at=grace_boundary,
             now_utc=now_utc,
             total_paid=total_paid,
             has_waiver=has_waiver,
-            grace_end_override=grace_boundary,
         )
         amount_due = projection['amount_due'] if obligation_type == 'RENT' else Decimal('0.00')
         grace_end = projection['grace_end']
@@ -506,20 +511,32 @@ def build_student_obligation_view(
         else:
             status_counts['OUTSTANDING'] += 1
 
+        # Whole elapsed days, measured by the resolver (is_preview / is_past_due
+        # already establish the sign, so neither measurement can go negative).
         days_until_due = None
         if is_preview and due_date:
-            delta = due_date - now_utc
-            days_until_due = delta.days
+            days_until_due = _cle(
+                class_id, "time_until", reference_time_utc=now_utc, target=due_date
+            ).remaining_seconds // 86400
 
         days_overdue = None
         if is_past_due and grace_end:
-            delta = now_utc - grace_end
-            days_overdue = delta.days
+            days_overdue = _cle(
+                class_id, "time_since", reference_time_utc=now_utc, start=grace_end
+            ).elapsed_seconds // 86400
+
+        # The last class day a payment avoids the late fee: the fee is charged
+        # once grace_end (00:00 of the following class day) has passed, so
+        # "pay by" is the day before it, not grace_end's own date.
+        grace_last_day = None
+        if grace_end:
+            grace_last_day = obligations_service.last_class_day_before(class_id, grace_end)
 
         period_info = {
             'correlation_id': assessment.correlation_id,
             'due_date': due_date,
             'grace_end': grace_end,
+            'grace_last_day': grace_last_day,
             'amount_due': amount_due,
             'amount_paid': total_paid,
             'amount_waived': has_waiver,
@@ -549,7 +566,11 @@ def build_student_obligation_view(
         else:
             # Prior obligation
             prior_obligations.append({
-                'period': assessment.timestamp.strftime('%B %Y') if assessment.timestamp else 'Unknown',
+                # Month of the class-local date, not of the UTC timestamp.
+                'period': (
+                    _class_date_of(class_id, assessment.timestamp).strftime('%B %Y')
+                    if assessment.timestamp else 'Unknown'
+                ),
                 'amount': amount_due,
                 'status': 'paid' if period_info['is_paid'] else ('waived' if has_waiver else 'outstanding'),
                 'due_date': due_date,
@@ -725,7 +746,7 @@ def build_class_obligation_summary(
             'is_waived': current.get('is_waived', False),
         })
 
-    now_utc = datetime.now(timezone.utc)
+    now_utc = _cle(class_id, "current_time").canonical_now_utc
 
     return ClassObligationSummary(
         class_id=class_id,
@@ -1012,7 +1033,9 @@ def add_display_formatting_to_student_obligation_view(
     if view.current_period and view.current_period.get('due_date'):
         due_date = view.current_period['due_date']
         if isinstance(due_date, datetime):
-            display_due_date = due_date.strftime("%B %d, %Y")
+            # The class-local date: the UTC date of a class-midnight boundary is
+            # the previous day in any class east of Greenwich.
+            display_due_date = _class_date_of(view.class_id, due_date).strftime("%B %d, %Y")
 
     display_amount_due = "$0.00"
     if view.current_period and view.current_period.get('amount_due') is not None:

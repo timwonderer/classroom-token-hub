@@ -164,3 +164,97 @@ def test_the_application_tree_is_clean():
     assert not offenders, "class-scoped deadlines bypassing CLE:\n  " + "\n  ".join(
         f"{f.path.relative_to(REPO_ROOT)}:{f.line} {f.message}" for f in offenders
     )
+
+
+# ==========================================================================
+# TEMPORAL_ARITHMETIC_OUTSIDE_RESOLVER — INV-ARC-015 §VII, SPEC-TIME-001 §XII
+# ==========================================================================
+
+def _arithmetic_findings(source: str, path: str = "app/services/obligation_view_model.py"):
+    return guardrails.check_temporal_arithmetic_outside_resolver(
+        pathlib.Path(path), ast.parse(source), source
+    )
+
+
+def test_detects_the_rent_grace_deadline_defect_verbatim():
+    """The view's grace fallback, as it shipped: 23:00 the previous class day
+    after the November fall-back."""
+    shipped = (
+        "grace_end = due_date + timedelta(days=grace_period_days) if due_date else None\n"
+    )
+    findings = _arithmetic_findings(shipped)
+    assert len(findings) == 1, findings
+    assert findings[0].rule == "TEMPORAL_ARITHMETIC_OUTSIDE_RESOLVER"
+    assert findings[0].line == 1
+
+
+def test_detects_the_payroll_next_date_defect_verbatim():
+    shipped = "candidate = first_pay + timedelta(days=freq_days * (periods_since_first + 1))\n"
+    assert len(_arithmetic_findings(shipped, "app/routes/admin.py")) == 1
+
+
+@pytest.mark.parametrize("shipped", [
+    # The near miss a rewrite would reach for once the bare name is banned.
+    "from datetime import timedelta as _td\nend = start + _td(days=1)\n",
+    "import datetime as dt\nend = start + dt.timedelta(days=1)\n",
+    "import datetime\nend = start + datetime.timedelta(days=1)\n",
+])
+def test_detects_every_spelling_of_timedelta(shipped):
+    assert len(_arithmetic_findings(shipped)) == 1
+
+
+def test_a_baseline_entry_does_not_travel_to_another_file():
+    """The baseline freezes a line where it stood, not the construction."""
+    frozen = "user.reset_code_expires_at = now + timedelta(minutes=10)\n"
+    assert _arithmetic_findings(frozen, "app/services/student_recovery.py") == []
+    assert len(_arithmetic_findings(frozen, "app/services/obligation_view_model.py")) == 1
+
+
+def test_ignores_paths_outside_services_feats_and_routes():
+    """The resolver itself is where this arithmetic belongs."""
+    source = "end_local = start_local + timedelta(days=1)\n"
+    assert _arithmetic_findings(source, "app/utils/canonical_temporal_resolver.py") == []
+
+
+def test_ignores_mentions_that_are_not_calls():
+    source = (
+        '"""grace = due + timedelta(days=3) was the defect."""\n'
+        "from datetime import timedelta\n"
+        "# end = start + timedelta(days=1)\n"
+        "def span() -> timedelta:\n"
+        "    return None\n"
+    )
+    assert _arithmetic_findings(source) == []
+
+
+def _arithmetic_sites():
+    """(relative path, source line) of every timedelta call in scope."""
+    sites = []
+    for scope in guardrails.TEMPORAL_ARITHMETIC_SCOPES:
+        for path in (REPO_ROOT / scope).rglob("*.py"):
+            text = path.read_text(encoding="utf-8", errors="replace")
+            lines = text.splitlines()
+            relative = path.relative_to(REPO_ROOT).as_posix()
+            for call in guardrails._timedelta_calls(ast.parse(text)):
+                sites.append((relative, lines[call.lineno - 1].strip()))
+    return sites
+
+
+def test_no_timedelta_arithmetic_outside_the_resolver():
+    offenders = [
+        site for site in _arithmetic_sites()
+        if site not in guardrails.TEMPORAL_ARITHMETIC_BASELINE
+    ]
+    assert not offenders, "timedelta arithmetic outside the resolver:\n  " + "\n  ".join(
+        f"{path}: {source}" for path, source in offenders
+    )
+
+
+def test_the_temporal_arithmetic_baseline_only_shrinks():
+    """A baseline entry with no matching line is a site that was fixed: remove
+    it, so the line cannot quietly come back under the old allowance."""
+    stale = guardrails.TEMPORAL_ARITHMETIC_BASELINE - set(_arithmetic_sites())
+    assert not stale, (
+        "remove fixed sites from TEMPORAL_ARITHMETIC_BASELINE in "
+        "scripts/policy_guardrails.py:\n  " + "\n  ".join(sorted(map(str, stale)))
+    )

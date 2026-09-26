@@ -108,7 +108,7 @@
           <div class="claim-date-row row g-2 mb-2 align-items-end">
             <div class="col-4">
               <label class="form-label small mb-1">Date</label>
-              <input type="date" name="claim_date" class="form-control" aria-label="Claimed date" max="{{ now.strftime('%Y-%m-%d') }}">
+              <input type="date" name="claim_date" class="form-control" aria-label="Claimed date" max="{{ class_today.isoformat() }}">
             </div>
             <div class="col-2">
               <label class="form-label small mb-1">Hours</label>
@@ -146,7 +146,7 @@
         <tbody>
           {% for claim in prior_claims %}
           <tr>
-            <td>{{ claim.filed_date.strftime('%b %d, %Y') if claim.filed_date else '—' }}</td>
+            <td>{{ claim.filed_date | fmt_date }}</td>
             <td><span class="badge bg-secondary">{{ claim.status|capitalize }}</span></td>
             <td class="text-end">
               {% if claim.approved_amount is not none %}${{ "%.2f"|format(claim.approved_amount) }}{% else %}—{% endif %}

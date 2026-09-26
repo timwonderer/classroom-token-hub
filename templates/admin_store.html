@@ -340,10 +340,10 @@
                 {% else %}
                   <div class="small text-muted">No class progress yet.</div>
                 {% endif %}
-                {% if item.collective_goal_expires_at %}
+                {% if item.collective_goal_last_day %}
                 <div class="small text-muted mt-1">
                   <span class="material-symbols-outlined icon-2xs icon-middle" aria-hidden="true">schedule</span>
-                  <strong>Deadline:</strong> {{ item.collective_goal_expires_at.strftime('%b %d, %Y') }}
+                  <strong>Deadline:</strong> {{ item.collective_goal_last_day.strftime('%b %d, %Y') }}
                 </div>
                 {% endif %}
               </div>

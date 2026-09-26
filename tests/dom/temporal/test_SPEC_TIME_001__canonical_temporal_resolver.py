@@ -269,6 +269,29 @@ def test_evaluation_day_boundaries():
     assert ev.boundary_end_utc == expected_end.astimezone(timezone.utc)
 
 
+@pytest.mark.parametrize("day, hours", [
+    (date(2026, 11, 1), 25),  # US fall-back
+    (date(2026, 3, 8), 23),   # US spring-forward
+])
+def test_evaluation_day_boundaries_end_at_next_class_midnight_across_dst(day, hours):
+    """INV-ARC-015 §VIII.1: a day is [00:00, 24:00) in class time, which is not
+    always 24 elapsed hours. Adding 24h to local midnight on Nov 1 ends the day
+    at 23:00 EST, an hour before the next class day actually begins."""
+    ev = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=FakeContext("cls-1"),
+        primitive="evaluation_day_boundaries",
+        reference_time_utc=REF,
+        evaluation_date=day,
+    )
+    eastern_tz = pytz.timezone(EASTERN)
+    next_midnight = eastern_tz.localize(datetime.combine(day + timedelta(days=1), datetime.min.time()))
+
+    assert ev.boundary_end_utc == next_midnight.astimezone(timezone.utc)
+    assert (ev.boundary_end.hour, ev.boundary_end.utcoffset()) == (0, next_midnight.utcoffset())
+    assert ev.boundary_end_utc - ev.boundary_start_utc == timedelta(hours=hours)
+
+
 # ---------------------------------------------------------------------------
 # §XIV-12: elapsed_duration sums one interval
 # ---------------------------------------------------------------------------
@@ -359,6 +382,21 @@ def test_shift_timestamp_returns_local_and_utc_forms():
 
     assert ev.shifted_timestamp.tzinfo.zone == EASTERN
     assert ev.shifted_timestamp_utc == _utc(2026, 7, 20, 13, 16, 30)
+
+
+def test_shift_timestamp_local_form_carries_the_offset_in_effect_after_dst():
+    """00:30 EDT on Nov 1 plus 3h is 02:30 EST, not 03:30 still labelled EDT."""
+    ev = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=FakeContext("cls-1"),
+        primitive="shift_timestamp",
+        reference_time_utc=REF,
+        timestamp=_utc(2026, 11, 1, 4, 30, 0),
+        elapsed_seconds=3 * 3600,
+    )
+
+    assert ev.shifted_timestamp_utc == _utc(2026, 11, 1, 7, 30, 0)
+    assert (ev.shifted_timestamp.hour, ev.shifted_timestamp.utcoffset()) == (2, timedelta(hours=-5))
 
 
 # ---------------------------------------------------------------------------

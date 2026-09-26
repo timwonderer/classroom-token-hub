@@ -1527,12 +1527,8 @@ def _build_economy_snapshot_from_analysis(class_id, checker, analysis):
     return {
         "class_id": class_id,
         "policy_mode": checker.policy_mode,
-        "analysis_payload": _serialize_economy_analysis_payload(analysis),
+        "analysis_payload": _serialize_economy_analysis_payload(analysis, class_id=class_id),
     }
-
-
-def _economy_refresh_timezone():
-    return pytz.timezone(current_app.config.get('ECONOMY_REFRESH_TIMEZONE', 'America/Los_Angeles'))
 
 
 def _json_safe_value(value):
@@ -1547,41 +1543,34 @@ def _json_safe_value(value):
     return value
 
 
-def _economy_weekly_refresh_bounds(now_utc=None):
-    now = ensure_utc(now_utc or utc_now())
-    local_now = now.astimezone(_economy_refresh_timezone())
-    days_since_sunday = (local_now.weekday() + 1) % 7
-    weekly_start_local = (local_now - timedelta(days=days_since_sunday)).replace(
-        hour=0,
-        minute=0,
-        second=0,
-        microsecond=0,
-    )
-    next_weekly_start_local = weekly_start_local + timedelta(days=7)
-    return ensure_utc(weekly_start_local), ensure_utc(next_weekly_start_local)
+def _economy_analysis_schedule(snapshot=None, *, class_id, now_utc=None, frozen=True):
+    """The class's current analysis windows, in class time (INV-ARC-015 §X.2).
 
+    Week and month are the resolver's calendar periods (SPEC-TIME-001 §IX.11:
+    weeks start Monday), never derived here. Without a class there is no class
+    time to state, so there is no schedule.
+    """
+    if not class_id:
+        return None
 
-def _economy_monthly_refresh_bounds(now_utc=None):
-    now = ensure_utc(now_utc or utc_now())
-    local_now = now.astimezone(_economy_refresh_timezone())
-    monthly_start_local = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    if monthly_start_local.month == 12:
-        next_monthly_start_local = monthly_start_local.replace(year=monthly_start_local.year + 1, month=1)
-    else:
-        next_monthly_start_local = monthly_start_local.replace(month=monthly_start_local.month + 1)
-    return ensure_utc(monthly_start_local), ensure_utc(next_monthly_start_local)
+    def _period(period):
+        return canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=SimpleNamespace(class_id=class_id),
+            primitive="evaluation_period_boundaries",
+            period=period,
+            reference_time_utc=now_utc,
+        )
 
-
-def _economy_analysis_schedule(snapshot=None, *, now_utc=None, frozen=True):
-    current_time = ensure_utc(now_utc or utc_now())
-    weekly_window_start, next_weekly_refresh = _economy_weekly_refresh_bounds(current_time)
-    monthly_window_start, next_monthly_refresh = _economy_monthly_refresh_bounds(current_time)
-    last_updated = ensure_utc(snapshot.effective_at) if snapshot and snapshot.effective_at else current_time
+    week, month = _period("week"), _period("month")
+    weekly_window_start, next_weekly_refresh = week.boundary_start_utc, week.boundary_end_utc
+    monthly_window_start, next_monthly_refresh = month.boundary_start_utc, month.boundary_end_utc
+    last_updated = ensure_utc(snapshot.effective_at) if snapshot and snapshot.effective_at else week.canonical_now_utc
     return {
         'frozen': frozen,
         'last_updated_at': last_updated.isoformat(),
-        'refresh_timezone': _economy_refresh_timezone().zone,
-        'weekly_refresh_label': 'Sunday 12:00 AM',
+        'refresh_timezone': week.display_timezone,
+        'weekly_refresh_label': 'Monday 12:00 AM',
         'monthly_refresh_label': '1st of each month 12:00 AM',
         'weekly_window_start_at': weekly_window_start.isoformat(),
         'monthly_window_start_at': monthly_window_start.isoformat(),
@@ -1590,7 +1579,7 @@ def _economy_analysis_schedule(snapshot=None, *, now_utc=None, frozen=True):
     }
 
 
-def _serialize_economy_analysis_payload(analysis, *, snapshot=None, now_utc=None, frozen=True):
+def _serialize_economy_analysis_payload(analysis, *, class_id, snapshot=None, now_utc=None, frozen=True):
     warnings_by_level = {
         'critical': [],
         'warning': [],
@@ -1624,7 +1613,7 @@ def _serialize_economy_analysis_payload(analysis, *, snapshot=None, now_utc=None
             'warning_items': warning_items,
             'recommendations': {},
             'cwi_breakdown': None,
-            'analysis_schedule': _economy_analysis_schedule(snapshot, now_utc=now_utc, frozen=frozen),
+            'analysis_schedule': _economy_analysis_schedule(snapshot, class_id=class_id, now_utc=now_utc, frozen=frozen),
         }
     return {
         'status': 'success',
@@ -1642,7 +1631,7 @@ def _serialize_economy_analysis_payload(analysis, *, snapshot=None, now_utc=None
             'expected_weekly_minutes': float(analysis.cwi.expected_weekly_minutes),
             'notes': _json_safe_value(analysis.cwi.notes),
         },
-        'analysis_schedule': _economy_analysis_schedule(snapshot, now_utc=now_utc, frozen=frozen),
+        'analysis_schedule': _economy_analysis_schedule(snapshot, class_id=class_id, now_utc=now_utc, frozen=frozen),
     }
 
 
@@ -1762,12 +1751,12 @@ def _get_frozen_economy_analysis_payload(
     )
 
     if class_id and expected_weekly_hours is None:
-        payload = _serialize_economy_analysis_payload(analysis, frozen=True)
-        payload['analysis_schedule'] = _economy_analysis_schedule(None, frozen=False)
+        payload = _serialize_economy_analysis_payload(analysis, class_id=class_id, frozen=True)
+        payload['analysis_schedule'] = _economy_analysis_schedule(None, class_id=class_id, frozen=False)
         payload['snapshot_cached'] = False
         return payload, None
 
-    payload = _serialize_economy_analysis_payload(analysis, frozen=False)
+    payload = _serialize_economy_analysis_payload(analysis, class_id=class_id, frozen=False)
     payload['snapshot_cached'] = False
     return payload, None
 
@@ -4300,6 +4289,20 @@ def _class_local_date_start_utc(date_str):
     return bounds.boundary_start_utc
 
 
+def _class_day_bounds_utc(date_str, class_id):
+    """UTC ``[start, end)`` of the class day a ``YYYY-MM-DD`` filter names.
+
+    Raises ``ValueError`` on a malformed date, as ``strptime`` does.
+    """
+    bounds = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=_cle_context(class_id),
+        primitive="evaluation_day_boundaries",
+        evaluation_date=datetime.strptime(date_str, '%Y-%m-%d').date(),
+    )
+    return bounds.boundary_start_utc, bounds.boundary_end_utc
+
+
 def _cle_context(class_id=None):
     """Execution context for a CLE evaluation.
 
@@ -4392,7 +4395,8 @@ def _local_date_of_end_of_day(instant, class_id=None):
     """Recover the local date ``_end_of_day_utc`` was given.
 
     The day boundary's end is exclusive — the next local day's midnight — so the
-    instant is stepped back a microsecond before its local day is read. Taking
+    instant's day is the class day holding the period's last instant
+    (``obligations_service.last_class_day_before``), not its own. Taking
     ``.date()`` of the stored datetime instead depends on the database session's
     timezone, and on a UTC server shows the following day, which a save then
     persists: each edit moved the date a day later.
@@ -4404,12 +4408,7 @@ def _local_date_of_end_of_day(instant, class_id=None):
     """
     if not instant:
         return None
-    return canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=_cle_context(class_id),
-        primitive="current_evaluation_day",
-        reference_time_utc=ensure_utc(instant) - timedelta(microseconds=1),
-    ).result["evaluation_date"]
+    return obligations_service.last_class_day_before(_cle_context(class_id).class_id, instant)
 
 import uuid
 
@@ -4981,6 +4980,11 @@ def store_management():
     # Add purchases list to each item for template access
     for item in items:
         item.purchases = purchases_by_lineage.get(item.product_lineage_uuid, [])
+        # The deadline is stored as the exclusive end of the chosen class day,
+        # so the day to show is the one before that instant, not its own date.
+        item.collective_goal_last_day = _local_date_of_end_of_day(
+            item.collective_goal_expires_at, class_id=selected_scope['class_id']
+        )
 
     # Build economic view from Class Configuration domain
     economic_view = build_economic_view(selected_scope['class_id'])
@@ -7490,10 +7494,6 @@ def payroll():
     """
     Enhanced payroll page with tabs for settings, students, rewards, fines, and manual payments.
     """
-    now_utc = utc_now()
-    import pytz as _pytz
-    current_time = now_utc.astimezone(_pytz.UTC)
-
     ctx = g.canonical_context
     now_eval = canonical_temporal_resolver(
         CLASS_LEVEL_EVALUATION,
@@ -7551,28 +7551,11 @@ def payroll():
 
 
 
-    def _compute_next_pay_date(setting, now):
-        freq_days = setting.payroll_frequency_days if setting and setting.payroll_frequency_days else 14
-        first_pay = ensure_utc(setting.first_pay_date) if setting and setting.first_pay_date else None
-
-        # Anchor the schedule strictly to the configured first pay date so manual runs
-        # don't shift the calendar. If no first date is set, fall back to now + frequency.
-        if first_pay:
-            if first_pay > now:
-                return first_pay
-
-            elapsed_days = (now - first_pay).days
-            periods_since_first = elapsed_days // freq_days
-            candidate = first_pay + timedelta(days=freq_days * (periods_since_first + 1))
-        else:
-            candidate = now + timedelta(days=freq_days)
-
-        while candidate <= now:
-            candidate += timedelta(days=freq_days)
-        return candidate
-
-    # Next scheduled payroll calculation (keep in UTC for template)
-    next_pay_date_utc = _compute_next_pay_date(default_setting, now_utc)
+    # Next scheduled payroll: the scheduler's own cursor, the instant the
+    # automatic-payroll job runs on (scheduled_tasks advances it by class-local
+    # calendar days). Recomputing it here as first_pay + N × 24h disagreed with
+    # that job by a class day after every DST change. UTC; the template formats.
+    next_pay_date_utc = default_setting.next_payroll_date if default_setting else None
 
     # Recent payroll activity (class-scoped via canonical class_id)
     my_class_ids = [selected_class_id] if selected_class_id else []
@@ -7603,7 +7586,7 @@ def payroll():
         payroll_summary_by_class_id.get(selected_class_id, {}).get(s.id, Decimal("0.00"))
         for s in students
     ) if selected_class_id else Decimal("0.00")
-    next_payroll_date = _compute_next_pay_date(default_setting, now_utc)
+    next_payroll_date = next_pay_date_utc
     display_next_payroll_estimate = f"${Decimal(str(next_payroll_estimate)):.2f}"
 
     # Student statistics
@@ -7812,7 +7795,9 @@ def payroll():
     display_settings_created_at_list = []
     for setting in block_settings:
         if setting.created_at:
-            display_settings_created_at_list.append(setting.created_at.strftime("%B %d, %Y"))
+            display_settings_created_at_list.append(
+                _class_local_date_of(setting.created_at).strftime("%B %d, %Y")
+            )
         else:
             display_settings_created_at_list.append("")
 
@@ -8966,15 +8951,21 @@ def banking():
         query = query.filter(Transaction.account_type == account_q)
     if type_q:
         query = query.filter(Transaction.type == type_q)
+    # The picked dates are class days (INV-ARC-015 §X.2): filter on the class
+    # day's own [00:00, 24:00) boundaries, not on UTC midnights, which are a
+    # different day's worth of transactions in every class but a UTC one.
     if start_date:
         try:
-            query = query.filter(Transaction.timestamp >= datetime.strptime(start_date, '%Y-%m-%d'))
+            query = query.filter(
+                Transaction.timestamp >= _class_day_bounds_utc(start_date, selected_class_id)[0]
+            )
         except ValueError:
             flash("Invalid start date format. Please use YYYY-MM-DD.", "danger")
     if end_date:
         try:
-            end_date_inclusive = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
-            query = query.filter(Transaction.timestamp < end_date_inclusive)
+            query = query.filter(
+                Transaction.timestamp < _class_day_bounds_utc(end_date, selected_class_id)[1]
+            )
         except ValueError:
             flash("Invalid end date format. Please use YYYY-MM-DD.", "danger")
 
@@ -9630,6 +9621,11 @@ def announcements():
     announcements_list = Announcement.query.filter_by(
         class_id=selected_class_id,
     ).order_by(Announcement.created_at.desc()).all()
+    for announcement in announcements_list:
+        # The last class day it shows (it is stored as that day's exclusive end).
+        announcement.expires_on = _local_date_of_end_of_day(
+            announcement.expires_at, class_id=selected_class_id
+        )
 
     return render_template(
         'admin_announcements.html',
@@ -9670,7 +9666,9 @@ def announcement_create():
                     message=form.message.data,
                     priority=form.priority.data,
                     is_active=form.is_active.data,
-                    expires_at=form.expires_at.data,
+                    # The picked date is the last class day it shows; it
+                    # expires at that day's end, not at midnight UTC.
+                    expires_at=_end_of_day_utc(form.expires_at.data, class_id=selected_class_id),
                 )
             flash(f'Announcement "{form.title.data}" created successfully!', 'success')
 
@@ -9714,6 +9712,12 @@ def announcement_edit(announcement_id):
     # Get the class info for this announcement
     form = AnnouncementForm(obj=announcement)
     form.class_id.data = class_context["class_id"]
+    if request.method == 'GET':
+        # Show back the class day the teacher chose, not the UTC date of the
+        # stored end-of-day instant.
+        form.expires_at.data = _local_date_of_end_of_day(
+            announcement.expires_at, class_id=class_context["class_id"]
+        )
 
     if form.validate_on_submit():
         try:
@@ -9728,7 +9732,7 @@ def announcement_edit(announcement_id):
                     message=form.message.data,
                     priority=form.priority.data,
                     is_active=form.is_active.data,
-                    expires_at=form.expires_at.data,
+                    expires_at=_end_of_day_utc(form.expires_at.data, class_id=class_context["class_id"]),
                 )
 
             flash(f'Announcement "{announcement.title}" updated successfully!', 'success')

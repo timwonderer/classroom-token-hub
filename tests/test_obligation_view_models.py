@@ -16,6 +16,7 @@ from app.services.obligation_view_model import (
 )
 from app.feats.base import FEATContext
 from types import SimpleNamespace
+from tests.helpers.classroom_initializer import initialize
 
 
 def _rent_settings_stub(rent_amount, grace_period_days, late_penalty_amount):
@@ -29,21 +30,28 @@ def _rent_settings_stub(rent_amount, grace_period_days, late_penalty_amount):
     )
 
 
-def test_projection_late_fee_is_informational_not_gating():
+# The cycle's persisted grace boundary, three days after the due date.
+PROJECTION_DUE = datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)
+PROJECTION_GRACE_BOUNDARY = datetime(2026, 8, 4, 12, 0, tzinfo=timezone.utc)
+PROJECTION_NOW = datetime(2026, 8, 20, 12, 0, tzinfo=timezone.utc)  # well past grace
+
+
+def test_projection_late_fee_is_informational_not_gating(app):
     """Regression: a past-grace UNPAID obligation stays payable at the ASSESSED
     principal only; the late fee is surfaced informationally and must NOT inflate
     remaining_amount nor gate satisfaction (FEAT-OBL-001 / DOM-OBL-001 §V.1)."""
+    classroom = initialize("chemistry_p1", app)
     settings = _rent_settings_stub(Decimal('50.00'), grace_period_days=3, late_penalty_amount=Decimal('10.00'))
-    due_date = datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)
-    now_utc = datetime(2026, 8, 20, 12, 0, tzinfo=timezone.utc)  # well past grace
 
-    proj = build_rent_policy_projection(
-        settings,
-        due_date=due_date,
-        coverage_due_date=due_date,
-        now_utc=now_utc,
-        total_paid=Decimal('0.00'),
-    )
+    with app.app_context():
+        proj = build_rent_policy_projection(
+            settings,
+            class_id=classroom.class_id,
+            due_date=PROJECTION_DUE,
+            grace_boundary_at=PROJECTION_GRACE_BOUNDARY,
+            now_utc=PROJECTION_NOW,
+            total_paid=Decimal('0.00'),
+        )
 
     # Payable amount tracks the assessed principal, NOT principal + late fee.
     assert proj['amount_due'] == Decimal('50.00')
@@ -55,20 +63,21 @@ def test_projection_late_fee_is_informational_not_gating():
     assert proj['is_satisfied'] is False
 
 
-def test_projection_full_principal_payment_satisfies_past_grace():
+def test_projection_full_principal_payment_satisfies_past_grace(app):
     """Regression: paying the assessed principal fully settles the obligation even
     when past grace — the uncollected late fee must not keep it unsatisfied."""
+    classroom = initialize("chemistry_p1", app)
     settings = _rent_settings_stub(Decimal('50.00'), grace_period_days=3, late_penalty_amount=Decimal('10.00'))
-    due_date = datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)
-    now_utc = datetime(2026, 8, 20, 12, 0, tzinfo=timezone.utc)
 
-    proj = build_rent_policy_projection(
-        settings,
-        due_date=due_date,
-        coverage_due_date=due_date,
-        now_utc=now_utc,
-        total_paid=Decimal('50.00'),  # full assessed principal
-    )
+    with app.app_context():
+        proj = build_rent_policy_projection(
+            settings,
+            class_id=classroom.class_id,
+            due_date=PROJECTION_DUE,
+            grace_boundary_at=PROJECTION_GRACE_BOUNDARY,
+            now_utc=PROJECTION_NOW,
+            total_paid=Decimal('50.00'),  # full assessed principal
+        )
 
     assert proj['remaining_amount'] == Decimal('0.00')
     assert proj['is_satisfied'] is True

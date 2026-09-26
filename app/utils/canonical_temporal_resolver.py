@@ -37,8 +37,11 @@ def ensure_utc(dt: datetime | None) -> datetime | None:
 
 def _get_class_timezone(class_id: str) -> pytz.BaseTzInfo:
     """Look up the IANA timezone for a class from ClassEconomy."""
+    from app.extensions import db
     from app.models import ClassEconomy
-    cls = ClassEconomy.query.filter_by(class_id=class_id).first()
+    # By primary key, so repeated evaluations for one class within a session
+    # read the identity map instead of issuing a query each time.
+    cls = db.session.get(ClassEconomy, class_id)
     if cls is None:
         raise TemporalResolutionError(
             f"No ClassEconomy found for class_id={class_id}"
@@ -302,8 +305,11 @@ def _evaluation_day_boundaries(reference_utc, tz, **kw):
     if not isinstance(eval_date, date) or isinstance(eval_date, datetime):
         raise TemporalResolutionError("evaluation_date must be a date, not datetime")
 
+    # Both ends are localized independently: a class day is [00:00, 24:00) in
+    # class time (INV-ARC-015 §VIII.1), which is 23 or 25 elapsed hours on a
+    # DST change, so the end is never start + 24h.
     start_local = tz.localize(datetime.combine(eval_date, time.min))
-    end_local = start_local + timedelta(days=1)
+    end_local = tz.localize(datetime.combine(eval_date + timedelta(days=1), time.min))
     return {
         "boundary_start": start_local,
         "boundary_end": end_local,
@@ -377,7 +383,9 @@ def _shift_timestamp(reference_utc, tz, **kw):
         raise TemporalResolutionError("elapsed_seconds must be an integer")
 
     local_timestamp = _to_authority(timestamp, tz)
-    shifted = local_timestamp + timedelta(seconds=elapsed_seconds)
+    # normalize() re-labels the result with the offset in effect at the
+    # shifted instant; pytz arithmetic otherwise keeps the starting offset.
+    shifted = tz.normalize(local_timestamp + timedelta(seconds=elapsed_seconds))
     return {
         "shifted_timestamp": shifted,
         "shifted_timestamp_utc": shifted.astimezone(timezone.utc),

@@ -71,10 +71,10 @@
                 <div class="card-body">
                     <p class="mb-2">{{ announcement.message|nl2br|safe }}</p>
                     <div class="text-muted small">
-                        <span class="material-symbols-outlined me-1" aria-hidden="true">calendar_month</span>Created: {{ announcement.created_at.strftime('%b %d, %Y at %I:%M %p') }}
+                        <span class="material-symbols-outlined me-1" aria-hidden="true">calendar_month</span>Created: {{ announcement.created_at | fmt_timestamp }}
                         {% if announcement.expires_at %}
                             <span class="ms-3">
-                                <span class="material-symbols-outlined me-1" aria-hidden="true">schedule</span>Expires: {{ announcement.expires_at.strftime('%b %d, %Y') }}
+                                <span class="material-symbols-outlined me-1" aria-hidden="true">schedule</span>Expires: {{ announcement.expires_on.strftime('%b %d, %Y') }}
                             </span>
                         {% endif %}
                     </div>

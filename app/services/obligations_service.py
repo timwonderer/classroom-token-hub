@@ -8,7 +8,7 @@ Does not perform writes; FEATs own all mutation.
 from __future__ import annotations
 
 import enum
-from datetime import datetime, timedelta
+from datetime import datetime
 from dataclasses import dataclass
 from decimal import Decimal
 from types import SimpleNamespace
@@ -685,18 +685,39 @@ def get_assessment_point(cycle: BillCycle) -> datetime | None:
             preview_days = 0
     if preview_days <= 0:
         return cycle.next_assessment_at
-    ctx = _class_ctx(cycle.class_id)
-    boundary_day = canonical_temporal_resolver(
+    return _start_of_class_day_before(cycle.class_id, cycle.next_assessment_at, preview_days)
+
+
+def _start_of_class_day_before(class_id: str, instant_utc: datetime, days: int) -> datetime:
+    """Start of the class-local day ``days`` calendar days before the one holding
+    ``instant_utc`` — the day itself, not ``days × 24h``, which lands an hour off
+    class midnight whenever a DST change falls in between.
+
+    Composed of resolver primitives only (SPEC-TIME-001 §XII): step to the middle
+    of the target day, take that day, take its start. From 00:00 on the start
+    day, ``days × 24h`` back then 12h forward is 12:00 on the target day, moved
+    by at most the net UTC-offset change between the two days — an hour or two,
+    never enough to leave it.
+    """
+    ctx = _class_ctx(class_id)
+    day_start = canonical_temporal_resolver(
         CLASS_LEVEL_EVALUATION,
         canonical_execution_context=ctx,
-        primitive="current_evaluation_day",
-        reference_time_utc=ensure_utc(cycle.next_assessment_at),
-    ).evaluation_date
+        primitive="evaluation_day_boundaries",
+        reference_time_utc=ensure_utc(instant_utc),
+    ).boundary_start_utc
+    midday = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=ctx,
+        primitive="shift_timestamp",
+        timestamp=day_start,
+        elapsed_seconds=12 * 3600 - days * 24 * 3600,
+    ).shifted_timestamp_utc
     return canonical_temporal_resolver(
         CLASS_LEVEL_EVALUATION,
         canonical_execution_context=ctx,
         primitive="evaluation_day_boundaries",
-        evaluation_date=boundary_day - timedelta(days=preview_days),
+        reference_time_utc=midday,
     ).boundary_start_utc
 
 
@@ -728,6 +749,29 @@ def get_succession_eligibility(
     reference = _reference_now(class_id, reference_time_utc)
     not_yet = _is_later(class_id, get_assessment_point(latest), reference)
     return (SuccessionEligibility.NOT_DUE if not_yet else SuccessionEligibility.DUE), latest
+
+
+def last_class_day_before(class_id: str, exclusive_end_utc: datetime):
+    """The class-local day holding the last instant of a period ending at
+    ``exclusive_end_utc`` — e.g. the last covered day of ``[start, end)``.
+
+    Composed of resolver primitives only (SPEC-TIME-001 §XII: no calendar
+    arithmetic outside the resolver): step back one second, take its day.
+    """
+    ctx = SimpleNamespace(class_id=class_id)
+    last_instant = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=ctx,
+        primitive="shift_timestamp",
+        timestamp=ensure_utc(exclusive_end_utc),
+        elapsed_seconds=-1,
+    ).shifted_timestamp_utc
+    return canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=ctx,
+        primitive="current_evaluation_day",
+        reference_time_utc=last_instant,
+    ).evaluation_date
 
 
 def get_termination_instant(class_id: str, internal_ref: str) -> datetime | None:

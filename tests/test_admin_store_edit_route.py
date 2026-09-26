@@ -19,7 +19,7 @@ import re
 
 import pytest
 from types import SimpleNamespace
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 from app.extensions import db
@@ -29,7 +29,7 @@ from app.routes.admin import _apply_rent_link_from_form
 from app.services.admin_settings_service import get_rent_settings
 from app.services.store_service import get_current_version
 from tests.helpers.class_domain import enable_class_feature
-from tests.helpers.classroom_initializer import initialize_as_teacher
+from tests.helpers.classroom_initializer import initialize, initialize_as_teacher
 from tests.helpers.store_products import publish_store_product
 
 pytestmark = [pytest.mark.regression]
@@ -287,6 +287,27 @@ def test_edit_keeps_the_delist_date(app, client):
         assert current.auto_delist_date == _end_of_day_utc(
             date(2030, 6, 30), class_id=classroom.class_id
         )
+
+
+@pytest.mark.parametrize("day, end_utc", [
+    # US spring-forward 2027-03-14: a 23-hour class day. 00:00 PST + 24h is
+    # 01:00 PDT on the 15th, which the reader then showed as the 15th, so each
+    # save moved the delist date a day later.
+    (date(2027, 3, 14), datetime(2027, 3, 15, 7, 0, tzinfo=timezone.utc)),
+    # US fall-back 2027-11-07: a 25-hour class day. 00:00 PDT + 24h is 23:00
+    # PST on the 7th, which delisted the item an hour before the day ended.
+    (date(2027, 11, 7), datetime(2027, 11, 8, 8, 0, tzinfo=timezone.utc)),
+])
+def test_INV_ARC_015__delist_day_round_trips_across_dst(app, day, end_utc):
+    """INV-ARC-015 §VIII.1: the stored end is the next class midnight, and the
+    form reads back the day the teacher chose."""
+    from app.routes.admin import _end_of_day_utc, _local_date_of_end_of_day
+
+    classroom = initialize("chemistry_p1", app)  # America/Los_Angeles
+    with app.app_context():
+        stored = _end_of_day_utc(day, class_id=classroom.class_id)
+        assert stored == end_utc
+        assert _local_date_of_end_of_day(stored, class_id=classroom.class_id) == day
 
 
 def test_future_start_date_publishes_in_use_and_gates_at_read_time(app, client):

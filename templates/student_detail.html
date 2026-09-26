@@ -276,8 +276,7 @@
                                             <span class="material-symbols-outlined me-1" aria-hidden="true">schedule</span>Code expires at
                                             <span class="utc-timestamp"
                                                 data-utc="{{ reset_code_expires_at.isoformat() if reset_code_expires_at else '' }}">
-                                                {{ reset_code_expires_at.strftime('%I:%M %p') if
-                                                reset_code_expires_at else 'N/A' }}
+                                                {{ reset_code_expires_at | fmt_time }}
                                             </span>.
                                             Student must go to the login page and click <strong>"I can't log into my
                                                 account"</strong>.

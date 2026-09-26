@@ -91,7 +91,7 @@
             {% endif %}
           </h5>
           {% if policy_summary.updated_at %}
-          <div class="small text-muted mb-1">Last updated: {{ policy_summary.updated_at.strftime('%B %-d, %Y') }}</div>
+          <div class="small text-muted mb-1">Last updated: {{ policy_summary.updated_at | fmt_date }}</div>
           {% endif %}
           <p class="text-muted mb-0">Configure the Economic Policy to change the earned income to expense ratio within the classroom economy. This affects the pricing recommendation calculations and alert thresholds.</p>
         </div>
@@ -120,7 +120,7 @@
           <span class="badge bg-info text-dark">Economy Update Scheduled</span>
           {% if pending_rebalance_effective_at %}
           <div class="small text-muted mt-1">
-            Scheduled effective date: {{ pending_rebalance_effective_at.strftime('%B %-d, %Y') }}
+            Scheduled effective date: {{ pending_rebalance_effective_at | fmt_date }}
           </div>
           {% endif %}
           {% endif %}

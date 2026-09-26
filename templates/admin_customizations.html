@@ -143,7 +143,7 @@
                             </div>
                             <div class="col-md-6 mb-2">
                                 <small class="text-muted">Account Created:</small>
-                                <div><strong>{{ admin.created_at.strftime('%B %d, %Y') if admin.created_at else 'N/A' }}</strong></div>
+                                <div><strong>{{ admin.created_at | fmt_date }}</strong></div>
                             </div>
                         </div>
                         {% if current_class %}
