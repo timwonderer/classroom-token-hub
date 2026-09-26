@@ -2119,7 +2119,15 @@ at the successor boundary" would never resume a lineage after re-enablement; bot
 for a recorded disablement in force at a boundary not yet reached). Slice 3 also deleted the route-local rent
 schedule (`_calculate_rent_timeline` and ~14 helpers, most already dead); the student dashboard's `rent_status` was
 computed and never rendered. Waiver-history expansion still steps periods from policy settings (display only,
-follow-up). Slice 4 in progress.
+follow-up). Slice 4 merged as `f9129d805` (plus `ec841e7ee`, student payment of an overdue premium).
+
+**Insurance verified live 2026-09-26** (tags `live-test/2026-09-25a` → `2026-09-26c`): purchase with first premium;
+a 1-day waiting period (claims before it refused, a claim filed after it accepted); a lost-time claim reviewed on
+the rebuilt teacher page (per-day hours, explanation, hours worked, payout breakdown); and approval, paid as payroll
+event #8 for $67.50 (1.25 h × $90.00 × 60%). Live testing drove these fixes: loss dates during the waiting period
+are not covered, for every policy type (operator ruling); the review page showed neither the claimed days nor the
+purchase being claimed; lost-time claims are decided per day (all days at 0 rejects); readable premium and payout
+descriptions; restored outline borders; alerts as shared cards.
 
 **Required tests beyond the ratification's list:** disable rent with no surviving state (no assessments); with old
 unpaid rent (still viewable and payable); with delinquent rent (late fees continue under the frozen contract);
