@@ -181,7 +181,7 @@
               {% endif %}
             </div>
             <div class="text-muted small mb-3">{{ cov.insurance_type|capitalize }} insurance{% if cov.purchased_at %} · bought {{ cov.purchased_at | fmt_date }}{% endif %}</div>
-            {% if cov.description %}<p class="mb-3">{{ cov.description }}</p>{% endif %}
+            {% if cov.description and cov.description != cov.title %}<p class="mb-3">{{ cov.description }}</p>{% endif %}
 
             <dl class="insurance-facts mb-3">
               <div class="insurance-fact">
