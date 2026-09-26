@@ -246,3 +246,23 @@ def test_rent_page_is_absent_when_rent_is_disabled_and_nothing_survives(client, 
 
     response = client.get("/student/rent")
     assert response.status_code == 404
+
+
+def test_late_fees_follow_the_policy_frozen_on_their_bill(app):
+    """Raising the late penalty does not reach bills issued under the old policy."""
+    classroom = _built(app, late_penalty=Decimal("5.00"))
+    with app.app_context():
+        seat_id = classroom.students[0].seat.id
+        issued_under = _cycles(classroom)[0].policy_uuid
+        customize_rent_settings(classroom.class_id, late_penalty_amount=Decimal("50.00"))
+
+        _reconcile(classroom, utc_now() + timedelta(days=1))
+
+        fees = ObligationAssessment.query.filter_by(
+            class_id=classroom.class_id,
+            internal_ref=f"rent:{classroom.class_id}:{seat_id}:late",
+            event_type="ASSESSMENT",
+        ).all()
+        assert len(fees) >= 2, "a recurring daily fee accrued after the change"
+        assert {fee.policy_uuid for fee in fees} == {issued_under}
+        assert {obligations_service.get_obligation_state(f.correlation_id).assessed_amount for f in fees} == {Decimal("5.00")}

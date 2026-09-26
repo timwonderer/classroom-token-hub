@@ -507,3 +507,15 @@ def test_DOM_IDEN_006__class_scoped_post_rejects_request_class_mismatch(client):
     assert class_a_settings.pay_rate == posted_rate, (
         "Canonical class must receive the posted payroll update"
     )
+
+
+def test_set_current_class_lands_on_the_dashboard(client):
+    """A teacher page open in the old class may not exist in the new one, so a
+    switch sends the teacher to the dashboard rather than reloading the page."""
+    owned_class = initialize("chemistry_p1", client.application)
+    teacher_seat = _teacher_seat(owned_class)
+    with client.session_transaction() as sess:
+        set_canonical_context(sess, user_id=owned_class.teacher_user.id, class_id=owned_class.class_id, seat_id=teacher_seat.id, role="admin")
+    response = admin_set_current_class(client, owned_class.class_id)
+    assert response.status_code == 200
+    assert response.get_json()["redirect_url"] == "/admin/"

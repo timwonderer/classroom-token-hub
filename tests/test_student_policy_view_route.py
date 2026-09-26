@@ -43,8 +43,8 @@ def _student_ctx(classroom, student):
 def _make_non_monetary_policy(classroom, *, waiting_period_days, title):
     """Define an insurance policy and return its ``policy_uuid``.
 
-    NON_MONETARY is deliberate: it is the only insurance type whose definition
-    accepts ``waiting_period_days``, which is the field under test.
+    Every insurance type accepts ``waiting_period_days``; NON_MONETARY keeps
+    the fixture minimal.
     """
     row = configure_insurance_definition(
         class_id=classroom.class_id,
@@ -171,3 +171,39 @@ def test_purchase_date_is_the_grant_date_not_now(app, client):
     resp = client.get(f"/student/insurance/policy/{policy_uuid}")
     assert resp.status_code == 200
     assert expected.encode() in resp.data
+
+
+def test_productivity_policy_page_states_its_real_limits(app, client):
+    """The limits card states what actually binds a productivity policy.
+
+    Live test 2026-09-25: it read "Claim deadline: 0 days", "Max per claim:
+    Unlimited" and "Max claims: Unlimited" for a policy with no filing
+    deadline, a per-period payout ceiling, and a claimable-dates allowance, and
+    "Current period ends" named the coverage boundary instead of the last
+    covered day.
+    """
+    with app.app_context():
+        classroom = provision_classroom("chemistry_p1")
+        enable_class_feature(class_id=classroom.class_id, feature="insurance")
+        policy_uuid = configure_insurance_definition(
+            class_id=classroom.class_id,
+            submission=dict(
+                insurance_type="PRODUCTIVITY", premium="30.00", charge_frequency="MONTHLY",
+                bill_preview_days=3, nonpayment_mode="ACCUMULATE",
+                reimbursement_percentage="60", payout_multiple="5",
+                claimable_dates_per_week_equivalent="3", title="Lost Time Cover",
+            ),
+            canonical_context=_teacher_ctx(classroom),
+            correlation_id=f"corr_{uuid4().hex}", idempotency_key=f"cfg:{uuid4().hex}",
+        ).policy_uuid
+        student = classroom.students[0]
+        _fund(student.seat)
+        _buy(classroom, student, policy_uuid)
+        login_student(client, student)
+
+    html = client.get(f"/student/insurance/policy/{policy_uuid}").get_data(as_text=True)
+    assert "Filing deadline: none" in html
+    assert "Payout per coverage period: up to $150.00" in html
+    assert "3 claimable dates per week of coverage" in html
+    assert "Unlimited" not in html and "0 days from incident" not in html
+    assert "covers you through" in html and "Current period ends" not in html

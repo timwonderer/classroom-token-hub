@@ -428,14 +428,14 @@ def describe_claim_contract(claim, *, canonical_context: CanonicalContext) -> Cl
     )
 
 
-def _enforce_non_monetary_submission(
+def _enforce_waiting_period(
     *,
     canonical_context: CanonicalContext,
     policy_terms,
     granted_event: EntitlementEvent,
     submitted_at: datetime,
 ) -> Optional["InsuranceClaimSubmissionResult"]:
-    """Gate a NON_MONETARY claim at submission on the configured waiting period.
+    """Gate a claim of any policy type at submission on the configured waiting period.
 
     The wait runs from this entitlement's own GRANTED timestamp, so a tier
     upgrade/downgrade — which grants a new entitlement — restarts it, while the
@@ -1218,6 +1218,17 @@ def _submit_insurance_claim_impl(
 
         parsed_productivity_dates: list[_ProductivityClaimedDate] = []
 
+        # The configured waiting period delays when coverage becomes claimable,
+        # for every policy type (operator decision, 2026-09-25).
+        enforcement = _enforce_waiting_period(
+            canonical_context=canonical_context,
+            policy_terms=policy_terms,
+            granted_event=granted_event,
+            submitted_at=now,
+        )
+        if enforcement is not None:
+            return enforcement
+
         if policy_terms.insurance_type == _TRANSACTION_INSURANCE_TYPE:
             enforcement = _enforce_transaction_submission(
                 canonical_context=canonical_context,
@@ -1254,17 +1265,6 @@ def _submit_insurance_claim_impl(
             # surfaced to the student now (and the teacher at review) but is NOT
             # persisted as eligibility truth.
             eligibility_flags.update(advisory_flags)
-        elif policy_terms.insurance_type == _NON_MONETARY_INSURANCE_TYPE:
-            # NON_MONETARY: no monetary basis to meter, but the configured waiting
-            # period delays when coverage becomes claimable.
-            enforcement = _enforce_non_monetary_submission(
-                canonical_context=canonical_context,
-                policy_terms=policy_terms,
-                granted_event=granted_event,
-                submitted_at=now,
-            )
-            if enforcement is not None:
-                return enforcement
 
         # 7. Create (or idempotently return) the SUBMITTED claim. The entitlement is
         #    NOT consumed — it stays GRANTED so further claims may be filed.

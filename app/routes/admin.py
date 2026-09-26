@@ -3405,7 +3405,9 @@ def set_current_class():
         )
         return jsonify({'status': 'error', 'message': 'Unable to switch classes right now.'}), 500
 
-    return jsonify({'status': 'success'}), 200
+    # A page open in the old class (a policy, a student, a claim) may not exist
+    # in the new one, so switching always lands on the new class's dashboard.
+    return jsonify({'status': 'success', 'redirect_url': url_for('admin.dashboard')}), 200
 
 
 # set_class_timezone route: DELETED — class timezone is now set once at creation

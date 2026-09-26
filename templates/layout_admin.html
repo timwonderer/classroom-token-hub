@@ -515,7 +515,7 @@
                 }).then(async (response) => {
                     const payload = await response.json().catch(() => ({}));
                     if (response.ok) {
-                        window.location.reload();
+                        window.location.assign(payload.redirect_url || '{{ url_for("admin.dashboard") }}');
                     } else if (errorBox && errorText) {
                         errorText.textContent = payload.message || 'Unable to switch classes right now.';
                         errorBox.classList.remove('d-none');

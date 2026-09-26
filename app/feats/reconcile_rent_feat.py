@@ -435,8 +435,14 @@ def reconcile_rent(
     # lapsed while its rent is still unsatisfied. Runs over every cycle (not just
     # the current one) so arrears from prior cycles continue to accrue penalties,
     # and is fully idempotent (each late fee has a deterministic correlation).
+    # Each bill's late fees follow the policy frozen on its own cycle, never the
+    # class's current policy (DOM-POL-001 §VII; INV-CORE-000 non-retroactivity).
     for cycle in obligations_service.get_bill_cycles_for_internal_ref(internal_ref_cycle):
-        result.late_fees_created += _assess_late_fees(settings, class_id, cycle, now)
+        cycle_settings = (
+            RentSettings.query.filter_by(policy_uuid=cycle.policy_uuid, class_id=class_id).first()
+            if cycle.policy_uuid else None
+        ) or settings
+        result.late_fees_created += _assess_late_fees(cycle_settings, class_id, cycle, now)
 
     if result.late_fees_created and result.reason in ("NOOP",):
         result.reason = "LATE_FEES_ASSESSED"

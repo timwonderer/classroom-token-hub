@@ -95,17 +95,18 @@
                         <h6>Claim Limits</h6>
                         <ul>
                             <li>Waiting period: {{ enrollment.policy.waiting_period_days }} days</li>
-                            <li>Claim deadline: {{ enrollment.contract_claim_time_limit_days }} days from incident</li>
-                            {% if enrollment.contract_max_claim_amount %}
-                            <li>Max per claim: ${{ "%.2f"|format(enrollment.contract_max_claim_amount) }}</li>
+                            {% if enrollment.contract_claim_time_limit_days is not none %}
+                            <li>Filing deadline: {{ enrollment.contract_claim_time_limit_days }} days from the transaction</li>
                             {% else %}
-                            <li>Max per claim: Unlimited</li>
+                            <li>Filing deadline: none</li>
+                            {% endif %}
+                            {% if enrollment.contract_period_payout_cap is not none %}
+                            <li>Payout per coverage period: up to ${{ "%.2f"|format(enrollment.contract_period_payout_cap) }}</li>
                             {% endif %}
                             {% if enrollment.contract_max_claims_count %}
-                            <li>Max claims: {{ enrollment.contract_max_claims_count }} per {{
-                                enrollment.contract_max_claims_period }}</li>
+                            <li>Limit: {{ "%g"|format(enrollment.contract_max_claims_count|float) }} {{ enrollment.contract_allowance_unit }} per week of coverage</li>
                             {% else %}
-                            <li>Max claims: Unlimited</li>
+                            <li>Limit: none</li>
                             {% endif %}
                         </ul>
                     </div>
@@ -114,8 +115,8 @@
                         <ul>
                             <li>Frequency: {{ enrollment.policy.charge_frequency|title }}</li>
                             <li>Autopay: {{ 'Yes' if enrollment.policy.autopay else 'No' }}</li>
-                            {% if enrollment.next_payment_due %}
-                            <li>Current period ends: {{ enrollment.next_payment_due | fmt_date }}</li>
+                            {% if enrollment.covered_through %}
+                            <li>Current period covers you through {{ enrollment.covered_through.strftime('%b %d, %Y') }}</li>
                             {% endif %}
                             {% if enrollment.policy.auto_cancel_nonpay_days %}
                             <li>Auto-cancel after {{ enrollment.policy.auto_cancel_nonpay_days }} days of non-payment

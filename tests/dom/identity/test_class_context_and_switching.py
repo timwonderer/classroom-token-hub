@@ -201,6 +201,16 @@ def test_switch_class_success(client, app, multi_class_student):
     assert payload["status"] == "success"
 
 
+def test_switch_class_lands_on_the_new_classes_dashboard(client, app, multi_class_student):
+    """A page open in the old class may not exist in the new one (a policy, a
+    bill), so a switch never reloads it: the switcher goes to the dashboard."""
+    target_class_id = multi_class_student["classrooms"]["B"].class_id
+    payload = student_switch_class(client, target_class_id).get_json()
+    assert payload["redirect_url"] == "/student/dashboard"
+    layout = client.get("/student/dashboard").get_data(as_text=True)
+    assert "window.location.reload();" not in layout.split("class-switcher-select")[-1][:3000]
+
+
 def test_switch_class_unauthorized_class(client, app, multi_class_student):
     response = student_switch_class(client, "invalid-class-id")
     assert response.status_code == 403

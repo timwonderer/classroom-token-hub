@@ -377,7 +377,7 @@
                     }).then(async (response) => {
                         const payload = await response.json().catch(() => ({}));
                         if (response.ok) {
-                            window.location.reload();
+                            window.location.assign(payload.redirect_url || '{{ url_for("student.dashboard") }}');
                         } else {
                             const message = payload.message || 'Unable to switch classes right now.';
                             if (errorBox && errorText) {

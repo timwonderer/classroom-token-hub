@@ -495,6 +495,10 @@ def get_feature_settings_for_student():
             (features.get("rent_enabled") and get_rent_settings_for_context(context))
             or _has_surviving_rent_state(context)
         )
+        # An owed premium keeps Insurance reachable after it is disabled (§IX.16).
+        features["insurance_enabled"] = bool(
+            features.get("insurance_enabled") or _has_surviving_premium_state(context)
+        )
         return features
 
     # Return system defaults
@@ -503,7 +507,9 @@ def get_feature_settings_for_student():
     return features
 
 
-_SURVIVING_PREMIUM_ENDPOINTS = {'student.view_policy', 'student.pay_insurance_premium'}
+_SURVIVING_PREMIUM_ENDPOINTS = {
+    'student.student_insurance', 'student.view_policy', 'student.pay_insurance_premium',
+}
 
 
 def _has_surviving_premium_state(context) -> bool:
@@ -1496,7 +1502,10 @@ def transfer():
 @login_required
 def insurance_marketplace():
     """Insurance marketplace - browse and manage policies."""
-    if not is_feature_enabled('insurance'):
+    # Disabled insurance stays reachable while a premium is owed (DOM-OBL-001
+    # §IX.16), with nothing offered for sale.
+    insurance_for_sale = is_feature_enabled('insurance')
+    if not insurance_for_sale and not _has_surviving_premium_state(resolve_canonical_context()):
         abort(404)
     from app.services.insurance_policy_service import normalize_insurance_type
     context = resolve_canonical_context()
@@ -1578,6 +1587,10 @@ def insurance_marketplace():
                 charge_frequency=d.charge_frequency,
                 waiting_period_days=d.waiting_period_days,
                 purchased_at=grant.timestamp,
+                # Derived from the Obligations read (DOM-STORE-001 §VIII.E.1).
+                premiums_current=insurance_coverage.are_premiums_current(
+                    class_id, grant.entitlement_id
+                ),
             )
         )
 
@@ -1615,6 +1628,7 @@ def insurance_marketplace():
         grouped_policies=grouped_policies,
         ungrouped_policies=ungrouped_policies,
         owned_coverage=owned_coverage,
+        insurance_for_sale=insurance_for_sale,
         my_claims=[_claim_display_row(claim) for claim in _list_insurance_claims(class_id=class_id, target_seat_id=seat_id)],
         now=utc_now(),
     )
@@ -2017,6 +2031,7 @@ def view_policy(policy_uuid):
     # never a cached payment flag (FEAT-STOR-007 §X).
     premiums_current = False
     next_payment_due = None
+    covered_through = None
     if entitlement is not None:
         premiums_current = insurance_coverage.are_premiums_current(
             context.class_id, entitlement.entitlement_id
@@ -2025,6 +2040,12 @@ def view_policy(policy_uuid):
             context.class_id, entitlement.entitlement_id
         )
         next_payment_due = current_period.end_utc if current_period else None
+        if next_payment_due is not None:
+            # The period is [start, end): its last covered day is the day before
+            # the coverage boundary (FEAT-STOR-007 terminology).
+            covered_through = insurance_coverage.class_local_date(
+                context.class_id, next_payment_due
+            ) - timedelta(days=1)
         purchase_date = ensure_utc(entitlement.timestamp)
         _, coverage_start_date = coverage_effective_start_utc(
             context,
@@ -2041,10 +2062,25 @@ def view_policy(policy_uuid):
         premiums_current=premiums_current,
         status="active" if entitlement is not None else "inactive",
         next_payment_due=next_payment_due,
-        contract_claim_time_limit_days=int(policy.claim_window_days or 0),
-        contract_max_claim_amount=None,
-        contract_max_claims_count=policy.claims_per_week_equivalent,
-        contract_max_claims_period="period",
+        covered_through=covered_through,
+        # None when the product has no filing deadline (productivity, non-monetary).
+        contract_claim_time_limit_days=(
+            int(policy.claim_window_days) if policy.claim_window_days is not None else None
+        ),
+        # The only monetary ceiling is per coverage period: premium × payout multiple.
+        contract_period_payout_cap=(
+            policy.premium * policy.payout_multiple
+            if policy.premium is not None and policy.payout_multiple is not None else None
+        ),
+        contract_max_claims_count=(
+            policy.claimable_dates_per_week_equivalent
+            if normalize_insurance_type(policy.insurance_type) == "PRODUCTIVITY"
+            else policy.claims_per_week_equivalent
+        ),
+        contract_allowance_unit=(
+            "claimable dates"
+            if normalize_insurance_type(policy.insurance_type) == "PRODUCTIVITY" else "claims"
+        ),
     )
     return render_template(
         'student_view_policy.html',
@@ -2812,7 +2848,10 @@ def switch_class(class_id):
         status="success",
         message=f"Switched to {teacher_name}'s class ({block_display})",
         teacher_name=teacher_name,
-        block=seat.class_economy.section if seat and seat.class_economy else None
+        block=seat.class_economy.section if seat and seat.class_economy else None,
+        # A page open in the old class (a policy, a bill) may not exist in the new
+        # one, so switching always lands on the new class's dashboard.
+        redirect_url=url_for('student.dashboard'),
     )
 
 

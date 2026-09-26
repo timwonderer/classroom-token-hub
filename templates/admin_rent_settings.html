@@ -30,7 +30,7 @@
       <strong>{{ deferral.enforced.amount }} {{ deferral.enforced.cadence }}</strong>{% if deferral.enforced.grace_period_days != deferral.pending.grace_period_days %},
       with a {{ deferral.enforced.grace_period_days }}-day grace period{% endif %}
       &mdash; the terms on this page take effect
-      <strong>{{ deferral.display_takes_effect_on }}</strong>, the next rent due date.
+      <strong>{{ deferral.display_takes_effect_on }}</strong>{% if deferral.billed_period_started %}, the next rent due date{% else %}, when the already-billed period ends{% endif %}.
       {%- if deferral.amount_changed %}
       <br>Rent changes from {{ deferral.enforced.amount }} to
       <strong>{{ deferral.pending.amount }} {{ deferral.pending.cadence }}</strong> then.
@@ -578,14 +578,14 @@
                         Enable Bill Preview
                       </label>
                     </div>
-                    <small class="text-muted d-block mb-2">Students can see incoming bills before due date</small>
+                    <small class="text-muted d-block mb-2">Each rent bill goes out early, and students can pay it before its period starts</small>
 
                     <div id="billPreviewDaysField"
                       style="display: {% if settings.bill_preview_enabled %}block{% else %}none{% endif %};">
                       <label for="bill_preview_days" class="form-label">Preview Days Before Due</label>
                       <input type="number" min="1" max="365" class="form-control" id="bill_preview_days"
                         name="bill_preview_days" value="{{ settings.bill_preview_days }}">
-                      <small class="text-muted">How many days before due date students can see the bill</small>
+                      <small class="text-muted">How many days before the due date each bill goes out. The new terms of a saved change apply only to bills not yet sent.</small>
                     </div>
                   </div>
 

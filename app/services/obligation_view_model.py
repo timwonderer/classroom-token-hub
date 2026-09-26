@@ -295,6 +295,34 @@ def build_empty_student_obligation_view(
     )
 
 
+def _select_current_assessment(class_id, assessment_events, late_fee_sources_due, obligations_service):
+    """The bill a student is shown first; see ``build_student_obligation_view``."""
+    if not assessment_events:
+        return None
+
+    def due_at(assessment):
+        cycle = db.session.get(BillCycle, assessment.bill_cycle_id) if assessment.bill_cycle_id else None
+        return (cycle.cycle_boundary_at if cycle else None) or assessment.timestamp
+
+    owing = []
+    for assessment in assessment_events:
+        state = obligations_service.get_obligation_state(assessment.correlation_id)
+        if (state is not None and state.is_outstanding) or assessment.correlation_id in late_fee_sources_due:
+            owing.append(assessment)
+    if owing:
+        return min(owing, key=due_at)
+
+    latest = assessment_events[-1]
+    latest_cycle = db.session.get(BillCycle, latest.bill_cycle_id) if latest.bill_cycle_id else None
+    if latest_cycle is not None:
+        current_cycle = obligations_service.get_current_bill_cycle(class_id, latest_cycle.internal_ref)
+        if current_cycle is not None:
+            for assessment in assessment_events:
+                if assessment.bill_cycle_id == current_cycle.id:
+                    return assessment
+    return latest
+
+
 def build_student_obligation_view(
     seat_id: int,
     class_id: str,
@@ -368,8 +396,21 @@ def build_student_obligation_view(
     total_waived_count = 0
     status_counts = {'SATISFIED': 0, 'OUTSTANDING': 0, 'PAST_DUE': 0}
 
-    # Assume most recent ASSESSMENT is "current period"
-    current_assessment = assessment_events[-1] if assessment_events else None
+    # The bill the student sees and pays first. Under advance assessment the
+    # newest bill can be next period's, issued during the preview window, so
+    # "newest" would hide an older unpaid bill (DOM-OBL-001 §V.7: latest is not
+    # current). Show the oldest bill with anything still owing (its rent or its
+    # late fees), matching the default payment target (§VIII); with nothing
+    # owing, the bill for the period in effect now; failing that, the newest.
+    late_fee_sources_due = set()
+    if obligation_type == 'RENT':
+        fee_rows, _ = _build_late_fee_rows(seat_id, class_id, now_utc)
+        late_fee_sources_due = {
+            row.get('source_correlation_id') for row in fee_rows if not row['is_paid']
+        }
+    current_assessment = _select_current_assessment(
+        class_id, assessment_events, late_fee_sources_due, obligations_service
+    )
     current_rent_settings = None
     if current_assessment and current_assessment.bill_cycle:
         current_rent_settings = _resolve_rent_settings_for_policy_uuid(current_assessment.bill_cycle.policy_uuid)
@@ -476,7 +517,9 @@ def build_student_obligation_view(
             'is_late': is_past_due,  # Alias for template
             'is_preview': is_preview,
             'is_preview_period': is_preview,  # Alias for template
-            'rent_is_active': projection['rent_is_active'],
+            # An issued bill is payable, including one issued ahead of its
+            # period during the preview window (DOM-OBL-001 §V.7).
+            'rent_is_active': True,
             'days_until_due': days_until_due,
             'days_overdue': days_overdue,
             'late_fee': late_fee,
