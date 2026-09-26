@@ -120,5 +120,6 @@ def test_cancelled_coverage_shows_its_end_date_not_a_cancel_button(client, world
 
     html = client.get("/student/insurance").get_data(as_text=True)
 
-    assert "Won't renew · covers you through Jan 16, 2027" in html
+    assert "You cancelled this coverage" in html
+    assert "January 16, 2027" in html
     assert "Cancel coverage</button>" not in html

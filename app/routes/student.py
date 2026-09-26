@@ -1635,6 +1635,7 @@ def insurance_marketplace():
         if d is None:
             continue
         claims_open_on, renews_on = _coverage_card_dates(context, grant, d)
+        last_covered_day = _last_covered_day(class_id, grant.entitlement_id)
         owned_coverage.append(
             SimpleNamespace(
                 entitlement_id=grant.entitlement_id,
@@ -1658,7 +1659,12 @@ def insurance_marketplace():
                     class_id, grant.entitlement_id
                 ),
                 # Set once renewal is stopped: the last day the coverage runs.
-                last_covered_day=_last_covered_day(class_id, grant.entitlement_id),
+                last_covered_day=last_covered_day,
+                # If cancelled now: the last day it would still cover. Same
+                # derivation the cancel command uses (DOM-OBL-001 §V.7).
+                cancel_covers_through=(
+                    None if last_covered_day else _cancel_covers_through(class_id, grant.entitlement_id)
+                ),
             )
         )
 
@@ -1865,6 +1871,18 @@ def _coverage_card_dates(context, grant, definition):
     if period is not None and period.end_utc is not None:
         renews_on = insurance_coverage.class_local_date(context.class_id, period.end_utc)
     return claims_open_on, renews_on
+
+
+def _cancel_covers_through(class_id, entitlement_id):
+    """The last class-local day of coverage if renewal were stopped now, else None."""
+    from app.services import obligations_service
+
+    instant = obligations_service.get_stop_renewal_instant(
+        class_id, insurance_coverage.premium_lineage_ref(entitlement_id)
+    )
+    if instant is None:
+        return None
+    return obligations_service.last_class_day_before(class_id, instant)
 
 
 def _last_covered_day(class_id, entitlement_id):

@@ -64,13 +64,69 @@
 {% set rank_label = {1: 'Basic', 2: 'Mid', 3: 'Premium'} %}
 {% set start_tab = 'coverage' if owned_coverage or not insurance_for_sale else 'buy' %}
 
+{% macro per(policy) -%}
+{{ {'MONTHLY': 'month', 'WEEKLY': 'week'}.get((policy.charge_frequency or '')|upper, 'period') }}
+{%- endmacro %}
+
+{% macro loss_words(policy) -%}
+{{ 'the wages you lose' if (policy.insurance_type or '')|upper == 'PRODUCTIVITY' else 'what you lose' }}
+{%- endmacro %}
+
+{% macro days(n) -%}{{ n }} day{{ '' if n == 1 else 's' }}{%- endmacro %}
+
+{% macro payout_cap(policy) -%}
+{%- if policy.payout_multiple is not none and policy.premium is not none -%}${{ '%.2f'|format(policy.premium * policy.payout_multiple) }}{%- endif -%}
+{%- endmacro %}
+
 {% macro policy_terms(policy) -%}
 {%- set parts = [] -%}
-{%- if policy.reimbursement_percentage is not none %}{% set _ = parts.append('Pays back ' ~ ('%.0f'|format(policy.reimbursement_percentage)) ~ '% of a covered loss') %}{% endif -%}
-{%- if policy.payout_multiple is not none and policy.premium is not none %}{% set _ = parts.append('up to $' ~ ('%.2f'|format(policy.premium * policy.payout_multiple)) ~ ' per period') %}{% endif -%}
-{%- if policy.claim_window_days is not none %}{% set _ = parts.append('file within ' ~ policy.claim_window_days ~ ' days') %}{% endif -%}
-{%- if policy.waiting_period_days %}{% set _ = parts.append(policy.waiting_period_days ~ '-day waiting period') %}{% endif -%}
+{%- if policy.reimbursement_percentage is not none %}{% set _ = parts.append('Pays back ' ~ ('%.0f'|format(policy.reimbursement_percentage)) ~ '% of ' ~ loss_words(policy)) %}{% endif -%}
+{%- if payout_cap(policy) %}{% set _ = parts.append('up to ' ~ payout_cap(policy) ~ ' a ' ~ per(policy)) %}{% endif -%}
+{%- if policy.claim_window_days is not none %}{% set _ = parts.append('file within ' ~ days(policy.claim_window_days)) %}{% endif -%}
+{%- if policy.waiting_period_days %}{% set _ = parts.append(days(policy.waiting_period_days) ~ ' waiting period') %}{% endif -%}
 {{ parts | join(' · ') }}
+{%- endmacro %}
+
+{# One confirmation pattern for every passphrase action on this page: say
+   plainly what will happen, then ask for the passphrase (FEAT-IDEN-002
+   §Credential boundary). #}
+{% macro passphrase_modal(modal_id, title, action, submit_label, submit_class, keep_label, input_id) -%}
+<div class="modal fade" id="{{ modal_id }}" tabindex="-1" aria-labelledby="{{ modal_id }}-title" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <form class="modal-content" method="POST" action="{{ action }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+      <div class="modal-header">
+        <h2 class="modal-title h5" id="{{ modal_id }}-title">{{ title }}</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        {{ caller() }}
+        <label class="form-label fw-semibold mt-3" for="{{ input_id }}">Your passphrase</label>
+        <input type="password" class="form-control" id="{{ input_id }}" name="passphrase"
+               autocomplete="current-password" required />
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">{{ keep_label }}</button>
+        <button type="submit" class="btn {{ submit_class }}">{{ submit_label }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+{%- endmacro %}
+
+{% macro buy_modal(policy) -%}
+{% call passphrase_modal('buy-' ~ policy.policy_uuid, 'Buy ' ~ policy.title ~ '?',
+        url_for('student.purchase_insurance', policy_uuid=policy.policy_uuid),
+        'Buy for $' ~ ('%.2f'|format(policy.premium)), 'btn-primary', 'Not now', 'insurance-passphrase-' ~ policy.policy_uuid) %}
+<ul class="mb-0">
+  <li class="mb-2"><strong>${{ "%.2f"|format(policy.premium) }}</strong> comes out of checking now, and again every {{ per(policy) }} until you cancel.</li>
+  {% if policy.reimbursement_percentage is not none %}
+  <li class="mb-2">If you have a covered loss, it pays back {{ "%.0f"|format(policy.reimbursement_percentage) }}% of {{ loss_words(policy) }}{% if payout_cap(policy) %}, up to {{ payout_cap(policy) }} a {{ per(policy) }}{% endif %}.</li>
+  {% endif %}
+  <li class="mb-2">{% if policy.waiting_period_days %}Claims open {{ days(policy.waiting_period_days) }} after you buy. Losses before then aren't covered.{% else %}You can claim for losses from the moment you buy.{% endif %}</li>
+  <li>If nothing goes wrong, you don't get the premiums back — that's what insurance costs.</li>
+</ul>
+{% endcall %}
 {%- endmacro %}
 
 <ul class="nav nav-tabs mb-4" id="insuranceTabs" role="tablist">
@@ -108,7 +164,7 @@
     <p class="text-muted">Insurance is closed to new purchases in this class. You can still pay any premium you owe.</p>
     {% endif %}
     {% for cov in owned_coverage %}
-    <div class="card mb-3">
+    <div class="card mb-3{% if cov.last_covered_day %} border-warning{% endif %}">
       <div class="card-body">
         <div class="row g-4">
           <div class="col-lg-8">
@@ -119,7 +175,7 @@
               {% elif cov.claims_open_on %}
               <span class="badge bg-warning text-dark">Waiting period</span>
               {% elif cov.last_covered_day %}
-              <span class="badge bg-secondary">Ending</span>
+              <span class="badge bg-warning text-dark">Cancelled</span>
               {% else %}
               <span class="badge bg-success">Active</span>
               {% endif %}
@@ -142,7 +198,7 @@
               </div>
               <div class="insurance-fact">
                 {% if cov.last_covered_day %}
-                <dt>Covers you through</dt>
+                <dt>Covered through</dt>
                 <dd>{{ cov.last_covered_day.strftime('%b %d, %Y') }}</dd>
                 {% else %}
                 <dt>Next premium</dt>
@@ -153,12 +209,18 @@
 
             <p class="small text-muted mb-0">{{ policy_terms(cov) }}</p>
 
+            {% if cov.last_covered_day %}
+            {% call cards.alert_card('warning', 'You cancelled this coverage', icon='event_busy', body_class='mt-3') %}
+            <p class="mb-0">It won't renew, so you won't be charged again. You're still covered — and can file claims for losses — through <strong>{{ cov.last_covered_day.strftime('%B %-d, %Y') }}</strong>. After that it ends.</p>
+            {% endcall %}
+            {% endif %}
+
             {% if not cov.premiums_current %}
             {% call cards.alert_card('danger', 'Coverage is paused', icon='warning', body_class='mt-3') %}
             <p class="mb-0">A premium is unpaid, so claims are refused until you pay it. Losses while coverage is paused stay uncovered after you pay.</p>
             {% endcall %}
             {% elif cov.claims_open_on %}
-            <p class="small mb-0 mt-2">Losses before {{ cov.claims_open_on.strftime('%b %d') }} are not covered — that is the waiting period.</p>
+            <p class="small mb-0 mt-2">Events that happened before {{ cov.claims_open_on.strftime('%b %d') }} are not covered.</p>
             {% endif %}
           </div>
 
@@ -173,21 +235,9 @@
               {% endif %}
               <a href="{{ url_for('student.view_policy', policy_uuid=cov.policy_uuid) }}" class="btn btn-outline-secondary">View policy</a>
 
-              {% if cov.last_covered_day %}
-              <p class="small text-muted mb-0 mt-1">Won't renew · covers you through {{ cov.last_covered_day.strftime('%b %d, %Y') }}</p>
-              {% else %}
-              {# Cancelling insurance is a passphrase action, the same as buying it
-                 (FEAT-IDEN-002 §Credential boundary). #}
-              <form method="POST" action="{{ url_for('student.cancel_insurance', policy_uuid=cov.policy_uuid) }}"
-                    class="border-top pt-3 mt-2"
-                    onsubmit="return confirm('Cancel this coverage? It will stop renewing — your benefits continue until the end of the current period.');">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                <label class="form-label small text-muted" for="cancelPassphrase-{{ cov.policy_uuid }}">Stop renewing — enter your passphrase</label>
-                <input type="password" class="form-control form-control-sm mb-2"
-                       id="cancelPassphrase-{{ cov.policy_uuid }}" name="passphrase"
-                       placeholder="Passphrase" autocomplete="current-password" required />
-                <button type="submit" class="btn btn-outline-danger btn-sm w-100">Cancel coverage</button>
-              </form>
+              {% if not cov.last_covered_day %}
+              <button type="button" class="btn btn-outline-danger mt-2" data-bs-toggle="modal"
+                      data-bs-target="#cancel-{{ cov.policy_uuid }}">Cancel coverage</button>
               {% endif %}
             </div>
           </div>
@@ -238,16 +288,8 @@
               <button type="button" class="btn btn-outline-secondary btn-sm w-100" disabled
                       title="Cancel your current plan in this group to switch tiers">Unavailable</button>
               {% else %}
-              <form method="POST" action="{{ url_for('student.purchase_insurance', policy_uuid=policy.policy_uuid) }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                {# Namespaced per section: the grouped-tier loop and the ungrouped
-                   loop below both render a buy form. #}
-                <label class="visually-hidden" for="insurance-tier-passphrase-{{ policy.policy_uuid }}">Passphrase to buy {{ policy.title }}</label>
-                <input type="password" class="form-control form-control-sm mb-2" id="insurance-tier-passphrase-{{ policy.policy_uuid }}" name="passphrase" autocomplete="current-password" placeholder="Passphrase" required />
-                <button type="submit" class="btn btn-primary btn-sm w-100" onclick="this.disabled=true;this.form.submit();">
-                  Buy — ${{ "%.2f"|format(policy.premium) }}
-                </button>
-              </form>
+              <button type="button" class="btn btn-primary btn-sm w-100" data-bs-toggle="modal"
+                      data-bs-target="#buy-{{ policy.policy_uuid }}">Buy — ${{ "%.2f"|format(policy.premium) }}</button>
               {% endif %}
             </div>
           </div>
@@ -268,39 +310,30 @@
               <h2 class="h6 mb-0">{{ policy.title }}</h2>
               <span class="badge bg-light text-dark border">{{ policy.insurance_type|capitalize }}</span>
             </div>
-            {% if policy.description %}
+            {% if policy.description and policy.description != policy.title %}
             <p class="text-muted small mb-2">{{ policy.description }}</p>
             {% endif %}
             <div class="fw-semibold mb-2">${{ "%.2f"|format(policy.premium) }}
               <span class="text-muted fw-normal">/ {{ policy.charge_frequency|lower }}</span>
             </div>
-            <ul class="list-unstyled small text-muted mb-3">
+            <ul class="list-unstyled small mb-3">
               {% if policy.reimbursement_percentage is not none %}
-              <li>Reimburses {{ "%.0f"|format(policy.reimbursement_percentage) }}% of a covered loss</li>
+              <li>Pays back {{ "%.0f"|format(policy.reimbursement_percentage) }}% of {{ loss_words(policy) }}</li>
               {% endif %}
-              {% if policy.payout_multiple is not none %}
-              <li>Period payout up to {{ "%.0f"|format(policy.payout_multiple) }}× the premium</li>
+              {% if payout_cap(policy) %}
+              <li>Pays out up to <strong>{{ payout_cap(policy) }}</strong> a {{ per(policy) }} in total</li>
               {% endif %}
               {% if policy.claim_window_days is not none %}
-              <li>File within {{ policy.claim_window_days }} days of an incident</li>
+              <li>File within {{ days(policy.claim_window_days) }} of the loss</li>
               {% endif %}
-              {% if policy.waiting_period_days is not none and policy.waiting_period_days > 0 %}
-              <li>Coverage waiting period: {{ policy.waiting_period_days }} days</li>
-              {% endif %}
+              <li>{% if policy.waiting_period_days %}Claims open {{ days(policy.waiting_period_days) }} after you buy{% else %}Claims open as soon as you buy{% endif %}</li>
             </ul>
             <div class="mt-auto">
               {% if policy.owned %}
               <button type="button" class="btn btn-outline-secondary w-100" disabled>You have this coverage</button>
               {% else %}
-              <form method="POST" action="{{ url_for('student.purchase_insurance', policy_uuid=policy.policy_uuid) }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                <label class="visually-hidden" for="insurance-passphrase-{{ policy.policy_uuid }}">Passphrase to buy {{ policy.title }}</label>
-                <input type="password" class="form-control mb-2" id="insurance-passphrase-{{ policy.policy_uuid }}" name="passphrase" autocomplete="current-password" placeholder="Passphrase" required />
-                <button type="submit" class="btn btn-primary w-100"
-                        onclick="this.disabled=true;this.form.submit();">
-                  Buy — ${{ "%.2f"|format(policy.premium) }} now
-                </button>
-              </form>
+              <button type="button" class="btn btn-primary w-100" data-bs-toggle="modal"
+                      data-bs-target="#buy-{{ policy.policy_uuid }}">Buy — ${{ "%.2f"|format(policy.premium) }} a {{ per(policy) }}</button>
               {% endif %}
             </div>
           </div>
@@ -359,6 +392,37 @@
   </div>
 
 </div>
+
+{# ---- Confirmation modals, outside the tab panes ------------------------ #}
+{% for cov in owned_coverage if not cov.last_covered_day %}
+{% call passphrase_modal('cancel-' ~ cov.policy_uuid, 'Cancel ' ~ cov.title ~ '?',
+        url_for('student.cancel_insurance', policy_uuid=cov.policy_uuid),
+        'Cancel coverage', 'btn-danger', 'Keep my coverage', 'cancelPassphrase-' ~ cov.policy_uuid) %}
+<p>Cancelling stops this policy from renewing. Here's what that means for you:</p>
+<ul class="mb-0">
+  {% if cov.cancel_covers_through %}
+  <li class="mb-2">You're <strong>still covered through {{ cov.cancel_covers_through.strftime('%B %-d, %Y') }}</strong>, and you can file claims for losses until then.</li>
+  {% else %}
+  <li class="mb-2">You stay covered until the end of the period you've paid for, and can file claims until then.</li>
+  {% endif %}
+  <li class="mb-2">After that it ends, and you won't be charged the ${{ "%.2f"|format(cov.premium) }} premium again.</li>
+  <li class="mb-2"><strong>No refund.</strong> Premiums you've already paid stay paid.</li>
+  {% if not cov.premiums_current %}
+  <li class="mb-2">You still owe the overdue premium — cancelling doesn't erase it.</li>
+  {% endif %}
+  <li>Changed your mind later? You'd have to buy it again{% if cov.waiting_period_days %}, and wait {{ days(cov.waiting_period_days) }} before claims open{% endif %}.</li>
+</ul>
+{% endcall %}
+{% endfor %}
+
+{% if insurance_for_sale %}
+{% for group in grouped_policies if not group.owned %}{% for policy in group.tiers %}
+{{ buy_modal(policy) }}
+{% endfor %}{% endfor %}
+{% for policy in ungrouped_policies if not policy.owned %}
+{{ buy_modal(policy) }}
+{% endfor %}
+{% endif %}
 
 {% endblock %}
 

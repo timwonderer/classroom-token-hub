@@ -431,3 +431,39 @@ def test_my_claims_shows_a_pending_claim_as_waiting_for_review(app, client):
     html = client.get("/student/insurance").get_data(as_text=True)
 
     assert "Waiting for review" in html
+
+
+# ---- Confirmations in modals; payout in dollars (2026-09-26) ----------------
+
+
+def test_buy_card_shows_the_payout_cap_in_dollars(app, client):
+    """premium $10 × payout multiple 3 = up to $30.00 a week, not "3× the premium"."""
+    with app.app_context():
+        classroom = provision_classroom("chemistry_p1")
+        enable_class_feature(class_id=classroom.class_id, feature="insurance")
+        policy_uuid = _make_policy(classroom)
+        login_student(client, classroom.students[0])
+
+    html = client.get("/student/insurance").get_data(as_text=True)
+
+    assert "Pays out up to <strong>$30.00</strong> a week in total" in html
+    assert "× the premium" not in html
+    assert f'id="buy-{policy_uuid}"' in html, "buying is confirmed in a modal"
+
+
+def test_cancel_modal_promises_the_date_cancelling_actually_gives(app, client):
+    """The modal's "still covered through" date comes from the same read the
+    cancel command uses, so it must equal the date shown after cancelling."""
+    import re
+
+    _classroom, policy_uuid, _txn = _held_coverage(app, client)
+    before = client.get("/student/insurance").get_data(as_text=True)
+    promised = re.search(r"still covered through ([A-Z][a-z]+ \d{1,2}, \d{4})", before)
+    assert promised, "the cancel modal names the last covered day"
+
+    client.post(f"/student/insurance/cancel/{policy_uuid}", data={"passphrase": CANONICAL_STUDENT_PASSPHRASE})
+    after = client.get("/student/insurance").get_data(as_text=True)
+
+    assert "You cancelled this coverage" in after
+    assert f"through <strong>{promised.group(1)}</strong>" in after
+    assert f'id="cancel-{policy_uuid}"' not in after, "no second cancel once cancelled"

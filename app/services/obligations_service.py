@@ -586,6 +586,41 @@ def get_latest_bill_cycle(internal_ref: str) -> BillCycle | None:
     )
 
 
+def _is_cycle_committed(cycle: BillCycle) -> bool:
+    """A not-yet-begun period is committed once any satisfaction is applied (§V.8)."""
+    assessments = (
+        db.session.query(ObligationAssessment)
+        .filter_by(bill_cycle_id=cycle.id, event_type="ASSESSMENT")
+        .all()
+    )
+    return any(get_satisfaction_events(a.correlation_id) for a in assessments)
+
+
+def get_stop_renewal_instant(
+    class_id: str,
+    internal_ref: str,
+    *,
+    reference_time_utc: datetime | None = None,
+) -> datetime | None:
+    """Where a lineage would end if renewal were stopped now (DOM-OBL-001 §V.7).
+
+    The end of the last committed period: the current period is committed; a
+    scheduled, not-yet-begun period (advance assessment) is committed only if
+    any satisfaction has been applied to it. None when there is no open lineage
+    in this class. Read-only — terminate_bill_cycle uses the same derivation, so
+    a preview and the command cannot disagree.
+    """
+    latest = get_latest_bill_cycle(internal_ref)
+    if latest is None or latest.class_id != class_id or latest.next_assessment_at is None:
+        return None
+    current = get_current_bill_cycle(class_id, internal_ref, reference_time_utc=reference_time_utc)
+    if current is None or latest.id == current.id:
+        return latest.next_assessment_at
+    if _is_cycle_committed(latest):
+        return latest.next_assessment_at
+    return current.next_assessment_at
+
+
 def check_idempotency_assessment(
     internal_ref: str,
     correlation_id: str,
