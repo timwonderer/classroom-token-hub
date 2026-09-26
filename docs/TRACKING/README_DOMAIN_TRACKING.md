@@ -13,6 +13,7 @@ audits, and superseded plans live in [`docs/archive/v2-tracking-2026/`](https://
 | File | Purpose |
 |---|---|
 | [`PRODUCTION_READINESS_2026-09.md`](PRODUCTION_READINESS_2026-09.md) | **Canonical tracker.** Domain readiness, blocking issues, fix tracks, ship gate. |
+| [`POST_LAUNCH_TODO.md`](POST_LAUNCH_TODO.md) | **Canonical post-launch backlog.** Deferred work verified open, with stable `PL-*` IDs. Owns closure status for the readiness tracker's §V and §VI post-ship items. |
 | [`ACCESSIBILITY_REVIEW_2026-09-03.md`](ACCESSIBILITY_REVIEW_2026-09-03.md) | Open accessibility remediation (INV-CORE-000 §III.7). |
 | [`DOCS_PLATFORM_ROADMAP.md`](DOCS_PLATFORM_ROADMAP.md) | Documentation platform plan. Post-ship. |
 | [`DOMAIN_IMPLEMENTATION_PLAN_TEMPLATE.md`](DOMAIN_IMPLEMENTATION_PLAN_TEMPLATE.md) | Reusable SOP-DEV-002 plan template for a single domain. |
