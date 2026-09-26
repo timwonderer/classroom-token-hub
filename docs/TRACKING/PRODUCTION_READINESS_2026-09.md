@@ -2133,6 +2133,12 @@ schedule (`_calculate_rent_timeline` and ~14 helpers, most already dead); the st
 computed and never rendered. Waiver-history expansion still steps periods from policy settings (display only,
 follow-up). Slice 4 merged as `f9129d805` (plus `ec841e7ee`, student payment of an overdue premium).
 
+**Live-test findings closed 2026-09-26:** 58 (lost-time explanations shown on review), 60 (claim allowance
+labelled per coverage period), 59 (policy page limits; "Autopay: Enabled" is now true by design, since every
+premium is auto-paid), 66 (cancelled coverage shows "Won't renew · covers you through <date>"), 61 (Payroll →
+Manual Payments: the page states a fixed credit; the route refuses anything but a positive deposit and never
+reads `account_type`; the orphan "Action:" label was removed).
+
 **Insurance verified live 2026-09-26** (tags `live-test/2026-09-25a` → `2026-09-26c`): purchase with first premium;
 a 1-day waiting period (claims before it refused, a claim filed after it accepted); a lost-time claim reviewed on
 the rebuilt teacher page (per-day hours, explanation, hours worked, payout breakdown); and approval, paid as payroll
