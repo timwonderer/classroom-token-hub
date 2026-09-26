@@ -289,7 +289,6 @@ def execute_purchase_insurance(
         correlation_id=correlation_id,
         amount=premium,
         ledger_idempotency_key=f"insurance-premium:{idempotency_key}:cycle1",
-        description=f"Insurance premium (policy {policy_uuid}, cycle 1)",
     )
 
     return InsurancePurchaseResult(

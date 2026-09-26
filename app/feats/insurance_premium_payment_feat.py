@@ -21,16 +21,42 @@ premiums themselves.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import timedelta
 from decimal import Decimal
+
+from app.extensions import db
 
 from app.feats.base import requires_feat_context
 from app.feats.satisfy_obligation_feat import SatisfyObligationRequest, satisfy_obligation
-from app.models import Seat, Transaction
-from app.services import obligations_service
+from app.models import BillCycle, Seat, Transaction
+from app.services import insurance_definition_service, obligations_service
 from app.services.identity_service import resolve_teacher_seat_for_class
-from app.services.insurance_coverage_service import premium_lineage_ref
+from app.services.insurance_coverage_service import class_local_date, premium_lineage_ref
 from app.services.ledger_balance_query_service import get_available_balance
 from app.services.ledger_posting_service import create_pending_transaction_idempotent
+
+
+def premium_description(class_id: str, correlation_id: str) -> str:
+    """What a student sees for a premium: the policy and the period it pays for.
+
+    e.g. "Insurance premium: Test Policy (Sep 25 – Oct 24)". The period is the
+    premium's bill cycle, [start, next boundary), shown as its covered days.
+    """
+    assessment = obligations_service.get_assessment_for_correlation(correlation_id)
+    title = "insurance policy"
+    if assessment is not None and assessment.policy_uuid:
+        definition = insurance_definition_service.get_insurance_definition(
+            assessment.policy_uuid, class_id=class_id
+        )
+        if definition is not None and definition.title:
+            title = definition.title
+    cycle = db.session.get(BillCycle, assessment.bill_cycle_id) if assessment and assessment.bill_cycle_id else None
+    if cycle is None or cycle.next_assessment_at is None:
+        return f"Insurance premium: {title}"
+    first = class_local_date(class_id, cycle.cycle_boundary_at)
+    last = class_local_date(class_id, cycle.next_assessment_at) - timedelta(days=1)
+    fmt = lambda d: d.strftime("%b %d").replace(" 0", " ")
+    return f"Insurance premium: {title} ({fmt(first)} – {fmt(last)})"
 
 
 def settle_insurance_premium(
@@ -40,7 +66,7 @@ def settle_insurance_premium(
     correlation_id: str,
     amount: Decimal,
     ledger_idempotency_key: str,
-    description: str,
+    description: str | None = None,
     mechanism: str = "self",
     actor_seat_id: int | None = None,
 ) -> Transaction:
@@ -51,6 +77,8 @@ def settle_insurance_premium(
     """
     if amount is None or Decimal(amount) <= Decimal("0.00"):
         raise ValueError("settle_insurance_premium requires a positive amount")
+    if description is None:
+        description = premium_description(class_id, correlation_id)
     authority_seat_id = resolve_teacher_seat_for_class(class_id).id
     transaction, _created = create_pending_transaction_idempotent(
         idempotency_key=ledger_idempotency_key,
@@ -147,7 +175,6 @@ def execute_insurance_premium_payment(
         correlation_id=state.correlation_id,
         amount=amount,
         ledger_idempotency_key=f"insurance-premium-payment:{idempotency_key}",
-        description=f"Insurance premium payment ({state.correlation_id})",
     )
     return InsurancePremiumPaymentResult(
         success=True,

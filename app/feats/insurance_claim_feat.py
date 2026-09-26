@@ -1670,7 +1670,9 @@ def _approve_productivity_claim(
                 amount=total_recognized,
                 summary_json={
                     "description": (
-                        f"Productivity insurance payout for claim {claim.claim_id}"
+                        f"Insurance payout: {policy_terms.title or 'insurance policy'} (lost time, "
+                        + ", ".join(r.claim_date.strftime("%b %d").replace(" 0", " ") for r in rows)
+                        + ")"
                     ),
                     "insurance_claim_id": claim.claim_id,
                     "entitlement_id": entitlement_id,
@@ -1985,7 +1987,10 @@ def _resolve_insurance_claim_impl(
                 amount=reimbursement_amount,
                 account_type="checking",
                 type="insurance_reimbursement",
-                description=f"Insurance reimbursement for transaction {transaction_id} (policy {insurance_policy_uuid})",
+                description=(
+                    f"Insurance payout: {getattr(policy_terms, 'title', None) or 'insurance policy'}"
+                    f" ({(source_transaction.description or 'covered purchase')[:80]})"
+                ),
                 original_transaction_id=source_transaction.id,
             )
             ledger_transaction_id = ledger_transaction.id

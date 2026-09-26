@@ -295,7 +295,6 @@ def _attempt_autopay(
         correlation_id=correlation_id,
         amount=amount,
         ledger_idempotency_key=f"insurance-premium:{entitlement_id}:{cycle_number}:autopay",
-        description=f"Insurance premium autopay (cycle {cycle_number})",
         mechanism="system",
         actor_seat_id=resolve_teacher_seat_for_class(class_id).id,
     )

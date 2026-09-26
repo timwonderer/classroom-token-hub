@@ -327,6 +327,13 @@ def test_lost_time_claim_shows_each_day_and_approves_fewer_hours_with_a_note(app
         rows = insurance_claim_service.list_productivity_dates_for_claim(claim_id, class_id=ids["class_id"])
         assert rows[0].teacher_approved_hours == Decimal("1.50")
         assert rows[0].adjustment_note == "Left at 1:30"
+        from app.models import Transaction
+        payouts = [
+            t.description for t in Transaction.query.filter_by(
+                class_id=ids["class_id"], seat_id=ids["student_seat_id"]
+            ) if (t.description or "").startswith("Insurance payout")
+        ]
+        assert payouts == [f"Insurance payout: Lost Time Cover (lost time, {today.strftime('%b %d').replace(' 0', ' ')})"]
 
 
 def test_lost_time_claim_with_every_day_at_zero_is_rejected_with_the_day_reasons(app, client):
@@ -356,4 +363,13 @@ def test_a_zero_hour_day_without_a_reason_is_refused(app, client):
     )
 
     assert b"Give a reason for each day you set to 0 hours." in resp.data
+    assert _claim_status(app, claim_id) == "SUBMITTED"
+
+
+def test_a_missing_hours_value_is_refused_not_approved_as_claimed(app, client):
+    ids, claim_id, today = _lost_time_claim(app, client)
+
+    resp = client.post(f"/admin/insurance/claim/{claim_id}", data={"status": "approved"}, follow_redirects=True)
+
+    assert b"Enter the hours to approve" in resp.data
     assert _claim_status(app, claim_id) == "SUBMITTED"

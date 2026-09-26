@@ -618,3 +618,18 @@ def test_renewal_job_is_registered_and_renews_due_entitlements(world):
         run_insurance_renewal_job()
     assert [c.cycle_number for c in w.cycles()] == [1, 2]
     assert w.premium_state(2).is_satisfied
+
+
+def test_premium_description_names_the_policy_and_its_period(world):
+    """Students saw "Insurance premium (policy <uuid>, cycle 1)"; the ledger line
+    now names the policy and the days the premium pays for."""
+    from app.models import Transaction
+
+    w = world()
+    w.fund(PURCHASE - timedelta(hours=1))
+    w.buy()
+    descriptions = {
+        t.description for t in Transaction.query.filter_by(class_id=w.class_id, seat_id=w.seat_id)
+        if t.description and t.description.startswith("Insurance premium")
+    }
+    assert descriptions == {"Insurance premium: Cover (Jan 10 – Jan 16)"}

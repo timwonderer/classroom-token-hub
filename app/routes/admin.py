@@ -6422,10 +6422,11 @@ def process_claim(claim_id):
             for row in productivity.dates:
                 key = row.claim_date.isoformat()
                 raw_hours = (request.form.get(f"approve_hours-{key}") or "").strip()
+                # A missing value is refused, never read as "approve as claimed".
                 try:
-                    hours = Decimal(raw_hours) if raw_hours else row.student_claimed_hours
+                    hours = Decimal(raw_hours)
                 except (ArithmeticError, InvalidOperation):
-                    flash(f"Hours for {key} must be a number.", "danger")
+                    flash(f"Enter the hours to approve for {row.claim_date.strftime('%b %d')}.", "danger")
                     return redirect(url_for("admin.process_claim", claim_id=claim.claim_id))
                 date_adjustments[key] = {
                     "hours": hours,
