@@ -93,3 +93,20 @@ must not claim business correctness. Provision `platform_observations` with seve
 replaceable `platform_current/current` projection. These records never update
 request-history rollups. A delayed platform result cannot rewind the current
 platform receipt time.
+
+## Bursty activity policy (SPEC-OPS-006 v1.2)
+
+Deploy the status public service and collector together. This revision reuses the
+existing minute-by-minute endpoint/database probes and unchanged sampler schema;
+no new host service or synthetic business probe is needed. Overall availability
+uses fresh platform checks independently of request volume. Feature observations
+have no minimum count; 404s remain measurements rather than feature-outage claims.
+
+The collector retains each component's latest nonempty valid source window in
+`telemetry_current/current.last_activity`. Context starts with newly collected
+activity after deployment; no backfill or rewrite of historical snapshots is
+required. Quiet/failed attempts preserve its original time, and readers and writes
+bound it to seven days. Idle historical observations do not become current success.
+Old daily counters retain their original policy; the page discloses that older
+windows required 20 requests. Verify quiet, error, recovery and stopped-monitoring
+views before calling the deployment complete.

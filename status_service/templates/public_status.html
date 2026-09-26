@@ -17,8 +17,7 @@
         <div class="hero-status-line"><span class="status-subtitle">CURRENT STATUS</span><span
             class="status-pill status-pill--hero status-pill--{{ overall_status.state }}">{{ overall_status.label
             }}</span></div>
-        <p class="status-last-checked">Last checked: {{ snapshot.sampled_at|status_time if snapshot else "awaiting
-          monitoring evidence" }}</p>
+        <p class="status-last-checked">Last checked: {{ overall_status.checked_at|status_time if overall_status.checked_at else "awaiting availability checks" }}</p>
       </div>
     </div>
   </section>
@@ -43,20 +42,18 @@
         {% else %}<article class="happening-banner happening-banner--{{ overall_status.state }}">
           <div class="happening-banner-title"><span class="material-symbols-outlined" aria-hidden="true">{{
               "check_circle" if overall_status.state == "available" else "warning" if overall_status.state in
-              ["degraded", "unavailable"] else "help" }}</span><strong>{{ "Everything is looking good." if
-              overall_status.state == "available" else "Heads up! Some services may not be working right now." if
-              overall_status.state in ["degraded", "unavailable"] else "Current service status is not recently
-              verified." }}</strong></div>
+              ["degraded", "unavailable"] else "help" }}</span><strong>{{ overall_status.detail }}</strong></div>
         </article>{% endfor %}
       </section>
       <p class="status-support">If you can’t sign in to report an issue, please email <a
           href="mailto:support@classroomtokenhub.com">support@classroomtokenhub.com</a>.</p>
       <section class="working-section" aria-labelledby="working-heading">
-        <h2 id="working-heading">What’s working?</h2>
+        <h2 id="working-heading">Recent feature activity</h2>
         <div class="capability-grid">{% for card in capability_cards %}<article
             class="capability-card capability-card--{{ card.state }}">
             <h3>{{ card.name }}</h3>
-            <p>{{ card.question }}</p>
+            <p>{{ card.detail }}</p>
+            {% if card.last %}<p>Last observed: {{ card.last.label }} · {{ card.last.sampled_at|status_time }} (five-minute window ending then).</p>{% endif %}
             <div class="capability-result capability-result--{{ card.state }}">{{ card.label }}</div>
           </article>{% endfor %}</div>
       </section>
@@ -83,20 +80,20 @@
               <h3>What the numbers mean</h3>
               <details class="measurement-explanation">
                 <summary>How service estimates and measurements work</summary>
-                <p>Service cards are estimates from recent requests: Yes means observations are within thresholds;
-                  Probably not means elevated errors or latency; Possibly down means at least ten requests with 50% or
-                  more HTTP 5xx. Missing or limited evidence remains Not recently verified. These estimates do not test
-                  every classroom action.</p>
-                <p>Elevated server-error responses means more than 2% returned HTTP 5xx. Elevated not-found responses
-                  means more than 5% returned HTTP 404; an expected missing resource can also cause a 404. High latency
-                  means p95 exceeds 1,500 ms. Crossings are shown even with limited traffic; within expected range
-                  requires at least 20 requests.</p>
+                <p>Overall availability comes from application and database checks every minute. Checks expire
+                  after five minutes if polling stops. They do not test every classroom action.</p>
+                <p>Feature cards describe observed responses with no minimum request count. Quiet periods show
+                  No recent activity and retain the last observed request window for up to seven days as historical
+                  context, not a current health claim. A server error is shown even for a single request.
+                  Denials and missing resources do not establish a feature outage.</p>
+                <p>The numerical details flag HTTP 5xx above 2%, HTTP 404 above 5%, and p95 above 1,500 ms.
+                  A 404 can be an expected missing resource; it does not change overall availability.</p>
                 <p>p80 and p95 are the response times below which 80% and 95% of measured requests fall. Application
                   requests include health polling. Route groups cover selected endpoints; classroom economy does not
                   represent every economic operation.</p>
                 <p>History shows eligible five-minute windows within thresholds, sampled once per minute. Windows
-                  overlap. It is not uptime or request success. Low/no traffic and missing or stale monitoring are
-                  excluded. Coverage compares eligible measured windows with scheduled minutes. Dates use UTC.</p>
+                  overlap. It is not uptime or request success. Empty windows and missing or stale monitoring are
+                  excluded. Coverage compares eligible measured windows with scheduled minutes. Historical windows retain the policy used when collected; older windows required 20 requests. Dates use UTC.</p>
               </details>
             </div>
           </article>

@@ -21,7 +21,7 @@ def snapshot(count=100):
 
 
 def test_traffic_empty_and_unavailable_are_distinct():
-    for count, expected in [(0, "NO_TRAFFIC"), (1, "LOW_TRAFFIC"), (20, "NORMAL")]:
+    for count, expected in [(0, "NO_TRAFFIC"), (1, "NORMAL"), (20, "NORMAL")]:
         data = validate_snapshot(snapshot(count))
         result = classify_component(data["components"][0], data, now=NOW)
         assert result["state"] == expected

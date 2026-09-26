@@ -8,6 +8,11 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Status monitoring
+
+- Overall availability now follows regular endpoint/database checks rather than request volume. Feature cards show response observations with no 20-request minimum, preserve timestamped last activity through quiet periods, and distinguish 404s from server failures. DOM-OPS-001 2.10 / SPEC-OPS-006 1.2.
+- Accessibility: activity, monitoring loss, and historical window timestamps are visible text on each card; retained activity never uses a current-success color during quiet periods. Existing native history disclosures and heading order remain intact.
+
 ### Obligations
 
 - **Rent and insurance fixes found while updating the user guides (2026-09-25)** — The student rent card showed the newest bill, so during the bill preview window it displayed next period's bill as "not yet due" with no Pay button and hid an unpaid current bill; it now shows the oldest bill still owing, and an early-issued bill is payable. Late fees used the class's current rent policy instead of the policy frozen on their bill, so raising the penalty reached old bills; each bill's fees now follow its own policy. The student insurance page marked every coverage "Active" even while a premium was overdue; it now shows **Premium overdue** and where to pay. With insurance disabled, a student who still owes a premium keeps the Insurance page (with nothing for sale) and its sidebar link. Rent settings wording now describes bill preview as issuing bills early. Student and teacher rent and insurance guides updated to match (DOM-OBL-001 §V.7, §VIII, §IX.16; DOM-POL-001 §VII). From the 2026-09-25 live check: the insurance waiting period is now enforced for every policy type, not only non-monetary (the page already showed it and greyed out the claim button while the server accepted the claim); the student policy page now states the real limits (filing deadline, payout per coverage period, claims or claimable dates per week) and the last covered day instead of the coverage boundary; and switching class, as a student or a teacher, now lands on the new class's dashboard instead of reloading a page that may not exist there.
