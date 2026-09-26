@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-LED-002 | 1.0 | 2026-09-01 | New | Normative |
+| SPEC-LED-002 | 1.1 | 2026-09-15 | 1.0 | Normative |
 
 ## I. Purpose
 
@@ -163,3 +163,12 @@ decisions MUST implement this contract without weakening its semantics.
 - `DOM-LED-001_LEDGER_DOMAIN.md`
 - `FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md`
 - `FEAT-LED-001_POST_LEDGER_TRANSACTION.md`
+
+### Seat-only replay identity
+
+Fingerprint version 3 removes principal identity from multi-effect plans. Single-effect
+and internal-transfer serializers are unchanged. Existing accepted digests MUST NOT
+be rewritten to infer a different command. The pre-launch seat-ownership migration
+MUST refuse an existing version 1/2 multi-effect reservation that needs the removed
+principal material; a separate explicit data-disposition decision is required. Runtime
+accepts only seat/class effect plans and fails closed on those obsolete bulk serializers.

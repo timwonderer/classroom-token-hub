@@ -1,3 +1,4 @@
+{% import "macros/cards.html" as cards %}
 <!DOCTYPE html>
 <html lang="en">
 
@@ -5,202 +6,34 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>500 - Internal Server Error</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}">
 
     <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
     <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Inter', sans-serif;
-            background: var(--surface);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 2rem;
-        }
-
-        .error-container {
-            background: var(--surface);
-            box-shadow: var(--shadow-lg);
-            max-width: 900px;
-            width: 100%;
-            overflow: hidden;
-            border-radius: var(--radius-lg);
-        }
-
-        .error-header {
-            background: var(--primary);
-            color: white;
-            padding: 2rem;
-            text-align: center;
-        }
-
-        .error-header h1 {
-            font-size: 4rem;
-            font-weight: 400;
-            margin: 0;
-            color: white;
-        }
-
-        .error-header p {
-            font-size: 1.2rem;
-            margin: 0.5rem 0 0 0;
-            opacity: 0.9;
-        }
-
-        .error-body {
-            padding: 2rem;
-        }
-
-        .error-message {
-            background: var(--surface);
-            border-left: 4px solid var(--danger);
-            padding: 1rem;
-            margin-bottom: 1.5rem;
-
-        }
-
-        .error-message h5 {
-            color: var(--danger);
-            margin-bottom: 0.5rem;
-        }
-
-        .error-message code {
-            padding: 0.2rem 0.4rem;
-            color: var(--text-primary);
-            font-family: var(--font-data);
-        }
-
-        .log-section {
-            margin-top: 1.5rem;
-        }
-
-        .log-output {
-            background: var(--neutral-900);
-            color: var(--neutral-200);
-            padding: 1rem;
-
-            max-height: 400px;
-            overflow-y: auto;
-            font-family: var(--font-data);
-            font-size: 0.85rem;
-            line-height: 1.4;
-            white-space: pre-wrap;
-            word-break: break-all;
-        }
-
-        .log-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 0.5rem;
-        }
-
-        .btn-copy {
-            background: var(--primary);
-            color: white;
-            border: none;
-            padding: 0.4rem 1rem;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.9rem;
-            transition: background 0.3s;
-        }
-
-        .btn-copy:hover {
-            background: var(--primary-hover);
-        }
-
-        .btn-copy.copied {
-            background: var(--success);
-        }
-
-        .actions {
-            display: flex;
-            gap: 1rem;
-            margin-top: 1.5rem;
-            flex-wrap: wrap;
-            justify-content: center;
-        }
-
-        .btn-primary-custom {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
-            color: white;
-            border: none;
-            padding: 0.75rem 1.5rem;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 1rem;
-            transition: transform 0.2s;
-            text-decoration: none;
-            display: inline-block;
-        }
-
-        .btn-primary-custom:hover {
-            transform: translateY(-2px);
-            color: white;
-        }
-
-        .error-id {
-
-            padding: 0.5rem 1rem;
-
-            margin-top: 1rem;
-            font-size: 0.9rem;
-
-        }
-
-        @media (max-width: 768px) {
-            .error-header h1 {
-                font-size: 3rem;
-            }
-
-            .error-body {
-                padding: 1.5rem;
-            }
-
-            .actions {
-                flex-direction: column;
-            }
-
-            .btn-primary-custom {
-                width: 100%;
-                text-align: center;
-            }
-        }
-    </style>
 </head>
 
-<body>
+<body class="error-page">
     <main id="main-content" aria-labelledby="error-heading">
     <div class="error-container">
         <div class="error-header">
-            <span class="material-symbols-outlined mb-2" aria-hidden="true" style="font-size:3rem; vertical-align: middle;">error</span>
+            <span class="material-symbols-outlined icon-2xl icon-middle mb-2" aria-hidden="true">error</span>
             <h1 id="error-heading">500</h1>
-            <p style="font-size:2rem">Internal Server Error</p>
+            <p>Internal Server Error</p>
         </div>
 
         <div class="error-body">
-            <div class="alert alert-warning" role="alert">
-                <p class="fw-bold">Pardon the Interruption!</p>
+            {% call cards.alert_card('warning', 'Pardon the interruption', icon='warning', body_class='mb-4', role='alert', heading_tag='h2') %}
                 <p class="mb-0">Something went wrong when processing your last action. It could be
                 due to a bug in our codes, a sudden glitch on our servers, or an unexpected input you provided. You may
                 try again and see if the problem persists.</p>
-            </div>
+            {% endcall %}
 
             {% if error_id %}
-            <div class="error-id alert alert-info mb-0">
-                <p>This error has been automatically logged with <strong>Error ID {{ error_id }}</strong>. If you plan on filing a bug report, please include this Error ID in your ticket for faster resolution.</p>
+            {% call cards.alert_card('info', 'This error was logged', icon='bug_report', body_class='mb-0', heading_tag='h2') %}
+                <p class="mb-2">This error has been automatically logged with <strong>Error ID {{ error_id }}</strong>. If you plan on filing a bug report, please include this Error ID in your ticket for faster resolution.</p>
                 <p class="mb-0">You can also help us identify the issue quicker by repeating the steps you have taken before encountering this error screen and immediately file a bug report. This will allow our system to capture the exact sequence of events that led to this error.</p>
-            </div>
+            {% endcall %}
             {% endif %}
 
             <div class="actions">
@@ -208,8 +41,7 @@
                 <button type="button" class="btn bg-primary text-white" onclick="history.back()">Go Back to Last Page</button>
                 <a href="https://status.classroomtokenhub.com" target="_blank" rel="noopener noreferrer"
                     class="btn bg-secondary text-white">
-                    Check System Status <span class="visually-hidden">(opens in a new tab)</span> <span class="material-symbols-outlined"
-                        style="vertical-align: middle;">open_in_new</span>
+                    Check System Status <span class="visually-hidden">(opens in a new tab)</span> <span class="material-symbols-outlined icon-middle" aria-hidden="true">open_in_new</span>
                 </a>
             </div>
 

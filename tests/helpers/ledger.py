@@ -9,7 +9,7 @@ from app.services.ledger_settlement_service import settle_balances
 from app.services.ledger_command_service import create_idempotent_transaction
 from app.services.ledger_posting_service import create_pending_transaction
 from app.services.ledger_transfer_service import create_transfer_pair
-from app.services.ledger_correction_service import compensate_posted_transaction
+from app.services.ledger_correction_service import reverse_transaction
 from app.services.ledger_interest_service import apply_monthly_savings_interest
 from app.services.ledger_fee_service import apply_overdraft_fee_if_needed
 from tests.helpers.classroom_initializer import (
@@ -36,7 +36,6 @@ def create_ledger_idempotent_transaction(
     idempotency_key: str,
     seat_id: int,
     class_id: str,
-    user_id: int | None = None,
     amount,
     account_type: str,
     type: str,
@@ -54,7 +53,6 @@ def create_ledger_idempotent_transaction(
         target_seat_id=target_seat_id or seat_id,
         actor_seat_id=actor_seat_id or seat_id,
         mechanism=mechanism,
-        user_id=user_id,
         amount=amount,
         account_type=account_type,
         type=type,
@@ -68,7 +66,6 @@ def create_ledger_pending_transaction(
     *,
     seat_id: int,
     class_id: str,
-    user_id: int | None = None,
     amount,
     account_type: str,
     type: str,
@@ -85,7 +82,6 @@ def create_ledger_pending_transaction(
         target_seat_id=target_seat_id or seat_id,
         actor_seat_id=actor_seat_id or seat_id,
         mechanism=mechanism,
-        user_id=user_id,
         amount=amount,
         account_type=account_type,
         type=type,
@@ -99,7 +95,6 @@ def create_ledger_transfer_pair(
     *,
     seat_id: int,
     class_id: str,
-    user_id: int | None = None,
     amount,
     from_account: str,
     to_account: str,
@@ -109,7 +104,6 @@ def create_ledger_transfer_pair(
     return create_transfer_pair(
         seat_id=seat_id,
         class_id=class_id,
-        user_id=user_id,
         amount=amount,
         from_account=from_account,
         to_account=to_account,
@@ -124,12 +118,14 @@ def compensate_ledger_posted_transaction(
     description: str,
     compensation_type: str = "refund",
     idempotency_key: str | None = None,
+    actor_seat_id: int | None = None,
 ):
-    return compensate_posted_transaction(
+    return reverse_transaction(
         transaction,
         description=description,
         compensation_type=compensation_type,
         idempotency_key=idempotency_key,
+        actor_seat_id=actor_seat_id,
     )
 
 

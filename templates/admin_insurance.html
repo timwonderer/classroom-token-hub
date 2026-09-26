@@ -3,6 +3,31 @@
 {% set current_page = "insurance" %}
 {% block title %}Insurance Management{% endblock %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("Insurance is the class's risk product. You author policies here, students buy them from the store, and the claims they file land at the top of this page.") }}
+
+{% call help.topic('ins-create', 'add_circle', 'Create and sell a policy') %}
+<ol class="ps-3 mb-0">
+    <li class="mb-2"><strong>Create a policy.</strong> Give it a premium, a charge frequency, and a coverage description students can actually evaluate.</li>
+    <li class="mb-2"><strong>Put it on sale.</strong> Only policies marked <em>For sale</em> appear to students.</li>
+    <li class="mb-0"><strong>Work the claims.</strong> Open a filed claim to approve or deny it and see the student's claim history alongside the terms they bought.</li>
+</ol>
+{% endcall %}
+
+{% call help.topic('ins-states', 'visibility', 'For sale, hidden, and retired') %}
+<p>The three availability states are not the same thing:</p>
+<ul class="ps-3 mb-0">
+    <li class="mb-2"><strong>For sale</strong> — students can buy it now.</li>
+    <li class="mb-2"><strong>Hidden</strong> — no new purchases, but everyone already covered stays covered until their term ends. Reversible with <em>Put back on sale</em>.</li>
+    <li class="mb-0"><strong>Retired</strong> — permanent. The terms can never be offered again.</li>
+</ul>
+{% endcall %}
+
+{% call help.topic('ins-edit', 'edit_note', 'Editing a policy someone already bought') %}
+<p class="mb-0"><strong>Editing a policy does not change anyone's coverage.</strong> A purchase freezes the terms as they stood that day, so your edits apply to future buyers only. If you need current holders on new terms, hide the old policy and publish a replacement.</p>
+{% endcall %}
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
   <div class="d-flex justify-content-between align-items-center mb-4">
@@ -10,7 +35,7 @@
       <p class="text-muted mb-0">Create and manage class insurance products that help students understand, navigate, and manage potential exposure to financial risks.</p>
     </div>
     <a class="btn btn-primary" href="{{ url_for('admin.new_insurance_policy') }}">
-      <span class="material-symbols-outlined me-1" style="vertical-align: text-bottom;">add_circle</span>
+      <span class="material-symbols-outlined me-1 icon-text-bottom" aria-hidden="true">add_circle</span>
       New policy
     </a>
   </div>
@@ -18,7 +43,7 @@
   <div class="card shadow-sm mb-4">
     <div class="card-header bg-info text-white py-3">
       <h5 class="mb-0 fw-semibold text-white">
-        <span class="material-symbols-outlined me-2" style="vertical-align: text-bottom;">info</span>
+        <span class="material-symbols-outlined me-2 icon-text-bottom" aria-hidden="true">info</span>
         Purchased Insurance Policies are Contracts
       </h5>
     </div>
@@ -27,10 +52,34 @@
     </div>
   </div>
 
+  <div class="card shadow-sm mb-4">
+    <div class="card-header bg-primary py-3">
+      {# `list_insurance_claims` returns every claim in the class regardless of
+         status, so this list is not "pending" — the heading says what the query
+         actually asks for. #}
+      <h5 class="mb-0 fw-bold"><span class="material-symbols-outlined me-2 icon-text-bottom" aria-hidden="true">other_admission</span>Filed claims</h5>
+    </div>
+    <div class="list-group list-group-flush">
+      {% for claim in claims %}
+      <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+         href="{{ url_for('admin.process_claim', claim_id=claim.claim_id) }}">
+        <span>
+          <strong>Claim #{{ claim.claim_id }}</strong>
+          <span class="badge bg-light text-dark border ms-2">Insurance claim</span>
+          <small class="d-block text-muted">Submitted {% if claim.submitted_at %}{{ claim.submitted_at|fmt_timestamp }}{% else %}N/A{% endif %}</small>
+        </span>
+        <span class="badge bg-secondary">{{ claim.status }}</span>
+      </a>
+      {% else %}
+      <div class="list-group-item text-muted mb-1 mt-1">If your students have filed an insurance claim, you will see it here.</div>
+      {% endfor %}
+    </div>
+  </div>
+
   <div class="card shadow">
     <div class="card-header bg-primary text-white py-3">
       <h5 class="mb-0 fw-bold text-white">
-        <span class="material-symbols-outlined me-2" style="vertical-align: text-bottom;">shield</span>
+        <span class="material-symbols-outlined me-2 icon-text-bottom" aria-hidden="true">shield</span>
         Existing Policies
       </h5>
     </div>
@@ -54,10 +103,17 @@
           <span class="badge bg-dark">{{ policy.availability_state }}</span>
           {% endif %}
           {% if policy.availability_state != 'RETIRED' %}
+          {% if policy.availability_state == 'HIDDEN' %}
+          <form method="POST" action="{{ url_for('admin.reactivate_insurance_policy', policy_uuid=policy.policy_uuid) }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+            <button type="submit" class="btn btn-sm btn-outline-success" title="Offer these same terms again">Put back on sale</button>
+          </form>
+          {% else %}
           <form method="POST" action="{{ url_for('admin.deactivate_insurance_policy', policy_uuid=policy.policy_uuid) }}" class="d-inline">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
             <button type="submit" class="btn btn-sm btn-outline-secondary" title="Hide from new enrollment">Hide</button>
           </form>
+          {% endif %}
           <form method="POST" action="{{ url_for('admin.delete_insurance_policy', policy_uuid=policy.policy_uuid) }}" class="d-inline"
                 onsubmit="return confirm('Retire this policy? It will be permanently unavailable for new enrollment.');">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
@@ -71,7 +127,7 @@
         No insurance policies exist for this class yet.
         <div class="mt-2">
           <a class="btn btn-sm btn-primary" href="{{ url_for('admin.new_insurance_policy') }}">
-            <span class="material-symbols-outlined me-1" style="vertical-align: text-bottom;">add_circle</span>
+            <span class="material-symbols-outlined me-1 icon-text-bottom" aria-hidden="true">add_circle</span>
             Create your first policy
           </a>
         </div>

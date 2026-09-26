@@ -29,7 +29,7 @@ This guide covers the Overview tab and the first two Settings sections: how much
 
 Two cards head the tab: **Current on Rent** and **Behind on Rent**, each a headcount.
 
-**Current Rent Configuration** below them is read-only — it reflects what you saved, not somewhere to edit:
+**Current Rent Configuration** below them is read-only — it reflects what you saved, not somewhere to edit. When a rent change you saved has not started yet, this card is titled **Saved Rent Configuration** instead, and a notice above it tells you which terms students are on in the meantime (see [When a change takes effect](#when-a-change-takes-effect)):
 
 | Field | What it shows |
 | --- | --- |
@@ -37,12 +37,39 @@ Two cards head the tab: **Current on Rent** and **Behind on Rent**, each a headc
 | **Late Penalty** | The amount, plus *once per period* or *every X days* |
 | **Grace Period** | Days |
 | **First Due Date** | A date, or *Day X of each month* |
-| **Current Rent Period** | A date range, or *Not active yet* |
-| **Next Due Date** | A date, or *Not scheduled yet* |
+| **Current Rent Period** | The period in effect now, from its first day to its last covered day, or *Not active yet* |
+| **Next Due Date** | The last day to pay before the next period starts, or *Not scheduled yet* |
 
 Badges beneath show which behaviours are on: **Bill Preview** (with its day count when enabled), **Incremental Payment**, **Prevent Purchase When Late**, and **Total Students**. Green means on, grey means off.
 
 **Student Roster** splits the class into a green **Current** section and a red **Behind** section. Behind rows read *Behind by X cycle* or *Behind by X cycles* — cycles, not days, so a student two periods in arrears is visibly worse off than one who is a day late. With no students it reads *No students in class yet.*
+
+### When a change takes effect
+
+**A rent change never applies to a period students have already been billed for.** Once a period's bills have gone out, its terms are fixed — you cannot raise rent, shorten a grace period, or change a due date on a bill students already hold. Your change applies from the **first period not yet billed**, and the page tells you the exact date.
+
+With **Bill Preview** on, next period's bills go out a few days before it starts. A change you save in those days misses that period too and starts the one after it. Save rent changes before the preview window opens if you want them to apply next period.
+
+You will see this in three places:
+
+- **When you save**, the confirmation names the date your new terms start and the terms students stay on until then.
+- **On the Overview tab**, a notice reads *These rent terms start [date]* for as long as the change is waiting, and the configuration card is retitled **Saved Rent Configuration** so it is clear you are looking at terms that are not yet in force. The notice says whether a period is *already underway* or the next period *has already been billed*.
+- **On the Settings tab**, the same notice sits above the form.
+
+The notice states the amount students are actually being billed right now, so you can always tell the two apart. Once the first period under the new terms begins, the notice disappears and the card goes back to reading **Current Rent Configuration**.
+
+If rent billing has been stopped for the class, the notice says so instead: your saved terms are recorded but nothing is scheduled to pick them up until billing resumes.
+
+This is the same rule that governs rent-linked store items. It exists so that a change of mind cannot land on students retroactively.
+
+### Turning rent off
+
+Turning rent off in your class features stops **new** rent. It never erases what students already owe:
+
+- Bills for a period that has not started, that a student has paid **nothing** toward, are cancelled. The student owes nothing for that period.
+- A student who has paid **anything** toward a future period keeps it: that period happens for them, perks included, and any remainder stays owed.
+- Rent already owed stays owed. Students keep their **Rent** page, can still pay, and late fees keep accruing under the terms each bill was issued with.
+- No new periods are scheduled while rent is off, and paying off the last bill does not turn rent back on. When you turn rent back on, billing resumes from the next period.
 
 ### Setting the amount and frequency
 

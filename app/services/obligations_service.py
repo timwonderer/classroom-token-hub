@@ -7,23 +7,49 @@ Does not perform writes; FEATs own all mutation.
 
 from __future__ import annotations
 
-from datetime import datetime
+import enum
+from datetime import datetime, timedelta
 from dataclasses import dataclass
 from decimal import Decimal
+from types import SimpleNamespace
 from typing import NamedTuple, Optional
 
 from app.extensions import db
-from app.models import ObligationAssessment, BillCycle, LedgerMechanism, Transaction
-from app.utils.canonical_temporal_resolver import ensure_utc
+from app.models import (
+    ObligationAssessment, BillCycle, LedgerMechanism, ObligationCommandReservation, Transaction,
+    TransactionStatus,
+)
+from app.utils.canonical_temporal_resolver import (
+    CLASS_LEVEL_EVALUATION, canonical_temporal_resolver, ensure_utc,
+)
 
 
 class BillCycleLifecycleError(Exception):
-    """Raised when a bill-cycle mutation violates the genesis/advancement lifecycle.
+    """Raised when a bill-cycle mutation violates the lifecycle (DOM-OBL-001 §V.7).
 
-    Genesis (`establish_bill_cycle`) requires that no prior cycle exists for the
-    lineage; advancement (`advance_bill_cycle`) requires an existing current cycle
-    and a strictly sequential successor. These are distinct Obligations commands
-    (DOM-OBL-001) and neither may perform the other's transition.
+    Succession (`schedule_next_bill_cycle`) is lawful only for an empty lineage or
+    a non-terminal latest cycle whose assessment point has arrived; termination
+    raises it for a lineage that does not exist or is out of class scope.
+    """
+
+
+class SuccessionNotDueError(BillCycleLifecycleError):
+    """Succession requested before the latest cycle's ``next_assessment_at``."""
+
+
+class SuccessionAfterTerminalError(BillCycleLifecycleError):
+    """Succession requested for a lineage whose latest cycle is terminal."""
+
+
+class SuccessionReplayMismatchError(Exception):
+    """DOM-OBL-001 §V.7 case 2: a known command identity presented with different terms."""
+
+
+class SuccessionConflictError(Exception):
+    """DOM-OBL-001 §V.7 case 3: a different command created the derived successor.
+
+    Never a replay and never a generic uniqueness failure. The command does not
+    re-derive against the advanced lineage.
     """
 
 
@@ -118,6 +144,20 @@ def get_obligation_events_for_window(
     if not assessments:
         return []
 
+    # A withdrawn assessment never became owed (DOM-OBL-001 §V.8), so it is not
+    # an obligation Interpretation interprets; it is dropped here rather than
+    # taught to the consumer.
+    withdrawn = {
+        row.correlation_id
+        for row in db.session.query(ObligationAssessment.correlation_id).filter(
+            ObligationAssessment.class_id == class_id,
+            ObligationAssessment.event_type == "WITHDRAWN",
+            ObligationAssessment.timestamp < end,
+        )
+    }
+    assessments = [a for a in assessments if a.correlation_id not in withdrawn]
+    if not assessments:
+        return []
     correlation_ids = {a.correlation_id for a in assessments}
 
     rows: list[ObligationEventRow] = [
@@ -198,10 +238,19 @@ def resolve_assessment_amount(assessment: ObligationAssessment) -> Decimal:
         if rent and rent.late_penalty_amount is not None:
             return Decimal(str(rent.late_penalty_amount))
 
-    # INSURANCE / IMMEDIATE / other types: their upstream contract lives
-    # in domain-specific tables not yet centralized here. Callers that
-    # need a non-zero amount for those types must resolve upstream and
-    # pass explicitly. Returning 0 is safe per the note above.
+    if obligation_type == 'INSURANCE_PREMIUM' and policy_uuid:
+        # The premium is the frozen per-period contract amount of the exact
+        # policy version the assessment carries (DOM-POL-001 §VII, frozen by
+        # reference; SPEC-ECON-003 §4.4.2). It does not scale with period length.
+        from app.services.insurance_definition_service import get_insurance_definition
+        policy = get_insurance_definition(policy_uuid, class_id=assessment.class_id)
+        if policy is not None and policy.premium is not None:
+            return Decimal(str(policy.premium))
+
+    # IMMEDIATE / other types: their upstream contract lives in
+    # domain-specific tables not yet centralized here. Callers that need a
+    # non-zero amount for those types must resolve upstream and pass
+    # explicitly.
     return Decimal('0.00')
 
 
@@ -237,21 +286,46 @@ def resolve_assessment_due_at(assessment: ObligationAssessment) -> datetime | No
     return assessment.timestamp
 
 
-@dataclass(frozen=True)
-class ObligationStatus:
-    """Derived obligation status (read-only projection over immutable facts)."""
-    correlation_id: str
-    seat_id: int
-    class_id: str
-    obligation_type: str
-    event_type: str  # ASSESSMENT | PAYMENT | WAIVED
+class ObligationStatusCode(str, enum.Enum):
+    """Derived status of one assessed obligation (DOM-OBL-001 §VIII)."""
+    OUTSTANDING = "OUTSTANDING"
+    SATISFIED = "SATISFIED"
+    WITHDRAWN = "WITHDRAWN"  # never became owed (§V.8); not satisfied, not outstanding
 
-    # Derived facts (never persisted per DOM-OBL-001 §VIII)
-    is_satisfied: bool
-    is_outstanding: bool
-    due_at: datetime | None  # Caller can compare against current time if needed
-    amount_paid: float  # Sum of Ledger amounts from PAYMENT events
-    amount_waived: bool  # True if any WAIVED event exists
+
+@dataclass(frozen=True)
+class ObligationState:
+    """The authoritative derived state of one assessed obligation (DOM-OBL-001 §VIII).
+
+    This is the single derivation of paid / outstanding / waived for an
+    obligation. Consumers read it (or a narrower read built on it); they do not
+    recompute it from assessment events or Ledger rows (INV-ARC-009 §V).
+    """
+    correlation_id: str
+    class_id: str
+    seat_id: int
+    obligation_type: str
+    internal_ref: str
+    bill_cycle_id: int | None
+    assessed_amount: Decimal
+    satisfied_amount: Decimal  # paid magnitude, excluding voided payments
+    remaining_amount: Decimal  # zero unless OUTSTANDING
+    is_waived: bool
+    is_withdrawn: bool
+    status: ObligationStatusCode
+    due_at: datetime | None
+
+    @property
+    def is_satisfied(self) -> bool:
+        return self.status is ObligationStatusCode.SATISFIED
+
+    @property
+    def is_outstanding(self) -> bool:
+        return self.status is ObligationStatusCode.OUTSTANDING
+
+    @property
+    def is_payable(self) -> bool:
+        return self.status is ObligationStatusCode.OUTSTANDING
 
 
 def get_assessment_for_correlation(correlation_id: str) -> ObligationAssessment | None:
@@ -289,6 +363,15 @@ def get_obligations_arising_from(source_correlation_id: str) -> list[ObligationA
     )
 
 
+def get_withdrawal_event(correlation_id: str) -> ObligationAssessment | None:
+    """The WITHDRAWN event for a correlation, if the assessment was withdrawn (§V.8)."""
+    return (
+        db.session.query(ObligationAssessment)
+        .filter_by(correlation_id=correlation_id, event_type="WITHDRAWN")
+        .first()
+    )
+
+
 def get_satisfaction_events(correlation_id: str) -> list[ObligationAssessment]:
     """Retrieve all PAYMENT and WAIVED events for a correlation (in order)."""
     return (
@@ -302,6 +385,16 @@ def get_satisfaction_events(correlation_id: str) -> list[ObligationAssessment]:
     )
 
 
+def payment_event_magnitude(event: ObligationAssessment) -> Decimal:
+    """The amount one PAYMENT event applied: its Ledger magnitude, or zero if voided."""
+    if event.event_type != "PAYMENT" or not event.ledger_transaction_id:
+        return Decimal("0.00")
+    txn = db.session.get(Transaction, event.ledger_transaction_id)
+    if txn is None or txn.amount is None or txn.status == TransactionStatus.VOID:
+        return Decimal("0.00")
+    return abs(Decimal(str(txn.amount)))
+
+
 def get_paid_magnitude(correlation_id: str) -> Decimal:
     """Canonical paid amount for an obligation: sum of PAYMENT ledger MAGNITUDES.
 
@@ -309,11 +402,25 @@ def get_paid_magnitude(correlation_id: str) -> Decimal:
     PAYMENT events sharing this correlation. Rent payments are posted as NEGATIVE
     debits, so the magnitude (abs) is applied toward the obligation. Multiple
     PAYMENT events (partial payments) accumulate here under one correlation.
+    A voided payment applies nothing: its money was reversed.
     """
-    from app.models import Transaction
+    return sum(
+        (payment_event_magnitude(event) for event in get_satisfaction_events(correlation_id)),
+        Decimal("0.00"),
+    )
+
+
+def get_paid_magnitude_through_event(
+    correlation_id: str, boundary_event: ObligationAssessment
+) -> Decimal:
+    """Sum PAYMENT magnitudes through one immutable satisfaction event."""
     total = Decimal('0.00')
     for event in get_satisfaction_events(correlation_id):
-        if event.event_type == 'PAYMENT' and event.ledger_transaction_id:
+        if event.event_type == 'PAYMENT' and (
+            event.timestamp < boundary_event.timestamp
+            or (event.timestamp == boundary_event.timestamp and event.id <= boundary_event.id)
+        ) and event.ledger_transaction_id:
+            from app.models import Transaction
             txn = db.session.get(Transaction, event.ledger_transaction_id)
             if txn is not None and txn.amount is not None:
                 total += abs(Decimal(str(txn.amount)))
@@ -343,59 +450,94 @@ def get_payment_event_by_ledger(
     )
 
 
-def get_obligation_status(correlation_id: str) -> ObligationStatus | None:
-    """
-    Derive obligation status from immutable facts.
+def get_obligation_state(
+    correlation_id: str,
+    *,
+    as_of: datetime | None = None,
+) -> ObligationState | None:
+    """Derive the authoritative state of one obligation (DOM-OBL-001 §VIII).
 
-    Per DOM-OBL-001 §VIII, satisfaction is computed as:
-    - paid_amount = sum(Ledger amounts from PAYMENT events)
-    - has_waiver = exists(WAIVED event)
-    - if paid_amount >= assessed_amount: SATISFIED
-    - elif has_waiver: SATISFIED
-    - else: OUTSTANDING
-
-    Past due = OUTSTANDING and now > due_at
+    ``as_of`` limits the satisfaction facts to those recorded at or before it;
+    omitted, every recorded fact counts. Voided payments never count.
     """
     assessment = get_assessment_for_correlation(correlation_id)
-    if not assessment:
+    if assessment is None:
         return None
 
-    satisfaction_events = get_satisfaction_events(correlation_id)
+    satisfied_amount = Decimal("0.00")
+    is_waived = False
+    cutoff = ensure_utc(as_of) if as_of is not None else None
+    for event in get_satisfaction_events(correlation_id):
+        if cutoff is not None and ensure_utc(event.timestamp) > cutoff:
+            continue
+        if event.event_type == "PAYMENT":
+            satisfied_amount += payment_event_magnitude(event)
+        elif event.event_type == "WAIVED":
+            is_waived = True
 
-    # Compute paid amount from Ledger references
-    amount_paid = 0.0
-    has_waiver = False
-
-    for event in satisfaction_events:
-        if event.event_type == 'PAYMENT' and event.ledger_transaction_id:
-            # Read Ledger amount through the FK relationship
-            txn = db.session.get(db.Model.__class__, event.ledger_transaction_id)
-            if txn and hasattr(txn, 'amount'):
-                amount_paid += float(txn.amount)
-        elif event.event_type == 'WAIVED':
-            has_waiver = True
-
-    # Derive satisfaction per DOM-OBL-001 §VIII
-    # Note: assessed_amount defaults to 0 (no amount stored in assessment_events per DOM-OBL-001 v2.5)
-    # Caller should use get_obligation_payment_status() from obligation_view_model.py to provide assessed_amount
-    assessed_amount = 0.0  # Default; caller should pass actual amount
-    is_satisfied = has_waiver or (amount_paid >= assessed_amount)
-    is_outstanding = not is_satisfied
-
-    # Per DOM-OBL-001 v2.5: due_at should come from bill_cycles, not assessment_events
-    # This legacy function defaults to None; use get_obligation_payment_status() for complete status
-    return ObligationStatus(
-        correlation_id=correlation_id,
-        seat_id=assessment.seat_id,
-        class_id=assessment.class_id,
-        obligation_type=assessment.obligation_type,
-        event_type=assessment.event_type,
-        is_satisfied=is_satisfied,
-        is_outstanding=is_outstanding,
-        due_at=None,  # Per DOM-OBL-001 v2.5: use bill_cycles for due dates
-        amount_paid=amount_paid,
-        amount_waived=has_waiver,
+    assessed_amount = resolve_assessment_amount(assessment)
+    withdrawal = get_withdrawal_event(correlation_id)
+    is_withdrawn = withdrawal is not None and (
+        cutoff is None or ensure_utc(withdrawal.timestamp) <= cutoff
     )
+    if is_withdrawn:
+        # Never became owed (DOM-OBL-001 §V.8). Deliberately NOT satisfied: a
+        # withdrawn future period and a paid, committed one are different outcomes.
+        status = ObligationStatusCode.WITHDRAWN
+        remaining = Decimal("0.00")
+    elif is_waived or satisfied_amount >= assessed_amount:
+        status = ObligationStatusCode.SATISFIED
+        remaining = Decimal("0.00")
+    else:
+        status = ObligationStatusCode.OUTSTANDING
+        remaining = assessed_amount - satisfied_amount
+
+    return ObligationState(
+        correlation_id=correlation_id,
+        class_id=assessment.class_id,
+        seat_id=assessment.seat_id,
+        obligation_type=assessment.obligation_type,
+        internal_ref=assessment.internal_ref,
+        bill_cycle_id=assessment.bill_cycle_id,
+        assessed_amount=assessed_amount,
+        satisfied_amount=satisfied_amount,
+        remaining_amount=remaining,
+        is_waived=is_waived,
+        is_withdrawn=is_withdrawn,
+        status=status,
+        due_at=resolve_assessment_due_at(assessment),
+    )
+
+
+def is_obligation_past_due(
+    state: ObligationState,
+    *,
+    reference_time_utc: datetime | None = None,
+) -> bool:
+    """Past due = OUTSTANDING and the reference time is after ``due_at``.
+
+    "After" is evaluated through the canonical temporal resolver in the class's
+    authority (INV-ARC-015 §VII), never against a database or process clock.
+    """
+    if not state.is_outstanding or state.due_at is None:
+        return False
+    return canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=SimpleNamespace(class_id=state.class_id),
+        primitive="later_than",
+        reference_time_utc=reference_time_utc,
+        candidate=_current_reference(state.class_id, reference_time_utc),
+        reference=state.due_at,
+    ).is_later
+
+
+def _current_reference(class_id: str, reference_time_utc: datetime | None) -> datetime:
+    return canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=SimpleNamespace(class_id=class_id),
+        primitive="current_time",
+        reference_time_utc=reference_time_utc,
+    ).canonical_now_utc
 
 
 def get_assessment_events_for_seat_class(
@@ -444,21 +586,6 @@ def get_latest_bill_cycle(internal_ref: str) -> BillCycle | None:
     )
 
 
-def get_latest_bill_cycle_for_class(class_id: str) -> BillCycle | None:
-    """Get the most recent bill cycle for a class.
-
-    DOM-OBL-001 treats bill_cycles as the current recurring rent cycle in force
-    for the class. The latest cycle row for the class is the canonical current
-    cycle projection.
-    """
-    return (
-        db.session.query(BillCycle)
-        .filter_by(class_id=class_id)
-        .order_by(BillCycle.cycle_number.desc(), BillCycle.id.desc())
-        .first()
-    )
-
-
 def check_idempotency_assessment(
     internal_ref: str,
     correlation_id: str,
@@ -502,22 +629,320 @@ def check_idempotency_satisfaction(
     return existing is not None
 
 
-def check_idempotency_bill_cycle(
-    internal_ref: str,
-    cycle_number: int,
-) -> bool:
-    """
-    Check if a bill cycle already exists.
+class SuccessionEligibility(enum.Enum):
+    """Succession eligibility of a bill-cycle lineage (DOM-OBL-001 §V.7)."""
+    EMPTY = "EMPTY"  # no cycle yet: succession creates cycle 1
+    DUE = "DUE"  # non-terminal latest cycle whose next_assessment_at has arrived
+    NOT_DUE = "NOT_DUE"  # non-terminal latest cycle, next_assessment_at still ahead
+    TERMINAL = "TERMINAL"  # latest cycle is terminal: succession is unlawful
 
-    Per FEAT-OBL-002: advancement must be idempotent by (internal_ref, cycle_number).
-    Returns True if already exists.
+
+def _class_ctx(class_id: str) -> SimpleNamespace:
+    return SimpleNamespace(class_id=class_id)
+
+
+def _reference_now(class_id: str, reference_time_utc: datetime | None) -> datetime:
+    return canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=_class_ctx(class_id),
+        primitive="current_time",
+        reference_time_utc=reference_time_utc,
+    ).canonical_now_utc
+
+
+def _is_later(class_id: str, candidate: datetime, reference: datetime) -> bool:
+    return canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=_class_ctx(class_id),
+        primitive="later_than",
+        reference_time_utc=reference,
+        candidate=candidate,
+        reference=reference,
+    ).is_later
+
+
+def get_assessment_point(cycle: BillCycle) -> datetime | None:
+    """When the successor of ``cycle`` is assessed (DOM-OBL-001 §V.7).
+
+    ``next_assessment_at − preview``, where ``preview`` is the bill preview
+    interval of the immutable policy version ``cycle.policy_uuid`` — the cycle's
+    own frozen terms, never the family's current row. A preview of N days places
+    the point at class-local midnight N calendar days before the boundary; a
+    preview of 0 places it at ``next_assessment_at`` itself. ``None`` for a
+    terminal cycle.
     """
-    existing = (
+    if cycle.next_assessment_at is None:
+        return None
+    preview_days = 0
+    if cycle.policy_uuid:
+        from app.services.policy_reference_service import (
+            PolicyReferenceNotFound,
+            get_bill_preview_days,
+        )
+        try:
+            preview_days = get_bill_preview_days(cycle.policy_uuid, class_id=cycle.class_id)
+        except PolicyReferenceNotFound:
+            preview_days = 0
+    if preview_days <= 0:
+        return cycle.next_assessment_at
+    ctx = _class_ctx(cycle.class_id)
+    boundary_day = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=ctx,
+        primitive="current_evaluation_day",
+        reference_time_utc=ensure_utc(cycle.next_assessment_at),
+    ).evaluation_date
+    return canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=ctx,
+        primitive="evaluation_day_boundaries",
+        evaluation_date=boundary_day - timedelta(days=preview_days),
+    ).boundary_start_utc
+
+
+def get_succession_eligibility(
+    class_id: str,
+    internal_ref: str,
+    *,
+    reference_time_utc: datetime | None = None,
+) -> tuple[SuccessionEligibility, BillCycle | None]:
+    """Whether a lineage may lawfully be succeeded at the reference time.
+
+    The single authoritative answer, used by ``schedule_next_bill_cycle`` itself
+    and by any caller that needs to know before asking (INV-ARC-009 §V: callers
+    do not reconstruct domain eligibility). Succession is due once the latest
+    cycle's assessment point (:func:`get_assessment_point`) has arrived, evaluated
+    through the canonical temporal resolver (INV-ARC-015 §VII). Returns the latest
+    cycle read, so the caller derives from the same state it evaluated.
+    """
+    latest = (
         db.session.query(BillCycle)
-        .filter_by(internal_ref=internal_ref, cycle_number=cycle_number)
+        .filter_by(class_id=class_id, internal_ref=internal_ref)
+        .order_by(BillCycle.cycle_number.desc())
         .first()
     )
-    return existing is not None
+    if latest is None:
+        return SuccessionEligibility.EMPTY, None
+    if latest.next_assessment_at is None:
+        return SuccessionEligibility.TERMINAL, latest
+    reference = _reference_now(class_id, reference_time_utc)
+    not_yet = _is_later(class_id, get_assessment_point(latest), reference)
+    return (SuccessionEligibility.NOT_DUE if not_yet else SuccessionEligibility.DUE), latest
+
+
+def get_termination_instant(class_id: str, internal_ref: str) -> datetime | None:
+    """The lineage's termination instant (§V.7), or ``None`` if not terminated."""
+    terminal = (
+        db.session.query(BillCycle)
+        .filter(
+            BillCycle.class_id == class_id,
+            BillCycle.internal_ref == internal_ref,
+            BillCycle.next_assessment_at.is_(None),
+        )
+        .order_by(BillCycle.cycle_number.desc())
+        .first()
+    )
+    return terminal.cycle_boundary_at if terminal is not None else None
+
+
+def get_current_bill_cycle(
+    class_id: str,
+    internal_ref: str,
+    *,
+    reference_time_utc: datetime | None = None,
+) -> BillCycle | None:
+    """The cycle whose period contains the reference time (DOM-OBL-001 §V.7).
+
+    ``cycle_boundary_at ≤ T < next_assessment_at``, among non-terminal cycles,
+    and only if the lineage has no termination instant at or before T. The
+    latest cycle is NOT a proxy for this: under advance assessment the latest is
+    routinely an upcoming cycle whose period has not begun. A scheduled cycle
+    that begins at or after the termination instant never becomes current.
+    """
+    reference = _reference_now(class_id, reference_time_utc)
+    instant = get_termination_instant(class_id, internal_ref)
+    if instant is not None and not _is_later(class_id, instant, reference):
+        return None
+    cycles = (
+        db.session.query(BillCycle)
+        .filter(
+            BillCycle.class_id == class_id,
+            BillCycle.internal_ref == internal_ref,
+            BillCycle.next_assessment_at.isnot(None),
+        )
+        .order_by(BillCycle.cycle_number.asc())
+        .all()
+    )
+    for cycle in cycles:
+        contains = canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=_class_ctx(class_id),
+            primitive="between_boundaries",
+            reference_time_utc=reference,
+            candidate=reference,
+            start_boundary=cycle.cycle_boundary_at,
+            end_boundary=cycle.next_assessment_at,
+        ).is_between
+        if contains:
+            return cycle
+    return None
+
+
+def are_required_obligations_satisfied(
+    class_id: str,
+    internal_ref: str,
+    *,
+    reference_time_utc: datetime | None = None,
+) -> bool:
+    """Whether every required obligation of a bill-cycle lineage is satisfied (§VIII).
+
+    Required = every assessment bound to one of the lineage's cycles whose due
+    boundary has arrived at the reference time, evaluated against facts recorded
+    at or before that time. Not-yet-due (including advance-assessed) and
+    WITHDRAWN assessments are not required. Product-blind; consumers MUST NOT
+    reconstruct this from obligation tables.
+    """
+    reference = _reference_now(class_id, reference_time_utc)
+    cycle_ids = [
+        row.id
+        for row in db.session.query(BillCycle.id).filter_by(
+            class_id=class_id, internal_ref=internal_ref
+        )
+    ]
+    if not cycle_ids:
+        return True
+    assessments = (
+        db.session.query(ObligationAssessment)
+        .filter(
+            ObligationAssessment.class_id == class_id,
+            ObligationAssessment.bill_cycle_id.in_(cycle_ids),
+            ObligationAssessment.event_type == "ASSESSMENT",
+        )
+        .all()
+    )
+    for assessment in assessments:
+        state = get_obligation_state(assessment.correlation_id, as_of=reference)
+        if state is None or state.is_withdrawn or state.due_at is None:
+            continue
+        if _is_later(class_id, state.due_at, reference):
+            continue  # not due yet
+        if not state.is_satisfied:
+            return False
+    return True
+
+
+def get_seat_current_period_state(
+    class_id: str,
+    internal_ref: str,
+    seat_id: int,
+    *,
+    reference_time_utc: datetime | None = None,
+) -> ObligationState | None:
+    """One seat's obligation for the period in effect now, or ``None``.
+
+    The period is the lineage's current cycle (temporal, never merely the
+    latest). ``None`` when no period is in effect or the seat was not assessed
+    for it. Consumers ask "has this seat paid for the current period" here
+    rather than re-deriving a period from policy settings.
+    """
+    cycle = get_current_bill_cycle(class_id, internal_ref, reference_time_utc=reference_time_utc)
+    if cycle is None:
+        return None
+    assessment = (
+        db.session.query(ObligationAssessment)
+        .filter_by(
+            class_id=class_id,
+            bill_cycle_id=cycle.id,
+            seat_id=seat_id,
+            event_type="ASSESSMENT",
+        )
+        .order_by(ObligationAssessment.id.asc())
+        .first()
+    )
+    if assessment is None:
+        return None
+    return get_obligation_state(assessment.correlation_id)
+
+
+def seat_has_surviving_obligations(
+    class_id: str,
+    seat_id: int,
+    obligation_types: tuple[str, ...],
+    *,
+    reference_time_utc: datetime | None = None,
+) -> bool:
+    """Whether a seat has obligation state that still needs to be resolvable.
+
+    True when any of the seat's assessments of these types is OUTSTANDING, or is
+    bound to a period that has not yet ended (a current or committed period).
+    Disabling the creation of new obligations never makes such state
+    unreachable (DOM-OBL-001 §IX.16).
+    """
+    reference = _reference_now(class_id, reference_time_utc)
+    assessments = (
+        db.session.query(ObligationAssessment)
+        .filter(
+            ObligationAssessment.class_id == class_id,
+            ObligationAssessment.seat_id == seat_id,
+            ObligationAssessment.event_type == "ASSESSMENT",
+            ObligationAssessment.obligation_type.in_(obligation_types),
+        )
+        .all()
+    )
+    for assessment in assessments:
+        state = get_obligation_state(assessment.correlation_id)
+        if state is None or state.is_withdrawn:
+            continue
+        if state.is_outstanding:
+            return True
+        cycle = db.session.get(BillCycle, assessment.bill_cycle_id) if assessment.bill_cycle_id else None
+        if cycle is not None and cycle.next_assessment_at is not None and _is_later(
+            class_id, cycle.next_assessment_at, reference
+        ):
+            return True
+    return False
+
+
+def get_default_payment_target(class_id: str, internal_ref: str) -> ObligationState | None:
+    """The obligation a payment settles when none is selected (DOM-OBL-001 §VIII).
+
+    The oldest OUTSTANDING assessment on the obligation lineage ``internal_ref``,
+    by due boundary. Callers do not order assessments themselves.
+    """
+    assessments = (
+        db.session.query(ObligationAssessment)
+        .filter_by(class_id=class_id, internal_ref=internal_ref, event_type="ASSESSMENT")
+        .all()
+    )
+    outstanding = [
+        state
+        for state in (get_obligation_state(a.correlation_id) for a in assessments)
+        if state is not None and state.is_outstanding
+    ]
+    if not outstanding:
+        return None
+    return min(outstanding, key=lambda st: (ensure_utc(st.due_at), st.correlation_id))
+
+
+def get_obligation_command_reservation(
+    class_id: str,
+    command_name: str,
+    idempotency_key: str,
+) -> ObligationCommandReservation | None:
+    """Look up a recorded Obligations command by its identity (DOM-OBL-001 §V.7).
+
+    Replay is decided by command identity, never by whether a bill-cycle row of
+    a given shape exists.
+    """
+    return (
+        db.session.query(ObligationCommandReservation)
+        .filter_by(
+            class_id=class_id,
+            command_name=command_name,
+            idempotency_key=idempotency_key,
+        )
+        .one_or_none()
+    )
 
 
 # ---- Rent-specific read models (domain-aware projections) ----

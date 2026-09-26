@@ -1,0 +1,607 @@
+"""Route-level behavioral probes of V1 insurance. Scratch file -- never committed.
+
+Each test states its PREDICTION (from reading the code, before running).
+Where a behavior is a claimed absence, a CONTROL variant is included so the
+result is attributable to the suspected cause rather than to test setup.
+"""
+from contextlib import nullcontext
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
+
+from app.extensions import db
+from app.models import (
+    Admin, FeatureSettings, InsuranceClaim, InsurancePolicy, Student,
+    StudentInsurance, StudentTeacher, TeacherBlock, Transaction, TransactionStatus,
+)
+
+UTC = timezone.utc
+
+
+def _now():
+    return datetime.now(UTC)
+
+
+def _tb(join_code, block='A'):
+    teacher = Admin(username=f"t_{join_code}", totp_secret="secret")
+    db.session.add(teacher); db.session.flush()
+    student = Student(first_name="Pro", last_initial="B", block=block, salt=b'salt')
+    db.session.add(student); db.session.flush()
+    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id, join_code=join_code))
+    db.session.add(TeacherBlock(
+        teacher_id=teacher.id, block=block, join_code=join_code, student_id=student.id,
+        is_claimed=True, first_name='Pro', last_initial='B', last_name_hash_by_part=[],
+        dob_sum=0, salt=b'salt', first_half_hash=f'hash-{join_code}',
+    ))
+    db.session.flush()
+    return teacher, student
+
+
+def _policy(teacher_id, code, **kw):
+    d = dict(policy_code=code, teacher_id=teacher_id, title=f"Cov {code}", description='',
+             premium=Decimal('10.00'), charge_frequency='monthly', autopay=True,
+             auto_cancel_nonpay_days=3, claim_type='legacy_monetary', is_monetary=True,
+             claim_time_limit_days=30, waiting_period_days=0)
+    d.update(kw)
+    p = InsurancePolicy(**d)
+    db.session.add(p); db.session.flush()
+    return p
+
+
+def _enroll(student_id, policy, join_code, **kw):
+    d = dict(student_id=student_id, policy_id=policy.id, join_code=join_code, status='active',
+             purchase_date=_now() - timedelta(days=40), last_payment_date=_now() - timedelta(days=40),
+             next_payment_due=_now() + timedelta(days=20),
+             coverage_start_date=_now() - timedelta(days=30), payment_current=True, days_unpaid=0)
+    d.update(kw)
+    e = StudentInsurance(**d)
+    db.session.add(e); db.session.flush()
+    e.freeze_policy_snapshot(policy)
+    db.session.commit()
+    return e
+
+
+def _fund(student_id, teacher_id, join_code, amount='500.00'):
+    db.session.add(Transaction(student_id=student_id, teacher_id=teacher_id, join_code=join_code,
+                               amount=Decimal(amount), account_type='checking', type='deposit',
+                               description='funds'))
+    db.session.commit()
+
+
+def _login_student(client, student):
+    with client.session_transaction() as s:
+        s['student_id'] = student.id
+        s['login_time'] = _now().isoformat()
+        s['last_activity'] = _now().isoformat()
+
+
+def _login_admin(client, admin_id):
+    with client.session_transaction() as s:
+        s['is_admin'] = True
+        s['admin_id'] = admin_id
+        s['last_activity'] = _now().isoformat()
+
+
+# ---------------------------------------------------------------- freeze
+
+def test_R1_null_frozen_terms_leak_to_the_live_policy(app):
+    """PREDICTION: a term that was NULL ("unlimited") when the enrollment was frozen is
+    not frozen at all -- contract_* falls through to the live policy, so a later edit
+    silently constrains existing enrollments. CONTROL: a non-NULL term stays frozen."""
+    with app.app_context():
+        t, s = _tb('R1')
+        pol = _policy(t.id, 'R1', max_claims_count=None, max_claim_amount=None,
+                      max_payout_per_period=None, claim_time_limit_days=30)
+        e = _enroll(s.id, pol, 'R1')
+        assert e.frozen_max_claims_count is None
+
+        pol.max_claims_count = 1
+        pol.max_claim_amount = Decimal('5.00')
+        pol.max_payout_per_period = Decimal('10.00')
+        pol.claim_time_limit_days = 2
+        db.session.commit(); db.session.refresh(e)
+
+        assert e.contract_max_claims_count == 1                    # LEAKED
+        assert e.contract_max_claim_amount == Decimal('5.00')      # LEAKED
+        assert e.contract_max_payout_per_period == Decimal('10.00')  # LEAKED
+        assert e.contract_claim_time_limit_days == 30              # control: really frozen
+
+
+# ---------------------------------------------------------------- cancel
+
+def test_R3_student_cancel_has_no_status_guard_and_no_ledger_effect(client, app):
+    """PREDICTION: cancel accepts any status, converts 'expired'->'cancelled', rewrites
+    cancel_date on an already-cancelled row, and writes no ledger row."""
+    with nullcontext():
+        t, s = _tb('R3')
+        pol = _policy(t.id, 'R3')
+        expired = _enroll(s.id, pol, 'R3', status='expired')
+        old = _now() - timedelta(days=50)
+        cancelled = _enroll(s.id, _policy(t.id, 'R3b'), 'R3', status='cancelled', cancel_date=old)
+        before_tx = Transaction.query.count()
+        _login_student(client, s)
+
+        client.post(f'/student/insurance/cancel/{expired.id}')
+        client.post(f'/student/insurance/cancel/{cancelled.id}')
+        db.session.refresh(expired); db.session.refresh(cancelled)
+
+        assert expired.status == 'cancelled' and expired.cancel_date is not None
+        assert cancelled.cancel_date.replace(tzinfo=UTC) > old
+        assert Transaction.query.count() == before_tx
+
+
+# ---------------------------------------------------------------- claim filing gates
+
+def _post_claim(client, policy_id, **extra):
+    data = dict(incident_date=(_now() - timedelta(days=1)).strftime('%Y-%m-%d'),
+                description='probe claim', claim_amount='5.00', comments='')
+    data.update(extra)
+    return client.post(f'/student/insurance/claim/{policy_id}', data=data)
+
+
+def test_R4a_legacy_claim_ignores_waiting_period_and_lapsed_premium_on_post(client, app):
+    """PREDICTION: for legacy_monetary the 'coverage not started' and 'payments not
+    current' gates exist only as UI text + a disabled button; a direct POST files the
+    claim anyway."""
+    with nullcontext():
+        t, s = _tb('R4A')
+        pol = _policy(t.id, 'R4A', claim_type='legacy_monetary', waiting_period_days=30)
+        _enroll(s.id, pol, 'R4A', coverage_start_date=_now() + timedelta(days=20), payment_current=False)
+        _login_student(client, s)
+
+        _post_claim(client, pol.id)
+        assert InsuranceClaim.query.filter_by(student_id=s.id).count() == 1
+
+
+def test_R4b_transaction_claim_enforces_the_same_gates_server_side(client, app):
+    """CONTROL for R4a: with the identical enrollment state, a transaction_monetary
+    claim is refused because the eligibility helper runs on POST."""
+    with nullcontext():
+        t, s = _tb('R4B')
+        pol = _policy(t.id, 'R4B', claim_type='transaction_monetary', waiting_period_days=30)
+        _enroll(s.id, pol, 'R4B', coverage_start_date=_now() + timedelta(days=20), payment_current=False)
+        tx = Transaction(student_id=s.id, teacher_id=t.id, join_code='R4B', amount=Decimal('-9.00'),
+                         account_type='checking', type='purchase', description='Purchase: Pen',
+                         status=TransactionStatus.POSTED)
+        db.session.add(tx); db.session.commit()
+        _login_student(client, s)
+
+        _post_claim(client, pol.id, transaction_id=str(tx.id))
+        assert InsuranceClaim.query.filter_by(student_id=s.id).count() == 0
+
+
+def test_R4c_max_claims_count_is_not_enforced_at_filing(client, app):
+    """PREDICTION: max_claims_count only produces a UI error at filing; a direct POST
+    can file beyond it (it is enforced later, at approval, on approved/paid claims)."""
+    with nullcontext():
+        t, s = _tb('R4C')
+        pol = _policy(t.id, 'R4C', max_claims_count=1)
+        e = _enroll(s.id, pol, 'R4C')
+        _login_student(client, s)
+
+        _post_claim(client, pol.id); _post_claim(client, pol.id)
+        assert InsuranceClaim.query.filter_by(student_insurance_id=e.id).count() == 2
+
+
+# ---------------------------------------------------------------- purchase
+
+def test_R6_purchase_ignores_inactive_policy_and_disabled_feature_flag(client, app):
+    """PREDICTION: the purchase POST checks only teacher ownership -- not policy.is_active,
+    not block visibility, and not the class-level insurance flag (only the marketplace
+    GET checks the flag). CONTROL: the marketplace GET does honor the flag."""
+    with nullcontext():
+        t, s = _tb('R6')
+        db.session.add(FeatureSettings(teacher_id=t.id, block='A', insurance_enabled=False))
+        pol = _policy(t.id, 'R6', is_active=False, autopay=True)
+        db.session.commit()
+        _fund(s.id, t.id, 'R6')
+        _login_student(client, s)
+
+        page = client.get('/student/insurance')
+        assert page.status_code == 302                              # control: GET is gated
+        client.post(f'/student/insurance/purchase/{pol.id}')
+        assert StudentInsurance.query.filter_by(student_id=s.id, policy_id=pol.id).count() == 1
+        assert Transaction.query.filter_by(student_id=s.id, type='insurance_premium').count() == 1
+
+
+def test_R6b_purchase_has_no_idempotency_double_post_creates_second_enrollment_guarded_only_by_read(client, app):
+    """PREDICTION: the only duplicate guard is a read-then-write 'already enrolled'
+    check; sequential double POST is rejected, but the enrollment table carries no
+    unique constraint (checked at the schema level)."""
+    with nullcontext():
+        t, s = _tb('R6B')
+        pol = _policy(t.id, 'R6B')
+        _fund(s.id, t.id, 'R6B')
+        _login_student(client, s)
+        client.post(f'/student/insurance/purchase/{pol.id}')
+        client.post(f'/student/insurance/purchase/{pol.id}')
+        assert StudentInsurance.query.filter_by(student_id=s.id, policy_id=pol.id).count() == 1
+        uniques = [c for c in StudentInsurance.__table__.constraints
+                   if c.__class__.__name__ == 'UniqueConstraint']
+        unique_idx = [i for i in StudentInsurance.__table__.indexes if i.unique]
+        assert uniques == [] and unique_idx == []
+
+
+def test_R6c_bundle_discount_is_frozen_into_the_premium_forever(client, app):
+    """PREDICTION: the discounted premium is written to frozen_premium at purchase and
+    billing uses it, so the discount persists after the qualifying policy is cancelled."""
+    with nullcontext():
+        t, s = _tb('R6C')
+        base = _policy(t.id, 'R6Cbase', premium=Decimal('10.00'))
+        pol = _policy(t.id, 'R6C', premium=Decimal('20.00'),
+                      bundle_with_policy_ids=str(base.id), bundle_discount_amount=Decimal('5.00'))
+        _enroll(s.id, base, 'R6C')
+        _fund(s.id, t.id, 'R6C')
+        _login_student(client, s)
+
+        client.post(f'/student/insurance/purchase/{pol.id}')
+        e = StudentInsurance.query.filter_by(student_id=s.id, policy_id=pol.id).one()
+        assert e.frozen_premium == Decimal('15.00')
+
+        base_e = StudentInsurance.query.filter_by(student_id=s.id, policy_id=base.id).one()
+        base_e.status = 'cancelled'; db.session.commit()
+        assert e.contract_premium == Decimal('15.00')              # discount outlives its condition
+
+
+# ---------------------------------------------------------------- repurchase
+
+def test_R5a_mass_remove_omits_cancel_date_so_cooldown_is_bypassed(client, app):
+    """PREDICTION: admin mass-remove sets status but not cancel_date, so a repurchase
+    cooldown that would otherwise apply is skipped and the student can re-buy at once."""
+    with nullcontext():
+        t, s = _tb('R5A')
+        pol = _policy(t.id, 'R5A', enable_repurchase_cooldown=True, repurchase_wait_days=30)
+        e = _enroll(s.id, pol, 'R5A')
+        _fund(s.id, t.id, 'R5A')
+        _login_admin(client, t.id)
+        client.post(f'/admin/insurance/mass-remove/{pol.id}', data={'student_ids': 'all'})
+        db.session.refresh(e)
+        assert e.status == 'cancelled' and e.cancel_date is None
+
+        _login_student(client, s)
+        client.post(f'/student/insurance/purchase/{pol.id}')
+        assert StudentInsurance.query.filter_by(student_id=s.id, policy_id=pol.id, status='active').count() == 1
+
+
+def test_R5b_student_cancel_alone_does_trigger_the_cooldown(client, app):
+    """CLEAN CONTROL: with no NULL-dated cancelled row in play, student cancel sets
+    cancel_date and the cooldown blocks the immediate repurchase."""
+    with nullcontext():
+        t, s = _tb('R5B')
+        pol = _policy(t.id, 'R5B', enable_repurchase_cooldown=True, repurchase_wait_days=30)
+        e = _enroll(s.id, pol, 'R5B')
+        _fund(s.id, t.id, 'R5B')
+        _login_student(client, s)
+        client.post(f'/student/insurance/cancel/{e.id}')
+        client.post(f'/student/insurance/purchase/{pol.id}')
+        assert StudentInsurance.query.filter_by(student_id=s.id, policy_id=pol.id, status='active').count() == 0
+
+
+def test_R5c_a_null_dated_cancelled_row_masks_a_later_cooldown(client, app):
+    """PREDICTION (from R5a's failed control): the cooldown reads the latest cancelled row
+    via ORDER BY cancel_date DESC .first(); Postgres sorts NULL first under DESC, so one
+    NULL-dated cancelled row permanently masks every later dated cancellation."""
+    with nullcontext():
+        t, s = _tb('R5C')
+        pol = _policy(t.id, 'R5C', enable_repurchase_cooldown=True, repurchase_wait_days=30)
+        _enroll(s.id, pol, 'R5C', status='cancelled', cancel_date=None)                 # e.g. from mass-remove
+        live = _enroll(s.id, pol, 'R5C')
+        _fund(s.id, t.id, 'R5C')
+        _login_student(client, s)
+        client.post(f'/student/insurance/cancel/{live.id}')                              # dated cancel
+        db.session.refresh(live)
+        assert live.cancel_date is not None
+        client.post(f'/student/insurance/purchase/{pol.id}')
+        assert StudentInsurance.query.filter_by(student_id=s.id, policy_id=pol.id, status='active').count() == 1
+
+
+# ---------------------------------------------------------------- manual pay
+
+def test_R7_manual_pay_advances_from_old_due_date_and_autopay_is_refused(client, app):
+    """PREDICTION: manual pay advances next_payment_due from the OLD due date (the job
+    advances from 'now'); autopay policies refuse manual payment outright."""
+    with nullcontext():
+        t, s = _tb('R7')
+        manual = _policy(t.id, 'R7m', autopay=False)
+        auto = _policy(t.id, 'R7a', autopay=True)
+        old_due = _now() - timedelta(days=3)
+        me = _enroll(s.id, manual, 'R7', next_payment_due=old_due, payment_current=False, days_unpaid=3)
+        ae = _enroll(s.id, auto, 'R7', next_payment_due=old_due, payment_current=False, days_unpaid=3)
+        _fund(s.id, t.id, 'R7')
+        _login_student(client, s)
+
+        client.post(f'/student/insurance/pay/{ae.id}')
+        assert Transaction.query.filter_by(student_id=s.id, type='insurance_premium').count() == 0
+
+        client.post(f'/student/insurance/pay/{me.id}')
+        db.session.refresh(me)
+        assert Transaction.query.filter_by(student_id=s.id, type='insurance_premium').count() == 1
+        assert me.payment_current is True
+        assert abs((me.next_payment_due.replace(tzinfo=UTC) - (old_due + timedelta(days=28))).total_seconds()) < 2
+
+
+def test_R7b_manual_pay_does_not_catch_up_multiple_missed_periods(client, app):
+    """PREDICTION: paying a manual policy that is 70 days late advances the due date by
+    only one period, leaving it still in the past, so it stays 'due' for the next job run."""
+    with nullcontext():
+        t, s = _tb('R7B')
+        manual = _policy(t.id, 'R7B', autopay=False)
+        old_due = _now() - timedelta(days=70)
+        e = _enroll(s.id, manual, 'R7B', next_payment_due=old_due, payment_current=False, days_unpaid=70)
+        _fund(s.id, t.id, 'R7B')
+        _login_student(client, s)
+
+        client.post(f'/student/insurance/pay/{e.id}')
+        db.session.refresh(e)
+        assert e.payment_current is True
+        assert e.next_payment_due.replace(tzinfo=UTC) < _now()      # still in the past
+
+
+# ---------------------------------------------------------------- policy delete
+
+def test_R2_delete_policy_fails_once_any_premium_transaction_references_it(client, app):
+    """PREDICTION: transaction.policy_id is a plain FK (no ON DELETE), so the per-policy
+    delete route cannot delete a policy that ever billed a premium -- it errors and the
+    whole delete rolls back. CONTROL: a policy with no premium transaction deletes fine."""
+    with nullcontext():
+        t, s = _tb('R2')
+        clean = _policy(t.id, 'R2clean')
+        billed = _policy(t.id, 'R2billed')
+        _enroll(s.id, billed, 'R2')
+        db.session.add(Transaction(student_id=s.id, teacher_id=t.id, join_code='R2', amount=Decimal('-10.00'),
+                                   account_type='checking', type='insurance_premium',
+                                   description='Insurance premium: x', policy_id=billed.id))
+        db.session.commit()
+        clean_id, billed_id = clean.id, billed.id
+        _login_admin(client, t.id)
+
+        client.post(f'/admin/insurance/delete/{clean_id}', data={'force_delete': 'true'})
+        assert db.session.get(InsurancePolicy, clean_id) is None          # control
+
+        client.post(f'/admin/insurance/delete/{billed_id}', data={'force_delete': 'true'})
+        db.session.expire_all()
+        assert db.session.get(InsurancePolicy, billed_id) is not None
+        assert StudentInsurance.query.filter_by(policy_id=billed_id, status='active').count() == 1
+
+
+# ---------------------------------------------------------------- void
+
+def test_R8_void_premium_with_bundle_suffix_does_not_flag_the_enrollment(client, app):
+    """PREDICTION: void matches the enrollment by parsing the policy title out of the
+    description, so a bundle-discount suffix defeats the match and nothing is flagged.
+    CONTROL: the plain description flags the enrollment unpaid."""
+    with nullcontext():
+        t, s = _tb('R8')
+        pol = _policy(t.id, 'R8', title='Coverage')
+        e = _enroll(s.id, pol, 'R8')
+        plain = Transaction(student_id=s.id, teacher_id=t.id, join_code='R8', amount=Decimal('-10.00'),
+                            account_type='checking', type='insurance_premium',
+                            description='Insurance premium: Coverage', policy_id=pol.id)
+        bundled = Transaction(student_id=s.id, teacher_id=t.id, join_code='R8', amount=Decimal('-10.00'),
+                              account_type='checking', type='insurance_premium',
+                              description='Insurance premium: Coverage (bundle discount -$5.00)', policy_id=pol.id)
+        db.session.add_all([plain, bundled]); db.session.commit()
+        _login_admin(client, t.id)
+
+        client.post(f'/admin/void-transaction/{bundled.id}', headers={'X-Requested-With': 'XMLHttpRequest'})
+        db.session.refresh(e); db.session.refresh(bundled)
+        assert bundled.is_void is True
+        assert e.payment_current is True                                   # NOT flagged
+
+        client.post(f'/admin/void-transaction/{plain.id}', headers={'X-Requested-With': 'XMLHttpRequest'})
+        db.session.refresh(e)
+        assert e.payment_current is False                                  # control
+
+
+# ---------------------------------------------------------------- claim review edge cases
+
+def _claim(e, pol, s, **kw):
+    d = dict(student_insurance_id=e.id, policy_id=pol.id, student_id=s.id, join_code=e.join_code,
+             incident_date=_now() - timedelta(days=1), filed_date=_now() - timedelta(hours=1),
+             description='c', claim_amount=Decimal('12.00'), status='pending')
+    d.update(kw)
+    c = InsuranceClaim(**d)
+    db.session.add(c); db.session.commit()
+    return c
+
+
+def _decide(client, claim_id, status, **extra):
+    data = {'status': status, 'approved_amount': '', 'rejection_reason': '', 'admin_notes': '',
+            'time_limit_override_reason': ''}
+    data.update(extra)
+    return client.post(f'/admin/insurance/claim/{claim_id}', data=data)
+
+
+def test_R9_cancellation_blocks_transaction_claims_but_not_legacy_claims(client, app):
+    """PREDICTION: after the enrollment is cancelled, a pending transaction_monetary
+    claim cannot be approved (eligibility requires an active enrollment) but a pending
+    legacy_monetary claim is still approved and paid out."""
+    with nullcontext():
+        t, s = _tb('R9')
+        tpol = _policy(t.id, 'R9t', claim_type='transaction_monetary', coverage_percent=Decimal('1.0'))
+        lpol = _policy(t.id, 'R9l', claim_type='legacy_monetary')
+        te = _enroll(s.id, tpol, 'R9'); le = _enroll(s.id, lpol, 'R9')
+        tx = Transaction(student_id=s.id, teacher_id=t.id, join_code='R9', amount=Decimal('-12.00'),
+                         account_type='checking', type='purchase', description='Purchase: Pen',
+                         status=TransactionStatus.POSTED)
+        db.session.add(tx); db.session.commit()
+        tclaim = _claim(te, tpol, s, transaction_id=tx.id)
+        lclaim = _claim(le, lpol, s)
+        te.status = 'cancelled'; le.status = 'cancelled'; db.session.commit()
+        _login_admin(client, t.id)
+
+        _decide(client, tclaim.id, 'approved'); _decide(client, lclaim.id, 'approved', approved_amount='12.00')
+        db.session.refresh(tclaim); db.session.refresh(lclaim)
+        assert tclaim.status == 'pending'
+        assert lclaim.status == 'approved'
+        assert Transaction.query.filter_by(type='insurance_reimbursement').count() == 1
+
+
+def test_R10_reapproval_cannot_double_pay_and_rejection_does_not_claw_back(client, app):
+    """PREDICTION: approve -> pending -> approve pays once (idempotency key), 'paid' and
+    'approved' are the same payout, and moving an approved claim to 'rejected' leaves the
+    reimbursement in place (no reversal)."""
+    with nullcontext():
+        t, s = _tb('R10')
+        pol = _policy(t.id, 'R10', claim_type='legacy_monetary')
+        e = _enroll(s.id, pol, 'R10')
+        c = _claim(e, pol, s)
+        _login_admin(client, t.id)
+
+        _decide(client, c.id, 'approved', approved_amount='12.00')
+        _decide(client, c.id, 'pending')
+        _decide(client, c.id, 'approved', approved_amount='12.00')
+        assert Transaction.query.filter_by(type='insurance_reimbursement').count() == 1
+
+        _decide(client, c.id, 'paid', approved_amount='12.00')
+        assert Transaction.query.filter_by(type='insurance_reimbursement').count() == 1
+
+        _decide(client, c.id, 'rejected')
+        db.session.refresh(c)
+        assert c.status == 'rejected'
+        reimb = Transaction.query.filter_by(type='insurance_reimbursement').one()
+        assert reimb.is_void is False
+        assert reimb.idempotency_key == f"txn:insurance:claim:{c.id}:reimbursement"
+
+
+# ---------------------------------------------------------------- purchase funding paths
+
+def _banking(teacher_id, **kw):
+    from app.models import BankingSettings
+    b = BankingSettings(teacher_id=teacher_id, **kw)
+    db.session.add(b); db.session.commit()
+    return b
+
+
+def test_R11a_declined_purchase_charges_an_overdraft_fee_each_attempt(client, app):
+    """PREDICTION: an unaffordable purchase creates no enrollment but, when overdraft fees
+    are enabled, charges a 'declined transaction' fee -- and charges it AGAIN on every
+    retry (no idempotency). The autopay job and manual pay never charge such a fee."""
+    with nullcontext():
+        t, s = _tb('R11A')
+        _banking(t.id, overdraft_fee_enabled=True, overdraft_fee_type='flat',
+                 overdraft_fee_flat_amount=Decimal('4.00'))
+        pol = _policy(t.id, 'R11A', premium=Decimal('50.00'))
+        _login_student(client, s)
+
+        client.post(f'/student/insurance/purchase/{pol.id}')
+        client.post(f'/student/insurance/purchase/{pol.id}')
+        assert StudentInsurance.query.filter_by(student_id=s.id).count() == 0
+        fees = Transaction.query.filter_by(student_id=s.id, type='overdraft_fee').all()
+        assert len(fees) == 2 and all(f.amount == Decimal('-4.00') for f in fees)
+
+
+def test_R11b_overdraft_protection_funds_a_purchase_from_savings_with_a_transfer_pair(client, app):
+    """PREDICTION: with protection enabled and savings >= shortfall, the purchase succeeds
+    and writes premium debit + a savings-withdrawal/checking-deposit pair sharing a
+    transfer_correlation_id."""
+    with nullcontext():
+        t, s = _tb('R11B')
+        _banking(t.id, overdraft_protection_enabled=True)
+        db.session.add(Transaction(student_id=s.id, teacher_id=t.id, join_code='R11B',
+                                   amount=Decimal('100.00'), account_type='savings', type='deposit',
+                                   description='savings'))
+        db.session.commit()
+        pol = _policy(t.id, 'R11B', premium=Decimal('10.00'))
+        _login_student(client, s)
+
+        client.post(f'/student/insurance/purchase/{pol.id}')
+        assert StudentInsurance.query.filter_by(student_id=s.id, policy_id=pol.id).count() == 1
+        pair = Transaction.query.filter(Transaction.student_id == s.id,
+                                        Transaction.transfer_correlation_id.isnot(None)).all()
+        assert sorted(p.type for p in pair) == ['Deposit', 'Withdrawal']
+        assert len({p.transfer_correlation_id for p in pair}) == 1
+
+
+def test_R12_no_repurchase_after_cancel_blocks_a_second_purchase(client, app):
+    """PREDICTION: no_repurchase_after_cancel permanently blocks re-buying once a cancelled
+    enrollment exists for that student/policy/class."""
+    with nullcontext():
+        t, s = _tb('R12')
+        pol = _policy(t.id, 'R12', no_repurchase_after_cancel=True)
+        e = _enroll(s.id, pol, 'R12')
+        _fund(s.id, t.id, 'R12')
+        _login_student(client, s)
+        client.post(f'/student/insurance/cancel/{e.id}')
+        client.post(f'/student/insurance/purchase/{pol.id}')
+        assert StudentInsurance.query.filter_by(student_id=s.id, policy_id=pol.id, status='active').count() == 0
+
+
+def test_R13_one_policy_per_tier_group_is_enforced_at_purchase(client, app):
+    """PREDICTION: a second policy in the same product_group_id is refused while the first
+    is active."""
+    with nullcontext():
+        t, s = _tb('R13')
+        a = _policy(t.id, 'R13a', product_group_id=7, tier_rank=1)
+        b = _policy(t.id, 'R13b', product_group_id=7, tier_rank=2)
+        _fund(s.id, t.id, 'R13')
+        _login_student(client, s)
+        client.post(f'/student/insurance/purchase/{a.id}')
+        client.post(f'/student/insurance/purchase/{b.id}')
+        held = {e.policy_id for e in StudentInsurance.query.filter_by(student_id=s.id, status='active')}
+        assert held == {a.id}
+
+
+# ---------------------------------------------------------------- approval gates by claim type
+
+def test_R14_hard_validation_blocks_monetary_payout_but_not_nonmonetary_approval(client, app):
+    """PREDICTION: with payment_current=False, a legacy_monetary claim cannot be approved
+    (hard errors block payout) but a non_monetary claim on the same enrollment state IS
+    approved -- for non-monetary claims every validation error is advisory."""
+    with nullcontext():
+        t, s = _tb('R14')
+        lpol = _policy(t.id, 'R14l', claim_type='legacy_monetary')
+        npol = _policy(t.id, 'R14n', claim_type='non_monetary', is_monetary=False)
+        le = _enroll(s.id, lpol, 'R14', payment_current=False)
+        ne = _enroll(s.id, npol, 'R14', payment_current=False, coverage_start_date=_now() + timedelta(days=9))
+        lclaim = _claim(le, lpol, s)
+        nclaim = _claim(ne, npol, s, claim_amount=None, claim_item='a pencil')
+        _login_admin(client, t.id)
+
+        _decide(client, lclaim.id, 'approved', approved_amount='12.00')
+        _decide(client, nclaim.id, 'approved')
+        db.session.refresh(lclaim); db.session.refresh(nclaim)
+        assert lclaim.status == 'pending'
+        assert nclaim.status == 'approved'
+        assert Transaction.query.filter_by(type='insurance_reimbursement').count() == 0
+
+
+def test_R15_payment_current_is_judged_at_review_time_not_filing_time(client, app):
+    """PREDICTION: a legacy claim filed while premiums were current is blocked if the
+    premium lapses before review, because approval re-reads enrollment.payment_current."""
+    with nullcontext():
+        t, s = _tb('R15')
+        pol = _policy(t.id, 'R15', claim_type='legacy_monetary')
+        e = _enroll(s.id, pol, 'R15', payment_current=True)
+        c = _claim(e, pol, s)                     # filed while current
+        e.payment_current = False; db.session.commit()   # lapses before review
+        _login_admin(client, t.id)
+
+        _decide(client, c.id, 'approved', approved_amount='12.00')
+        db.session.refresh(c)
+        assert c.status == 'pending'
+
+
+# ---------------------------------------------------------------- manual-pay retry semantics
+
+def test_R7c_thirty_second_guard_blocks_an_immediate_repeat_but_not_one_after_the_window(client, app):
+    """PREDICTION: an immediate second POST is refused by the 30s time-window guard; after
+    the window, if the enrollment is still 'payable' (still past due after a late payment),
+    a second POST charges another premium and advances another period."""
+    with nullcontext():
+        t, s = _tb('R7C')
+        pol = _policy(t.id, 'R7C', autopay=False)
+        e = _enroll(s.id, pol, 'R7C', next_payment_due=_now() - timedelta(days=70),
+                    payment_current=False, days_unpaid=70)
+        _fund(s.id, t.id, 'R7C')
+        _login_student(client, s)
+
+        client.post(f'/student/insurance/pay/{e.id}')
+        client.post(f'/student/insurance/pay/{e.id}')                    # immediate repeat
+        assert Transaction.query.filter_by(student_id=s.id, type='insurance_premium').count() == 1
+
+        for tx in Transaction.query.filter_by(student_id=s.id, type='insurance_premium'):
+            tx.timestamp = tx.timestamp - timedelta(seconds=120)          # age it past the guard
+        db.session.commit()
+
+        client.post(f'/student/insurance/pay/{e.id}')                    # after the window
+        assert Transaction.query.filter_by(student_id=s.id, type='insurance_premium').count() == 2

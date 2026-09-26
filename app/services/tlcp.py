@@ -43,6 +43,7 @@ DEFAULT_PUBLIC_ENDPOINTS = {
     "docs.view_doc",
     "docs.search",
     "admin.login",
+    "student.login",
     "main.district",
     "main.offline",
     "main.service_worker",
@@ -143,32 +144,64 @@ def _log_invariant_violation(message: str, *, context: CanonicalContext | None =
 
 
 def resolve_actor_context(context: CanonicalContext | None) -> dict | None:
-    """Convert canonical request context into correlation logging fields."""
+    """Convert canonical request context into correlation logging fields.
+
+    The class-context/sysadmin matrix is symmetric and both failure cells
+    fail closed (INV-ARC-019 -- "System administrators cannot possess Class
+    Context"):
+
+        Teacher/student request, context present -> expected
+        Teacher/student request, context absent  -> FAIL CLOSED + invariant violation
+        Sysadmin request, context absent         -> expected
+        Sysadmin request, context present        -> FAIL CLOSED + invariant violation
+
+    The last row is not merely hypothetical: a sysadmin session should never
+    produce a CanonicalContext at all, so if one ever reaches here it is
+    itself the violation -- a scope leak, not a legitimate actor -- and must
+    not be silently trusted as though sysadmin were class-scoped.
+    """
     if not has_request_context():
         return None
-    if context is None:
-        endpoint = request.endpoint
+
+    endpoint = request.endpoint
+    is_sysadmin_endpoint = bool(endpoint and endpoint.startswith("sysadmin."))
+
+    if context is not None:
+        if is_sysadmin_endpoint:
+            _log_invariant_violation(
+                "sysadmin request unexpectedly carries canonical class context",
+                context=context,
+            )
+            return None
+
+        seat = db.session.get(Seat, context.seat_id)
+        if not seat:
+            _log_invariant_violation("missing canonical seat", context=context)
+            return None
+    else:
         if request.endpoint in DEFAULT_NO_CONTEXT_ENDPOINTS:
             return None
         if _is_public_request(endpoint, request.path):
             return None
+        # Sysadmins are structurally forbidden from holding canonical class
+        # context -- every request to the whole sysadmin blueprint is
+        # therefore context-free by design, not a violation. This is a
+        # blueprint-wide exemption rather than a per-endpoint allowlist entry
+        # because the alternative is re-adding every new sysadmin route here
+        # forever; DEFAULT_NO_CONTEXT_ENDPOINTS stays for endpoints outside a
+        # blueprint where "no context" is a genuine per-route exception.
+        if is_sysadmin_endpoint:
+            return None
         _log_invariant_violation("missing canonical context")
         return None
 
-    seat = db.session.get(Seat, context.seat_id)
-    if not seat:
-        _log_invariant_violation("missing canonical seat", context=context)
-        return None
-
     actor_type = seat.role
-    actor_id = context.user_id
     class_id = context.class_id
     actor_public_id = seat.public_id
 
     endpoint = request.url_rule.rule if request.url_rule and request.url_rule.rule else request.path
     return {
         "actor_type": actor_type,
-        "actor_id": actor_id,
         "actor_public_id": actor_public_id,
         "class_id": class_id,
         "endpoint": endpoint,
@@ -189,10 +222,22 @@ def persist_request_trace(
     default request-scoped ``db.session``.  The caller is responsible for
     committing (or rolling back) the provided session.
     """
-    if not context or not context.get("actor_public_id"):
+    if not context or not context.get("actor_public_id") or not context.get("class_id"):
         return
 
     sess = _session if _session is not None else db.session
+    # after_request may run after this request destroyed its own class/seat.
+    # Never recreate a trace from the pre-deletion cached request context.
+    # Share-lock the seat so a concurrent seat deletion cannot miss this trace.
+    # This writer runs in its own session after the response; a seat that is
+    # locked for deletion or update is skipped rather than waited on, since a
+    # trace is supplemental diagnostics (DOM-SUP-001 §X).
+    actor_exists = sess.query(Seat.id).filter_by(
+        public_id=context["actor_public_id"], class_id=context["class_id"],
+        role=context.get("actor_type"),
+    ).with_for_update(read=True, skip_locked=True).first()
+    if actor_exists is None:
+        return
 
     trace_limit = _int_env("TLCP_TRACE_LIMIT", DEFAULT_TRACE_LIMIT)
     ttl_days = _int_env("TLCP_TRACE_TTL_DAYS", DEFAULT_TRACE_TTL_DAYS)

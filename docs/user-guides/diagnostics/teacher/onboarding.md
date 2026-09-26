@@ -1,5 +1,5 @@
 ---
-title: Onboarding and Feature Settings Troubleshooting
+title: Onboarding and Economy Features Troubleshooting
 description: Why a feature is missing or a class isn't set up the way you expect.
 category: diagnostics
 subcategory: teacher
@@ -9,7 +9,7 @@ related:
   - user-guides/diagnostics/teacher/attendance-payroll
 ---
 
-# Onboarding and Feature Settings Troubleshooting
+# Onboarding and Economy Features Troubleshooting
 
 Diagnostic guide for resolving issues with missing features and the getting started widget.
 
@@ -21,7 +21,7 @@ Diagnostic guide for resolving issues with missing features and the getting star
 
 ### Causes & Solutions
 **Cause 1: Feature disabled in settings**
-- **Check:** View the Feature Settings page for the specific class period.
+- **Check:** Open **Class Tools → Economy Features** for the specific class period.
 - **Fix:** Toggle the feature to "ON". Features can be disabled per class period; period-specific settings override global defaults.
 
 **Cause 2: Student in wrong class context**

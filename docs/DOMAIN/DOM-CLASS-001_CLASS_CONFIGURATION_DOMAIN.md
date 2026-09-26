@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-CLASS-001 | 3.2 | 2026-08-08 | 3.1 | Constitutional |
+| DOM-CLASS-001 | 3.4 | 2026-09-24 | 3.3 | Constitutional |
 
 ## I. Purpose
 
@@ -21,7 +21,7 @@ This domain also absorbs the class economy governance and class economic policy 
 This domain governs:
 
 - `classes`
-- `economic-engine`
+- `economic_engine`
 - `class_features`
 - class-level economic configuration
 - class creation and deletion workflows
@@ -64,12 +64,14 @@ Owned class-level facts include:
 This domain is the sole schema and mutation authority over:
 
 - `classes`
-- `economic-engine`
+- `economic_engine`
 - `class_features`
+- `feature_settings`
 
 `classes` establishes the canonical class boundary.
-`economic-engine` stores only the canonical class-level economic configuration facts identified by `DOM-CLASS-002`.
+`economic_engine` stores only the canonical class-level economic configuration facts identified by `DOM-CLASS-002`.
 `class_features` stores feature enablement by class.
+`feature_settings` stores per-class economy policy configuration that applies when a feature is enabled; it does not record enablement, which stays in `class_features`.
 
 ## VII. Owned Tables
 
@@ -99,7 +101,7 @@ Rules:
 - Class creation establishes the canonical class boundary and all required class-owned configuration rows.
 - Class deletion removes the class record and all class-owned configuration rows.
 
-### 2. `economic-engine`
+### 2. `economic_engine`
 
 Class-level economic setup and projection state.
 
@@ -125,7 +127,7 @@ Rules:
 
 - This domain stores class-level configuration only.
 - It owns feature enablement, class identity, and all class-level economic configuration facts.
-- It owns the `economic-engine` schema and its projection.
+- It owns the `economic_engine` schema and its projection.
 - It does not freeze any derived projection field set before the reconstruction is complete.
 - It does not own rent settings, store offerings, insurance definitions, payroll rules, or banking rules.
 - It does not mutate ledger, attendance, obligations, or entitlement tables.
@@ -138,10 +140,10 @@ Rules:
 - Other domains consume class-level configuration from this domain.
 - `timezone` governs class-level temporal interpretation.
 - FEAT orchestration may read class-level configuration, but it does not own it.
-- `economic-engine` is a projection of class-level configuration and must not become independent policy truth.
-- `economic-engine` must not be treated as an immutable legacy schema contract while reconstruction is in progress.
+- `economic_engine` is a projection of class-level configuration and must not become independent policy truth.
+- `economic_engine` must not be treated as an immutable legacy schema contract while reconstruction is in progress.
 - Class creation and class deletion are class-level mutation workflows.
-- Disabling a feature changes access and display state only; it does not rewrite downstream facts.
+- Disabling a feature changes access and display state for new use only; it does not rewrite downstream facts, and it does not remove the access needed to resolve surviving downstream state (for rent, `DOM-OBL-001` §IX.16).
 
 ## X. Amendment
 
@@ -149,3 +151,20 @@ Revisions to this document must:
 1. Increment the version number.
 2. Update the Effective Date.
 3. Maintain consistency with `INV-CORE-000`.
+
+
+## Terminal Roster Deletion
+
+A teacher deleting the final student Seat triggers class-universe destruction,
+including the administrative teacher Seat. Count all student Seats (claimed or
+unclaimed), not visible rows or only currently signed-in students. If this is
+the teacher's final class membership, destroy the teacher principal through the
+account-destruction command. Otherwise preserve sibling classes and clear
+canonical pointers to the destroyed class.
+
+Preview the complete consequence in the deletion modal. Re-evaluate ownership,
+selected seats, and whether class/account destruction follows inside the locked
+execution transaction. An outdated, narrower confirmation must be rejected.
+Unclaim retains the Seat and does not trigger this rule. Initial empty-class
+creation remains valid until roster setup; there is no empty-class or stale-class
+background inference.

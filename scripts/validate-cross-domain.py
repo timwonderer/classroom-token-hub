@@ -42,26 +42,34 @@ TABLE_DOMAIN = {
     "identity_profiles": "DOM-IDEN",
     "recovery_requests": "DOM-IDEN",
     "student_recovery_codes": "DOM-IDEN",
+    "recovery_class_challenges": "DOM-IDEN",
     "passkey_credentials": "DOM-IDEN",
+    "teacher_signup_attempts": "DOM-IDEN",
     # DOM-CLASS-001 / -003 — class directives and their version lifecycle
     "class_features": "DOM-CLASS",
     "economic_engine": "DOM-CLASS",
+    "feature_settings": "DOM-CLASS",
     "policy_versions": "DOM-CLASS",
     "policy_transitions": "DOM-CLASS",
     # DOM-PROD-001 — productivity and payroll facts
     "attendance_sessions": "DOM-PROD",
     "hall_pass_logs": "DOM-PROD",
     "payroll_event": "DOM-PROD",
+    "payroll_cycle_completion": "DOM-PROD",
     # DOM-OBL-001 — seat-scoped debt lifecycle
     "bill_cycles": "DOM-OBL",
     "assessment_events": "DOM-OBL",
     "obligation_satisfaction": "DOM-OBL",
+    "obligation_command_reservation": "DOM-OBL",
     # DOM-LED-001 — monetary truth
     "ledger_transaction": "DOM-LED",
     "ledger_balance_snapshot": "DOM-LED",
+    "ledger_command_reservation": "DOM-LED",
     # DOM-STORE-001 — entitlement grant and exercise lineage
     "entitlement_events": "DOM-STORE",
     "pending_actions": "DOM-STORE",
+    "insurance_claims": "DOM-STORE",
+    "insurance_claim_productivity_dates": "DOM-STORE",
     # DOM-OPS-001 — operational truth and audit trace
     "operational_events": "DOM-OPS",
     "audit_events": "DOM-OPS",
@@ -79,6 +87,7 @@ TABLE_DOMAIN = {
     "issue_status_history": "DOM-SUP",
     "issue_resolution_actions": "DOM-SUP",
     "ticket_correlation_pack": "DOM-SUP",
+    "actor_request_trace": "DOM-SUP",
     "announcements": "DOM-SUP",
     "issue_categories": "DOM-SUP",
     # DOM-POL-001 — append-only policy definition repository
@@ -87,8 +96,9 @@ TABLE_DOMAIN = {
     "payroll_rewards": "DOM-POL",
     "payroll_fines": "DOM-POL",
     "hall_pass_settings": "DOM-POL",
-    "store_items": "DOM-POL",
     "store_item_visibility": "DOM-POL",
+    "store_products": "DOM-POL",
+    "insurance_policies": "DOM-POL",
 }
 
 # INV-ARC-021 §V.7 enumerates these and only these as legal cross-domain
@@ -116,14 +126,6 @@ BASELINE_FOREIGN_KEYS = {
     "issue_resolution_actions.related_transaction_id -> ledger_transaction.id (DOM-SUP -> DOM-LED)",
     "ledger_transaction.lineage_event_id -> audit_events.id (DOM-LED -> DOM-OPS)",
     "payroll_event.policy_version_id -> policy_versions.id (DOM-PROD -> DOM-CLASS)",
-    # Tables with no attribution in DOM-CORE-002 §V. Ownership cannot be judged
-    # until the schema definition is amended to name their owning domain.
-    "insurance_claim_productivity_dates.claim_id -> insurance_claims.claim_id: "
-    "insurance_claim_productivity_dates has no domain attribution in DOM-CORE-002 §V",
-    "insurance_claim_productivity_dates.claim_id -> insurance_claims.claim_id: "
-    "insurance_claims has no domain attribution in DOM-CORE-002 §V",
-    "ledger_transaction.command_reservation_id -> ledger_command_reservation.id: "
-    "ledger_command_reservation has no domain attribution in DOM-CORE-002 §V",
 }
 
 

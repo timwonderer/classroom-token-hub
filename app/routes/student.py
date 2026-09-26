@@ -26,7 +26,7 @@ from dateutil.relativedelta import relativedelta
 
 from app.extensions import db, limiter
 from app.models import (
-    Transaction, TransactionStatus, AttendanceSession, StoreItem, StoreItemVisibility,
+    Transaction, TransactionStatus, AttendanceSession, StoreItemVisibility,
     # StoreItemBlock removed — store_item_blocks unauthorized; use store_item_visibility (DOM-STORE-001)
     RentSettings,
     ClassFeature, Issue, Seat, User, UserRole, PendingAction,
@@ -55,8 +55,6 @@ from app.utils.helpers import is_safe_url, format_utc_iso, render_template_with_
 from app.utils.constants import THEME_PROMPTS
 from app.utils.turnstile import verify_turnstile_token
 from app.utils.ip_handler import get_real_ip
-from app.utils.claim_credentials import compute_primary_claim_hash, match_claim_hash
-from app.utils.name_utils import hash_last_name_parts
 from app.utils.help_content import HELP_ARTICLES
 from app.utils.economy_policy import (
     get_class_feature_settings,
@@ -64,7 +62,6 @@ from app.utils.economy_policy import (
     resolve_feature_class,
     resolve_feature_class_for_class,
 )
-from app.hash_utils import hash_username_lookup
 from app.access import (
     AccessScopeDenied,
     resolve_scope,
@@ -80,10 +77,11 @@ from app.services.entitlement_read_service import (
     get_entitlement_history,
     get_active_entitlements,
     get_entitlement_status,
+    derive_display_status,
 )
 from app.services.insurance_policy_service import list_insurance_policy_versions
-from app.services.insurance_policy_service import get_insurance_entitlement_item_id
 from app.services import insurance_definition_service as insurance_defs
+from app.services import insurance_coverage_service as insurance_coverage
 from app.services.entitlement_read_service import (
     has_active_insurance_coverage,
     has_active_coverage_in_group,
@@ -94,7 +92,7 @@ from app.services.ledger_balance_query_service import (
     get_available_balances,
     get_posted_balance,
 )
-from app.services.ledger_interest_service import apply_monthly_savings_interest as post_monthly_savings_interest
+from app.services.ledger_interest_service import resolve_savings_policy
 from app.services.economic_engine import (
     savings_interest_for_payout_period,
     project_savings_balances,
@@ -104,6 +102,7 @@ from app.services.entitlement_service import (
     get_hall_pass_balance,
 )
 from app.services.entitlement_read_service import get_active_entitlements
+from app.services.store import collective_goals
 from app.services.store.builders import (
     build_store_item_card_view,
     build_entitlement_card_view,
@@ -113,14 +112,13 @@ from app.services.recovery_service import (
     dismiss_recovery_code as dismiss_recovery_code_row,
     get_pending_recovery_code_for_seat,
     get_recovery_code_for_seat,
-    set_recovery_code_verified,
 )
 from app.services.classroom_setup import create_student_user_for_seat
 from app.feats.base import requires_feat_context, FEATContext
 from app.feats.rent_payment_feat import execute_rent_payment, execute_rent_bill_payment
-from app.feats.transfer_feat import execute_account_transfer
+from app.feats.transfer_feat import InsufficientFunds, execute_account_transfer
 from app.feats.store_purchase_feat import execute_store_purchase
-from app.feats.insurance_claim_feat import submit_insurance_claim
+from app.feats.insurance_claim_feat import coverage_effective_start_utc, submit_insurance_claim
 from app.payroll import get_pay_rate_for_class
 from app.utils.join_code import get_display_join_code
 from app.utils.canonical_temporal_resolver import utc_now, ensure_utc
@@ -227,14 +225,29 @@ def _list_insurance_claims(*, class_id: str, target_seat_id: int, entitlement_id
     return rows
 
 
-def _list_available_insurance_entitlements(*, target_seat_id: int, class_id: str, entitlement_item_id: int | None = None):
-    """Return active insurance entitlement events for a seat."""
-    return get_active_entitlements(
+def _list_available_insurance_entitlements(*, target_seat_id: int, class_id: str, policy_uuid: str | None = None):
+    """Return the seat's active INSURANCE entitlements, optionally for one policy.
+
+    An INSURANCE grant carries its governing policy in ``payload["policy_uuid"]``,
+    not in ``EntitlementEvent.product_id`` — that column holds a *store product
+    lineage* uuid, per its own column comment, and insurance is not sold through
+    the store catalog. Passing a policy uuid as ``product_id`` therefore matched
+    no rows at all, so this helper reported every holder of valid coverage as
+    uncovered. Every other insurance read in this module already resolves through
+    the payload (``_active_insurance_entitlement_id``, ``insurance_marketplace``,
+    and ``insurance_claim_feat._resolve_claim_policy``); this one now does too.
+    """
+    grants = get_active_entitlements(
         seat_id=target_seat_id,
         class_id=class_id,
-        product_id=entitlement_item_id,
         entitlement_type="INSURANCE",
     )
+    if policy_uuid is None:
+        return grants
+    return [
+        grant for grant in grants
+        if (grant.payload or {}).get("policy_uuid") == policy_uuid
+    ]
 from app.utils.display_name_session import (
     get_teacher_display_name_cache,
     upsert_teacher_display_name_cache,
@@ -273,6 +286,7 @@ STUDENT_FEATURE_ENDPOINTS = {
     'student.purchase_insurance': 'insurance',
     'student.cancel_insurance': 'insurance',
     'student.file_claim': 'insurance',
+    'student.pay_insurance_premium': 'insurance',
     'student.view_policy': 'insurance',
     'student.shop': 'store',
     'student.rent': 'rent',
@@ -299,6 +313,13 @@ def enforce_student_feature_gates():
         return None
 
     if not is_feature_enabled(feature_name):
+        # Disabling a feature stops new obligations; it never makes existing
+        # ones unreachable (DOM-OBL-001 §IX.16), so the pages that view and pay
+        # them stay open while any survives.
+        if feature_name == 'rent' and _has_surviving_rent_state(context):
+            return None
+        if endpoint in _SURVIVING_PREMIUM_ENDPOINTS and _has_surviving_premium_state(context):
+            return None
         abort(404)
     return None
 
@@ -343,7 +364,7 @@ def _get_total_earnings_for_seat(seat_id: int | None, *, class_id: str | None = 
     query = Transaction.query.filter(
         Transaction.seat_id == seat_id,
         Transaction.amount > 0,
-        Transaction.is_void == False,
+        Transaction.status != TransactionStatus.VOID,
         ~Transaction.description.startswith("Transfer"),
     )
     if class_id:
@@ -356,28 +377,23 @@ def _get_total_earnings_for_seat(seat_id: int | None, *, class_id: str | None = 
 
 
 
-def _get_claimed_setup_state():
-    """
-    Returns (seat, user) for the active setup or recovery flow.
-
-    During new claim: seat is the unclaimed Seat, user is None (no User created yet).
-    During recovery: seat is already bound; user is the existing User with cleared credentials.
-    """
-    seat_id = session.get('onboarding_seat_ref')
-    seat = db.session.get(Seat, seat_id) if seat_id else None
-
-    # For recovery the User exists on the seat; for new claim seat.user_id is NULL.
-    user = None
-    if seat and seat.user_id:
-        user_ref = session.get('onboarding_user_ref')
-        if user_ref:
-            user = db.session.get(User, user_ref)
-        if not user:
-            user = db.session.get(User, seat.user_id)
-
-    return seat, user
-
-
+def _get_credential_setup_state():
+    """Resolve either an unclaimed seat or a recovery principal, never both."""
+    user_ref = session.get('onboarding_user_ref')
+    seat_ref = session.get('onboarding_seat_ref')
+    if user_ref is not None:
+        if seat_ref is not None:
+            return None, None
+        user = db.session.get(User, user_ref, populate_existing=True)
+        from app.feats.identity_feat import recovery_setup_is_valid
+        if not recovery_setup_is_valid(user, session.get('recovery_setup_authorization')):
+            return None, None
+        return None, user
+    seat = db.session.get(Seat, seat_ref) if seat_ref is not None else None
+    if (not seat or seat.user_id is not None or seat.claimed_at is not None
+            or session.get('onboarding_claim_generation') != seat.claim_generation):
+        return None, None
+    return seat, None
 
 
 def _prime_seat_teacher_display_name_cache(student_user_id: int) -> None:
@@ -419,11 +435,19 @@ def get_rent_settings_for_context(context):
             return scoped_policy
     if not class_id:
         return None
-    from app.models import BillCycle
-    current_cycle = (
-        BillCycle.query.filter_by(class_id=class_id)
-        .order_by(BillCycle.cycle_number.desc(), BillCycle.id.desc())
-        .first()
+    # bill_cycles carries every obligation family, discriminated by internal_ref.
+    # Selecting the class's newest cycle row picks up insurance cycles too, and
+    # their policy_uuid names an InsurancePolicy that no rent lookup can resolve.
+    # The governing policy is the one frozen on the period in effect now; the
+    # latest cycle may be an already-billed future period (DOM-OBL-001 §V.7:
+    # the latest cycle is not necessarily current). Before the first period
+    # begins, the latest billed cycle is the one whose terms students face.
+    from app.services.obligations_service import (
+        get_current_bill_cycle,
+        get_latest_bill_cycle,
+    )
+    current_cycle = get_current_bill_cycle(class_id, f"rent:{class_id}") or get_latest_bill_cycle(
+        f"rent:{class_id}"
     )
     if not current_cycle or not current_cycle.policy_uuid:
         # Fallback: no BillCycle yet. `rent_settings` is append-only, so this
@@ -442,16 +466,6 @@ def _support_actor_public_id(class_context):
         seat_id = getattr(class_context, 'seat_id', None)
     seat = db.session.get(Seat, seat_id) if seat_id else None
     return seat.public_id if seat else None
-
-
-def _get_rent_coverage_window(settings, coverage_due_date):
-    """Return canonical [start, end) coverage window for a rent cycle."""
-    if not settings or not coverage_due_date:
-        return (None, None)
-    start = ensure_utc(coverage_due_date)
-    period_delta = _get_rent_period_delta(settings)
-    end = _add_rent_period(start, period_delta)
-    return (start, end)
 
 
 def get_feature_settings_for_student():
@@ -473,10 +487,54 @@ def get_feature_settings_for_student():
 
     scoped_features = get_class_feature_settings_for_class(class_id)
     if scoped_features:
-        return scoped_features["features"]
+        features = dict(scoped_features["features"])
+        # A Rent link is reachable only when the class has both the feature flag
+        # and the required rent configuration. Keep navigation truthful when a
+        # teacher has enabled the flag but has not configured rent yet.
+        features["rent_enabled"] = bool(
+            (features.get("rent_enabled") and get_rent_settings_for_context(context))
+            or _has_surviving_rent_state(context)
+        )
+        # An owed premium keeps Insurance reachable after it is disabled (§IX.16).
+        features["insurance_enabled"] = bool(
+            features.get("insurance_enabled") or _has_surviving_premium_state(context)
+        )
+        return features
 
     # Return system defaults
-    return ClassFeature.defaults_dict()
+    features = ClassFeature.defaults_dict()
+    features["rent_enabled"] = bool(features.get("rent_enabled") and get_rent_settings_for_context(context))
+    return features
+
+
+_SURVIVING_PREMIUM_ENDPOINTS = {
+    'student.student_insurance', 'student.view_policy', 'student.pay_insurance_premium',
+}
+
+
+def _has_surviving_premium_state(context) -> bool:
+    """Whether the seat still has an insurance premium to view or pay (§IX.16)."""
+    class_id = getattr(context, "class_id", None) if context else None
+    seat_id = getattr(context, "seat_id", None) if context else None
+    if not class_id or not seat_id:
+        return False
+    from app.services.obligations_service import seat_has_surviving_obligations
+
+    return seat_has_surviving_obligations(class_id, seat_id, ("INSURANCE_PREMIUM",))
+
+
+def _has_surviving_rent_state(context) -> bool:
+    """Whether the seat still has rent to view or pay (DOM-OBL-001 §IX.16).
+
+    Disabling rent stops new rent; it never makes existing rent unreachable.
+    """
+    class_id = getattr(context, "class_id", None) if context else None
+    seat_id = getattr(context, "seat_id", None) if context else None
+    if not class_id or not seat_id:
+        return False
+    from app.services.obligations_service import seat_has_surviving_obligations
+
+    return seat_has_surviving_obligations(class_id, seat_id, ("RENT", "LATE_FEE"))
 
 
 def is_feature_enabled(feature_name):
@@ -529,6 +587,13 @@ def claim_account():
     form = StudentClaimAccountForm()
 
     if form.validate_on_submit():
+        # Ingress gate: join_code + name is guessable/enumerable, unauthenticated,
+        # and rate-limited by nothing else on this route.
+        turnstile_token = request.form.get('cf-turnstile-response')
+        if not verify_turnstile_token(turnstile_token, get_real_ip()):
+            flash("Security verification failed. Please complete the check and try again.", "claim")
+            return redirect(url_for('student.claim_account'))
+
         display_join_code = format_join_code(form.join_code.data)
         first_name = (form.first_name.data or "").strip()
         last_name = form.last_name.data.strip()
@@ -550,27 +615,35 @@ def claim_account():
         # User creation and seat binding happen atomically at the end of the setup flow
         # (DOM-IDEN-002 §VIII, seat.user_id stays NULL until claim is fully complete).
         session['onboarding_seat_ref'] = result.seat_id
+        session['onboarding_claim_generation'] = result.claim_generation
         session.pop('onboarding_user_ref', None)
+        session.pop('recovery_setup_authorization', None)
         session.pop('generated_username', None)
         session.pop('theme_prompt', None)
         session.pop('theme_slug', None)
 
         return redirect(url_for('student.create_username'))
 
-    return render_template('student_account_claim.html', form=form)
+    return render_template(
+        'student_account_claim.html',
+        form=form,
+        turnstile_site_key=current_app.config.get("TURNSTILE_SITE_KEY"),
+    )
 
 
 @student_bp.route('/create-username', methods=['GET', 'POST'])
 def create_username():
     """PAGE 2: Create Username - Generate themed username."""
-    # Only allow if claimed
-    seat, user = _get_claimed_setup_state()
-    if not seat:
+    # Require initial-claim or recovery authorization.
+    seat, user = _get_credential_setup_state()
+    if not seat and not user:
+        if session.get('onboarding_user_ref') is not None:
+            session.pop('onboarding_user_ref', None)
+            session.pop('recovery_setup_authorization', None)
+            flash("Recovery session expired or invalid. Ask your teacher for a new code.", "setup")
+            return redirect(url_for('recovery.account_lookup'))
         flash("Please claim your account first.", "setup")
         return redirect(url_for('student.claim_account'))
-    if user and user.pin_hash is not None and (user.reset_code is None or not user.reset_code_expires_at or ensure_utc(user.reset_code_expires_at) < utc_now()):
-        flash("Invalid or already setup account.", "setup")
-        return redirect(url_for('student.login'))
     # Assign a random theme prompt if not yet in session
     if 'theme_prompt' not in session:
         selected_theme = random.choice(THEME_PROMPTS)
@@ -583,7 +656,7 @@ def create_username():
         if not validate_chosen_word(chosen_word):
             flash("Please enter a valid word (3-12 letters, no numbers or spaces).", "setup")
             return redirect(url_for('student.create_username'))
-        username = build_username(chosen_word, seat.roster_fingerprint or "")
+        username = build_username(chosen_word, (seat.roster_fingerprint or "") if seat else "")
         # Store username in session only — no DB writes until setup_pin_passphrase.
         session['generated_username'] = username
         session.pop('theme_prompt', None)
@@ -595,15 +668,17 @@ def create_username():
 @student_bp.route('/setup-pin-passphrase', methods=['GET', 'POST'])
 def setup_pin_passphrase():
     """PAGE 3: Setup PIN & Passphrase - Secure the account."""
-    # Only allow if claimed and username generated
-    seat, user = _get_claimed_setup_state()
+    # Require setup authorization and a generated username
+    seat, user = _get_credential_setup_state()
     username = session.get('generated_username')
-    if not seat or not username:
+    if (not seat and not user) or not username:
+        if session.get('onboarding_user_ref') is not None and not user:
+            session.pop('onboarding_user_ref', None)
+            session.pop('recovery_setup_authorization', None)
+            flash("Recovery session expired or invalid. Ask your teacher for a new code.", "setup")
+            return redirect(url_for('recovery.account_lookup'))
         flash("Please complete previous steps.", "setup")
         return redirect(url_for('student.claim_account'))
-    if user and user.pin_hash is not None and (user.reset_code is None or not user.reset_code_expires_at or ensure_utc(user.reset_code_expires_at) < utc_now()):
-        flash("Invalid or already setup account.", "setup")
-        return redirect(url_for('student.login'))
     from app.feats.identity_feat import activate_student_credentials
 
     form = StudentPinPassphraseForm()
@@ -616,26 +691,36 @@ def setup_pin_passphrase():
 
         # FEAT-IDEN-002: Activate credentials (handles both new claim and recovery paths).
         result = activate_student_credentials(
-            seat_id=seat.id,
+            seat_id=seat.id if seat else None,
+            claim_generation=session.get("onboarding_claim_generation") if seat else None,
+            recovery_authorization=session.get("recovery_setup_authorization") if user else None,
             user_id=user.id if user else None,
             username=username,
             pin=pin,
             passphrase=passphrase,
-            correlation_id=f"corr_iden_credentials_{seat.id}_{uuid.uuid4().hex}",
-            idempotency_key=f"feat:iden:credentials:{seat.id}:{username}",
+            correlation_id=f"corr_iden_credentials_{uuid.uuid4().hex}",
+            idempotency_key=f"feat:iden:credentials:{'user' if user else 'seat'}:{user.id if user else seat.id}:{username}",
         )
 
         if not result.success:
             flash(result.error_message, "setup")
+            if result.error_code == "INVALID_RECOVERY_STATE":
+                session.pop("onboarding_user_ref", None)
+                session.pop("recovery_setup_authorization", None)
+                return redirect(url_for("recovery.account_lookup"))
             if result.error_code == "USERNAME_TAKEN":
                 return redirect(url_for('student.create_username'))
             return redirect(url_for('student.setup_pin_passphrase'))
 
         # Clear session onboarding keys
         session.pop('onboarding_seat_ref', None)
+        session.pop('onboarding_claim_generation', None)
         session.pop('onboarding_user_ref', None)
+        session.pop('recovery_setup_authorization', None)
         session.pop('generated_username', None)
-        flash("You're all set! Log in with your new username and PIN to get started.", "success")
+        # Sign-in takes the passphrase (FEAT-IDEN-002 §Credential boundary);
+        # the PIN is for transfers, attendance, and hall passes.
+        flash("You're all set! Log in with your new username and passphrase to get started.", "success")
         return redirect(url_for('student.setup_complete'))
     return render_template('student_pin_setup.html', username=username, form=form)
 
@@ -743,18 +828,62 @@ def add_class():
             flash(result.error_message, category)
             return redirect(_get_return_target())
 
-        # Switch context to the newly claimed class.
-        # The IDENTITY FEAT owns the mutation transaction boundary.
+        # Switch context to the newly claimed class. bind_authenticated_student_to_class's
+        # own FEAT-IDEN-005 context already closed by this point -- a bare
+        # attribute set here was never inside any FEAT context and was silently
+        # discarded at request teardown (same shape as finding 53's passkey
+        # bug), so the class was claimed but never actually became active. Use
+        # the same canonical helper the dedicated /switch-class route uses,
+        # under its own FEAT context, so the write actually commits.
         new_seat = db.session.get(Seat, result.seat_id)
         if new_seat:
-            user = db.session.get(User, context.user_id)
-            user.last_active_class_id = new_seat.class_id
-            user.last_active_seat_id = new_seat.id
+            from app.auth import switch_student_session_context
+            with FEATContext(
+                "FEAT-IDEN-005",
+                idempotency_key=f"feat:iden:activate-added-class:{context.user_id}:{new_seat.class_id}",
+            ):
+                switch_student_session_context(student, class_id=new_seat.class_id, seat_id=new_seat.id)
 
         flash("You're in! This class is now your active class.", "success")
         return redirect(url_for('student.dashboard'))
 
     return render_template('student_add_class.html', form=form)
+
+
+def _resolve_entitlement_products(class_id: str) -> dict[str, StoreProduct]:
+    """Index every product version in a class by both of its identifiers.
+
+    Entitlement history is a list of dicts, not ORM rows, and a page may render
+    hundreds of them. Loading the class's products once and indexing them by
+    ``policy_uuid`` *and* ``product_lineage_uuid`` turns what would be two
+    queries per entitlement into one query per page.
+
+    Both keys are needed because the two answer different questions: the
+    version says what the student bought, the lineage says which product it
+    was. UUIDs collide across neither, so one dict can safely hold both.
+    """
+    index: dict[str, StoreProduct] = {}
+    products = (
+        StoreProduct.query.filter_by(class_id=class_id)
+        .order_by(StoreProduct.created_at.asc())
+        .all()
+    )
+    for product in products:
+        index[product.policy_uuid] = product
+        # Later rows win, so the lineage key lands on the newest version — the
+        # right fallback for events written before payloads carried a version.
+        index[product.product_lineage_uuid] = product
+    return index
+
+
+def _product_for_entitlement(
+    index: dict[str, StoreProduct], entitlement: dict
+) -> StoreProduct | None:
+    """The product version behind one entitlement-history entry."""
+    frozen_uuid = entitlement.get("policy_uuid")
+    if frozen_uuid and frozen_uuid in index:
+        return index[frozen_uuid]
+    return index.get(entitlement.get("product_id"))
 
 
 # -------------------- STUDENT DASHBOARD --------------------
@@ -797,13 +926,14 @@ def dashboard():
 
     # Canonical store purchases scoped to the active seat/class.
     entitlements = []
+    product_by_key = _resolve_entitlement_products(scope.class_id)
     for entitlement in get_entitlement_history(seat_id=scope.seat_id, class_id=scope.class_id):
-        # Insurance entitlements resolve through StoreProduct (policy_uuid), never
-        # StoreItem — skip them so a shared product_id int can never misrender an
-        # insurance grant as a general store item.
+        # Insurance entitlements are governed by InsurancePolicy, not by the
+        # store catalog. Skip them so an insurance grant is never rendered as a
+        # store item.
         if entitlement["entitlement_type"] == "INSURANCE":
             continue
-        item = db.session.get(StoreItem, entitlement["product_id"])
+        item = _product_for_entitlement(product_by_key, entitlement)
         if item is None:
             continue
         entitlements.append(SimpleNamespace(
@@ -819,8 +949,18 @@ def dashboard():
     savings_transactions = [tx for tx in transactions if tx.account_type == 'savings']
 
     checking_balance, savings_balance = get_available_balances(scope.seat_id, scope.class_id)
-    # Calculate forecast interest using Decimal
-    forecast_interest = _quantize_currency(savings_balance * Decimal('0.045') / Decimal('12'))
+    # The projection runs the payout engine over the posted balance, on the
+    # class's configured terms. A hardcoded APY here is prohibited outright
+    # (SPEC-ECON-001 §10, §11), and accrual is posted-only (§9.2).
+    savings_policy = resolve_savings_policy(scope.class_id)
+    posted_savings_balance = get_posted_balance(scope.seat_id, scope.class_id, 'savings')
+    forecast_interest = savings_interest_for_payout_period(
+        posted_balance=posted_savings_balance,
+        annual_rate=savings_policy.annual_rate,
+        calculation_type=savings_policy.calculation_type,
+        compound_frequency=savings_policy.compound_frequency,
+        payout_frequency=savings_policy.payout_frequency,
+    )
 
     attendance_state = get_class_attendance_status(student, class_id=scope.class_id, ctx=scope)
     if 'projected_pay' in attendance_state and attendance_state['projected_pay'] is not None:
@@ -861,73 +1001,6 @@ def dashboard():
     class_id = scope.class_id
     active_insurance = None
 
-    rent_status = None
-    rent_settings = get_rent_settings_for_context(context)
-    if rent_settings and student.is_rent_enabled:
-        now = utc_now()
-        timeline = _calculate_rent_timeline(rent_settings, now)
-        due_date = timeline['due_date']
-        grace_end_date = timeline['grace_end_date']
-        coverage_due_date = timeline['coverage_due_date']
-        upcoming_due_date = timeline['upcoming_due_date']
-        preview_start_date = timeline['preview_start_date']
-        rent_is_active = timeline['rent_is_active']
-        is_preview_period = timeline['is_preview_period_candidate']
-
-        # Calculate coverage period for pre-paid system
-        if is_preview_period:
-            coverage_month = upcoming_due_date.month
-            coverage_year = upcoming_due_date.year
-            grace_end_date_for_status = upcoming_due_date + timedelta(days=rent_settings.grace_period_days)
-        else:
-            coverage_month = coverage_due_date.month if coverage_due_date else upcoming_due_date.month
-            coverage_year = coverage_due_date.year if coverage_due_date else upcoming_due_date.year
-            grace_end_date_for_status = (coverage_due_date + timedelta(days=rent_settings.grace_period_days)) if coverage_due_date else grace_end_date
-
-        from app.services.obligations_service import (
-            get_assessment_events_for_seat_class,
-            get_satisfaction_events,
-        )
-        from app.services.obligation_view_model import get_total_paid_for_obligation
-
-        seat_ids = [scope.seat_id]
-
-        # Check rent for current class only (v2 canonical scoping via class_id)
-        # Per DOM-OBL-001, get all RENT ASSESSMENT events for this seat
-        all_assessments = get_assessment_events_for_seat_class(
-            scope.seat_id,
-            class_id,
-            obligation_type='RENT',
-        )
-
-        # Filter to only unsatisfied assessments (no PAYMENT or WAIVED)
-        assessments = []
-        for assessment in all_assessments:
-            satisfaction = get_satisfaction_events(assessment.correlation_id)
-            if not satisfaction:  # No PAYMENT or WAIVED = unsatisfied
-                assessments.append(assessment)
-
-        # Calculate total paid from PAYMENT events via Ledger (canonical amounts source)
-        total_paid = Decimal('0.00')
-        for assessment in assessments:
-            status = get_total_paid_for_obligation(assessment.correlation_id, class_id)
-            if status:
-                total_paid += status.total_paid
-
-        # Use v2 version which correctly computes grace period payments from canonical PAYMENT events
-        paid_by_grace = _total_paid_by_grace(assessments, grace_end_date_for_status)
-        late_fee = Decimal('0.00')
-        if rent_is_active and now > grace_end_date_for_status and paid_by_grace < rent_settings.rent_amount:
-            late_fee = rent_settings.late_fee
-        total_due = rent_settings.rent_amount + late_fee if rent_is_active else Decimal('0.00')
-        all_paid = total_paid >= total_due if rent_is_active else False
-
-        rent_status = {
-            'is_active': rent_is_active,
-            'is_paid': all_paid if rent_is_active else False,
-            'is_preview': is_preview_period
-        }
-
     dashboard_time = canonical_temporal_resolver(
         CLASS_LEVEL_EVALUATION,
         canonical_execution_context=scope,
@@ -956,7 +1029,7 @@ def dashboard():
     feature_settings = get_feature_settings_for_student()
 
     # --- Check for pending recovery request ---
-    pending_recovery_code = get_pending_recovery_code_for_seat(student.id, sle_now)
+    pending_recovery_code = get_pending_recovery_code_for_seat(student.id, sle_now, class_id=student.class_id)
 
     # --- Calculate weekly/monthly analytics ---
     from app.models import AttendanceSession as _AttSession
@@ -1037,12 +1110,12 @@ def dashboard():
     # FIX: Add null check to prevent decimal.InvalidOperation on corrupted data
     earnings_this_week = sum(
         (tx.amount for tx in transactions
-        if tx.amount is not None and tx.amount > Decimal('0') and _occurred_in_period(tx.timestamp, start=week_start, end=week_end) and not tx.is_void),
+        if tx.amount is not None and tx.amount > Decimal('0') and _occurred_in_period(tx.timestamp, start=week_start, end=week_end) and tx.status != TransactionStatus.VOID),
         Decimal('0.00')
     )
     earnings_this_month = sum(
         (tx.amount for tx in transactions
-        if tx.amount is not None and tx.amount > Decimal('0') and _occurred_in_period(tx.timestamp, start=month_start, end=now_utc) and not tx.is_void),
+        if tx.amount is not None and tx.amount > Decimal('0') and _occurred_in_period(tx.timestamp, start=month_start, end=now_utc) and tx.status != TransactionStatus.VOID),
         Decimal('0.00')
     )
 
@@ -1050,12 +1123,12 @@ def dashboard():
     # FIX: Add null check to prevent decimal.InvalidOperation on corrupted data
     spending_this_week = abs(sum(
         (tx.amount for tx in transactions
-        if tx.amount is not None and tx.amount < Decimal('0') and _occurred_in_period(tx.timestamp, start=week_start, end=week_end) and not tx.is_void),
+        if tx.amount is not None and tx.amount < Decimal('0') and _occurred_in_period(tx.timestamp, start=week_start, end=week_end) and tx.status != TransactionStatus.VOID),
         Decimal('0.00')
     ))
     spending_this_month = abs(sum(
         (tx.amount for tx in transactions
-        if tx.amount is not None and tx.amount < Decimal('0') and _occurred_in_period(tx.timestamp, start=month_start, end=now_utc) and not tx.is_void),
+        if tx.amount is not None and tx.amount < Decimal('0') and _occurred_in_period(tx.timestamp, start=month_start, end=now_utc) and tx.status != TransactionStatus.VOID),
         Decimal('0.00')
     ))
 
@@ -1083,9 +1156,11 @@ def dashboard():
         recent_transactions=transactions[:5],  # Most recent 5 transactions
         now=local_now,
         forecast_interest=float(forecast_interest),
+        posted_savings_balance=float(posted_savings_balance),
+        savings_annual_rate=savings_policy.annual_rate,
+        savings_payout_frequency=savings_policy.payout_frequency,
         recent_deposit=recent_deposit,
         active_insurance=active_insurance,
-        rent_status=rent_status,
         unpaid_seconds=total_unpaid_seconds,
         projected_pay=float(attendance_state.get("projected_pay") or 0),
         total_unpaid_elapsed=total_unpaid_elapsed,
@@ -1233,12 +1308,25 @@ def transfer():
             flash(message, "transfer_error")
             return redirect(url_for("student.transfer"))
 
-        passphrase = request.form.get("passphrase")
+        pin = request.form.get("pin")
         user = get_current_user()
-        if not user or not verify_password(passphrase, user.passphrase_hash or ''):
+        # User.pin_hash is nullable and recovery clears it. Without this branch,
+        # verify_password(pin, '') rejects every PIN such a student can type and
+        # the only feedback is "Incorrect PIN" — transfers become permanently
+        # unavailable with nothing pointing at the cause.
+        if user and not user.pin_hash:
+            message = (
+                "Your PIN has not been set yet. Set one from your account page, "
+                "then try the transfer again."
+            )
             if is_json:
-                return jsonify(status="error", message="Incorrect passphrase"), 400
-            flash("Incorrect passphrase. Transfer canceled.", "transfer_error")
+                return jsonify(status="error", message=message), 400
+            flash(message, "transfer_error")
+            return redirect(url_for("student.transfer"))
+        if not user or not verify_password(pin, user.pin_hash or ''):
+            if is_json:
+                return jsonify(status="error", message="Incorrect PIN"), 400
+            flash("Incorrect PIN. Transfer canceled.", "transfer_error")
             return redirect(url_for("student.transfer"))
 
         from_account = request.form.get('from_account')
@@ -1303,6 +1391,24 @@ def transfer():
                 current_app.logger.info(
                     f"Transfer {amount} from {from_account} to {to_account} for seat {seat_id}"
                 )
+            except InsufficientFunds as e:
+                # The checks above ran before the seat row was locked, so a
+                # concurrent transfer can have spent the balance in between. The
+                # FEAT re-checks under the lock and this is that verdict.
+                #
+                # The wording is composed here from the exception's structured
+                # `from_account`, never from `str(e)`. Rendering an exception's
+                # own text into a response is the shape of a stack-trace leak
+                # even when the current message happens to be a safe constant:
+                # it makes every future edit to that exception a change to what
+                # students see. This keeps the two identical in wording to the
+                # pre-lock branches above and independent of the raise site.
+                db.session.rollback()
+                message = f"Insufficient {e.from_account} funds."
+                if is_json:
+                    return jsonify(status="error", message=message), 400
+                flash(message, "transfer_error")
+                return redirect(url_for("student.transfer"))
             except SQLAlchemyError as e:
                 db.session.rollback()
                 current_app.logger.error(
@@ -1321,19 +1427,20 @@ def transfer():
     transactions = Transaction.query.filter(
         Transaction.seat_id == context.seat_id,
         Transaction.class_id == context.class_id,
-        Transaction.is_void == False,
+        Transaction.status != TransactionStatus.VOID,
     ).order_by(Transaction.timestamp.desc()).all()
     checking_transactions = [t for t in transactions if t.account_type == 'checking']
     savings_transactions = [t for t in transactions if t.account_type == 'savings']
 
-    # Economic Engine is the sole authority for savings policy (SPEC-ECON-001).
-    # No hardcoded APY default: if the engine has not configured a rate, savings
-    # earns nothing and we must NOT advertise a fabricated rate (§11).
-    settings = get_current_economic_engine(context.class_id)
-    annual_rate = settings.interest_rate if settings and settings.interest_rate is not None else None
-    calculation_type = settings.interest_calculation_type if settings and settings.interest_calculation_type else 'simple'
-    compound_frequency = settings.compound_frequency if settings and settings.compound_frequency else 'never'
-    payout_frequency = settings.interest_payout_frequency if settings and settings.interest_payout_frequency else 'monthly'
+    # Economic Engine is the sole authority for savings policy (SPEC-ECON-001),
+    # read through the same resolver the payout command uses so a projection
+    # cannot drift from execution (§10).
+    policy = resolve_savings_policy(context.class_id)
+    settings = policy.engine
+    annual_rate = policy.annual_rate
+    calculation_type = policy.calculation_type
+    compound_frequency = policy.compound_frequency
+    payout_frequency = policy.payout_frequency
     monthly_interest_rate = (annual_rate / Decimal('12')) if annual_rate is not None else Decimal('0')
 
     # Balances shown to the student: available for spend/transfer display.
@@ -1375,6 +1482,7 @@ def transfer():
                          savings_transactions=savings_transactions,
                          checking_balance=checking_balance,
                          savings_balance=savings_balance,
+                         posted_savings_balance=posted_savings_balance,
                          forecast_interest=forecast_interest,
         scoped_total_earnings=_get_total_earnings_for_seat(student.id, class_id=context.class_id),
                          settings=settings,
@@ -1388,24 +1496,17 @@ def transfer():
                          transfer_token=transfer_token)
 
 
-def apply_savings_interest(student, annual_rate=Decimal('0.045')):
-    """Compatibility command wrapper that forwards savings-interest writes into the ledger service."""
-    context = resolve_canonical_context()
-    if not context:
-        return None
-    seat = get_current_seat()
-    if not seat:
-        return None
-    interest_tx = post_monthly_savings_interest(seat, annual_rate=annual_rate)
-    return interest_tx
-
-
 # -------------------- INSURANCE --------------------
 
 @student_bp.route('/insurance', endpoint='student_insurance')
 @login_required
 def insurance_marketplace():
     """Insurance marketplace - browse and manage policies."""
+    # Disabled insurance stays reachable while a premium is owed (DOM-OBL-001
+    # §IX.16), with nothing offered for sale.
+    insurance_for_sale = is_feature_enabled('insurance')
+    if not insurance_for_sale and not _has_surviving_premium_state(resolve_canonical_context()):
+        abort(404)
     from app.services.insurance_policy_service import normalize_insurance_type
     context = resolve_canonical_context()
     if not context:
@@ -1432,6 +1533,9 @@ def insurance_marketplace():
                 reimbursement_percentage=d.reimbursement_percentage,
                 payout_multiple=d.payout_multiple,
                 claim_window_days=d.claim_window_days,
+                # The card renders this; without it the whole marketplace page
+                # raised UndefinedError on a SimpleNamespace and returned 500.
+                waiting_period_days=d.waiting_period_days,
                 claims_per_week_equivalent=d.claims_per_week_equivalent,
                 claimable_dates_per_week_equivalent=d.claimable_dates_per_week_equivalent,
                 tier_name=d.tier_name,
@@ -1481,7 +1585,12 @@ def insurance_marketplace():
                 insurance_type=d.insurance_type,
                 premium=d.premium,
                 charge_frequency=d.charge_frequency,
+                waiting_period_days=d.waiting_period_days,
                 purchased_at=grant.timestamp,
+                # Derived from the Obligations read (DOM-STORE-001 §VIII.E.1).
+                premiums_current=insurance_coverage.are_premiums_current(
+                    class_id, grant.entitlement_id
+                ),
             )
         )
 
@@ -1519,6 +1628,7 @@ def insurance_marketplace():
         grouped_policies=grouped_policies,
         ungrouped_policies=ungrouped_policies,
         owned_coverage=owned_coverage,
+        insurance_for_sale=insurance_for_sale,
         my_claims=[_claim_display_row(claim) for claim in _list_insurance_claims(class_id=class_id, target_seat_id=seat_id)],
         now=utc_now(),
     )
@@ -1531,6 +1641,12 @@ def purchase_insurance(policy_uuid):
     context = resolve_canonical_context()
     if not context:
         flash("No class selected. Please select a class to continue.", "error")
+        return redirect(url_for('student.student_insurance'))
+
+    passphrase = request.form.get('passphrase', '')
+    user = get_current_user()
+    if not user or not user.passphrase_hash or not verify_password(passphrase, user.passphrase_hash):
+        flash("Enter your passphrase to confirm the insurance purchase.", "error")
         return redirect(url_for('student.student_insurance'))
 
     # A fresh per-request key: a double-submit is caught by POLICY_ALREADY_HELD
@@ -1578,6 +1694,16 @@ def cancel_insurance(policy_uuid):
         flash("No class selected. Please select a class to continue.", "error")
         return redirect(url_for('student.student_insurance'))
 
+    # FEAT-IDEN-002 §Credential boundary names "cancelling insurance" as a
+    # passphrase action, alongside purchasing it. The route previously took a
+    # bare confirmation, so the two halves of one decision were held to
+    # different standards.
+    passphrase = request.form.get('passphrase', '')
+    user = get_current_user()
+    if not user or not user.passphrase_hash or not verify_password(passphrase, user.passphrase_hash):
+        flash("Enter your passphrase to confirm the cancellation.", "error")
+        return redirect(url_for('student.student_insurance'))
+
     result = execute_cancel_insurance(
         canonical_context=context,
         policy_uuid=policy_uuid,
@@ -1599,6 +1725,81 @@ def cancel_insurance(policy_uuid):
     return redirect(url_for('student.student_insurance'))
 
 
+@student_bp.route('/insurance/policy/<policy_uuid>/pay-premium', methods=['POST'])
+@login_required
+def pay_insurance_premium(policy_uuid):
+    """Pay the oldest outstanding premium on the student's coverage for a policy.
+
+    FEAT-STOR-007 §V: a premium whose automatic payment failed stays outstanding
+    and the student may pay it at any later time, before or after its boundary.
+    Payment after coverage ended settles that premium only and never resurrects
+    the coverage (DOM-STORE-001 §VIII.E.1). Passphrase-confirmed (FEAT-IDEN-002).
+    """
+    context = resolve_canonical_context()
+    if not context:
+        flash("No class selected. Please select a class to continue.", "error")
+        return redirect(url_for('student.student_insurance'))
+
+    passphrase = request.form.get('passphrase', '')
+    user = get_current_user()
+    if not user or not user.passphrase_hash or not verify_password(passphrase, user.passphrase_hash):
+        flash("Enter your passphrase to confirm the payment.", "error")
+        return redirect(url_for('student.view_policy', policy_uuid=policy_uuid))
+
+    from app.feats.insurance_premium_payment_feat import execute_insurance_premium_payment
+
+    entitlement_id = _insurance_entitlement_owing_premium(context.seat_id, context.class_id, policy_uuid)
+    if entitlement_id is None:
+        flash("You have no unpaid premium on this policy.", "info")
+        return redirect(url_for('student.view_policy', policy_uuid=policy_uuid))
+
+    result = execute_insurance_premium_payment(
+        class_id=context.class_id,
+        seat_id=context.seat_id,
+        entitlement_id=entitlement_id,
+        idempotency_key=f"inspay:{uuid.uuid4().hex}",
+    )
+    if result.success:
+        flash(f"Premium of ${result.amount_paid:.2f} paid.", "success")
+    elif result.error_code == "INSUFFICIENT_FUNDS":
+        flash("You don't have enough in checking to pay this premium.", "error")
+    elif result.error_code in ("NOTHING_TO_PAY", "NOT_PAYABLE"):
+        flash("You have no unpaid premium on this policy.", "info")
+    else:
+        flash(result.error_message or "The payment could not be completed.", "error")
+    return redirect(url_for('student.view_policy', policy_uuid=policy_uuid))
+
+
+def _insurance_entitlement_owing_premium(seat_id, class_id, policy_uuid):
+    """The seat's insurance entitlement for this policy with an unpaid premium, else None.
+
+    Includes ended coverage: premium debt for periods that began before the end
+    survives it (DOM-STORE-001 §VIII.E.1). Oldest grant first.
+    """
+    from app.models import EntitlementEvent
+    from app.services import obligations_service
+    from app.services.insurance_coverage_service import premium_lineage_ref
+
+    grants = (
+        EntitlementEvent.query.filter_by(
+            class_id=class_id,
+            target_seat_id=seat_id,
+            entitlement_type="INSURANCE",
+            event_type="GRANTED",
+        )
+        .order_by(EntitlementEvent.timestamp.asc(), EntitlementEvent.event_id.asc())
+        .all()
+    )
+    for grant in grants:
+        if (grant.payload or {}).get("policy_uuid") != policy_uuid:
+            continue
+        if obligations_service.get_default_payment_target(
+            class_id, premium_lineage_ref(grant.entitlement_id)
+        ) is not None:
+            return grant.entitlement_id
+    return None
+
+
 def _active_insurance_entitlement_id(seat_id, class_id, policy_uuid):
     """Entitlement_id of the seat's ACTIVE coverage for exactly this policy, else None.
 
@@ -1616,7 +1817,15 @@ def _active_insurance_entitlement_id(seat_id, class_id, policy_uuid):
 
 
 def _eligible_claim_transactions(seat_id, class_id, limit=25):
-    """Recent money-out transactions a TRANSACTION policy might cover (FEAT validates)."""
+    """Recent money-out transactions a TRANSACTION policy might cover (FEAT validates).
+
+    Excludes a transaction that already backs a claim of any status — a source
+    transaction may back at most one claim lifecycle, ever (FEAT-STOR-003's
+    DUPLICATE_CLAIM_SUBJECT gate at submission enforces this already). Listing
+    an already-claimed transaction here just let a student pick it and be
+    refused, so this reads the same fact the submission gate checks.
+    """
+    from app.models import InsuranceClaim
     from app.services.insurance_eligibility_contract import (
         TRANSFER_TYPES, OBLIGATION_TYPES, DISALLOWED_TRANSACTION_TYPES,
     )
@@ -1629,7 +1838,16 @@ def _eligible_claim_transactions(seat_id, class_id, limit=25):
         .limit(80)
         .all()
     )
-    return [t for t in rows if (t.type or "").lower() not in excluded][:limit]
+    already_claimed_txn_ids = {
+        (claim.claim_basis or {}).get("transaction_id")
+        for claim in InsuranceClaim.query.filter_by(
+            class_id=class_id, target_seat_id=seat_id,
+        ).all()
+    }
+    return [
+        t for t in rows
+        if (t.type or "").lower() not in excluded and t.id not in already_claimed_txn_ids
+    ][:limit]
 
 
 @student_bp.route('/insurance/claim/<policy_uuid>', methods=['GET', 'POST'])
@@ -1677,6 +1895,11 @@ def file_claim(policy_uuid):
         if is_transaction_type:
             tid = form.transaction_id.data
             claim_subject["transaction_id"] = int(tid) if tid not in (None, "") else None
+            # The "Briefly describe what happened" field was rendered and
+            # submitted but never read here, so it was silently dropped --
+            # the admin review page's "Claim Description" was guaranteed blank
+            # for every TRANSACTION claim regardless of what the student typed.
+            claim_subject["description"] = (form.description.data or "").strip() or None
         else:
             # PRODUCTIVITY: one or more class-local loss-dates, each with hours and
             # the student's own explanation (evidentiary; FEAT-STOR-003 validates).
@@ -1738,9 +1961,9 @@ def file_claim(policy_uuid):
     )
 
 
-@student_bp.route('/insurance/policy/<int:enrollment_id>')
+@student_bp.route('/insurance/policy/<policy_uuid>')
 @login_required
-def view_policy(enrollment_id):
+def view_policy(policy_uuid):
     """View policy details and claims history."""
     from app.services.insurance_policy_service import normalize_insurance_type
     context = resolve_canonical_context()
@@ -1752,20 +1975,16 @@ def view_policy(enrollment_id):
         context.identity_profile.full_name
         if getattr(context, "identity_profile", None) else ""
     )
-    policy_version = db.session.get(PolicyVersion, enrollment_id)
-    if policy_version is None or policy_version.class_id != context.class_id or policy_version.domain != "insurance":
+    policy = insurance_defs.get_insurance_definition(policy_uuid, class_id=context.class_id)
+    if policy is None:
         flash("That insurance policy is not available for this class.", "error")
         return redirect(url_for('student.student_insurance'))
-    payload = json.loads(policy_version.policy_payload_json or "{}")
-    entitlement_item_id = get_insurance_entitlement_item_id(policy_version)
-    entitlement = None
-    if entitlement_item_id is not None:
-        active_entitlements = _list_available_insurance_entitlements(
-            target_seat_id=context.seat_id,
-            class_id=context.class_id,
-            entitlement_item_id=entitlement_item_id,
-        )
-        entitlement = active_entitlements[0] if active_entitlements else None
+    active_entitlements = _list_available_insurance_entitlements(
+        target_seat_id=context.seat_id,
+        class_id=context.class_id,
+        policy_uuid=policy_uuid,
+    )
+    entitlement = active_entitlements[0] if active_entitlements else None
     if entitlement is None:
         flash("You do not have an active insurance entitlement for this policy.", "warning")
     def _claim_display_row(claim):
@@ -1793,47 +2012,75 @@ def view_policy(enrollment_id):
             filed_date=claim.submitted_at,
         )
     placeholder_policy = SimpleNamespace(
-        id=policy_version.id,
-        title=payload.get("title") or f"Policy v{policy_version.version_number}",
-        description=payload.get("description", ""),
-        premium=Decimal(str(payload.get("premium", "0.00"))),
-        charge_frequency=payload.get("charge_frequency", "monthly"),
-        waiting_period_days=int(payload.get("waiting_period_days", 0) or 0),
-        max_claims_count=payload.get("max_claims_count"),
-        claim_type=normalize_insurance_type(payload.get("claim_type")),
-        autopay=bool(payload.get("autopay", False)),
-        auto_cancel_nonpay_days=int(payload.get("auto_cancel_nonpay_days", 0) or 0),
-        entitlement_item_id=entitlement_item_id,
-        payload=payload,
+        id=policy.policy_uuid,
+        title=policy.title or "Insurance policy",
+        description=policy.description or "",
+        premium=policy.premium,
+        charge_frequency=policy.charge_frequency,
+        waiting_period_days=int(policy.waiting_period_days or 0),
+        max_claims_count=policy.claims_per_week_equivalent,
+        claim_type=normalize_insurance_type(policy.insurance_type),
+        autopay=True,
+        auto_cancel_nonpay_days=policy.cancel_after_days,
+        entitlement_item_id=policy.policy_uuid,
+        payload={},
     )
+    purchase_date = None
     coverage_start_date = None
+    # Derived from the Obligations read every render (DOM-STORE-001 §VIII.E.1);
+    # never a cached payment flag (FEAT-STOR-007 §X).
+    premiums_current = False
+    next_payment_due = None
+    covered_through = None
     if entitlement is not None:
-        from app.models import ObligationAssessment
-        coverage_row = (
-            ObligationAssessment.query.filter_by(
-                class_id=context.class_id,
-                seat_id=context.seat_id,
-                policy_version_id=policy_version.id,
-            )
-            .order_by(ObligationAssessment.timestamp.desc(), ObligationAssessment.id.desc())
-            .first()
+        premiums_current = insurance_coverage.are_premiums_current(
+            context.class_id, entitlement.entitlement_id
         )
-        coverage_start_date = getattr(coverage_row, "coverage_start_time", None)
+        current_period = insurance_coverage.get_coverage_period(
+            context.class_id, entitlement.entitlement_id
+        )
+        next_payment_due = current_period.end_utc if current_period else None
+        if next_payment_due is not None:
+            # The period is [start, end): its last covered day is the day before
+            # the coverage boundary (FEAT-STOR-007 terminology).
+            covered_through = insurance_coverage.class_local_date(
+                context.class_id, next_payment_due
+            ) - timedelta(days=1)
+        purchase_date = ensure_utc(entitlement.timestamp)
+        _, coverage_start_date = coverage_effective_start_utc(
+            context,
+            purchase_date,
+            placeholder_policy.waiting_period_days,
+        )
     enrollment = SimpleNamespace(
-        id=enrollment_id,
+        id=policy_uuid,
         policy=placeholder_policy,
         contract_title=placeholder_policy.title,
         contract_description=placeholder_policy.description,
-        purchase_date=utc_now(),
+        purchase_date=purchase_date,
         coverage_start_date=coverage_start_date,
-        payment_current=entitlement is not None,
-        days_unpaid=0,
+        premiums_current=premiums_current,
         status="active" if entitlement is not None else "inactive",
-        next_payment_due=None,
-        contract_claim_time_limit_days=int(payload.get("claim_time_limit_days", 0) or 0),
-        contract_max_claim_amount=None,
-        contract_max_claims_count=None,
-        contract_max_claims_period="period",
+        next_payment_due=next_payment_due,
+        covered_through=covered_through,
+        # None when the product has no filing deadline (productivity, non-monetary).
+        contract_claim_time_limit_days=(
+            int(policy.claim_window_days) if policy.claim_window_days is not None else None
+        ),
+        # The only monetary ceiling is per coverage period: premium × payout multiple.
+        contract_period_payout_cap=(
+            policy.premium * policy.payout_multiple
+            if policy.premium is not None and policy.payout_multiple is not None else None
+        ),
+        contract_max_claims_count=(
+            policy.claimable_dates_per_week_equivalent
+            if normalize_insurance_type(policy.insurance_type) == "PRODUCTIVITY"
+            else policy.claims_per_week_equivalent
+        ),
+        contract_allowance_unit=(
+            "claimable dates"
+            if normalize_insurance_type(policy.insurance_type) == "PRODUCTIVITY" else "claims"
+        ),
     )
     return render_template(
         'student_view_policy.html',
@@ -1877,29 +2124,38 @@ def shop():
 
     now = utc_now()
     now_db = ensure_utc(now)
-    items_query = StoreItem.query.filter(
-        StoreItem.class_id == class_id,
-        StoreItem.is_active == True,
-        or_(StoreItem.auto_delist_date == None, StoreItem.auto_delist_date > now_db),
+    # Only IN_USE versions are sellable, and the partial unique index
+    # guarantees at most one per lineage — so this cannot show a student two
+    # prices for the same product. A grant-only product is not purchasable
+    # and is never offered here (SPEC-STORE-001 §IV.D, §V.A), and a future
+    # start date gates sellability at read time (§IV.C).
+    items_query = StoreProduct.query.filter(
+        StoreProduct.class_id == class_id,
+        StoreProduct.availability_state == store_service.IN_USE,
+        StoreProduct.direct_purchase_allowed.is_(True),
+        or_(
+            StoreProduct.activation_at == None,
+            StoreProduct.activation_at <= now_db,
+        ),
+        or_(
+            StoreProduct.auto_delist_date == None,
+            StoreProduct.auto_delist_date > now_db,
+        ),
     )
     items = [
-        item for item in items_query.order_by(StoreItem.name).all()
-        if store_service.is_item_visible_to_seat(item.id, seat.id)
+        item for item in items_query.order_by(StoreProduct.name).all()
+        if store_service.is_product_visible_to_seat(item.product_lineage_uuid, seat.id)
     ]
-    policy_uuid_by_item_id = {}
-    for store_product in StoreProduct.query.filter_by(class_id=class_id, is_retired=False).all():
-        product_id = (store_product.payload or {}).get("product_id")
-        if isinstance(product_id, int):
-            policy_uuid_by_item_id[product_id] = store_product.policy_uuid
 
     entitlements = []
+    product_by_key = _resolve_entitlement_products(class_id)
     for entry in get_entitlement_history(seat_id=seat.id, class_id=class_id):
-        # Insurance entitlements resolve through StoreProduct (policy_uuid), never
-        # StoreItem — skip them so a shared product_id int can never misrender an
-        # insurance grant as a general store item.
+        # Insurance entitlements are governed by InsurancePolicy, not by the
+        # store catalog. Skip them so an insurance grant is never rendered as a
+        # store item.
         if entry["entitlement_type"] == "INSURANCE":
             continue
-        item = db.session.get(StoreItem, entry["product_id"])
+        item = _product_for_entitlement(product_by_key, entry)
         if item is None:
             continue
         entitlements.append(SimpleNamespace(
@@ -1907,7 +2163,7 @@ def shop():
             seat_id=seat.id,
             class_id=class_id,
             store_item=item,
-            status=get_entitlement_status(entry["entitlement_id"], class_id),
+            status=derive_display_status(entry["entitlement_id"]),
             purchase_date=datetime.fromisoformat(entry["timestamp"]),
             expiry_date=None,
             is_from_bundle=False,
@@ -1916,120 +2172,89 @@ def shop():
     # Check if student has paid rent this month using canonical rent settings only.
     from app.models import RentSettings
     has_paid_rent = False
-    rent_item_types_by_store_id = {}
-    per_use_limit_by_store_id = {}
+    rent_item_types_by_lineage = {}
 
     # v2: scope is class_id + seat_id from canonical context (INV-ARC-019)
     if class_id and context:
         seat_id = context.seat_id
         rent_settings = get_rent_settings_for_context(context)
         if rent_settings:
-            now = utc_now()
-
-            # Calculate current coverage period (pre-paid system)
-            coverage_due_date = _calculate_rent_coverage_due_date(rent_settings, now)
-
-
-            if coverage_due_date and seat_id:
-                has_paid_rent = _is_student_coverage_period_paid(
-                    rent_settings,
-                    seat_id,
-                    class_id,
-                    coverage_due_date,
-                    include_waivers=False,
+            # Paid (not waived) for the rent period in effect now, as Obligations
+            # derives it (DOM-OBL-001 §VIII); a billed future period does not count.
+            if seat_id:
+                from app.services.obligations_service import get_seat_current_period_state
+                period_state = get_seat_current_period_state(class_id, f"rent:{class_id}", seat_id)
+                has_paid_rent = bool(
+                    period_state and period_state.is_satisfied and not period_state.is_waived
                 )
 
-            # Read store-linked rent items from canonical rent settings so
-            # mid-cycle teacher edits don't change what students see.
-            from app.services.store_service import get_frozen_store_linked_items
-            frozen_store_items = get_frozen_store_linked_items(rent_settings)
-            for frozen_item in frozen_store_items:
-                sid = frozen_item['store_item_id']
-                effective_type = frozen_item.get('rent_item_type', 'privilege')
-                # Some rows can still carry privilege as the
-                # default type while semantically behaving per-use via duration.
-                if effective_type == 'privilege' and frozen_item.get('purchase_duration') == 'per_use':
-                    effective_type = 'per_use'
-                rent_item_types_by_store_id.setdefault(sid, set()).add(effective_type)
+            # Which products this class's rent currently grants on payment.
+            # Read from the rent policy, not from the products themselves, so a
+            # mid-cycle change to the linked set cannot alter what the student
+            # is looking at right now.
+            for benefit in rent_settings.get_satisfaction_benefit_grants():
+                lineage = benefit.get("product_lineage_uuid")
+                if lineage:
+                    rent_item_types_by_lineage.setdefault(lineage, set()).add('privilege')
 
-                if effective_type == 'per_use':
-                    use_limit = frozen_item.get('use_limit')
-                    per_use_limit_by_store_id[sid] = use_limit if use_limit else -1
-
-    # Build rent-perk availability map for rent-linked per-use items.
-    rent_free_entitlement_counts = {}  # {store_item_id: available_units or -1 for unlimited}
+    # Units the student actually holds, per product. Derived by counting
+    # non-terminal PERK grants — never predicted from configuration, so the
+    # badge cannot promise a perk that was never granted.
+    rent_free_entitlement_counts = {}
     if seat:
         active_entitlements = get_active_entitlements(seat_id=seat.id, class_id=class_id)
         for entitlement in active_entitlements:
-            if entitlement.product_id:
-                rent_free_entitlement_counts[entitlement.product_id] = -1
-
-        # Backfill UI for paid-rent students who are entitled to per-use perks
-        # but are missing grant rows (edge-state). Do not override items
-        # that already have an explicit grant record (including exhausted = 0).
-        if has_paid_rent and per_use_limit_by_store_id:
-            existing_per_use_ids = {
-                entitlement.product_id
-                for entitlement in active_entitlements
-                if entitlement.product_id in per_use_limit_by_store_id
-            }
-
-            for store_item_id, granted_uses in per_use_limit_by_store_id.items():
-                if store_item_id not in existing_per_use_ids and store_item_id not in rent_free_entitlement_counts:
-                    rent_free_entitlement_counts[store_item_id] = granted_uses
+            if entitlement.product_id and entitlement.acquisition_type == "PERK":
+                rent_free_entitlement_counts[entitlement.product_id] = (
+                    rent_free_entitlement_counts.get(entitlement.product_id, 0) + 1
+                )
 
     # Calculate class size for collective goals (count unique students in this class)
-    from app.models import Seat
-    class_size = 0
-    if class_id:
-        class_size = (
-            db.session.query(db.func.count(db.func.distinct(Seat.id)))
-            .filter(
-                Seat.class_id == class_id,
-                Seat.claimed_at.isnot(None),
-                Seat.role == "student",  # Exclude teacher account from class size
-            )
-            .scalar() or 0
-        )
+    class_size = collective_goals.count_class_size(class_id) if class_id else 0
 
     # Phase 1: Build collective progress view models (eliminates template-level calculations)
     collective_progress_by_item = {}
     collective_items = [item for item in items if item.item_type == 'collective']
-    collective_item_ids = [item.id for item in collective_items]
-    if collective_item_ids and class_id:
-        progress_rows = (
-            db.session.query(
-                EntitlementEvent.product_id,
-                db.func.count(db.distinct(EntitlementEvent.target_seat_id)).label('student_count'),
-            )
-            .filter(
-                EntitlementEvent.product_id.in_(collective_item_ids),
-                EntitlementEvent.class_id == class_id,
-                EntitlementEvent.event_type == "GRANTED",
-            )
-            .group_by(EntitlementEvent.product_id)
-            .all()
+    # Progress is counted over the lineage, so a teacher who edits a collective
+    # item mid-drive does not reset the class back to zero. The count itself
+    # comes from the shared authority so this bar, the teacher's bar, and the
+    # expiry sweep cannot disagree about whether the goal was met.
+    collective_lineages = [item.product_lineage_uuid for item in collective_items]
+    if collective_lineages and class_id:
+        progress_counts = collective_goals.count_goal_participants(
+            class_id, collective_lineages
         )
-        progress_counts = {row.product_id: int(row.student_count or 0) for row in progress_rows}
 
         for item in collective_items:
-            count = progress_counts.get(item.id, 0)
-            collective_progress_by_item[item.id] = build_collective_progress_view(
+            lineage = item.product_lineage_uuid
+            collective_progress_by_item[lineage] = build_collective_progress_view(
                 item=item,
-                purchase_count=count,
+                purchase_count=progress_counts.get(lineage, 0),
                 class_size=class_size,
             )
+
+    # Remaining stock for every listed product, in one grouped query rather
+    # than one per card.
+    sold_by_lineage = store_service.units_sold_by_lineage(
+        class_id, [item.product_lineage_uuid for item in items]
+    )
 
     # Phase 1: Build store item card view models (eliminates template-level rent logic)
     store_item_views = []
     for item in items:
+        remaining = None
+        if item.inventory_total is not None:
+            remaining = max(
+                0, item.inventory_total - sold_by_lineage.get(item.product_lineage_uuid, 0)
+            )
         view = build_store_item_card_view(
             item=item,
             class_id=class_id,
             has_paid_rent=has_paid_rent,
-            rent_item_types_by_store_id=rent_item_types_by_store_id,
+            rent_item_types_by_lineage=rent_item_types_by_lineage,
             rent_free_entitlement_counts=rent_free_entitlement_counts,
             collective_progress_by_item=collective_progress_by_item,
+            stock_remaining=remaining,
         )
         store_item_views.append(view)
 
@@ -2065,155 +2290,6 @@ def shop():
 # -------------------- RENT --------------------
 
 
-def _get_rent_timezone(class_id: str):
-    """
-    Return the class-authoritative timezone used for rent schedule semantics.
-
-    Rent is a class-level evaluation and must use the class timezone
-    established on ClassEconomy. If the class cannot be resolved, fail closed.
-    """
-    if not class_id:
-        raise ValueError("Rent timezone resolution requires class_id")
-    from app.utils.canonical_temporal_resolver import (
-        CLASS_LEVEL_EVALUATION,
-        canonical_temporal_resolver,
-    )
-
-    class _TemporalContext:
-        def __init__(self, class_id: str):
-            self.class_id = class_id
-
-    evaluation = canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=_TemporalContext(class_id=class_id),
-        primitive="current_time",
-    )
-    return evaluation.canonical_now.tzinfo
-
-
-def _calculate_rent_deadlines(settings, reference_date=None):
-    """Return the due date and grace end date for the active month."""
-    class_id = getattr(settings, "class_id", None)
-    teacher_tz = _get_rent_timezone(class_id)
-    reference_utc = ensure_utc(reference_date) if reference_date else utc_now()
-    reference_local = reference_utc.astimezone(teacher_tz)
-
-    def _local_due_to_utc(
-        year: int,
-        month: int,
-        day: int,
-        hour: int = 0,
-        minute: int = 0,
-        second: int = 0,
-    ) -> datetime:
-        local_due = teacher_tz.localize(datetime(year, month, day, hour, minute, second))
-        return local_due.astimezone(timezone.utc)
-
-    # If first_rent_due_date is set and we haven't reached it yet, return it
-    if settings.first_rent_due_date:
-        first_due = ensure_utc(settings.first_rent_due_date)
-        first_due_local = first_due.astimezone(teacher_tz) if first_due else None
-        if (
-            first_due
-            and first_due.hour == 0
-            and first_due.minute == 0
-            and first_due.second == 0
-            and first_due.microsecond == 0
-        ):
-            # Preserve day-only anchors that were stored as UTC midnight.
-            first_due_local = teacher_tz.localize(datetime(first_due.year, first_due.month, first_due.day, 0, 0, 0))
-            first_due = first_due_local.astimezone(timezone.utc)
-        # If we're before the first due date, return the first due date
-        if first_due_local and reference_local < first_due_local:
-            grace_end_date = first_due + timedelta(days=settings.grace_period_days)
-            return first_due, grace_end_date
-
-        # Calculate due date based on frequency from first_rent_due_date
-        if settings.frequency_type == 'monthly':
-            # Calculate how many months have passed since first due date
-            months_diff = (reference_local.year - first_due_local.year) * 12 + (reference_local.month - first_due_local.month)
-            # Calculate the due date for the current period
-            target_year = first_due_local.year + (first_due_local.month + months_diff - 1) // 12
-            target_month = (first_due_local.month + months_diff - 1) % 12 + 1
-            last_day_of_month = monthrange(target_year, target_month)[1]
-            due_day = min(first_due_local.day, last_day_of_month)
-            due_date = _local_due_to_utc(
-                target_year,
-                target_month,
-                due_day,
-                first_due_local.hour,
-                first_due_local.minute,
-                first_due_local.second,
-            )
-        else:
-            # Calculate due date based on frequency
-            freq_delta = None
-            if settings.frequency_type == 'daily':
-                freq_delta = timedelta(days=1)
-            elif settings.frequency_type == 'weekly':
-                freq_delta = timedelta(weeks=1)
-            elif settings.frequency_type == 'custom':
-                if settings.custom_frequency_unit == 'days':
-                    freq_delta = timedelta(days=settings.custom_frequency_value)
-                elif settings.custom_frequency_unit == 'weeks':
-                    freq_delta = timedelta(weeks=settings.custom_frequency_value)
-                elif settings.custom_frequency_unit == 'months':
-                    # Custom monthly logic (Every X months)
-                    # Calculate how many months have passed since first due date
-                    months_diff = (reference_local.year - first_due_local.year) * 12 + (reference_local.month - first_due_local.month)
-
-                    # Calculate the number of full periods passed
-                    # We use integer division to find the start of the current cycle
-                    periods = months_diff // settings.custom_frequency_value
-                    total_months_add = periods * settings.custom_frequency_value
-
-                    target_year = first_due_local.year + (first_due_local.month + total_months_add - 1) // 12
-                    target_month = (first_due_local.month + total_months_add - 1) % 12 + 1
-
-                    last_day_of_month = monthrange(target_year, target_month)[1]
-                    due_day = min(first_due_local.day, last_day_of_month)
-                    due_date = _local_due_to_utc(
-                        target_year,
-                        target_month,
-                        due_day,
-                        first_due_local.hour,
-                        first_due_local.minute,
-                        first_due_local.second,
-                    )
-
-            if freq_delta:
-                # Calculate periods passed for fixed time deltas
-                time_diff = reference_date - first_due
-                periods = time_diff // freq_delta
-                due_date = first_due + (periods * freq_delta)
-
-            use_fallback = False
-            if not freq_delta and settings.frequency_type != 'custom':
-                # Fallback for unknown frequency types
-                use_fallback = True
-            elif settings.frequency_type == 'custom' and settings.custom_frequency_unit not in ['days', 'weeks', 'months']:
-                 # Fallback for unknown custom units
-                use_fallback = True
-
-            if use_fallback:
-                current_year = reference_local.year
-                current_month = reference_local.month
-                last_day_of_month = monthrange(current_year, current_month)[1]
-                due_day = min(settings.due_day_of_month, last_day_of_month)
-                due_date = _local_due_to_utc(current_year, current_month, due_day)
-
-    else:
-        # No first_rent_due_date set, use traditional monthly logic
-        current_year = reference_local.year
-        current_month = reference_local.month
-        last_day_of_month = monthrange(current_year, current_month)[1]
-        due_day = min(settings.due_day_of_month, last_day_of_month)
-        due_date = _local_due_to_utc(current_year, current_month, due_day)
-
-    grace_end_date = due_date + timedelta(days=settings.grace_period_days)
-    return due_date, grace_end_date
-
-
 def _get_rent_period_delta(settings):
     """Return a timedelta/relativedelta representing one rent period."""
     if settings.frequency_type == 'daily':
@@ -2240,518 +2316,6 @@ def _add_rent_period(dt, delta):
     return dt + delta
 
 
-def _calculate_due_dates(settings, now):
-    """Return the current and next due dates for rent-linked expiry calculations."""
-    first_due = ensure_utc(settings.first_rent_due_date)
-    if not first_due:
-        return (None, None)
-
-    delta = _get_rent_period_delta(settings)
-    if now < first_due:
-        return (first_due, _add_rent_period(first_due, delta))
-
-    current_due = first_due
-    next_due = _add_rent_period(first_due, delta)
-    while next_due and next_due <= now:
-        current_due = next_due
-        next_due = _add_rent_period(next_due, delta)
-
-    return (current_due, next_due)
-
-
-def _calculate_upcoming_rent_due_date(settings, due_date, coverage_due_date):
-    """
-    Return the next due date students can preview/pay toward.
-
-    For monthly schedules without first_rent_due_date, derive next due date using
-    _calculate_rent_deadlines to preserve due_day_of_month clamping (e.g., 31st).
-    """
-    if not coverage_due_date:
-        return due_date
-
-    if settings.frequency_type == 'monthly' and not settings.first_rent_due_date:
-        reference_date = coverage_due_date + relativedelta(months=1)
-        next_due, _ = _calculate_rent_deadlines(settings, reference_date)
-        return next_due
-
-    period_delta = _get_rent_period_delta(settings)
-    return _add_rent_period(coverage_due_date, period_delta)
-
-
-def _calculate_rent_timeline(settings, now):
-    """Compute due-date timeline and activation flags used by rent views/payments."""
-    due_date, grace_end_date = _calculate_rent_deadlines(settings, now)
-    coverage_due_date = _calculate_rent_coverage_due_date(settings, now)
-    upcoming_due_date = _calculate_upcoming_rent_due_date(settings, due_date, coverage_due_date)
-
-    preview_start_date = None
-    if settings.bill_preview_enabled and settings.bill_preview_days:
-        preview_start_date = upcoming_due_date - timedelta(days=settings.bill_preview_days)
-
-    rent_is_active = False
-    is_preview_period_candidate = False
-    if coverage_due_date and now >= coverage_due_date:
-        rent_is_active = True
-    if preview_start_date and now >= preview_start_date and now < upcoming_due_date:
-        rent_is_active = True
-        is_preview_period_candidate = True
-
-    return {
-        'due_date': due_date,
-        'grace_end_date': grace_end_date,
-        'coverage_due_date': coverage_due_date,
-        'upcoming_due_date': upcoming_due_date,
-        'preview_start_date': preview_start_date,
-        'rent_is_active': rent_is_active,
-        'is_preview_period_candidate': is_preview_period_candidate,
-    }
-
-
-def _total_paid_by_grace(assessments, grace_end_date):
-    """Sum Ledger amounts for PAYMENT events on or before grace end date — DOM-OBL-001.
-
-    Args:
-        assessments: List of ASSESSMENT events (from get_assessment_events_for_seat_class)
-        grace_end_date: Datetime boundary for on-time payments
-
-    Returns:
-        Total amount paid on time (sum of PAYMENT event ledger amounts)
-    """
-    from app.models import Transaction
-
-    if not assessments or not grace_end_date:
-        return Decimal('0.00')
-    grace_end_date = ensure_utc(grace_end_date)
-
-    total = Decimal('0.00')
-
-    for assessment in assessments:
-        if not assessment.internal_ref:
-            continue
-
-        # Get all PAYMENT events for this assessment
-        from app.services.obligations_service import get_payment_events_for_assessment
-
-        payment_events = get_payment_events_for_assessment(assessment.id, assessment.class_id)
-
-        for payment_event in payment_events:
-            # Only count payments made by grace end date
-            # (Per DOM-OBL-001 §VII.1, canonical event time is `timestamp`.)
-            if payment_event.timestamp and ensure_utc(payment_event.timestamp) <= grace_end_date:
-                if payment_event.ledger_transaction_id:
-                    txn = db.session.get(Transaction, payment_event.ledger_transaction_id)
-                    if txn and txn.type == 'credit':
-                        total += txn.amount
-
-    return total
-
-
-def _get_locked_rent_amount_for_class_cycle(class_id, coverage_due_date):
-    """Return the policy-defined rent amount for a class coverage cycle."""
-    from app.services.obligations_service import get_cycle_rent_amount
-
-    if not class_id or not coverage_due_date:
-        return None
-    return get_cycle_rent_amount(class_id, coverage_due_date.month, coverage_due_date.year)
-
-
-def _get_effective_rent_amount_for_coverage_period(
-    settings,
-    assessments,
-    coverage_due_date,
-    class_id=None,
-    locked_amount=None,
-):
-    """
-    Return the effective base rent for the coverage period.
-
-    If the class rate changed mid-cycle, lock to the first valid payer's base
-    amount for that class. As a fallback, keep a student's earlier paid
-    base amount when the setting update happened after their first payment.
-
-    Per DOM-OBL-001, uses PAYMENT events (canonical payment records) instead of
-    removed satisfaction relationship.
-    """
-    from app.services.obligations_service import get_payment_events_for_assessment
-
-    current_amount = settings.rent_amount or Decimal('0.00')
-
-    if locked_amount is None:
-        locked_amount = _get_locked_rent_amount_for_class_cycle(class_id, coverage_due_date)
-    if locked_amount is not None:
-        return locked_amount
-
-    if assessments:
-        updated_at = getattr(settings, 'updated_at', None)
-        if updated_at:
-            # Collect payment timestamps from PAYMENT events (canonical source)
-            payment_dates = []
-            for assessment in assessments:
-                payment_events = get_payment_events_for_assessment(assessment.id, class_id)
-                payment_dates.extend([p.timestamp for p in payment_events if p.timestamp])
-
-            if payment_dates:
-                earliest = min(payment_dates)
-                if ensure_utc(updated_at) > ensure_utc(earliest):
-                    # Settings changed after first payment; use current settings
-                    return current_amount
-
-    return current_amount
-
-
-def _match_valid_rent_payments(payments, candidate_txns):
-    """Match payments to non-void rent transactions using existing tolerance rules."""
-    if not payments:
-        return []
-    txns_by_amount = {}
-    for txn in candidate_txns:
-        txns_by_amount.setdefault(txn.amount, []).append(txn)
-
-    used_txn_ids = set()
-    valid_payments = []
-    for payment in payments:
-        candidates = txns_by_amount.get(-payment.amount_paid, [])
-        for txn in candidates:
-            if txn.id in used_txn_ids or txn.is_void:
-                continue
-            if not txn.timestamp or not payment.payment_date:
-                continue
-            if abs((ensure_utc(txn.timestamp) - ensure_utc(payment.payment_date)).total_seconds()) > RENT_PAYMENT_MATCH_TOLERANCE_SECONDS:
-                continue
-            used_txn_ids.add(txn.id)
-            valid_payments.append(payment)
-            break
-
-    return valid_payments
-
-
-def _build_rent_coverage_context(
-    settings,
-    *,
-    class_id,
-    seat_ids,
-    coverage_due_date,
-    include_waivers=True,
-):
-    """
-    Preload rent facts for a single class + coverage period.
-
-    Callers can pass this to _is_student_coverage_period_paid(...) to avoid
-    repeating equivalent queries for every student in the same request.
-
-    Returns canonical ``ObligationAssessment`` rows (ASSESSMENT events) grouped by seat.
-    Payment amounts are derived from PAYMENT events via the Ledger domain (per DOM-OBL-001).
-    Use get_total_paid_for_obligation() from obligation_view_model to calculate paid amounts for each assessment.
-    """
-    from app.services.obligations_service import (
-        get_assessment_events_for_seat_class,
-        get_satisfaction_events,
-    )
-
-    if not settings or not class_id or not coverage_due_date or not seat_ids:
-        return None
-
-    valid_seats = (
-        db.session.query(Seat.id)
-        .filter(Seat.class_id == class_id, Seat.id.in_(seat_ids))
-        .all()
-    )
-    valid_seat_ids = [s.id for s in valid_seats]
-    if not valid_seat_ids:
-        return None
-
-    # Get all RENT assessments for valid seats
-    waived_seat_ids = set()
-    assessments = []
-    for seat_id in valid_seat_ids:
-        seat_assessments = get_assessment_events_for_seat_class(
-            seat_id,
-            class_id,
-            obligation_type='RENT',
-        )
-        for assessment in seat_assessments:
-            satisfaction = get_satisfaction_events(assessment.correlation_id)
-            # Check if waived
-            if include_waivers:
-                for event in satisfaction:
-                    if event.event_type == 'WAIVED':
-                        waived_seat_ids.add(seat_id)
-                        break
-            # Include all assessments (satisfied or not)
-            assessments.append(assessment)
-
-    assessments_by_seat: dict[int, list] = defaultdict(list)
-    for a in assessments:
-        assessments_by_seat[a.seat_id].append(a)
-
-    return {
-        "class_id": class_id,
-        "coverage_due_date": ensure_utc(coverage_due_date),
-        "waived_seat_ids": waived_seat_ids,
-        "valid_payments_by_seat": dict(assessments_by_seat),
-        "locked_rent_amount": _get_locked_rent_amount_for_class_cycle(class_id, coverage_due_date),
-    }
-
-
-def _is_coverage_period_paid(
-    settings,
-    assessments,
-    coverage_due_date,
-    include_late_fee=True,
-    class_id=None,
-    locked_amount=None,
-):
-    """
-    Return True when a coverage period is fully paid.
-
-    Per DOM-OBL-001, ``assessments`` is a list of canonical ``ObligationAssessment``
-    rows (ASSESSMENT events). Total paid is calculated from PAYMENT events via Ledger.
-
-    When include_late_fee is True (default), late fee is required when rent
-    was not fully paid by grace. When False, this checks base-rent coverage
-    only (used by hall-pass perk restoration).
-    """
-    from app.services.obligation_view_model import get_total_paid_for_obligation
-
-    if not settings or not coverage_due_date:
-        return False
-    effective_rent_amount = _get_effective_rent_amount_for_coverage_period(
-        settings,
-        assessments,
-        coverage_due_date,
-        class_id=class_id,
-        locked_amount=locked_amount,
-    )
-    if effective_rent_amount <= Decimal('0.00'):
-        return True
-    if not assessments:
-        return False
-
-    # Calculate total paid from PAYMENT events via Ledger (canonical amounts source)
-    total_paid = Decimal('0.00')
-    for assessment in assessments:
-        status = get_total_paid_for_obligation(assessment.correlation_id, class_id)
-        if status:
-            total_paid += status.total_paid
-
-    grace_for_coverage = coverage_due_date + timedelta(days=settings.grace_period_days)
-    # Use v2 version which works with canonical PAYMENT events from Ledger
-    paid_by_grace = _total_paid_by_grace(assessments, grace_for_coverage)
-
-    required_total = effective_rent_amount
-    if include_late_fee and paid_by_grace < effective_rent_amount:
-        required_total += settings.late_fee
-
-    return total_paid >= required_total
-
-
-def _get_active_rent_waiver_v2(seat_id, class_id, coverage_due_date):
-    """Return the canonical WAIVED assessment for the given coverage period, if any."""
-    from app.services.obligations_service import (
-        get_rent_waivers_for_seat,
-        resolve_assessment_due_at,
-    )
-
-    if not seat_id or not class_id or not coverage_due_date:
-        return None
-
-    # Per DOM-OBL-001 §VII, a WAIVED event's coverage period is derived
-    # from its linked bill_cycle (not stored on the event). Match by
-    # month/year against the resolved due boundary.
-    waivers = get_rent_waivers_for_seat(seat_id, class_id)
-    for waiver in waivers:
-        waiver_due_at = resolve_assessment_due_at(waiver)
-        if waiver_due_at:
-            if (waiver_due_at.month == coverage_due_date.month and
-                waiver_due_at.year == coverage_due_date.year):
-                return waiver
-
-    return None
-
-
-def _has_active_rent_waiver_v2(seat_id, class_id, coverage_due_date):
-    """Return True when a waiver covers the given coverage period."""
-    return _get_active_rent_waiver_v2(seat_id, class_id, coverage_due_date) is not None
-
-
-def _iter_rent_waiver_coverage_dates(settings, waiver):
-    """Expand a waiver row into the individual coverage due dates it covers."""
-    if not settings or not waiver:
-        return []
-
-    delta = _get_rent_period_delta(settings)
-    dates = []
-    current = ensure_utc(getattr(waiver, "coverage_start_time", None))
-    end = ensure_utc(getattr(waiver, "coverage_end_time", None))
-
-    while current and end and current <= end:
-        dates.append(current)
-        next_date = _add_rent_period(current, delta)
-        if next_date <= current:
-            break
-        current = next_date
-
-    return dates
-
-
-def _get_rent_coverage_label(coverage_due_date):
-    if not coverage_due_date:
-        return "Unknown"
-    return (ensure_utc(coverage_due_date) + timedelta(days=1)).strftime('%b %Y')
-
-
-def _expand_rent_waiver_history(settings, waivers, *, now=None):
-    """Return one waiver-history row per covered rent period."""
-    now = ensure_utc(now or utc_now())
-    current_coverage_due_date = _calculate_rent_coverage_due_date(settings, now) if settings else None
-    entries = []
-
-    for waiver in waivers or []:
-        for coverage_due_date in _iter_rent_waiver_coverage_dates(settings, waiver):
-            coverage_day = ensure_utc(coverage_due_date).date()
-            current_day = ensure_utc(current_coverage_due_date).date() if current_coverage_due_date else None
-            seat = getattr(waiver, "seat", None)
-            student = _get_canonical_student_from_context() if seat else None
-
-            if current_day is None or coverage_day > current_day:
-                status = 'upcoming'
-                status_label = 'Upcoming'
-                cancellable = True
-            elif current_day and coverage_day == current_day:
-                status = 'current'
-                status_label = 'Current'
-                cancellable = False
-            else:
-                status = 'used'
-                status_label = 'Used'
-                cancellable = False
-
-            entries.append({
-                'waiver': waiver,
-                'student': student,
-                'coverage_due_date': coverage_due_date,
-                'coverage_label': _get_rent_coverage_label(coverage_due_date),
-                'status': status,
-                'status_label': status_label,
-                'is_cancellable': cancellable,
-                'created_at': ensure_utc(getattr(waiver, "assessed_at", None)) if getattr(waiver, "assessed_at", None) else None,
-            })
-
-    status_rank = {'current': 0, 'upcoming': 1, 'used': 2}
-    entries.sort(
-        key=lambda item: (
-            status_rank.get(item['status'], 3),
-            -(item['coverage_due_date'].timestamp() if item['coverage_due_date'] else 0),
-            -(item['created_at'].timestamp() if item['created_at'] else 0),
-        )
-    )
-    return entries
-
-
-def _is_student_coverage_period_paid(
-    settings,
-    seat_id,
-    class_id,
-    coverage_due_date,
-    include_late_fee=True,
-    include_waivers=True,
-    coverage_context=None,
-):
-    """
-    Return True when a student's specific coverage period is fully paid or waived.
-    """
-    if not settings:
-        return False
-    if not coverage_due_date or not class_id:
-        return False
-
-    context_applies = False
-    if coverage_context:
-        context_class_id = coverage_context.get("class_id")
-        context_coverage_due = ensure_utc(coverage_context.get("coverage_due_date"))
-        context_applies = (
-            context_class_id == class_id
-            and context_coverage_due == ensure_utc(coverage_due_date)
-        )
-
-    locked_amount = None
-    if context_applies:
-        locked_amount = coverage_context.get("locked_rent_amount")
-        if include_waivers and seat_id in (coverage_context.get("waived_seat_ids") or set()):
-            return True
-    else:
-        if include_waivers:
-            if _has_active_rent_waiver_v2(seat_id, class_id, coverage_due_date):
-                return True
-
-    if context_applies:
-        assessments = (coverage_context.get("valid_payments_by_seat") or {}).get(seat_id, [])
-    else:
-        from app.services.obligations_service import (
-            get_assessment_events_for_seat_class,
-            get_satisfaction_events,
-        )
-        all_assessments = get_assessment_events_for_seat_class(
-            seat_id,
-            class_id,
-            obligation_type='RENT',
-        )
-        assessments = []
-        for assessment in all_assessments:
-            satisfaction = get_satisfaction_events(assessment.correlation_id)
-            if not satisfaction:
-                assessments.append(assessment)
-    return _is_coverage_period_paid(
-        settings,
-        assessments,
-        coverage_due_date,
-        include_late_fee=include_late_fee,
-        class_id=class_id,
-        locked_amount=locked_amount,
-    )
-
-
-def _calculate_rent_coverage_due_date(settings, reference_date=None):
-    """
-    Return the most recently passed due date for coverage tracking.
-
-    If we're before the current due date, this returns the previous due date.
-    """
-    reference_date = ensure_utc(reference_date) if reference_date else utc_now()
-    if settings.first_rent_due_date:
-        first_due = ensure_utc(settings.first_rent_due_date)
-        if first_due and reference_date < first_due:
-            return None
-    current_due_date, _ = _calculate_rent_deadlines(settings, reference_date)
-    if not current_due_date:
-        return None
-
-    if reference_date >= current_due_date:
-        return current_due_date
-
-    # If we're before the current due date, compute the previous due date.
-    # For monthly settings without a first_rent_due_date, compute the prior
-    # month explicitly to preserve the configured day-of-month.
-    if settings.frequency_type == 'monthly' and not settings.first_rent_due_date:
-        teacher_tz = _get_rent_timezone(getattr(settings, "class_id", None))
-        current_due_local = ensure_utc(current_due_date).astimezone(teacher_tz)
-        prev_year = current_due_local.year
-        prev_month = current_due_local.month - 1
-        if prev_month == 0:
-            prev_month = 12
-            prev_year -= 1
-
-        _, last_day = monthrange(prev_year, prev_month)
-        due_day = settings.due_day_of_month or last_day
-        due_day = min(due_day, last_day)
-        previous_due_local = teacher_tz.localize(datetime(prev_year, prev_month, due_day, current_due_local.hour, current_due_local.minute, current_due_local.second))
-        return previous_due_local.astimezone(timezone.utc)
-
-    delta = _get_rent_period_delta(settings)
-    return current_due_date - delta
-
-
-
 @student_bp.route('/rent')
 @login_required
 def rent():
@@ -2764,8 +2328,9 @@ def rent():
     - View model contains all aggregation and derivation logic
     - Template receives only the view model, no raw queries
     """
-    # Check if rent feature is enabled
-    if not is_feature_enabled('rent'):
+    # Rent is reachable while enabled, and while the seat still has rent to
+    # view or pay after it is disabled (DOM-OBL-001 §IX.16).
+    if not is_feature_enabled('rent') and not _has_surviving_rent_state(resolve_canonical_context()):
         abort(404)
 
     # Resolve canonical context (MAP-UI-002 requirement)
@@ -2895,11 +2460,6 @@ def rent_pay(period):
         flash("Rent system is currently disabled.", "error")
         return redirect(url_for('student.dashboard'))
 
-    if not seat.is_rent_enabled:
-        current_app.logger.info("rent_pay exit: student rent disabled")
-        flash("Rent is not enabled for your account.", "error")
-        return redirect(url_for('student.dashboard'))
-
     # Resolve the seat's rent assessments (chronological order). Each rent
     # assessment anchors a BILL — the rent principal plus the late fees that arose
     # from it (linked by source_correlation_id). The student pays the bill as one
@@ -2912,10 +2472,11 @@ def rent_pay(period):
         return redirect(url_for('student.rent'))
 
     # Prefer the bill (rent correlation) posted by the pay form; validate it is
-    # one of this seat's rent obligations. Fall back to the most recent bill (the
-    # "current period" surfaced by the rent view).
+    # one of this seat's rent obligations. With no selection, pay the OLDEST bill
+    # that still has a balance (DOM-OBL-001 §VIII default payment target) — never
+    # the latest, which under advance assessment may be next period's bill while
+    # an older one is still owed. A late fee points at the rent bill it arose from.
     posted_correlation = (request.form.get('correlation_id') or '').strip()
-    target = None
     if posted_correlation:
         target = next(
             (a for a in assessments if a.correlation_id == posted_correlation),
@@ -2924,10 +2485,29 @@ def rent_pay(period):
         if target is None:
             flash("That rent bill is no longer available.", "info")
             return redirect(url_for('student.rent'))
+        correlation_id = target.correlation_id
     else:
-        target = assessments[-1]
+        from app.services.obligations_service import get_default_payment_target
 
-    correlation_id = target.correlation_id
+        candidates = [
+            state
+            for state in (
+                get_default_payment_target(class_id, f"rent:{class_id}:{seat_id}"),
+                get_default_payment_target(class_id, f"rent:{class_id}:{seat_id}:late"),
+            )
+            if state is not None
+        ]
+        if not candidates:
+            flash("You have no rent to pay right now.", "info")
+            return redirect(url_for('student.rent'))
+        oldest = min(candidates, key=lambda st: st.due_at)
+        if oldest.obligation_type == 'LATE_FEE':
+            from app.services.obligations_service import get_assessment_for_correlation
+
+            fee = get_assessment_for_correlation(oldest.correlation_id)
+            correlation_id = fee.source_correlation_id or oldest.correlation_id
+        else:
+            correlation_id = oldest.correlation_id
 
     # Command-owned idempotency: the pay form carries a per-render nonce that
     # identifies THIS payment command. It is stable across a resubmit of the same
@@ -3000,7 +2580,7 @@ def rent_pay(period):
 @limiter.limit("60 per minute")
 @requires_feat_context("FEAT-IDEN-001")
 def login():
-    """Student login with username and PIN."""
+    """Student login with username and passphrase."""
     form = StudentLoginForm()
     if form.validate_on_submit():
         is_json = request.is_json or request.headers.get("X-Requested-With") == "XMLHttpRequest"
@@ -3015,21 +2595,21 @@ def login():
             return redirect(url_for('student.login', next=request.args.get('next')))
 
         username = form.username.data.strip()
-        pin = form.pin.data.strip()
+        passphrase = form.passphrase.data.strip()
 
         user = find_canonical_user_by_auth_username(username, expected_role="student")
 
         try:
-            pin_valid = bool(user and verify_password(pin, user.pin_hash or ''))
+            passphrase_valid = bool(user and verify_password(passphrase, user.passphrase_hash or ''))
             has_claimed_seat = False
-            if pin_valid:
+            if passphrase_valid:
                 has_claimed_seat = Seat.query.filter(
                     Seat.user_id == user.id,
                     Seat.role == "student",
                     Seat.claimed_at.isnot(None),
                 ).count() > 0
 
-            if not pin_valid or not has_claimed_seat:
+            if not passphrase_valid or not has_claimed_seat:
                 if is_json:
                     return jsonify(status="error", message="Invalid credentials"), 401
                 flash("Invalid credentials", "error")
@@ -3047,7 +2627,9 @@ def login():
         # Clear old student-specific session keys without wiping the CSRF token.
         _reset_student_login_session()
         session.pop('onboarding_seat_ref', None)
+        session.pop('onboarding_claim_generation', None)
         session.pop('onboarding_user_ref', None)
+        session.pop('recovery_setup_authorization', None)
         session.pop('generated_username', None)
         clear_teacher_display_name_cache()
 
@@ -3201,8 +2783,12 @@ def select_class_context():
             )
 
         # Update canonical DB pointers so resolve_canonical_context() succeeds on next request.
-        linked_user.last_active_class_id = selected_class_id
-        linked_user.last_active_seat_id = selected_seat.id
+        from app.auth import switch_student_session_context
+        with FEATContext(
+            "FEAT-IDEN-005",
+            idempotency_key=f"feat:iden:select-class-context:{linked_user.id}:{selected_class_id}",
+        ):
+            switch_student_session_context(selected_seat, class_id=selected_class_id, seat_id=selected_seat.id)
 
         return redirect(url_for('student.dashboard'))
 
@@ -3262,7 +2848,10 @@ def switch_class(class_id):
         status="success",
         message=f"Switched to {teacher_name}'s class ({block_display})",
         teacher_name=teacher_name,
-        block=seat.class_economy.section if seat and seat.class_economy else None
+        block=seat.class_economy.section if seat and seat.class_economy else None,
+        # A page open in the old class (a policy, a bill) may not exist in the new
+        # one, so switching always lands on the new class's dashboard.
+        redirect_url=url_for('student.dashboard'),
     )
 
 
@@ -3400,7 +2989,7 @@ def report_transaction_issue(transaction_id):
     transaction = Transaction.query.filter_by(
         id=transaction_id,
         seat_id=student.id,
-        join_code=get_display_join_code(class_context.class_id)
+        class_id=class_context.class_id,
     ).first_or_404()
 
     form = TransactionIssueSubmissionForm()
@@ -3524,14 +3113,9 @@ def verify_recovery(code_id):
     student = db.session.get(Seat, context.seat_id) if context and getattr(context, "seat_id", None) else None
 
     # Get the recovery code request
-    recovery_code = get_recovery_code_for_seat(code_id, student.id)
+    recovery_code = get_recovery_code_for_seat(code_id, student.id, class_id=context.class_id) if student else None
     if recovery_code is None:
         flash("Invalid recovery request.", "error")
-        return redirect(url_for('student.dashboard'))
-
-    # Check if already verified
-    if recovery_code.code_hash:
-        flash("You have already verified this recovery request.", "info")
         return redirect(url_for('student.dashboard'))
 
     # Check if expired
@@ -3560,20 +3144,15 @@ def verify_recovery(code_id):
                                  recovery_code=recovery_code,
                                  student=student)
 
-        # Generate 6-digit recovery code using cryptographically secure randomness
-        code = ''.join([str(secrets.randbelow(10)) for _ in range(6)])
-
-        # Hash and store the code. FEAT-IDEN-002 is HIGH blast radius and requires an
-        # idempotency_key, so it cannot ride the bare @requires_feat_context route
-        # decorator (which passes no key and fails fatally on entry). Open the FEAT inline
-        # with a deterministic key.
-        verified_at = utc_now()
-        with FEATContext("FEAT-IDEN-002", idempotency_key=f"feat:iden-002:verify-recovery:{code_id}"):
-            set_recovery_code_verified(code_id, hash_hmac(code.encode(), b''), verified_at)
-            recovery_code.code_hash = "verified"
-            recovery_code.verified_at = verified_at
-
-        current_app.logger.info(f"Student {student.id} verified recovery request {recovery_code.recovery_request_id}")
+        from app.feats.teacher_recovery_feat import issue_confirmation
+        code = issue_confirmation(request_id=recovery_code.recovery_request_id,
+            code_id=code_id, class_id=context.class_id, seat_id=student.id, principal_id=user.id, passphrase=passphrase,
+            correlation_id=f"teacher-recovery-confirmation:{code_id}",
+            idempotency_key=f"teacher-recovery:issue:{code_id}")
+        if code is None:
+            flash("Recovery confirmation is no longer available.", "error")
+            return redirect(url_for('student.dashboard'))
+        recovery_code.code_hash = "generated"
 
         return render_template('student_verify_recovery.html',
                              recovery_code=recovery_code,
@@ -3596,7 +3175,7 @@ def dismiss_recovery(code_id):
     student = db.session.get(Seat, context.seat_id) if context and getattr(context, "seat_id", None) else None
 
     # Get the recovery code request
-    recovery_code = get_recovery_code_for_seat(code_id, student.id)
+    recovery_code = get_recovery_code_for_seat(code_id, student.id, class_id=context.class_id) if student else None
     if recovery_code is None:
         flash("Invalid recovery request.", "error")
         return redirect(url_for('student.dashboard'))

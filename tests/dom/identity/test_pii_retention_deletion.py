@@ -34,8 +34,6 @@ def _assert_pii_is_present(seat: Seat) -> IdentityProfile:
     profile = IdentityProfile.query.filter_by(seat_id=seat.id).one()
     assert profile.first_name, "fixture seat has no display PII to retain or delete"
     assert profile.last_name
-    assert seat.claim_first_name_hash, "fixture seat has no claim hashes"
-    assert seat.claim_last_name_hash
     return profile
 
 
@@ -65,9 +63,13 @@ def test_seat_deletion_removes_the_identity_profile_in_the_same_transaction(clie
 def test_seat_deletion_removes_the_claim_verification_hashes(client):
     """The hashes live on `seats`, so their deletion is the row's deletion."""
     classroom = initialize("chemistry_p1", db)
-    seat = classroom.students[0].seat
+    from app.hash_utils import hash_claim_name
+    from app.services.classroom_setup import create_roster_student_seat
+    with FEATContext("FEAT-IDEN-006", idempotency_key="arc018:unclaimed"):
+        seat = create_roster_student_seat(class_id=classroom.class_id, first_name="Pending", last_name="Student", claim_first_name_hash=hash_claim_name("pending", class_id=classroom.class_id, field="first"), claim_last_name_hash=hash_claim_name("student", class_id=classroom.class_id, field="last"))
     seat_id = seat.id
     _assert_pii_is_present(seat)
+    assert seat.claim_first_name_hash and seat.claim_last_name_hash
 
     with FEATContext("FEAT-IDEN-007", idempotency_key="arc018:claim-hash-delete"):
         delete_seat_with_profile(seat)
@@ -125,7 +127,14 @@ def test_user_deletion_removes_the_username_hash(client):
     stored_hash = db.session.get(User, user_id).username_hash
     assert stored_hash, "fixture user has no username hash to retain or delete"
 
+    # A principal cannot outlive its seats (fk_seats_user_id_users is RESTRICT),
+    # so the seat goes first, as every production deletion path does.
     with FEATContext("FEAT-IDEN-007", idempotency_key="arc018:user-delete"):
+        db.session.execute(
+            text("UPDATE users SET last_active_seat_id = NULL WHERE id = :user_id"),
+            {"user_id": user_id},
+        )
+        db.session.execute(text("DELETE FROM seats WHERE user_id = :user_id"), {"user_id": user_id})
         db.session.delete(db.session.get(User, user_id))
         db.session.flush()
 

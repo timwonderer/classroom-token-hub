@@ -717,14 +717,103 @@ to `get_rent_waiver_history_for_class` under DOM-OBL-001 §V.6 one-time-immutabl
 `.coverage_start_time` / `.coverage_end_time`, attributes DOM-OBL-001 v2.5 removed from
 `assessment_events`. Delete all three.
 
-**Cross-cutting** — 9 Dependabot advisories on the default branch (8 high, 1 moderate); accessibility
+**Cross-cutting** — 11 Dependabot advisories on the default branch (10 high, 1 moderate); accessibility
 remediation tracked separately in `ACCESSIBILITY_REVIEW_2026-09-03.md`.
+
+**Scoped 2026-09-07 — not a ship blocker, and not for the reason the count suggests.** All eleven
+alerts resolve to a single manifest, `docs-site/package-lock.json`: `fast-uri` ×4, `image-size` ×2
+(no patch available), `browserslist` ×2, `nanoid`, `js-yaml`, `qs`. They are transitive dependencies
+of the Docusaurus workspace, which **no workflow builds and nothing deploys** — `docs-site/build/`
+and `docs-site/node_modules/` are gitignored, and the only runtime touch from the application is
+`app/utils/helpers.py:30` reading `docs-site/route-map.json`, a data file. No shipped artifact
+executes this code. The advisories are real; the production exposure is not. Treat as build-tooling
+hygiene, post-ship.
+
+**But the reason they have gone unpatched is a live defect, and it is the tenth matches-nothing
+instance.** `.github/dependabot.yml` declares exactly two ecosystems — `pip` at `/` and
+`github-actions` at `/`. There is **no `npm` entry, and no entry for `/docs-site`**. So Dependabot
+cannot open a pull request against the only manifest it is raising alerts about. The security tab and
+the update configuration describe disjoint sets. This is the same failure shape as the others on this
+branch: a configuration that reads as coverage, produces no error, and matches nothing. The alert
+count is not evidence of a backlog being ignored — it is evidence of an automation that was never
+pointed at the file. Adding an `npm` / `/docs-site` block is the fix; it is safe to do post-ship, but
+it should be done deliberately rather than discovered again from a rising number.
 
 ### Launch checklist (must clear before promotion) — verified 2026-09-05
 
 Unlike the findings above, these are *not* post-ship backlog. Each one is a release-mechanics defect
 that domain readiness does not cover, and every item was confirmed against the working tree rather
 than recalled.
+
+**Status service must not launch until its operator environment is verified — OPEN 2026-09-14.**
+Two defects, one of which only the repository owner can clear because it is a setting, not a file:
+
+- **The `production` environment's deployment branch policy allowed only `codex/v2.0`,** retired on
+  2026-09-07 — **retargeted to `main` by the owner on 2026-09-15.** Until then every job bound to
+  that environment (`deploy-status.yml`, `release-v2.yml`, `toggle-maintenance.yml`,
+  `tailscale-ssh-smoke-test.yml`) was rejected from `main` before its first step, and
+  `deploy-status.yml` ran from a push exactly once (2026-09-07) and died this way. It is the
+  matches-nothing class again, in the one place no workflow file shows: the filter lives in
+  repository settings. **With the policy open, the next push to `main` that touches the status
+  paths deploys both services.** Until the `--update-*` fix below is on `main`, such a push still
+  runs the old workflow and would strip the operator configuration. So nothing else should land in
+  `status/**`, `status_service/**`, `tests/test_status_*.py` or `deploy-status.yml` first.
+- **`deploy-status.yml` deployed with `--set-env-vars` / `--set-secrets`,** which remove everything
+  they do not list. The operator's auth configuration (`IAP_AUDIENCE`, `STATUS_OPERATOR_ALLOWLIST`,
+  `IAP_TRUSTED_EMAIL_HEADER`) is not in the repository, so the first deploy past the policy would
+  have emptied the allowlist and locked out every operator. Fixed in #1385: `--update-*` flags, plus
+  a final deploy step that fails when the operator service lacks the allowlist or audience.
+- **The first deploy (2026-09-15, run 34928799354, triggered by merging #1385) verified neither
+  service.** Both revisions went live with the `--update-*` flags, so CI stripped nothing. But its
+  public health check curled the service's `run.app` URL, which restricted ingress answers with
+  Google's 404 from any GitHub runner. That check failed, so the operator auth check after it was
+  skipped, and the operator service's configuration went uninspected. Fixed in #1386: a readiness
+  check that describes both services instead of requesting them, and an auth check that runs
+  whenever the operator deploy succeeded. The deploy from #1386's merge (run 34929999750) passed both:
+  both services serving that commit, `STATUS_OPERATOR_ALLOWLIST` and `IAP_AUDIENCE` present and not
+  blank, header fallback on.
+- **The operator console's front door is `operator.status.classroomtokenhub.com`,** served by a
+  Google Cloud load balancer (`136.68.93.205`, with a Google-managed certificate for that name). An
+  unauthenticated request to `/operator/notices` or `/health` gets IAP's own 302 to Google sign-in
+  (`x-goog-iap-generated-response: true`, body "Invalid IAP credentials: empty token"); the
+  application is never reached. A first check on 2026-09-15 went through a local resolver that
+  still answered with Cloudflare addresses, where the TLS handshake failed. Public resolvers and a
+  retry showed the load balancer, so that earlier result is withdrawn.
+  **A signed-in request got past IAP and then failed, and the cause was the image.** On 2026-09-15
+  the owner's browser, signed in to Google, got a plain `Service Unavailable` 503 from this address,
+  and `status.classroomtokenhub.com` returned the identical 503. The workflow built the image with
+  `status_service/` as its context, so it never contained the sibling `status/` package that
+  `status_service/app.py` imports, and both services failed to boot with `ModuleNotFoundError: No
+  module named 'status'`. A guess recorded here earlier, that a serverless NEG named the wrong
+  service, was wrong. The build context was fixed in `de8b49649` (#1389, carried into #1388). A
+  manual deploy of the corrected image brought the public `/health` to 200 through Cloudflare and
+  the load balancer, and the authenticated operator page rendered (reported in #1389). The deploy
+  checks did not catch the failure: run 34929999750 found both revisions Ready and serving, because
+  a revision can report Ready while the application inside it fails to import. Revision readiness
+  is not evidence that the application boots.
+
+Clears only when all of the following hold:
+
+1. **Met 2026-09-15 (run 34929999750).** The deploy's `Verify both services are serving this commit`
+   and `Verify operator auth configuration survived the deploy` steps pass. If either auth value is
+   held in Secret Manager, the auth step reads its payload to confirm it is not blank, so the deploy
+   service account needs `secretmanager.versions.access` on that secret or the step fails as
+   unverified.
+2. `IAP_AUDIENCE` equals the audience of the IAP resource actually fronting the service, and
+   `IAP_TRUSTED_EMAIL_HEADER` is as decided (currently `true`). Presence is verified; the value is
+   not. Every operator request logs `status operator authenticated via=<path>` with the signed
+   assertion's result, so one real sign-in settles it: `via=iap_assertion` means the audience is
+   right, and `via=trusted_header assertion=wrong_audience` means it is wrong.
+3. The service's ingress and IAP enablement match what the header fallback assumes.
+   `status_service/identity.py` trusts `X-Goog-Authenticated-User-Email` only because direct requests
+   cannot reach the container, and `gcloud run deploy` does not pin `--ingress`. Partial evidence
+   (2026-09-15): unauthenticated requests from the internet to both services' `run.app` URLs, the
+   operator's `/operator/notices` included, get Google's ingress 404 rather than the application.
+   That shows the direct path is closed from outside. On the path that is open, the front door
+   answers an unauthenticated request with IAP's redirect to Google sign-in (see above), so IAP is
+   enforced there too. What remains is the real sign-in in item 4.
+4. An allowlisted operator loads `/operator/notices`, and a signed-in account that is not on the
+   allowlist gets 401.
 
 **CI gates on a branch that does not exist — CLOSED 2026-09-05 (`00fdcecf3`).** Three workflows
 filtered on `codex/v2.0`, a ref absent locally *and* on the remote. `actionlint.yml` was degraded
@@ -874,9 +963,35 @@ about whether the product has shipped. No `landing.html` filename survives — a
 the same content would be a second front door to keep in sync, and nothing ever linked to that name
 because the file was never deployed.
 
-This closes the static-site half of the question only. **The application's own gating is still
-unverified** — maintenance mode and the login routes decide whether `app.classroomtokenhub.com` is
-reachable, and nothing above establishes that. It remains an open pre-ship item.
+This closes the static-site half of the question only; the application's own gating is answered
+separately, immediately below.
+
+**Application gating: Cloudflare Access — UPDATED 2026-09-21.** Restricted
+access to `app.classroomtokenhub.com` is gated by a Cloudflare Access policy on the hostname, not by
+`MAINTENANCE_MODE` or per-route login checks. Access is enforced at the edge, before a request
+reaches Flask, so one policy covers every route — including ones nobody thought to audit — and the
+gate cannot be undone by a route that forgets to consult a flag. Cloudflare Access replaces application maintenance mode for both prelaunch and
+operational access restrictions. Its policy is managed at the edge; the app has no
+maintenance flag, custom bypass, or maintenance page. Admission still requires
+normal application authentication and capability checks (DOM-OPS-001).
+
+**Why the claim holds.** An edge policy on a hostname is only as good as the origin's unreachability
+around it, and this origin is unreachable: a DigitalOcean cloud firewall admits `80`/`443` only from
+Cloudflare's IP ranges, so nothing that has not transited Cloudflare reaches nginx. Without that, the
+policy would be the same shape of defect as an unlinked-but-published `landing.html` — real to anyone
+who used the front door, absent to anyone who did not. See the 2026-09-07 addendum to
+`docs/ops/audits/PROD_AUDIT_2026-07-01.md`, which records the firewall; the audit body reports "UFW
+inactive" and describes the host only, which reads as an exposed origin and is not.
+
+**Health checks are unaffected, with one exception.** `release-v2.yml` verifies production by SSH-ing
+over Tailscale and curling `http://127.0.0.1/health` on the box, so Cloudflare is not in that path.
+The status service does not poll the application at all — it has no outbound HTTP and reads Firestore.
+The exception is `scripts/test_monitoring.sh`, which hits the public hostname and currently *asserts*
+`/health` and `/health/status` require no authentication, failing if they do. Behind Access that
+assertion inverts and reports failure for the correct configuration. It needs the
+`CF-Access-Client-Id` / `CF-Access-Client-Secret` service-token headers and a corrected expectation
+before it is run against a gated host. **This is the one open item in this block.** Any uptime monitor
+configured outside the repository needs the same token.
 
 **Superseded — `index.html` as holding page with `landing.html` orphaned (2026-09-06).**
 `index.html` no longer redirects to `./landing.html` (see the retirement pass above); it is a
@@ -944,6 +1059,8 @@ this branch. The filter now names only what the job runs; that test's evidence i
 constitutional CI, which is where it belongs. The Postgres service image also moves to the ECR
 mirror, matching the three other workflows that run one.
 
+> **EXECUTED 2026-09-07 — verified, with two deviations from plan. See "Rename — executed" below.**
+
 **Branch rename — PREPARED 2026-09-06, remote step not yet executed.** The decision recorded above
 ("merge `CTH_v2.0` into `main`, or repoint the deploy trigger") was resolved by renaming rather than
 merging: `main` → `legacy_main`, then `CTH_v2.0` → `main`, then delete `legacy_main`. The v1 line is
@@ -960,13 +1077,65 @@ a branch never was; the name was dropped in favor of "v2"), and **dated record**
 dated audits, `docs/archive/`, and the narrative above, left intact because rewriting them would
 falsify what was true at the time).
 
-Two consequences to carry into the remote step. First, `origin/HEAD` currently points at
-`CTH_v2.0`, so the default branch moves with the rename rather than needing a separate change.
-Second, "port `origin/main` deltas" in `DEVELOPMENT.md` meant the v1 branch; after the rename that
-phrase would instruct porting `main` into itself, so those items now measure against
-`legacy_v1.10.0` explicitly. Before executing: check for open PRs targeting `main` (a rename
-retargets them), confirm branch protection followed the rename, then `git fetch --prune` in every
-worktree and set `V2_RELEASE_LINEAGE_REF=main`.
+**Amended 2026-09-07 — the branch being renamed is `claude/ci-onto-landed`, not `CTH_v2.0`.** The
+integration work landed on `claude/ci-onto-landed`, which is 212 commits ahead of `CTH_v2.0`; that
+branch becomes `main` directly. No merge down to `CTH_v2.0` happens first, and `CTH_v2.0` is retired
+along with every other outstanding branch rather than being the thing promoted. `CTH_v2.0` carries
+two commits (`f84ea7f1c`, `1063d6bdc`) that are deliberately not carried over: they reduce
+`github-pages/` to `index.html` alone, which would leave the `/privacy`, `/terms`, and `/district`
+redirects in `app/routes/main.py` pointing at files that no longer exist.
+
+One consequence of the amendment. `origin/HEAD` points at `CTH_v2.0`, and the original plan noted
+that the default branch would move with the rename rather than needing a separate change — true when
+the branch being renamed *was* `CTH_v2.0`. It no longer is, so **the default branch must be
+repointed explicitly**, or it keeps naming a branch that is about to be deleted. This is the same
+defect class the rename exists to remove, one level up: a default-branch pointer that resolves to
+nothing is not distinguishable, from most tooling's view, from one that was never consulted.
+
+**Sequencing constraint discovered 2026-09-07.** `CTH_v2.0` cannot be deleted before the default
+branch is repointed — GitHub rejected the delete outright with *"refusing to delete the current
+branch."* It is also the repository's **only protected branch**. So the order is fixed, not
+preferential: repoint `origin/HEAD` and move protection to the new `main` **first**, delete `CTH_v2.0`
+**second**. Attempting the prune in the other order fails safely, but it fails.
+
+### Rename — executed 2026-09-07
+
+Verified against the remote rather than taken on report, because the rename has parts that complete
+independently and a partial one looks identical to a finished one from inside the repo:
+
+| Check | Result |
+|-------|--------|
+| Default branch | `main` |
+| Branch protection | `main` (and only `main`) |
+| `origin/HEAD` | `refs/remotes/origin/main` |
+| Local `main` vs `origin/main` | `0 0` — identical |
+| Remote branches | 3: `main`, `main_legacy_v1.10.0`, `copilot/codexv20` |
+| `CTH_v2.0` | gone |
+
+**Deviation 1 — the v1 line is under one name, not two, and the name is not `legacy_main`.** The plan
+was `main` → `legacy_main`, delete `legacy_main`, rely on `legacy_v1.10.0`. What happened instead:
+`main` → `main_legacy_v1.10.0` at `db275ee37`, and the separate `legacy_v1.10.0` ref is gone. This is
+safe, and it was checked rather than assumed — `git merge-base --is-ancestor 1f7bfeb40
+origin/main_legacy_v1.10.0` returns true, so the old `legacy_v1.10.0` tip is contained in the surviving
+branch, which is the superset of the two. All ten `v1.*` tags are intact. **`CLAUDE.md` needs a small
+correction**: it names `legacy_v1.10.0` as the ref carrying the v1 line, and that ref no longer exists.
+
+**Deviation 2 — the eight Dependabot PRs closed, as flagged.** Deleting the branches closed #1354,
+#1353, #1287, #1286, #1284, #1281, #1270, #1236. No open PRs remain. This costs little in substance:
+they were `pip` and `github-actions` version bumps, in different ecosystems from all eleven open
+security advisories (which are `npm`, see §"Cross-cutting" above), so no vulnerability fix was lost.
+The cost is procedural — Dependabot does not recreate a PR for a version whose PR was closed, so these
+specific bumps will not return on their own. If they are wanted, they need `@dependabot reopen` or a
+fresh run; if they are not, nothing further is required. Worth noting that the branch deletion and the
+rename together mean the next scheduled Dependabot run is the first one to evaluate the *new* default
+branch, so its output is the real baseline.
+
+Carried unchanged from the original plan: "port `origin/main` deltas" in `DEVELOPMENT.md` meant the
+v1 branch; after the rename that phrase would instruct porting `main` into itself, so those items
+now measure against `legacy_v1.10.0` explicitly. Before executing: check for open PRs targeting
+`main` (a rename retargets them — none were open as of 2026-09-07), confirm branch protection
+followed the rename, repoint `origin/HEAD`, then `git fetch --prune` in every worktree and set
+`V2_RELEASE_LINEAGE_REF=main`.
 
 ---
 
@@ -984,7 +1153,7 @@ content already present on HEAD.
 | Bug-hunter badge system | `codex/compliance-check-legacy-structure` @ `3cdb1294` | **Backlog** — see below |
 | `github-pages/v2transition.html` | `CTH_v2.0`, `docs/v2-progress-page` | **Pre-promotion** — see below |
 | Ledger decomposition | `codex/ledger-canonicalization` @ `eafc6510..1a8eeb99` | **Landed 2026-09-05** — merge `8201f2935`; follow-up commit reviewed and declined 2026-09-06, see below |
-| Release-process replacement | `codex/ledger-canonicalization` @ `389d78b7..60297398` | **Owner decision** — see below |
+| Release-process replacement | `codex/ledger-canonicalization` @ `389d78b7..60297398` | **Landed independently; branch deleted 2026-09-07** — see below |
 
 ### Ledger follow-up commit — reviewed and declined 2026-09-06
 
@@ -1019,7 +1188,42 @@ harmless at runtime and actively misleading on the page: it implies partial appl
 this migration tolerates and defends against, when the real (and unreachable) hazard sits in the
 early return above it.
 
-### Release-process replacement (owner decision, blocks nothing)
+### Release-process replacement — **DECIDED 2026-09-07: already landed; branch deleted**
+
+The decision below was framed as open. It is not: **events answered it.** Every artifact the
+"owner decision" was about is on HEAD already, having arrived by a different route —
+`.github/workflows/deploy.yml` is deleted, and `release-v2.yml`, `docs-links.yml`,
+`tailscale-ssh-smoke-test.yml`, `app/observability.py`, `status/`, and `status_service/` are all
+present. `599dc7e7b` ("Add bounded status signals and automated deployment") and its successors
+carried them. The process change shipped; what remained on the branch was the branch, not the change.
+
+**The branch is 103 commits behind HEAD and 22 ahead, and the 22 add nothing.** Measured by content
+rather than by count, every file the branch still touches is *net-negative* against HEAD —
+`status/projection.py` −57, `app/observability.py` −59, `scripts/check_production_docs.py` −42,
+`SPEC-OPS-003` −39. `status_service/app.py` is the clearest single case: the branch defines
+`derive_capability_cards` inline and has no `derive_platform_checks`, while HEAD has moved the former
+into `status/projection.py` and added the latter. The branch is the earlier draft of HEAD's code.
+
+Merging it would also restore `docs/LOGS/` in full — removed 2026-09-05 and, per `CLAUDE.md`, "must
+not be reintroduced" — delete `constitutional-ci.yml` and `deploy-status.yml`, revert `docs/user-guides/`
+to the v1 tree, and remove roughly twenty test modules including `test_pii_storage_validator.py`,
+`test_session_cookie_lifetime.py`, and `test_route_registration_contract.py`. Same shape as
+`loving-banzai-564730`: a branch whose age, not its intent, made it destructive.
+
+**Disposition: deleted.** Tagged `archive/ledger-canonicalization-20260907` at `97041b62b` first —
+not because the content is needed, but because this branch alone had no remote, so deletion would
+have been irreversible where every other deletion in this pass was not. A tag is the cheapest way to
+make that asymmetry go away. Its worktree was verified clean and removed.
+
+**A method note this branch earns.** The three-dot diffstat (`HEAD...branch`) reported 43 files and
+`deploy.yml −152`, which reads as "this branch removes the deploy workflow." It does not — HEAD
+already had. Three-dot measures from the merge base, so on a stale branch it describes a tree that no
+longer exists. The two-dot diff (`HEAD..branch`) is what answers *"what would merging this do to what
+I have now"*, and it returned 416 files of mostly reversion. **This is the third time on this branch
+that a merge-base-relative number nearly produced a wrong call** — after `codex/status-page-integration`
+and `insurance/recommendation-card`. Use two-dot for disposition; three-dot only for review.
+
+### Release-process replacement — original framing (superseded, retained for the reasoning)
 
 `codex/ledger-canonicalization` is two unrelated bodies of work sharing a branch. Commits 1–13 are the
 ledger decomposition and were merged. Commits 14–21 are observability, status reporting, and CI, and
@@ -1069,15 +1273,31 @@ both are already resolved on HEAD by better mechanisms than the branch used:
 
 Nothing else on that branch fixes a defect on HEAD. Defer the whole branch.
 
-### Uncommitted worktree work — deferred 2026-09-06
+### Uncommitted worktree work — deferred 2026-09-06, **resolved 2026-09-07**
 
-Two worktrees hold uncommitted, unreachable work. Both were evaluated against one question — *does
-this fix something broken on HEAD, or is it required to ship?* — and both answer no.
+Two worktrees held uncommitted, unreachable work. Both were evaluated against one question — *does
+this fix something broken on HEAD, or is it required to ship?* — and both answered no. Both worktrees
+are now gone and both bodies of work are on branches, because uncommitted work is the one category
+that cannot be recovered after the fact. Neither branch is in the ship path.
 
 `insurance-rec-card` (307 insertions across `app/routes/admin.py`,
 `templates/admin_edit_insurance_policy.html`, plus a new test) surfaces the Economic Engine's advisory
 starting values as a card on the insurance policy form. Its own changelog entry files it under
 **Added**. It is a usability improvement over an existing passive footnote, not a repair.
+
+**Disposition: preserved at `84b677b7f` on `insurance/recommendation-card`**, cut from
+`stash@{0}` onto its own merge base (`66ab3368b`, 2026-09-02) rather than onto HEAD, so its 752
+insertions are measured against the tree it was written on. `.claude/launch.json` was excluded —
+machine-local, hardcoded to one absolute interpreter path. The stash was left intact as a fallback.
+
+Committing it surfaced a **ninth instance of the matches-nothing class**, in a shape none of the
+previous eight took: not a filter matching nothing, but a producer with no consumer.
+`recommend_insurance_terms` is defined at
+`app/feats/class_configuration/feat_class_003_insurance_policy_management.py:348`, exported from
+`app/feats/class_configuration/__init__.py`, and imported at `app/routes/admin.py:125` — and called
+from nowhere in the application. HEAD compensates with a passive footnote at
+`templates/admin_edit_insurance_policy.html:163`. The branch is what would consume it. Until it
+lands, the import is dead weight that reads as live wiring.
 
 `loving-banzai-564730` (730 insertions) is Phase 5/6 class-configuration view-model wiring plus a new
 `admin_create_class_form.html` and a bulk-add-students test. It is mid-flight — its diff leaves a blank
@@ -1085,8 +1305,150 @@ line where `create_class_with_roster` was removed from an import block — and i
 already ships `admin_create_class.html`, rendered from three call sites in `app/routes/admin.py`, so
 there is no missing-template failure for it to fix.
 
-Neither is lost; both remain in their worktrees. Neither should be swept up in a cleanup pass without
-first being committed to a branch.
+**Disposition: archived at `217789387` on `archive/class-config-phase5-6`, discard rather than
+defer.** Applying it to HEAD moved it from "additive" to "regressive": it predates the accessibility
+remediation now protected by an active CI gate, predates CWI gating, edits
+`templates/admin_settings.html` which HEAD deleted in favor of `templates/admin_customizations.html`,
+and replaces a JSON endpoint with a form flow that raw-`INSERT`s names into `identity_profiles`,
+bypassing `PIIEncryptedType`. Its own test fails on HEAD with `405 != 400` because
+`/admin/students/bulk-add` is not a registered route. The branch is a record, not a candidate — it
+must never be merged.
+
+**Method note, recorded because it cost a full cycle.** `loving-banzai-564730` was first judged "new
+and worth preserving" on metadata alone — insertion count, untracked-file presence, "306 commits
+behind" read as merge difficulty rather than as direction. The error compounded when the applied
+patch was grepped *in the conflicted working tree* and two of its own additions were reported back as
+properties of clean HEAD. Metadata describes size and presence; it never establishes direction
+relative to HEAD. A conflicted tree is not a source of truth. Both checks must run against a clean
+checkout.
+
+### Branch and worktree prune — executed 2026-09-07
+
+The triage above exists so branches can be deleted. This is the deletion record. Every SHA below is
+written down because a deleted remote branch is recoverable — `git push origin <sha>:refs/heads/<name>`
+restores it while GitHub still holds the object — and an unrecorded one is not.
+
+**Worktrees: 12 → 2.** Removed `loving-banzai-564730` and `insurance-rec-card` (both preserved to
+branches first, above), the six clean agent worktrees `crazy-moore-315b8b`,
+`exciting-zhukovsky-acf1e8`, `magical-ramanujan-3fced7`, `pensive-matsumoto-2cd959`,
+`strange-lovelace-d0e6a4`, `upbeat-lalande-0f5a4a`, and the two `~/.codex/worktrees/` checkouts
+holding branches slated for deletion (`constitutional-ci`, `status-page-integration`) — both verified
+clean before removal. Remaining: this repo, plus `~/.codex/worktrees/ledger-canonicalization`.
+
+**Local branches: 21 → 6.** Deleted, each verified contained in or superseded by HEAD:
+`CTH_v2.0` (1063d6bdc), `claude/strange-lovelace-d0e6a4` (f8cf5894f),
+`codex/compliance-check-legacy-structure` (3cdb12945), `codex/constitutional-ci-reconstruction`
+(ca4836204), `codex/status-page-integration` (86fca6692), `docs/v2-progress-page` (8e4224b41),
+`ledger-canonicalization-pre-rebase` (3356bd2ff), `support-text-extraction` (8f48643cb), plus the ten
+fully-contained branches deleted earlier in the same pass.
+
+**Remote branches: 25 → 13.** Deleted: `codex/compliance-check-legacy-structure` (9aa2c7b97),
+`support-text-extraction` (be16fff3b), `insurance-recommendation` (6b9c316ce),
+`fix/obligation-template-broken-urls` (00d00c8d0), `fix/classroom-setup-column-mismatch` (1ac8e2885),
+`codex/landed-architecture-execution-fixes` (213cafdc6),
+`codex/accessibility-usability-review-remedy` (09bdc3530), `claude/adoring-elbakyan-aa061f`
+(38af5d8bf), `claude/class-config-domain-complete-iuaniy` (cdaad3c48),
+`feat/identity-route-wiring-phase6-7` (b35ad592d), `feat-context-correction` (1668bb1d7),
+`copilot/review-dependency-upgrade-findings` (7508aba13).
+
+The two domain branches were the only ones in that list not already covered by a dated sweep, so they
+were checked by outcome rather than by commit count: `IdentityProfileView` is present on HEAD at
+`app/services/view_model_builders.py`, and all five `app/feats/class_configuration/feat_class_00*.py`
+modules are present. Commit-count divergence measures history shape; neither branch's *result* is
+missing.
+
+**Deliberately kept, with the reason each survives a prune described as "all obsolete branches":**
+
+| Ref | Why it stays |
+|-----|--------------|
+| `origin/main` (136 unique) | The rename ceremony consumes it. Deleting it now removes the thing being renamed. |
+| `origin/legacy_v1.10.0` (133) | Carries the v1 line per `CLAUDE.md`. Never delete. |
+| `origin/CTH_v2.0` (2) | Default and only protected branch — delete is refused until `origin/HEAD` moves. Sequenced above. |
+| `origin/claude/ci-onto-landed` | The ship branch. |
+| 8 `dependabot/*` refs | Each backs an **open PR** (#1354, #1353, #1287, #1286, #1284, #1281, #1270, #1236). Deleting the branch closes the PR. `reviewdog/action-actionlint-1.73.2` had no open PR and was already pruned. |
+| `origin/copilot/codexv20` (117) | Held, not cleared. Large and not independently verified this session; the 2026-09-04 sweep's coverage of it is asserted, not re-checked. Cheap to keep, expensive to be wrong about. |
+| ~~`codex/ledger-canonicalization`~~ | **Resolved 2026-09-07 — deleted.** The decision it was held for had already been made by events. Tagged `archive/ledger-canonicalization-20260907` because it had no remote. |
+
+`insurance/recommendation-card` and `archive/class-config-phase5-6` are new this pass and are the
+reason the worktrees could be removed at all.
+
+### Class destruction has no FEAT contract of its own — **RESOLVED 2026-09-17**
+
+`FEAT-CLASS-001` was the FEAT class destruction executed under: `_hard_delete_class_scope` was
+decorated with it and `FEAT-IDEN-007` §Composition designated it. But `FEAT-CLASS-001` is titled
+"Creating New Class Boundary" and is creation-shaped throughout — its §III states the workflow
+"SHALL NOT execute within CanonicalContext because the target Class Boundary does not yet exist",
+its §VII and §VIII describe rolling back a *provisioning* transaction, and its §X guarantees
+"exactly one Class Boundary is **established**". Two Normative documents disagreed about what that
+FEAT was, and the runtime followed the wrong one.
+
+**Resolved by giving destruction its own execution identity.** `FEAT-CLASS-006` — "Destroy class
+boundary", Class Configuration, blast radius HIGH — is registered and contracted at
+`docs/FEATURE-EXECUTION/FEAT-CLASS-006_DESTROYING_CLASS_BOUNDARY.md`. This is not documentation
+neatness: every request executes a single command path whose domain, capability and action are
+recorded as part of its observability (INV-ARC-000 §VIII.2), and a FEAT names a user-facing action
+rather than a bucket of operations on one table (INV-CORE-001). Destruction also has semantics
+creation has no analogue for — class-scoped data must not survive deletion of its `class_id`
+(INV-CORE-000 §26, §33) and a principal holding no Seat anywhere cannot exist (DOM-IDEN-005 §V.6,
+§VI). Attributing a destroyed class universe to the create-a-class command made the audit statement
+false, not merely imprecise.
+
+The prior designation is treated as normative debt exposed by review, not as precedent.
+`FEAT-CLASS-001` is creation only and now says so in a new §V.A, with a matching guarantee in §X.
+
+**Landed:**
+- `FEAT-CLASS-006` in `FEAT_REGISTRY` (HIGH), contract document written.
+- `_hard_delete_class_scope` (join-code surface) and `_execute_class_scope_deletion`
+  (roster-terminal surface) both execute `FEAT-CLASS-006`.
+- `FEAT-CLASS-006` §IV.2 carries the same bound established for teacher destruction: the pre-FEAT
+  read only selects the executor, and the FEAT re-acquires the locks, re-evaluates whether the
+  principal still survives the teardown, and fails closed with no mutation when it would not. The
+  join-code route surfaces that refusal as a 409 rather than a 500.
+- Both destruction paths take the same two locks in the same order (`users`, then `classes`) through
+  one helper, so they cannot deadlock against each other.
+- Normative references retargeted: `FEAT-IDEN-007` §Composition and §Automatic/roster-terminal,
+  `FEAT-IDEN-006` §Roster removal, `FEAT-CLASS-001` §V.A and §X. Descriptive references updated in
+  `MAP-UI-001`. Historical closure records elsewhere in this file keep their original identifiers.
+- `tests/dom/class/test_class_destruction_feat_identity.py` covers registry separation, a structural
+  guard that no destruction entry point is *declared* under `FEAT-CLASS-001`, both surfaces'
+  attribution, audit lineage, the locked-refusal path, atomicity, and hard-deletion scoping against
+  a surviving sibling class.
+
+**Not changed:** class creation remains `FEAT-CLASS-001` (`admin.py` create-class route and
+`feat_class_001_create_class_boundary.py`). Destruction of a class holding its principal's last Seat
+remains `FEAT-IDEN-007`, which composes the plain `_destroy_class_scope_rows` command rather than
+entering `FEAT-CLASS-006` — a FEAT never executes another FEAT (INV-ARC-000 §VIII.2).
+
+### Frozen migration baseline — replace the live-ORM bootstrap (post-launch, architectural)
+
+`0001_bootstrap` builds the baseline by calling `metadata.create_all` against **today's** ORM
+metadata instead of a frozen snapshot of the schema as it stood at baseline time. Its own docstring
+states the consequence: "deleting a model retroactively removes a table that existed at baseline
+time — and later migrations in the chain still legitimately reference it."
+
+So removing a model or a column can retroactively break an unrelated historical revision, and the
+revision graph looks untouched while it happens. The failure surfaces only on a fresh chain — a new
+production database or a `conftest` schema rebuild — never on an already-migrated one. The bootstrap
+already carries a partial remedy for whole **tables** (`_create_retired_baseline_tables`); there is
+none for **columns**.
+
+**Remedy:** emit a frozen baseline DDL snapshot, so every historical migration executes against the
+schema it was actually written against. The bootstrap is itself a merged migration, so this is a
+baseline replacement, not an edit under `SOP-DB-001` §V.B.
+
+**Interim position (accepted, not permanent):** `SOP-DB-001` §V.B defines a Bootstrap-Replay
+Correction — a guard that declines a historical operation when the bootstrap has left its target
+column absent. It may not change what the migration does when the column is present and may not
+alter its intended end state. Two corrections are recorded in that section's register
+(`3a69db4907b4`, `8f1a2c3d4b5e`), both from authorship moving off `user_id` / `created_by` onto
+`created_by_seat_id`.
+
+**Why this is not merely cosmetic debt:** without the two guards a fresh `flask db upgrade` fails at
+`3a69db4907b4`, so the first DigitalOcean deployment would not boot. The guards are load-bearing for
+deployment today. Each further model removal is a new opportunity to break the chain silently, and
+the cost of the remedy does not fall over time.
+
+**Scheduled:** post-launch. Every additional correction under §V.B raises the priority.
 
 ### Bug-hunter badge system (backlog)
 
@@ -1120,7 +1482,668 @@ before.
 
 ---
 
-## VII. Maintenance
+## VII. Live-Test Campaign (2026-09-19 →)
+
+First controlled deployment of v2 onto the deployment host, run against
+`SOP-DEP-001`. Full evidence in
+[`docs/ops/audits/LIVE_TEST_DEPLOYMENT_2026-09-19.md`](../ops/audits/LIVE_TEST_DEPLOYMENT_2026-09-19.md);
+this section carries only what bears on the launch decision.
+
+**Deployed SHA:** `8c5cff7c8`, tag `live-test/2026-09-19`. Single gunicorn
+worker, migration head `d9e1f3a5b7c9`, 44 tables, fresh database.
+
+### Status
+
+| | |
+|---|---|
+| §VI–§X (release gate, runtime, secrets, migration, health) | Complete, passed |
+| §XI (full-app browser test) | **In progress** — three sessions run, 67 findings (38 through 2026-09-21, 39-67 the 2026-09-21/22 session) |
+| §XIV (go/no-go decision) | Pending — §XI must complete first |
+| §XVI (completion condition) | Not met |
+
+**Amended 2026-09-23 — §XI evidence is now indexed.** Every §XI checklist line
+has been mapped to its supporting citation in
+[`docs/ops/audits/LIVE_TEST_XI_EVIDENCE_INDEX.md`](../ops/audits/LIVE_TEST_XI_EVIDENCE_INDEX.md).
+**All 17 lines are evidenced**; no line is unsupported. The index exists
+because the evidence is spread across three documents in prose that does not
+match the checklist's wording — a reviewer searching for the literal route
+path `/admin/export-students` found nothing and wrongly reported that line as
+unevidenced, when it was fully documented as "Selected-class export." The
+index is a derived lookup surface, not an authority; the three source records
+remain authoritative and unmodified.
+
+Two shortfalls remain, both inside the "attendance, productivity, payroll,
+obligations, ledger and store paths" line, and both narrower than their
+summaries below suggest:
+
+- **Rent payment** — a wait, not a task; the preview window opens 2026-09-29.
+- **Insurance waiting-period gate** — **mis-stated below as untested; it is
+  unreachable.** The gate applies only to NON_MONETARY, and NON_MONETARY
+  claims cannot be filed: `app/routes/student.py:1860` is the only caller of
+  `submit_insurance_claim` and is gated behind
+  `claimable = is_transaction_type or is_productivity_type`. It carries four
+  passing FEAT-level unit tests and zero production reachability. Verified at
+  the code layer 2026-09-23; see the index's Gap 2 for the full chain.
+  Reclassifying it is an operator decision and has not been made.
+  **Resolved 2026-09-25:** the operator's rule is that a waiting period applies to every policy
+  type. The submission gate now runs for all types (`_enforce_waiting_period` in
+  `app/feats/insurance_claim_feat.py`, pinned by `TestWaitingPeriodAppliesToEveryType`), which also
+  makes the claim-review page's "claimable from" wording below correct for every type.
+
+The index also records one adjacent defect found while verifying that gap:
+`admin_process_claim.html` tells a reviewing teacher "claimable from `<date>`"
+for *any* policy with a nonzero waiting period, including the two types where
+enforcement ignores it. Latent today (no production policy sets one), live the
+first time a teacher uses the field the 2026-09-21 change enabled. Unfixed,
+pending direction.
+
+**Current as of 2026-09-21.** The finding count below (23) reflects the first
+session. The second session took it to 38, and findings 21-35 are remediated on
+`codex/live-test-launch-readiness` (PR #1420), not yet merged or deployed. The
+live host still runs `8c5cff7c8`, so **every fix in that batch is absent from
+production**. This section remains the launch gate; for the current per-finding
+status and the untested inventory see
+[`docs/ops/audits/RESUME_2026-09-22.md`](../ops/audits/RESUME_2026-09-22.md).
+
+Open launch blocker unaffected by that batch: **finding 14**, the sysadmin
+dashboard 500 (`operational_events` was never created). **Closed 2026-09-22 —
+see the amendment below.**
+
+**Amended 2026-09-22.** Live host is now `3210e8edd`, tag `live-test/2026-09-22a`
+— a continuous direct-to-`main` live-test session spanning 2026-09-21/22 (per
+operator instruction: hotfix-and-deploy for live-test purposes, full suite
+reserved for the official production launch transition). Full per-finding
+detail is in
+[`docs/ops/audits/RESUME_2026-09-22_findings_39-54.md`](../ops/audits/RESUME_2026-09-22_findings_39-54.md),
+which continues from the `RESUME_2026-09-22.md` linked above and now covers
+findings 39-67. Highlights relevant to the launch decision:
+
+- **Finding 14 is CLOSED** (`b7db24437`) — `operational_events` (DOM-OPS-001 §5)
+  was never created, despite live code referencing it since the migration that
+  dropped its v1 predecessors. Verified live, not just by the automated suite:
+  curled the endpoint directly and diffed the server log before/after.
+- **Finding 64** (found while retesting 14) — the same sysadmin surface's
+  unified ticket-detail page 500'd separately on `fmt_timestamp` choking on
+  ISO-string timestamps inside TLCP correlation packs. Closed (`182928a79`),
+  verified live end-to-end: operator drove a real ticket from student
+  submission through teacher escalation to sysadmin resolution.
+- **Finding 65** — a student who tapped "Done for the Day" still saw active
+  Start Work/Break buttons; server-side enforcement was already correct
+  (`app/feats/prod.py` already refused a same-day restart), the UI just never
+  read the fact. Closed (`a9eba02f6`), automated-tested only, not yet
+  reconfirmed by an operator click-through since deploy.
+- **Finding 67** — every sysadmin request logged an ERROR-level
+  "missing canonical context" invariant violation, forever, because
+  sysadmin's permanent structural lack of class context (INV-ARC-019) was
+  never added to TLCP's exemption lists — alarm-fatigue noise that could mask
+  a genuine violation in the same log stream. Closed (`24bca2c8c`), verified
+  live by diffing the log across the fix.
+- **Two rent-correctness defects, found live and closed same session**
+  (`ad4f69933`, `3210e8edd`): (a) a cycle's frozen `policy_uuid` was correctly
+  fixing its *terms* but was also accidentally fixing its *roster* — a student
+  who claimed a seat after a cycle's first assessment pass got no rent
+  obligation at all until the cycle advanced, potentially over a month later;
+  reconciliation now assesses the current cycle's roster on every run, never
+  retroactively against a cycle that already closed before the seat was
+  claimed. (b) the admin rent page claimed "a rent cycle is already underway"
+  for a cycle whose `cycle_boundary_at` was still a month in the future —
+  directly contradicting the same page's own "Not active yet" summary a few
+  lines below. Both automated-tested (67 passing tests across the affected
+  areas) but not yet reconfirmed by a fresh operator click-through.
+
+**Open, and required before launch: none, by this table's own bar** (a launch
+blocker here is an operations surface that hard-crashes; see the updated table
+below). Findings 65 and 67 above, plus 58-63 and 66 (insurance-cancel
+visibility — diagnosed, not yet fixed) in the RESUME doc, are real defects but
+none 500s — they are tracked as non-blocking until reclassified.
+
+### What the campaign has established
+
+**The economic core is sound.** Payroll, store purchase, insufficient-funds
+refusal, inventory exhaustion, transfers and scheduled settlement all reconcile
+to the cent, with debit and entitlement grant provably atomic (shared
+`correlation_id`, 12 ms apart) and no fee ever charged on a lateral transfer.
+
+**Class isolation holds.** All five isolation items pass, including a
+cross-boundary write attempted from a real stale browser tab — a class B session
+submitting a class A seat id wrote nothing. This is the shape of the original P0
+same-teacher multi-period leak, and it is the single most important thing the
+campaign has confirmed.
+
+**Every defect found in a money path was presentation or lifecycle sequencing.**
+None touched correctness of money, class scoping, or transactional atomicity.
+
+### What it has cost to learn
+
+23 findings across two sessions. 20 from session one, of which the functional
+ones were remediated in PR #1405 (merged 2026-09-20) with 74 regression tests,
+each confirmed failing against the pre-fix SHA.
+
+**Open, and required before launch:** none — the sole entry below closed 2026-09-22.
+
+| # | Finding | Why it blocks | Status |
+|---|---|---|---|
+| ~~14~~ | Sysadmin dashboard 500s — `operational_events` dropped by migration, never created | §XI requires operations surfaces to load without 500. Needs a design decision, not a migration: the error path runs outside FEAT context by construction, so an ORM-written event would roll back with the failure it records. | **CLOSED `b7db24437`, 2026-09-22 — verified live** (see the amendment above; also uncovered finding 64 on the same surface, also closed) |
+
+**Open, not blocking:**
+
+| # | Finding | Kind |
+|---|---|---|
+| 1 | Icon font unsubsetted, 3.8 MB | Performance; needs a build step |
+| 2 | Static assets send `Cache-Control: no-cache` | Performance; needs asset versioning first |
+| 19 | Surviving v1 Grafana dashboards query labels v2 does not emit, and render as zeros | Monitoring; dashboards live in Grafana's own database, not the repo |
+| 21 | CSV export heads its section column "Block", the retired v1 name | Wording |
+| 22 | A second tab silently changes the first tab's class; the stale tab keeps showing the old one | Usability. No data crosses — writes are scoped — but the teacher is told "applied to 0 student(s)" in a success style with nothing naming the cause |
+| 23 | Seven `print()` calls in the canonical context resolver bypass structured logging | Hygiene; latent, none has fired |
+
+**This table is frozen at the second live-test session (2026-09-21).** Findings
+39-67 from the continuing 2026-09-21/22 session — including 58-63 and 66,
+non-blocking by the same bar — are tracked in the RESUME doc linked above, not
+duplicated here, to keep one current list rather than two that can drift.
+
+### Not yet exercised
+
+**Superseded in part by the second session.** Rent is no longer uncovered:
+reconciliation, genesis, advance, idempotency and policy binding were all
+exercised live, and the append-only policy invariant (B1) was re-verified under
+an adversarial attempt. Rent *payment* remains untested — the class's preview
+window does not open until 2026-09-29. **Amended 2026-09-22:** two further rent
+defects surfaced live this session and are closed — a cycle's frozen
+`policy_uuid` was correctly fixing its terms but was also accidentally fixing
+its roster (a late-claimed seat got no obligation until the cycle advanced),
+and the admin page falsely claimed a cycle was "already underway" a month
+before its boundary. Both are the kind of thing the standing lesson below
+describes: found by an operator's real click-through, not by the suite.
+
+**Corrected 2026-09-22 — "Insurance remains the only economic domain with zero
+coverage" was wrong even as of the session that wrote it, and should not have
+been asserted without checking the campaign's own record.** Insurance policy
+purchase, waiting-period configuration (including making it settable on every
+policy type), claim submission, teacher review, approve/reject, the
+filing-window override gate, and cancellation have all been exercised live
+across the campaign — the claim-review, filing-window, and cancellation work
+specifically in the 2026-09-21/22 session, confirmed by screenshot and by
+direct database query (`BillCycle.next_assessment_at IS NULL` on the cancelled
+policies' terminal cycles, real expiry dates). See
+`RESUME_2026-09-22_findings_39-54.md` §2-3 for the evidence. **The actual gap
+is narrower:** every test policy used
+`waiting_period_days = 0`, so the waiting-period enforcement gate itself has
+never been exercised end-to-end.
+
+**Corrected 2026-09-23 — the ledger-credit half of that gap is closed.**
+Queried production directly: two `insurance_claims` rows are `APPROVED`
+(`64bcf577…`, `22a04194…`), and both carry a populated
+`ledger_transaction_id` (19, 16) pointing to a real `ledger_transaction` row
+with `status='POSTED'`, `type='insurance_reimbursement'`, amount matching
+the claim's `result_amount` exactly ($3.00 and $18.00), for the correct
+`seat_id`/`class_id`, timestamped within ~6ms of the claim's `decided_at` —
+the same atomic-commit signature already established elsewhere in this
+campaign. Approval provably credits the ledger, not just reaches
+`APPROVED` status. **Still open:** the waiting-period enforcement gate
+itself (every test policy used `waiting_period_days = 0`).
+
+**Corrected 2026-09-22, twice more, same session — verify before asserting
+absence.** Two more items on this list were also already exercised and are
+removed:
+
+- **Hall-pass verification page** (`main.verify_hall_pass`,
+  `/verify/hallpass/<token>`) — the positive path this tracker's own earlier
+  entry called untestable "because no `hall_pass_logs` row could exist" is no
+  longer blocked: two real `hall_pass_logs` rows exist (Bathroom @ 00:45:37,
+  Water Fountain @ 02:04:41 UTC, 2026-09-22), and the server log shows GET/POST
+  hits to the verification page from a real browser bracketing each one
+  (00:43-00:46 and 02:07), with the POST response body size changing across
+  repeated calls (2119 → 2788 → 2787 → 2767 bytes) — consistent with real
+  `approved → left → returned` state transitions, not a static reload.
+- **Passwordless enrollment** — already recorded in
+  `RESUME_2026-09-22_findings_39-54.md` §3 (finding 53's fix: operator
+  registered a passkey, it persisted, sign-in succeeded), and confirmed again
+  here directly against the database: one `passkey_credentials` row exists,
+  `created_at` 04:35:55 and `last_used` 05:39:48 UTC (2026-09-22) — registered
+  *and* later used to sign in, over an hour apart.
+
+**Amended 2026-09-23 — two more items closed off this list, one of them by
+finding a real defect.**
+
+- **Student-assisted teacher account recovery** — exercised end-to-end and
+  confirmed complete at the database layer, not just attempted: a
+  `recovery_requests` row shows `status='verified'` with a real
+  `completed_at` (04:29:04 UTC), its `recovery_class_challenges` row shows
+  `satisfied_at` (04:28:25), and a `student_recovery_codes` row shows a real
+  `verified_at` (04:28:16) for the confirming student's seat. The server log
+  independently shows the full request chain: `/admin/recover` ->
+  `/admin/recovery/select-class` -> `/admin/recovery/submit-class-code` on
+  the teacher side, `/student/verify-recovery/<id>` on the student side, and
+  `/admin/recovery-status` confirming the result -- all 200s.
+- **Student-side add/switch class** — exercised live, and doing so found a
+  real defect, now fixed (`2e5ebf0a2`): `/student/add-class` set the new
+  active-class pointer directly on the ORM object after its own FEAT context
+  had already closed, with no commit -- silently discarded at request
+  teardown, same shape as finding 53's passkey bug. A student who joined a
+  second class saw "This class is now your active class" but the switch
+  never stuck; confirmed live via a real account with two genuinely claimed
+  seats whose `last_active_class_id` still pointed at the first class after
+  adding the second. Fixed by routing through the same
+  `switch_student_session_context()` helper the dedicated
+  `/student/switch-class/<class_id>` route already used correctly.
+
+**Amended 2026-09-23, again — the fix above did not resolve the live
+report; a second, unrelated defect did (`6dc09bbc8`).** After the
+`add_class` fix shipped, the reporting student (Jordan, two genuinely
+claimed seats) still could not switch classes — his "Switch Class" sidebar
+dropdown showed exactly one `<option>`, confirmed by two separate
+screenshots. Root cause: `inject_student_layout_view()`'s
+`available_classes` was hardcoded to a single-item list built from only the
+current class's display metadata, structurally incapable of ever listing a
+second class for any student. The teacher-side twin context processor had
+already been fixed for the identical defect shape. Fixed by sourcing the
+dropdown from the same all-claimed-seats query `select_class_context()`
+already used. Regression test added
+(`test_dashboard_switcher_lists_every_claimed_class`), 32 tests re-run
+green. **Confirmed complete live by the operator after deploy** — see
+`RESUME_2026-09-22_findings_39-54.md` §8 finding 69 for full detail.
+
+**Amended 2026-09-23, again — the two threads left open after finding 69
+are now both closed (`195162a31`).**
+
+- **`/admin/recover` rate-limit fine-tuning** — confirmed before changing
+  anything: GET and POST shared one "5 per hour" bucket, so page loads
+  alone (no guessable-data resolution) could exhaust the budget for the
+  actual sensitive action. Scoped the limit to POST only, leaving its
+  threshold untouched — an availability fix, not a security relaxation.
+  Verified live: 8 GETs all 200, then a real POST sequence with a valid
+  CSRF token hit 429 exactly on the 5th attempt. See
+  `RESUME_2026-09-22_findings_39-54.md` §8 finding 70.
+- **`select_class_context()`** — carried the same unguarded-write shape as
+  finding 68 (raw ORM assignment, no FEAT context, no commit), reachable
+  via the no-canonical-context fallback path rather than `add_class`'s
+  trigger. Fixed via an inline `FEAT-IDEN-005` context calling
+  `switch_student_session_context()`. Regression test reproduces the
+  defect exactly via a fresh post-request DB read; mutation-proofed. See
+  `RESUME_2026-09-22_findings_39-54.md` §8 finding 71.
+
+**Amended 2026-09-23 — PII sweep complete (`a484bd6f4`).** URLs clean
+(code + 7 days of production access logs). One real logging leak found
+and fixed: `add_individual_student`'s idempotency key embedded the raw
+student name, written verbatim to the log on every FEAT-ENTRY;
+`dedupe_key` already HMAC-encodes the same identity, so the raw name
+was redundant as well as unsafe. Mutation-proofed regression test
+added. Four flash-message instances were flagged against the letter of
+the security doc's own example, then reconsidered and left alone —
+they're session-scoped and visible only to the teacher already looking
+at that exact student, so they don't actually expose anything; the
+doc's example is really about user-enumeration to an unauthorized
+party, a different threat that doesn't apply here. See
+`RESUME_2026-09-22_findings_39-54.md` §8 finding 72.
+
+Still untested: two of the three sweeps (Turnstile coverage on every
+configured route, accessibility per INV-ARC-020).
+
+**Amended 2026-09-23 — Turnstile sweep complete (`f1a62e0a8`).** A
+systematic pass over every unauthenticated route found three more gaps
+beyond the four already fixed: `/admin/login` (widget rendering via
+the global context processor, but never verified server-side),
+`/admin/resume-credentials` (no widget, no server check at all -- a
+bare 6-digit PIN with no session precondition, the single most
+guessable secret on the recovery surface), and
+`/verify/hallpass/<token>` (no widget, no server check -- the
+`(join_code, first_name, last_name)` match is guessable even though
+the URL token itself isn't). All three fixed and mutation-proofed. See
+`RESUME_2026-09-22_findings_39-54.md` §8 findings 75-77.
+
+Still untested: accessibility per INV-ARC-020.
+
+**Amended 2026-09-23 — full pre-launch suite run recorded.** First full
+(not targeted) `pytest` run since this live-test campaign began,
+against `a916bbfeb` (matches the currently deployed code —
+`live-test/2026-09-23e` is one commit earlier, doc-only diff).
+3597 tests recorded: 3561 pass, 16 error, 4 fail, 16 skip (99.00%).
+Evidence preserved verbatim at
+[`docs/ops/audits/evidence/2026-09-23_pytest-full_a916bbfeb/`](../ops/audits/evidence/2026-09-23_pytest-full_a916bbfeb/)
+per `SOP-DEP-001` §XV.
+
+Investigated every non-pass outcome individually before accepting this
+as clean — none trace to this campaign's changes:
+- **16 errors**, all `tests/test_status_page.py`, all
+  `ModuleNotFoundError: No module named 'google.auth'` — a missing
+  local dev dependency (`google-auth`/`google-cloud-*` isn't in
+  `requirements.txt` and isn't installed in this venv), not a code
+  defect. `test_status_page.py` last touched by `1023c5e76`, unrelated
+  to this campaign.
+
+**Corrected 2026-09-23, same day — the "4 fails ... none from this
+campaign" claim above was wrong, and the operator caught it.** The
+check that produced it only asked "which commit last touched this
+file," not "did that commit land before or after the last known-clean
+full run" — and `b4a639311` (2026-09-21 22:01 UTC, the prior full run,
+0 fails/0 errors) turned out to predate every one of those commits,
+not postdate them. Verified properly with
+`git merge-base --is-ancestor b4a639311 <sha>`: `dea06c1e6`, `1e20214ed`
+(hall pass) and `ccfb989ee`, `7ee59c1b9`, `060f3989b` (claim page) all
+landed later that same evening (19:19–22:21 PDT = after the clean
+run's UTC timestamp), squarely inside this campaign.
+
+- **`test_design_token_contract.py::test_SPEC_DES_001__templates_conform[R5]`**
+  — a real regression. `git log -S` confirms `7ee59c1b9` (09-21) added
+  5 new `style="font-size:1em;vertical-align:middle;"` spans to
+  `templates/admin_process_claim.html` — a genuinely new static inline
+  style, not pre-existing debt. No sanctioned CSS class covered "size
+  an icon to match surrounding text" (the existing `.icon-xs`…`.icon-3xl`
+  tokens are all fixed rem sizes). Added `.icon-inherit { font-size: 1em; }`
+  to `static/css/style.css` alongside the existing token classes and
+  swapped all 5 spans to `class="... icon-inherit icon-middle"`.
+  Verified the swap is visually exact, not approximate: rendered both
+  the old inline style and the new classes against the real stylesheet
+  in a browser and diffed `getComputedStyle` — `fontSize` and
+  `verticalAlign` matched byte-for-byte. 49/49 `test_design_token_contract.py`
+  tests and 3/3 `test_accessibility.py` tests re-run green.
+
+- **The three `test_hall_pass_lifecycle_classification.py` failures**
+  — not a production regression at all, despite living in files this
+  campaign touched. `dea06c1e6` (which created this test file) and
+  `1e20214ed` hardcoded a literal day-boundary window
+  (`datetime(2026, 9, 21, 7, 0, ...)` to `datetime(2026, 9, 22, 7, 0, ...)`)
+  and a literal history-query date (`"2026-09-21"`) — both correct on
+  the day they were written, both silently expired the moment real
+  wall-clock time moved past them, since `_leave()`/`_return()` stamp
+  their attendance rows with genuine current time regardless of what
+  date the test asserts against. Confirmed this is test-only by reading
+  the real callers: `app/routes/admin.py`'s Issued/Out page and
+  `app/routes/api.py`'s checkin route both compute their day boundary
+  *dynamically* via `canonical_temporal_resolver(..., primitive=
+  "evaluation_day_boundaries")` at request time — never a hardcoded
+  literal. Fixed by making the test do the same (a new
+  `_todays_boundaries()` helper calling the identical production
+  primitive) and computing the history query's date at test-run time
+  instead of hardcoding it. **Mutation-proofed properly**: temporarily
+  broke `resolve_hall_pass_lifecycle_status` to always return
+  `"approved"`, confirmed 5 of the 7 tests in the file catch it (2 that
+  don't exercise any state transition can't, by construction), restored
+  the resolver untouched (`git diff` empty), reran clean — 7/7 pass.
+
+Both fixes committed together; see the RESUME audit doc §8 for the
+full writeup. **This correction stands as the record** — the file's
+own convention is to layer a dated amendment over a wrong claim, not
+silently rewrite it, so the retracted text above stays visible rather
+than being deleted.
+
+**Amended 2026-09-23, again — accessibility per INV-ARC-020, in
+progress.** Per operator direction ("all pages... minimum ADA
+requirements"), built the real WCAG-level infrastructure this campaign
+was missing (`tests/test_axe_app_pages.py`, commits `b11a4f6ea` and
+`db1cddec5`) rather than another manual pass: a throwaway `werkzeug`
+server + headless Chromium via Playwright, running the actual axe-core
+engine's WCAG 2 A/AA ruleset against real, authenticated,
+server-rendered pages — the app's own axe harness previously only ever
+covered the 4 static marketing pages, and even that wasn't running
+locally (Playwright was in `requirements.txt` but not installed on
+`PATH`; the project's own `venv/` had it all along).
+
+A companion mapping (background agent, 2026-09-23) classified all 88
+real page templates into 12 groups by what's needed to reach a 200
+response. **40 of 88 (Groups A/B/C/E/F/G/H) now verified against real
+WCAG 2 A/AA with zero violations**, after finding and fixing 10 genuine
+defects — full detail in `RESUME_2026-09-22_findings_39-54.md` §8
+finding 78. Two were shared/systemic fixes (a sidebar sign-out button
+contrast bug affecting every teacher+sysadmin page; an EasyMDE
+markdown-editor missing-label bug affecting 4 templates/5 editor
+instances, fixed once via a `MutationObserver` rather than patched per
+call site) rather than one-off patches.
+
+**Amended 2026-09-23, again — Groups D/J/L complete; Group I is cleanup,
+not test scope. Accessibility campaign done: 88/88.**
+
+Groups D/I/J/L were not reachable with the harness's `initialize_as_teacher`/
+`enable_class_feature` pattern, so a new `tests/simulated/` directory was
+built: a persistent, production-sourced world database instead of a
+hermetic per-run schema, seeded once from a production `pg_dump` (PII
+decrypted on production, re-encrypted locally, the production
+`ENCRYPTION_KEY` never leaving production). This does not weaken
+SPEC-TEST-001 — that rule governs row *provenance* (must come from
+canonical FEAT/production code paths), not *reuse*; a world seeded and
+mutated exclusively through canonical FEAT helpers, accumulating real
+history across runs, fulfills the rule's spirit. Full reasoning in
+`tests/simulated/conftest.py`.
+
+- **Group D — 7/7 pages, zero violations** (`test_group_d_pages.py`):
+  found the one class in the seeded world that already owned a real
+  claim/issue/policy row, queried its ids, covered
+  `admin_process_claim.html`, `admin_view_issue.html`,
+  `sysadmin_view_issue.html`, `student_file_claim.html`,
+  `student_view_policy.html`, `admin_announcement_form.html` (edit mode
+  — the one announcement it needed was created via the real admin route
+  and contributed back), and `student_detail.html` (its signed `nav=`
+  token was scraped from a real `GET /admin/students` response, since it
+  cannot be hand-built).
+- **Group J — 2/2 pages, zero violations** (`test_group_j_pages.py`):
+  `admin_recovery_prepare.html`/`admin_recovery_status.html`, reached by
+  really submitting the unauthenticated `/admin/recover` form (Turnstile
+  self-bypasses; `TURNSTILE_SECRET_KEY` is unset here). The one scenario
+  in this whole effort that could not be satisfied from existing world
+  state — recovery proof needs a claimed student's *plaintext* username,
+  and usernames are stored only as an unsalted HMAC digest, unrecoverable
+  from any database — so this test provisions its own tiny classroom
+  through the same production service calls the canonical initializer
+  uses, with a freshly-suffixed teacher username every run (reusing the
+  shared `teacher_alice` fixture identity breaks proof once that teacher
+  accumulates a second class — hit that wall firsthand; see
+  `RESUME_2026-09-22_findings_39-54.md`'s 2026-09-23 amendment for the
+  full incident, including a `PEPPER_KEY`-hardcoding gotcha in
+  `tests/conftest.py` and a `prevent_immutable_delete()` trigger that
+  correctly refused to let stray fixture rows be cleaned up).
+- **Group L — 1/1 page, zero violations** (`test_group_l_pages.py`):
+  `student_verify_recovery.html`, reached via the same FEAT chain plus
+  logging in as exactly the seat `select_class_recipients` randomly
+  chose (any other seat 404s by design).
+- **Group I — reclassified, not a test gap.** All 7 templates
+  re-confirmed to have zero `render_template()` references anywhere in
+  `app/`; flagged for a dedicated cleanup session rather than folded into
+  this one.
+
+**Campaign total: 88/88 real page templates verified against real WCAG 2
+A/AA with zero violations** (40 from Groups A/B/C/E/F/G/H, 7 dead
+templates correctly excluded, 10 from Groups D/J/L — with 10 genuine
+defects found and fixed earlier in the campaign and zero new ones in
+Groups D/J/L). INV-ARC-020's accessibility requirement is now backed by
+real, verified coverage rather than a partial pass.
+
+**Amended 2026-09-23 — insurance has no recurring-premium executor (open, launch-relevant).**
+Insurance purchase writes bill cycle 1 with a `next_assessment_at` one period out, and nothing in `app/`
+consumes that date to assess premium #2. Verified by search rather than by reading the summaries above:
+`app/feats/` holds `purchase_insurance_feat`, `cancel_insurance_feat` and `insurance_claim_feat` and no premium
+assessment or recurrence FEAT; the only scheduled insurance job, `run_insurance_expiry_job`
+(`app/scheduled_tasks.py:607`), enumerates **terminal** cycles only (`next_assessment_at IS NULL`); and
+`app/scheduled_tasks.py:12-13` still carries `# TODO (Phase 4): insurance_billing deleted; move to Obligations
+domain`. Consequence, as far as the code shows: an insurance lineage that is never cancelled is charged once and
+then neither billed again nor expired.
+
+- **Why no test or live session has seen it.** Recurrence only matters once a lineage ages past its first
+  period, and none has. The production snapshot's only insurance lineages (2, both seat 3) were both cancelled
+  during live testing (cycle 2, `next_assessment_at` NULL); no live, uncancelled lineage exists. A lineage
+  bought today first comes due one period later. This is an aging-state gap, the same class as rent payment
+  (blocked to 2026-09-29): success paths pass, and the defect only exists after time passes.
+- **The expiry job's stated triggers are partly fictional.** Its docstring says a lineage terminates via
+  "FEAT-OBL-005 cancellation, teacher offering-cancel, or nonpayment non-renewal". `terminate_bill_cycle` has
+  exactly one caller (`cancel_insurance_feat`); the other two have none. Nonpayment non-renewal cannot exist
+  without an executor that detects nonpayment.
+- **Lineage identity is not stable.** `purchase_insurance_feat.py:124` builds
+  `internal_ref = f"insurance:{seat_id}:{policy_uuid}:{idempotency_key}"`, embedding the purchase command's
+  execution identity in the domain identity of a lineage that is meant to recur. Nothing exposes this today
+  only because nothing ever has to reconstruct that key.
+- **Registry drift, noted not resolved.** `FEAT_REGISTRY` names `FEAT-OBL-003` "Scheduled Insurance Cycle"
+  (`app/feats/base.py:249`); the FEAT document of that number is *Satisfy Obligation*.
+
+**Boundary, stated so it is not lost:** do not migrate insurance onto canonical bill-cycle succession until the
+recurring-premium lifecycle and a stable lineage identity are ratified. Migrating rent first is unaffected.
+
+**Lineage identity — ratified by the operator 2026-09-23.** One insurance entitlement constitutes one recurring
+billing lineage. A subsequent purchase creates a new entitlement and therefore a new billing lineage. Purchase
+command identity (the idempotency key) does not participate in billing-lineage identity. The Obligations
+`internal_ref` for an insurance lineage derives from the `entitlement_id` alone; the succession primitive keeps
+treating `internal_ref` as opaque. This settles the identity half of the boundary above. Not yet carried into a
+normative document or into `purchase_insurance_feat.py`.
+
+**Succession primitive landed 2026-09-24 (rent only).** `schedule_next_bill_cycle` with command-identity replay
+(`obligation_command_reservation`) now creates every rent cycle; see CHANGELOG "Bill-cycle succession is one command".
+Insurance still creates cycle 1 through the interim `establish_bill_cycle` and has no successor path. What remains
+for insurance is the bounded integration: key `internal_ref` on `entitlement_id`, add the recurring-premium
+executor, and move cycle 1 onto succession, after the two decisions below.
+
+**Still open after that ratification — two product decisions, neither settled by existing code:**
+
+- *Nonpayment.* When a recurring premium reaches its due boundary and cannot be paid, what happens to the
+  obligation, to coverage, and to the next billing boundary? This one answer decides whether missed premiums
+  accumulate, whether and how retry happens, when coverage ceases, and whether another premium can fall due.
+  Cancellation expiry (EXPIRED at the cycle boundary) is ratified; nonpayment behavior is not, and the two are
+  separate questions.
+- *What "monthly" means.* No normative document defines insurance cadence. V1 used 28 days. V2 uses calendar
+  months but labels it "INTERIM BINDING: DOM-POL does not yet designate a canonical cadence field"
+  (`purchase_insurance_feat.py:81`), and its two call sites disagree: purchase adds a calendar month to the UTC
+  instant (`relativedelta(months=1)`), while claims count class-local calendar days to the next calendar month
+  (`insurance_claim_feat.py:194`). Neither V1's nor V2's current behavior carries authority.
+
+**What V1 contributes, and its limits.** [`V1_INSURANCE_LIFECYCLE_TRACE_2026-09-23.md`](../ops/audits/V1_INSURANCE_LIFECYCLE_TRACE_2026-09-23.md)
+records what V1 insurance did, transition by transition, with 30 prediction-first probes. It is non-normative
+evidence, not a specification. V1's recurring unit was the enrollment row: the same row was re-charged at its
+frozen premium and its due date advanced, until cancelled; the "renewal" builder was never called in
+production. Two cautions on treating it as a target: its billing job is young (added 2026-04-20, eight weeks
+before the freeze) with tests that contradict one another, and several of its behaviors are product decisions
+rather than obviously correct ones (one period charged however late, daily autopay retry as the only
+recovery, no late fee, no expiration). Those need an owner decision before any of them is ported.
+
+### Amended 2026-09-24 — insurance claims run against a FEAT that contradicts its governing DOM (open, launch-relevant)
+
+**Status: STOP.** Nothing touching claims (runtime or either document) changes until this is resolved. The operator
+decides which representation survives, and first which domain owns claim truth at all.
+
+**The conflict.** Both documents are Normative; DOM outranks FEAT, and FEAT-STOR-003 §XIX (Amendment) says revisions "must
+remain consistent with `DOM-STORE-001`".
+
+- `DOM-STORE-001` v5.0 §VI lists "`insurance_claims` as a separate mutable workflow table" among superseded
+  concepts. §VIII.E.1 (Insurance): claims are represented through `pending_actions` before resolution; on resolution the
+  entitlement records a terminal `CONSUMED` event carrying the claimed subject and decision; claims "MAY be repeated
+  against the same entitlement" (§VIII.B, Consumption semantics, lets a type allow further terminal facts after `CONSUMED`).
+- `FEAT-STOR-003` v1.2 §XVII prohibits writing `CONSUMED` for a filed or approved claim, and prohibits "modelling the
+  claim lifecycle on `PendingAction` (or any generic action queue) instead of the dedicated `InsuranceClaim` record,
+  which is the sole owner of claim existence, status, basis, decision, and correlation."
+- Runtime follows the FEAT: `insurance_claims` and `insurance_claim_productivity_dates` exist
+  (`app/services/insurance_claim_service.py`, `app/feats/insurance_claim_feat.py`); no claim writes `pending_actions`
+  or `CONSUMED`. Both tables are the only two ORM tables still unregistered in DOM-CORE-002 (1.10), deliberately.
+
+**Provenance (git).**
+
+| Date | Commit | DOM-STORE-001 | FEAT-STOR-003 |
+| :--- | :--- | :--- | :--- |
+| 2026-07-22 | `5b6c2b464`, `6e4c22804` | v3.0: Store is "sole schema and mutation authority" over `entitlements`, `entitlement_consumptions`, **`insurance_claims`** | v1.0: first-class claim; bans `CONSUMED` on file/approve |
+| 2026-08-03 | `184910af8` "Store foundation" (demolition plan) | v5.0 (effective 07-28): event model, `entitlement_events` + `pending_actions` only; `insurance_claims` superseded | v2.0 (effective 07-27): `pending_actions` row + `CONSUMED` on resolution — aligned with the DOM |
+| 2026-08-28 | `02d412e6b` "complete insurance architecture" | **not touched** | rewritten (395 lines) as **"v1.1, supersedes 1.0"**: first-class `InsuranceClaim` restored, `PendingAction` banned; migrations create `insurance_claims` |
+| 2026-09-01 | `4dea11a11` | — | v1.2: claim terms resolved from the immutable policy by `policy_uuid` |
+
+**What the trace shows, and what it does not.**
+
+- The DOM moved away from a claims table deliberately, as part of a planned whole-domain move to an event model.
+  The FEAT moved back without amending the DOM, and its version went *backwards* (2.0 → "1.1 supersedes 1.0"). Its
+  revision note mentions only the allowance rule, not abandoning `pending_actions`. That pattern fits text edited from
+  the v1.0 base, not a recorded supersession of v2.0. It is the same failure shape as bill-cycle genesis: a lower
+  document changed architecture without propagating upward.
+- It does not show the FEAT was wrong. Its code gives a substantive reason: the entitlement "stays GRANTED until its
+  real coverage boundary, so multiple claims may be filed under one active policy". DOM v5 can support repeated
+  claims only through the §VIII.B exception, which it states thinly. A first-class record also holds claim state the
+  event model spreads across payloads (status, basis, per-date productivity evidence, decision, source-transaction
+  uniqueness). Neither side's reasoning was written down at the time.
+
+**The prior question (operator).** What domain truth does an insurance claim represent, and which domain owns it?
+DOM-STORE-001 §II (Scope) already hedges: "an insurance entitlement is granted here, while claim execution may coordinate with
+Ledger and a *claim-specific domain*." A claim touches entitlement state (Store), policy terms and waiting periods
+(Policies), productivity dates (Productivity), and reimbursement (Ledger). Store owning the entitlement a claim is made
+against does not by itself make Store the owner of the claim lifecycle; that assignment may be another artifact of
+insurance being built through Store.
+
+**Resolution paths, not chosen:** (a) amend DOM-STORE-001 to ratify a first-class claim record (in Store or a claims
+owner) and register the tables; (b) bring runtime back to `pending_actions` + `CONSUMED`; (c) reassign claim
+ownership first, then choose the representation inside the owning domain.
+
+**Resolved 2026-09-24 — path (a), Store as owner (operator).** Every normative ownership assignment already named
+Store (FEAT-STOR-003 §II, DOM-STORE-001 §IV, DOM-STORE-001 v3.0), so no new domain was created; the "claim-specific
+domain" hedge in §II is removed. What was wrong was the representation, not the owner. `DOM-STORE-001` v5.1:
+
+- `insurance_claims` and `insurance_claim_productivity_dates` are durable Store-owned claim state (§VII.C–D).
+- `pending_actions` is in-flight work: it MAY carry an unresolved claim request, is never durable claim truth, must
+  not hold claim-specific structured data permanently, and resolving it never deletes or rewrites the claim (§VII.B).
+- An insurance entitlement is reusable coverage. Filing, approving, rejecting or fulfilling a claim writes no
+  `CONSUMED`, `EXPIRED` or `REVOKED`; an `INSURANCE` entitlement records no `CONSUMED` at all; it terminates only
+  through its coverage lifecycle. An individual claim is not a consumption event, so no exception to §VIII.B's
+  terminality rules was needed.
+- Resolution of a pending action, the lifecycle of a claim, and termination of an entitlement are independent
+  lifecycle events (§VIII.E.1).
+
+`FEAT-STOR-003` v1.3 conforms (no runtime behavior change). DOM-CORE-002 1.10 registers both tables, leaving zero
+unregistered ORM tables. Runtime already conformed; the dead `derive_claim_allowance`, which counted `CONSUMED`
+events as claims used, is deleted. Out of scope and unchanged: claim calculation, payout, premiums, cadence,
+nonpayment.
+
+### Amended 2026-09-24 — recurring premiums and advance billing: ratified, implementation in progress
+
+The two open insurance decisions (nonpayment, "monthly") are ratified and encoded, together with real advance
+billing for rent: DOM-OBL-001 3.2, DOM-POL-001 2.2 / 001A 2.1, DOM-STORE-001 5.2, DOM-CLASS-001 3.4,
+SPEC-TIME-001 1.1, SPEC-ECON-003 2.1, FEAT-OBL-002 2.1, FEAT-STOR-002 2.1, FEAT-STOR-003 1.4, FEAT-POL-001 2.1,
+FEAT-CLASS-004 1.1, and the new FEAT-STOR-007 (Insurance Coverage Renewal). Commits `098581a12` … `3aea2abf3`.
+
+**Implementation slices, in dependency order:**
+
+1. Temporal: `anchored_recurrence_boundary`, `minimum_period_duration` (SPEC-TIME-001 §IX.12–13).
+2. Obligations core: `WITHDRAWN` (§V.8) in derived status and satisfaction; current-cycle query (period
+   containment, excluding cycles at/after a termination instant); "required obligations satisfied" read; default
+   payment target (oldest outstanding); Policies read of the preview interval by `policy_uuid`; succession at the
+   assessment point; `terminate_bill_cycle` at the termination instant with withdrawal of untouched advance
+   assessments.
+3. Rent conformance: advance assessment in reconciliation; succession only while rent is enabled at the successor
+   boundary; the disabled path settles existing state (late fees) and never creates; roster backfill against the
+   current (and already-assessed upcoming) cycle; perk expiry at the boundary and perk grant at period start;
+   `/rent` available while surviving rent state exists; payment default oldest outstanding; rent policy lookups
+   by current cycle (`student.py:433`, `admin.py:1807`); pending-policy save (`admin.py:5327`) binds at assessment;
+   replace route-local schedule math (`_calculate_rent_timeline` in `student.py`, used by the student dashboard,
+   `admin.py:4525`, `economy_rebalance.py:75`) with Obligations' current/upcoming cycles; rent disable withdraws
+   untouched advance rent (FEAT-CLASS-004).
+4. Insurance: policy fields and migration (`bill_preview_days`, `nonpayment_mode`, `cancel_after_days`); purchase
+   keyed by `entitlement_id` and moved onto succession (delete `establish_bill_cycle`); FEAT-STOR-007 executor and
+   scheduled job (advance assessment, auto-pay, ACCUMULATE, CANCEL_AFTER_X_DAYS, nonpayment `EXPIRED`); stop-renewal
+   at the termination instant; claim filing gated on the Obligations read; claim allowance/payout per period;
+   remove `payment_current` view shims (`student.py:1984`, `admin.py:3573`).
+
+**Status:** slice 1 `3791c49d0`; slice 2 `f4c2c1372` (one canonical obligation-state derivation) and `c2e198442`
+(WITHDRAWN, assessment point, current cycle, termination instant); slice 3 landed with
+`tests/dom/obligations/test_rent_disablement_surviving_state.py` — its tests found that the student blueprint's
+feature gate 404'd `/rent` before the route's surviving-state check ran, and that succession requiring rent "enabled
+at the successor boundary" would never resume a lineage after re-enablement; both fixed (a successor is refused only
+for a recorded disablement in force at a boundary not yet reached). Slice 3 also deleted the route-local rent
+schedule (`_calculate_rent_timeline` and ~14 helpers, most already dead); the student dashboard's `rent_status` was
+computed and never rendered. Waiver-history expansion still steps periods from policy settings (display only,
+follow-up). Slice 4 in progress.
+
+**Required tests beyond the ratification's list:** disable rent with no surviving state (no assessments); with old
+unpaid rent (still viewable and payable); with delinquent rent (late fees continue under the frozen contract);
+during preview untouched (`WITHDRAWN`), partly paid (committed, remainder payable, late fees continue), fully paid
+(committed, perks at period start, no successor); reconciliation while disabled never creates a period;
+paying the last surviving obligation while disabled does not re-enable rent or create a successor (mutation-test);
+a policy-B preview change does not move a cycle created under policy A (mutation-test).
+
+### Standing lesson for the ship gate
+
+Every one of the first session's 23 findings — and all fifteen the second
+session added — was invisible to the test suite and visible within minutes of a
+real browser. That is not an argument against the suite —
+it caught none of these because none was the kind of thing it was written to
+catch. It is an argument that **suite-green is not a launch signal on its own**,
+and that the §XI browser pass is load-bearing rather than ceremonial.
+
+`SOP-DEP-001` §XI.A now records the adversarial technique the second session
+developed, so the next operator does not have to rediscover that a negative
+result proves little without a prediction to compare it against.
+
+---
+
+## VIII. Maintenance
 
 Update this file when a track changes status or a finding is closed. Record closure with the commit
 SHA. Do not create a new dated tracking document for this sprint — amend this one. Historical

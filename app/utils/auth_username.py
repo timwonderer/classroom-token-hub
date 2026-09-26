@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from app.hash_utils import get_random_salt, hash_username, hash_username_lookup
+from app.hash_utils import get_random_salt, hash_username, hash_username_lookup, normalize_lookup_text
 
 
 def normalize_auth_username(username: str | None) -> str:
-    return (username or "").strip()
+    return normalize_lookup_text(username or "", kind="username")
 
 
 

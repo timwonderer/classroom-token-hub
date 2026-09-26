@@ -14,6 +14,11 @@ def test_DOM_IDEN_006__student_login_next_redirect(client, monkeypatch):
     assert '/student/dashboard' in resp.headers['Location']
 
     # Login with next parameter and expect redirect back
-    login_resp = student_login_next(client, username=student.username, pin=student.pin, next_path="/student/dashboard")
+    login_resp = student_login_next(
+        client,
+        username=student.username,
+        passphrase=student.passphrase,
+        next_path="/student/dashboard",
+    )
     assert login_resp.status_code == 302
     assert login_resp.headers['Location'].endswith('/student/dashboard')

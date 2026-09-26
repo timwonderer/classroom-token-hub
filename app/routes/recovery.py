@@ -6,6 +6,8 @@ import hmac
 from app.extensions import db, limiter
 from app.models import Seat
 from app.auth import admin_required
+from app.utils.ip_handler import get_real_ip
+from app.utils.turnstile import verify_turnstile_token
 
 recovery_bp = Blueprint('recovery', __name__, url_prefix='/recovery')
 
@@ -69,13 +71,20 @@ def account_lookup():
     """
     Step 2 — Student Submits Reset Code (DOM-IDEN-002 §IX).
 
-    Delegates to FEAT-IDEN-004 for recovery code validation and credential clearing.
+    Delegates to FEAT-IDEN-004 for single-use recovery code acceptance.
     """
     if request.method == 'POST':
         reset_code = request.form.get('reset_code', '').strip().upper()
 
         if not reset_code:
             flash("Reset code is required.", "error")
+            return redirect(url_for('recovery.account_lookup'))
+
+        # Ingress gate: the reset code is the only secret guarding this
+        # unauthenticated entry point, and this route has no other bot check.
+        turnstile_token = request.form.get('cf-turnstile-response')
+        if not verify_turnstile_token(turnstile_token, get_real_ip()):
+            flash("Security verification failed. Please complete the check and try again.", "error")
             return redirect(url_for('recovery.account_lookup'))
 
         from app.feats.identity_feat import validate_recovery_code
@@ -94,16 +103,26 @@ def account_lookup():
         )
 
         if not result.success:
+            session.pop('onboarding_user_ref', None)
+            session.pop('recovery_setup_authorization', None)
             session.pop('recovery_student_ref', None)
             flash(result.error_message, "error")
             return redirect(url_for('recovery.account_lookup'))
 
         # Set session for credential setup flow.
-        session['onboarding_seat_ref'] = result.seat_id
+        session.pop('onboarding_seat_ref', None)
+        session.pop('generated_username', None)
+        session.pop('theme_prompt', None)
+        session.pop('theme_slug', None)
         session['onboarding_user_ref'] = result.user_id
+        session['recovery_setup_authorization'] = result.setup_authorization
+        session.permanent = False
         session.pop('recovery_student_ref', None)
 
         flash("Recovery code verified. Please set up your new username and credentials.", "success")
         return redirect(url_for('student.create_username'))
 
-    return render_template('student/recovery/account_lookup.html')
+    return render_template(
+        'student/recovery/account_lookup.html',
+        turnstile_site_key=current_app.config.get("TURNSTILE_SITE_KEY"),
+    )

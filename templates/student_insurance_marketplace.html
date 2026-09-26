@@ -4,8 +4,40 @@
 {% block title %}Insurance{% endblock %}
 {% block page_icon %}shield{% endblock %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("Policies you can buy, the coverage you already hold, and the claims you have filed against it.") }}
+
+{% call help.topic('ins-what', 'shield', 'What a policy actually buys') %}
+<p>You pay a <strong>premium</strong> on a schedule. In return, if the thing the policy covers happens to you, you can file a claim and be paid back for part or all of it.</p>
+<p class="mb-0">If nothing happens, you do not get the premiums back. That is not a bug — it is what you were buying. Insurance is worth it when the loss you are protecting against would hurt more than the premiums do.</p>
+{% endcall %}
+
+{% call help.topic('ins-before', 'fact_check', 'Read these before you buy') %}
+<ul class="ps-3 mb-0">
+    <li class="mb-2"><strong>Waiting period</strong> — how long after buying before coverage starts. Buying a policy after the thing has already happened does not cover it.</li>
+    <li class="mb-2"><strong>Claim limits</strong> — the most one claim can pay, and how many claims you get in a period.</li>
+    <li class="mb-0"><strong>Premium and frequency</strong> — how much leaves checking, and how often. This keeps charging you.</li>
+</ul>
+{% endcall %}
+
+{% call help.topic('ins-paying', 'payments', 'Keep the premium paid') %}
+<p class="mb-0">Each premium is billed a few days before its period starts and taken from checking right away. If checking is short, the premium stays unpaid and your coverage pauses when the new period starts, so claims are refused until you pay it on the policy page. Depending on the policy, unpaid premiums either keep adding up or end your coverage after a set number of days. Some policies also make you wait before you can buy them again.</p>
+{% endcall %}
+
+{% call help.topic('ins-claims', 'assignment_turned_in', 'Filing and tracking claims') %}
+<p class="mb-0">File from the policy itself, within its claim deadline, and say plainly what happened. <strong>Your claims</strong> shows where each one stands. Approval is your teacher's decision, and a claim can be capped or refused if it is outside the terms you bought.</p>
+{% endcall %}
+{% endblock %}
+
+{% block extra_styles %}
+<style>
+  .insurance-market-column { max-width: 960px; }
+  .insurance-cancel-passphrase { max-width: 12rem; }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid" style="max-width: 960px;">
+<div class="container-fluid insurance-market-column">
 
   {# ---- Your coverage ---------------------------------------------------- #}
   <section class="mb-4">
@@ -18,22 +50,40 @@
           <div class="card-body">
             <div class="d-flex justify-content-between align-items-start">
               <h3 class="h6 mb-1">{{ cov.title }}</h3>
+              {% if cov.premiums_current %}
               <span class="badge bg-success">Active</span>
+              {% else %}
+              <span class="badge bg-danger">Premium overdue</span>
+              {% endif %}
             </div>
+            {% if not cov.premiums_current %}
+            <p class="text-danger small mb-2">Coverage is paused until the overdue premium is paid. Open <strong>View policy</strong> to pay it.</p>
+            {% endif %}
             <div class="text-muted small mb-2">{{ cov.insurance_type|capitalize }}</div>
             <div class="fw-semibold">${{ "%.2f"|format(cov.premium) }}
               <span class="text-muted fw-normal">/ {{ cov.charge_frequency|lower }} premium</span>
             </div>
+            {% if cov.waiting_period_days is not none and cov.waiting_period_days > 0 %}
+            <div class="text-muted small mt-1">Claims begin after {{ cov.waiting_period_days }} days.</div>
+            {% endif %}
             {% if cov.purchased_at %}
             <div class="text-muted small mt-1">Since {{ cov.purchased_at.strftime('%b %d, %Y') }}</div>
             {% endif %}
             <div class="d-flex gap-2 mt-3">
+              <a href="{{ url_for('student.view_policy', policy_uuid=cov.policy_uuid) }}"
+                 class="btn btn-outline-secondary btn-sm">View policy</a>
               <a href="{{ url_for('student.file_claim', policy_uuid=cov.policy_uuid) }}"
                  class="btn btn-outline-primary btn-sm">File a claim</a>
+              {# Cancelling insurance is a passphrase action, the same as buying it
+                 (FEAT-IDEN-002 §Credential boundary). #}
               <form method="POST" action="{{ url_for('student.cancel_insurance', policy_uuid=cov.policy_uuid) }}"
-                    class="d-inline"
+                    class="d-flex align-items-center gap-2"
                     onsubmit="return confirm('Cancel this coverage? It will stop renewing — your benefits continue until the end of the current period.');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                <label class="visually-hidden" for="cancelPassphrase-{{ cov.policy_uuid }}">Passphrase</label>
+                <input type="password" class="form-control form-control-sm insurance-cancel-passphrase"
+                       id="cancelPassphrase-{{ cov.policy_uuid }}" name="passphrase"
+                       placeholder="Passphrase" autocomplete="current-password" required />
                 <button type="submit" class="btn btn-outline-danger btn-sm">Cancel coverage</button>
               </form>
             </div>
@@ -48,6 +98,9 @@
   </section>
 
   {# ---- Available policies ----------------------------------------------- #}
+  {% if not insurance_for_sale %}
+  <p class="text-muted">Insurance is closed to new purchases in this class. You can still pay any premium you owe.</p>
+  {% else %}
   <section class="mb-4">
     <h2 class="h5 mb-3">Available policies</h2>
 
@@ -84,6 +137,12 @@
             {% else %}
             <form method="POST" action="{{ url_for('student.purchase_insurance', policy_uuid=policy.policy_uuid) }}" class="d-inline">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+              {# Namespaced per section: the grouped-tier loop and the ungrouped
+                 loop below both render a buy form, and a bare policy_uuid id
+                 appears twice in the template even though a given policy is only
+                 ever rendered by one of them. #}
+              <label class="visually-hidden" for="insurance-tier-passphrase-{{ policy.policy_uuid }}">Passphrase to buy {{ policy.title }}</label>
+              <input type="password" class="form-control form-control-sm mb-2" id="insurance-tier-passphrase-{{ policy.policy_uuid }}" name="passphrase" autocomplete="current-password" placeholder="Passphrase" required />
               <button type="submit" class="btn btn-primary btn-sm" onclick="this.disabled=true;this.form.submit();">
                 Buy — ${{ "%.2f"|format(policy.premium) }}
               </button>
@@ -123,6 +182,9 @@
               {% if policy.claim_window_days is not none %}
               <li>File within {{ policy.claim_window_days }} days of an incident</li>
               {% endif %}
+              {% if policy.waiting_period_days is not none and policy.waiting_period_days > 0 %}
+              <li>Coverage waiting period: {{ policy.waiting_period_days }} days</li>
+              {% endif %}
             </ul>
             <div class="mt-auto">
               {% if policy.owned %}
@@ -130,6 +192,8 @@
               {% else %}
               <form method="POST" action="{{ url_for('student.purchase_insurance', policy_uuid=policy.policy_uuid) }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                <label class="visually-hidden" for="insurance-passphrase-{{ policy.policy_uuid }}">Passphrase to buy {{ policy.title }}</label>
+                <input type="password" class="form-control mb-2" id="insurance-passphrase-{{ policy.policy_uuid }}" name="passphrase" autocomplete="current-password" placeholder="Passphrase" required />
                 <button type="submit" class="btn btn-primary w-100"
                         onclick="this.disabled=true;this.form.submit();">
                   Buy — ${{ "%.2f"|format(policy.premium) }} now
@@ -148,6 +212,7 @@
     <p class="text-muted">No insurance policies are available in this class yet.</p>
     {% endif %}
   </section>
+  {% endif %}
 
   {# ---- Your claims (read-only) ------------------------------------------ #}
   {% if my_claims %}

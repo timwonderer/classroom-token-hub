@@ -4,17 +4,26 @@ FEAT-OBL-002: Scheduled Rent Cycle — canonical rent reconciliation.
 This is the SINGLE mechanism that materializes the recurring rent lifecycle for a
 class. It is idempotent and safe to run repeatedly (on a schedule or on demand):
 
-  - First run for a rent-enabled class with no cycle yet: create cycle 1 and one
-    ASSESSMENT per claimed, non-exempt student seat.
-  - Later runs: when the current cycle's ``next_assessment_at`` has been reached,
-    create the successor cycle, assess it, and expire the PRIOR cycle's PERK
-    hall passes at the rent boundary (DOM-OBL-001 §IX.9 / DOM-STORE-001 §VIII.6).
-  - Runs before the boundary, or for a disabled class, are no-ops.
+  - While Obligations reports the ``rent:{class_id}`` lineage eligible for
+    succession (empty, or its current cycle's ``next_assessment_at`` reached),
+    request the next cycle through ``schedule_next_bill_cycle`` (DOM-OBL-001
+    §V.7); for every successor after cycle 1, expire the PRIOR cycle's PERK hall
+    passes at the rent boundary (DOM-OBL-001 §IX.9 / DOM-STORE-001 §VIII.6).
+  - Every run, regardless of the above: assess one RENT ASSESSMENT per claimed,
+    non-exempt student seat against whichever cycle is now current. A cycle's
+    frozen ``policy_uuid`` fixes its TERMS (amount, cadence, penalty, due
+    dates) only — never its roster. A seat claimed after the cycle's first
+    assessment pass is picked up here on the very next reconciliation, always
+    against the CURRENT cycle, never retroactively against one that already
+    advanced past before the seat was claimed. Idempotent per (seat, cycle),
+    so a roster with nothing new to assess costs nothing extra.
+  - Runs before the boundary with no roster change, or for a disabled class,
+    are no-ops.
 
 Layering (INV-ARC-006 / INV-ARC-021): reconciliation is a FEAT orchestrator. It
 reads schedule INTENT from RentSettings, resolves concrete instants through the
-Rent schedule producer, and drives the Obligations domain (via the assess /
-advance-cycle FEATs) and the Store domain (via entitlement expiry). Each domain
+Rent schedule producer, and drives the Obligations domain (via the assess and
+bill-cycle succession commands) and the Store domain (via entitlement expiry). Each domain
 still owns its own mutation; the FEAT only coordinates them under one transaction.
 
 Lineage conventions (greenfield):
@@ -35,14 +44,20 @@ from app.services import obligations_service
 from app.services import rent_schedule_service
 from app.services import entitlement_service
 from app.services.identity_service import resolve_teacher_seat_for_class
-from app.services.class_configuration_query_service import get_rent_settings, is_feature_enabled
+from app.services.class_configuration_query_service import (
+    get_class_feature_history, get_rent_settings, is_feature_enabled,
+)
 from app.feats.base import requires_feat_context, FEATContext
 # Obligations DOMAIN commands (plain functions), invoked within THIS FEAT's single
 # context — never the execute_* FEAT wrappers (INV-ARC-000 / -021 / -006).
 from app.feats.assess_obligation_feat import assess_obligation, AssessmentRequest
-from app.feats.advance_bill_cycle_feat import advance_bill_cycle, AdvanceBillCycleRequest
-from app.feats.establish_bill_cycle_feat import establish_bill_cycle, EstablishBillCycleRequest
-from app.utils.canonical_temporal_resolver import ensure_utc, utc_now
+from app.feats.schedule_next_bill_cycle_feat import (
+    schedule_next_bill_cycle, ScheduleNextBillCycleRequest,
+)
+from app.services.obligations_service import SuccessionEligibility
+from app.utils.canonical_temporal_resolver import (
+    CLASS_LEVEL_EVALUATION, canonical_temporal_resolver, ensure_utc, utc_now,
+)
 
 
 # Safety bound on catch-up: never materialize more than this many cycles in one
@@ -60,6 +75,7 @@ class ReconcileRentRequest:
     """Input contract for rent reconciliation."""
     class_id: str
     reference_time_utc: datetime | None = None  # 'now'; defaults to system UTC
+    idempotency_key: str | None = None  # names this run; defaults to class + reference instant
 
 
 @dataclass
@@ -111,13 +127,13 @@ def _assess_cycle(settings: RentSettings, class_id: str, cycle) -> int:
 
 
 def _expire_prior_cycle_perks(class_id: str, prior_cycle, actor_seat_id: int) -> int:
-    """Expire PERK hall passes granted under the prior cycle's assessments."""
+    """Expire every PERK entitlement granted under the prior cycle's assessments."""
     expired = 0
     prior_assessments = obligations_service.get_assessments_for_bill_cycle(
         prior_cycle.id, obligation_type="RENT"
     )
     for assessment in prior_assessments:
-        expired += entitlement_service.expire_rent_hall_passes(
+        expired += entitlement_service.expire_rent_perks(
             correlation_id=assessment.correlation_id,
             class_id=class_id,
             actor_seat_id=actor_seat_id,
@@ -183,15 +199,9 @@ def _assess_late_fees(settings: RentSettings, class_id: str, cycle, now) -> int:
         if rent_assessment is None:
             continue
 
-        # No new penalties once the rent principal is satisfied (paid or waived).
-        # Satisfaction is measured against the paid MAGNITUDE (rent payments post
-        # as negative debits) plus any waiver — never the raw signed ledger sum.
-        assessed_amount = obligations_service.resolve_assessment_amount(rent_assessment)
-        paid_magnitude = obligations_service.get_paid_magnitude(rent_correlation_id)
-        waived = obligations_service.check_idempotency_satisfaction(
-            rent_correlation_id, "WAIVED"
-        )
-        if waived or paid_magnitude >= assessed_amount:
+        # No new penalties once the rent principal is no longer outstanding
+        # (paid or waived), per the canonical Obligations state.
+        if not obligations_service.get_obligation_state(rent_correlation_id).is_outstanding:
             continue
 
         late_internal_ref = f"rent:{class_id}:{seat.id}:late"
@@ -218,21 +228,95 @@ def _assess_late_fees(settings: RentSettings, class_id: str, cycle, now) -> int:
     return created
 
 
+def _is_later(class_id: str, candidate, reference) -> bool:
+    """``candidate`` strictly after ``reference``, via the canonical resolver (INV-ARC-015)."""
+    return canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=SimpleNamespace(class_id=class_id),
+        primitive="later_than",
+        reference_time_utc=reference,
+        candidate=candidate,
+        reference=reference,
+    ).is_later
+
+
+def _rent_disabled_for_period(class_id: str, boundary, now) -> bool:
+    """Whether a recorded disablement prevents the period beginning at ``boundary``.
+
+    DOM-OBL-001 §IX.15: no successor is scheduled for a period rent is disabled
+    for. Rent disabled *now* already stops succession (the caller's ``enabled``);
+    this covers a disablement recorded to take effect at or before a boundary
+    that has not yet arrived. A boundary already passed is catch-up after
+    re-enablement, which the current state governs.
+    """
+    if _is_later(class_id, now, boundary):
+        return False
+    for row in get_class_feature_history(class_id, "rent"):  # newest first
+        if not _is_later(class_id, row.effective_at, boundary):
+            return row.economic_version_id is None
+    return False
+
+
+def _expire_ended_period_perks(class_id: str, now, actor_seat_id_fn) -> int:
+    """Expire the PERK passes of every rent period that has ended by ``now``.
+
+    Perks belong to their period and end at its boundary (DOM-OBL-001 §IX.9) —
+    at the period's end, never when a successor is created: under advance
+    assessment the successor exists days before the boundary. Idempotent.
+    """
+    expired = 0
+    for cycle in obligations_service.get_bill_cycles_for_internal_ref(f"rent:{class_id}"):
+        if cycle.class_id != class_id or cycle.next_assessment_at is None:
+            continue
+        if _is_later(class_id, cycle.next_assessment_at, now):
+            continue
+        expired += _expire_prior_cycle_perks(class_id, cycle, actor_seat_id_fn())
+    return expired
+
+
+def _grant_period_start_perks(class_id: str, cycle) -> int:
+    """Grant the perks of a period that was paid before it began (DOM-OBL-001 §IX.13).
+
+    Payment made during the preview window grants nothing early; the perks are
+    granted here once that period is current. Idempotent: a correlation that
+    already carries a PERK grant is skipped.
+    """
+    from app.feats.rent_payment_feat import _award_satisfaction_perks, perks_already_granted
+
+    awarded = 0
+    for assessment in obligations_service.get_assessments_for_bill_cycle(cycle.id, obligation_type="RENT"):
+        state = obligations_service.get_obligation_state(assessment.correlation_id)
+        if state is None or not state.is_satisfied or state.is_waived:
+            continue
+        if perks_already_granted(class_id, assessment.correlation_id):
+            continue
+        settings = RentSettings.query.filter_by(policy_uuid=assessment.policy_uuid).first()
+        seat = Seat.query.filter_by(id=assessment.seat_id, class_id=class_id).first()
+        if settings is None or seat is None:
+            continue
+        awarded += _award_satisfaction_perks(settings, seat, assessment.correlation_id)
+    return awarded
+
+
 def reconcile_rent(
     request: ReconcileRentRequest,
     *,
     context: FEATContext,
 ) -> ReconcileRentResult:
-    """Materialize the rent lifecycle up to ``reference_time_utc``. Idempotent."""
+    """Materialize the rent lifecycle up to ``reference_time_utc``. Idempotent.
+
+    While rent is enabled: succession (advance-assessed at each period's preview
+    point, and only while rent is enabled at the successor's boundary) and roster
+    assessment. Whether enabled or not: everything needed to resolve surviving
+    rent state — perk expiry at ended periods, perks for periods paid in advance,
+    and late fees (DOM-OBL-001 §IX.16). Disabling rent never strands a debt.
+    """
     class_id = request.class_id
     if not class_id:
         raise ValueError("reconcile_rent requires class_id")
 
     now = ensure_utc(request.reference_time_utc) if request.reference_time_utc else utc_now()
-
-    # Class-level rent gate.
-    if not is_feature_enabled(class_id, "rent"):
-        return ReconcileRentResult(reason="RENT_DISABLED")
+    enabled = is_feature_enabled(class_id, "rent")
 
     # New cycles and new assessments are NEW work, so they take the policy
     # currently in force and freeze its `policy_uuid` onto themselves. This is the
@@ -241,87 +325,124 @@ def reconcile_rent(
     # wrong amount permanently (DOM-POL-001 §VI.1, §VII).
     settings = get_rent_settings(class_id)
     if settings is None:
-        return ReconcileRentResult(reason="NO_SETTINGS")
+        return ReconcileRentResult(reason="NO_SETTINGS" if enabled else "RENT_DISABLED")
 
     # Lightweight resolver context: the temporal resolver only reads .class_id.
     ctx = SimpleNamespace(class_id=class_id)
     internal_ref_cycle = f"rent:{class_id}"
 
-    result = ReconcileRentResult(reason="NOOP")
-    latest = obligations_service.get_latest_bill_cycle(internal_ref_cycle)
+    result = ReconcileRentResult(reason="NOOP" if enabled else "RENT_DISABLED")
 
-    if latest is None:
-        # First cycle for this class — genesis, not advancement. Establishes
-        # cycle 1 via the dedicated Obligations genesis command (never
-        # advance_bill_cycle, which is advancement-only).
-        due_local = rent_schedule_service.first_due_local_date(
-            settings, context=ctx, reference_time_utc=now
+    # Command identity for each succession this run requests. A caller-supplied
+    # key names the run; otherwise the run is identified by its class and the
+    # reference instant it reconciles to, so a retry of the same run replays
+    # rather than racing itself. Each succession step appends the cycle it was
+    # evaluated against, which keeps distinct steps of one run distinct commands.
+    run_identity = request.idempotency_key or f"rent-reconcile:{class_id}:{now.isoformat()}"
+
+    teacher_seat = {}
+
+    def actor_seat_id():
+        if "id" not in teacher_seat:
+            teacher_seat["id"] = resolve_teacher_seat_for_class(class_id).id
+        return teacher_seat["id"]
+
+    # Succession, repeated while Obligations says the lineage is due. Eligibility
+    # is the domain's determination (DOM-OBL-001 §V.7); this loop only asks. The
+    # first cycle is not a separate command: an EMPTY lineage is succeeded to 1.
+    iterations = 0
+    while enabled:
+        eligibility, latest = obligations_service.get_succession_eligibility(
+            class_id, internal_ref_cycle, reference_time_utc=now
         )
+        if eligibility not in (SuccessionEligibility.EMPTY, SuccessionEligibility.DUE):
+            break
+        if latest is not None:
+            iterations += 1
+            if iterations > _MAX_CATCHUP_CYCLES:
+                result.reason = "CATCHUP_BOUND_EXCEEDED"
+                break
+
+        if latest is None:
+            due_local = rent_schedule_service.first_due_local_date(
+                settings, context=ctx, reference_time_utc=now
+            )
+        else:
+            # Successor due date is the class-local date of the resolved next_assessment_at.
+            due_local = rent_schedule_service.local_date_of_instant(
+                ctx, latest.next_assessment_at
+            )
         schedule = rent_schedule_service.resolve_cycle_schedule(
             settings, due_local_date=due_local, context=ctx
         )
-        cycle = establish_bill_cycle(
-            EstablishBillCycleRequest(
-                class_id=class_id,
-                internal_ref=internal_ref_cycle,
-                cycle_boundary_at=schedule.cycle_boundary_at,
-                next_assessment_at=schedule.next_assessment_at,
-                grace_boundary_at=schedule.grace_boundary_at,
-                policy_uuid=settings.policy_uuid,
-            ),
-            context=None,
-        )
-        result.assessments_created += _assess_cycle(settings, class_id, cycle)
-        result.cycles_created.append(cycle.cycle_number)
-        result.reason = "CREATED_INITIAL"
-        latest = cycle
-
-    # Catch-up: advance while the current cycle's assessment boundary has arrived.
-    actor_seat_id = None
-    iterations = 0
-    while now >= ensure_utc(latest.next_assessment_at):
-        iterations += 1
-        if iterations > _MAX_CATCHUP_CYCLES:
-            result.reason = "CATCHUP_BOUND_EXCEEDED"
+        # No period is scheduled that a recorded disablement prevents (§IX.15).
+        if _rent_disabled_for_period(class_id, schedule.cycle_boundary_at, now):
             break
-
-        # Successor due date is the class-local date of the resolved next_assessment_at.
-        next_due_local = rent_schedule_service.local_date_of_instant(
-            ctx, latest.next_assessment_at
-        )
-        schedule = rent_schedule_service.resolve_cycle_schedule(
-            settings, due_local_date=next_due_local, context=ctx
-        )
-        new_cycle = advance_bill_cycle(
-            AdvanceBillCycleRequest(
+        evaluated_against = latest.cycle_number if latest is not None else 0
+        new_cycle = schedule_next_bill_cycle(
+            ScheduleNextBillCycleRequest(
                 class_id=class_id,
                 internal_ref=internal_ref_cycle,
-                cycle_number=latest.cycle_number + 1,
                 cycle_boundary_at=schedule.cycle_boundary_at,
                 next_assessment_at=schedule.next_assessment_at,
                 grace_boundary_at=schedule.grace_boundary_at,
                 policy_uuid=settings.policy_uuid,
+                idempotency_key=f"{run_identity}:after:{evaluated_against}",
+                reference_time_utc=now,
             ),
             context=None,
         )
-        result.assessments_created += _assess_cycle(settings, class_id, new_cycle)
-
-        # Expire the prior cycle's rent PERK hall passes at the boundary.
-        if actor_seat_id is None:
-            actor_seat_id = resolve_teacher_seat_for_class(class_id).id
-        result.perks_expired += _expire_prior_cycle_perks(class_id, latest, actor_seat_id)
-
         result.cycles_created.append(new_cycle.cycle_number)
-        if result.reason in ("NOOP",):
+        if latest is None:
+            result.reason = "CREATED_INITIAL"
+        elif result.reason == "NOOP":
             result.reason = "ADVANCED"
-        latest = new_cycle
+
+    current = obligations_service.get_current_bill_cycle(
+        class_id, internal_ref_cycle, reference_time_utc=now
+    )
+    latest = obligations_service.get_latest_bill_cycle(internal_ref_cycle)
+    upcoming = (
+        latest
+        if latest is not None
+        and latest.next_assessment_at is not None
+        and (current is None or latest.id != current.id)
+        and _is_later(class_id, latest.cycle_boundary_at, now)
+        else None
+    )
+
+    # Roster assessment against the current cycle, and against the upcoming one
+    # once it has been advance-assessed (operator report, 2026-09-22): the frozen
+    # policy_uuid fixes a cycle's TERMS, never its ROSTER. A seat claimed later is
+    # picked up on the next run, never retroactively against a period that has
+    # already ended. Idempotent per (seat, cycle). New assessment is new work, so
+    # it happens only while rent is enabled.
+    if enabled:
+        for cycle in (current, upcoming):
+            if cycle is None:
+                continue
+            backfilled = _assess_cycle(settings, class_id, cycle)
+            result.assessments_created += backfilled
+            if backfilled and result.reason == "NOOP":
+                result.reason = "ROSTER_BACKFILLED"
+
+    # Surviving-state work runs whether or not rent is enabled (§IX.16).
+    result.perks_expired += _expire_ended_period_perks(class_id, now, actor_seat_id)
+    if current is not None:
+        _grant_period_start_perks(class_id, current)
 
     # Late-fee accrual: assess penalties on any cycle whose grace boundary has
     # lapsed while its rent is still unsatisfied. Runs over every cycle (not just
     # the current one) so arrears from prior cycles continue to accrue penalties,
     # and is fully idempotent (each late fee has a deterministic correlation).
+    # Each bill's late fees follow the policy frozen on its own cycle, never the
+    # class's current policy (DOM-POL-001 §VII; INV-CORE-000 non-retroactivity).
     for cycle in obligations_service.get_bill_cycles_for_internal_ref(internal_ref_cycle):
-        result.late_fees_created += _assess_late_fees(settings, class_id, cycle, now)
+        cycle_settings = (
+            RentSettings.query.filter_by(policy_uuid=cycle.policy_uuid, class_id=class_id).first()
+            if cycle.policy_uuid else None
+        ) or settings
+        result.late_fees_created += _assess_late_fees(cycle_settings, class_id, cycle, now)
 
     if result.late_fees_created and result.reason in ("NOOP",):
         result.reason = "LATE_FEES_ASSESSED"
@@ -344,5 +465,6 @@ def execute_reconcile_rent(
     request = ReconcileRentRequest(
         class_id=class_id,
         reference_time_utc=reference_time_utc,
+        idempotency_key=idempotency_key,
     )
     return reconcile_rent(request, context=None)

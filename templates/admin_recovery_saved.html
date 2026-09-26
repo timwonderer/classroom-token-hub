@@ -1,3 +1,4 @@
+{% import "macros/cards.html" as cards %}
 <!DOCTYPE html>
 <html lang="en">
 
@@ -5,23 +6,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Classroom Token Hub - Progress Saved</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}">
 
     <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
     <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Inter', sans-serif;
+        .recovery-page {
+            font-family: var(--font-family);
             min-height: 100vh;
             background: var(--neutral-50);
-            padding: 2rem;
+            padding: var(--space-8);
         }
 
         .container {
@@ -30,87 +25,70 @@
         }
 
         .status-card {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 2px 8px color-mix(in srgb, black 10%, transparent);
-            padding: 2rem;
-            margin-bottom: 1.5rem;
+            background: var(--surface);
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-md);
+            padding: var(--space-8);
+            margin-bottom: var(--space-6);
         }
 
         .status-header {
-            color: var(--warning);
-            font-weight: 700;
-            font-size: 1.75rem;
-            margin-bottom: 1rem;
+            color: var(--alert-warning-text);
+            font-weight: var(--weight-bold);
+            font-size: var(--text-3xl);
+            margin-bottom: var(--space-4);
         }
 
         .resume-pin-display {
             background: var(--surface);
             border: 3px solid var(--success);
-            border-radius: 10px;
-            padding: 2rem;
+            border-radius: var(--radius-lg);
+            padding: var(--space-8);
             text-align: center;
-            margin: 1.5rem 0;
+            margin: var(--space-6) 0;
         }
 
         .resume-pin {
-            font-size: 3rem;
-            font-weight: 700;
-            letter-spacing: 0.3em;
-            color: var(--success);
             font-family: var(--font-data);
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, var(--warning) 0%, var(--warning) 100%);
-            border: none;
-            padding: 0.85rem 2rem;
-            font-weight: 700;
-            transition: all 0.3s ease;
-            border-radius: 12px;
-            box-shadow: 0 8px 24px color-mix(in srgb, var(--warning) 35%, transparent);
-        }
-
-        .btn-primary:hover {
-            background: linear-gradient(135deg, var(--warning) 0%, var(--warning) 100%);
+            font-size: var(--text-4xl);
+            font-weight: var(--weight-bold);
+            letter-spacing: var(--tracking-widest);
+            color: var(--success);
         }
     </style>
 </head>
 
-<body>
+<body class="recovery-page">
     <main id="main-content" aria-labelledby="recovery-saved-heading">
     <div class="container">
         <div class="status-card">
             <h1 id="recovery-saved-heading" class="status-header"><span class="material-symbols-outlined me-2" aria-hidden="true">check_circle</span>Progress Saved!</h1>
 
-            <div class="alert alert-success">
-                <h5 class="alert-heading">Your recovery codes have been saved</h5>
-                <p class="mb-0">You've saved {{ codes_saved }} recovery code(s). You can come back anytime before {{ recovery_request.expires_at.strftime('%B %d, %Y at %I:%M %p') }} to continue.</p>
-            </div>
+            {% call cards.alert_card('success', 'Your recovery attempt can be resumed', icon='check_circle', body_class='mb-3', heading_tag='h2') %}
+                <p class="mb-0">Your code-entry receipts and private class confirmations stay with this attempt. No code validity is revealed. You can come back anytime before {{ recovery_request.expires_at.strftime('%B %d, %Y at %I:%M %p') }} to continue.</p>
+            {% endcall %}
 
             <div class="resume-pin-display">
                 <div class="mb-2"><strong>Your Resume PIN:</strong></div>
                 <div class="resume-pin">{{ resume_pin }}</div>
             </div>
 
-            <div class="alert alert-warning">
-                <strong><span class="material-symbols-outlined me-1">warning</span>Important:</strong>
-                <ul class="mb-0 mt-2">
+            {% call cards.alert_card('warning', 'Write down this PIN now', icon='warning', body_class='mb-3', heading_tag='h2') %}
+                <ul class="mb-0">
                     <li>Write down this PIN immediately - it will NOT be shown again</li>
                     <li>You'll need this PIN to resume your recovery later</li>
                     <li>This PIN expires on {{ recovery_request.expires_at.strftime('%B %d, %Y at %I:%M %p') }}</li>
                 </ul>
-            </div>
+            {% endcall %}
 
-            <div class="alert alert-info">
-                <h6><strong>What happens next?</strong></h6>
+            {% call cards.alert_card('info', 'What happens next?', icon='checklist', body_class='mb-3', heading_tag='h2') %}
                 <ol class="mb-0">
                     <li>Collect the remaining recovery codes from your students</li>
                     <li>Go to the teacher login page and click "Resume Recovery"</li>
                     <li>Enter your PIN to continue where you left off</li>
                     <li>Complete your account reset</li>
                 </ol>
-            </div>
+            {% endcall %}
 
             <div class="mt-4">
                 <a href="{{ url_for('admin.login') }}" class="btn btn-primary w-100">
@@ -120,7 +98,7 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='vendor/bootstrap/bootstrap.bundle.min.js') }}"></script>
     </main>
 </body>
 </html>

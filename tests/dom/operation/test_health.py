@@ -30,6 +30,10 @@ def test_DOM_OPS_001__bounded_status_signals(client):
     assert {signal['key'] for signal in resp.json['signals']} >= {
         'login', 'attendance', 'payroll', 'database', 'invariant_verification'
     }
+    database = next(signal for signal in resp.json['signals'] if signal['key'] == 'database')
+    assert database['checked_at'] is not None
+    assert all(signal['checked_at'] is None for signal in resp.json['signals']
+               if signal['diagnostic_code'] == 'CHECK_NOT_REGISTERED')
     assert all('class_id' not in signal for signal in resp.json['signals'])
 
 

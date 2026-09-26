@@ -2,6 +2,29 @@
 {% block page_title %}Interpretation{% endblock %}
 {% block page_icon %}insights{% endblock %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("What the class economy recorded during a completed payroll cycle, described in plain language.") }}
+
+{% call help.topic('itr-cycles', 'calendar_month', 'One completed cycle at a time') %}
+<p class="mb-0">Nothing appears until your first payroll cycle closes, and each cycle is interpreted as it stood when it closed. Use the selector to move between them.</p>
+{% endcall %}
+
+{% call help.topic('itr-reading', 'menu_book', 'How to read a section') %}
+<ul class="ps-3 mb-0">
+    <li class="mb-2"><strong>Start with the overview cards</strong> for the headline observation in each section, then jump to a section for the detail behind it.</li>
+    <li class="mb-0"><strong>"How to read this"</strong> explains what a section is measuring. Worth reading before drawing a conclusion from an unfamiliar number.</li>
+</ul>
+{% endcall %}
+
+{% call help.topic('itr-limits', 'help_center', 'Blanks, prompts, and what this page will not do') %}
+<ul class="ps-3">
+    <li class="mb-2"><strong>Some observations say "not applicable."</strong> That means the cycle did not contain the activity needed to compute them — it is not a zero and not a problem.</li>
+    <li class="mb-0"><strong>The guiding questions are prompts, not findings.</strong> They are collapsed on purpose so they never read as the system's verdict on your class.</li>
+</ul>
+<p class="mb-0 text-muted">This page only observes. It reads the economy and never changes it, so nothing you do here can affect a student's balance.</p>
+{% endcall %}
+{% endblock %}
+
 {#
   Interpretation page (DOM-ITR). This template is a PURE CONSUMER of the
   page view model (app/services/interpretation/page_view.py): it renders the
@@ -15,58 +38,59 @@
 {% block content %}
 <style>
   .interpretation-page { max-width: 1120px; }
-  .itr-intro { max-width: 760px; margin-bottom: 1.5rem; }
-  .itr-intro h2 { margin-bottom: .45rem; }
-  .itr-intro p { color: #4a4a4a; margin-bottom: 0; }
-  .itr-overview { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: .8rem; margin: 1.25rem 0 1.75rem; }
-  .itr-overview-card { border: 1px solid #d9d9d9; border-top: 4px solid var(--secondary, #d4a857); border-radius: 8px; padding: 1rem; background: #fff; min-height: 126px; }
+  .itr-intro { max-width: 760px; margin-bottom: var(--space-6); }
+  .itr-intro h2 { margin-bottom: var(--space-2); }
+  .itr-intro p { color: var(--text-secondary); margin-bottom: 0; }
+  .itr-overview { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: var(--space-3); margin: var(--space-5) 0 var(--space-6); }
+  .itr-overview-card { border: 1px solid var(--border-color); border-top: 4px solid var(--secondary); border-radius: var(--radius-lg); padding: var(--space-4); background: var(--surface); min-height: 126px; }
   .itr-overview-card a { color: inherit; text-decoration: none; }
-  .itr-overview-card a:focus-visible { outline: 2px solid #33547a; outline-offset: 3px; }
-  .itr-overview-label { color: #555; font-size: .82rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
-  .itr-overview-title { font-weight: 700; margin: .3rem 0 .55rem; }
-  .itr-overview-value { color: #33547a; font-weight: 700; }
-  .itr-contents { border: 1px solid #d9d9d9; border-radius: 8px; background: #f8f7f3; padding: 1rem 1.25rem; margin-bottom: 2rem; }
-  .itr-contents h2 { font-size: 1rem; margin: 0 0 .6rem; }
-  .itr-contents-controls { display: flex; align-items: end; gap: .65rem; flex-wrap: wrap; }
-  .itr-contents-controls label { color: #555; font-weight: 600; margin-bottom: .35rem; }
+  .itr-overview-card a:focus-visible { outline: 2px solid var(--info); outline-offset: 3px; }
+  .itr-overview-label { color: var(--text-secondary); font-size: var(--text-sm); font-weight: var(--weight-bold); letter-spacing: var(--tracking-wide); text-transform: uppercase; }
+  .itr-overview-title { font-weight: var(--weight-bold); margin: var(--space-1) 0 var(--space-2); }
+  .itr-overview-value { color: var(--info); font-weight: var(--weight-bold); }
+  .itr-contents { border: 1px solid var(--border-color); border-radius: var(--radius-lg); background: var(--background); padding: var(--space-4) var(--space-5); margin-bottom: var(--space-8); }
+  .itr-contents h2 { font-size: var(--text-base); margin: 0 0 var(--space-2); }
+  .itr-contents-controls { display: flex; align-items: end; gap: var(--space-3); flex-wrap: wrap; }
+  .itr-contents-controls label { color: var(--text-secondary); font-weight: var(--weight-semibold); margin-bottom: var(--space-1); }
   .itr-contents-controls select { min-width: min(26rem, 100%); }
-  .itr-section { margin-bottom: 1.5rem; scroll-margin-top: 1rem; }
-  .itr-section-card { border: 1px solid #d9d9d9; border-radius: 8px; background: #fff; overflow: hidden; box-shadow: 0 2px 8px rgba(28, 35, 42, .08); }
-  .itr-section-header { background: #195b55; color: #fff; padding: .9rem 1.25rem; }
-  .itr-section-header h2 { color: #fff !important; font-size: 1.2rem; margin: 0; }
-  .itr-section-header .material-symbols-outlined { color: #fff; vertical-align: middle; margin-right: .45rem; }
-  .itr-section-body { padding: 1.25rem; }
-  .itr-section > h2 { margin: 0 0 .25rem; }
-  .itr-section-summary { color: #4a4a4a; margin-bottom: .9rem; }
+  .itr-cycle-select { min-width: 18rem; }
+  .itr-section { margin-bottom: var(--space-6); scroll-margin-top: var(--space-4); }
+  .itr-section-card { border: 1px solid var(--border-color); border-radius: var(--radius-lg); background: var(--surface); overflow: hidden; box-shadow: var(--shadow-md); }
+  .itr-section-header { background: var(--primary); color: var(--text-inverse); padding: var(--space-4) var(--space-5); }
+  .itr-section-header h2 { color: var(--text-inverse) !important; font-size: var(--text-xl); margin: 0; }
+  .itr-section-header .material-symbols-outlined { color: var(--text-inverse); vertical-align: middle; margin-right: var(--space-2); }
+  .itr-section-body { padding: var(--space-5); }
+  .itr-section > h2 { margin: 0 0 var(--space-1); }
+  .itr-section-summary { color: var(--text-secondary); margin-bottom: var(--space-4); }
   /* "How to read this" — a calm explanatory callout, deliberately not an alert. */
-  .itr-how-to-read { background: #eef4f3; border-left: 4px solid #195b55; border-radius: 6px; padding: .7rem .95rem; margin-bottom: 1.2rem; }
-  .itr-how-to-read-label { display: block; font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #195b55; margin-bottom: .25rem; }
-  .itr-how-to-read p { margin: 0; color: #35443f; }
+  .itr-how-to-read { background: var(--primary-subtle); border-left: 4px solid var(--primary); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); margin-bottom: var(--space-5); }
+  .itr-how-to-read-label { display: block; font-size: var(--text-xs); font-weight: var(--weight-bold); letter-spacing: var(--tracking-wide); text-transform: uppercase; color: var(--primary); margin-bottom: var(--space-1); }
+  .itr-how-to-read p { margin: 0; color: var(--text-primary); }
   .itr-observation {
-    border: 1px solid #d9d9d9; border-radius: 8px;
-    padding: .9rem 1rem; margin-bottom: .7rem; background: #fbfbfa;
+    border: 1px solid var(--border-color); border-radius: var(--radius-lg);
+    padding: var(--space-4); margin-bottom: var(--space-3); background: var(--neutral-50);
   }
-  .itr-observation > h3 { font-size: 1rem; margin-bottom: .35rem; }
-  .itr-value { font-size: 1.2rem; font-weight: 700; margin-bottom: .2rem; color: #2f3d4a; }
-  .itr-supporting, .itr-basis { color: #4a4a4a; margin-bottom: .15rem; }
+  .itr-observation > h3 { font-size: var(--text-base); margin-bottom: var(--space-1); }
+  .itr-value { font-size: var(--text-xl); font-weight: var(--weight-bold); margin-bottom: var(--space-1); color: var(--text-primary); }
+  .itr-supporting, .itr-basis { color: var(--text-secondary); margin-bottom: var(--space-1); }
   .itr-basis { font-style: italic; }
-  .itr-explanation { color: #333; margin-top: .5rem; margin-bottom: 0; }
-  .itr-not-applicable { color: #555; margin-bottom: 0; }
+  .itr-explanation { color: var(--text-primary); margin-top: var(--space-2); margin-bottom: 0; }
+  .itr-not-applicable { color: var(--text-secondary); margin-bottom: 0; }
   /* Modest, secondary reflection panel — deliberately not an alert. */
-  .itr-questions { margin-top: .75rem; font-size: .9rem; }
+  .itr-questions { margin-top: var(--space-3); font-size: var(--text-sm); }
   .itr-questions > summary {
-    cursor: pointer; color: #33547a; font-weight: 600; display: inline-block;
-    padding: .15rem .1rem;
+    cursor: pointer; color: var(--info); font-weight: var(--weight-semibold); display: inline-block;
+    padding: var(--space-1);
   }
-  .itr-questions[open] > summary { margin-bottom: .35rem; }
-  .itr-questions ul { margin: 0 0 0 1.1rem; color: #444; }
-  .itr-questions li { margin-bottom: .25rem; }
+  .itr-questions[open] > summary { margin-bottom: var(--space-1); }
+  .itr-questions ul { margin: 0 0 0 var(--space-4); color: var(--text-secondary); }
+  .itr-questions li { margin-bottom: var(--space-1); }
   /* Preserve a visible keyboard focus indicator (INV-ARC-020). */
   .itr-questions > summary:focus-visible {
-    outline: 2px solid #33547a; outline-offset: 2px; border-radius: 3px;
+    outline: 2px solid var(--info); outline-offset: 2px; border-radius: var(--radius-sm);
   }
-  .itr-cycle-selector { margin-bottom: 1.25rem; }
-  .itr-cycle-meta { color: #4a4a4a; margin-bottom: 1.5rem; }
+  .itr-cycle-selector { margin-bottom: var(--space-5); }
+  .itr-cycle-meta { color: var(--text-secondary); margin-bottom: var(--space-6); }
 </style>
 
 <div class="container-fluid interpretation-page">
@@ -90,7 +114,7 @@
         class="itr-cycle-selector d-flex align-items-end gap-2 flex-wrap">
     <div>
       <label for="itr-cycle-select" class="form-label">Completed cycle</label>
-      <select id="itr-cycle-select" name="cycle" class="form-select" style="min-width: 18rem;">
+      <select id="itr-cycle-select" name="cycle" class="form-select itr-cycle-select">
         {% for summary in view.history %}
         <option value="{{ summary.payroll_cycle_id }}"
                 {% if summary.payroll_cycle_id == view.selected_cycle_id %}selected{% endif %}>

@@ -1,4 +1,21 @@
 no_progress = true
 
+# The public pages link to the developer documentation site root-relatively as
+# "/docs/", because that is where it sits in the GitHub Pages artifact:
+# github-pages/ is copied to / and docs-site/build/ to /docs/ (see
+# .github/workflows/github-pages.yml). A root-relative link has no meaning
+# without a root, so an offline check over the repository cannot resolve it and
+# errors while building the URL — before any `exclude` pattern is consulted.
+#
+# Pointing the root at the repository resolves it to docs/, which is the right
+# target rather than a coincidence: docs/ is the tree the documentation site
+# publishes. The link and its destination are therefore both checked.
+root_dir = "."
+
 exclude = ["^mailto:", "^tel:", "^\\$\\{\\{"]
-exclude_path = ["(^|/)templates/", "(^|/)\\.claude/"]
+exclude_path = [
+  "(^|/)templates/",
+  "(^|/)\\.claude/",
+  "(^|/)docs/archive/",
+  "(^|/)status_service/static/",
+]

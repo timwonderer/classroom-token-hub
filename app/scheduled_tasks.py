@@ -6,6 +6,7 @@ Contains periodic tasks that run in the background to maintain system state.
 
 import logging
 import secrets
+from typing import Callable, NamedTuple
 from app.feats.base import FEATContextError, requires_feat_context
 from app.services.insurance_policy_service import delete_due_policy_lineages
 # TODO (Phase 4): insurance_billing deleted; move to Obligations domain
@@ -57,25 +58,32 @@ def enforce_daily_limits_job():
         checked_count = 0
         closed_count = 0
 
-        def _active_intervals_for_day(rows, *, day_start_utc, now_utc):
+        def _active_intervals_for_day(rows, *, day_start_utc, horizon_utc):
+            """Paid intervals inside ONE canonical class day, bounded by ``horizon_utc``.
+
+            ``horizon_utc`` is the end of that day, or the canonical now when the
+            day is still running. Clamping the interval END — not just the start —
+            is what stops a session that outlived its own day from being re-read as
+            a session that began at the following midnight (DOM-PROD-001 §312).
+            """
             intervals = []
             active_start = None
             for row in rows:
-                if row.timestamp > now_utc:
+                if row.timestamp > horizon_utc:
                     break
                 if row.status == "active":
                     active_start = row.timestamp
                     continue
                 if row.status == "inactive" and active_start is not None:
                     interval_start = max(active_start, day_start_utc)
-                    interval_end = min(row.timestamp, now_utc)
+                    interval_end = min(row.timestamp, horizon_utc)
                     if interval_end >= interval_start:
                         intervals.append((interval_start, interval_end))
                     active_start = None
             if active_start is not None:
                 interval_start = max(active_start, day_start_utc)
-                if now_utc >= interval_start:
-                    intervals.append((interval_start, now_utc))
+                if horizon_utc >= interval_start:
+                    intervals.append((interval_start, horizon_utc))
             return intervals
 
         for class_id, class_events in rows_by_class_id.items():
@@ -87,9 +95,12 @@ def enforce_daily_limits_job():
             # section label never had its configured daily limit enforced here
             # at all. The limit is class-scoped policy; the label is not a
             # precondition for it (INV-ARC-014 §V).
+            #
+            # A missing limit is no longer a reason to skip the class. The
+            # end-of-day termination in DOM-PROD-001 §312 is unconditional — it
+            # is not contingent on a daily limit being configured — so only the
+            # §314 limit arithmetic below is skipped when `daily_limit` is None.
             daily_limit = get_daily_limit_seconds(class_id=class_id)
-            if not daily_limit:
-                continue
 
             actor_seat_id = resolve_teacher_seat_for_class(class_id).id
             ctx = CanonicalContext(
@@ -104,12 +115,6 @@ def enforce_daily_limits_job():
                 primitive="current_time",
             )
             now_utc = now_evaluation.canonical_now_utc
-            day_bounds = canonical_temporal_resolver(
-                CLASS_LEVEL_EVALUATION,
-                canonical_execution_context=ctx,
-                primitive="evaluation_day_boundaries",
-                reference_time_utc=now_utc,
-            )
 
             active_latest_events = {}
             for event in class_events:
@@ -122,56 +127,96 @@ def enforce_daily_limits_job():
                     with db.session.begin_nested():
                         checked_count += 1
 
+                        # An unclaimed seat is not an attendance subject, so its
+                        # retained open session is left untouched rather than
+                        # written to (DOM-IDEN-002 §VIII).
                         seat = Seat.query.filter_by(
                             id=seat_id,
                             class_id=class_id,
                             role="student",
-                        ).first()
+                        ).filter(Seat.claimed_at.isnot(None)).first()
                         if seat is None:
                             continue
+
+                        # The open session is evaluated in the canonical day of
+                        # its OWN `active` row, never in today's. Anchoring on
+                        # today is what let a session survive a server outage
+                        # across midnight and be re-read as one that began at
+                        # today's 00:00 — which both lost the prior day's
+                        # end-of-day row and dated the closing row to today,
+                        # locking the student out of working (the `done_today`
+                        # gate in app/feats/prod.py).
+                        day_bounds = canonical_temporal_resolver(
+                            CLASS_LEVEL_EVALUATION,
+                            canonical_execution_context=ctx,
+                            primitive="evaluation_day_boundaries",
+                            reference_time_utc=latest_event.timestamp,
+                        )
+                        day_end_utc = day_bounds.boundary_end_utc
+                        # No session accrues past the end of its own day (§312),
+                        # and none accrues into the future.
+                        day_is_over = day_end_utc <= now_utc
+                        horizon_utc = day_end_utc if day_is_over else now_utc
 
                         intervals = _active_intervals_for_day(
                             rows_by_scope[(class_id, seat_id)],
                             day_start_utc=day_bounds.boundary_start_utc,
-                            now_utc=now_utc,
+                            horizon_utc=horizon_utc,
                         )
                         if not intervals:
                             continue
 
-                        total_evaluation = canonical_temporal_resolver(
-                            CLASS_LEVEL_EVALUATION,
-                            canonical_execution_context=ctx,
-                            primitive="elapsed_duration",
-                            reference_time_utc=now_utc,
-                            intervals=intervals,
-                        )
-                        if total_evaluation.elapsed_seconds < daily_limit:
-                            continue
+                        close_at_utc = None
+                        reason = None
 
-                        accumulated_before_active = 0
-                        active_start, _active_end = intervals[-1]
-                        if len(intervals) > 1:
-                            prior_evaluation = canonical_temporal_resolver(
+                        if daily_limit:
+                            total_evaluation = canonical_temporal_resolver(
                                 CLASS_LEVEL_EVALUATION,
                                 canonical_execution_context=ctx,
                                 primitive="elapsed_duration",
                                 reference_time_utc=now_utc,
-                                intervals=intervals[:-1],
+                                intervals=intervals,
                             )
-                            accumulated_before_active = prior_evaluation.elapsed_seconds
+                            if total_evaluation.elapsed_seconds >= daily_limit:
+                                # DOM-PROD-001 §314: correct the closing timestamp
+                                # so the accumulated time equals the limit exactly.
+                                accumulated_before_active = 0
+                                active_start, _active_end = intervals[-1]
+                                if len(intervals) > 1:
+                                    prior_evaluation = canonical_temporal_resolver(
+                                        CLASS_LEVEL_EVALUATION,
+                                        canonical_execution_context=ctx,
+                                        primitive="elapsed_duration",
+                                        reference_time_utc=now_utc,
+                                        intervals=intervals[:-1],
+                                    )
+                                    accumulated_before_active = prior_evaluation.elapsed_seconds
 
-                        remaining_seconds = int(daily_limit) - int(accumulated_before_active)
-                        close_at_utc = active_start
-                        if remaining_seconds > 0:
-                            close_evaluation = canonical_temporal_resolver(
-                                CLASS_LEVEL_EVALUATION,
-                                canonical_execution_context=ctx,
-                                primitive="shift_timestamp",
-                                reference_time_utc=now_utc,
-                                timestamp=active_start,
-                                elapsed_seconds=remaining_seconds,
-                            )
-                            close_at_utc = close_evaluation.shifted_timestamp_utc
+                                remaining_seconds = int(daily_limit) - int(accumulated_before_active)
+                                close_at_utc = active_start
+                                if remaining_seconds > 0:
+                                    close_evaluation = canonical_temporal_resolver(
+                                        CLASS_LEVEL_EVALUATION,
+                                        canonical_execution_context=ctx,
+                                        primitive="shift_timestamp",
+                                        reference_time_utc=now_utc,
+                                        timestamp=active_start,
+                                        elapsed_seconds=remaining_seconds,
+                                    )
+                                    close_at_utc = close_evaluation.shifted_timestamp_utc
+                                reason = f"Daily limit reached ({daily_limit / 3600:.1f}h)"
+
+                        if close_at_utc is None and day_is_over:
+                            # DOM-PROD-001 §312: terminate at end of day in the
+                            # canonical class timezone, dated to the same day as
+                            # the originating `active` entry. Unconditional — it
+                            # does not require a configured daily limit.
+                            close_at_utc = day_end_utc
+                            reason = "Automatically closed at end of day"
+
+                        if close_at_utc is None:
+                            # Still inside its own day and under the limit.
+                            continue
 
                         reached_at_or_before_now = canonical_temporal_resolver(
                             CLASS_LEVEL_EVALUATION,
@@ -190,7 +235,7 @@ def enforce_daily_limits_job():
                             actor_seat_id=actor_seat_id,
                             mechanism="system",
                             status="inactive",
-                            reason=f"Daily limit reached ({daily_limit / 3600:.1f}h)",
+                            reason=reason,
                             reason_code=AttendanceReasonCode.DONE_FOR_DAY,
                             idempotency_key=f"daily_limit:{class_id}:{seat_id}:{secrets.token_hex(12)}",
                             reference_time_utc=close_at_utc,
@@ -198,10 +243,11 @@ def enforce_daily_limits_job():
 
                         closed_count += 1
                         logger.info(
-                            "Closed daily-limit attendance session for seat %s in class %s at %s",
+                            "Closed attendance session for seat %s in class %s at %s (%s)",
                             seat_id,
                             class_id,
                             close_at_utc,
+                            reason,
                         )
                 except FEATContextError:
                     # A constitutional violation is never per-seat noise. Swallowing
@@ -235,7 +281,6 @@ def database_maintenance_job():
     Runs at 2 AM UTC to clean up orphaned entries and maintain data integrity.
     """
     # Import here to avoid circular imports
-    from app.models import StoreItem
     from app.extensions import db
 
     logger = logging.getLogger('scheduled_tasks')
@@ -322,6 +367,94 @@ def run_rent_reconciliation_job():
         skipped,
         failed,
     )
+
+
+def _advance_local_calendar_days(occurrence_utc, days: int, ctx):
+    """Advance an occurrence by `days` *local calendar* days, keeping the local clock.
+
+    `occurrence_utc + timedelta(days=N)` preserves the clock time in UTC rather
+    than in the class's timezone, so a DST transition inside the interval moves
+    the run to the wrong local date — twice a year, permanently, because each
+    run seeds the next.
+
+    Preserving the wall-clock components is what makes this exact. An earlier
+    attempt added the *elapsed* UTC duration since local midnight to the target
+    midnight, which is not the same thing: on a 25-hour fall-back day an
+    occurrence at 23:30 local is 24h30m after midnight, so the target landed on
+    the following local date — reintroducing the defect in a narrower case.
+
+    Ambiguous and nonexistent local times are the two cases a naive
+    implementation silently gets wrong, so both are decided explicitly:
+
+    * **Ambiguous** (fall back — the clock reads 01:30 twice): take the
+      chronologically earlier instant, so the interval never silently lengthens.
+    * **Nonexistent** (spring forward — 02:30 never happens): take the smallest
+      forward shift onto a time that does exist, so 02:30 becomes 03:30.
+
+    Both are chosen by comparing the candidate instants directly rather than by
+    passing an ``is_dst`` flag. The flag does not mean "the earlier one": in
+    Europe/Dublin the tz database models winter as *negative* DST, so
+    ``is_dst=True`` on an ambiguous Dublin timestamp returns the **later**
+    instant — the opposite of Los Angeles. Selecting on the property actually
+    wanted is the only formulation that holds in every zone.
+
+    The local time of day is preserved rather than normalised to midnight
+    because `next_payroll_date` falls back to `created_at` for classes that
+    never set a first pay date (`payroll_settings_service`); forcing midnight
+    would move an established run time for those classes.
+    """
+    from datetime import datetime, timedelta, timezone as _timezone
+
+    import pytz
+
+    from app.utils.canonical_temporal_resolver import (
+        CLASS_LEVEL_EVALUATION,
+        canonical_temporal_resolver,
+    )
+
+    # Ask CLE which timezone governs this class rather than reading
+    # ClassEconomy here: the class-to-timezone mapping is the resolver's to own.
+    authority = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=ctx,
+        primitive="current_time",
+    ).temporal_authority
+    tz = pytz.timezone(authority)
+
+    local_occurrence = occurrence_utc.astimezone(tz)
+    target_naive = datetime.combine(
+        local_occurrence.date() + timedelta(days=days),
+        local_occurrence.time(),
+    )
+
+    try:
+        target_local = tz.localize(target_naive, is_dst=None)
+    except pytz.exceptions.AmbiguousTimeError:
+        # Two instants carry this wall clock; take the earlier. Compared as UTC
+        # rather than selected by flag — see the note on Europe/Dublin above.
+        target_local = min(
+            (tz.localize(target_naive, is_dst=flag) for flag in (True, False)),
+            key=lambda candidate: candidate.astimezone(_timezone.utc),
+        )
+    except pytz.exceptions.NonExistentTimeError:
+        # No instant carries this wall clock, so the local time must move. Take
+        # the smallest *forward* move onto a time that exists: 02:30 becomes
+        # 03:30, not 01:30 (backwards, which would run early) and not 03:00
+        # (the first existing instant, which would pull the run earlier within
+        # the day than configured).
+        candidates = [
+            tz.normalize(tz.localize(target_naive, is_dst=flag))
+            for flag in (False, True)
+        ]
+        target_local = min(
+            candidates,
+            key=lambda candidate: (
+                candidate.replace(tzinfo=None) <= target_naive,
+                abs(candidate.replace(tzinfo=None) - target_naive),
+            ),
+        )
+
+    return target_local.astimezone(_timezone.utc)
 
 
 def run_automatic_payroll_job():
@@ -422,7 +555,11 @@ def run_automatic_payroll_job():
                 )
                 # Scheduling bookkeeping (the scheduler's own concern), committed
                 # atomically with the cycle so a failure leaves the class due.
-                settings.next_payroll_date = scheduled_occurrence + timedelta(days=frequency_days)
+                #
+                # Advanced by local calendar days, not by 24-hour UTC spans.
+                settings.next_payroll_date = _advance_local_calendar_days(
+                    scheduled_occurrence, frequency_days, ctx
+                )
             ran += 1
         except Exception:
             failed += 1
@@ -488,10 +625,14 @@ def run_insurance_expiry_job():
     """
     from app.extensions import db
     from app.feats.base import FEATContext
-    from app.models import BillCycle, ObligationAssessment
+    from app.models import BillCycle
     from app.services import entitlement_service
-    from app.services.entitlement_read_service import get_active_insurance_grant
     from app.services.identity_service import resolve_teacher_seat_for_class
+    from app.services.insurance_coverage_service import (
+        entitlement_id_for_premium_lineage,
+        get_insurance_grant,
+        get_terminal_event,
+    )
     from app.utils.canonical_temporal_resolver import ensure_utc, utc_now
 
     logger = logging.getLogger('scheduled_tasks')
@@ -518,29 +659,23 @@ def run_insurance_expiry_job():
     failed = 0
     for cycle in terminal_cycles:
         try:
-            # Resolve the seat/policy binding, which lives on the INSURANCE_PREMIUM
-            # assessment the cycle drives (bill cycles are seat-blind). A cycle with
-            # no insurance assessment is some other lineage (e.g. rent) — skip.
-            assessment = (
-                ObligationAssessment.query
-                .filter_by(
-                    internal_ref=cycle.internal_ref,
-                    obligation_type="INSURANCE_PREMIUM",
-                )
-                .first()
+            # The premium lineage names its entitlement (DOM-OBL-001 §II.B:
+            # ``insurance:{entitlement_id}``). Any other lineage (e.g. rent) is
+            # skipped. Resolving by entitlement — not by seat + policy — means a
+            # repurchase of the same policy is never expired by its predecessor's
+            # terminal row.
+            entitlement_id = entitlement_id_for_premium_lineage(cycle.internal_ref)
+            grant = (
+                get_insurance_grant(cycle.class_id, entitlement_id)
+                if entitlement_id else None
             )
-            if assessment is None:
+            if grant is None or get_terminal_event(cycle.class_id, entitlement_id) is not None:
+                # Not insurance, or already expired (e.g. at a nonpayment deadline).
                 skipped += 1
                 continue
 
-            grant = get_active_insurance_grant(
-                assessment.seat_id, assessment.class_id, assessment.policy_uuid
-            )
-            if grant is None:
-                # Already expired (or no active coverage for this lineage).
-                skipped += 1
-                continue
-
+            # EXPIRED takes effect at the termination instant (the end of the last
+            # committed period, DOM-OBL-001 §V.7), not when this job happened to run.
             boundary = ensure_utc(cycle.cycle_boundary_at)
             idempotency_key = (
                 f"insurance-expiry:{grant.entitlement_id}:{boundary.isoformat()}"
@@ -548,17 +683,18 @@ def run_insurance_expiry_job():
             with FEATContext("FEAT-STOR-002", idempotency_key=idempotency_key):
                 entitlement_service.expire_entitlement(
                     entitlement_id=grant.entitlement_id,
-                    class_id=assessment.class_id,
-                    target_seat_id=assessment.seat_id,
-                    actor_seat_id=resolve_teacher_seat_for_class(assessment.class_id).id,
+                    class_id=cycle.class_id,
+                    target_seat_id=grant.target_seat_id,
+                    actor_seat_id=resolve_teacher_seat_for_class(cycle.class_id).id,
                     product_id=grant.product_id,
                     entitlement_type="INSURANCE",
                     acquisition_type=grant.acquisition_type,
                     correlation_id=idempotency_key,
                     payload={
                         "source": "run_insurance_expiry_job",
-                        "policy_uuid": assessment.policy_uuid,
+                        "policy_uuid": (grant.payload or {}).get("policy_uuid"),
                     },
+                    effective_at=boundary,
                 )
             expired += 1
         except Exception:
@@ -575,6 +711,430 @@ def run_insurance_expiry_job():
     )
 
 
+def run_insurance_renewal_job():
+    """Insurance coverage renewal (FEAT-STOR-007) for every active insurance entitlement.
+
+    For each entitlement without a terminal event: apply the purchased
+    version's nonpayment behavior, then — while the lineage's assessment point
+    has arrived — schedule the next coverage period, assess its premium, and
+    attempt automatic payment. Each entitlement runs under its OWN top-level
+    FEAT-STOR-007 context (a plain loop, no shared FEAT context), so one
+    entitlement's failure cannot roll back or block another. Idempotent: a
+    rerun finds every step already recorded and writes nothing.
+    """
+    from app.extensions import db
+    from app.feats.insurance_coverage_renewal_feat import (
+        execute_insurance_coverage_renewal,
+        list_renewable_insurance_entitlements,
+    )
+
+    logger = logging.getLogger('scheduled_tasks')
+    logger.info("Starting scheduled insurance coverage-renewal job")
+
+    try:
+        work = list_renewable_insurance_entitlements()
+    except Exception:
+        db.session.rollback()
+        logger.exception("Insurance renewal job could not enumerate entitlements")
+        return
+
+    renewed = 0
+    terminated = 0
+    failed = 0
+    for class_id, entitlement_id in work:
+        try:
+            result = execute_insurance_coverage_renewal(
+                class_id=class_id,
+                entitlement_id=entitlement_id,
+                idempotency_key=f"FEAT-STOR-007:renew:{entitlement_id}",
+            )
+            if result.cycles_scheduled:
+                renewed += 1
+            if result.terminated_for_nonpayment:
+                terminated += 1
+        except Exception:
+            failed += 1
+            db.session.rollback()
+            logger.exception("Insurance renewal failed for entitlement %s", entitlement_id)
+            continue
+
+    logger.info(
+        "Insurance coverage-renewal job completed. Renewed %s, terminated for nonpayment %s, failed %s",
+        renewed, terminated, failed,
+    )
+
+
+def run_collective_goal_expiry_job():
+    """Sweep lapsed collective goals: EXPIRE the unmet ones and refund their buy-ins.
+
+    DOM-STORE-001 §5 requires a collective-goal entitlement to "record EXPIRED
+    when the goal is not reached by the deadline and coordinate a lawful refund."
+    The purchase-time gate already stops a lapsed goal from selling; this job is
+    the other half — without it, students who bought into a goal that never
+    happened keep an unexercisable entitlement and stay charged for it.
+
+    Only **unmet** goals are swept. A goal that reached its target before the
+    deadline stays GRANTED: the reward is owed and the teacher fulfils it by
+    hand, so expiring it would refund the students who actually won.
+
+    The work-list is the product table itself — live goal products whose
+    deadline has passed — so there is no per-entitlement enumeration. Each goal
+    runs under its OWN top-level FEAT-STOR-002 context (isolated failure), and
+    the command skips lineages that already terminated, so re-runs are safe.
+    """
+    from app.extensions import db
+    from app.feats.collective_goal_expiry_feat import expire_lapsed_collective_goal
+    from app.models import StoreProduct
+    from app.services import store_service
+    from app.services.identity_service import resolve_teacher_seat_for_class
+    from app.services.store import collective_goals
+    from app.utils.canonical_temporal_resolver import utc_now
+
+    logger = logging.getLogger('scheduled_tasks')
+    logger.info("Starting scheduled collective-goal expiry job")
+
+    now = utc_now()
+    try:
+        lapsed_products = (
+            StoreProduct.query
+            .filter(
+                StoreProduct.item_type == 'collective',
+                StoreProduct.availability_state == store_service.IN_USE,
+                StoreProduct.collective_goal_expires_at.isnot(None),
+                StoreProduct.collective_goal_expires_at <= now,
+            )
+            .order_by(StoreProduct.class_id.asc(), StoreProduct.product_lineage_uuid.asc())
+            .all()
+        )
+    except Exception:
+        db.session.rollback()
+        logger.exception("Collective-goal expiry job could not enumerate lapsed goals")
+        return
+
+    expired = 0
+    refunded = 0
+    skipped = 0
+    failed = 0
+    unresolved = 0
+    for product in lapsed_products:
+        class_id = product.class_id
+        lineage = product.product_lineage_uuid
+        try:
+            # Whether the goal was met is read through the shared authority, so
+            # this decision matches the progress bar both the student and the
+            # teacher were shown.
+            class_size = collective_goals.count_class_size(class_id)
+            target = collective_goals.resolve_goal_target(product, class_size)
+            participants = collective_goals.count_goal_participants(
+                class_id, [lineage]
+            ).get(lineage, 0)
+
+            if collective_goals.is_goal_met(participants, target):
+                # Met before the deadline — the reward stands, fulfilment is manual.
+                skipped += 1
+                continue
+
+            # The FEAT entry owns its own envelope, so this job must not open
+            # one — exactly one FEAT executes per invocation (INV-ARC-000
+            # §VIII.2), and nesting is refused.
+            result = expire_lapsed_collective_goal(
+                product=product,
+                class_id=class_id,
+                actor_seat_id=resolve_teacher_seat_for_class(class_id).id,
+                idempotency_key=f"goal-expiry:{class_id}:{lineage}",
+            )
+            expired += result.entitlements_expired
+            refunded += result.purchases_refunded
+            unresolved += len(result.unresolved_correlations)
+        except Exception:
+            failed += 1
+            db.session.rollback()
+            logger.exception(
+                "Collective-goal expiry failed for lineage %s in class %s",
+                lineage, class_id,
+            )
+            continue
+
+    logger.info(
+        "Collective-goal expiry job completed. Expired %s entitlement(s) across "
+        "%s refunded purchase(s); skipped %s met goal(s), %s unresolved "
+        "purchase(s) left for review, %s goal(s) failed",
+        expired, refunded, skipped, unresolved, failed,
+    )
+
+
+def run_economy_rebalance_activation_job():
+    """Activate due queued economy policy transitions for every teacher.
+
+    FEAT-CLASS-005 is HIGH blast radius, so its envelope requires an
+    idempotency_key. ``requires_feat_context`` reads that key from keyword
+    arguments only, and this job is invoked by the scheduler with none, so a
+    decorator-owned envelope refuses before the body runs. Each teacher
+    therefore gets its own context with a derived key, which also keeps one
+    teacher's failure from rolling back the activations already committed for
+    the teachers before it.
+    """
+    from app.extensions import db
+    from app.feats.base import FEATContext
+    from app.models import ClassEconomy
+    from app.utils.canonical_temporal_resolver import utc_now
+    from app.utils.economy_rebalance import activate_due_rebalances
+
+    logger = logging.getLogger('scheduled_tasks')
+    teacher_ids = [
+        row[0]
+        for row in db.session.query(ClassEconomy.teacher_user_id)
+        .filter(ClassEconomy.teacher_user_id.isnot(None))
+        .distinct()
+        .all()
+    ]
+    activated = 0
+    failed = 0
+    run_key = utc_now().strftime("%Y-%m-%dT%H")
+    for teacher_id in teacher_ids:
+        try:
+            with FEATContext(
+                "FEAT-CLASS-005",
+                idempotency_key=f"economy-rebalance-job:{teacher_id}:{run_key}",
+            ):
+                count, _labels = activate_due_rebalances(teacher_id)
+                activated += count
+        except Exception:
+            failed += 1
+            db.session.rollback()
+            logger.exception(
+                "Economy rebalance activation failed for teacher %s", teacher_id
+            )
+    logger.info(
+        "Economy rebalance activation completed; activated %s transition(s), "
+        "failed %s teacher(s)",
+        activated, failed,
+    )
+
+
+def run_ledger_settlement_job():
+    """Settle every seat context carrying unsettled ledger activity.
+
+    ``create_pending_transaction`` is the only ledger write boundary and it
+    creates every effect PENDING, so settlement is what admits money to posted
+    history: it assigns ``posting_sequence`` and advances
+    ``LedgerBalanceSnapshot``. Nothing else in the application calls it, which
+    means without this job no transaction ever posts, every snapshot stays
+    absent, and every posted-balance read answers zero forever.
+    """
+    from app.services.ledger_settlement_service import settle_pending_transaction_contexts
+
+    logger = logging.getLogger('scheduled_tasks')
+    summary = settle_pending_transaction_contexts()
+    logger.info(
+        "Ledger settlement sweep completed; settled %s context(s), failed %s context(s)",
+        summary["settled_contexts"], summary["failed_contexts"],
+    )
+    return summary
+
+
+def run_savings_interest_job():
+    """Post the current savings-interest payout for eligible class seats."""
+    from app.extensions import db
+    from app.feats.base import FEATContext
+    from app.models import Seat
+    from app.services.ledger_interest_service import apply_monthly_savings_interest
+    from app.utils.canonical_temporal_resolver import utc_now
+
+    # Interest accrues on posted balances only (SPEC-ECON-001 §9.2), so an
+    # unsettled ledger presents a zero base and this job underpays silently
+    # rather than failing. Two independent interval jobs have no ordering
+    # guarantee between them, so the dependency is discharged here instead of
+    # being left to registration order.
+    run_ledger_settlement_job()
+
+    logger = logging.getLogger('scheduled_tasks')
+    class_ids = [row[0] for row in db.session.query(Seat.class_id).distinct().all()]
+    posted = 0
+    failed = 0
+    period_key = utc_now().strftime("%Y-%m")
+    for class_id in class_ids:
+        # Claimed student seats only (DOM-IDEN-005 §VII-VIII: participation is
+        # lawful only once a Seat is bound to a User). This read carried neither
+        # filter, so it paid savings interest to teacher seats and to unclaimed
+        # seats holding a savings balance preserved through unclaim — the latter
+        # every month, forever.
+        seats = (
+            Seat.query
+            .filter(
+                Seat.class_id == class_id,
+                Seat.role == "student",
+                Seat.claimed_at.isnot(None),
+            )
+            .order_by(Seat.id.asc())
+            .all()
+        )
+        try:
+            with FEATContext(
+                "FEAT-LED-001",
+                idempotency_key=f"savings-interest-job:{class_id}:{period_key}",
+            ):
+                for seat in seats:
+                    if apply_monthly_savings_interest(seat) is not None:
+                        posted += 1
+        except Exception:
+            failed += 1
+            db.session.rollback()
+            logger.exception("Savings-interest payout failed for class %s", class_id)
+    logger.info(
+        "Savings-interest job completed; posted %s payout(s), failed %s class(es)",
+        posted, failed,
+    )
+
+
+SCHEDULED_JOB_MAX_INSTANCES = 1
+
+
+class ScheduledJobSpec(NamedTuple):
+    """One scheduled job's registration, declared apart from the scheduler.
+
+    The jobs used to be registered by ten inline ``scheduler.add_job`` calls
+    inside ``init_scheduled_tasks``, which is skipped under TESTING and only
+    reachable by starting a real BackgroundScheduler. That made "is this job
+    registered at all?" untestable — and a settlement sweep that existed as a
+    function nobody scheduled is exactly the defect that shipped. Declaring the
+    set here lets a test assert membership and ordering without a scheduler.
+    """
+
+    id: str
+    name: str
+    func: Callable[[], object]
+    trigger: str
+    trigger_kwargs: dict
+
+
+# Ordering is meaningful where one job depends on another having run: ledger
+# settlement precedes savings interest because interest accrues on posted
+# balances only. Registration order alone does not enforce that at runtime —
+# run_savings_interest_job discharges the dependency itself — but declaring it
+# here keeps the relationship visible and assertable.
+def purge_stale_teacher_accounts_job():
+    from app.services.teacher_lifecycle import purge_stale_teacher_accounts
+    return purge_stale_teacher_accounts()
+
+
+def purge_expired_teacher_signups_job():
+    from app.feats.teacher_signup_feat import purge_expired_signups
+    from app.feats.base import generate_correlation_id
+    return purge_expired_signups(correlation_id=generate_correlation_id(),
+        idempotency_key='teacher-signup:purge')
+
+
+SCHEDULED_JOB_SPECS: tuple[ScheduledJobSpec, ...] = (
+    ScheduledJobSpec(
+        id='expired_teacher_signups',
+        name='Delete expired teacher signup staging',
+        func=purge_expired_teacher_signups_job,
+        trigger='interval',
+        trigger_kwargs={'hours': 1},
+    ),
+    ScheduledJobSpec(
+        id='stale_teacher_accounts',
+        name='Delete stale teacher accounts',
+        func=purge_stale_teacher_accounts_job,
+        trigger='interval',
+        trigger_kwargs={'hours': 1},
+    ),
+    ScheduledJobSpec(
+        id='enforce_daily_limits',
+        name='Enforce daily attendance limits',
+        func=enforce_daily_limits_job,
+        trigger='interval',
+        trigger_kwargs={'hours': 1},
+    ),
+    ScheduledJobSpec(
+        id='database_maintenance',
+        name='Nightly database maintenance',
+        func=database_maintenance_job,
+        trigger='cron',
+        trigger_kwargs={'hour': 2, 'minute': 0},
+    ),
+    ScheduledJobSpec(
+        id='audit_invariant_check',
+        name='Nightly audit chain integrity verification',
+        func=run_audit_invariant_check_job,
+        trigger='cron',
+        trigger_kwargs={'hour': 3, 'minute': 0},
+    ),
+    # Hourly so cycle boundaries and rent-boundary PERK expiry are materialized
+    # promptly across timezones, even when no student visits the rent page.
+    # Idempotent per class.
+    ScheduledJobSpec(
+        id='rent_reconciliation',
+        name='Rent lifecycle reconciliation',
+        func=run_rent_reconciliation_job,
+        trigger='interval',
+        trigger_kwargs={'hours': 1},
+    ),
+    # Fires the canonical completion FEAT only for classes whose
+    # next_payroll_date is due; idempotent per scheduled occurrence, so an
+    # hourly cadence never double-runs a cycle.
+    ScheduledJobSpec(
+        id='automatic_payroll',
+        name='Automatic payroll (due classes)',
+        func=run_automatic_payroll_job,
+        trigger='interval',
+        trigger_kwargs={'hours': 1},
+    ),
+    # Hourly, so each coverage period's premium is assessed (and autopaid) at
+    # its bill-preview point and a CANCEL_AFTER_X_DAYS deadline is applied
+    # promptly across timezones. Idempotent per entitlement and period.
+    ScheduledJobSpec(
+        id='insurance_renewal',
+        name='Insurance coverage renewal',
+        func=run_insurance_renewal_job,
+        trigger='interval',
+        trigger_kwargs={'hours': 1},
+    ),
+    # Reads the bill-cycle table for terminal insurance lineages whose coverage
+    # boundary has passed and writes EXPIRED via FEAT-STOR-002. Idempotent per
+    # entitlement/boundary, so a daily cadence never double-expires.
+    ScheduledJobSpec(
+        id='insurance_expiry',
+        name='Insurance boundary expiry',
+        func=run_insurance_expiry_job,
+        trigger='cron',
+        trigger_kwargs={'hour': 4, 'minute': 0},
+    ),
+    # Hourly, because a goal deadline is a wall-clock instant the teacher chose
+    # rather than a daily boundary, and students can see the deadline pass.
+    # Skips goals already met and lineages already terminated.
+    ScheduledJobSpec(
+        id='collective_goal_expiry',
+        name='Collective goal expiry and refund',
+        func=run_collective_goal_expiry_job,
+        trigger='interval',
+        trigger_kwargs={'hours': 1},
+    ),
+    ScheduledJobSpec(
+        id='economy_rebalance_activation',
+        name='Activate due economy rebalances',
+        func=run_economy_rebalance_activation_job,
+        trigger='interval',
+        trigger_kwargs={'hours': 1},
+    ),
+    ScheduledJobSpec(
+        id='ledger_settlement',
+        name='Ledger settlement sweep',
+        func=run_ledger_settlement_job,
+        trigger='interval',
+        trigger_kwargs={'hours': 1},
+    ),
+    ScheduledJobSpec(
+        id='savings_interest_payout',
+        name='Savings interest payout',
+        func=run_savings_interest_job,
+        trigger='interval',
+        trigger_kwargs={'hours': 1},
+    ),
+)
+
+
 def init_scheduled_tasks(app):
     """
     Initialize and start scheduled tasks.
@@ -586,119 +1146,30 @@ def init_scheduled_tasks(app):
 
     logger = logging.getLogger('scheduled_tasks')
 
-    # Wrapper function that runs the enforce_daily_limits_job with Flask app context
-    def run_enforce_daily_limits():
-        with app.app_context():
-            enforce_daily_limits_job()
-
-    # Wrapper function that runs the database_maintenance_job with Flask app context
-    def run_database_maintenance():
-        with app.app_context():
-            database_maintenance_job()
-
-    def run_audit_invariant_check():
-        with app.app_context():
-            run_audit_invariant_check_job()
-
-    # Wrapper that runs the rent reconciliation job with Flask app context
-    def run_rent_reconciliation():
-        with app.app_context():
-            run_rent_reconciliation_job()
-
-    # Wrapper that runs the automatic-payroll job with Flask app context
-    def run_automatic_payroll():
-        with app.app_context():
-            run_automatic_payroll_job()
-
-    # Wrapper that runs the insurance boundary-expiry job with Flask app context
-    def run_insurance_expiry():
-        with app.app_context():
-            run_insurance_expiry_job()
-
-    if not scheduler.running:
-        # Add the daily-limit enforcement job to run every hour
-        scheduler.add_job(
-            func=run_enforce_daily_limits,
-            trigger='interval',
-            hours=1,
-            id='enforce_daily_limits',
-            name='Enforce daily attendance limits',
-            replace_existing=True,
-            max_instances=1  # Prevent overlapping executions
-        )
-
-        # Add the database maintenance job to run nightly at 2 AM UTC
-        scheduler.add_job(
-            func=run_database_maintenance,
-            trigger='cron',
-            hour=2,
-            minute=0,
-            id='database_maintenance',
-            name='Nightly database maintenance',
-            replace_existing=True,
-            max_instances=1  # Prevent overlapping executions
-        )
-
-        # Nightly audit chain integrity check — runs at 3 AM UTC (after maintenance)
-        scheduler.add_job(
-            func=run_audit_invariant_check,
-            trigger='cron',
-            hour=3,
-            minute=0,
-            id='audit_invariant_check',
-            name='Nightly audit chain integrity verification',
-            replace_existing=True,
-            max_instances=1
-        )
-
-        # Rent lifecycle reconciliation — runs hourly so cycle boundaries and
-        # rent-boundary PERK expiry are materialized promptly across timezones,
-        # even when no student visits the rent page. Idempotent per class.
-        scheduler.add_job(
-            func=run_rent_reconciliation,
-            trigger='interval',
-            hours=1,
-            id='rent_reconciliation',
-            name='Rent lifecycle reconciliation',
-            replace_existing=True,
-            max_instances=1  # Prevent overlapping executions
-        )
-
-        # Automatic payroll — hourly. Fires the canonical completion FEAT only for
-        # classes whose next_payroll_date is due; idempotent per scheduled
-        # occurrence, so an hourly cadence never double-runs a cycle.
-        scheduler.add_job(
-            func=run_automatic_payroll,
-            trigger='interval',
-            hours=1,
-            id='automatic_payroll',
-            name='Automatic payroll (due classes)',
-            replace_existing=True,
-            max_instances=1  # Prevent overlapping executions
-        )
-
-        # Insurance boundary expiry — daily at 4 AM UTC. Reads the bill-cycle table
-        # for terminal insurance lineages whose coverage boundary has passed and
-        # writes EXPIRED via FEAT-STOR-002. Idempotent per entitlement/boundary, so
-        # a daily cadence never double-expires.
-        scheduler.add_job(
-            func=run_insurance_expiry,
-            trigger='cron',
-            hour=4,
-            minute=0,
-            id='insurance_expiry',
-            name='Insurance boundary expiry',
-            replace_existing=True,
-            max_instances=1  # Prevent overlapping executions
-        )
-
-        scheduler.start()
-        logger.info(
-            "Scheduled tasks initialized: daily-limit enforcement (hourly), "
-            "database maintenance (2 AM UTC), "
-            "audit invariant check (3 AM UTC), "
-            "rent reconciliation (hourly), "
-            "automatic payroll (hourly)"
-        )
-    else:
+    if scheduler.running:
         logger.info("Scheduler already running")
+        return
+
+    def in_app_context(job_func):
+        def run():
+            with app.app_context():
+                job_func()
+        run.__name__ = job_func.__name__
+        return run
+
+    for spec in SCHEDULED_JOB_SPECS:
+        scheduler.add_job(
+            func=in_app_context(spec.func),
+            trigger=spec.trigger,
+            id=spec.id,
+            name=spec.name,
+            replace_existing=True,
+            max_instances=SCHEDULED_JOB_MAX_INSTANCES,
+            **spec.trigger_kwargs,
+        )
+
+    scheduler.start()
+    logger.info(
+        "Scheduled tasks initialized: %s",
+        ", ".join(spec.id for spec in SCHEDULED_JOB_SPECS),
+    )

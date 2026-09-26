@@ -22,6 +22,9 @@ from app.utils.transaction_idempotency import create_idempotent_transaction
 from tests.helpers.canonical_classroom import provision_classroom, login_student
 from tests.helpers.class_domain import enable_class_feature
 
+# tests/helpers/canonical_identities.py provisions every student with this.
+CANONICAL_STUDENT_PASSPHRASE = "testpass"
+
 
 def _teacher_ctx(classroom):
     return CanonicalContext(
@@ -34,7 +37,7 @@ def _make_policy(classroom, premium="10.00"):
     row = configure_insurance_definition(
         class_id=classroom.class_id,
         submission=dict(
-            insurance_type="TRANSACTION", premium=premium, charge_frequency="WEEKLY",
+            insurance_type="TRANSACTION", premium=premium, charge_frequency="WEEKLY", bill_preview_days=3, nonpayment_mode="ACCUMULATE",
             reimbursement_percentage="80", payout_multiple="3",
             claims_per_week_equivalent="1", claim_window_days="7",
             title="Basic Cover",
@@ -51,7 +54,7 @@ def _fund(seat, amount="100.00"):
         create_idempotent_transaction(
             idempotency_key=f"fund:{seat.id}:{uuid4().hex}",
             seat_id=seat.id, class_id=seat.class_id, target_seat_id=seat.id,
-            actor_seat_id=seat.id, mechanism="self", user_id=seat.user_id,
+            actor_seat_id=seat.id, mechanism="self",
             amount=Decimal(amount), account_type="checking", type="payroll",
             description="test funding",
         )
@@ -76,7 +79,13 @@ def test_marketplace_lists_and_student_can_buy(app, client):
     assert b"Buy" in resp.data
 
     # Purchase drives FEAT-OBL-004.
-    resp = client.post(f"/student/insurance/purchase/{policy_uuid}")
+    # Buying insurance verifies the passphrase (FEAT-IDEN-002 §Credential
+    # boundary). Without it the route flashes and redirects without buying, so
+    # the coverage assertion below would fail for the wrong reason.
+    resp = client.post(
+        f"/student/insurance/purchase/{policy_uuid}",
+        data={"passphrase": CANONICAL_STUDENT_PASSPHRASE},
+    )
     assert resp.status_code == 302  # redirect back to the marketplace
 
     with app.app_context():
@@ -100,7 +109,11 @@ def test_purchase_insufficient_funds_flashes_and_writes_nothing(app, client):
         class_id = classroom.class_id
         login_student(client, student)
 
-    resp = client.post(f"/student/insurance/purchase/{policy_uuid}", follow_redirects=True)
+    resp = client.post(
+        f"/student/insurance/purchase/{policy_uuid}",
+        data={"passphrase": CANONICAL_STUDENT_PASSPHRASE},
+        follow_redirects=True,
+    )
     assert resp.status_code == 200
 
     with app.app_context():
@@ -120,7 +133,7 @@ def _make_claimable_txn(seat):
         t, _created = create_idempotent_transaction(
             idempotency_key=f"claimtxn:{seat.id}:{uuid4().hex}",
             seat_id=seat.id, class_id=seat.class_id, target_seat_id=seat.id,
-            actor_seat_id=seat.id, mechanism="self", user_id=seat.user_id,
+            actor_seat_id=seat.id, mechanism="self",
             amount=Decimal("-20.00"), account_type="checking", type="purchase",
             description="Store purchase")
     db.session.commit()
@@ -157,6 +170,63 @@ def test_file_claim_form_and_submission(app, client):
         assert claims == 1
 
 
+def test_transaction_claim_description_is_captured(app, client):
+    """The "Briefly describe what happened" field was rendered and submitted
+    but never read by the route -- the admin review page's Claim Description
+    was guaranteed blank for every TRANSACTION claim regardless of student input."""
+    with app.app_context():
+        classroom = provision_classroom("chemistry_p1")
+        enable_class_feature(class_id=classroom.class_id, feature="insurance")
+        policy_uuid = _make_policy(classroom)
+        student = classroom.students[0]
+        _fund(student.seat)
+        execute_purchase_insurance(
+            canonical_context=_student_ctx(classroom),
+            policy_uuid=policy_uuid, idempotency_key=f"ins:{uuid4().hex}")
+        db.session.commit()
+        txn_id = _make_claimable_txn(student.seat)
+        class_id, seat_id = classroom.class_id, student.seat.id
+        login_student(client, student)
+
+    resp = client.post(
+        f"/student/insurance/claim/{policy_uuid}",
+        data={"transaction_id": str(txn_id), "description": "The item arrived broken."},
+    )
+    assert resp.status_code in (200, 302)
+    with app.app_context():
+        claim = InsuranceClaim.query.filter_by(class_id=class_id, target_seat_id=seat_id).one()
+        assert claim.claim_basis.get("description") == "The item arrived broken."
+
+
+def test_already_claimed_transaction_is_excluded_from_the_dropdown(app, client):
+    """A transaction that already backs a claim must not be offered again --
+    the submission gate refuses it (DUPLICATE_CLAIM_SUBJECT) regardless, so
+    listing it just let a student pick it and be refused."""
+    with app.app_context():
+        classroom = provision_classroom("chemistry_p1")
+        enable_class_feature(class_id=classroom.class_id, feature="insurance")
+        policy_uuid = _make_policy(classroom)
+        student = classroom.students[0]
+        _fund(student.seat, "200.00")
+        execute_purchase_insurance(
+            canonical_context=_student_ctx(classroom),
+            policy_uuid=policy_uuid, idempotency_key=f"ins:{uuid4().hex}")
+        db.session.commit()
+        claimed_txn_id = _make_claimable_txn(student.seat)
+        still_eligible_txn_id = _make_claimable_txn(student.seat)
+        login_student(client, student)
+
+    client.post(f"/student/insurance/claim/{policy_uuid}",
+                data={"transaction_id": str(claimed_txn_id)})
+
+    resp = client.get(f"/student/insurance/claim/{policy_uuid}")
+    page = resp.data.decode()
+    assert f'value="{still_eligible_txn_id}"' in page
+    assert f'value="{claimed_txn_id}"' not in page, (
+        "an already-claimed transaction is still offered in the dropdown"
+    )
+
+
 def test_file_claim_fails_closed_without_coverage(app, client):
     with app.app_context():
         classroom = provision_classroom("chemistry_p1")
@@ -176,7 +246,7 @@ def _make_productivity_policy(classroom):
     row = configure_insurance_definition(
         class_id=classroom.class_id,
         submission=dict(
-            insurance_type="PRODUCTIVITY", premium="10.00", charge_frequency="WEEKLY",
+            insurance_type="PRODUCTIVITY", premium="10.00", charge_frequency="WEEKLY", bill_preview_days=3, nonpayment_mode="ACCUMULATE",
             reimbursement_percentage="80", payout_multiple="5",
             claimable_dates_per_week_equivalent="5", title="Productivity Cover",
         ),
@@ -224,7 +294,7 @@ def _make_tier(classroom, group, level, premium="10.00"):
     row = configure_insurance_definition(
         class_id=classroom.class_id,
         submission=dict(
-            insurance_type="TRANSACTION", premium=premium, charge_frequency="WEEKLY",
+            insurance_type="TRANSACTION", premium=premium, charge_frequency="WEEKLY", bill_preview_days=3, nonpayment_mode="ACCUMULATE",
             reimbursement_percentage="80", payout_multiple="3",
             claims_per_week_equivalent="1", claim_window_days="7",
             title=f"{group} {level}", tier_group=group, tier_level=str(level),
@@ -255,15 +325,23 @@ def test_grouped_marketplace_shows_group_and_cancel_stops_renewal(app, client):
     assert b"Paycheck Protection" in resp.data
 
     # Buy the Basic tier.
-    assert client.post(f"/student/insurance/purchase/{basic}").status_code == 302
+    assert client.post(
+        f"/student/insurance/purchase/{basic}",
+        data={"passphrase": CANONICAL_STUDENT_PASSPHRASE},
+    ).status_code == 302
 
     # The group now shows as enrolled; the other tier is unavailable (one per group).
     resp = client.get("/student/insurance")
     assert b"Enrolled" in resp.data
     assert b"Unavailable" in resp.data
 
-    # Cancel via FEAT-OBL-005 — stop renewal (terminal bill cycle).
-    resp = client.post(f"/student/insurance/cancel/{basic}")
+    # Cancel via FEAT-OBL-005 — stop renewal (terminal bill cycle). The
+    # passphrase is required, as it is for buying (FEAT-IDEN-002 §Credential
+    # boundary).
+    resp = client.post(
+        f"/student/insurance/cancel/{basic}",
+        data={"passphrase": CANONICAL_STUDENT_PASSPHRASE},
+    )
     assert resp.status_code == 302
 
     with app.app_context():
@@ -283,5 +361,9 @@ def test_cancel_without_coverage_warns(app, client):
         student = classroom.students[0]
         login_student(client, student)
 
-    resp = client.post(f"/student/insurance/cancel/{policy_uuid}", follow_redirects=True)
+    resp = client.post(
+        f"/student/insurance/cancel/{policy_uuid}",
+        data={"passphrase": CANONICAL_STUDENT_PASSPHRASE},
+        follow_redirects=True,
+    )
     assert resp.status_code == 200  # redirected back with a warning flash

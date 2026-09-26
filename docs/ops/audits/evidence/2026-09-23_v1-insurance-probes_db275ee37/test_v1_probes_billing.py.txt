@@ -1,0 +1,179 @@
+"""Behavioral probes of V1 insurance billing. Scratch file -- never committed.
+
+Each test states its PREDICTION (formed by reading the code, before running)
+and asserts it. A failure means the code-read was wrong.
+"""
+from datetime import timedelta
+from decimal import Decimal
+
+from app.extensions import db
+from app.models import (
+    Admin, InsurancePolicy, Student, StudentInsurance, StudentTeacher,
+    TeacherBlock, Transaction,
+)
+from app.scheduled_tasks import process_insurance_billing_job
+from app.utils.insurance_billing import (
+    INSURANCE_BILLING_LAUNCH_CUTOFF, insurance_next_payment_due,
+)
+from app.utils.time import ensure_utc
+
+NOW = INSURANCE_BILLING_LAUNCH_CUTOFF + timedelta(days=100)
+POST_LAUNCH = INSURANCE_BILLING_LAUNCH_CUTOFF + timedelta(days=1)  # avoid the legacy-reset gate
+
+
+def _tb(join_code='PROBE1', block='A'):
+    teacher = Admin(username=f"t_{join_code}", totp_secret="secret")
+    db.session.add(teacher); db.session.flush()
+    student = Student(first_name="Pro", last_initial="B", block=block, salt=b'salt')
+    db.session.add(student); db.session.flush()
+    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id, join_code=join_code))
+    db.session.add(TeacherBlock(
+        teacher_id=teacher.id, block=block, join_code=join_code, student_id=student.id,
+        is_claimed=True, first_name='Pro', last_initial='B', last_name_hash_by_part=[],
+        dob_sum=0, salt=b'salt', first_half_hash=f'hash-{join_code}',
+    ))
+    db.session.flush()
+    return teacher, student
+
+
+def _policy(teacher_id, code, **kw):
+    defaults = dict(
+        policy_code=code, teacher_id=teacher_id, title=f"Cov {code}", description='',
+        premium=Decimal('10.00'), charge_frequency='monthly', autopay=True,
+        auto_cancel_nonpay_days=3, claim_type='transaction_monetary', is_monetary=True,
+    )
+    defaults.update(kw)
+    p = InsurancePolicy(**defaults)
+    db.session.add(p); db.session.flush()
+    return p
+
+
+def _enroll(student_id, policy, join_code, *, due, status='active', payment_current=True, days_unpaid=0):
+    e = StudentInsurance(
+        student_id=student_id, policy_id=policy.id, join_code=join_code, status=status,
+        purchase_date=POST_LAUNCH, last_payment_date=POST_LAUNCH,
+        next_payment_due=due, coverage_start_date=POST_LAUNCH,
+        payment_current=payment_current, days_unpaid=days_unpaid,
+    )
+    db.session.add(e); db.session.flush()
+    e.freeze_policy_snapshot(policy)
+    db.session.commit()
+    return e
+
+
+def _fund(student_id, teacher_id, join_code, amount):
+    db.session.add(Transaction(
+        student_id=student_id, teacher_id=teacher_id, join_code=join_code,
+        amount=Decimal(amount), account_type='checking', type='deposit', description='funds',
+    ))
+    db.session.commit()
+
+
+def _premiums(student_id, join_code):
+    return Transaction.query.filter_by(
+        student_id=student_id, join_code=join_code, type='insurance_premium').count()
+
+
+def test_P6_three_missed_periods_charge_once_and_rerun_is_a_noop(app):
+    """PREDICTION: an autopay enrollment 3 periods overdue is charged ONE premium
+    (no catch-up), next_payment_due jumps to NOW+28d (skipping the missed periods),
+    and re-running the job at the same instant charges nothing more."""
+    with app.app_context():
+        t, s = _tb('P6')
+        pol = _policy(t.id, 'P6')
+        e = _enroll(s.id, pol, 'P6', due=NOW - timedelta(days=90))
+        _fund(s.id, t.id, 'P6', '500.00')
+
+        process_insurance_billing_job(now=NOW)
+        db.session.refresh(e)
+        assert _premiums(s.id, 'P6') == 1
+        assert ensure_utc(e.next_payment_due) == insurance_next_payment_due(NOW, 'monthly')
+
+        process_insurance_billing_job(now=NOW)
+        assert _premiums(s.id, 'P6') == 1
+
+
+def test_P7_deactivated_policy_still_billed(app):
+    """PREDICTION: billing filters on enrollment status/due date only, never on
+    policy.is_active, so a deactivated policy's enrollment is still charged."""
+    with app.app_context():
+        t, s = _tb('P7')
+        pol = _policy(t.id, 'P7', is_active=False)
+        e = _enroll(s.id, pol, 'P7', due=NOW - timedelta(days=1))
+        _fund(s.id, t.id, 'P7', '100.00')
+
+        process_insurance_billing_job(now=NOW)
+        db.session.refresh(e)
+        assert _premiums(s.id, 'P7') == 1
+        assert e.payment_current is True
+
+
+def test_P8a_autopay_recovers_on_a_later_run_once_funded(app):
+    """PREDICTION: an autopay enrollment that failed (insufficient funds) stays in
+    the due set, and is charged by the next run after the student is funded, with
+    no fee, and payment_current returns to True."""
+    with app.app_context():
+        t, s = _tb('P8A')
+        pol = _policy(t.id, 'P8A', auto_cancel_nonpay_days=10)
+        e = _enroll(s.id, pol, 'P8A', due=NOW - timedelta(days=1))
+
+        process_insurance_billing_job(now=NOW)
+        db.session.refresh(e)
+        assert e.payment_current is False and _premiums(s.id, 'P8A') == 0
+
+        _fund(s.id, t.id, 'P8A', '100.00')
+        process_insurance_billing_job(now=NOW + timedelta(days=1))
+        db.session.refresh(e)
+        assert e.payment_current is True and _premiums(s.id, 'P8A') == 1
+        assert e.days_unpaid == 0
+        assert Transaction.query.filter_by(student_id=s.id, type='overdraft_fee').count() == 0
+
+
+def test_P8b_autopay_with_no_funds_is_auto_cancelled_at_threshold(app):
+    """PREDICTION: insufficient-funds autopay is cancelled once
+    (today - due_date) >= auto_cancel_nonpay_days, with cancel_date set to the run."""
+    with app.app_context():
+        t, s = _tb('P8B')
+        pol = _policy(t.id, 'P8B', auto_cancel_nonpay_days=3)
+        e = _enroll(s.id, pol, 'P8B', due=NOW - timedelta(days=1))
+
+        process_insurance_billing_job(now=NOW + timedelta(days=1))   # 2 days late
+        db.session.refresh(e)
+        assert e.status == 'active' and e.days_unpaid == 2
+
+        process_insurance_billing_job(now=NOW + timedelta(days=2))   # 3 days late
+        db.session.refresh(e)
+        assert e.status == 'cancelled'
+        assert ensure_utc(e.cancel_date) == NOW + timedelta(days=2)
+
+
+def test_P8c_zero_threshold_means_never_auto_cancel(app):
+    """PREDICTION: auto_cancel_nonpay_days == 0 disables auto-cancel entirely, so an
+    enrollment can stay 'active' and unpaid indefinitely."""
+    with app.app_context():
+        t, s = _tb('P8C')
+        pol = _policy(t.id, 'P8C', auto_cancel_nonpay_days=0)
+        e = _enroll(s.id, pol, 'P8C', due=NOW - timedelta(days=1))
+
+        process_insurance_billing_job(now=NOW + timedelta(days=365))
+        db.session.refresh(e)
+        assert e.status == 'active' and e.payment_current is False
+        assert e.days_unpaid >= 300
+
+
+def test_P8d_premium_charge_is_a_pending_debit_with_no_key_or_enrollment_link(app):
+    """PREDICTION: the recurring premium is a PENDING, non-idempotent debit that
+    carries policy_id but no idempotency_key and no enrollment reference."""
+    with app.app_context():
+        t, s = _tb('P8D')
+        pol = _policy(t.id, 'P8D')
+        _enroll(s.id, pol, 'P8D', due=NOW - timedelta(days=1))
+        _fund(s.id, t.id, 'P8D', '100.00')
+
+        process_insurance_billing_job(now=NOW)
+        tx = Transaction.query.filter_by(student_id=s.id, type='insurance_premium').one()
+        assert tx.status.name == 'PENDING'
+        assert tx.amount == Decimal('-10.00')
+        assert tx.idempotency_key is None
+        assert tx.policy_id == pol.id
+        assert not hasattr(tx, 'student_insurance_id')

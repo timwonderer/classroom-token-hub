@@ -11,7 +11,7 @@ from app.models import (
     IssueCategory,
     PayrollSettings,
     Seat,
-    StoreItem,
+    StoreProduct,
     User,
 )
 from app.services.class_configuration_query_service import get_payroll_settings
@@ -223,6 +223,38 @@ def test_DOM_IDEN_007__add_individual_student_creates_single_student_seat_for_ne
     assert new_seat.dedupe_code is not None
 
 
+def test_add_individual_student_does_not_log_the_students_name(client, caplog):
+    """The idempotency_key passed to FEATContext is written verbatim to the
+    FEAT-ENTRY log line on every context entry (app/feats/base.py's
+    log_event). It must never embed raw PII -- a student's plaintext name
+    reaching the application log this way persists indefinitely and is
+    readable by anyone with server/log access, unlike a flash message scoped
+    to the acting teacher's own session. dedupe_key already encodes
+    (class_id, first_name, last_name) via HMAC, so it carries the same
+    uniqueness the raw names did without exposing them.
+    """
+    class_row = initialize("chemistry_p1", client.application)
+    admin = class_row.teacher_user
+    teacher_seat = _teacher_seat(class_row)
+    with client.session_transaction() as sess:
+        set_canonical_context(sess, user_id=admin.id, class_id=class_row.class_id, seat_id=teacher_seat.id, role="admin")
+
+    import logging
+    caplog.set_level(logging.INFO, logger="app.feats.base")
+
+    response = admin_add_individual_student(
+        client,
+        first_name="Confidential",
+        last_name="Surnametoshow",
+        dob="2010-01-02",
+        block_select="A",
+    )
+
+    assert response.status_code == 302
+    assert "Confidential" not in caplog.text
+    assert "Surnametoshow" not in caplog.text
+
+
 def test_DOM_IDEN_006__add_individual_student_uses_selected_class_when_block_has_other_scope(client):
     class_row_old = initialize("chemistry_p1", client.application)
     class_row_new = initialize("ap_csp_p3", client.application)
@@ -256,7 +288,10 @@ def test_DOM_IDEN_006__add_individual_student_uses_selected_class_when_block_has
 def test_DOM_IDEN_001__students_page_does_not_render_hidden_block_input(client):
     from pathlib import Path
 
-    template_text = Path("/Users/timothychang/Documents/GitHub/classroom-economy/templates/admin_students.html").read_text()
+    # Resolved from this file, not from one developer's home directory — the
+    # absolute path here made the test unrunnable anywhere else.
+    repo_root = Path(__file__).resolve().parents[3]
+    template_text = (repo_root / "templates" / "admin_students.html").read_text(encoding="utf-8")
 
     assert 'name="block"' not in template_text
     assert 'id="block"' not in template_text
@@ -270,12 +305,12 @@ def test_DOM_IDEN_006__store_create_requires_current_class_context(client):
     with client.session_transaction() as sess:
         set_canonical_context(sess, user_id=admin.id, class_id=class_row.class_id, seat_id=teacher_seat.id, role="admin")
 
-    initial_store_item_count = db.session.query(StoreItem).count()
+    initial_store_item_count = db.session.query(StoreProduct).count()
     with FEATContext("FEAT-IDEN-001", idempotency_key="admin-membership:store-guard:post"):
         response = admin_create_store_item(client)
 
     assert response.status_code == 404
-    assert db.session.query(StoreItem).count() == initial_store_item_count
+    assert db.session.query(StoreProduct).count() == initial_store_item_count
 
 
 def test_DOM_IDEN_006__payroll_settings_requires_current_class_context(client):
@@ -472,3 +507,15 @@ def test_DOM_IDEN_006__class_scoped_post_rejects_request_class_mismatch(client):
     assert class_a_settings.pay_rate == posted_rate, (
         "Canonical class must receive the posted payroll update"
     )
+
+
+def test_set_current_class_lands_on_the_dashboard(client):
+    """A teacher page open in the old class may not exist in the new one, so a
+    switch sends the teacher to the dashboard rather than reloading the page."""
+    owned_class = initialize("chemistry_p1", client.application)
+    teacher_seat = _teacher_seat(owned_class)
+    with client.session_transaction() as sess:
+        set_canonical_context(sess, user_id=owned_class.teacher_user.id, class_id=owned_class.class_id, seat_id=teacher_seat.id, role="admin")
+    response = admin_set_current_class(client, owned_class.class_id)
+    assert response.status_code == 200
+    assert response.get_json()["redirect_url"] == "/admin/"

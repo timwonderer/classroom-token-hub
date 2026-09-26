@@ -9996,7 +9996,7 @@ student = <Student 1>, join_code = 'PAYROLL1', block = 'A'
 
     def _attach_student_to_class(student, join_code="ATTEND1", block="A"):
 >       from app.models import Admin, TeacherBlock, StudentTeacher, User, Seat, UserRole
-E       ImportError: cannot import name 'TeacherBlock' from 'app.models' (/Users/timothychang/Documents/GitHub/classroom-economy/app/models.py)
+E       ImportError: cannot import name 'TeacherBlock' from 'app.models' (app/models.py)
 
 tests/test_attendance.py:17: ImportError
 ---------------------------- Captured stderr setup -----------------------------
@@ -10032,7 +10032,7 @@ student = <Student 1>, join_code = 'ATTEND2', block = 'A'
 
     def _attach_student_to_class(student, join_code="ATTEND1", block="A"):
 >       from app.models import Admin, TeacherBlock, StudentTeacher, User, Seat, UserRole
-E       ImportError: cannot import name 'TeacherBlock' from 'app.models' (/Users/timothychang/Documents/GitHub/classroom-economy/app/models.py)
+E       ImportError: cannot import name 'TeacherBlock' from 'app.models' (app/models.py)
 
 tests/test_attendance.py:17: ImportError
 ---------------------------- Captured stderr setup -----------------------------
@@ -10069,7 +10069,7 @@ student = <Student 1>, join_code = 'ATTEND6', block = 'A'
 
     def _attach_student_to_class(student, join_code="ATTEND1", block="A"):
 >       from app.models import Admin, TeacherBlock, StudentTeacher, User, Seat, UserRole
-E       ImportError: cannot import name 'TeacherBlock' from 'app.models' (/Users/timothychang/Documents/GitHub/classroom-economy/app/models.py)
+E       ImportError: cannot import name 'TeacherBlock' from 'app.models' (app/models.py)
 
 tests/test_attendance.py:17: ImportError
 ---------------------------- Captured stderr setup -----------------------------
@@ -10105,7 +10105,7 @@ student = <Student 1>, join_code = 'ATTEND3', block = 'A'
 
     def _attach_student_to_class(student, join_code="ATTEND1", block="A"):
 >       from app.models import Admin, TeacherBlock, StudentTeacher, User, Seat, UserRole
-E       ImportError: cannot import name 'TeacherBlock' from 'app.models' (/Users/timothychang/Documents/GitHub/classroom-economy/app/models.py)
+E       ImportError: cannot import name 'TeacherBlock' from 'app.models' (app/models.py)
 
 tests/test_attendance.py:17: ImportError
 ---------------------------- Captured stderr setup -----------------------------
@@ -10141,7 +10141,7 @@ student = <Student 1>, join_code = 'ATTEND4', block = 'A'
 
     def _attach_student_to_class(student, join_code="ATTEND1", block="A"):
 >       from app.models import Admin, TeacherBlock, StudentTeacher, User, Seat, UserRole
-E       ImportError: cannot import name 'TeacherBlock' from 'app.models' (/Users/timothychang/Documents/GitHub/classroom-economy/app/models.py)
+E       ImportError: cannot import name 'TeacherBlock' from 'app.models' (app/models.py)
 
 tests/test_attendance.py:17: ImportError
 ---------------------------- Captured stderr setup -----------------------------
@@ -10399,9 +10399,9 @@ Traceback (most recent call last):
     rv = self.dispatch_request()
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/flask/app.py", line 902, in dispatch_request
     return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/auth.py", line 250, in decorated_function
+  File "app/auth.py", line 250, in decorated_function
     return f(*args, **kwargs)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py", line 2870, in dashboard
+  File "app/routes/admin.py", line 2870, in dashboard
     .filter(HallPassLog.join_code.in_(join_code_scope))
 NameError: name 'join_code_scope' is not defined
 ------------------------------ Captured log call -------------------------------
@@ -10421,9 +10421,9 @@ Traceback (most recent call last):
     rv = self.dispatch_request()
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/flask/app.py", line 902, in dispatch_request
     return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/auth.py", line 250, in decorated_function
+  File "app/auth.py", line 250, in decorated_function
     return f(*args, **kwargs)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py", line 2870, in dashboard
+  File "app/routes/admin.py", line 2870, in dashboard
     .filter(HallPassLog.join_code.in_(join_code_scope))
 NameError: name 'join_code_scope' is not defined
 --------------------------- Captured stderr teardown ---------------------------
@@ -10474,9 +10474,9 @@ Traceback (most recent call last):
     rv = self.dispatch_request()
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/flask/app.py", line 902, in dispatch_request
     return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/auth.py", line 250, in decorated_function
+  File "app/auth.py", line 250, in decorated_function
     return f(*args, **kwargs)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py", line 2870, in dashboard
+  File "app/routes/admin.py", line 2870, in dashboard
     .filter(HallPassLog.join_code.in_(join_code_scope))
 NameError: name 'join_code_scope' is not defined
 ------------------------------ Captured log call -------------------------------
@@ -10494,9 +10494,9 @@ Traceback (most recent call last):
     rv = self.dispatch_request()
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/flask/app.py", line 902, in dispatch_request
     return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/auth.py", line 250, in decorated_function
+  File "app/auth.py", line 250, in decorated_function
     return f(*args, **kwargs)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py", line 2870, in dashboard
+  File "app/routes/admin.py", line 2870, in dashboard
     .filter(HallPassLog.join_code.in_(join_code_scope))
 NameError: name 'join_code_scope' is not defined
 --------------------------- Captured stderr teardown ---------------------------
@@ -10539,9 +10539,9 @@ Traceback (most recent call last):
     rv = self.dispatch_request()
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/flask/app.py", line 902, in dispatch_request
     return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/auth.py", line 250, in decorated_function
+  File "app/auth.py", line 250, in decorated_function
     return f(*args, **kwargs)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py", line 2870, in dashboard
+  File "app/routes/admin.py", line 2870, in dashboard
     .filter(HallPassLog.join_code.in_(join_code_scope))
 NameError: name 'join_code_scope' is not defined
 ------------------------------ Captured log call -------------------------------
@@ -10555,9 +10555,9 @@ Traceback (most recent call last):
     rv = self.dispatch_request()
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/flask/app.py", line 902, in dispatch_request
     return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/auth.py", line 250, in decorated_function
+  File "app/auth.py", line 250, in decorated_function
     return f(*args, **kwargs)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py", line 2870, in dashboard
+  File "app/routes/admin.py", line 2870, in dashboard
     .filter(HallPassLog.join_code.in_(join_code_scope))
 NameError: name 'join_code_scope' is not defined
 --------------------------- Captured stderr teardown ---------------------------
@@ -11572,9 +11572,9 @@ AttributeError: type object 'BalanceCache' has no attribute 'student_id'
 The above exception was the direct cause of the following exception:
 
 Traceback (most recent call last):
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/utils/banking.py", line 54, in _settle_pending_transaction_contexts_legacy
+  File "app/utils/banking.py", line 54, in _settle_pending_transaction_contexts_legacy
     settle_balances(seat_id, class_id)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/utils/banking.py", line 167, in settle_balances
+  File "app/utils/banking.py", line 167, in settle_balances
     BalanceCache.query
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/sqlalchemy/orm/query.py", line 1992, in filter_by
     clauses = [
@@ -11593,9 +11593,9 @@ AttributeError: type object 'BalanceCache' has no attribute 'student_id'
 The above exception was the direct cause of the following exception:
 
 Traceback (most recent call last):
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/utils/banking.py", line 54, in _settle_pending_transaction_contexts_legacy
+  File "app/utils/banking.py", line 54, in _settle_pending_transaction_contexts_legacy
     settle_balances(seat_id, class_id)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/utils/banking.py", line 167, in settle_balances
+  File "app/utils/banking.py", line 167, in settle_balances
     BalanceCache.query
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/sqlalchemy/orm/query.py", line 1992, in filter_by
     clauses = [
@@ -11623,9 +11623,9 @@ AttributeError: type object 'BalanceCache' has no attribute 'student_id'
 The above exception was the direct cause of the following exception:
 
 Traceback (most recent call last):
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/utils/banking.py", line 54, in _settle_pending_transaction_contexts_legacy
+  File "app/utils/banking.py", line 54, in _settle_pending_transaction_contexts_legacy
     settle_balances(seat_id, class_id)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/utils/banking.py", line 167, in settle_balances
+  File "app/utils/banking.py", line 167, in settle_balances
     BalanceCache.query
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/sqlalchemy/orm/query.py", line 1992, in filter_by
     clauses = [
@@ -11644,9 +11644,9 @@ AttributeError: type object 'BalanceCache' has no attribute 'student_id'
 The above exception was the direct cause of the following exception:
 
 Traceback (most recent call last):
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/utils/banking.py", line 54, in _settle_pending_transaction_contexts_legacy
+  File "app/utils/banking.py", line 54, in _settle_pending_transaction_contexts_legacy
     settle_balances(seat_id, class_id)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/utils/banking.py", line 167, in settle_balances
+  File "app/utils/banking.py", line 167, in settle_balances
     BalanceCache.query
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/sqlalchemy/orm/query.py", line 1992, in filter_by
     clauses = [
@@ -12923,11 +12923,11 @@ INFO     app.feats.base:base.py:227 FEAT-ENTRY: feat=FEAT-BYPASS-LEGACY | correl
 [2026-06-07 19:32:18,343] INFO in auth [4508ad382122470da6ae2af972757c8a] [actor=teacher:None class_id=None] [endpoint=/admin/account-delete method=POST] [error_class=- correlation_version=1]: Admin access attempt: session = {'admin_id': 1, 'csrf_token': '4a1bfaa103a82c3d9b8ca539d7dd65b1d8b53fb1', 'is_admin': True, 'last_activity': '2026-06-08T02:32:18.340139+00:00', 'user_id': 1}
 [2026-06-07 19:32:18,355] ERROR in admin [4508ad382122470da6ae2af972757c8a] [actor=teacher:None class_id=None] [endpoint=/admin/account-delete method=POST] [error_class=- correlation_version=1]: Error deleting teacher account: Can't call Query.update() or Query.delete() when join(), outerjoin(), select_from(), or from_self() has been called
 Traceback (most recent call last):
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py", line 10790, in account_delete
+  File "app/routes/admin.py", line 10790, in account_delete
     _hard_delete_teacher_account_scope(admin_id)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py", line 1561, in _hard_delete_teacher_account_scope
+  File "app/routes/admin.py", line 1561, in _hard_delete_teacher_account_scope
     _delete_teacher_residual_ownership_rows(teacher_id)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py", line 1414, in _delete_teacher_residual_ownership_rows
+  File "app/routes/admin.py", line 1414, in _delete_teacher_residual_ownership_rows
     Seat.query.join(ClassEconomy, ClassEconomy.class_id == Seat.class_id).filter(
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/sqlalchemy/orm/query.py", line 3200, in delete
     bulk_del = BulkDelete(self, delete_args)
@@ -12944,11 +12944,11 @@ INFO     app.feats.base:base.py:264 FEAT-COMMIT-OWNERSHIP: FEAT-BYPASS-LEGACY | 
 INFO     app:auth.py:217 Admin access attempt: session = {'admin_id': 1, 'csrf_token': '4a1bfaa103a82c3d9b8ca539d7dd65b1d8b53fb1', 'is_admin': True, 'last_activity': '2026-06-08T02:32:18.340139+00:00', 'user_id': 1}
 ERROR    app:admin.py:10801 Error deleting teacher account: Can't call Query.update() or Query.delete() when join(), outerjoin(), select_from(), or from_self() has been called
 Traceback (most recent call last):
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py", line 10790, in account_delete
+  File "app/routes/admin.py", line 10790, in account_delete
     _hard_delete_teacher_account_scope(admin_id)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py", line 1561, in _hard_delete_teacher_account_scope
+  File "app/routes/admin.py", line 1561, in _hard_delete_teacher_account_scope
     _delete_teacher_residual_ownership_rows(teacher_id)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py", line 1414, in _delete_teacher_residual_ownership_rows
+  File "app/routes/admin.py", line 1414, in _delete_teacher_residual_ownership_rows
     Seat.query.join(ClassEconomy, ClassEconomy.class_id == Seat.class_id).filter(
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/sqlalchemy/orm/query.py", line 3200, in delete
     bulk_del = BulkDelete(self, delete_args)
@@ -14682,9 +14682,9 @@ INFO     app.feats.base:base.py:227 FEAT-ENTRY: feat=FEAT-BYPASS-LEGACY | correl
 [2026-06-07 19:32:50,084] INFO in base [4bea1af233244fc3816f9fb5d9392a00] [actor=teacher:None class_id=None] [endpoint=/admin/run_payroll method=POST] [error_class=- correlation_version=1]: FEAT-ENTRY: feat=FEAT-LED-004 | correlation_id=bypass_test_9d15ecac2a7f421a9afcf6191fad7242 | idempotency_key=NONE
 [2026-06-07 19:32:50,084] ERROR in admin [4bea1af233244fc3816f9fb5d9392a00] [actor=teacher:None class_id=None] [endpoint=/admin/run_payroll method=POST] [error_class=- correlation_version=1]: Payroll unexpected error: Missing canonical class_id context.
 Traceback (most recent call last):
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py", line 8570, in _run_payroll_legacy
+  File "app/routes/admin.py", line 8570, in _run_payroll_legacy
     selected_scope = _require_payroll_feature_scope_from_request()
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py", line 1103, in _require_payroll_feature_scope_from_request
+  File "app/routes/admin.py", line 1103, in _require_payroll_feature_scope_from_request
     raise InvariantViolation("Missing canonical class_id context.")
 app.feats.base.InvariantViolation: Missing canonical class_id context.
 ------------------------------ Captured log call -------------------------------
@@ -14706,9 +14706,9 @@ WARNING  app.feats.base:base.py:174 FEAT-INTEGRITY-WARNING: FEAT FEAT-LED-004 (B
 INFO     app.feats.base:base.py:227 FEAT-ENTRY: feat=FEAT-LED-004 | correlation_id=bypass_test_9d15ecac2a7f421a9afcf6191fad7242 | idempotency_key=NONE
 ERROR    app:admin.py:8639 Payroll unexpected error: Missing canonical class_id context.
 Traceback (most recent call last):
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py", line 8570, in _run_payroll_legacy
+  File "app/routes/admin.py", line 8570, in _run_payroll_legacy
     selected_scope = _require_payroll_feature_scope_from_request()
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py", line 1103, in _require_payroll_feature_scope_from_request
+  File "app/routes/admin.py", line 1103, in _require_payroll_feature_scope_from_request
     raise InvariantViolation("Missing canonical class_id context.")
 app.feats.base.InvariantViolation: Missing canonical class_id context.
 --------------------------- Captured stderr teardown ---------------------------
@@ -20040,7 +20040,7 @@ client = <FlaskClient <Flask 'app'>>, test_student = <Student 1>
 
     def test_dashboard_renders_recent_deposit(client, test_student):
 >       from app.models import Admin, StudentTeacher, TeacherBlock
-E       ImportError: cannot import name 'TeacherBlock' from 'app.models' (/Users/timothychang/Documents/GitHub/classroom-economy/app/models.py)
+E       ImportError: cannot import name 'TeacherBlock' from 'app.models' (app/models.py)
 
 tests/test_interest.py:52: ImportError
 ---------------------------- Captured stderr setup -----------------------------
@@ -20899,7 +20899,7 @@ client = <FlaskClient <Flask 'app'>>
 
     def test_calculate_payroll(client):
 >       from app.models import AttendanceSession, TeacherBlock, Student
-E       ImportError: cannot import name 'TeacherBlock' from 'app.models' (/Users/timothychang/Documents/GitHub/classroom-economy/app/models.py)
+E       ImportError: cannot import name 'TeacherBlock' from 'app.models' (app/models.py)
 
 tests/test_payroll.py:38: ImportError
 ---------------------------- Captured stderr setup -----------------------------
@@ -20920,7 +20920,7 @@ client = <FlaskClient <Flask 'app'>>
 
     def test_calculate_payroll_ignores_other_class_manual_payment_anchor(client):
 >       from app.models import AttendanceSession, Admin, TeacherBlock, Student
-E       ImportError: cannot import name 'TeacherBlock' from 'app.models' (/Users/timothychang/Documents/GitHub/classroom-economy/app/models.py)
+E       ImportError: cannot import name 'TeacherBlock' from 'app.models' (app/models.py)
 
 tests/test_payroll.py:145: ImportError
 ---------------------------- Captured stderr setup -----------------------------
@@ -20943,7 +20943,7 @@ client = <FlaskClient <Flask 'app'>>
         """Test the caching logic for payroll."""
         from app.payroll import get_cached_payroll_with_meta
 >       from app.models import Admin, AttendanceSession, Student, TeacherBlock, PayrollCache
-E       ImportError: cannot import name 'TeacherBlock' from 'app.models' (/Users/timothychang/Documents/GitHub/classroom-economy/app/models.py)
+E       ImportError: cannot import name 'TeacherBlock' from 'app.models' (app/models.py)
 
 tests/test_payroll.py:449: ImportError
 ---------------------------- Captured stderr setup -----------------------------
@@ -24512,11 +24512,11 @@ Traceback (most recent call last):
     return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/flask_limiter/extension.py", line 1298, in __inner
     return cast(R, flask.current_app.ensure_sync(obj)(*a, **k))
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/feats/base.py", line 432, in decorated_function
+  File "app/feats/base.py", line 432, in decorated_function
     return f(*args, **kwargs)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/recovery.py", line 106, in account_lookup
+  File "app/routes/recovery.py", line 106, in account_lookup
     return _account_lookup_legacy(*args, **kwargs)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/recovery.py", line 184, in _account_lookup_legacy
+  File "app/routes/recovery.py", line 184, in _account_lookup_legacy
     db.session.flush() # FEAT-LEGACY-WRAP: commit removed
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/sqlalchemy/orm/scoping.py", line 924, in flush
     return self._proxied.flush(objects=objects)
@@ -24582,11 +24582,11 @@ Traceback (most recent call last):
     return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/flask_limiter/extension.py", line 1298, in __inner
     return cast(R, flask.current_app.ensure_sync(obj)(*a, **k))
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/feats/base.py", line 432, in decorated_function
+  File "app/feats/base.py", line 432, in decorated_function
     return f(*args, **kwargs)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/recovery.py", line 106, in account_lookup
+  File "app/routes/recovery.py", line 106, in account_lookup
     return _account_lookup_legacy(*args, **kwargs)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/recovery.py", line 184, in _account_lookup_legacy
+  File "app/routes/recovery.py", line 184, in _account_lookup_legacy
     db.session.flush() # FEAT-LEGACY-WRAP: commit removed
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/sqlalchemy/orm/scoping.py", line 924, in flush
     return self._proxied.flush(objects=objects)
@@ -24692,11 +24692,11 @@ Traceback (most recent call last):
     return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/flask_limiter/extension.py", line 1298, in __inner
     return cast(R, flask.current_app.ensure_sync(obj)(*a, **k))
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/feats/base.py", line 432, in decorated_function
+  File "app/feats/base.py", line 432, in decorated_function
     return f(*args, **kwargs)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/recovery.py", line 106, in account_lookup
+  File "app/routes/recovery.py", line 106, in account_lookup
     return _account_lookup_legacy(*args, **kwargs)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/recovery.py", line 184, in _account_lookup_legacy
+  File "app/routes/recovery.py", line 184, in _account_lookup_legacy
     db.session.flush() # FEAT-LEGACY-WRAP: commit removed
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/sqlalchemy/orm/scoping.py", line 924, in flush
     return self._proxied.flush(objects=objects)
@@ -24762,11 +24762,11 @@ Traceback (most recent call last):
     return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/flask_limiter/extension.py", line 1298, in __inner
     return cast(R, flask.current_app.ensure_sync(obj)(*a, **k))
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/feats/base.py", line 432, in decorated_function
+  File "app/feats/base.py", line 432, in decorated_function
     return f(*args, **kwargs)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/recovery.py", line 106, in account_lookup
+  File "app/routes/recovery.py", line 106, in account_lookup
     return _account_lookup_legacy(*args, **kwargs)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/recovery.py", line 184, in _account_lookup_legacy
+  File "app/routes/recovery.py", line 184, in _account_lookup_legacy
     db.session.flush() # FEAT-LEGACY-WRAP: commit removed
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/sqlalchemy/orm/scoping.py", line 924, in flush
     return self._proxied.flush(objects=objects)
@@ -24884,11 +24884,11 @@ Traceback (most recent call last):
     return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/flask_limiter/extension.py", line 1298, in __inner
     return cast(R, flask.current_app.ensure_sync(obj)(*a, **k))
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/feats/base.py", line 432, in decorated_function
+  File "app/feats/base.py", line 432, in decorated_function
     return f(*args, **kwargs)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/recovery.py", line 106, in account_lookup
+  File "app/routes/recovery.py", line 106, in account_lookup
     return _account_lookup_legacy(*args, **kwargs)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/recovery.py", line 184, in _account_lookup_legacy
+  File "app/routes/recovery.py", line 184, in _account_lookup_legacy
     db.session.flush() # FEAT-LEGACY-WRAP: commit removed
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/sqlalchemy/orm/scoping.py", line 924, in flush
     return self._proxied.flush(objects=objects)
@@ -24966,11 +24966,11 @@ Traceback (most recent call last):
     return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/flask_limiter/extension.py", line 1298, in __inner
     return cast(R, flask.current_app.ensure_sync(obj)(*a, **k))
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/feats/base.py", line 432, in decorated_function
+  File "app/feats/base.py", line 432, in decorated_function
     return f(*args, **kwargs)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/recovery.py", line 106, in account_lookup
+  File "app/routes/recovery.py", line 106, in account_lookup
     return _account_lookup_legacy(*args, **kwargs)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/recovery.py", line 184, in _account_lookup_legacy
+  File "app/routes/recovery.py", line 184, in _account_lookup_legacy
     db.session.flush() # FEAT-LEGACY-WRAP: commit removed
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/sqlalchemy/orm/scoping.py", line 924, in flush
     return self._proxied.flush(objects=objects)
@@ -25088,11 +25088,11 @@ Traceback (most recent call last):
     return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/flask_limiter/extension.py", line 1298, in __inner
     return cast(R, flask.current_app.ensure_sync(obj)(*a, **k))
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/feats/base.py", line 432, in decorated_function
+  File "app/feats/base.py", line 432, in decorated_function
     return f(*args, **kwargs)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/recovery.py", line 106, in account_lookup
+  File "app/routes/recovery.py", line 106, in account_lookup
     return _account_lookup_legacy(*args, **kwargs)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/recovery.py", line 184, in _account_lookup_legacy
+  File "app/routes/recovery.py", line 184, in _account_lookup_legacy
     db.session.flush() # FEAT-LEGACY-WRAP: commit removed
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/sqlalchemy/orm/scoping.py", line 924, in flush
     return self._proxied.flush(objects=objects)
@@ -25158,11 +25158,11 @@ Traceback (most recent call last):
     return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/flask_limiter/extension.py", line 1298, in __inner
     return cast(R, flask.current_app.ensure_sync(obj)(*a, **k))
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/feats/base.py", line 432, in decorated_function
+  File "app/feats/base.py", line 432, in decorated_function
     return f(*args, **kwargs)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/recovery.py", line 106, in account_lookup
+  File "app/routes/recovery.py", line 106, in account_lookup
     return _account_lookup_legacy(*args, **kwargs)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/recovery.py", line 184, in _account_lookup_legacy
+  File "app/routes/recovery.py", line 184, in _account_lookup_legacy
     db.session.flush() # FEAT-LEGACY-WRAP: commit removed
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/sqlalchemy/orm/scoping.py", line 924, in flush
     return self._proxied.flush(objects=objects)
@@ -25277,11 +25277,11 @@ Traceback (most recent call last):
     return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/flask_limiter/extension.py", line 1298, in __inner
     return cast(R, flask.current_app.ensure_sync(obj)(*a, **k))
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/feats/base.py", line 432, in decorated_function
+  File "app/feats/base.py", line 432, in decorated_function
     return f(*args, **kwargs)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/recovery.py", line 106, in account_lookup
+  File "app/routes/recovery.py", line 106, in account_lookup
     return _account_lookup_legacy(*args, **kwargs)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/recovery.py", line 184, in _account_lookup_legacy
+  File "app/routes/recovery.py", line 184, in _account_lookup_legacy
     db.session.flush() # FEAT-LEGACY-WRAP: commit removed
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/sqlalchemy/orm/scoping.py", line 924, in flush
     return self._proxied.flush(objects=objects)
@@ -25350,11 +25350,11 @@ Traceback (most recent call last):
     return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/flask_limiter/extension.py", line 1298, in __inner
     return cast(R, flask.current_app.ensure_sync(obj)(*a, **k))
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/feats/base.py", line 432, in decorated_function
+  File "app/feats/base.py", line 432, in decorated_function
     return f(*args, **kwargs)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/recovery.py", line 106, in account_lookup
+  File "app/routes/recovery.py", line 106, in account_lookup
     return _account_lookup_legacy(*args, **kwargs)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/recovery.py", line 184, in _account_lookup_legacy
+  File "app/routes/recovery.py", line 184, in _account_lookup_legacy
     db.session.flush() # FEAT-LEGACY-WRAP: commit removed
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/sqlalchemy/orm/scoping.py", line 924, in flush
     return self._proxied.flush(objects=objects)
@@ -25477,11 +25477,11 @@ Traceback (most recent call last):
     return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/flask_limiter/extension.py", line 1298, in __inner
     return cast(R, flask.current_app.ensure_sync(obj)(*a, **k))
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/feats/base.py", line 432, in decorated_function
+  File "app/feats/base.py", line 432, in decorated_function
     return f(*args, **kwargs)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/recovery.py", line 106, in account_lookup
+  File "app/routes/recovery.py", line 106, in account_lookup
     return _account_lookup_legacy(*args, **kwargs)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/recovery.py", line 184, in _account_lookup_legacy
+  File "app/routes/recovery.py", line 184, in _account_lookup_legacy
     db.session.flush() # FEAT-LEGACY-WRAP: commit removed
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/sqlalchemy/orm/scoping.py", line 924, in flush
     return self._proxied.flush(objects=objects)
@@ -25559,11 +25559,11 @@ Traceback (most recent call last):
     return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/flask_limiter/extension.py", line 1298, in __inner
     return cast(R, flask.current_app.ensure_sync(obj)(*a, **k))
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/feats/base.py", line 432, in decorated_function
+  File "app/feats/base.py", line 432, in decorated_function
     return f(*args, **kwargs)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/recovery.py", line 106, in account_lookup
+  File "app/routes/recovery.py", line 106, in account_lookup
     return _account_lookup_legacy(*args, **kwargs)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/recovery.py", line 184, in _account_lookup_legacy
+  File "app/routes/recovery.py", line 184, in _account_lookup_legacy
     db.session.flush() # FEAT-LEGACY-WRAP: commit removed
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/sqlalchemy/orm/scoping.py", line 924, in flush
     return self._proxied.flush(objects=objects)
@@ -26401,7 +26401,7 @@ pin = '0000'
 
     def create_claimed_seat(teacher_id, student_id, block, join_code, salt=None, username=None, pin=None):
 >       from app.models import TeacherBlock, ClassEconomy, Seat, User, UserRole
-E       ImportError: cannot import name 'TeacherBlock' from 'app.models' (/Users/timothychang/Documents/GitHub/classroom-economy/app/models.py)
+E       ImportError: cannot import name 'TeacherBlock' from 'app.models' (app/models.py)
 
 tests/test_tap_flow.py:18: ImportError
 ---------------------------- Captured stderr setup -----------------------------
@@ -26457,7 +26457,7 @@ pin = '0000'
 
     def create_claimed_seat(teacher_id, student_id, block, join_code, salt=None, username=None, pin=None):
 >       from app.models import TeacherBlock, ClassEconomy, Seat, User, UserRole
-E       ImportError: cannot import name 'TeacherBlock' from 'app.models' (/Users/timothychang/Documents/GitHub/classroom-economy/app/models.py)
+E       ImportError: cannot import name 'TeacherBlock' from 'app.models' (app/models.py)
 
 tests/test_tap_flow.py:18: ImportError
 ---------------------------- Captured stderr setup -----------------------------
@@ -26516,7 +26516,7 @@ pin = '0000'
 
     def create_claimed_seat(teacher_id, student_id, block, join_code, salt=None, username=None, pin=None):
 >       from app.models import TeacherBlock, ClassEconomy, Seat, User, UserRole
-E       ImportError: cannot import name 'TeacherBlock' from 'app.models' (/Users/timothychang/Documents/GitHub/classroom-economy/app/models.py)
+E       ImportError: cannot import name 'TeacherBlock' from 'app.models' (app/models.py)
 
 tests/test_tap_flow.py:18: ImportError
 ---------------------------- Captured stderr setup -----------------------------
@@ -26571,7 +26571,7 @@ username = 'status_student', pin = '0000'
 
     def create_claimed_seat(teacher_id, student_id, block, join_code, salt=None, username=None, pin=None):
 >       from app.models import TeacherBlock, ClassEconomy, Seat, User, UserRole
-E       ImportError: cannot import name 'TeacherBlock' from 'app.models' (/Users/timothychang/Documents/GitHub/classroom-economy/app/models.py)
+E       ImportError: cannot import name 'TeacherBlock' from 'app.models' (app/models.py)
 
 tests/test_tap_flow.py:18: ImportError
 ---------------------------- Captured stderr setup -----------------------------
@@ -26623,9 +26623,9 @@ Traceback (most recent call last):
     rv = self.dispatch_request()
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/flask/app.py", line 902, in dispatch_request
     return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/auth.py", line 250, in decorated_function
+  File "app/auth.py", line 250, in decorated_function
     return f(*args, **kwargs)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py", line 2870, in dashboard
+  File "app/routes/admin.py", line 2870, in dashboard
     .filter(HallPassLog.join_code.in_(join_code_scope))
 NameError: name 'join_code_scope' is not defined
 [2026-06-07 19:39:01,571] WARNING in __init__ [86c27f5e15de4e6e90b8eee1da0028d5] [actor=teacher:None class_id=None] [endpoint=/admin/ method=GET] [error_class=- correlation_version=1]: Could not load feature settings, falling back to defaults: Instance '<User at 0x10a7431c0>' has been deleted, or its row is otherwise not present.
@@ -26639,9 +26639,9 @@ Traceback (most recent call last):
     rv = self.dispatch_request()
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/flask/app.py", line 902, in dispatch_request
     return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/auth.py", line 250, in decorated_function
+  File "app/auth.py", line 250, in decorated_function
     return f(*args, **kwargs)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py", line 2870, in dashboard
+  File "app/routes/admin.py", line 2870, in dashboard
     .filter(HallPassLog.join_code.in_(join_code_scope))
 NameError: name 'join_code_scope' is not defined
 WARNING  app:__init__.py:659 Could not load feature settings, falling back to defaults: Instance '<User at 0x10a7431c0>' has been deleted, or its row is otherwise not present.
@@ -26762,9 +26762,9 @@ Traceback (most recent call last):
     rv = self.dispatch_request()
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/flask/app.py", line 902, in dispatch_request
     return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/feats/base.py", line 432, in decorated_function
+  File "app/feats/base.py", line 432, in decorated_function
     return f(*args, **kwargs)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/student.py", line 633, in claim_account
+  File "app/routes/student.py", line 633, in claim_account
     salt = get_random_salt()
 NameError: name 'get_random_salt' is not defined
 ------------------------------ Captured log call -------------------------------
@@ -26786,9 +26786,9 @@ Traceback (most recent call last):
     rv = self.dispatch_request()
   File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/site-packages/flask/app.py", line 902, in dispatch_request
     return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/feats/base.py", line 432, in decorated_function
+  File "app/feats/base.py", line 432, in decorated_function
     return f(*args, **kwargs)
-  File "/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/student.py", line 633, in claim_account
+  File "app/routes/student.py", line 633, in claim_account
     salt = get_random_salt()
 NameError: name 'get_random_salt' is not defined
 --------------------------- Captured stderr teardown ---------------------------
@@ -28691,11 +28691,11 @@ INFO     app:auth.py:217 Admin access attempt: session = {'admin_id': 1, 'is_adm
 WARNING  app.feats.base:base.py:281 FEAT-INTEGRITY-WARNING: MULTIPLE-COMMIT-ATTEMPT in FEAT-BYPASS-LEGACY. Count=3. Correlation=bypass_test_f2e98dfafb5044ffad66388563d1d949
 =============================== warnings summary ===============================
 tests/test_audit_lineage.py::test_system_audit_authority_allows_write
-  /Users/timothychang/Documents/GitHub/classroom-economy/tests/test_audit_lineage.py:335: LegacyAPIWarning: The Query.get() method is considered legacy as of the 1.x series of SQLAlchemy and becomes a legacy construct in 2.0. The method is now available as Session.get() (deprecated since: 2.0) (Background on SQLAlchemy 2.0 at: https://sqlalche.me/e/b8d9)
+  tests/test_audit_lineage.py:335: LegacyAPIWarning: The Query.get() method is considered legacy as of the 1.x series of SQLAlchemy and becomes a legacy construct in 2.0. The method is now available as Session.get() (deprecated since: 2.0) (Background on SQLAlchemy 2.0 at: https://sqlalche.me/e/b8d9)
     ae = AuditEvent.query.get(event.id)
 
 tests/test_multi_teacher_hardening.py::test_remove_student_from_teacher_scope_preserves_shared_student
-  /Users/timothychang/Documents/GitHub/classroom-economy/app/utils/student_deletion.py:172: SAWarning: Coercing Subquery object into a select() for use in IN(); please pass a select() construct explicitly
+  app/utils/student_deletion.py:172: SAWarning: Coercing Subquery object into a select() for use in IN(); please pass a select() construct explicitly
     Seat.class_id.in_(teacher_class_ids),
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html

@@ -31,7 +31,7 @@ from decimal import Decimal
 
 from app.extensions import db
 from app.feats.base import FEATContext
-from app.hash_utils import hash_username_lookup
+from app.hash_utils import hash_username_lookup, hash_claim_name, hash_roster_fingerprint
 from app.models import (
     ClassEconomy,
     IdentityProfile,
@@ -296,11 +296,9 @@ def _provision_roster_seat(class_id: str, row: dict) -> Seat:
         class_id=class_id,
         role="student",
         claimed_at=None,
-        claim_first_name_hash=hash_username_lookup(first_name.lower()),
-        claim_last_name_hash=hash_username_lookup(last_name.lower()),
-        roster_fingerprint=hash_username_lookup(
-            f"{class_id}|{first_name.lower()}|{last_name.lower()}"
-        ),
+        claim_first_name_hash=hash_claim_name(first_name.lower(), class_id=class_id, field="first"),
+        claim_last_name_hash=hash_claim_name(last_name.lower(), class_id=class_id, field="last"),
+        roster_fingerprint=hash_roster_fingerprint(class_id=class_id, first_name=first_name, last_name=last_name),
         dedupe_code=row.get("dedupe_code"),
     )
     db.session.add(seat)

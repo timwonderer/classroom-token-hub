@@ -1,22 +1,54 @@
 {% extends "layout_student.html" %}
+{% import 'macros/cards.html' as cards %}
 {% set page_title = "Store" %}
 {% set current_page = "store" %}
 {% block title %}Store{% endblock %}
 {% block page_icon %}storefront{% endblock %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("Buy what your teacher has listed, then come back to My Items when you actually want to use it.") }}
+
+{% call help.topic('shop-buy', 'shopping_cart', 'Buying an item') %}
+<p>Choose a quantity and confirm with your <strong>passphrase</strong>. The cost comes out of checking, so if the balance is not there the purchase will not go through.</p>
+<p class="mb-0">Check the price against what you owe soon. Spending down to nothing right before rent is charged is the most common way students end up overdrawn.</p>
+{% endcall %}
+
+{% call help.topic('shop-owned', 'inventory_2', 'Buying is not using') %}
+<p class="mb-0">A purchase puts the item in <strong>My Items</strong> and it waits there. Nothing happens in class until you come back and use it, so buying early is safe — just remember it is sitting there.</p>
+{% endcall %}
+
+{% call help.topic('shop-redeem', 'redeem', 'Using an item') %}
+<p><strong>Use Item</strong> sends a redemption request to your teacher with whatever details you provide, and is confirmed with your <strong>passphrase</strong>. Say clearly what you are asking for — a vague request is slower to approve.</p>
+<p class="mb-0">The request has to be accepted before anything takes effect. Send it before you need it, not at the moment you need it.</p>
+{% endcall %}
+
+{% call help.topic('shop-credentials', 'lock', 'Why it asks twice') %}
+<p>Buying and using items both ask for your <strong>passphrase</strong>, because both are decisions about what you own. Your <strong>PIN</strong> is for the quick things you do repeatedly in class — starting work, taking a break, moving money between checking and savings, and taking a hall pass.</p>
+<p class="mb-0">Either one exists so nobody else on a shared or unlocked device can act in your name. Do not let someone else type either one.</p>
+{% endcall %}
+{% endblock %}
+
+{% block extra_styles %}
+<style>
+    .shop-goal-progress { height: 25px; }
+    /* Modal notes shown as blocks; [hidden] still wins when they are hidden. */
+    .shop-modal-block { display: block; }
+</style>
+{% endblock %}
+
 {% block content %}
-<div id="storePageFeedback" class="alert d-none" role="status" aria-live="polite" aria-atomic="true" tabindex="-1"></div>
+<div id="storePageFeedback" class="mb-3 d-none" role="status" aria-live="polite" aria-atomic="true" tabindex="-1"></div>
 
 <!-- Tabs -->
 <ul class="nav nav-tabs mb-4" id="storeTabs" role="tablist">
     <li class="nav-item" role="presentation">
         <button class="nav-link active" id="browse-tab" data-bs-toggle="tab" data-bs-target="#browse" type="button" role="tab" aria-controls="browse" aria-selected="true">
-            <span class="material-symbols-outlined">shopping_cart</span> Browse Items
+            <span class="material-symbols-outlined" aria-hidden="true">shopping_cart</span> Browse Items
         </button>
     </li>
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="my-items-tab" data-bs-toggle="tab" data-bs-target="#my-items" type="button" role="tab" aria-controls="my-items" aria-selected="false">
-            <span class="material-symbols-outlined">inventory_2</span> My Items
+            <span class="material-symbols-outlined" aria-hidden="true">inventory_2</span> My Items
             {% if entitlements %}<span class="badge bg-primary ms-1">{{ entitlements|length }}</span>{% endif %}
         </button>
     </li>
@@ -34,29 +66,20 @@
                     <div class="card-body d-flex flex-column">
                         <h2 class="h5 card-title">{{ item.name }}</h2>
                         {% if item.is_rent_covered %}
-                        <div class="alert alert-success alert-sm mb-2 py-1 px-2">
-                            <small><strong><span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle;">check_circle</span> Included in your rent!</strong></small>
-                        </div>
+                        {% call cards.alert_card('success', 'Included in your rent', icon='check_circle', body_class='mb-2') %}
+                            <p class="mb-0">Your rent already covers this item.</p>
+                        {% endcall %}
                         {% elif item.is_rent_perk_item %}
                         <div class="mb-2">
-                            <span class="badge bg-info"><span class="material-symbols-outlined" style="font-size: 14px; vertical-align: middle;">card_membership</span> Rent Perk</span>
-                            {% if item.has_any_rent_free_purchase %}
-                            {% if item.rent_free_units_available == -1 %}
-                            <span class="badge bg-success">Unlimited free uses</span>
-                            {% elif item.has_legacy_rent_free_purchase %}
-                            <span class="badge bg-success">Free with paid rent</span>
-                            {% else %}
-                            <span class="badge bg-success">{{ item.rent_free_units_available }} free use{{ 's' if item.rent_free_units_available != 1 else '' }} remaining</span>
-                            {% endif %}
+                            <span class="badge bg-info"><span class="material-symbols-outlined icon-2xs icon-middle" aria-hidden="true">card_membership</span> Rent Perk</span>
+                            {% if item.display_rent_perk_message %}
+                            <span class="badge bg-success">{{ item.display_rent_perk_message }}</span>
                             {% endif %}
                         </div>
                         {% endif %}
                         <div class="mb-2">
                             {% if item.is_rent_covered %}
                             <span class="badge bg-success fs-6">Included in Rent</span>
-                            {% elif item.has_any_rent_free_purchase %}
-                            <span class="badge bg-success fs-6">Rent Perk price: $0.00</span>
-                            <span class="badge bg-light text-dark border">Regular: {{ item.display_regular_price }}</span>
                             {% else %}
                             <span class="badge bg-primary fs-6">{{ item.display_price }}</span>
                             {% endif %}
@@ -75,7 +98,7 @@
                         {% if item.is_bundle %}
                         <div class="mb-2">
                             <span class="badge bg-warning text-dark">
-                                <span class="material-symbols-outlined">inventory_2</span> Bundle: {{ item.bundle_quantity }} items
+                                <span class="material-symbols-outlined" aria-hidden="true">inventory_2</span> Bundle: {{ item.bundle_quantity }} items
                             </span>
                         </div>
                         {% endif %}
@@ -83,7 +106,7 @@
                         {% if item.bulk_discount_enabled %}
                         <div class="mb-2">
                             <span class="badge bg-success">
-                                <span class="material-symbols-outlined">percent</span> {{ item.bulk_discount_percentage }}% off when you buy {{ item.bulk_discount_quantity }}+
+                                <span class="material-symbols-outlined" aria-hidden="true">percent</span> {{ item.bulk_discount_percentage }}% off when you buy {{ item.bulk_discount_quantity }}+
                             </span>
                         </div>
                         {% endif %}
@@ -92,15 +115,15 @@
                         {% if item.collective_progress %}
                         <div class="mb-3">
                             {% if item.collective_progress.goal_type == 'whole_class' %}
-                                <div class="alert alert-info p-2 mb-2">
-                                    <small><strong>Whole Class Goal:</strong> All {{ class_size }} students must purchase!</small>
-                                </div>
+                                {% call cards.alert_card('info', 'Whole class goal', icon='groups', body_class='mb-2') %}
+                                    <p class="mb-0">All {{ class_size }} students must purchase!</p>
+                                {% endcall %}
                             {% elif item.collective_progress.goal_type == 'fixed' %}
-                                <div class="alert alert-info p-2 mb-2">
-                                    <small><strong>Collective Goal:</strong> {{ item.collective_progress.target_count }} students needed to unlock</small>
-                                </div>
+                                {% call cards.alert_card('info', 'Collective goal', icon='group', body_class='mb-2') %}
+                                    <p class="mb-0">{{ item.collective_progress.target_count }} students needed to unlock</p>
+                                {% endcall %}
                             {% endif %}
-                            <div class="progress" style="height: 25px;">
+                            <div class="progress shop-goal-progress">
                                 <div class="progress-bar {% if item.collective_progress.is_complete %}bg-success{% else %}bg-warning{% endif %}"
                                      role="progressbar"
                                      aria-label="{{ item.name }} collective purchase progress"
@@ -114,12 +137,12 @@
                             {% if not item.collective_progress.is_complete %}
                                 <small class="text-muted">{{ item.collective_progress.remaining_count }} more needed!</small>
                             {% else %}
-                                <small class="text-success"><span class="material-symbols-outlined">check_circle</span> Goal reached! Item will unlock soon.</small>
+                                <small class="text-success"><span class="material-symbols-outlined" aria-hidden="true">check_circle</span> Goal reached! Item will unlock soon.</small>
                             {% endif %}
                             {% if item.collective_progress.display_expires_at %}
-                            <div class="alert alert-warning p-2 mt-2 mb-0">
-                                <small><span class="material-symbols-outlined" style="font-size: 14px; vertical-align: middle;">schedule</span> <strong>Deadline:</strong> Goal expires {{ item.collective_progress.display_expires_at }}</small>
-                            </div>
+                            {% call cards.alert_card('warning', 'Goal deadline', icon='schedule', body_class='mt-2 mb-0') %}
+                                <p class="mb-0">Goal expires {{ item.collective_progress.display_expires_at }}</p>
+                            {% endcall %}
                             {% endif %}
                         </div>
                         {% endif %}
@@ -132,22 +155,16 @@
                             </p>
                         {% endif %}
 
-                        {% if item.limit_per_student %}
-                            <p class="text-muted small mb-2">
-                                <strong>Limit:</strong> {{ item.limit_per_student }} per student
-                            </p>
-                        {% endif %}
 
                         <div class="mt-auto">
                             <button type="button" class="btn btn-primary w-100"
                                     data-bs-toggle="modal"
                                     data-bs-target="#buyItemModal"
-                                    data-policy-uuid="{{ policy_uuid_by_item_id.get(item.id, '') }}"
                                     data-item-name="{{ item.name }}"
                                     data-item-price="{{ item.price_amount }}"
                                     data-item-regular-price="{{ item.regular_price_amount }}"
                                     data-policy-uuid="{{ item.policy_uuid or '' }}"
-                                    data-has-rent-free-purchase="{{ 'true' if item.has_any_rent_free_purchase else 'false' }}"
+                                    data-rent-perk-message="{{ item.display_rent_perk_message or '' }}"
                                     data-item-type="{{ item.item_type }}"
                                     data-is-bundle="{{ 'true' if item.is_bundle else 'false' }}"
                                     data-bundle-quantity="{{ item.bundle_quantity if item.is_bundle else 0 }}"
@@ -165,10 +182,9 @@
             {% endfor %}
         </div>
         {% else %}
-        <div class="alert alert-info text-center">
-            <h2 class="h5">No Items Available</h2>
+        {% call cards.alert_card('info', 'No items available', icon='storefront', heading_tag='h2') %}
             <p class="mb-0">There are currently no items in the store. Check back later!</p>
-        </div>
+        {% endcall %}
         {% endif %}
     </div>
 
@@ -196,12 +212,12 @@
 
                         <p class="text-muted small mb-2">
                             <strong>Purchased:</strong>
-                            {{ entitlement.display_purchased_date|fmt_timestamp }}
+                            {{ entitlement.purchased_at|fmt_timestamp }}
                         </p>
 
                         {% if entitlement.has_expiry_date %}
                         <p class="text-muted small mb-2">
-                            <strong>Expires:</strong> {{ entitlement.display_expiry_date }}
+                            <strong>Expires:</strong> {{ entitlement.expires_at|fmt_date }}
                         </p>
                         {% endif %}
 
@@ -209,14 +225,21 @@
 
                         <div class="mt-auto">
                             {% if entitlement.is_hall_pass %}
-                                <!-- Hall Pass - Use immediately -->
-                                <button type="button" class="btn btn-success w-100 use-item-btn"
-                                        data-item-id="{{ entitlement.entitlement_id }}"
-                                        data-item-name="{{ entitlement.item_name }}"
-                                        data-item-type="hall_pass"
-                                        data-redemption-prompt="">
-                                    <span class="material-symbols-outlined">exit_to_app</span> Request Hall Pass
-                                </button>
+                                {# A hall pass is held here and used elsewhere.
+                                   Exercising one marks the student out of an
+                                   active work session (DOM-PROD-001), which only
+                                   the attendance Break flow can know about — it
+                                   is disabled until the student starts work, and
+                                   refuses when the seat holds no pass. This card
+                                   therefore shows the pass and names where to
+                                   use it, rather than offering a second request
+                                   path with none of those preconditions.
+                                   /api/use-item refuses hall passes regardless,
+                                   so a button here could only ever fail. #}
+                                <p class="small text-muted mb-0">
+                                    <span class="material-symbols-outlined icon-2xs icon-middle" aria-hidden="true">info</span>
+                                    Use this from <strong>Break</strong> on your dashboard, once you have started work.
+                                </p>
                             {% elif entitlement.can_redeem_immediately %}
                                 <!-- Immediate use item - redeem now -->
                                 <button type="button" class="btn btn-primary w-100 use-item-btn"
@@ -224,7 +247,7 @@
                                         data-item-name="{{ entitlement.item_name }}"
                                         data-item-type="immediate"
                                         data-redemption-prompt="">
-                                    <span class="material-symbols-outlined">redeem</span> Use Now
+                                    <span class="material-symbols-outlined" aria-hidden="true">redeem</span> Use Now
                                 </button>
                             {% elif entitlement.can_request_redemption %}
                                 <!-- Delayed use item - request redemption -->
@@ -233,15 +256,15 @@
                                         data-item-name="{{ entitlement.item_name }}"
                                         data-item-type="delayed"
                                         data-redemption-prompt="{{ entitlement.redemption_prompt or '' }}">
-                                    <span class="material-symbols-outlined">schedule</span> Request Redemption
+                                    <span class="material-symbols-outlined" aria-hidden="true">schedule</span> Request Redemption
                                 </button>
                             {% elif entitlement.is_pending_approval %}
                                 <button type="button" class="btn btn-secondary w-100" disabled>
-                                    <span class="material-symbols-outlined">hourglass_empty</span> Awaiting Approval
+                                    <span class="material-symbols-outlined" aria-hidden="true">hourglass_empty</span> Awaiting Approval
                                 </button>
                             {% elif entitlement.is_processing %}
                                 <button type="button" class="btn btn-info w-100" disabled>
-                                    <span class="material-symbols-outlined">sync</span> Processing
+                                    <span class="material-symbols-outlined" aria-hidden="true">sync</span> Processing
                                 </button>
                             {% endif %}
                         </div>
@@ -251,11 +274,9 @@
             {% endfor %}
         </div>
         {% else %}
-        <div class="alert alert-info text-center">
-            <span class="material-symbols-outlined" style="font-size: 3rem;">inventory_2</span>
-            <h2 class="h5 mt-2">No Purchased Items</h2>
+        {% call cards.alert_card('info', 'No purchased items', icon='inventory_2', heading_tag='h2') %}
             <p class="mb-0">You haven't purchased any items yet. Browse the store to get started!</p>
-        </div>
+        {% endcall %}
         {% endif %}
     </div>
 </div>
@@ -269,27 +290,26 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <div id="buyFeedback" class="alert d-none" role="alert" aria-live="assertive" aria-atomic="true" tabindex="-1"></div>
-                <div class="alert alert-info">
+                <div id="buyFeedback" class="mb-3 d-none" role="alert" aria-live="assertive" aria-atomic="true" tabindex="-1"></div>
+                {% call cards.alert_card('info', 'What you are buying', icon='shopping_cart', body_class='mb-3') %}
+                    <p class="mb-0">
                     <strong>Item:</strong> <span id="modalItemName"></span><br>
                     <strong>Unit Price:</strong> $<span id="modalItemPrice"></span><br>
-                    <span id="rentPerkModalNote" style="display: none;">
-                        <strong>Rent Perk:</strong> This purchase is $0 while free uses remain this rent period.<br>
-                        <strong>Regular Price:</strong> $<span id="modalRegularPrice"></span><br>
+                    <span id="rentPerkModalNote" hidden>
+                        <strong>Rent Perk:</strong> You already hold free uses of this item — redeem them from
+                        <em>My Items</em> at no cost. Buying here is an additional purchase at the price above.<br>
                     </span>
-                    <span id="modalBundleInfo" style="display: none;">
+                    <span id="modalBundleInfo" class="shop-modal-block" hidden>
                         <strong>Bundle:</strong> <span id="modalBundleQuantity"></span> items per bundle<br>
                     </span>
-                    <span id="modalDiscountInfo" style="display: none;">
-                        <strong>Bulk Discount:</strong> <span id="modalDiscountPercentage"></span>% off when buying <span id="modalDiscountQuantity"></span>+<br>
+                    <span id="modalDiscountInfo" class="shop-modal-block" hidden>
+                        <strong>Bulk Discount:</strong> <span id="modalDiscountPercentage"></span>% off when buying <span id="modalDiscountQuantity"></span>+
                     </span>
-                </div>
+                    </p>
+                {% endcall %}
 
                 <!-- Item Type Explanation -->
-                <div id="itemTypeExplanation" class="alert mb-3" style="display: none;">
-                    <h3 class="h6 alert-heading mb-2"><span class="material-symbols-outlined me-2">info</span>How This Item Works</h3>
-                    <p id="explanationText" class="mb-0"></p>
-                </div>
+                <div id="itemTypeExplanation" class="mb-3" hidden></div>
 
                 <form id="buyItemForm">
                     <input type="hidden" id="modalItemId" name="policy_uuid">
@@ -311,12 +331,12 @@
                         <small class="text-muted" id="quantityHint"></small>
                     </div>
 
-                    <div class="alert alert-success" id="totalPriceDisplay">
-                        <strong>Total Price:</strong> $<span id="totalPrice">0.00</span>
-                        <span id="savingsDisplay" style="display: none;">
-                            <br><small class="text-success"><span class="material-symbols-outlined">check_circle</span> You save $<span id="savingsAmount">0.00</span>!</small>
-                        </span>
-                    </div>
+                    {% call cards.alert_card('success', 'Total price', icon='payments', id='totalPriceDisplay', body_class='mb-3') %}
+                        <p class="mb-0">$<span id="totalPrice">0.00</span></p>
+                        <p id="savingsDisplay" class="mb-0 mt-1 text-success" hidden>
+                            <span class="material-symbols-outlined" aria-hidden="true">check_circle</span> You save $<span id="savingsAmount">0.00</span>!
+                        </p>
+                    {% endcall %}
 
                     <div class="mb-3">
                         <label for="passphrase" class="form-label">Enter your Passphrase to confirm:</label>
@@ -341,15 +361,15 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <div id="useFeedback" class="alert d-none" role="alert" aria-live="assertive" aria-atomic="true" tabindex="-1"></div>
-                <div class="alert alert-info">
-                    <strong>Item:</strong> <span id="useModalItemName"></span>
-                </div>
+                <div id="useFeedback" class="mb-3 d-none" role="alert" aria-live="assertive" aria-atomic="true" tabindex="-1"></div>
+                {% call cards.alert_card('info', 'Item to use', icon='redeem', body_class='mb-3') %}
+                    <p class="mb-0"><span id="useModalItemName"></span></p>
+                {% endcall %}
                 <p id="useModalMessage"></p>
                 <form id="useItemForm">
                     <input type="hidden" id="useModalItemId" name="entitlement_id">
                     <input type="hidden" id="useModalItemType" name="item_type">
-                    <div class="mb-3" id="redemptionDetailsDiv" style="display: none;">
+                    <div class="mb-3" id="redemptionDetailsDiv" hidden>
                         <label for="redemptionDetails" class="form-label fw-bold">
                             <span id="redemptionPromptLabel">Additional Information</span>
                         </label>
@@ -357,8 +377,16 @@
                         <small class="text-muted">This information will be sent to your teacher for review.</small>
                     </div>
                     <div class="mb-3">
-                        <label for="usePassphrase" class="form-label">Enter your PIN to confirm:</label>
-                        <input type="password" class="form-control" id="usePassphrase" name="pin" inputmode="numeric" pattern="[0-9]*" autocomplete="current-password" required>
+                        {# FEAT-IDEN-002 "Credential boundary": using an entitlement
+                           takes the passphrase. Hall passes are that rule's named
+                           exception and take the PIN, but they are not redeemed from
+                           this surface at all — they are used from the dashboard
+                           Break flow — so this field is always the passphrase.
+                           It previously said "PIN" and carried inputmode="numeric",
+                           while the server verified the passphrase: a student who
+                           typed what the label asked for was refused. #}
+                        <label for="usePassphrase" class="form-label">Enter your Passphrase to confirm:</label>
+                        <input type="password" class="form-control" id="usePassphrase" name="passphrase" autocomplete="current-password" required>
                     </div>
                 </form>
             </div>
@@ -373,20 +401,33 @@
 
 {% block extra_scripts %}
 <script>
+    const STORE_FEEDBACK_TITLES = {
+        buyFeedback: 'Purchase not completed',
+        useFeedback: 'Item not used',
+    };
+    const STORE_FEEDBACK_ICONS = { success: 'check_circle', warning: 'warning', info: 'info', danger: 'error' };
+
+    function renderStoreFeedback(feedback, message, kind, title) {
+        feedback.replaceChildren(window.AppCore.buildAlertCard({
+            level: kind,
+            title,
+            icon: STORE_FEEDBACK_ICONS[kind] || 'info',
+            body: message,
+        }));
+        feedback.classList.remove('d-none');
+        feedback.focus();
+    }
+
     function announceStore(message, feedbackId, kind = 'danger') {
         const feedback = document.getElementById(feedbackId);
         if (!feedback) return;
-        feedback.className = `alert alert-${kind}`;
-        feedback.textContent = message;
-        feedback.focus();
+        renderStoreFeedback(feedback, message, kind, STORE_FEEDBACK_TITLES[feedbackId] || 'Something went wrong');
     }
 
     function announceStorePage(message, kind = 'success') {
         const feedback = document.getElementById('storePageFeedback');
         if (!feedback) return;
-        feedback.className = `alert alert-${kind}`;
-        feedback.textContent = message;
-        feedback.focus();
+        renderStoreFeedback(feedback, message, kind, kind === 'success' ? 'Done' : 'Store update');
     }
 
     let currentItemData = {};
@@ -403,7 +444,11 @@
             itemType: button.getAttribute('data-item-type'),
             basePrice: parseFloat(button.getAttribute('data-item-price')),
             regularPrice: parseFloat(button.getAttribute('data-item-regular-price')),
-            hasRentFreePurchase: button.getAttribute('data-has-rent-free-purchase') === 'true',
+            // The availability-gated message, matching the badge on the card.
+            // `has_any_rent_free_purchase` was the wrong predicate here: it stays
+            // true after the last free unit is consumed, so the modal and the
+            // quantity hint went on promising free uses the student no longer had.
+            rentPerkMessage: button.getAttribute('data-rent-perk-message') || '',
             isBundle: button.getAttribute('data-is-bundle') === 'true',
             bundleQuantity: parseInt(button.getAttribute('data-bundle-quantity')) || 0,
             bulkDiscountEnabled: button.getAttribute('data-bulk-discount-enabled') === 'true',
@@ -424,64 +469,64 @@
         document.getElementById('modalBasePrice').value = currentItemData.basePrice;
         document.getElementById('modalInventory').value = currentItemData.inventory;
         const rentPerkModalNote = document.getElementById('rentPerkModalNote');
-        const modalRegularPrice = document.getElementById('modalRegularPrice');
-        if (currentItemData.hasRentFreePurchase) {
-            rentPerkModalNote.style.display = 'inline';
-            modalRegularPrice.textContent = currentItemData.regularPrice.toFixed(2);
-        } else {
-            rentPerkModalNote.style.display = 'none';
-        }
+        rentPerkModalNote.hidden = !currentItemData.rentPerkMessage;
 
         // Show bundle info
         if (currentItemData.isBundle) {
-            document.getElementById('modalBundleInfo').style.display = 'block';
+            document.getElementById('modalBundleInfo').hidden = false;
             document.getElementById('modalBundleQuantity').textContent = currentItemData.bundleQuantity;
         } else {
-            document.getElementById('modalBundleInfo').style.display = 'none';
+            document.getElementById('modalBundleInfo').hidden = true;
         }
 
         // Show discount info
         if (currentItemData.bulkDiscountEnabled) {
-            document.getElementById('modalDiscountInfo').style.display = 'block';
+            document.getElementById('modalDiscountInfo').hidden = false;
             document.getElementById('modalDiscountPercentage').textContent = currentItemData.bulkDiscountPercentage;
             document.getElementById('modalDiscountQuantity').textContent = currentItemData.bulkDiscountQuantity;
         } else {
-            document.getElementById('modalDiscountInfo').style.display = 'none';
+            document.getElementById('modalDiscountInfo').hidden = true;
         }
 
         // Show item type explanation
         const explanationDiv = document.getElementById('itemTypeExplanation');
-        const explanationText = document.getElementById('explanationText');
-        let explanation = '';
-        let alertClass = 'alert-primary';
+        let explanation = null;
 
         switch (currentItemData.itemType) {
             case 'immediate':
-                explanation = '<strong>Immediate Use:</strong> This item is used instantly upon purchase. You won\'t need to redeem it later - it\'s applied to your account right away.';
-                alertClass = 'alert-success';
+                explanation = {
+                    level: 'success', icon: 'bolt', title: 'Immediate use',
+                    body: 'This item is used instantly upon purchase. You won\'t need to redeem it later - it\'s applied to your account right away.',
+                };
                 break;
             case 'delayed':
-                explanation = '<strong>Delayed Use:</strong> After purchase, this item will appear in your "My Items" tab. You can redeem it whenever you\'re ready by clicking "Use Item" and entering your PIN.';
-                alertClass = 'alert-info';
+                explanation = {
+                    level: 'info', icon: 'schedule', title: 'Delayed use',
+                    body: 'After purchase, this item waits in your "My Items" tab. When you want it, choose "Request Redemption" and confirm with your passphrase — that sends a request to your teacher, and the item is not used until they approve it. Ask before you need it, not at the moment you need it.',
+                };
                 break;
             case 'hall_pass':
-                explanation = '<strong>Hall Pass:</strong> This is a special hall pass item. Upon purchase, it\'s added to your hall pass balance and can be used during class when you need to leave.';
-                alertClass = 'alert-warning';
+                explanation = {
+                    level: 'warning', icon: 'directions_walk', title: 'Hall pass',
+                    body: 'Buying this adds one to your hall pass balance. You use it from the Break button on your dashboard while you are clocked in — not from this page.',
+                };
                 break;
             case 'collective':
-                explanation = '<strong>Collective Goal:</strong> This is a class goal! Multiple students must purchase this item before it unlocks for everyone. Your purchase counts toward the goal, and you\'ll receive the item once enough classmates have also purchased it. Check the progress bar on the item card to see how close you are!';
-                alertClass = 'alert-primary';
+                explanation = {
+                    level: 'info', icon: 'groups', title: 'Collective goal',
+                    body: 'This is a class goal! Multiple students must purchase this item before it unlocks for everyone. Your purchase counts toward the goal, and you\'ll receive the item once enough classmates have also purchased it. Check the progress bar on the item card to see how close you are!',
+                };
                 break;
             default:
-                explanation = '';
+                explanation = null;
         }
 
         if (explanation) {
-            explanationDiv.className = `alert mb-3 ${alertClass}`;
-            explanationText.innerHTML = explanation;
-            explanationDiv.style.display = 'block';
+            explanationDiv.replaceChildren(window.AppCore.buildAlertCard(explanation));
+            explanationDiv.hidden = false;
         } else {
-            explanationDiv.style.display = 'none';
+            explanationDiv.replaceChildren();
+            explanationDiv.hidden = true;
         }
 
         // Set max quantity if inventory limited
@@ -493,22 +538,13 @@
         } else {
             quantityInput.removeAttribute('max');
         }
-        if (currentItemData.hasRentFreePurchase) {
-            quantityInput.value = 1;
-            quantityInput.max = 1;
-            quantityInput.readOnly = true;
-            decreaseQtyBtn.disabled = true;
-            increaseQtyBtn.disabled = true;
-        } else {
-            quantityInput.readOnly = false;
-            decreaseQtyBtn.disabled = false;
-            increaseQtyBtn.disabled = false;
-        }
-
-        // Reset quantity
-        if (!currentItemData.hasRentFreePurchase) {
-            quantityInput.value = 1;
-        }
+        // Quantity is unconstrained by rent perks. Holding a free use does not
+        // change what a purchase is or costs, so it must not lock the control
+        // to a single unit as though one $0 unit were on offer.
+        quantityInput.readOnly = false;
+        decreaseQtyBtn.disabled = false;
+        increaseQtyBtn.disabled = false;
+        quantityInput.value = 1;
         updateTotalPrice();
     });
 
@@ -541,9 +577,10 @@
         let unitPrice = currentItemData.basePrice;
         let hasDiscount = false;
 
-        // Apply bulk discount if applicable
-        if (!currentItemData.hasRentFreePurchase &&
-            currentItemData.bulkDiscountEnabled &&
+        // Apply bulk discount if applicable. This mirrors _calculate_debit in
+        // store_purchase_feat: whole-order, at or above the threshold. The
+        // server recomputes it, so this is a quote, not the authority.
+        if (currentItemData.bulkDiscountEnabled &&
             quantity >= currentItemData.bulkDiscountQuantity) {
             const discountMultiplier = 1 - (currentItemData.bulkDiscountPercentage / 100);
             unitPrice = currentItemData.basePrice * discountMultiplier;
@@ -559,22 +596,22 @@
         // Show savings if discount applied
         if (hasDiscount && savings > 0) {
             document.getElementById('savingsAmount').textContent = savings.toFixed(2);
-            document.getElementById('savingsDisplay').style.display = 'block';
+            document.getElementById('savingsDisplay').hidden = false;
         } else {
-            document.getElementById('savingsDisplay').style.display = 'none';
+            document.getElementById('savingsDisplay').hidden = true;
         }
 
         // Update quantity hint
         let hint = '';
-        if (currentItemData.hasRentFreePurchase) {
-            hint = 'Rent perk active: this purchase is free.';
+        if (currentItemData.rentPerkMessage) {
+            hint = `${currentItemData.rentPerkMessage} — this buys more.`;
         }
         if (currentItemData.isBundle) {
             const totalItems = quantity * currentItemData.bundleQuantity;
             hint += hint ? ' • ' : '';
             hint += `You will get ${totalItems} total uses (${quantity} bundle${quantity > 1 ? 's' : ''})`;
         }
-        if (!currentItemData.hasRentFreePurchase && currentItemData.bulkDiscountEnabled) {
+        if (currentItemData.bulkDiscountEnabled) {
             if (quantity >= currentItemData.bulkDiscountQuantity) {
                 hint += hint ? ' • ' : '';
                 hint += `Bulk discount applied!`;
@@ -653,7 +690,7 @@
 
             if (itemType === 'delayed') {
                 // Show redemption details for delayed items
-                redemptionDetailsDiv.style.display = 'block';
+                redemptionDetailsDiv.hidden = false;
 
                 // Set custom prompt if provided, otherwise use default
                 if (redemptionPrompt && redemptionPrompt.trim() !== '') {
@@ -665,12 +702,12 @@
                 document.getElementById('useModalMessage').textContent = 'This will request redemption. Your teacher will review and approve it.';
             } else {
                 // Hide for other item types
-                redemptionDetailsDiv.style.display = 'none';
+                redemptionDetailsDiv.hidden = true;
                 redemptionDetailsTextarea.value = ''; // Clear previous value
 
-                if (itemType === 'hall_pass') {
-                    document.getElementById('useModalMessage').textContent = 'This will request a hall pass. Your teacher will be notified.';
-                } else if (itemType === 'immediate') {
+                // No control emits 'hall_pass' any more: a pass is exercised
+                // from the attendance Break flow, and /api/use-item refuses it.
+                if (itemType === 'immediate') {
                     document.getElementById('useModalMessage').textContent = 'This item will be redeemed immediately upon confirmation.';
                 }
             }
@@ -687,18 +724,18 @@
     document.getElementById('confirmUseBtn').addEventListener('click', () => {
         const form = document.getElementById('useItemForm');
         const entitlementId = form.querySelector('#useModalItemId').value;
-        const pin = form.querySelector('#usePassphrase').value;
+        const passphrase = form.querySelector('#usePassphrase').value;
         const redemptionDetails = form.querySelector('#redemptionDetails').value;
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
-        if (!pin) {
-            announceStore('Enter your PIN to confirm this action.', 'useFeedback');
+        if (!passphrase) {
+            announceStore('Enter your passphrase to confirm this action.', 'useFeedback');
             return;
         }
 
         const requestBody = {
             entitlement_id: entitlementId,
-            passphrase: pin
+            passphrase: passphrase
         };
 
         // Include redemption details if provided

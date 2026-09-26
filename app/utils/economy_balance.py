@@ -20,11 +20,16 @@ import logging
 logger = logging.getLogger(__name__)
 
 from app.utils.economy_policy import (
+    AVERAGE_WEEKS_PER_MONTH as _AVERAGE_WEEKS_PER_MONTH,
+    frequency_label,
     get_active_policy_mode,
     get_active_policy_mode_for_class,
     get_policy_profile,
     get_price_recommendation_context,
     normalize_policy_mode,
+    scale_band,
+    STORE_ROLE_RATIOS,
+    weeks_per_period,
 )
 
 
@@ -35,12 +40,17 @@ class WarningLevel(Enum):
     CRITICAL = "critical"
 
 
-class PricingTier(Enum):
-    """Store item pricing tiers per SPEC-ECON-003 §4.8 (store tier reference)."""
-    BASIC = "basic"           # 0.02-0.05 * CWI
-    STANDARD = "standard"     # 0.05-0.10 * CWI
-    PREMIUM = "premium"       # 0.10-0.25 * CWI
-    LUXURY = "luxury"         # 0.25-0.50 * CWI
+class EconomicRole(Enum):
+    """Store economic roles per SPEC-ECON-003 §4.7.
+
+    The teacher declares the role; the price is then reported against that
+    role's reference band. The old pricing tiers ran the other way — they were
+    inferred from the price — which meant a product had no stable role to be
+    judged against across a price change.
+    """
+    NECESSITY = "necessity"        # 0.01-0.10 * CWI
+    CONVENIENCE = "convenience"    # 0.11-0.20 * CWI
+    ADD_ON = "add_on"              # 0.21-0.30 * CWI
 
 
 @dataclass
@@ -90,36 +100,23 @@ class EconomyBalanceChecker:
     - Balance warnings
     """
 
-    # Standard ratios; canonical reference per SPEC-ECON-003 §4 and §8 (Canonical Economic Reference Table)
-    RENT_MIN_RATIO = 2.0
-    RENT_MAX_RATIO = 2.5
-    RENT_DEFAULT_RATIO = 2.25
-
-    UTILITIES_MIN_RATIO = 0.20
-    UTILITIES_MAX_RATIO = 0.30
-    UTILITIES_DEFAULT_RATIO = 0.25
-
+    # Rent, fine, collective-goal and savings ratios are NOT restated here. They
+    # are read per-mode from POLICY_MODES, which transcribes the SPEC-ECON-003 §4
+    # tables; a local fallback copy is a second spelling of the band and drifts
+    # silently from the one the teacher is shown (INV-ARC-022).
+    #
     # NOTE (SPEC-ECON-003 migration): insurance CWI-band and coverage/period-cap
     # multiplier constants were removed. Insurance economics are owned by the
     # Economic Engine (app/services/economic_engine.resolve_insurance).
 
-    FINE_MIN_RATIO = 0.05
-    FINE_MAX_RATIO = 0.15
-    FINE_DEFAULT_RATIO = 0.10
-
-    # Store item tier ratios
-    STORE_TIERS = {
-        PricingTier.BASIC: (0.02, 0.05),
-        PricingTier.STANDARD: (0.05, 0.10),
-        PricingTier.PREMIUM: (0.10, 0.25),
-        PricingTier.LUXURY: (0.25, 0.50),
+    STORE_ROLE_BANDS = {
+        role: (STORE_ROLE_RATIOS[role.value]["min"], STORE_ROLE_RATIOS[role.value]["max"])
+        for role in EconomicRole
     }
 
-    # Budget survival minimum
-    MIN_WEEKLY_SAVINGS_RATIO = 0.10
-
-    # Conversion helpers
-    AVERAGE_WEEKS_PER_MONTH = 365.25 / 12 / 7
+    # Conversion helpers. The month length is the policy module's constant, not a
+    # local restatement of it — two spellings produced two rent bands.
+    AVERAGE_WEEKS_PER_MONTH = _AVERAGE_WEEKS_PER_MONTH
 
     # Conservative weekly store spending estimate
     ESTIMATED_WEEKLY_STORE_SPENDING_RATIO = 0.15
@@ -152,28 +149,74 @@ class EconomyBalanceChecker:
         self.policy_mode = resolved_mode
         self.policy_profile = get_policy_profile(resolved_mode)
 
-    def _ratio_band(self, key: str, fallback_min: float, fallback_max: float, fallback_recommended: float) -> Tuple[float, float, float]:
-        ratios = self.policy_profile.get("ratios", {}).get(key, {})
+    def _ratio_band(self, key: str) -> Tuple[float, float, float]:
+        ratios = self.policy_profile["ratios"][key]
         return (
-            float(ratios.get("min", fallback_min)),
-            float(ratios.get("max", fallback_max)),
-            float(ratios.get("recommended", fallback_recommended)),
+            float(ratios["min"]),
+            float(ratios["max"]),
+            float(ratios["recommended"]),
         )
 
-    def _minimum_ratio(self, key: str, fallback_value: float) -> float:
-        ratios = self.policy_profile.get("ratios", {}).get(key, {})
-        return float(ratios.get("min", fallback_value))
+    def _minimum_ratio(self, key: str) -> float:
+        return float(self.policy_profile["ratios"][key]["min"])
 
-    def _store_tiers(self) -> Dict[PricingTier, Tuple[float, float]]:
-        tiers = dict(self.STORE_TIERS)
-        configured_tiers = self.policy_profile.get("ratios", {}).get("store_tiers", {})
-        for tier in PricingTier:
-            tier_config = configured_tiers.get(tier.value, {})
-            tiers[tier] = (
-                float(tier_config.get("min", self.STORE_TIERS[tier][0])),
-                float(tier_config.get("max", self.STORE_TIERS[tier][1])),
-            )
-        return tiers
+    def rent_band(
+        self,
+        cwi: float,
+        frequency_type: str,
+        custom_frequency_value: Optional[float] = None,
+        custom_frequency_unit: Optional[str] = None,
+    ) -> Dict[str, Decimal]:
+        """The rent band for a class, in the cadence the teacher sets rent on.
+
+        This is the only place a rent recommendation is derived. The settings page
+        and the balance warning both read it, so the number a teacher is shown is
+        the number they are judged against (INV-ARC-022).
+        """
+        min_ratio, max_ratio, recommended_ratio = self._ratio_band("rent_weekly")
+        return scale_band(
+            cwi,
+            {"min": min_ratio, "max": max_ratio, "recommended": recommended_ratio},
+            weeks_per_period(
+                frequency_type,
+                custom_frequency_value=custom_frequency_value,
+                custom_frequency_unit=custom_frequency_unit,
+            ),
+        )
+
+    def fine_band(self, cwi: float) -> Dict[str, Decimal]:
+        """The fine band for a class's policy mode, on the cent grid."""
+        min_ratio, max_ratio, recommended_ratio = self._ratio_band("fine_weekly")
+        return scale_band(
+            cwi,
+            {"min": min_ratio, "max": max_ratio, "recommended": recommended_ratio},
+        )
+
+    def store_role_bands(self, cwi: float) -> Dict[EconomicRole, Dict[str, Decimal]]:
+        """Each economic role's reference price band, on the cent grid."""
+        return {
+            role: scale_band(cwi, {"min": bounds[0], "max": bounds[1]})
+            for role, bounds in self.STORE_ROLE_BANDS.items()
+        }
+
+    def _weekly_insurance_premium(self, policy_version) -> Optional[float]:
+        """Weekly premium of one offered insurance policy version, or None.
+
+        A policy version carries its terms in its payload, not in columns. An
+        inactive version is not offered, and a version with no usable premium is
+        skipped rather than priced by guesswork.
+        """
+        import json
+
+        if not getattr(policy_version, "is_active", False):
+            return None
+        try:
+            payload = json.loads(getattr(policy_version, "policy_payload_json", None) or "{}")
+            premium = Decimal(str(payload["premium"]))
+        except (KeyError, TypeError, ValueError, ArithmeticError):
+            return None
+        frequency = str(payload.get("charge_frequency") or "weekly").lower()
+        return float(self._normalize_to_weekly(premium, frequency))
 
     def _normalize_to_weekly(
         self,
@@ -302,61 +345,69 @@ class EconomyBalanceChecker:
             return warnings
 
         from app.models import _quantize_currency
+        custom_frequency_value = rent_settings.custom_frequency_value
+        custom_frequency_unit = getattr(rent_settings, 'custom_frequency_unit', None)
         rent_amount = _quantize_currency(rent_settings.rent_amount)
         weekly_rent = self._normalize_to_weekly(
             rent_amount,
             rent_settings.frequency_type,
-            rent_settings.custom_frequency_value,
-            getattr(rent_settings, 'custom_frequency_unit', None)
+            custom_frequency_value,
+            custom_frequency_unit,
         )
-        monthly_rent = _quantize_currency(weekly_rent * Decimal(str(self.AVERAGE_WEEKS_PER_MONTH)))
-        rent_min_ratio_weekly, rent_max_ratio_weekly, _ = self._ratio_band(
-            "rent_weekly",
-            self.RENT_MIN_RATIO,
-            self.RENT_MAX_RATIO,
-            self.RENT_DEFAULT_RATIO,
+
+        # Judged in the cadence the teacher set it in, against the band the rent
+        # page quotes. Converting to a monthly equivalent first added a rounding
+        # step the page did not take, so a value copied off the page could be
+        # reported as out of range.
+        band = self.rent_band(
+            cwi,
+            rent_settings.frequency_type,
+            custom_frequency_value,
+            custom_frequency_unit,
         )
-        rent_min_ratio = rent_min_ratio_weekly * self.AVERAGE_WEEKS_PER_MONTH
-        rent_max_ratio = rent_max_ratio_weekly * self.AVERAGE_WEEKS_PER_MONTH
-        monthly_ratio = float(monthly_rent / Decimal(cwi)) if cwi > 0 else 0
+        recommended_min = band['min']
+        recommended_max = band['max']
+        label = frequency_label(
+            rent_settings.frequency_type,
+            custom_frequency_value=custom_frequency_value,
+            custom_frequency_unit=custom_frequency_unit,
+        )
+        weekly_ratio = float(weekly_rent / Decimal(str(cwi))) if cwi > 0 else 0
 
-        recommended_min = cwi * rent_min_ratio
-        recommended_max = cwi * rent_max_ratio
-
-        if monthly_ratio < rent_min_ratio:
-            deviation = (rent_min_ratio - monthly_ratio) / rent_min_ratio
+        if rent_amount < recommended_min:
+            deviation = float((recommended_min - rent_amount) / recommended_min) if recommended_min else 0
             level = WarningLevel.CRITICAL if deviation > self.MAJOR_DEVIATION_THRESHOLD else WarningLevel.WARNING
             warnings.append(BalanceWarning(
                 feature="Rent",
                 level=level,
-                message=f"Monthly-equivalent rent (${monthly_rent:.2f}) is below recommended minimum. Students may not learn proper budgeting.",
-                current_value=monthly_rent,
-                recommended_min=recommended_min,
-                recommended_max=recommended_max,
-                cwi_ratio=monthly_ratio
+                message=f"Rent (${rent_amount:.2f} {label}) is below the recommended minimum of ${recommended_min:.2f}. Students may not learn proper budgeting.",
+                current_value=float(rent_amount),
+                recommended_min=float(recommended_min),
+                recommended_max=float(recommended_max),
+                cwi_ratio=weekly_ratio
             ))
-        elif monthly_ratio > rent_max_ratio:
-            deviation = (monthly_ratio - rent_max_ratio) / rent_max_ratio
+        elif rent_amount > recommended_max:
+            deviation = float((rent_amount - recommended_max) / recommended_max) if recommended_max else 0
             level = WarningLevel.CRITICAL if deviation > self.MAJOR_DEVIATION_THRESHOLD else WarningLevel.WARNING
             warnings.append(BalanceWarning(
                 feature="Rent",
                 level=level,
-                message=f"Monthly-equivalent rent (${monthly_rent:.2f}) is above recommended maximum. Students may struggle with other expenses.",
-                current_value=monthly_rent,
-                recommended_min=recommended_min,
-                recommended_max=recommended_max,
-                cwi_ratio=monthly_ratio
+                message=f"Rent (${rent_amount:.2f} {label}) is above the recommended maximum of ${recommended_max:.2f}. Students may struggle with other expenses.",
+                current_value=float(rent_amount),
+                recommended_min=float(recommended_min),
+                recommended_max=float(recommended_max),
+                cwi_ratio=weekly_ratio
             ))
         else:
             # Within bounds - provide info
             warnings.append(BalanceWarning(
                 feature="Rent",
                 level=WarningLevel.INFO,
-                message=f"Rent is balanced at ${monthly_rent:.2f}/month ({monthly_ratio:.2f}x CWI)",
-                current_value=monthly_rent,
-                recommended_min=recommended_min,
-                recommended_max=recommended_max,
-                cwi_ratio=monthly_ratio
+                message=f"Rent is balanced at ${rent_amount:.2f} {label} (${weekly_rent:.2f} per week, {weekly_ratio:.2f}x CWI)",
+                current_value=float(rent_amount),
+                recommended_min=float(recommended_min),
+                recommended_max=float(recommended_max),
+                cwi_ratio=weekly_ratio
             ))
 
         return warnings
@@ -377,18 +428,11 @@ class EconomyBalanceChecker:
         if not fines:
             return warnings
 
-        fine_min_ratio, fine_max_ratio, _ = self._ratio_band(
-            "fine_weekly",
-            self.FINE_MIN_RATIO,
-            self.FINE_MAX_RATIO,
-            self.FINE_DEFAULT_RATIO,
-        )
+        fine_min_ratio, fine_max_ratio, _ = self._ratio_band("fine_weekly")
         recommended_min = cwi * fine_min_ratio
         recommended_max = cwi * fine_max_ratio
 
         for fine in fines:
-            if not fine.is_active:
-                continue
 
             from app.models import _quantize_currency
             fine_amount = _quantize_currency(fine.amount)
@@ -481,7 +525,7 @@ class EconomyBalanceChecker:
         Check if store items are balanced relative to CWI.
 
         Args:
-            store_items: List of StoreItem model instances
+            store_items: List of StoreProduct model instances
             cwi: Calculated CWI value
 
         Returns:
@@ -492,62 +536,70 @@ class EconomyBalanceChecker:
         if not store_items:
             return warnings
 
+        # Availability is the caller's to decide, not this checker's. A product
+        # version is sellable when its availability_state is IN_USE, and every
+        # caller resolves that through store_service before handing the list
+        # over. Re-deriving it here meant reading a v1 `is_active` column that
+        # no longer exists, which took the whole analysis down with an
+        # AttributeError.
         for item in store_items:
-            if not item.is_active:
-                continue
-
             # Skip long-term goal items from CWI balance checks
             if getattr(item, 'is_long_term_goal', False):
+                continue
+
+            # Grant-only products carry no price, so there is nothing to
+            # position against the role's band.
+            if item.price is None:
                 continue
 
             price = float(item.price)
             price_ratio = price / cwi if cwi > 0 else 0
 
-            # Determine appropriate tier
-            appropriate_tier = None
-            tier_message = ""
+            try:
+                role = EconomicRole(getattr(item, 'economic_role', None))
+            except ValueError:
+                continue
 
-            store_tiers = self._store_tiers()
-            for tier, (min_ratio, max_ratio) in store_tiers.items():
-                if min_ratio <= price_ratio <= max_ratio:
-                    appropriate_tier = tier
-                    tier_message = f"Price fits {tier.value.upper()} tier"
-                    break
+            band = self.store_role_bands(cwi)[role]
+            band_min, band_max = float(band['min']), float(band['max'])
+            label = role.value.replace('_', '-').title()
 
-            if appropriate_tier:
+            if band_min <= price <= band_max:
                 warnings.append(BalanceWarning(
                     feature=f"Store Item: {item.name}",
                     level=WarningLevel.INFO,
-                    message=f"{tier_message}: ${price:.2f} ({price_ratio:.2f}x CWI)",
+                    message=f"${price:.2f} is within the {label} range (${band_min:.2f}–${band_max:.2f}).",
                     current_value=price,
                     recommended_min=None,
                     recommended_max=None,
                     cwi_ratio=price_ratio
                 ))
+            elif price > band_max:
+                warnings.append(BalanceWarning(
+                    feature=f"Store Item: {item.name}",
+                    level=WarningLevel.WARNING,
+                    message=(
+                        f"${price:.2f} is above the {label} range (${band_min:.2f}–${band_max:.2f}). "
+                        "It takes students longer to reach than the role suggests."
+                    ),
+                    current_value=price,
+                    recommended_min=band_min,
+                    recommended_max=band_max,
+                    cwi_ratio=price_ratio
+                ))
             else:
-                # Price is outside all tiers
-                if price_ratio > store_tiers[PricingTier.LUXURY][1]:
-                    max_recommended = cwi * store_tiers[PricingTier.LUXURY][1]
-                    warnings.append(BalanceWarning(
-                        feature=f"Store Item: {item.name}",
-                        level=WarningLevel.CRITICAL,
-                        message=f"Price (${price:.2f}) exceeds LUXURY tier max (${max_recommended:.2f}). Students may never afford this. Consider marking as 'Long Term Goal Item' if this is intentional.",
-                        current_value=price,
-                        recommended_min=cwi * store_tiers[PricingTier.BASIC][0],
-                        recommended_max=cwi * store_tiers[PricingTier.LUXURY][1],
-                        cwi_ratio=price_ratio
-                    ))
-                elif price_ratio < store_tiers[PricingTier.BASIC][0]:
-                    min_recommended = cwi * store_tiers[PricingTier.BASIC][0]
-                    warnings.append(BalanceWarning(
-                        feature=f"Store Item: {item.name}",
-                        level=WarningLevel.WARNING,
-                        message=f"Price (${price:.2f}) is below BASIC tier min (${min_recommended:.2f}). May not be a meaningful reward.",
-                        current_value=price,
-                        recommended_min=cwi * store_tiers[PricingTier.BASIC][0],
-                        recommended_max=cwi * store_tiers[PricingTier.LUXURY][1],
-                        cwi_ratio=price_ratio
-                    ))
+                warnings.append(BalanceWarning(
+                    feature=f"Store Item: {item.name}",
+                    level=WarningLevel.WARNING,
+                    message=(
+                        f"${price:.2f} is below the {label} range (${band_min:.2f}–${band_max:.2f}). "
+                        "Students reach it sooner than the role suggests."
+                    ),
+                    current_value=price,
+                    recommended_min=band_min,
+                    recommended_max=band_max,
+                    cwi_ratio=price_ratio
+                ))
 
         return warnings
 
@@ -562,16 +614,9 @@ class EconomyBalanceChecker:
         """
         Validate rent amount against CWI-based recommendations.
 
-        The input amount is normalized to weekly for ratio checking.
-
-        Recommendation source depends on scope:
-        - block-scoped validation uses SPEC-ECON-003 monthly multipliers
-          (2.0x-2.5x weekly CWI, with 2.25x default)
-        - global validation uses policy-mode weekly burden bands converted to
-          monthly-equivalent values
-
-        Monthly recommendations are converted to the teacher's chosen
-        frequency for display.
+        The band comes from the class's policy-mode weekly burden ratios, scaled
+        to the teacher's chosen frequency and rounded once, so the recommendation
+        is a value they can actually type.
         """
         # Convert input rent to weekly for comparison
         from app.models import _quantize_currency
@@ -582,95 +627,46 @@ class EconomyBalanceChecker:
             custom_frequency_unit,
         )
 
-        # Rent validation uses policy-mode weekly burden bands, converted to monthly.
-        rent_min_ratio_weekly, rent_max_ratio_weekly, rent_recommended_ratio_weekly = self._ratio_band(
-            "rent_weekly",
-            self.RENT_MIN_RATIO,
-            self.RENT_MAX_RATIO,
-            self.RENT_DEFAULT_RATIO,
+        # One band, in the teacher's own cadence: the same call the balance
+        # warning makes (INV-ARC-022).
+        band = self.rent_band(
+            cwi,
+            frequency_type,
+            custom_frequency_value,
+            custom_frequency_unit,
         )
-        weeks_per_month = Decimal(str(self.AVERAGE_WEEKS_PER_MONTH))
-        rent_min_ratio_monthly = Decimal(str(rent_min_ratio_weekly)) * weeks_per_month
-        rent_max_ratio_monthly = Decimal(str(rent_max_ratio_weekly)) * weeks_per_month
-        rent_recommended_ratio_monthly = Decimal(str(rent_recommended_ratio_weekly)) * weeks_per_month
+        recommendations = {key: float(value) for key, value in band.items()}
 
-        monthly_min = cwi * float(rent_min_ratio_monthly)
-        monthly_max = cwi * float(rent_max_ratio_monthly)
-        monthly_recommended = cwi * float(rent_recommended_ratio_monthly)
-
-        # Convert to weekly for ratio calculation
-
-        # Calculate ratio based on weekly equivalents
         cwi_decimal = Decimal(str(cwi)) if isinstance(cwi, (float, int)) else cwi
-        
         ratio = weekly_rent / cwi_decimal if cwi_decimal > 0 else Decimal('0')
-        
-        monthly_ratio = ratio * Decimal(str(self.AVERAGE_WEEKS_PER_MONTH))
 
-        # Convert recommendations to match the input frequency for clarity
-        def convert_from_monthly(monthly_value: float) -> float:
-            """Convert a monthly value to the teacher's chosen frequency."""
-            if frequency_type == 'monthly':
-                return monthly_value
-            elif frequency_type == 'weekly':
-                return monthly_value / self.AVERAGE_WEEKS_PER_MONTH
-            elif frequency_type == 'biweekly':
-                return monthly_value / (self.AVERAGE_WEEKS_PER_MONTH / 2)
-            elif frequency_type == 'daily':
-                return monthly_value / (self.AVERAGE_WEEKS_PER_MONTH * 7)
-            elif frequency_type == 'custom':
-                unit = (custom_frequency_unit or 'days').lower()
-                freq_value = custom_frequency_value or 1
-                if unit == 'weeks':
-                    return monthly_value / self.AVERAGE_WEEKS_PER_MONTH * freq_value
-                elif unit == 'months':
-                    return monthly_value * freq_value
-                else:  # days
-                    return monthly_value / (self.AVERAGE_WEEKS_PER_MONTH * 7) * freq_value
-            raise ValueError(f"Unsupported frequency_type: {frequency_type}")
-
-        recommendations = {
-            'min': round(convert_from_monthly(monthly_min), 2),
-            'max': round(convert_from_monthly(monthly_max), 2),
-            'recommended': round(convert_from_monthly(monthly_recommended), 2),
-        }
-
-        # Generate frequency label for messages
-        if frequency_type == 'custom':
-            freq_value = custom_frequency_value or 1
-            freq_unit = (custom_frequency_unit or 'days').lower()
-            # Pluralize unit if needed
-            if freq_value == 1:
-                label_unit = freq_unit.rstrip('s')
-            else:
-                label_unit = freq_unit if freq_unit.endswith('s') else freq_unit + 's'
-            frequency_label = f"per {freq_value} {label_unit}"
-        else:
-            frequency_label = {
-                'monthly': 'per month',
-                'weekly': 'per week',
-                'biweekly': 'per 2 weeks',
-                'daily': 'per day',
-            }.get(frequency_type, frequency_type)
+        label = frequency_label(
+            frequency_type,
+            custom_frequency_value=custom_frequency_value,
+            custom_frequency_unit=custom_frequency_unit,
+        )
 
         warnings: List[Dict[str, str]] = []
-        if monthly_ratio < rent_min_ratio_monthly:
+        # Compare against the same rounded band the message quotes back. A raw
+        # ratio comparison flags an amount as out of range while naming a
+        # boundary that prints identically to the amount itself.
+        if rent_amount < recommendations['min']:
             warnings.append({
                 'level': 'warning',
                 'title': 'Rent may be set too low',
                 'message': (
-                    f"The rent amount you entered (${rent_amount:.2f} {frequency_label}) is "
-                    f"below the recommended minimum of ${recommendations['min']:.2f} {frequency_label}. "
+                    f"The rent amount you entered (${rent_amount:.2f} {label}) is "
+                    f"below the recommended minimum of ${recommendations['min']:.2f} {label}. "
                     f"This may reduce students' incentive to budget and save."
                 ),
             })
-        elif monthly_ratio > rent_max_ratio_monthly:
+        elif rent_amount > recommendations['max']:
             warnings.append({
                 'level': 'warning',
                 'title': 'Rent may be set too high',
                 'message': (
-                    f"The rent amount you entered (${rent_amount:.2f} {frequency_label}) is "
-                    f"above the recommended maximum of ${recommendations['max']:.2f} {frequency_label}. "
+                    f"The rent amount you entered (${rent_amount:.2f} {label}) is "
+                    f"above the recommended maximum of ${recommendations['max']:.2f} {label}. "
                     f"Students may have difficulty meeting their other obligations."
                 ),
             })
@@ -679,7 +675,7 @@ class EconomyBalanceChecker:
                 'level': 'success',
                 'title': 'Rent is balanced',
                 'message': (
-                    f"Rent is set to ${rent_amount:.2f} {frequency_label} "
+                    f"Rent is set to ${rent_amount:.2f} {label} "
                     f"(${weekly_rent:.2f} per week), within the recommended range."
                 ),
             })
@@ -691,19 +687,18 @@ class EconomyBalanceChecker:
         cwi = float(cwi)
         ratio = fine_amount / cwi if cwi > 0 else 0
 
-        recommendations = {
-            'min': round(cwi * self.FINE_MIN_RATIO, 2),
-            'max': round(cwi * self.FINE_MAX_RATIO, 2),
-            'recommended': round(cwi * self.FINE_DEFAULT_RATIO, 2),
-        }
+        # The class's policy mode, not the default-mode constants: a tight or
+        # comfortable class was shown its own band and judged against another's.
+        # The comparison is on the displayed cents for the same reason rent's is.
+        recommendations = {key: float(value) for key, value in self.fine_band(cwi).items()}
 
         warnings: List[Dict[str, str]] = []
-        if ratio < self.FINE_MIN_RATIO:
+        if fine_amount < recommendations['min']:
             warnings.append({
                 'level': 'warning',
                 'message': f'Fine (${fine_amount:.2f}) may be too small to be meaningful.',
             })
-        elif ratio > self.FINE_MAX_RATIO:
+        elif fine_amount > recommendations['max']:
             warnings.append({
                 'level': 'critical',
                 'message': f'Fine (${fine_amount:.2f}) is too harsh. May cause student insolvency.',
@@ -716,46 +711,64 @@ class EconomyBalanceChecker:
 
         return warnings, recommendations, float(ratio)
 
-    def validate_store_item_value(self, price: float, cwi: float) -> Tuple[List[Dict[str, str]], Dict[str, Dict[str, float]], float]:
+    def validate_store_item_value(
+        self,
+        price: float,
+        cwi: float,
+        economic_role: Optional[str] = None,
+    ) -> Tuple[List[Dict[str, str]], Dict[str, Dict[str, float]], float]:
+        """Position a price against its declared economic role's band.
+
+        The role is an input, not an inference. A price outside its role's band
+        stays valid (SPEC-ECON-003 §4.7) — the report says where it sits, it
+        does not reclassify the product or reject the value.
+        """
         price = float(price)
         cwi = float(cwi)
         ratio = price / cwi if cwi > 0 else 0
-        recommendations: Dict[str, Dict[str, float]] = {}
         warnings: List[Dict[str, str]] = []
 
-        store_tiers = self._store_tiers()
-        tier_found = None
-        for tier, (min_r, max_r) in store_tiers.items():
-            if min_r <= ratio <= max_r:
-                tier_found = tier
-                recommendations[tier.value] = {
-                    'min': round(cwi * min_r, 2),
-                    'max': round(cwi * max_r, 2),
-                }
-                break
-
-        recommendations['tiers'] = {
-            tier.value: {
-                'min': round(cwi * bounds[0], 2),
-                'max': round(cwi * bounds[1], 2),
-            }
-            for tier, bounds in store_tiers.items()
+        # Bands are compared on the displayed currency figure, not the raw
+        # ratio: a price copied from a band's printed maximum rounds a fraction
+        # of a cent above the ratio boundary and read as out of range.
+        role_bands = {
+            role: {key: float(value) for key, value in band.items()}
+            for role, band in self.store_role_bands(cwi).items()
+        }
+        recommendations: Dict[str, Dict[str, float]] = {
+            'roles': {role.value: dict(band) for role, band in role_bands.items()}
         }
 
-        if tier_found:
+        try:
+            role = EconomicRole(economic_role)
+        except ValueError:
+            return warnings, recommendations, float(ratio)
+
+        band = role_bands[role]
+        label = role.value.replace('_', '-').title()
+        recommendations[role.value] = dict(band)
+        recommendations['selected_role'] = dict(band)
+
+        if band['min'] <= price <= band['max']:
             warnings.append({
                 'level': 'success',
-                'message': f'Price fits {tier_found.value.upper()} tier (${price:.2f})',
+                'message': f"${price:.2f} is within the {label} range (${band['min']:.2f}–${band['max']:.2f}).",
             })
-        elif ratio > store_tiers[PricingTier.LUXURY][1]:
-            warnings.append({
-                'level': 'critical',
-                'message': f'Price (${price:.2f}) exceeds LUXURY tier max. Students may never afford this.',
-            })
-        elif ratio < store_tiers[PricingTier.BASIC][0]:
+        elif price > band['max']:
             warnings.append({
                 'level': 'warning',
-                'message': f'Price (${price:.2f}) is below BASIC tier. May not be meaningful reward.',
+                'message': (
+                    f"${price:.2f} is above the {label} range (${band['min']:.2f}–${band['max']:.2f}). "
+                    "It takes students longer to reach than the role suggests."
+                ),
+            })
+        else:
+            warnings.append({
+                'level': 'warning',
+                'message': (
+                    f"${price:.2f} is below the {label} range (${band['min']:.2f}–${band['max']:.2f}). "
+                    "Students reach it sooner than the role suggests."
+                ),
             })
 
         return warnings, recommendations, float(ratio)
@@ -776,7 +789,7 @@ class EconomyBalanceChecker:
         if feature == 'fine':
             return self.validate_fine_value(value, cwi)
         if feature == 'store_item':
-            return self.validate_store_item_value(value, cwi)
+            return self.validate_store_item_value(value, cwi, kwargs.get('economic_role'))
 
         raise ValueError('Unsupported feature type')
 
@@ -814,21 +827,18 @@ class EconomyBalanceChecker:
                 getattr(rent_settings, 'custom_frequency_unit', None)
             ))
 
-        # Calculate weekly insurance (use cheapest active policy as baseline)
+        # Calculate weekly insurance (use cheapest offered policy as baseline).
+        # Same rule as store items: the caller passes the offered set; this
+        # checker does not re-derive availability.
         weekly_insurance = 0
         if insurance_policies:
-            active_policies = [p for p in insurance_policies if p.is_active]
-            if active_policies:
-                # Find cheapest weekly equivalent
-                cheapest_weekly = float('inf')
-                for policy in active_policies:
-                    premium = float(policy.premium)
-                    weekly_equiv = float(self._normalize_to_weekly(premium, policy.charge_frequency))
-
-                    if weekly_equiv < cheapest_weekly:
-                        cheapest_weekly = weekly_equiv
-
-                weekly_insurance = cheapest_weekly if cheapest_weekly != float('inf') else 0
+            weekly_premiums = [
+                weekly for weekly in (
+                    self._weekly_insurance_premium(policy) for policy in insurance_policies
+                )
+                if weekly is not None
+            ]
+            weekly_insurance = min(weekly_premiums) if weekly_premiums else 0
 
         # Estimate weekly store spending if not provided
         if average_store_spending is None:
@@ -838,7 +848,7 @@ class EconomyBalanceChecker:
         # Calculate weekly savings
         weekly_savings = weekly_income - weekly_rent - weekly_insurance - average_store_spending
 
-        required_savings = cwi * self._minimum_ratio("savings_weekly", self.MIN_WEEKLY_SAVINGS_RATIO)
+        required_savings = cwi * self._minimum_ratio("savings_weekly")
         passed = weekly_savings >= required_savings
 
         return passed, weekly_savings
@@ -861,7 +871,7 @@ class EconomyBalanceChecker:
             rent_settings: RentSettings instance (optional)
             insurance_policies: Policy rows (optional)
             fines: List of PayrollFine instances (optional)
-            store_items: List of StoreItem instances (optional)
+            store_items: List of StoreProduct instances (optional)
             expected_weekly_hours: Expected weekly attendance hours
             average_store_spending: Average weekly store spending (estimated if None)
 
@@ -919,9 +929,9 @@ class EconomyBalanceChecker:
             all_warnings.append(BalanceWarning(
                 feature="Budget Survival Test",
                 level=WarningLevel.CRITICAL,
-                message=f"Students cannot save enough income! Weekly savings: ${weekly_savings:.2f} (need ${cwi * self._minimum_ratio('savings_weekly', self.MIN_WEEKLY_SAVINGS_RATIO):.2f})",
+                message=f"Students cannot save enough income! Weekly savings: ${weekly_savings:.2f} (need ${cwi * self._minimum_ratio('savings_weekly'):.2f})",
                 current_value=weekly_savings,
-                recommended_min=cwi * self._minimum_ratio("savings_weekly", self.MIN_WEEKLY_SAVINGS_RATIO),
+                recommended_min=cwi * self._minimum_ratio("savings_weekly"),
                 recommended_max=None,
                 cwi_ratio=weekly_savings / cwi if cwi > 0 else 0
             ))
@@ -970,8 +980,23 @@ def format_warnings_for_display(warnings: List[BalanceWarning]) -> str:
     Returns:
         HTML string
     """
+    def _alert_card_open(level: str, icon: str, title: str) -> str:
+        # Mirrors the `alert_card` macro in templates/macros/cards.html.
+        text_class = 'text-dark' if level == 'warning' else 'text-white'
+        return (
+            f'<div class="card alert-card border-{level} mb-3">'
+            f'<div class="card-header bg-{level} {text_class} d-flex align-items-center">'
+            f'<span class="material-symbols-outlined me-2" aria-hidden="true">{icon}</span>'
+            f'<h3 class="h5 fw-bold mb-0 {text_class}">{title}</h3>'
+            '</div>'
+            '<div class="card-body">'
+        )
+
     if not warnings:
-        return '<div class="alert alert-success"><i class="bi bi-check-circle-fill me-1"></i>Economy is balanced!</div>'
+        return (
+            _alert_card_open('success', 'check_circle', 'Economy is balanced')
+            + '<p class="mb-0">No balance warnings for the current settings.</p></div></div>'
+        )
 
     # Group by level
     critical = [w for w in warnings if w.level == WarningLevel.CRITICAL]
@@ -981,21 +1006,21 @@ def format_warnings_for_display(warnings: List[BalanceWarning]) -> str:
     html_parts = []
 
     if critical:
-        html_parts.append('<div class="alert alert-danger"><strong><i class="bi bi-exclamation-octagon-fill me-1"></i>Critical Issues:</strong><ul>')
+        html_parts.append(_alert_card_open('danger', 'error', 'Critical economy issues') + '<ul class="mb-0">')
         for w in critical:
             html_parts.append(f'<li>{w.message}</li>')
-        html_parts.append('</ul></div>')
+        html_parts.append('</ul></div></div>')
 
     if warning:
-        html_parts.append('<div class="alert alert-warning"><strong><i class="bi bi-exclamation-triangle-fill me-1"></i>Warnings:</strong><ul>')
+        html_parts.append(_alert_card_open('warning', 'warning', 'Economy warnings') + '<ul class="mb-0">')
         for w in warning:
             html_parts.append(f'<li>{w.message}</li>')
-        html_parts.append('</ul></div>')
+        html_parts.append('</ul></div></div>')
 
     if info and not (critical or warning):  # Only show info if no problems
-        html_parts.append('<div class="alert alert-info"><strong><i class="bi bi-info-circle-fill me-1"></i>Balance Info:</strong><ul>')
+        html_parts.append(_alert_card_open('info', 'info', 'Balance details') + '<ul class="mb-0">')
         for w in info[:5]:  # Limit to 5 info messages
             html_parts.append(f'<li>{w.message}</li>')
-        html_parts.append('</ul></div>')
+        html_parts.append('</ul></div></div>')
 
     return '\n'.join(html_parts)

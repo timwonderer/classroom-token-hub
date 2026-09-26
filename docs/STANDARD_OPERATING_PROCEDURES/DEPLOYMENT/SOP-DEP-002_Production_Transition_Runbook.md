@@ -1,0 +1,185 @@
+# v2 Production Transition Runbook
+
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| SOP-DEP-002 | 1.5 | 2026-09-21 | 1.4 | Normative |
+
+## I. Purpose
+
+Provide the explicit operator workflow for moving the current v2 branch from live-test candidate to production transition.
+
+## II. Scope
+
+Production transition work for `main` after successful live testing, including Cloudflare Access gating, migration execution, post-deploy verification, rollback decision points, and operator sign-off.
+
+## III. Authority Level
+
+Normative (SOP Tier). Subordinate to `INV-CORE-000`.
+
+## IV. Dependencies
+
+- `INV-CORE-000_CORE_INVARIANTS.md`
+- `SOP-DB-009_Migration_Compliance_Review.md`
+- `SOP-DEP-001_Live_Test_Runbook.md`
+- `SOP-DEP-016_Rollback_Procedures.md`
+
+## V. Preconditions
+
+- `main` is the approved deployment branch.
+- Live-test runbook has been executed successfully.
+- Migration compliance status has been reviewed.
+- Backup, maintenance window, and rollback contacts are confirmed.
+- Team-owned production and pre-production database targets are identified before any migration step begins.
+- Named production operator, independent verifier, and rollback approver are assigned before the maintenance window starts.
+
+## VI. Pre-Production Checklist
+
+1. Enable Cloudflare Access gating if the deployment requires a protected window.
+2. Verify current production backup or snapshot and test restore instructions.
+3. Confirm migration head state and target revision.
+4. Confirm operator sign-off from engineering and operations.
+5. Reconfirm smoke checklist and escalation path.
+
+Current branch verification references:
+
+- access gate: Cloudflare Zero Trust policy for the application hostname
+- release workflow: `.github/workflows/release-v2.yml` (manual exact-SHA release)
+- deployment transport: GitHub Actions connects to the production host through
+  Tailscale using `PRODUCTION_TAILSCALE_HOST`; public-IP SSH is not the
+  approved deployment path;
+- transport smoke test: `.github/workflows/tailscale-ssh-smoke-test.yml`
+- migration safety check: `bash scripts/check-migrations.sh`
+
+The production release lineage is configured as the protected environment
+variable `V2_RELEASE_LINEAGE_REF`. A release request MUST provide a full
+40-character commit SHA that is an ancestor of that approved lineage. A branch
+name or moving branch tip is not itself a release artifact.
+
+### Cloudflare Access gate verification
+
+Before a restricted work window, confirm an unauthenticated browser reaches Access,
+an unauthorized identity cannot enter, and an authorized operator can reach the
+normal application sign-in. Verify the origin cannot be reached around Cloudflare.
+Public health probes require authorized service-token headers; host-local probes
+do not traverse Access. Never record tokens in logs or deployment evidence.
+
+At the end of the window, change the Access policy only when public access is
+intended and release checks have passed. Deploying the app does not change that
+policy. Remove obsolete `MAINTENANCE_*` settings from deployment configuration;
+there is no application flag, sysadmin bypass, or query-token alternative.
+
+## VII. Upgrade Flow
+
+1. Restrict the application hostname using Cloudflare Access.
+2. Confirm the Access login is shown to an unauthenticated visitor, unauthorized admission is denied, and authorized operator access works.
+3. Confirm migration head state and run the migration safety check.
+4. Apply migrations.
+5. Deploy application code.
+6. Run post-deploy smoke checks before reopening the app.
+
+## VIII. Post-Migration Verification
+
+Verify:
+
+- app boots normally
+- `/admin/login` and `/student/login` load
+- `/docs` loads
+- teacher current-class switching works via `POST /admin/current-class`
+- student add-class and switch-class flows work
+- class-scoped admin actions respect membership
+- selected-class export works via `/admin/export-students?join_code=<owned-join-code>`
+- hall-pass verification path works via `/verify/hallpass/<teacher_public_token>`
+- no unexpected migration head drift is present
+
+## IX. Rollback Policy
+
+- If migration fails before app reopen, rollback to the pre-deploy backup/snapshot.
+- If post-deploy smoke checks fail and cannot be corrected within the maintenance window, rollback.
+- If migration is structurally successful but business behavior is incorrect, keep Cloudflare Access restricted until rollback or fix-forward is approved.
+
+### IX.1 Exact-SHA Release Failure Handling
+
+The release workflow does not automatically downgrade production. A failed
+release MUST remain in an operator-controlled state until the production
+operator and rollback approver select rollback or fix-forward.
+
+| Failure point | Required action |
+|---|---|
+| Lineage, SHA, environment approval, Tailscale, or SSH preflight | No production mutation is authorized; correct the release request or transport configuration. |
+| Migration fails before restart | Keep the existing service running if possible, keep the maintenance window controlled, capture migration output, and stop for operator review. Do not retry blindly. |
+| Migration succeeds but restart fails | Keep the environment controlled, inspect service logs/status, and restore service using the approved operator procedure. Do not run an automatic downgrade. |
+| Restart succeeds but `/health` fails | Keep Cloudflare Access restricted, capture the exact deployed SHA and health/service evidence, then choose approved fix-forward or restore-from-backup. |
+| Non-backward-compatible migration requires rollback | Rollback MUST use the verified backup/restore procedure and named rollback approval; `alembic downgrade` is not an automatic production recovery mechanism. |
+
+Every failure record MUST include the requested SHA, approved lineage ref,
+migration result, service state, health result, and operator decision.
+
+## X. Transition Record Template
+
+Use this template for the production transition record:
+
+```text
+Production Transition Record
+Date:
+Branch:
+Commit SHA:
+Production operator:
+Independent verifier:
+Rollback approver:
+Maintenance window:
+
+Pre-window confirmation
+- Backup/snapshot reference:
+- Restore procedure verified:
+- flask db heads:
+- flask db current:
+- bash scripts/check-migrations.sh:
+
+Cloudflare Access gate
+- Enable action:
+- Access login, denial, and operator admission verified:
+
+Deployment
+- Migration result:
+- Application deploy result:
+
+Post-deploy verification
+- /admin/login:
+- /student/login:
+- /docs:
+- POST /admin/current-class:
+- /student/add-class:
+- POST /student/switch-class/<join_code>:
+- /admin/export-students?join_code=<owned-join-code>:
+- /verify/hallpass/<teacher_public_token>:
+
+Outcome
+- Reopen time:
+- Go/no-go:
+- Rollback needed:
+- Operator sign-off:
+- Independent verifier sign-off:
+- Rollback approver sign-off:
+```
+
+## XI. Sign-Off Record
+
+Record:
+
+- deployment time
+- operator
+- branch SHA
+- migration result
+- smoke-check status
+- reopen time
+- rollback decision
+
+## XII. Deferral Boundary
+
+- This runbook is limited to launch-critical transition steps and operator records.
+- Broader operational taxonomy changes, route-family cleanup, and post-port architecture alignment are deferred until after `../../SPECS/V2_ADMIN_ROUTE_REFACTOR.md` and `../../MAP/MAP-CLASS-002_CLASS_SCOPE_NORMALIZATION_TARGET.md`.
+
+
+
+## XIII. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.

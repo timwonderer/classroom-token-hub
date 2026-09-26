@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Dict, Optional
 
 from flask import has_app_context
@@ -13,7 +13,9 @@ FREQUENCY_WEEK_MULTIPLIERS = {
     "daily": Decimal("0.142857142857"),
     "weekly": Decimal("1.0"),
     "biweekly": Decimal("2.0"),
-    "monthly": Decimal("4.348214285714"),
+    # Bound to the constant rather than re-stated: a second spelling of the
+    # month length makes two price bands out of one policy ratio (INV-ARC-022).
+    "monthly": AVERAGE_WEEKS_PER_MONTH,
     "semester": Decimal("18.0"),
     "yearly": Decimal("52.0"),
 }
@@ -21,6 +23,16 @@ FREQUENCY_WEEK_MULTIPLIERS = {
 # pricing model) were removed as part of the SPEC-ECON-003 insurance migration.
 # The canonical insurance economic model (deterministic per-(product, tier, mode)
 # presets) now lives in app/services/economic_engine.py (resolve_insurance).
+
+# Store economic role reference bands as a share of CWI (SPEC-ECON-003 §4.7).
+# These sit outside POLICY_MODES on purpose: the spec's table has no policy-mode
+# axis, so the same band applies in tight, default, and comfortable.
+STORE_ROLE_RATIOS: Dict[str, Dict[str, float]] = {
+    "necessity": {"min": 0.01, "max": 0.10},
+    "convenience": {"min": 0.11, "max": 0.20},
+    "add_on": {"min": 0.21, "max": 0.30},
+}
+
 FEATURE_FLAGS = {
     "payroll",
     "insurance",
@@ -30,21 +42,23 @@ FEATURE_FLAGS = {
     "store",
 }
 
+# Every band here is transcribed from a numbered SPEC-ECON-003 §4 table: rent
+# §4.3, fines §4.5, collective goals §4.6, savings §4.2. ``recommended`` is the
+# band midpoint, which §4.8 names as the value a rebalance proposes; it is a
+# proposal, never a bound.
+#
+# There is no utilities band. v2 has no utilities feature and SPEC-ECON-003 does
+# not model one, so carrying a band for it would make an unreachable number look
+# authoritative.
 POLICY_MODES: Dict[str, Dict[str, Any]] = {
     "tight": {
         "label": "Tight",
         "summary": "More budgeting pressure",
         "description": "A leaner economy with less surplus and more deliberate spending.",
         "ratios": {
-            "rent_weekly": {"min": 0.70, "max": 0.80, "recommended": 0.75},
-            "utilities_weekly": {"min": 0.07, "max": 0.12, "recommended": 0.095},
-            "fine_weekly": {"min": 0.07, "max": 0.18, "recommended": 0.11},
-            "store_tiers": {
-                "basic": {"min": 0.01, "max": 0.03},
-                "standard": {"min": 0.02, "max": 0.04},
-                "premium": {"min": 0.04, "max": 0.12},
-                "luxury": {"min": 0.12, "max": 0.24},
-            },
+            "rent_weekly": {"min": 0.30, "max": 0.40, "recommended": 0.35},
+            "fine_weekly": {"min": 0.05, "max": 0.10, "recommended": 0.075},
+            "collective_goal": {"min": 1.0, "max": 3.0},
             "savings_weekly": {"min": 0.05, "target": 0.05},
         },
     },
@@ -53,15 +67,9 @@ POLICY_MODES: Dict[str, Dict[str, Any]] = {
         "summary": "Balanced economy",
         "description": "The standard baseline with moderate pressure and stable survival margins.",
         "ratios": {
-            "rent_weekly": {"min": 0.60, "max": 0.75, "recommended": 0.675},
-            "utilities_weekly": {"min": 0.05, "max": 0.10, "recommended": 0.075},
-            "fine_weekly": {"min": 0.05, "max": 0.15, "recommended": 0.10},
-            "store_tiers": {
-                "basic": {"min": 0.01, "max": 0.03},
-                "standard": {"min": 0.02, "max": 0.05},
-                "premium": {"min": 0.05, "max": 0.15},
-                "luxury": {"min": 0.15, "max": 0.30},
-            },
+            "rent_weekly": {"min": 0.35, "max": 0.50, "recommended": 0.425},
+            "fine_weekly": {"min": 0.05, "max": 0.12, "recommended": 0.085},
+            "collective_goal": {"min": 1.0, "max": 5.0},
             "savings_weekly": {"min": 0.10, "target": 0.10},
         },
     },
@@ -70,16 +78,10 @@ POLICY_MODES: Dict[str, Dict[str, Any]] = {
         "summary": "More breathing room",
         "description": "A more forgiving economy with lower fixed pressure and larger student margin.",
         "ratios": {
-            "rent_weekly": {"min": 0.50, "max": 0.65, "recommended": 0.575},
-            "utilities_weekly": {"min": 0.04, "max": 0.08, "recommended": 0.06},
-            "fine_weekly": {"min": 0.04, "max": 0.12, "recommended": 0.08},
-            "store_tiers": {
-                "basic": {"min": 0.02, "max": 0.04},
-                "standard": {"min": 0.03, "max": 0.06},
-                "premium": {"min": 0.06, "max": 0.18},
-                "luxury": {"min": 0.18, "max": 0.35},
-            },
-            "savings_weekly": {"min": 0.15, "target": 0.175},
+            "rent_weekly": {"min": 0.40, "max": 0.55, "recommended": 0.475},
+            "fine_weekly": {"min": 0.07, "max": 0.15, "recommended": 0.11},
+            "collective_goal": {"min": 1.5, "max": 7.0},
+            "savings_weekly": {"min": 0.15, "target": 0.15},
         },
     },
 }
@@ -95,32 +97,77 @@ def get_policy_profile(mode: Optional[str]) -> Dict[str, Any]:
 
 
 def _quantize_money(value: Decimal) -> Decimal:
-    return Decimal(str(value)).quantize(Decimal("0.01"))
+    # Half-up, matching the Economic Engine's ``_money``. The default context
+    # rounds half-to-even, so a band landing on an exact half-cent (CWI 337.50 at
+    # 7%) came out a cent apart from the engine's figure for the same band.
+    return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
-def convert_weekly_amount_to_frequency(
-    value: Optional[Decimal],
+def weeks_per_period(
     frequency: Optional[str],
     *,
     custom_frequency_value: Optional[int] = None,
     custom_frequency_unit: Optional[str] = None,
-) -> Optional[Decimal]:
-    if value is None:
-        return None
+) -> Decimal:
+    """How many weeks one period of ``frequency`` spans.
 
-    amount = Decimal(str(value))
+    Every weekly policy ratio reaches a teacher-visible amount through this one
+    conversion, so a band shown on a settings page and the band the balance
+    warning judges against cannot pick up different rounding on the way.
+    """
     normalized_frequency = (frequency or "weekly").strip().lower()
     if normalized_frequency == "custom":
         unit = (custom_frequency_unit or "days").strip().lower()
         count = Decimal(str(custom_frequency_value or 1))
         if unit == "weeks":
-            return _quantize_money(amount * count)
+            return count
         if unit == "months":
-            return _quantize_money(amount * AVERAGE_WEEKS_PER_MONTH * count)
-        return _quantize_money(amount / (Decimal("7") / count))
+            return AVERAGE_WEEKS_PER_MONTH * count
+        return count / Decimal("7")
 
-    multiplier = FREQUENCY_WEEK_MULTIPLIERS.get(normalized_frequency, FREQUENCY_WEEK_MULTIPLIERS["weekly"])
-    return _quantize_money(amount * multiplier)
+    return FREQUENCY_WEEK_MULTIPLIERS.get(normalized_frequency, FREQUENCY_WEEK_MULTIPLIERS["weekly"])
+
+
+def frequency_label(
+    frequency: Optional[str],
+    *,
+    custom_frequency_value: Optional[int] = None,
+    custom_frequency_unit: Optional[str] = None,
+) -> str:
+    """The human phrasing of a billing cadence, e.g. ``per 2 weeks``."""
+    normalized_frequency = (frequency or "weekly").strip().lower()
+    if normalized_frequency == "custom":
+        count = int(custom_frequency_value or 1)
+        unit = (custom_frequency_unit or "days").strip().lower()
+        unit = unit.rstrip("s") if count == 1 else (unit if unit.endswith("s") else f"{unit}s")
+        return f"per {count} {unit}"
+
+    return {
+        "daily": "per day",
+        "weekly": "per week",
+        "biweekly": "per 2 weeks",
+        "monthly": "per month",
+        "semester": "per semester",
+        "yearly": "per year",
+    }.get(normalized_frequency, normalized_frequency)
+
+
+def scale_band(
+    cwi: Optional[Decimal],
+    ratios: Dict[str, Any],
+    weeks: Decimal = Decimal("1"),
+) -> Dict[str, Decimal]:
+    """Turn weekly CWI ratios into per-period money, rounding exactly once.
+
+    Rounding the weekly figure and then scaling it produces a different band
+    than scaling and then rounding, which is how the Economic Engine card and
+    the rent page came to disagree by a cent or two.
+    """
+    cwi_decimal = _quantize_money(Decimal(str(cwi or 0)))
+    return {
+        key: _quantize_money(cwi_decimal * Decimal(str(ratio)) * weeks)
+        for key, ratio in ratios.items()
+    }
 
 
 def get_price_recommendation_context(mode: Optional[str], cwi: Optional[Decimal]) -> Optional[Dict[str, Any]]:
@@ -131,66 +178,41 @@ def get_price_recommendation_context(mode: Optional[str], cwi: Optional[Decimal]
         return None
 
     profile = get_policy_profile(mode)
-    ratios = profile.get("ratios", {})
+    ratios = profile["ratios"]
     cwi_decimal = _quantize_money(Decimal(str(cwi)))
 
-    def band(key: str, fallback_min: float, fallback_max: float, fallback_recommended: float) -> Dict[str, Decimal]:
-        values = ratios.get(key, {})
+    def store_roles() -> Dict[str, Dict[str, float]]:
         return {
-            "min": _quantize_money(cwi_decimal * Decimal(str(values.get("min", fallback_min)))),
-            "max": _quantize_money(cwi_decimal * Decimal(str(values.get("max", fallback_max)))),
-            "recommended": _quantize_money(cwi_decimal * Decimal(str(values.get("recommended", fallback_recommended)))),
-        }
-
-    def multiplier_band(key: str, fallback_min: float, fallback_max: float, fallback_recommended: float) -> Dict[str, float]:
-        values = ratios.get(key, {})
-        return {
-            "min": round(float(values.get("min", fallback_min)), 2),
-            "max": round(float(values.get("max", fallback_max)), 2),
-            "recommended": round(float(values.get("recommended", fallback_recommended)), 2),
-        }
-
-    def store_tiers() -> Dict[str, Dict[str, float]]:
-        configured = ratios.get("store_tiers", {})
-        defaults = {
-            "basic": {"min": 0.02, "max": 0.05},
-            "standard": {"min": 0.05, "max": 0.10},
-            "premium": {"min": 0.10, "max": 0.25},
-            "luxury": {"min": 0.25, "max": 0.50},
-        }
-        tier_map: Dict[str, Dict[str, float]] = {}
-        for tier_name, fallback in defaults.items():
-            band_values = configured.get(tier_name, fallback)
-            tier_map[tier_name] = {
-                "min": float(_quantize_money(cwi_decimal * Decimal(str(band_values.get("min", fallback["min"]))))),
-                "max": float(_quantize_money(cwi_decimal * Decimal(str(band_values.get("max", fallback["max"]))))),
+            role: {
+                "min": float(_quantize_money(cwi_decimal * Decimal(str(bounds["min"])))),
+                "max": float(_quantize_money(cwi_decimal * Decimal(str(bounds["max"])))),
             }
-        return tier_map
+            for role, bounds in STORE_ROLE_RATIOS.items()
+        }
 
     # NOTE (SPEC-ECON-003 migration): insurance pricing guidance is no longer
     # produced here. Insurance recommendations are owned exclusively by the
     # Economic Engine (app/services/economic_engine.resolve_insurance), which is
     # product- and tier-aware. This legacy builder retains only the
-    # rent/utilities/fines/store/savings surfaces still pending their own
-    # Engine migration.
-    rent_weekly = band("rent_weekly", 0.60, 0.75, 0.675)
-    utilities_weekly = band("utilities_weekly", 0.05, 0.10, 0.075)
-    fine_weekly = band("fine_weekly", 0.05, 0.15, 0.10)
-    savings = ratios.get("savings_weekly", {"min": 0.10, "target": 0.10})
+    # rent/fines/store/savings surfaces still pending their own Engine migration.
+    rent_ratios = ratios["rent_weekly"]
+    rent_weekly = scale_band(cwi_decimal, rent_ratios)
+    rent_monthly = scale_band(cwi_decimal, rent_ratios, AVERAGE_WEEKS_PER_MONTH)
+    fine_weekly = scale_band(cwi_decimal, ratios["fine_weekly"])
+    savings = ratios["savings_weekly"]
 
     return {
         "policy_mode": normalize_policy_mode(mode),
         "policy_label": profile["label"],
         "cwi": float(cwi_decimal),
         "rent_weekly": {key: float(value) for key, value in rent_weekly.items()},
-        "rent": {
-            key: float(_quantize_money(value * AVERAGE_WEEKS_PER_MONTH))
-            for key, value in rent_weekly.items()
-        },
-        "utilities": {key: float(value) for key, value in utilities_weekly.items()},
+        "rent": {key: float(value) for key, value in rent_monthly.items()},
+        # The policy ratios themselves, so a "% of CWI" line is read rather than
+        # reverse-engineered from an already-rounded dollar band.
+        "rent_ratios": {key: float(value) for key, value in rent_ratios.items()},
         "fine": {key: float(value) for key, value in fine_weekly.items()},
-        "store_tiers": store_tiers(),
-        "min_weekly_savings": float(_quantize_money(cwi_decimal * Decimal(str(savings.get("min", 0.10))))),
+        "store_roles": store_roles(),
+        "min_weekly_savings": float(_quantize_money(cwi_decimal * Decimal(str(savings["min"])))),
     }
 
 

@@ -5,33 +5,36 @@ from wtforms import HiddenField, TextAreaField, FloatField, SelectField, Integer
 from wtforms.validators import Optional
 
 from wtforms import SubmitField
+from wtforms.csrf.core import CSRFTokenField
+from datetime import date
+from app.services.store.form_contract import resolve_store_form_contract
 
 
 class StoreItemForm(FlaskForm):
     name = StringField('Item Name', validators=[DataRequired()])
     description = TextAreaField('Description')
-    price = FloatField('Price', validators=[DataRequired()])
-    tier = SelectField('Pricing Tier (optional)', choices=[
-        ('', 'No Tier'),
-        ('basic', 'Basic (2-5% of CWI)'),
-        ('standard', 'Standard (5-10% of CWI)'),
-        ('premium', 'Premium (10-25% of CWI)'),
-        ('luxury', 'Luxury (25-50% of CWI)')
-    ], validators=[Optional()])
+    price = FloatField('Price', validators=[Optional()])
+    economic_role = SelectField('Economic Role', choices=[
+        ('necessity', 'Necessity (1-10% of CWI)'),
+        ('convenience', 'Convenience (11-20% of CWI)'),
+        ('add_on', 'Add-on (21-30% of CWI)')
+    ], validators=[DataRequired()])
     item_type = SelectField('Item Type', choices=[
         ('immediate', 'Immediate Use'),
         ('delayed', 'Delayed Use'),
         ('collective', 'Collective Goal'),
-        ('hall_pass', 'Hall Pass')
+        ('hall_pass', 'Hall Pass'),
+        ('privilege', 'Privilege')
     ], validators=[DataRequired()])
     inventory = IntegerField('Inventory (leave blank for unlimited)', validators=[Optional()])
-    limit_per_student = IntegerField('Purchase Limit per Student (leave blank for no limit)', validators=[Optional()])
-    auto_delist_date = DateField('Auto-Delist Date (optional)', format='%Y-%m-%d', validators=[Optional()])
+    holding_limit = IntegerField('Holding Limit per Student (leave blank for unlimited)', validators=[Optional()])
+    direct_purchase_allowed = BooleanField('Students may purchase this item directly', default=True)
+    available_with_overdue_obligations = BooleanField('Essential: allow purchase when rent is overdue', default=False)
+    activation_date = DateField('Start date (optional)', format='%Y-%m-%d', validators=[Optional()])
+    auto_delist_date = DateField('Delist date (optional)', format='%Y-%m-%d', validators=[Optional()])
     auto_expiry_days = IntegerField('Item Expiry in Days (optional, for delayed-use items)', validators=[Optional()])
-    is_active = BooleanField('Item is Active', default=True)
     is_long_term_goal = BooleanField('Long-Term Goal Item (exclude from CWI balance checks)', default=False)
     bypass_cwi_warnings = BooleanField('Bypass CWI Warnings', default=False)
-    blocks = SelectMultipleField('Visible to Periods/Blocks (leave empty for all)', choices=[], validators=[Optional()])
 
     # Bundle settings
     is_bundle = BooleanField('This is a Bundled Item', default=False)
@@ -52,38 +55,123 @@ class StoreItemForm(FlaskForm):
     collective_goal_expires_at = DateField('Goal Expiration Date (optional)', format='%Y-%m-%d', validators=[Optional()])
 
     # Redemption settings (for delayed-use items)
-    redemption_prompt = TextAreaField('Redemption Prompt (optional, for delayed-use items)', validators=[Optional()])
+    redemption_prompt = TextAreaField('Prompt for students to answer when redeeming', validators=[Optional()])
+    redemption_prompt_enabled = BooleanField('Students need to provide extra information', default=False)
+
+    # Rent linkage. The store owns this, not Rent Settings: the teacher decides
+    # here whether paying rent hands the student this item, and how many. The
+    # flag is stored on the rent policy rather than on the product, which is
+    # what makes a change apply from the next cycle onward — see
+    # RentSettings.validate_satisfaction_benefits.
+    is_rent_linked = BooleanField('Students receive this item when they pay rent', default=False)
+    rent_linked_quantity = IntegerField('Quantity granted per rent payment', validators=[Optional()])
 
     submit = SubmitField('Save Item')
 
-    def validate_bundle_quantity(self, field):
-        """Validate bundle quantity when bundle is enabled."""
-        if self.is_bundle.data and (not field.data or field.data <= 0):
-            raise ValidationError('Bundle quantity is required and must be greater than 0 when creating a bundled item.')
+    # Conditional requirements live in validate(), not in per-field
+    # `validate_<name>` hooks. WTForms appends those hooks to the end of the
+    # field's own validator chain, and every field below carries `Optional()`,
+    # which raises StopValidation for a blank field. A hook on such a field
+    # therefore never runs precisely in the case it exists to catch — a blank
+    # quantity submitted while the feature that requires it is enabled.
+    def validate(self, extra_validators=None):
+        """Run the declared validators, then the cross-field requirements."""
+        valid = super().validate(extra_validators=extra_validators)
 
-    def validate_bulk_discount_quantity(self, field):
-        """Validate bulk discount quantity when bulk discount is enabled."""
-        if self.bulk_discount_enabled.data and (not field.data or field.data <= 0):
-            raise ValidationError('Minimum quantity is required and must be greater than 0 when bulk discount is enabled.')
+        def require_positive(field, message):
+            nonlocal valid
+            if not field.data or field.data <= 0:
+                field.errors = list(field.errors) + [message]
+                valid = False
 
-    def validate_bulk_discount_percentage(self, field):
-        """Validate bulk discount percentage when bulk discount is enabled."""
+        # `local_today` is the class's current local date, set by the route from
+        # CLE. Falling back to `date.today()` reads the *server's* clock: on a
+        # UTC host, a teacher in the Americas creating an item after late
+        # afternoon was told their own current date was "before today", because
+        # UTC had already rolled over.
+        today = getattr(self, 'local_today', None) or date.today()
+        if self.activation_date.data and self.activation_date.data < today:
+            self.activation_date.errors = list(self.activation_date.errors) + ['Start date cannot be before today.']
+            valid = False
+
+        if self.is_rent_linked.data:
+            if self.item_type.data == 'privilege':
+                self.rent_linked_quantity.data = 1
+            require_positive(
+                self.rent_linked_quantity,
+                'Quantity is required and must be greater than 0 for a rent-linked item.',
+            )
+
+        if self.is_bundle.data:
+            require_positive(
+                self.bundle_quantity,
+                'Bundle quantity is required and must be greater than 0 when creating a bundled item.',
+            )
+
         if self.bulk_discount_enabled.data:
-            if not field.data or field.data <= 0:
-                raise ValidationError('Discount percentage is required and must be greater than 0 when bulk discount is enabled.')
-            if field.data > 100:
-                raise ValidationError('Discount percentage cannot exceed 100%.')
+            require_positive(
+                self.bulk_discount_quantity,
+                'Minimum quantity is required and must be greater than 0 when bulk discount is enabled.',
+            )
+            require_positive(
+                self.bulk_discount_percentage,
+                'Discount percentage is required and must be greater than 0 when bulk discount is enabled.',
+            )
+            if self.bulk_discount_percentage.data and self.bulk_discount_percentage.data > 100:
+                self.bulk_discount_percentage.errors = list(
+                    self.bulk_discount_percentage.errors
+                ) + ['Discount percentage cannot exceed 100%.']
+                valid = False
 
-    def validate_collective_goal_type(self, field):
-        """Validate collective goal type is set when item type is collective."""
-        if self.item_type.data == 'collective' and not field.data:
-            raise ValidationError('Collective goal type is required when item type is Collective Goal.')
+        if self.item_type.data == 'collective':
+            if self.price.data is None:
+                self.price.errors = list(self.price.errors) + [
+                    'Goal amount is required for a Collective Goal.'
+                ]
+                valid = False
+            if not self.collective_goal_type.data:
+                self.collective_goal_type.errors = list(
+                    self.collective_goal_type.errors
+                ) + ['Collective goal type is required when item type is Collective Goal.']
+                valid = False
+            elif self.collective_goal_type.data == 'fixed':
+                # Only the fixed goal type carries an explicit target; a
+                # whole_class target is derived from class size (DOM-STOR).
+                require_positive(
+                    self.collective_goal_target,
+                    'Target number of purchases is required and must be greater than 0 '
+                    'when using Fixed collective goal type.',
+                )
 
-    def validate_collective_goal_target(self, field):
-        """Validate collective goal target when type is fixed."""
-        if self.item_type.data == 'collective' and self.collective_goal_type.data == 'fixed':
-            if not field.data or field.data <= 0:
-                raise ValidationError('Target number of purchases is required and must be greater than 0 when using Fixed collective goal type.')
+        direct_purchase = (not self.is_rent_linked.data) or bool(self.direct_purchase_allowed.data)
+        if direct_purchase and self.item_type.data != 'collective':
+            if self.price.data is None:
+                self.price.errors = list(self.price.errors) + ['Price is required when students may purchase this item.']
+                valid = False
+
+        contract = resolve_store_form_contract(
+            item_type=self.item_type.data,
+            rent_linked=bool(self.is_rent_linked.data),
+            direct_purchase=direct_purchase,
+            rent_prevents_purchase_when_late=False,
+        )
+        ignored_default_fields = {'direct_purchase_allowed', 'available_with_overdue_obligations'}
+        for name, field in self._fields.items():
+            # A contract is a vocabulary of item-configuration fields, so the
+            # CSRF token and the submit button can never appear in one. A
+            # browser sends both on every POST; policing them rejected every
+            # real submission while tests, which post neither, stayed green.
+            if isinstance(field, (SubmitField, CSRFTokenField)):
+                continue
+            if name in contract.legal_fields or name in ignored_default_fields:
+                continue
+            value = field.data
+            meaningful = bool(value) if isinstance(value, bool) else value not in (None, '', [])
+            if meaningful:
+                field.errors = list(field.errors) + ['This field is not applicable to the selected item configuration.']
+                valid = False
+
+        return valid
 
 
 class AdminSignupForm(FlaskForm):
@@ -143,7 +231,7 @@ class StudentPinPassphraseForm(FlaskForm):
 
 class StudentLoginForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired()])
-    pin = PasswordField('PIN', validators=[DataRequired()])
+    passphrase = PasswordField('Passphrase', validators=[DataRequired()])
     turnstile_token = HiddenField('cf-turnstile-response')
     submit = SubmitField('Login')
 
@@ -164,6 +252,9 @@ class AdminClaimProcessForm(FlaskForm):
     approved_amount = FloatField('Approved Amount', validators=[Optional()])
     rejection_reason = TextAreaField('Rejection Reason (if rejected)')
     teacher_notes = TextAreaField('Teacher Notes')
+    filing_window_override_reason = TextAreaField(
+        'Filing Window Override Reason', validators=[Optional()]
+    )
     submit = SubmitField('Update Claim')
 
 
@@ -173,7 +264,6 @@ class PayrollSettingsForm(FlaskForm):
     pay_rate = FloatField('Pay Rate ($ per minute)', validators=[DataRequired()], default=0.25)
     payroll_frequency_days = IntegerField('Payroll Frequency (days)', validators=[DataRequired()], default=14)
     overtime_multiplier = FloatField('Overtime Multiplier', validators=[Optional()], default=1.0)
-    bonus_rate = FloatField('Bonus Rate ($ per minute)', validators=[Optional()], default=0.0)
     apply_to_all = BooleanField('Apply to All Blocks', default=False)
     is_active = BooleanField('Settings Active', default=True)
     submit = SubmitField('Save Settings')

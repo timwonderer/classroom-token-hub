@@ -3,6 +3,19 @@
 {% block title %}This feature is currently disabled{% endblock %}
 {% set current_page = "feature_disabled" %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("You reached a settings page for a feature this class does not currently use, so there is nothing here to configure.") }}
+
+{% call help.topic('featoff-enable', 'toggle_on', 'Turning it on') %}
+<p><strong>Enable the feature first</strong> from Economy Features, then come back — the settings page opens normally once it is on.</p>
+<p class="mb-0"><strong>Some features cannot be enabled yet.</strong> Insurance, rent, and the store price against student income, so payroll and the economic engine must be configured before they unlock.</p>
+{% endcall %}
+
+{% call help.topic('featoff-data', 'inventory_2', 'What happened to the data') %}
+<p class="mb-0"><strong>Nothing was lost.</strong> If this feature was on before, its data is still there and returns when you re-enable it.</p>
+{% endcall %}
+{% endblock %}
+
 {% block content %}
 <div class="container py-4">
   <div class="card shadow-sm">

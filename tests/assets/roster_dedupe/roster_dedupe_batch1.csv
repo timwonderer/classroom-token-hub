@@ -1,0 +1,13 @@
+﻿First Name,Last Name,Notes,Expect Claim Code
+Ava,Martinez,Unique - claim with no code,no
+Liam,Chen,Unique - no code until batch 2 adds a namesake,no
+Noah,Patel,Unique - claim with no code,no
+Sofia,Nguyen,Duplicate pair 1 of 2 - needs code,yes
+Sofia,Nguyen,Duplicate pair 2 of 2 - needs code,yes
+Ethan,Brooks,Triple 1 of 3 - needs code,yes
+Ethan,Brooks,Triple 2 of 3 - needs code,yes
+Ethan,Brooks,Triple 3 of 3 - needs code,yes
+Maya,Okafor,Case variant 1 of 2 - same group as MAYA okafor - needs code,yes
+MAYA,okafor,Case variant 2 of 2 - same group as Maya Okafor - needs code,yes
+Zoë,Kim,Accent differs from Zoe Kim - separate names - no code,no
+Zoe,Kim,Accent differs from Zoë Kim - separate names - no code,no

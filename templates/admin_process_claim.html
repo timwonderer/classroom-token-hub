@@ -3,6 +3,29 @@
 {% set current_page = "insurance" %}
 {% block title %}Process Claim{% endblock %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("This is where you decide a single claim. Everything above the form is evidence; the form at the bottom is the decision.") }}
+
+{% call help.topic('claim-decide', 'gavel', 'Deciding the claim') %}
+<ol class="ps-3 mb-0">
+    <li class="mb-2"><strong>Read the claim against the policy that was purchased</strong>, shown in <em>Policy Information</em> — not against the policy as it reads today. A purchase freezes its terms.</li>
+    <li class="mb-2"><strong>Check the claims history</strong> for this student. Repeat claims are usually the interesting signal.</li>
+    <li class="mb-0"><strong>Set the status</strong>, then submit.</li>
+</ol>
+{% endcall %}
+
+{% call help.topic('claim-writing', 'edit_note', 'What the student sees, and what stays with you') %}
+<ul class="ps-3 mb-0">
+    <li class="mb-2"><strong>Rejection reason is required when you reject.</strong> The student sees it, so write the reason you would be willing to defend out loud.</li>
+    <li class="mb-0"><strong>Teacher notes are yours.</strong> Use them for the reasoning you do not want to publish.</li>
+</ul>
+{% endcall %}
+
+{% call help.topic('claim-payout', 'calculate', 'Who sets the payout') %}
+<p class="mb-0"><strong>You do not.</strong> Approved amounts are calculated from the linked transaction, then capped by the policy's per-claim and per-period limits.</p>
+{% endcall %}
+{% endblock %}
+
 {% block extra_head %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
 <style>
@@ -10,10 +33,10 @@
         min-height: 100px;
     }
     .editor-toolbar {
-        border-radius: 4px 4px 0 0;
+        border-radius: var(--radius-sm) var(--radius-sm) 0 0;
     }
     .CodeMirror {
-        border-radius: 0 0 4px 4px;
+        border-radius: 0 0 var(--radius-sm) var(--radius-sm);
     }
 </style>
 {% endblock %}
@@ -85,10 +108,9 @@
           <dt class="col-sm-4">Current Status:</dt>
           <dd class="col-sm-8">
             <span class="badge
-              {% if claim.status == 'pending' %}bg-warning text-dark
-              {% elif claim.status == 'approved' %}bg-success
-              {% elif claim.status == 'rejected' %}bg-danger
-              {% elif claim.status == 'paid' %}bg-info
+              {% if claim.status|lower == 'submitted' %}bg-warning text-dark
+              {% elif claim.status|lower == 'approved' %}bg-success
+              {% elif claim.status|lower == 'rejected' %}bg-danger
               {% endif %}">
               {{ claim.status|title }}
             </span>
@@ -114,6 +136,14 @@
         <h6>Teacher Notes:</h6>
         <div class="bg-info-subtle p-3 rounded">{{ claim.teacher_notes | markdown }}</div>
         {% endif %}
+
+        {% if claim.filing_window_override_reason %}
+        <h6>Filing Window Override:</h6>
+        <div class="alert alert-warning py-2 small">
+          <span class="material-symbols-outlined me-1 icon-inherit icon-middle" aria-hidden="true">edit_note</span>
+          {{ claim.filing_window_override_reason | markdown }}
+        </div>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -127,68 +157,70 @@
         <p><strong>Claim Type:</strong><br>
           {% if claim_type == 'TRANSACTION' %}
             <span class="badge bg-info">[TXN] Transaction-based</span>
-          {% elif claim_type == 'NON_MONETARY' %}
-            <span class="badge bg-warning text-dark">[NON-MONETARY]</span>
+          {% elif claim_type == 'PRODUCTIVITY' %}
+            <span class="badge bg-primary">[PRODUCTIVITY]</span>
           {% else %}
-            <span class="badge bg-primary">[CUSTOM]</span>
+            <span class="badge bg-warning text-dark">[NON-MONETARY]</span>
           {% endif %}
         </p>
 
         <p><strong>Coverage Start:</strong><br>
-          {% if enrollment.coverage_start_date %}
-            {{ enrollment.coverage_start_date.strftime('%B %d, %Y') }}
-          {% else %}
-            <span class="text-warning">Still in waiting period</span>
-          {% endif %}
+          {{ coverage_start | fmt_date }}
         </p>
 
         <p><strong>Waiting Period:</strong><br>
-          {{ claim.policy.waiting_period_days }} days
-        </p>
-
-        <p><strong>Claim Time Limit:</strong><br>
-          {{ contract_claim_time_limit_days }} days from incident
-        </p>
-
-        <p><strong>Max Claim Amount:</strong><br>
-          {% if contract_max_claim_amount %}
-            ${{ "%.2f"|format(contract_max_claim_amount) }}
+          {% if contract_waiting_period_days %}
+            {{ contract_waiting_period_days }} days — claimable from {{ coverage_effective_date.isoformat() }}
           {% else %}
-            Unlimited
+            None — coverage is immediate
           {% endif %}
         </p>
 
-        <p><strong>Max Claims:</strong><br>
-          {% if contract_max_claims_count %}
-            {{ contract_max_claims_count }} per {{ contract_max_claims_period }}
+        <p><strong>Filing Window:</strong><br>
+          {% if contract_claim_window_days is not none %}
+            {{ contract_claim_window_days }} days from the covered transaction
           {% else %}
-            Unlimited
+            No filing window for this product
           {% endif %}
         </p>
 
-        <p><strong>Premium Status:</strong><br>
-          {% if enrollment.payment_current %}
-            <span class="badge bg-success">Current</span>
+        {% if contract_claim_window_days is not none %}
+        <p><strong>Validation Status:</strong><br>
+          {% if filing_window_exceeded %}
+            <span class="badge bg-warning text-dark">
+              <span class="material-symbols-outlined me-1 icon-inherit icon-middle" aria-hidden="true">schedule</span>
+              Filed outside the filing window
+            </span>
+            <div class="text-muted small mt-1">Override available — see form below.</div>
           {% else %}
-            <span class="badge bg-danger">{{ enrollment.days_unpaid }} days overdue</span>
+            <span class="badge bg-success">
+              <span class="material-symbols-outlined me-1 icon-inherit icon-middle" aria-hidden="true">check_circle</span>
+              Filed within the filing window
+            </span>
           {% endif %}
         </p>
+        {% endif %}
 
-        {% if remaining_period_cap is not none and contract_max_payout_per_period %}
-          <p><strong>Remaining Period Cap:</strong><br>
-            ${{ '%.2f'|format(remaining_period_cap) }} left this {{ contract_max_claims_period }}
+        {% if contract_reimbursement_percentage is not none %}
+          <p><strong>Reimbursement:</strong><br>
+            {{ contract_reimbursement_percentage }}% of the covered loss
           </p>
         {% endif %}
 
-        <hr>
+        <p><strong>Period Allowance:</strong><br>
+          {% if contract_period_allowance is not none %}
+            {{ contract_period_consumed }} of {{ contract_period_allowance }}
+            {{ contract_allowance_unit }}{{ '' if contract_period_allowance == 1 else 's' }} used this coverage period
+          {% else %}
+            Not metered for this product
+          {% endif %}
+        </p>
 
-        <h6>Validation Status:</h6>
-        {% if validation_errors %}
-          {% for error in validation_errors %}
-            <div class="alert alert-danger py-2 small">{{ error }}</div>
-          {% endfor %}
-        {% else %}
-          <div class="alert alert-success py-2 small"><span class="material-symbols-outlined me-1">check_circle</span>Claim meets all requirements</div>
+        {% if contract_max_payout_per_period %}
+          <p><strong>Period Payout Capacity:</strong><br>
+            ${{ '%.2f'|format(remaining_period_cap) }} remaining of
+            ${{ '%.2f'|format(contract_max_payout_per_period) }}
+          </p>
         {% endif %}
       </div>
     </div>
@@ -203,12 +235,12 @@
           <li>Pending: {{ claims_stats.pending }} claims</li>
           <li>Approved: {{ claims_stats.approved }} claims</li>
           <li>Rejected: {{ claims_stats.rejected }} claims</li>
-          <li>Paid: {{ claims_stats.paid }} claims</li>
         </ul>
 
-        {% if contract_max_claims_count %}
+        {% if contract_period_allowance is not none %}
           <p class="text-muted small">
-            Used {{ claims_stats.approved + claims_stats.paid }} of {{ contract_max_claims_count }} claims this {{ contract_max_claims_period }}
+            {{ contract_period_consumed }} of {{ contract_period_allowance }}
+            {{ contract_allowance_unit }}{{ '' if contract_period_allowance == 1 else 's' }} drawn this coverage period
           </p>
         {% endif %}
       </div>
@@ -222,6 +254,16 @@
     <h5 class="mb-0">Process This Claim</h5>
   </div>
   <div class="card-body">
+    {% if claim.status|lower != 'submitted' %}
+      <p class="mb-0">
+        <span class="material-symbols-outlined me-1 icon-inherit icon-middle" aria-hidden="true">lock</span>
+        This claim was <strong>{{ claim.status|lower }}</strong>{% if claim.decided_at %} on {{ claim.decided_at | fmt_timestamp }}{% endif %}.
+        Decisions are final — no further changes can be made here.
+      </p>
+      {% if claim.decision_note %}
+      <div class="bg-light p-3 rounded mt-3">{{ claim.decision_note | markdown }}</div>
+      {% endif %}
+    {% else %}
     <form method="POST" action="{{ url_for('admin.process_claim', claim_id=claim.id) }}">
       {{ form.hidden_tag() }}
 
@@ -250,11 +292,28 @@
         {{ form.teacher_notes(class="form-control", rows=3) }}
       </div>
 
+      {% if filing_window_exceeded %}
+      <div class="mb-3 border border-warning rounded p-3 bg-warning-subtle">
+        <label class="form-label fw-bold text-warning-emphasis" for="filing_window_override_reason">
+          <span class="material-symbols-outlined me-1 icon-inherit icon-middle" aria-hidden="true">edit_note</span>
+          Filing Window Override Reason
+          <span class="badge bg-warning text-dark ms-1">Required to approve</span>
+        </label>
+        {{ form.filing_window_override_reason(class="form-control", rows=3,
+            placeholder="Explain why this claim should be approved despite being filed outside the policy's filing window...") }}
+        <small class="text-muted mt-1 d-block">
+          This claim was filed outside the policy's filing window. Provide a written explanation to
+          override the block and proceed with approval. Your reason will be permanently recorded on the claim.
+        </small>
+      </div>
+      {% endif %}
+
       <div class="d-flex gap-2">
         {{ form.submit(class="btn btn-primary") }}
         <a href="{{ url_for('admin.insurance_management') }}" class="btn btn-secondary">Back to Insurance</a>
       </div>
     </form>
+    {% endif %}
   </div>
 </div>
 
@@ -284,6 +343,18 @@
         toolbar: ["bold", "italic", "|", "unordered-list", "ordered-list", "|", "link", "|", "preview"],
         status: false,
         placeholder: "Internal notes about this claim (Markdown supported)...",
+      });
+    }
+
+    const filingWindowOverrideField = document.getElementById('filing_window_override_reason');
+    if (filingWindowOverrideField) {
+      new EasyMDE({
+        element: filingWindowOverrideField,
+        spellChecker: false,
+        autoDownloadFontAwesome: false,
+        toolbar: ["bold", "italic", "|", "unordered-list", "ordered-list", "|", "link", "|", "preview"],
+        status: false,
+        placeholder: "Explain why this claim should be approved despite being filed late (Markdown supported)...",
       });
     }
   });

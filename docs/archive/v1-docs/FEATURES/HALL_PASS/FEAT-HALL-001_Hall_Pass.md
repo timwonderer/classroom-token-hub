@@ -2,7 +2,9 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| FEAT-ARC-001     | 1.1     | 2026-03-08     | 1.0        | Normative       |
+| FEAT-ARC-001     | 1.1     | 2026-03-08     | 1.0        | Archived - non-normative       |
+
+> **Archived — history, not authority.** This document describes a superseded version of the system and is retained under `docs/archive/` as a record of what was once true. It governs nothing. Current authority lives in `docs/INVARIANT/`, `docs/DOMAIN/`, and `docs/STANDARD_OPERATING_PROCEDURES/`, in that order (`.claude/rules/documentation.md`).
 
 ## I. Purpose
 Define the full hall pass feature contract across student, teacher, and public verification flows. This spec is the source of truth for lifecycle states, API behavior, data invariants, and deprecation policy.

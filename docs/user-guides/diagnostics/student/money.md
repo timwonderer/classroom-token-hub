@@ -29,6 +29,11 @@ If something doesn't look right with your Balances, Transfers, and Interest, che
 - Interest does not post on days when you moved money into savings.
 - Overdraft protection or fees allow a negative checking balance if enabled by your teacher.
 
+## If the savings projection starts below the visible balance
+The **Account Balances** card shows money available for use, which can include a pending transfer. The **Savings Balance Projection (12 Months)** is based only on the current **posted** Savings balance, as stated beneath the chart. A recent transfer can therefore make the visible Savings balance higher than the projection until the transfer posts.
+
+If the difference remains after the transfer is posted, trust **Account Balances** for the spendable balance and report the mismatch to your teacher. Do not transfer money just to correct the projection; the chart is a forecast, not a separate account.
+
 ## When to report an issue to your teacher
 If you've checked everything above and the problem is still occurring:
 - Tell them the class you were in when the transaction happened.

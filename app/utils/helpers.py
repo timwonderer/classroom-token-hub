@@ -9,7 +9,7 @@ This module provides reusable helper functions for:
 """
 
 from datetime import timezone
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse, urljoin, urlunparse
 import hashlib
 import hmac
 import json
@@ -101,6 +101,27 @@ def get_external_docs_base_url():
     return base_url.rstrip("/")
 
 
+# The in-app site owns exactly one tree: docs/user-guides, the help centre for
+# teachers and students. Technical documentation is published separately. This
+# boundary is decided here rather than by docs-site/route-map.json: that map
+# still lists `user-guides` as migrated, and honouring it would redirect the
+# working in-app help centre off the application the moment an external docs
+# base URL is configured.
+USER_GUIDES_DIR = "user-guides"
+
+# Endpoints of the in-app help centre itself. They are pages, not documents, so
+# they are never forwarded to the technical site.
+APP_OWNED_DOCS_ROUTES = frozenset({"search", "timeline"})
+
+
+def is_user_guide_doc_path(doc_path=None):
+    """True for the help-centre tree the application itself serves."""
+    normalized = (doc_path or "").strip().strip("/")
+    if not normalized:
+        return False
+    return normalized.partition("#")[0].strip("/").split("/", 1)[0] == USER_GUIDES_DIR
+
+
 def get_external_docs_target(doc_path=None):
     """Return an external docs target path for a migrated route, or None."""
     raw_doc_path = (doc_path or "").strip()
@@ -122,10 +143,17 @@ def docs_url_for(doc_path=None, prefer_external=None):
     normalized_anchor = f"#{anchor}" if anchor else ""
 
     if prefer_external is None:
-        prefer_external = not has_internal_docs_session()
+        # Help-centre links stay in the app; it serves that tree itself.
+        prefer_external = not is_user_guide_doc_path(normalized_doc_path)
 
     external_base = get_external_docs_base_url()
     external_target = get_external_docs_target(normalized_doc_path)
+    if external_target is None and not is_user_guide_doc_path(normalized_doc_path):
+        # Unmapped and developer-facing. The technical site publishes the docs/
+        # tree at its own repository-relative paths, so the deep link survives
+        # unchanged; route-map.json only has to carry the exceptions, which are
+        # the paths that were renamed on the way over.
+        external_target = normalized_doc_path
     if prefer_external and external_base and external_target is not None:
         normalized_target = external_target.strip("/")
         if normalized_target:
@@ -138,12 +166,18 @@ def docs_url_for(doc_path=None, prefer_external=None):
 
 
 def should_redirect_public_docs(doc_path=None):
-    """Return True when unauthenticated docs traffic should use the external site."""
-    return (
-        bool(get_external_docs_base_url())
-        and not has_internal_docs_session()
-        and get_external_docs_target(doc_path) is not None
-    )
+    """Return True when docs traffic belongs to the external technical site.
+
+    The help centre and its index always stay in the application, whatever the
+    route map says. Everything else is developer-facing and belongs to the
+    technical site.
+    """
+    normalized = (doc_path or "").strip().strip("/")
+    if not normalized or is_user_guide_doc_path(normalized):
+        return False
+    if normalized in APP_OWNED_DOCS_ROUTES:
+        return False
+    return bool(get_external_docs_base_url())
 
 
 def format_utc_iso(dt):
@@ -166,12 +200,49 @@ def is_safe_url(target, host_url=None):
     # Allow empty targets
     if not target:
         return True
+    # Browsers normalize backslashes to forward slashes, so "/\evil.com" is a
+    # protocol-relative URL to them while urlparse reads it as a local path.
+    target = target.replace('\\', '/')
+    # Any leading-slash run is protocol-relative to a browser. urljoin collapses
+    # three-or-more slashes into a local path, so it would report "///evil.example"
+    # as same-origin while the Location header still navigates off-site.
+    if target.startswith('//'):
+        return False
     # Use provided host_url or fall back to request.host_url
     if host_url is None:
         host_url = request.host_url
     ref_url = urlparse(host_url)
     test_url = urlparse(urljoin(host_url, target))
     return test_url.scheme in ('http', 'https') and ref_url.netloc == test_url.netloc
+
+
+def safe_redirect_target(target, fallback):
+    """
+    Resolve a user-supplied redirect target to a same-origin relative URL.
+
+    Returns ``fallback`` unless ``target`` is a root-relative in-app path. Any
+    absolute URL, protocol-relative URL, or scheme-bearing target is rejected
+    rather than sanitized, so an attacker-controlled ``?next=`` can never send
+    an authenticated user off-origin.
+
+    Args:
+        target: The untrusted redirect target (e.g. ``request.args.get("next")``)
+        fallback: Trusted URL to use when ``target`` is absent or unsafe
+    """
+    if not target:
+        return fallback
+    # Normalize before parsing: browsers treat "/\evil.com" as protocol-relative.
+    candidate = target.replace('\\', '/')
+    # Reject any leading-slash run outright rather than letting urlparse collapse
+    # "///evil.example" down to a path that only looks local.
+    if candidate.startswith('//'):
+        return fallback
+    parsed = urlparse(candidate)
+    if parsed.scheme or parsed.netloc:
+        return fallback
+    if not parsed.path.startswith('/'):
+        return fallback
+    return urlunparse(('', '', parsed.path, parsed.params, parsed.query, parsed.fragment))
 
 
 def render_markdown(text):

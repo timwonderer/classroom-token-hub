@@ -1,8 +1,9 @@
 # GitHub Pages Site
 
 This directory is the deployable GitHub Pages source for `classroomtokenhub.com` (see `CNAME`).
-`.github/workflows/github-pages-transition.yml` uploads the whole directory as the Pages artifact,
-so every file here is published.
+`.github/workflows/github-pages.yml` copies this whole directory to the root of the Pages artifact,
+so every file here is published. The same workflow builds `docs-site/` into `/docs/` alongside it,
+which is where the footer's "Developer Documentation" link goes.
 
 - `index.html` — the v2 landing page, carrying the three sign-in entry points.
 - `learnmore.html` — the supporting learn-more page, linked from `index.html`.

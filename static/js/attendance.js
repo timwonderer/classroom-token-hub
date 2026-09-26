@@ -13,9 +13,10 @@ document.addEventListener("DOMContentLoaded", () => {
       const initialState = JSON.parse(serverStateEl.textContent);
       updateAttendanceUI(
         initialState.active,
-        initialState.duration,
+        pickTimeToday(initialState),
         initialState.projected_pay,
-        initialState.hall_pass
+        initialState.hall_pass,
+        initialState.done
       );
     } catch (e) {
       console.error('Failed to parse initial attendance state', e);
@@ -96,9 +97,9 @@ function performTap(action, pin, reason = null) {
     .then(data => {
       if (!data) return; // Session expired, already redirecting
       if (data.status === "ok") {
-        const state = { active: data.active, duration: data.duration, duration_today: data.duration_today, projected_pay: data.projected_pay, hall_pass: data.hall_pass };
+        const state = { active: data.active, duration: data.duration, duration_today: data.duration_today, projected_pay: data.projected_pay, hall_pass: data.hall_pass, done: data.done };
         rememberAttendanceState(state);
-        updateAttendanceUI(state.active, pickTimeToday(state), state.projected_pay, state.hall_pass);
+        updateAttendanceUI(state.active, pickTimeToday(state), state.projected_pay, state.hall_pass, state.done);
         let message = `${action === "start_work" ? "Start Work" : "Break"} successful`;
         createToast(message);
       } else {
@@ -129,7 +130,7 @@ setInterval(() => {
       if (data.status === 'ok' && data.attendance_state) {
         const state = data.attendance_state;
         rememberAttendanceState(state);
-        updateAttendanceUI(state.active, pickTimeToday(state), state.projected_pay, state.hall_pass);
+        updateAttendanceUI(state.active, pickTimeToday(state), state.projected_pay, state.hall_pass, state.done);
       }
     })
     .catch(err => console.error("Status polling error:", err));
@@ -145,7 +146,7 @@ function pickTimeToday(state) {
   return state ? state.duration : 0;
 }
 
-function updateAttendanceUI(isActive, duration, projectedPay, hallPass = null) {
+function updateAttendanceUI(isActive, duration, projectedPay, hallPass = null, doneForDay = false) {
   const row = document.querySelector(".attendance-state-row");
   if (!row) return;
 
@@ -155,29 +156,67 @@ function updateAttendanceUI(isActive, duration, projectedPay, hallPass = null) {
   const startWorkBtn = row.querySelector("#startWork");
   const breakWorkBtn = row.querySelector("#breakWork");
 
-  rememberAttendanceState({ active: isActive, duration, projected_pay: projectedPay, hall_pass: hallPass });
+  rememberAttendanceState({ active: isActive, duration, projected_pay: projectedPay, hall_pass: hallPass, done: doneForDay });
 
-  statusCell.textContent = isActive ? "Active" : "Inactive";
-  statusCell.classList.toggle("text-success", isActive);
-  statusCell.classList.toggle("fw-bold", isActive);
-  statusCell.classList.toggle("text-muted", !isActive);
+  // Done-for-day is a terminal state for the class-local day (server already
+  // refuses a same-day restart) -- it must read distinctly from a plain
+  // in-between "Inactive" (e.g. mid-break) so a student doesn't try Start
+  // Work expecting it to work.
+  statusCell.textContent = doneForDay ? "Done for Day" : (isActive ? "Active" : "Inactive");
+  statusCell.classList.toggle("attendance-status-active", isActive && !doneForDay);
+  statusCell.classList.toggle("attendance-status-neutral", !isActive || doneForDay);
+  statusCell.classList.toggle("fw-bold", isActive && !doneForDay);
 
   durationCell.textContent = formatDuration(duration);
   if (payCell) {
     payCell.textContent = Number(projectedPay || 0).toFixed(2);
   }
 
-  if (startWorkBtn) startWorkBtn.disabled = isActive;
-  configureBreakButton(breakWorkBtn, isActive, hallPass);
+  // "Start Work" must also be disabled while out on an open hall pass, not
+  // only while genuinely active. isActive is false in both cases, but only one
+  // of them should offer a fresh clock-in -- the other should offer "Return".
+  const onOpenHallPass = !!(hallPass && hallPass.status === 'left');
+  if (startWorkBtn) startWorkBtn.disabled = isActive || onOpenHallPass || doneForDay;
+  configureBreakButton(breakWorkBtn, isActive, hallPass, doneForDay);
 
   // Handle hall pass overlay
   updateHallPassOverlay(hallPass);
 }
 
-function configureBreakButton(button, isActive, hallPass) {
+function configureBreakButton(button, isActive, hallPass, doneForDay = false) {
   if (!button) return;
-  button.disabled = !isActive;
   button.classList.remove('btn-warning', 'btn-danger', 'btn-primary', 'btn-outline-warning');
+
+  // Terminal for the day -- takes priority over hall-pass/active state, which
+  // shouldn't be reachable once done_for_day is recorded anyway, but this
+  // keeps the button correct even if a stale hall-pass state lingers.
+  if (doneForDay) {
+    button.disabled = true;
+    button.dataset.state = 'done';
+    button.innerHTML = '<span class="material-symbols-outlined align-bottom me-1" aria-hidden="true">event_available</span> Done for Day';
+    return;
+  }
+
+  // A hall pass the student has not yet returned from determines the primary
+  // action REGARDLESS of isActive. "left" means the seat's latest attendance
+  // event is inactive/hall_pass -- the student is out of the room -- and
+  // isActive is therefore false, exactly like an ordinary break. Checking
+  // hallPass BEFORE the isActive branch below is what previously let a
+  // genuinely open pass fall through unrecognised: with isActive false, this
+  // function returned a disabled, generically-labelled "Break" button before
+  // ever inspecting hallPass, leaving "Start Work" as the only enabled control
+  // while the student was still physically out of the room. Reproduced live
+  // on 2026-09-21: the resulting click wrote a plain new work session on top
+  // of the open pass and desynchronized the hall-pass log from the truth.
+  if (hallPass && hallPass.status === 'left') {
+    button.disabled = false;
+    button.dataset.state = 'return';
+    button.classList.add('btn-primary');
+    button.innerHTML = '<span class="material-symbols-outlined align-bottom me-1" aria-hidden="true">login</span> Return';
+    return;
+  }
+
+  button.disabled = !isActive;
 
   if (!isActive) {
     button.dataset.state = 'break';
@@ -224,7 +263,9 @@ function openBreakChoiceModal() {
     .then(r => r.json())
     .then(data => {
       if (data.status === 'success') {
-        renderBreakDestinations(data.pass_types || []);
+        // The endpoint returns pass_type_payload; this read `data.pass_types`,
+        // which the API has never sent, so the destination list rendered empty.
+        renderBreakDestinations(data.pass_type_payload || []);
       } else {
         renderBreakDestinationError(data.message || 'Unable to load hall-pass destinations.');
       }
@@ -256,7 +297,9 @@ function renderBreakDestinations(passTypes) {
   }
 
   passTypes.forEach(passType => {
-    const destination = (passType && passType.name) ? String(passType.name) : '';
+    const destination = (passType && (passType.name || passType.pass_name))
+      ? String(passType.name || passType.pass_name)
+      : '';
     if (!destination) return;
     const button = document.createElement('button');
     button.type = 'button';
@@ -274,10 +317,14 @@ function renderBreakDestinationError(message) {
   const list = document.getElementById('hallPassDestinationList');
   if (!list) return;
   list.textContent = '';
-  const alert = document.createElement('div');
-  alert.className = 'alert alert-danger mb-0';
-  alert.textContent = message;
-  list.appendChild(alert);
+  list.appendChild(window.AppCore.buildAlertCard({
+    level: 'danger',
+    icon: 'error',
+    title: 'Destinations unavailable',
+    body: message,
+    role: 'alert',
+    className: 'mb-0',
+  }));
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -296,84 +343,57 @@ function updateHallPassOverlay(hallPass) {
 
   if (!hallPass || hallPass.status === 'returned') {
     // No active hall pass - hide pass info
-    if (passInfoDisplay) passInfoDisplay.style.display = 'none';
+    if (passInfoDisplay) passInfoDisplay.hidden = true;
     return;
   }
 
   // Show pass info inline based on status
   if (passInfoDisplay) {
-    passInfoDisplay.style.display = 'block';
+    passInfoDisplay.hidden = false;
     passInfoDisplay.textContent = ''; // Clear existing content
 
-    const buildStatusLabel = (iconClass, text) => {
-      const strong = document.createElement('strong');
-      const icon = document.createElement('i');
-      icon.className = `bi ${iconClass} me-1`;
-      icon.setAttribute('aria-hidden', 'true');
-      strong.appendChild(icon);
-      strong.appendChild(document.createTextNode(text));
-      return strong;
+    const buildDetail = (text) => {
+      const small = document.createElement('p');
+      small.className = 'small mb-0';
+      small.textContent = text;
+      return small;
+    };
+
+    const showStatusCard = (level, icon, title, bodyParts) => {
+      passInfoDisplay.appendChild(window.AppCore.buildAlertCard({
+        level,
+        icon,
+        title,
+        bodyNodes: bodyParts,
+        className: 'mb-2',
+      }));
     };
 
     if (hallPass.status === 'pending') {
-      const alertDiv = document.createElement('div');
-      alertDiv.className = 'alert alert-warning mb-2';
-
-      alertDiv.appendChild(buildStatusLabel('bi-hourglass-split', 'Hall Pass: Pending Approval'));
-      alertDiv.appendChild(document.createElement('br'));
-
-      const small = document.createElement('small');
-      small.textContent = 'Destination: ' + (hallPass.reason || 'N/A');
-      alertDiv.appendChild(small);
-      alertDiv.appendChild(document.createElement('br'));
-
       const button = document.createElement('button');
-      button.className = 'btn btn-sm btn-danger mt-1';
+      button.type = 'button';
+      button.className = 'btn btn-sm btn-danger mt-2';
       button.textContent = 'Cancel';
       button.onclick = function () { cancelHallPass(hallPass.id); };
-      alertDiv.appendChild(button);
 
-      passInfoDisplay.appendChild(alertDiv);
+      showStatusCard('warning', 'hourglass_top', 'Hall pass pending approval', [
+        buildDetail('Destination: ' + (hallPass.reason || 'N/A')),
+        button,
+      ]);
     } else if (hallPass.status === 'approved') {
-      const alertDiv = document.createElement('div');
-      alertDiv.className = 'alert alert-success mb-2';
-
-      alertDiv.appendChild(buildStatusLabel('bi-check-circle-fill', 'Hall Pass Approved!'));
-      alertDiv.appendChild(document.createElement('br'));
-
-      const small = document.createElement('small');
-      small.textContent = 'Destination: ' + (hallPass.reason || 'N/A');
-      alertDiv.appendChild(small);
-      alertDiv.appendChild(document.createElement('br'));
-
-      passInfoDisplay.appendChild(alertDiv);
+      showStatusCard('success', 'check_circle', 'Hall pass approved', [
+        buildDetail('Destination: ' + (hallPass.reason || 'N/A')),
+      ]);
     } else if (hallPass.status === 'left') {
-      const alertDiv = document.createElement('div');
-      alertDiv.className = 'alert alert-info mb-2';
-
-      alertDiv.appendChild(buildStatusLabel('bi-geo-alt-fill', 'Currently Out'));
-      alertDiv.appendChild(document.createElement('br'));
-
-      const small = document.createElement('small');
-      small.textContent = 'Destination: ' + (hallPass.reason || 'N/A');
-      alertDiv.appendChild(small);
-      alertDiv.appendChild(document.createElement('br'));
-
-      passInfoDisplay.appendChild(alertDiv);
+      showStatusCard('info', 'directions_walk', 'Currently out', [
+        buildDetail('Destination: ' + (hallPass.reason || 'N/A')),
+      ]);
     } else if (hallPass.status === 'rejected') {
-      const alertDiv = document.createElement('div');
-      alertDiv.className = 'alert alert-danger mb-2';
-
-      alertDiv.appendChild(buildStatusLabel('bi-x-circle-fill', 'Hall Pass Denied'));
-      alertDiv.appendChild(document.createElement('br'));
-
-      const small = document.createElement('small');
-      small.textContent = 'Reason: ' + (hallPass.reason || 'N/A');
-      alertDiv.appendChild(small);
-
-      passInfoDisplay.appendChild(alertDiv);
+      showStatusCard('danger', 'cancel', 'Hall pass denied', [
+        buildDetail('Reason: ' + (hallPass.reason || 'N/A')),
+      ]);
     } else {
-      passInfoDisplay.style.display = 'none';
+      passInfoDisplay.hidden = true;
     }
   }
 }
@@ -385,7 +405,7 @@ function refreshUi() {
       if (statusData.status === 'ok' && statusData.attendance_state) {
         const state = statusData.attendance_state;
         rememberAttendanceState(state);
-        updateAttendanceUI(state.active, pickTimeToday(state), state.projected_pay, state.hall_pass);
+        updateAttendanceUI(state.active, pickTimeToday(state), state.projected_pay, state.hall_pass, state.done);
       }
     });
 }
@@ -419,10 +439,15 @@ function requestHallPass(destination) {
     return;
   }
 
+  // FEAT-IDEN-002 "Credential boundary": hall-pass use takes the PIN. Prompted
+  // the same way as "done for the day", which is the neighbouring break action.
+  const pin = prompt(`Enter your PIN to request a hall pass to ${destination.trim()}:`);
+  if (!pin) return;
+
   window.AppCore.csrfFetch('/api/hall-pass/request', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ destination: destination.trim() })
+    body: JSON.stringify({ destination: destination.trim(), pin: pin })
   })
     .then(r => r.json())
     .then(data => {

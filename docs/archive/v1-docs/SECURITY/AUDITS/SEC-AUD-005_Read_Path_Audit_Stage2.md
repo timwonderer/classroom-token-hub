@@ -2,7 +2,9 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-|SEC-AUD-005| 1.1 | 2026-03-08 | 1.0 |Normative|
+|SEC-AUD-005| 1.1 | 2026-03-08 | 1.0 |Archived - non-normative|
+
+> **Archived — history, not authority.** This document describes a superseded version of the system and is retained under `docs/archive/` as a record of what was once true. It governs nothing. Current authority lives in `docs/INVARIANT/`, `docs/DOMAIN/`, and `docs/STANDARD_OPERATING_PROCEDURES/`, in that order (`.claude/rules/documentation.md`).
 
 **Date:** 2025-02-22
 **Focus:** Verification of Read-Path Optimizations (Balance Service & Write-on-Read Removal)

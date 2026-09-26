@@ -21,10 +21,31 @@ from app.feats.attendance import save_hall_pass_setup_config, update_hall_pass_q
 from app.feats.base import FEATContext
 from app.models import HallPassSettings
 from app.services.class_configuration_query_service import get_hall_pass_settings
-from tests.helpers.classroom_initializer import initialize
+from tests.helpers.classroom_initializer import initialize, initialize_as_teacher
 
 
 _PAYLOAD = [{"pass_name": "Break", "max_queue": 2, "consume_pass": False}]
+
+
+def test_queue_settings_api_preserves_selected_limit_and_rejects_invalid_saves(client, app):
+    initialize_as_teacher("chemistry_p1", client, app)
+    url = "/api/hall-pass/settings"
+    for limit in (7, 1, 50):
+        response = client.post(url, json={"max_queue_limit": limit})
+        assert response.status_code == 200
+        assert response.get_json()["settings"]["max_queue_limit"] == limit
+        reloaded = client.get(url)
+        assert reloaded.status_code == 200
+        assert reloaded.get_json()["settings"]["max_queue_limit"] == limit
+
+    for payload in ({}, {"queue_enabled": True, "queue_limit": 3},
+                    {"max_queue_limit": None}, {"max_queue_limit": True},
+                    {"max_queue_limit": 1.5}, {"max_queue_limit": 0},
+                    {"max_queue_limit": 51}, {"max_queue_limit": "7"}):
+        before = HallPassSettings.query.count()
+        assert client.post(url, json=payload).status_code == 400
+        assert HallPassSettings.query.count() == before
+        assert client.get(url).get_json()["settings"]["max_queue_limit"] == 50
 
 
 def _save(classroom, *, max_queue_limit, key, payload=None):

@@ -10,32 +10,31 @@ label matched two classes) risked reaching across classes.
 ``chemistry_p1`` and ``ap_csp_p3`` are both owned by ``teacher_alice``.
 """
 
-from decimal import Decimal
-
 from app.extensions import db
 from app.feats.base import FEATContext
-from app.models import ClassEconomy, Seat, StoreItem
+from app.models import ClassEconomy, Seat, StoreProduct
 from app.services.context_resolver import CanonicalContext
 from tests.helpers.classroom_initializer import initialize
+from tests.helpers.store_products import publish_store_product
 
 
-def _add_store_item(class_id: str, user_id: int, name: str) -> int:
+def _add_store_item(class_id: str, user_id: int, name: str) -> str:
+    """Publish one live product and return its version uuid."""
     with FEATContext(
         "FEAT-TEST-SETUP",
         idempotency_key=f"store-item:{class_id}:{name}",
     ):
-        item = StoreItem(
-            user_id=user_id,
+        product = publish_store_product(
             class_id=class_id,
+            entitlement_type="IMMEDIATE_USE",
             name=name,
-            price=Decimal("5.00"),
-            item_type="immediate",
-            is_active=True,
+            price="5.00",
         )
-        db.session.add(item)
-        db.session.flush()
-        item_id = item.id
-    return item_id
+    return product.policy_uuid
+
+
+def _product_exists(policy_uuid: str) -> bool:
+    return db.session.query(StoreProduct).filter_by(policy_uuid=policy_uuid).first() is not None
 
 
 def test_DOM_CLASS_001__hard_delete_class_scope_spares_sibling_class(client):
@@ -57,7 +56,7 @@ def test_DOM_CLASS_001__hard_delete_class_scope_spares_sibling_class(client):
     )
 
     # _hard_delete_class_scope is decorated with @requires_feat_context, so it
-    # opens its own FEAT-CLASS-001 context; call it directly (no outer wrapper).
+    # opens its own FEAT-CLASS-006 context; call it directly (no outer wrapper).
     from app.feats.base import generate_correlation_id
     from app.routes.admin import _hard_delete_class_scope
 
@@ -72,10 +71,10 @@ def test_DOM_CLASS_001__hard_delete_class_scope_spares_sibling_class(client):
 
     # Class A is destroyed.
     assert db.session.get(ClassEconomy, class_a.class_id) is None
-    assert db.session.get(StoreItem, item_a) is None
+    assert not _product_exists(item_a)
     assert Seat.query.filter_by(class_id=class_a.class_id).count() == 0
 
     # Class B is fully intact — no cross-class fan-out.
     assert db.session.get(ClassEconomy, class_b.class_id) is not None
-    assert db.session.get(StoreItem, item_b) is not None
+    assert _product_exists(item_b)
     assert Seat.query.filter_by(class_id=class_b.class_id).count() > 0

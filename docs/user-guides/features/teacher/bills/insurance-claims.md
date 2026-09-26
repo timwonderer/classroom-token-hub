@@ -22,10 +22,7 @@ The review screen gathers everything you need to make that call in one place: wh
 
 ### How a claim reaches you
 
-Students file from their own insurance page against a policy they hold. You do not create claims.
-
-> [!WARNING]
-> **There is currently no claims queue in the teacher UI.** The **Insurance Management** page lists your policies only — it has no tabs and no list of filed claims. Reaching the review screen requires a direct link to a specific claim. Until that is fixed, ask students to tell you when they have filed. This is a known product defect, not a setting you have missed.
+Students file from their own insurance page against a policy they hold. You do not create claims. Filed claims appear in the **Filed claims** list on **Insurance Management**; select one to open its review screen.
 
 ### Reading the review screen
 
@@ -48,13 +45,13 @@ Below that you get the student's **Claim Description** and any **Student Comment
 
 | Field | Why it matters |
 | --- | --- |
-| Coverage Start | Reads *Still in waiting period* if coverage has not begun |
+| Claim Type | Which kind of policy the claim is against |
+| Coverage Start | When the student's coverage began, or *Still in waiting period* |
 | Waiting Period | How many days after purchase coverage takes effect |
-| Claim Time Limit | How many days from the incident they had to file |
-| Max Claim Amount | The per-claim ceiling, or Unlimited |
-| Max Claims | How many claims per period, or Unlimited |
-| Premium Status | Current, or how many days overdue |
-| Remaining Period Cap | How much payout is left in the current period |
+| Filing Window | How many days from the covered transaction they had to file, with whether this claim made it |
+| Reimbursement | The share of the loss the policy pays back |
+| Period Allowance | How many claims (or claimable dates) they have used in the coverage period this claim was filed in |
+| Period Payout Capacity | How much payout is left in that coverage period |
 
 **Validation Status** does the arithmetic for you. It either lists the specific rules the claim breaks, or reads **Claim meets all requirements**.
 
@@ -76,6 +73,9 @@ Approving a monetary claim deposits the approved amount into the student's check
 
 > [!IMPORTANT]
 > **The contract is frozen at purchase.** Waiting periods, caps, and limits shown here are the ones in force when that student bought the policy. Editing the policy afterwards does not change their terms. If a student's numbers look different from your current settings, that is why.
+
+> [!NOTE]
+> **A claim is judged as of when it was filed.** Students cannot file while their coverage is paused for an unpaid premium, so any claim that reaches you was filed while they were covered. It stays reviewable even if their coverage pauses or ends afterwards. Allowances and payout caps count per coverage period — the one the claim was filed in.
 
 > [!NOTE]
 > **Check the waiting period first.** A student complaining they cannot claim has usually not reached their coverage start date. The screen tells you outright.

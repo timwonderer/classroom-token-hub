@@ -469,3 +469,120 @@ def test_empty_intervals_fails_closed():
             reference_time_utc=REF,
             intervals=[],
         )
+
+
+# ---------------------------------------------------------------------------
+# §XIV-21..24: anchored_recurrence_boundary / minimum_period_duration
+# ---------------------------------------------------------------------------
+
+def _boundary(anchor, cadence, index, overflow=None, tz=None):
+    inputs = dict(anchor_date=anchor, cadence=cadence, index=index)
+    if overflow is not None:
+        inputs["overflow"] = overflow
+    return canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=FakeContext("cls-1"),
+        primitive="anchored_recurrence_boundary",
+        reference_time_utc=REF,
+        **inputs,
+    )
+
+
+def _monthly(anchor, count, overflow="roll_forward"):
+    return [_boundary(anchor, "month", n, overflow).boundary_date for n in range(count)]
+
+
+def test_anchored_recurrence_day_31_roll_forward_sequence_non_leap():
+    """The operator-ratified sequence, verbatim (SPEC-TIME-001 §IX.12)."""
+    assert _monthly(date(2026, 1, 31), 12) == [
+        date(2026, 1, 31), date(2026, 3, 1), date(2026, 3, 31), date(2026, 5, 1),
+        date(2026, 5, 31), date(2026, 7, 1), date(2026, 7, 31), date(2026, 8, 31),
+        date(2026, 10, 1), date(2026, 10, 31), date(2026, 12, 1), date(2026, 12, 31),
+    ]
+
+
+def test_anchored_recurrence_day_31_in_a_leap_year_still_rolls_to_march_1():
+    """February 29 exists but is not the anchor day, so it is not the boundary."""
+    assert _monthly(date(2028, 1, 31), 3) == [date(2028, 1, 31), date(2028, 3, 1), date(2028, 3, 31)]
+
+
+def test_anchored_recurrence_february_leap_and_non_leap():
+    assert _monthly(date(2027, 1, 29), 2) == [date(2027, 1, 29), date(2027, 3, 1)]  # non-leap
+    assert _monthly(date(2028, 1, 29), 2) == [date(2028, 1, 29), date(2028, 2, 29)]  # leap
+    leap_anchor = date(2028, 2, 29)
+    assert _boundary(leap_anchor, "month", 12, "roll_forward").boundary_date == date(2029, 3, 1)
+    assert _boundary(leap_anchor, "month", 48, "roll_forward").boundary_date == date(2032, 2, 29)
+
+
+def test_anchored_recurrence_is_not_a_fixed_duration():
+    """A 30- or 31-day step lands on 3/2 or 3/3 from 1/31; the anchor lands on 3/1."""
+    march = _boundary(date(2026, 1, 31), "month", 1, "roll_forward").boundary_date
+    assert march == date(2026, 3, 1)
+    assert march not in {date(2026, 1, 31) + timedelta(days=30), date(2026, 1, 31) + timedelta(days=31)}
+
+
+def test_anchored_recurrence_roll_forward_is_not_month_end_clamping():
+    assert _boundary(date(2026, 1, 31), "month", 1, "roll_forward").boundary_date == date(2026, 3, 1)
+    assert _boundary(date(2026, 1, 31), "month", 1, "clamp").boundary_date == date(2026, 2, 28)
+
+
+def test_anchored_recurrence_never_drifts_from_a_previous_result():
+    """Chaining from the rolled 3/1 would give 4/1 (or 3/28 when clamped); each
+    boundary is derived from the anchor instead, so the anchor day returns."""
+    assert _boundary(date(2026, 1, 31), "month", 2, "roll_forward").boundary_date == date(2026, 3, 31)
+    assert _boundary(date(2026, 1, 31), "month", 2, "clamp").boundary_date == date(2026, 3, 31)
+
+
+def test_anchored_recurrence_weekly_stays_at_class_midnight_across_dst():
+    """US DST starts 2026-03-08: the boundary is local midnight, not +168h."""
+    before = _boundary(date(2026, 3, 1), "week", 1)
+    after = _boundary(date(2026, 3, 1), "week", 2)
+    assert (before.boundary_date, after.boundary_date) == (date(2026, 3, 8), date(2026, 3, 15))
+    assert before.boundary_start.hour == 0 and after.boundary_start.hour == 0
+    assert after.boundary_start_utc - before.boundary_start_utc == timedelta(hours=167)
+
+
+def test_anchored_recurrence_boundary_utc_is_class_local_midnight():
+    ev = _boundary(date(2026, 1, 31), "month", 1, "roll_forward")
+    assert ev.boundary_start == pytz.timezone(EASTERN).localize(datetime(2026, 3, 1))
+    assert ev.boundary_start_utc == _utc(2026, 3, 1, 5, 0, 0)
+
+
+@pytest.mark.parametrize("inputs", [
+    dict(anchor_date=datetime(2026, 1, 31, tzinfo=timezone.utc), cadence="month", index=1, overflow="clamp"),
+    dict(anchor_date=date(2026, 1, 31), cadence="year", index=1),
+    dict(anchor_date=date(2026, 1, 31), cadence="month", index=1),
+    dict(anchor_date=date(2026, 1, 31), cadence="month", index=-1, overflow="clamp"),
+    dict(anchor_date=date(2026, 1, 31), cadence="month", index=1, overflow="nearest"),
+])
+def test_anchored_recurrence_fails_closed_on_bad_input(inputs):
+    with pytest.raises(TemporalResolutionError):
+        canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION, canonical_execution_context=FakeContext("cls-1"),
+            primitive="anchored_recurrence_boundary", reference_time_utc=REF, **inputs,
+        )
+
+
+def test_minimum_period_duration():
+    def minimum(cadence):
+        return canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="minimum_period_duration",
+            reference_time_utc=REF, cadence=cadence,
+        ).minimum_calendar_days
+    assert (minimum("week"), minimum("month")) == (7, 28)
+
+
+def test_minimum_period_duration_is_the_true_monthly_minimum():
+    """Checked by enumeration over every anchor day, both overflow rules, and a
+    leap and non-leap year."""
+    shortest = min(
+        (
+            _boundary(date(year, 1, day), "month", n + 1, overflow).boundary_date
+            - _boundary(date(year, 1, day), "month", n, overflow).boundary_date
+        ).days
+        for year in (2026, 2028)
+        for day in range(1, 32)
+        for overflow in ("roll_forward", "clamp")
+        for n in range(12)
+    )
+    assert shortest == 28

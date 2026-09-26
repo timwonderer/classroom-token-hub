@@ -119,7 +119,6 @@ def _posted_history_cents(class_id: str, seat_id: int, account_type: str) -> int
         Transaction.seat_id == seat_id,
         Transaction.account_type == account_type,
         Transaction.status == TransactionStatus.POSTED,
-        Transaction.is_void.isnot(True),
     ).scalar()
     return int(total or 0)
 
@@ -132,6 +131,13 @@ def settle_balances(seat_id: int, class_id: str) -> None:
     if not seat or str(seat.class_id) != str(class_id):
         raise ValueError("settle_balances requires a seat bound to the provided class_id")
 
+    # Seat money operations share this exclusive lock with every balance-debiting
+    # FEAT.  Take it before the class row so the lock order is always
+    # seat -> class; this prevents settlement from racing a debit (or deadlocking
+    # with a future debit that also needs the class posting-sequence lock).
+    db.session.query(Seat).filter(
+        Seat.id == seat_id, Seat.class_id == class_id
+    ).with_for_update().one()
     # The class row serializes posting-sequence allocation for this class.
     db.session.query(ClassEconomy).filter(ClassEconomy.class_id == class_id).with_for_update().one()
     pending = (
@@ -171,10 +177,6 @@ def settle_balances(seat_id: int, class_id: str) -> None:
     now = utc_now()
     for tx in pending:
         account_type = _normalize_account_type(tx.account_type, tx.id)
-        if tx.is_void:
-            tx.status = TransactionStatus.VOID
-            tx.voided_at = tx.voided_at or now
-            continue
         next_sequence = int(next_sequence) + 1
         tx.status = TransactionStatus.POSTED
         tx.posted_at = tx.posted_at or now

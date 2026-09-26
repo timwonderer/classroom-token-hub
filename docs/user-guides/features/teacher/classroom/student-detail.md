@@ -115,10 +115,10 @@ The student then goes to the login page, selects **"I can't log into my account"
 > **Voiding is per-transaction and immediate.** There is one confirmation dialog and no undo. If you meant to correct an amount rather than cancel the entry, void it and post a replacement so the record shows what happened.
 
 > [!NOTE]
-> **Insurance always reads None on this page.** The field is not wired to the current insurance records, so it shows *None* even for insured students. Check the student's own insurance page for the real status.
+> **Insurance status is derived from active coverage.** The page shows the current policy title for an active insurance entitlement and shows *None* when the student has no active coverage.
 
 > [!NOTE]
-> **Ignore the Date of Birth instruction.** The yellow setup card tells you the student must also enter their date of birth. The app never collects or stores one, and the claim form does not ask for it. Name plus join code is the whole of it.
+> **Account recovery uses the roster name and class join code.** The app does not collect or store a date of birth.
 
 ## Related guides
 

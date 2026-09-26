@@ -241,6 +241,10 @@ def create_student_user_for_seat(
 
     seat.user_id = student.id
     seat.claimed_at = seat.claimed_at or utc_now()
+    seat.claim_first_name_hash = None
+    seat.claim_last_name_hash = None
+    seat.roster_fingerprint = None
+    seat.dedupe_code = None
     student.last_active_class_id = seat.class_id
     student.last_active_seat_id = seat.id
     db.session.flush()
@@ -281,10 +285,10 @@ def create_student_seat_with_profile(
 
 def _set_claim_hashes(seat: Seat, first_name: str, last_name: str) -> None:
     """Set claim lookup hashes on a seat so the claim flow can match by name."""
-    from app.hash_utils import hash_username_lookup
+    from app.hash_utils import hash_claim_name
 
-    seat.claim_first_name_hash = hash_username_lookup(first_name.strip().lower())
-    seat.claim_last_name_hash = hash_username_lookup(last_name.strip().lower())
+    seat.claim_first_name_hash = hash_claim_name(first_name, class_id=seat.class_id, field="first")
+    seat.claim_last_name_hash = hash_claim_name(last_name, class_id=seat.class_id, field="last")
 
 
 def update_or_create_roster_seat(
@@ -312,7 +316,6 @@ def update_or_create_roster_seat(
                 notes=notes,
             )
             db.session.add(profile)
-        _set_claim_hashes(existing_seat, first_name, last_name)
         db.session.flush()
         return existing_seat
 
@@ -387,6 +390,19 @@ def create_roster_student_seat(
 
 def delete_seat_with_profile(seat: Seat) -> None:
     """Delete a seat and its identity profile in canonical order."""
+    from app.models import ActorRequestTrace, Issue
+    from app.utils.student_deletion import lock_seats_for_deletion
+
+    # Hold the seat exclusively first: a ticket written between this cleanup and
+    # the seat DELETE would have nothing left to attach to (DOM-SUP-001 §X).
+    lock_seats_for_deletion([seat.id])
+
+    # Support references a seat by public ID only (DOM-SUP-001 §X). An unclaimed
+    # seat keeps the tickets and traces of its earlier claimant, so they go here.
+    Issue.query.filter(Issue.actor_public_id == seat.public_id).delete(synchronize_session=False)
+    ActorRequestTrace.query.filter(
+        ActorRequestTrace.actor_public_id == seat.public_id
+    ).delete(synchronize_session=False)
     profile = IdentityProfile.query.filter_by(seat_id=seat.id).first()
     if profile:
         db.session.delete(profile)

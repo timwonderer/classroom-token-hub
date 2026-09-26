@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-OPS-001 | 1.0 | 2026-08-31 | N/A | Normative |
+| SOP-OPS-001 | 1.2 | 2026-09-21 | 1.1 | Normative |
 
 ## I. Purpose
 
@@ -30,6 +30,7 @@ Normative (SOP Tier). Subordinate to `INV-CORE-000`, `INV-CORE-001`, `INV-ARC-00
 - `DOM-OPS-002_AUDIT_LINEAGE_INTEGRITY.md`
 - `SOP-CORE-000_Sop_Foundation.md`
 - `SOP-DOC-000_DOCUMENTATION_STANDARD.md`
+- `SPEC-OPS-006_PUBLIC_REQUEST_MONITORING.md`
 
 ## V. Operating Boundary
 
@@ -40,23 +41,33 @@ Normative (SOP Tier). Subordinate to `INV-CORE-000`, `INV-CORE-001`, `INV-ARC-00
 5. It must not recompute or replace business-domain truth. Operational interpretations must remain consistent with `DOM-OPS` contracts.
 6. Liveness, readiness, and correctness must remain distinguishable; a reachable endpoint is not sufficient evidence of correctness.
 
+### Public measurements and internal verification
+
+Public request monitoring follows SPEC-OPS-006. Verify the fixed route grouping,
+query window, counts, quantiles, source timestamps, thresholds and coverage before
+publishing. HTTP response distributions are observations, not feature correctness
+or semantic execution outcomes. Missing and stale measurements remain explicit.
+Internal feature-integrity verification remains governed by SPEC-OPS-005 and its
+one-class authorization, affirmative proof, freshness and redaction requirements.
+Those internal evaluator registrations do not gate numerical public cards.
+
 ## VI. Observation and Publication Procedure
 
 For each scheduled or manually initiated observation:
 
 1. Generate and preserve a correlation identity for the observation workflow.
 2. Record the observation as an append-only operational event with timestamp, component, outcome, and bounded diagnostic detail.
-3. Classify the result as liveness, readiness, correctness, or an external-infrastructure failure.
+3. Classify public request snapshots using SPEC-OPS-006; preserve the separate liveness, readiness and correctness classifications for internal evidence.
 4. Compare the result with the applicable Operations-domain health semantics.
 5. Publish only the approved user-facing status and actionable communication; keep sensitive diagnostic detail operator-only.
-6. Preserve failures, retries, skipped executions, and recovery observations as distinct events.
+6. Preserve internal failures, retries, skipped executions and recovery observations as distinct events. Public request snapshot redelivery is idempotent by source minute under SPEC-OPS-006; transport retries never inflate measurement history.
 
 ## VII. Incident Procedure
 
 When a condition requires incident communication:
 
 1. Confirm the observation and its originating correlation context.
-2. When the canonical Operations incident lifecycle is available, create or update the canonical incident through that lifecycle, recording an append-only event. When it is unavailable, publish only an authorized external status notice under the external-publication rules defined by `DOM-OPS-001`.
+2. Publish investigated user impact through an operator notice under DOM-OPS-001 during normal operation or service unavailability. Record an investigation evidence note/reference; automated snapshot links are optional. Canonical incidents, when created, retain their independent append-only lifecycle; a notice never implies that one exists.
 3. Publish the minimum clear message needed by teachers and students: affected capability, current impact, recommended user action (including “no action required” when appropriate), recovery expectation, and next update expectation.
 4. When recovery timing is known or reasonably estimated, identify the recovery expectation as estimated where applicable. When recovery timing cannot be reasonably established, do not infer one from historical incidents; state that no recovery estimate is currently available and provide the next-update expectation.
 5. Escalate integrity failures, audit-lineage failures, privacy concerns, or uncertainty about canonical interpretation to the responsible operator.

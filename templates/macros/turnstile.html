@@ -1,0 +1,29 @@
+{#
+  Cloudflare Turnstile widget for the auth shell.
+
+  Turnstile's default "normal" widget is a fixed 300px wide, and the auth panel
+  is narrower than that on most phones — .auth-container sets `overflow: hidden`,
+  so the widget would be clipped and the form left unsubmittable. Below the
+  threshold we ask for the documented 150px "compact" size instead. ("flexible"
+  is no help: it still floors at 300px.)
+
+  The size has to be set before api.js renders the widget. api.js is deferred, so
+  it runs after parsing, which means this inline script always wins the race.
+#}
+{% macro turnstile(site_key, wrapper_class="mb-4") %}
+{% if site_key %}
+<div class="{{ wrapper_class }}">
+    <div class="cf-turnstile" data-sitekey="{{ site_key }}" data-theme="light"></div>
+</div>
+<script>
+    (function () {
+        if (!window.matchMedia('(max-width: 26rem)').matches) {
+            return;
+        }
+        document.querySelectorAll('.cf-turnstile:not([data-size])').forEach(function (widget) {
+            widget.dataset.size = 'compact';
+        });
+    })();
+</script>
+{% endif %}
+{% endmacro %}

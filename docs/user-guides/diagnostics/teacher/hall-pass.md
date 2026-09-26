@@ -13,6 +13,21 @@ related:
 
 Diagnostic guide for resolving issues with hall pass approvals, tracking, and terminal usage.
 
+## Configure tab says it cannot load the class scope
+
+### Symptoms
+- The **Configure** tab shows **Class scope not found** or **Hall pass is disabled for this class**.
+- Pass destinations and their controls do not load, so the configuration instructions are unavailable.
+
+### Causes & Solutions
+**Cause 1: The active class context is unavailable**
+- **Check:** Confirm a class is selected in the teacher sidebar, then reload Hall Pass Management and open **Configure**.
+- **Fix:** If a class is selected and the message persists, do not attempt to configure passes. Report the class name and the exact message to support; this is an application configuration failure.
+
+**Cause 2: Hall Pass is disabled for the class**
+- **Check:** Open **Class Tools → Economy Features** and verify Hall Pass is enabled for the active class.
+- **Fix:** Enable Hall Pass from **Class Tools → Economy Features**, then reload the Hall Pass Management page and open **Configure**. Until it is enabled, destination controls cannot be viewed.
+
 ## Passes cannot be approved
 
 ### Symptoms
@@ -21,7 +36,7 @@ Diagnostic guide for resolving issues with hall pass approvals, tracking, and te
 
 ### Causes & Solutions
 **Cause 1: Hall pass feature disabled**
-- **Check:** Verify Hall Pass is enabled in Feature Settings for the class.
+- **Check:** Verify Hall Pass is enabled in **Class Tools → Economy Features** for the class.
 - **Fix:** Enable the feature to allow approvals.
 
 **Cause 2: Pass is no longer pending**

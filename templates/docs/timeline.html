@@ -7,72 +7,73 @@
 {% block extra_head %}
 <style>
 /* ── Page-scoped timeline tokens ──────────────────────────────────────────────
-   All category/era colors are defined once here as CSS custom properties.
-   No hex codes appear in any rule below — every color reference uses var().
-   Per design_system.md: "NEVER use hex codes in templates."
+   Category/era colours are aliases of the shared design tokens (SPEC-DES-001
+   §IX). Scoped to .timeline-page rather than :root so they never shadow a
+   shared rule. Borders are token-derived tints of the matching status colour.
    ─────────────────────────────────────────────────────────────────────────── */
-:root {
+.timeline-page {
     /* Features (green) */
-    --tl-features:         #2e7d5b;
-    --tl-features-bg:      #e6f4ed;
+    --tl-features:         var(--success);
+    --tl-features-text:    var(--success-hover);
+    --tl-features-bg:      var(--success-subtle);
 
     /* Fixes / crises (red) */
-    --tl-fixes:            #c0392b;
-    --tl-fixes-bg:         #fef2f2;
-    --tl-fixes-border:     #fca5a5;
+    --tl-fixes:            var(--danger);
+    --tl-fixes-bg:         var(--danger-subtle);
+    --tl-fixes-border:     color-mix(in srgb, var(--danger) 40%, var(--surface));
 
-    /* Security (orange) */
-    --tl-security:         #d35400;
-    --tl-security-text:    #c05621;
-    --tl-security-bg:      #fff7ed;
+    /* Security (amber-brown; no orange token exists) */
+    --tl-security:         var(--accent-text-on-light);
+    --tl-security-text:    var(--alert-warning-text);
+    --tl-security-bg:      var(--warning-subtle);
 
     /* Architecture (blue) */
-    --tl-arch:             #2980b9;
-    --tl-arch-text:        #2563eb;
-    --tl-arch-bg:          #eff6ff;
+    --tl-arch:             var(--info);
+    --tl-arch-text:        var(--alert-info-text);
+    --tl-arch-bg:          var(--info-subtle);
 
-    /* Philosophy / Era I (purple) */
-    --tl-phil:             #7d3c98;
-    --tl-phil-dark:        #5b2d7e;
-    --tl-phil-text:        #7c3aed;
-    --tl-phil-bg:          #faf5ff;
-    --tl-phil-bg-light:    #f3e8ff;
-    --tl-phil-border:      #d8b4fe;
+    /* Philosophy / Era I (graphite; no purple token exists) */
+    --tl-phil:             var(--neutral-700);
+    --tl-phil-dark:        var(--neutral-900);
+    --tl-phil-text:        var(--neutral-700);
+    --tl-phil-bg:          var(--neutral-50);
+    --tl-phil-bg-light:    var(--neutral-50);
+    --tl-phil-border:      var(--neutral-300);
 
     /* Mobile (sky) */
-    --tl-mobile-bg:        #e0f2fe;
-    --tl-mobile-text:      #0369a1;
+    --tl-mobile-bg:        var(--info-subtle);
+    --tl-mobile-text:      var(--alert-info-text);
 
     /* Analytics (leaf green) */
-    --tl-analytics-bg:     #f0fdf4;
-    --tl-analytics-text:   #15803d;
+    --tl-analytics-bg:     var(--success-subtle);
+    --tl-analytics-text:   var(--success-hover);
 
     /* Warning / lesson (amber) */
-    --tl-warning-bg:       #fefce8;
-    --tl-warning-text:     #854d0e;
-    --tl-warning-border:   #fde68a;
+    --tl-warning-bg:       var(--warning-subtle);
+    --tl-warning-text:     var(--alert-warning-text);
+    --tl-warning-border:   color-mix(in srgb, var(--warning) 50%, var(--surface));
 
     /* Patch badge (light green) */
-    --tl-patch-bg:         #f0f9f5;
-    --tl-patch-border:     #b2dfcc;
+    --tl-patch-bg:         var(--success-subtle);
+    --tl-patch-border:     color-mix(in srgb, var(--success) 35%, var(--surface));
 
     /* Era II background (amber) */
-    --tl-era-ii-bg:        #fff3e0;
-    --tl-era-ii-border:    #fdba74;
+    --tl-era-ii-bg:        var(--warning-subtle);
+    --tl-era-ii-border:    color-mix(in srgb, var(--warning) 60%, var(--surface));
 
     /* Era III background (sky) */
-    --tl-era-iii-bg:       #e0f2fe;
-    --tl-era-iii-border:   #7dd3fc;
+    --tl-era-iii-bg:       var(--info-subtle);
+    --tl-era-iii-border:   color-mix(in srgb, var(--info) 45%, var(--surface));
 
     /* Era IV background (leaf green) */
-    --tl-era-iv-bg:        #dcfce7;
-    --tl-era-iv-border:    #86efac;
+    --tl-era-iv-bg:        var(--success-subtle);
+    --tl-era-iv-border:    color-mix(in srgb, var(--success) 45%, var(--surface));
 
     /* Release badge border (teal-tinted) */
-    --tl-release-border:   #b2d0cc;
+    --tl-release-border:   color-mix(in srgb, var(--primary) 30%, var(--surface));
 
     /* Hero darkening shade (deep teal for gradient end) */
-    --tl-hero-dark:        #0d2e2a;
+    --tl-hero-dark:        color-mix(in srgb, var(--primary) 50%, var(--neutral-900));
 }
 
 /* ── Timeline Page Layout ── */
@@ -84,8 +85,8 @@
 /* ── Hero ── */
 .timeline-hero {
     background: linear-gradient(135deg, var(--primary) 0%, var(--tl-hero-dark) 100%);
-    color: white;
-    padding: 3.5rem 0 2.5rem;
+    color: var(--text-inverse);
+    padding: var(--space-12) 0 var(--space-10);
     text-align: center;
     position: relative;
     overflow: hidden;
@@ -96,17 +97,17 @@
     inset: 0;
     background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
 }
-.timeline-hero h1 { font-size: clamp(1.8rem, 4vw, 2.8rem); font-weight: 700; margin-bottom: 0.5rem; color: white; }
-.timeline-hero .subtitle { font-size: 1.1rem; opacity: 0.8; max-width: 600px; margin: 0 auto 1.5rem; }
-.timeline-hero .badge-row { display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; }
+.timeline-hero h1 { font-size: clamp(var(--text-3xl), 4vw, var(--text-4xl)); font-weight: var(--weight-bold); margin-bottom: var(--space-2); color: var(--text-inverse); }
+.timeline-hero .subtitle { font-size: var(--text-lg); color: var(--text-on-dark-muted); max-width: 600px; margin: 0 auto var(--space-6); }
+.timeline-hero .badge-row { display: flex; gap: var(--space-2); justify-content: center; flex-wrap: wrap; }
 .timeline-hero .stat-badge {
-    /* White tint over dark primary background — white overlay, not Bootstrap opacity utility */
-    background: color-mix(in srgb, white 12%, transparent);
-    border: 1px solid color-mix(in srgb, white 20%, transparent);
+    /* Inverse tint over dark primary background — overlay, not Bootstrap opacity utility */
+    background: color-mix(in srgb, var(--text-inverse) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--text-inverse) 20%, transparent);
     border-radius: var(--radius-pill);
-    padding: 0.25rem 0.85rem;
-    font-size: 0.82rem;
-    font-weight: 500;
+    padding: var(--space-1) var(--space-3);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
 }
 
 /* ── Filters ── */
@@ -116,22 +117,22 @@
     position: sticky;
     top: 0;
     z-index: 100;
-    padding: 0.75rem 0;
+    padding: var(--space-3) 0;
 }
-.filter-group { display: flex; gap: 0.4rem; flex-wrap: wrap; justify-content: center; }
+.filter-group { display: flex; gap: var(--space-2); flex-wrap: wrap; justify-content: center; }
 .filter-btn {
     border: 1.5px solid var(--neutral-300);
     background: transparent;
     color: var(--text-secondary);
     border-radius: var(--radius-pill);
-    padding: 0.3rem 1rem;
-    font-size: 0.8rem;
-    font-weight: 500;
+    padding: var(--space-1) var(--space-4);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: all var(--duration-fast) var(--ease-standard);
 }
 .filter-btn:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-subtle); }
-.filter-btn.active                              { background: var(--primary);      color: white; border-color: var(--primary); }
+.filter-btn.active                              { background: var(--primary);      color: var(--text-inverse); border-color: var(--primary); }
 .filter-btn[data-filter="features"].active      { background: var(--tl-features);  border-color: var(--tl-features); }
 .filter-btn[data-filter="fixes"].active         { background: var(--tl-fixes);     border-color: var(--tl-fixes); }
 .filter-btn[data-filter="security"].active      { background: var(--tl-security);  border-color: var(--tl-security); }
@@ -139,34 +140,34 @@
 .filter-btn[data-filter="philosophy"].active    { background: var(--tl-phil);      border-color: var(--tl-phil); }
 
 /* ── Main Timeline Container ── */
-.timeline-wrap { max-width: 900px; margin: 0 auto; padding: 2.5rem 1rem 4rem; }
+.timeline-wrap { max-width: 900px; margin: 0 auto; padding: var(--space-10) var(--space-4) var(--space-16); }
 
 /* ── Era Dividers ── */
 .era-divider {
     display: flex;
     align-items: center;
-    gap: 1rem;
-    margin: 2.5rem 0 1.5rem;
+    gap: var(--space-4);
+    margin: var(--space-10) 0 var(--space-6);
 }
 .era-divider-line { flex: 1; height: 1px; background: var(--neutral-200); }
 .era-badge {
     border-radius: var(--radius-pill);
-    padding: 0.4rem 1.2rem;
-    font-size: 0.78rem;
-    font-weight: 700;
-    letter-spacing: 0.06em;
+    padding: var(--space-2) var(--space-5);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-bold);
+    letter-spacing: var(--tracking-wide);
     text-transform: uppercase;
     white-space: nowrap;
 }
-.era-i   { background: var(--tl-phil-bg-light); color: var(--tl-phil);     border: 1px solid var(--tl-phil-border); }
-.era-ii  { background: var(--tl-era-ii-bg);     color: var(--tl-fixes);    border: 1px solid var(--tl-era-ii-border); }
-.era-iii { background: var(--tl-era-iii-bg);    color: var(--tl-arch);     border: 1px solid var(--tl-era-iii-border); }
-.era-iv  { background: var(--tl-era-iv-bg);     color: var(--tl-features); border: 1px solid var(--tl-era-iv-border); }
+.era-i   { background: var(--tl-phil-bg-light); color: var(--tl-phil-text);     border: 1px solid var(--tl-phil-border); }
+.era-ii  { background: var(--tl-era-ii-bg);     color: var(--alert-danger-text); border: 1px solid var(--tl-era-ii-border); }
+.era-iii { background: var(--tl-era-iii-bg);    color: var(--tl-arch-text);      border: 1px solid var(--tl-era-iii-border); }
+.era-iv  { background: var(--tl-era-iv-bg);     color: var(--tl-features-text);  border: 1px solid var(--tl-era-iv-border); }
 
 /* ── Timeline Track ── */
 .timeline-track {
     position: relative;
-    padding-left: 2.5rem;
+    padding-left: var(--space-10);
 }
 .timeline-track::before {
     content: '';
@@ -181,14 +182,16 @@
 /* ── Timeline Entry ── */
 .tl-entry {
     position: relative;
-    margin-bottom: 1.25rem;
-    transition: opacity 0.25s ease, transform 0.25s ease;
+    margin-bottom: var(--space-5);
+    transition: opacity var(--duration-slow) var(--ease-standard), transform var(--duration-slow) var(--ease-standard);
 }
 .tl-entry.hidden {
     display: none;
 }
 
 /* ── Dot on the line ── */
+/* The 2px ring outside the surface-coloured border is an outline, not an
+   elevation: it follows the circle and carries the category colour. */
 .tl-dot {
     position: absolute;
     left: -2.5rem;
@@ -197,17 +200,17 @@
     height: 1.1rem;
     border-radius: 50%;
     border: 2.5px solid var(--surface);
-    box-shadow: 0 0 0 2px var(--neutral-300);
+    outline: 2px solid var(--neutral-300);
     background: var(--neutral-400);
     z-index: 1;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    transition: transform var(--duration-base) var(--ease-standard);
 }
-.tl-dot.dot-features     { background: var(--tl-features); box-shadow: 0 0 0 2px var(--tl-features); }
-.tl-dot.dot-fixes        { background: var(--tl-fixes);    box-shadow: 0 0 0 2px var(--tl-fixes); }
-.tl-dot.dot-security     { background: var(--tl-security); box-shadow: 0 0 0 2px var(--tl-security); }
-.tl-dot.dot-architecture { background: var(--tl-arch);     box-shadow: 0 0 0 2px var(--tl-arch); }
-.tl-dot.dot-philosophy   { background: var(--tl-phil);     box-shadow: 0 0 0 2px var(--tl-phil); }
-.tl-dot.dot-milestone    { background: var(--secondary);   box-shadow: 0 0 0 2px var(--secondary); width: 1.3rem; height: 1.3rem; left: -2.6rem; top: 0.9rem; }
+.tl-dot.dot-features     { background: var(--tl-features); outline-color: var(--tl-features); }
+.tl-dot.dot-fixes        { background: var(--tl-fixes);    outline-color: var(--tl-fixes); }
+.tl-dot.dot-security     { background: var(--tl-security); outline-color: var(--tl-security); }
+.tl-dot.dot-architecture { background: var(--tl-arch);     outline-color: var(--tl-arch); }
+.tl-dot.dot-philosophy   { background: var(--tl-phil);     outline-color: var(--tl-phil); }
+.tl-dot.dot-milestone    { background: var(--secondary);   outline-color: var(--secondary); width: 1.3rem; height: 1.3rem; left: -2.6rem; top: 0.9rem; }
 
 .tl-entry:hover .tl-dot { transform: scale(1.3); }
 
@@ -218,51 +221,51 @@
     border-radius: var(--radius-lg);
     overflow: hidden;
     box-shadow: var(--shadow-sm);
-    transition: box-shadow 0.2s ease;
+    transition: box-shadow var(--duration-base) var(--ease-standard);
 }
 .tl-entry:hover .tl-card { box-shadow: var(--shadow-md); }
 
 .tl-card-header {
     display: flex;
     align-items: flex-start;
-    gap: 0.75rem;
-    padding: 0.9rem 1rem;
+    gap: var(--space-3);
+    padding: var(--space-4);
     cursor: pointer;
     user-select: none;
 }
 .tl-card-header:hover { background: var(--neutral-50); }
 
 .tl-version-badge {
-    font-size: 0.72rem;
-    font-weight: 700;
-    padding: 0.2rem 0.55rem;
+    font-size: var(--text-2xs);
+    font-weight: var(--weight-bold);
+    padding: var(--space-1) var(--space-2);
     border-radius: var(--radius-sm);
-    letter-spacing: 0.04em;
+    letter-spacing: var(--tracking-wide);
     white-space: nowrap;
     flex-shrink: 0;
-    margin-top: 0.15rem;
+    margin-top: calc(var(--space-1) / 2);
 }
-.badge-release  { background: var(--primary-subtle);    color: var(--primary);          border: 1px solid var(--tl-release-border); }
-.badge-patch    { background: var(--tl-patch-bg);       color: var(--tl-features);      border: 1px solid var(--tl-patch-border); }
-.badge-crisis   { background: var(--tl-fixes-bg);       color: var(--tl-fixes);         border: 1px solid var(--tl-fixes-border); }
-.badge-milestone{ background: var(--tl-warning-bg);     color: var(--tl-warning-text);  border: 1px solid var(--tl-warning-border); }
-.badge-future   { background: var(--tl-phil-bg-light);  color: var(--tl-phil);          border: 1px solid var(--tl-phil-border); }
-.badge-era      { background: var(--neutral-50);        color: var(--text-secondary);   border: 1px solid var(--neutral-200); font-style: italic; }
+.badge-release  { background: var(--primary-subtle);    color: var(--primary);           border: 1px solid var(--tl-release-border); }
+.badge-patch    { background: var(--tl-patch-bg);       color: var(--tl-features-text);  border: 1px solid var(--tl-patch-border); }
+.badge-crisis   { background: var(--tl-fixes-bg);       color: var(--alert-danger-text); border: 1px solid var(--tl-fixes-border); }
+.badge-milestone{ background: var(--tl-warning-bg);     color: var(--tl-warning-text);   border: 1px solid var(--tl-warning-border); }
+.badge-future   { background: var(--tl-phil-bg-light);  color: var(--tl-phil-text);      border: 1px solid var(--tl-phil-border); }
+.badge-era      { background: var(--neutral-50);        color: var(--text-secondary);    border: 1px solid var(--neutral-200); font-style: italic; }
 
 .tl-meta { flex: 1; min-width: 0; }
-.tl-title { font-size: 0.95rem; font-weight: 600; color: var(--text-primary); margin: 0 0 0.25rem; }
-.tl-date  { font-size: 0.75rem; color: var(--text-muted); }
+.tl-title { font-size: var(--text-base); font-weight: var(--weight-semibold); color: var(--text-primary); margin: 0 0 var(--space-1); }
+.tl-date  { font-size: var(--text-xs); color: var(--text-muted); }
 
-.tl-tags { display: flex; gap: 0.3rem; flex-wrap: wrap; margin-top: 0.3rem; }
+.tl-tags { display: flex; gap: var(--space-1); flex-wrap: wrap; margin-top: var(--space-1); }
 .tl-tag  {
-    font-size: 0.68rem;
-    font-weight: 600;
-    padding: 0.1rem 0.45rem;
+    font-size: var(--text-2xs);
+    font-weight: var(--weight-semibold);
+    padding: calc(var(--space-1) / 2) var(--space-2);
     border-radius: var(--radius-pill);
-    letter-spacing: 0.03em;
+    letter-spacing: var(--tracking-wide);
 }
-.tag-features     { background: var(--tl-features-bg);  color: var(--tl-features); }
-.tag-fixes        { background: var(--tl-fixes-bg);      color: var(--tl-fixes); }
+.tag-features     { background: var(--tl-features-bg);  color: var(--tl-features-text); }
+.tag-fixes        { background: var(--tl-fixes-bg);      color: var(--alert-danger-text); }
 .tag-security     { background: var(--tl-security-bg);   color: var(--tl-security-text); }
 .tag-architecture { background: var(--tl-arch-bg);       color: var(--tl-arch-text); }
 .tag-philosophy   { background: var(--tl-phil-bg);       color: var(--tl-phil-text); }
@@ -272,51 +275,52 @@
 
 .tl-chevron {
     flex-shrink: 0;
-    transition: transform 0.2s ease;
+    transition: transform var(--duration-base) var(--ease-standard);
     color: var(--text-muted);
-    font-size: 1.1rem;
+    font-size: var(--icon-sm);
     line-height: 1;
-    margin-top: 0.1rem;
+    margin-top: calc(var(--space-1) / 2);
 }
 .tl-card.expanded .tl-chevron { transform: rotate(180deg); }
 
 .tl-card-body {
     border-top: 1px solid var(--neutral-100);
-    padding: 1rem;
-    font-size: 0.875rem;
+    padding: var(--space-4);
+    font-size: var(--text-sm);
     color: var(--text-primary);
     display: none;
 }
 .tl-card.expanded .tl-card-body { display: block; }
 
-.tl-card-body ul { padding-left: 1.25rem; margin: 0.5rem 0; }
-.tl-card-body li { margin-bottom: 0.3rem; line-height: 1.5; }
+.tl-card-body ul { padding-left: var(--space-5); margin: var(--space-2) 0; }
+.tl-card-body li { margin-bottom: var(--space-1); line-height: var(--leading-normal); }
 .tl-card-body .lesson-box {
     background: var(--tl-warning-bg);
     border-left: 3px solid var(--secondary);
-    padding: 0.6rem 0.9rem;
+    padding: var(--space-2) var(--space-4);
     border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-    margin-top: 0.75rem;
-    font-size: 0.82rem;
+    margin-top: var(--space-3);
+    font-size: var(--text-sm);
 }
 .tl-card-body .lesson-box strong { color: var(--tl-warning-text); }
 .tl-card-body .crisis-box {
     background: var(--tl-fixes-bg);
     border-left: 3px solid var(--tl-fixes);
-    padding: 0.6rem 0.9rem;
+    padding: var(--space-2) var(--space-4);
     border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-    margin-top: 0.75rem;
-    font-size: 0.82rem;
+    margin-top: var(--space-3);
+    font-size: var(--text-sm);
 }
-.tl-card-body .crisis-box strong { color: var(--tl-fixes); }
+.tl-card-body .crisis-box strong { color: var(--alert-danger-text); }
 
 /* ── No results ── */
 .no-results {
     text-align: center;
-    padding: 3rem 1rem;
+    padding: var(--space-12) var(--space-4);
     color: var(--text-muted);
     display: none;
 }
+.no-results-icon { color: var(--neutral-300); }
 
 /* ── Philosophy Section ── */
 .philosophy-section {
@@ -324,63 +328,62 @@
     border: 1px solid var(--neutral-200);
     border-radius: var(--radius-lg);
     overflow: hidden;
-    margin-top: 2.5rem;
+    margin-top: var(--space-10);
 }
 .philosophy-section .ph-header {
     background: linear-gradient(135deg, var(--tl-phil), var(--tl-phil-dark));
-    color: white;
-    padding: 1.2rem 1.5rem;
+    color: var(--text-inverse);
+    padding: var(--space-5) var(--space-6);
 }
 
-.philosophy-section h5 {color: white;}
-.philosophy-section .ph-body { padding: 1.25rem 1.5rem; }
+.philosophy-section h5 { color: var(--text-inverse); }
+.philosophy-section .ph-lede { margin: var(--space-1) 0 0; color: var(--text-on-dark-muted); font-size: var(--text-sm); }
+.philosophy-section .ph-body { padding: var(--space-5) var(--space-6); }
 .anti-goal-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 0.75rem;
-    margin-top: 0.75rem;
+    gap: var(--space-3);
+    margin-top: var(--space-3);
 }
 .anti-goal-item {
     background: var(--neutral-50);
     border: 1px solid var(--neutral-200);
     border-radius: var(--radius-md);
-    padding: 0.7rem 0.9rem;
-    font-size: 0.82rem;
-    line-height: 1.5;
+    padding: var(--space-3) var(--space-4);
+    font-size: var(--text-sm);
+    line-height: var(--leading-normal);
 }
-.anti-goal-item .ag-no  { color: var(--tl-fixes);    font-weight: 700; font-size: 0.7rem; letter-spacing: 0.05em; display: block; margin-bottom: 0.2rem; }
-.anti-goal-item .ag-yes { color: var(--tl-features);  font-size: 0.75rem; margin-top: 0.25rem; display: block; }
+.anti-goal-item .ag-no  { color: var(--tl-fixes);         font-weight: var(--weight-bold); font-size: var(--text-2xs); letter-spacing: var(--tracking-wide); display: block; margin-bottom: var(--space-1); }
+.anti-goal-item .ag-yes { color: var(--tl-features-text); font-size: var(--text-xs); margin-top: var(--space-1); display: block; }
 
 /* ── Quote ── */
 .project-quote {
     background: var(--primary-subtle);
     border: 1px solid var(--tl-release-border);
     border-radius: var(--radius-lg);
-    padding: 1.5rem;
-    margin-top: 2rem;
-
+    padding: var(--space-6);
+    margin-top: var(--space-8);
 }
 .project-quote blockquote {
-    font-size: 0.95rem;
-    line-height: 1.75;
+    font-size: var(--text-base);
+    line-height: var(--leading-normal);
     color: var(--text-primary);
-
-    margin: 0 0 1rem;
+    margin: 0 0 var(--space-4);
 }
-.project-quote cite { font-size: 0.8rem; color: var(--text-muted); font-style: normal; }
+.project-quote cite { font-size: var(--text-xs); color: var(--text-muted); font-style: normal; }
 
 /* ── Back link ── */
 .back-bar {
     background: var(--surface);
     border-bottom: 1px solid var(--neutral-200);
-    padding: 0.6rem 1rem;
+    padding: var(--space-2) var(--space-4);
 }
-.back-bar a { color: var(--text-secondary); font-size: 0.82rem; text-decoration: none; display: inline-flex; align-items: center; gap: 0.25rem; }
+.back-bar a { color: var(--text-secondary); font-size: var(--text-sm); text-decoration: none; display: inline-flex; align-items: center; gap: var(--space-1); }
 .back-bar a:hover { color: var(--primary); }
 
 /* ── Responsive ── */
 @media (max-width: 576px) {
-    .timeline-track { padding-left: 2rem; }
+    .timeline-track { padding-left: var(--space-8); }
     .timeline-track::before { left: 0.5rem; }
     .tl-dot { left: -2rem; width: 0.9rem; height: 0.9rem; top: 1.1rem; }
     .tl-dot.dot-milestone { left: -2.15rem; width: 1.1rem; height: 1.1rem; }
@@ -395,7 +398,7 @@
     <div class="back-bar">
         <div class="container">
             <a href="{{ url_for('docs.index') }}">
-                <span class="material-symbols-outlined" style="font-size:1rem;">arrow_back</span>
+                <span class="material-symbols-outlined icon-xs" aria-hidden="true">arrow_back</span>
                 Help & Support
             </a>
         </div>
@@ -416,23 +419,23 @@
             <div class="filter-group">
                 <button type="button" class="filter-btn active" data-filter="all" aria-pressed="true">All</button>
                 <button type="button" class="filter-btn" data-filter="features" aria-pressed="false">
-                    <span class="material-symbols-outlined" style="font-size:0.85rem;vertical-align:middle;">add_circle</span>
+                    <span class="material-symbols-outlined icon-2xs icon-middle" aria-hidden="true">add_circle</span>
                     Features
                 </button>
                 <button type="button" class="filter-btn" data-filter="fixes" aria-pressed="false">
-                    <span class="material-symbols-outlined" style="font-size:0.85rem;vertical-align:middle;">build</span>
+                    <span class="material-symbols-outlined icon-2xs icon-middle" aria-hidden="true">build</span>
                     Fixes & Crises
                 </button>
                 <button type="button" class="filter-btn" data-filter="security" aria-pressed="false">
-                    <span class="material-symbols-outlined" style="font-size:0.85rem;vertical-align:middle;">security</span>
+                    <span class="material-symbols-outlined icon-2xs icon-middle" aria-hidden="true">security</span>
                     Security
                 </button>
                 <button type="button" class="filter-btn" data-filter="architecture" aria-pressed="false">
-                    <span class="material-symbols-outlined" style="font-size:0.85rem;vertical-align:middle;">schema</span>
+                    <span class="material-symbols-outlined icon-2xs icon-middle" aria-hidden="true">schema</span>
                     Architecture
                 </button>
                 <button type="button" class="filter-btn" data-filter="philosophy" aria-pressed="false">
-                    <span class="material-symbols-outlined" style="font-size:0.85rem;vertical-align:middle;">lightbulb</span>
+                    <span class="material-symbols-outlined icon-2xs icon-middle" aria-hidden="true">lightbulb</span>
                     Philosophy
                 </button>
             </div>
@@ -446,7 +449,7 @@
         <div class="era-divider" data-era="all philosophy architecture">
             <div class="era-divider-line"></div>
             <span class="era-badge era-i">
-                <span class="material-symbols-outlined" style="font-size:0.85rem;vertical-align:middle;">auto_awesome</span>
+                <span class="material-symbols-outlined icon-2xs icon-middle" aria-hidden="true">auto_awesome</span>
                 What if, I just build it myself?
             </span>
             <div class="era-divider-line"></div>
@@ -473,7 +476,7 @@
                                 <span class="tl-tag tag-architecture">Architecture</span>
                             </div>
                         </div>
-                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                        <span class="material-symbols-outlined tl-chevron" aria-hidden="true">expand_more</span>
                     </div>
                     <div class="tl-card-body">
                         <p>The project began as a full-time high school teacher's answer to a gap in educational technology: no platform simulated classroom economies realistically while respecting student data privacy.</p>
@@ -487,7 +490,7 @@
                             <li><strong>Insurance as Reality Response</strong> — Attendance isn't purely a moral choice; punishment disguised as realism is neither accurate nor educational</li>
                         </ul>
                         <strong>The Name Change: "Classroom Economy" → "Classroom Token Hub"</strong>
-                        <p style="margin-top:0.5rem">Not just a rebrand — a philosophical shift from a gimmick to a persistent, interconnected system. A hub for comprehensive financial literacy.</p>
+                        <p class="mt-2">Not just a rebrand — a philosophical shift from a gimmick to a persistent, interconnected system. A hub for comprehensive financial literacy.</p>
                         <div class="lesson-box">
                             <strong>Key Learning:</strong> Real students find real bugs that simulated testing misses. Security must be foundational, not retrofitted.
                         </div>
@@ -510,7 +513,7 @@
                                 <span class="tl-tag tag-security">Security</span>
                             </div>
                         </div>
-                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                        <span class="material-symbols-outlined tl-chevron" aria-hidden="true">expand_more</span>
                     </div>
                     <div class="tl-card-body">
                         <p>Real classroom testing and iterative development produced the core platform:</p>
@@ -536,7 +539,7 @@
         <div class="era-divider" data-era="all fixes security architecture">
             <div class="era-divider-line"></div>
             <span class="era-badge era-ii">
-                <span class="material-symbols-outlined" style="font-size:0.85rem;vertical-align:middle;">crisis_alert</span>
+                <span class="material-symbols-outlined icon-2xs icon-middle" aria-hidden="true">crisis_alert</span>
                 Oh no, why can I see other classes?
             </span>
             <div class="era-divider-line"></div>
@@ -558,7 +561,7 @@
                                 <span class="tl-tag tag-security">Security</span>
                             </div>
                         </div>
-                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                        <span class="material-symbols-outlined tl-chevron" aria-hidden="true">expand_more</span>
                     </div>
                     <div class="tl-card-body">
                         <div class="crisis-box">
@@ -600,7 +603,7 @@
                                 <span class="tl-tag tag-security">Security</span>
                             </div>
                         </div>
-                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                        <span class="material-symbols-outlined tl-chevron" aria-hidden="true">expand_more</span>
                     </div>
                     <div class="tl-card-body">
                         <p>All critical security issues resolved. Production-ready platform.</p>
@@ -637,7 +640,7 @@
                                 <span class="tl-tag tag-analytics">Analytics</span>
                             </div>
                         </div>
-                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                        <span class="material-symbols-outlined tl-chevron" aria-hidden="true">expand_more</span>
                     </div>
                     <div class="tl-card-body">
                         <ul>
@@ -665,7 +668,7 @@
                                 <span class="tl-tag tag-fixes">Fixes</span>
                             </div>
                         </div>
-                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                        <span class="material-symbols-outlined tl-chevron" aria-hidden="true">expand_more</span>
                     </div>
                     <div class="tl-card-body">
                         <ul>
@@ -685,7 +688,7 @@
         <div class="era-divider" data-era="all features security architecture">
             <div class="era-divider-line"></div>
             <span class="era-badge era-iii">
-                <span class="material-symbols-outlined" style="font-size:0.85rem;vertical-align:middle;">rocket_launch</span>
+                <span class="material-symbols-outlined icon-2xs icon-middle" aria-hidden="true">rocket_launch</span>
                 Wouldn't it be nice to have that too?
             </span>
             <div class="era-divider-line"></div>
@@ -708,7 +711,7 @@
                                 <span class="tl-tag tag-architecture">Architecture</span>
                             </div>
                         </div>
-                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                        <span class="material-symbols-outlined tl-chevron" aria-hidden="true">expand_more</span>
                     </div>
                     <div class="tl-card-body">
                         <ul>
@@ -739,7 +742,7 @@
                                 <span class="tl-tag tag-fixes">Migration</span>
                             </div>
                         </div>
-                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                        <span class="material-symbols-outlined tl-chevron" aria-hidden="true">expand_more</span>
                     </div>
                     <div class="tl-card-body">
                         <ul>
@@ -767,7 +770,7 @@
                                 <span class="tl-tag tag-features">Features</span>
                             </div>
                         </div>
-                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                        <span class="material-symbols-outlined tl-chevron" aria-hidden="true">expand_more</span>
                     </div>
                     <div class="tl-card-body">
                         <ul>
@@ -795,7 +798,7 @@
                                 <span class="tl-tag tag-security">Security</span>
                             </div>
                         </div>
-                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                        <span class="material-symbols-outlined tl-chevron" aria-hidden="true">expand_more</span>
                     </div>
                     <div class="tl-card-body">
                         <ul>
@@ -823,7 +826,7 @@
                                 <span class="tl-tag tag-security">Privacy</span>
                             </div>
                         </div>
-                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                        <span class="material-symbols-outlined tl-chevron" aria-hidden="true">expand_more</span>
                     </div>
                     <div class="tl-card-body">
                         <ul>
@@ -851,7 +854,7 @@
                                 <span class="tl-tag tag-docs">Docs</span>
                             </div>
                         </div>
-                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                        <span class="material-symbols-outlined tl-chevron" aria-hidden="true">expand_more</span>
                     </div>
                     <div class="tl-card-body">
                         <ul>
@@ -880,7 +883,7 @@
                                 <span class="tl-tag tag-mobile">Mobile</span>
                             </div>
                         </div>
-                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                        <span class="material-symbols-outlined tl-chevron" aria-hidden="true">expand_more</span>
                     </div>
                     <div class="tl-card-body">
                         <ul>
@@ -907,7 +910,7 @@
                                 <span class="tl-tag tag-fixes">Critical Fix</span>
                             </div>
                         </div>
-                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                        <span class="material-symbols-outlined tl-chevron" aria-hidden="true">expand_more</span>
                     </div>
                     <div class="tl-card-body">
                         <div class="crisis-box">
@@ -940,7 +943,7 @@
                                 <span class="tl-tag tag-fixes">Fixes</span>
                             </div>
                         </div>
-                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                        <span class="material-symbols-outlined tl-chevron" aria-hidden="true">expand_more</span>
                     </div>
                     <div class="tl-card-body">
                         <ul>
@@ -961,7 +964,7 @@
         <div class="era-divider" data-era="all features fixes">
             <div class="era-divider-line"></div>
             <span class="era-badge era-iv">
-                <span class="material-symbols-outlined" style="font-size:0.85rem;vertical-align:middle;">verified</span>
+                <span class="material-symbols-outlined icon-2xs icon-middle" aria-hidden="true">verified</span>
                 This is Classroom Token Hub. Your classroom economy, reimagined.
             </span>
             <div class="era-divider-line"></div>
@@ -984,7 +987,7 @@
                                 <span class="tl-tag tag-security">Security</span>
                             </div>
                         </div>
-                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                        <span class="material-symbols-outlined tl-chevron" aria-hidden="true">expand_more</span>
                     </div>
                     <div class="tl-card-body">
                         <ul>
@@ -1019,7 +1022,7 @@
                                 <span class="tl-tag tag-fixes">Fixes (P0)</span>
                             </div>
                         </div>
-                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                        <span class="material-symbols-outlined tl-chevron" aria-hidden="true">expand_more</span>
                     </div>
                     <div class="tl-card-body">
                         <ul>
@@ -1046,7 +1049,7 @@
                                 <span class="tl-tag tag-features">Upcoming</span>
                             </div>
                         </div>
-                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                        <span class="material-symbols-outlined tl-chevron" aria-hidden="true">expand_more</span>
                     </div>
                     <div class="tl-card-body">
                         <strong>High Priority (v1.9):</strong>
@@ -1071,18 +1074,18 @@
 
         <!-- No results message -->
         <div class="no-results" id="noResults">
-            <span class="material-symbols-outlined" style="font-size:2.5rem; color:var(--neutral-300); display:block; margin-bottom:0.5rem;">search_off</span>
+            <span class="material-symbols-outlined icon-xl d-block mb-2 no-results-icon" aria-hidden="true">search_off</span>
             No entries match this filter. Try a different category.
         </div>
 
         <!-- Philosophy Section -->
         <div class="philosophy-section">
             <div class="ph-header">
-                <h5 style="margin:0; font-weight:700;">
-                    <span class="material-symbols-outlined" style="vertical-align:middle; margin-right:0.4rem;">lightbulb</span>
+                <h5 class="m-0 fw-bold">
+                    <span class="material-symbols-outlined icon-middle me-2" aria-hidden="true">lightbulb</span>
                     No, we are not about that life
                 </h5>
-                <p style="margin:0.3rem 0 0; opacity:0.8; font-size:0.85rem;">Classroom Token Hub was created as a classroom economy system that fosters responsibility and shared accountability. Flashy features and gamification are antithesis to our design principles. The following features were intentially omitted to preserve the integrity and consistency with our philosophy.</p>
+                <p class="ph-lede">Classroom Token Hub was created as a classroom economy system that fosters responsibility and shared accountability. Flashy features and gamification are antithesis to our design principles. The following features were intentially omitted to preserve the integrity and consistency with our philosophy.</p>
             </div>
             <div class="ph-body">
                 <div class="anti-goal-grid">

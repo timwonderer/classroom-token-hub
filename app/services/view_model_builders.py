@@ -244,10 +244,16 @@ def build_policy_list_view(class_id: str) -> list[PolicyListView]:
     - Ordering is presentation-only and does not affect policy truth
     """
     policies = StorePolicyResolver.list_store_policies(class_id)
+    # Ordered by when the teacher published each version, then by name. This
+    # used to lead with product_id, which was a sequential integer and so read
+    # as creation order by accident; product_id is now a lineage UUID, and
+    # sorting a teacher-facing list by a random identifier is arbitrary. The
+    # policy_uuid tiebreaker only decides between versions published in the
+    # same instant.
     sorted_policies = sorted(
         policies,
         key=lambda policy: (
-            policy.product_id,
+            policy.created_at,
             policy.name or "",
             policy.policy_uuid,
         ),
@@ -271,13 +277,22 @@ def build_policy_list_view(class_id: str) -> list[PolicyListView]:
 
 
 @dataclass(frozen=True)
+class StoreFormContract:
+    """Server-owned gating contract for the Store creation/edit form."""
+    item_type_rules: MappingProxyType
+    collective_goal_band: MappingProxyType
+    rent_prevents_purchase_when_late: bool
+
+
+@dataclass(frozen=True)
 class StoreManagementView:
     """Phase 6-7: Canonical view model for admin store management page."""
     # Store items (owned by Store domain)
     items: list[Any]
     total_items: int
     active_items: int
-    rent_managed_item_ids: set[int]
+    # Keyed by product lineage: rent grants a *product*, not a version of one.
+    rent_managed_item_ids: set[str]
 
     # Store statistics (owned by Store domain)
     total_purchases: int
@@ -285,7 +300,7 @@ class StoreManagementView:
     recent_purchases: list[Any]
 
     # Collective items progress (owned by Store domain)
-    collective_progress_by_item: dict[int, list[dict]]
+    collective_progress_by_item: dict[str, list[dict]]
 
     # Display-only label map for the single active class (owned by Class
     # Configuration domain). Keyed by the class's section label purely for
@@ -316,6 +331,7 @@ class StoreManagementView:
         warnings=(),
         display_context=MappingProxyType({}),
     ))
+    form_contract: StoreFormContract | None = None
 
 
 def build_store_management_view(
@@ -326,8 +342,9 @@ def build_store_management_view(
     pending_redemptions: list[Any],
     recent_purchases: list[Any],
     class_labels_by_block: dict[str, str],
-    rent_managed_item_ids: set[int],
-    collective_progress_by_item: dict[int, list[dict]],
+    # Keyed by product lineage: rent grants a *product*, not a version of one.
+    rent_managed_item_ids: set[str],
+    collective_progress_by_item: dict[str, list[dict]],
     audit_rows: list[dict[str, Any]],
     audit_total: int,
     audit_page: int,
@@ -341,6 +358,7 @@ def build_store_management_view(
     audit_end_date: str = "",
     selected_scope: dict[str, Any] | None = None,
     feature_options: list[dict[str, Any]] | None = None,
+    form_contract: StoreFormContract | None = None,
 ) -> StoreManagementView:
     """
     Build the canonical store management view for admin dashboard.
@@ -378,4 +396,5 @@ def build_store_management_view(
             warnings=(),
             display_context=MappingProxyType({}),
         ),
+        form_contract=form_contract,
     )

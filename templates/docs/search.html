@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "macros/docs_hero.html" import docs_hero %}
+{% import "macros/cards.html" as cards %}
 {% set full_width = true %}
 
 {% block title %}Search Documentation{% if query %} - {{ query }}{% endif %}{% endblock %}
@@ -11,7 +12,7 @@
         <div class="input-group input-group-lg">
             <input type="search" name="q" class="form-control" placeholder="Search documentation..." value="{{ query }}" aria-label="Search" autofocus>
             <button class="btn btn-secondary" type="submit">
-                <span class="material-symbols-outlined" style="vertical-align: middle;">search</span>
+                <span class="material-symbols-outlined icon-middle" aria-hidden="true">search</span>
                 Search
             </button>
         </div>
@@ -59,15 +60,11 @@
             </div>
         {% else %}
             <!-- No Results Message -->
-            <div class="alert alert-info">
-                <h4 class="alert-heading">
-                    <span class="material-symbols-outlined" style="vertical-align: middle;">info</span>
-                    No results found
-                </h4>
+            {% call cards.alert_card('info', 'No results found', icon='search_off') %}
                 <p class="mb-0">
-                    Try searching with different keywords or browse the <a href="{{ url_for('docs.index') }}" class="alert-link">documentation categories</a>.
+                    Try searching with different keywords or browse the <a href="{{ url_for('docs.index') }}">documentation categories</a>.
                 </p>
-            </div>
+            {% endcall %}
         {% endif %}
     {% else %}
         <!-- Search Tips -->
@@ -76,7 +73,7 @@
                 <div class="card h-100">
                     <div class="card-body">
                         <h3 class="h5 card-title">
-                            <span class="material-symbols-outlined" style="vertical-align: middle;">tips_and_updates</span>
+                            <span class="material-symbols-outlined icon-middle" aria-hidden="true">tips_and_updates</span>
                             Search Tips
                         </h3>
                         <ul class="mb-0">
@@ -92,7 +89,7 @@
                 <div class="card h-100">
                     <div class="card-body">
                         <h3 class="h5 card-title">
-                            <span class="material-symbols-outlined" style="vertical-align: middle;">bookmark</span>
+                            <span class="material-symbols-outlined icon-middle" aria-hidden="true">bookmark</span>
                             Popular Topics
                         </h3>
                         <ul class="mb-0">

@@ -31,6 +31,14 @@ from app.feats.base import FEATContext
 from tests.helpers.classroom_initializer import initialize
 
 
+# EntitlementEvent.product_id names a store product *lineage* and is a
+# String(36) uuid. These were integer literals, which Postgres refuses to
+# compare against a varchar column at all ("operator does not exist:
+# character varying = integer"), so every test touching product_id errored
+# before it could assert anything.
+PRODUCT_LINEAGE_A = "00000000-0000-4000-8000-000000000101"
+PRODUCT_LINEAGE_B = "00000000-0000-4000-8000-000000000102"
+
 _created_events = []  # Track events for batch commit
 
 
@@ -107,7 +115,7 @@ class TestGetEntitlementBalance:
                     entitlement_type="HALL_PASS",
                     event_type="GRANTED",
                     acquisition_type="PURCHASE",
-                    product_id=101,
+                    product_id=PRODUCT_LINEAGE_A,
                     correlation_id=str(uuid.uuid4()),
                     actor_seat_id=teacher_seat_id,
                 )
@@ -120,7 +128,7 @@ class TestGetEntitlementBalance:
                 seat_id=seat_id,
                 class_id=class_id,
                 entitlement_type="HALL_PASS",
-                product_id=101,
+                product_id=PRODUCT_LINEAGE_A,
             )
 
             assert balance == 3
@@ -146,7 +154,7 @@ class TestGetEntitlementBalance:
                     entitlement_type="HALL_PASS",
                     event_type="GRANTED",
                     acquisition_type="PURCHASE",
-                    product_id=101,
+                    product_id=PRODUCT_LINEAGE_A,
                     timestamp=datetime.utcnow(),
                     actor_seat_id=teacher_seat_id,
                     correlation_id=str(uuid.uuid4()),
@@ -162,7 +170,7 @@ class TestGetEntitlementBalance:
                     entitlement_type="HALL_PASS",
                     event_type="CONSUMED",
                     acquisition_type="PURCHASE",
-                    product_id=101,
+                    product_id=PRODUCT_LINEAGE_A,
                     timestamp=datetime.utcnow() + timedelta(seconds=1),
                     actor_seat_id=teacher_seat_id,
                     correlation_id=str(uuid.uuid4()),
@@ -176,7 +184,7 @@ class TestGetEntitlementBalance:
                 seat_id=seat_id,
                 class_id=class_id,
                 entitlement_type="HALL_PASS",
-                product_id=101,
+                product_id=PRODUCT_LINEAGE_A,
             )
 
             assert balance == 3
@@ -205,7 +213,7 @@ class TestGetEntitlementBalance:
                 entitlement_type="HALL_PASS",
                 event_type="GRANTED",
                 acquisition_type="PURCHASE",
-                product_id=101,
+                product_id=PRODUCT_LINEAGE_A,
                 timestamp=datetime.utcnow(),
                 actor_seat_id=teacher_seat_id,
                 correlation_id=str(uuid.uuid4()),
@@ -220,7 +228,7 @@ class TestGetEntitlementBalance:
                 entitlement_type="HALL_PASS",
                 event_type="GRANTED",
                 acquisition_type="PURCHASE",
-                product_id=101,
+                product_id=PRODUCT_LINEAGE_A,
                 timestamp=datetime.utcnow(),
                 actor_seat_id=teacher_seat_id,
                 correlation_id=str(uuid.uuid4()),
@@ -234,7 +242,7 @@ class TestGetEntitlementBalance:
                 seat_id=seat_id,
                 class_id=class_id,
                 entitlement_type="HALL_PASS",
-                product_id=101,
+                product_id=PRODUCT_LINEAGE_A,
             )
 
             # Check balance in class 2
@@ -242,7 +250,7 @@ class TestGetEntitlementBalance:
                 seat_id=seat_id,
                 class_id=class2_id,
                 entitlement_type="HALL_PASS",
-                product_id=101,
+                product_id=PRODUCT_LINEAGE_A,
             )
 
             assert balance_class1 == 1
@@ -262,7 +270,7 @@ class TestGetPurchaseCount:
             count = get_purchase_count(
                 seat_id=seat_id,
                 class_id=class_id,
-                product_id=101,
+                product_id=PRODUCT_LINEAGE_A,
             )
 
             assert count == 0
@@ -285,7 +293,7 @@ class TestGetPurchaseCount:
                     entitlement_type="HALL_PASS",
                     event_type="GRANTED",
                     acquisition_type="PURCHASE",
-                    product_id=101,
+                    product_id=PRODUCT_LINEAGE_A,
                     timestamp=datetime.utcnow(),
                     actor_seat_id=teacher_seat_id,
                     correlation_id=str(uuid.uuid4()),
@@ -300,7 +308,7 @@ class TestGetPurchaseCount:
                 entitlement_type="HALL_PASS",
                 event_type="GRANTED",
                 acquisition_type="GRANT",
-                product_id=101,
+                product_id=PRODUCT_LINEAGE_A,
                 timestamp=datetime.utcnow(),
                 actor_seat_id=teacher_seat_id,
                 correlation_id=str(uuid.uuid4()),
@@ -313,7 +321,7 @@ class TestGetPurchaseCount:
             count = get_purchase_count(
                 seat_id=seat_id,
                 class_id=class_id,
-                product_id=101,
+                product_id=PRODUCT_LINEAGE_A,
             )
 
             assert count == 3
@@ -336,7 +344,7 @@ class TestGetPurchaseCount:
                     entitlement_type="HALL_PASS",
                     event_type="GRANTED",
                     acquisition_type="PURCHASE",
-                    product_id=101,
+                    product_id=PRODUCT_LINEAGE_A,
                     timestamp=datetime.utcnow(),
                     actor_seat_id=teacher_seat_id,
                     correlation_id=str(uuid.uuid4()),
@@ -351,7 +359,7 @@ class TestGetPurchaseCount:
                 entitlement_type="HALL_PASS",
                 event_type="GRANTED",
                 acquisition_type="PURCHASE",
-                product_id=102,
+                product_id=PRODUCT_LINEAGE_B,
                 timestamp=datetime.utcnow(),
                 actor_seat_id=teacher_seat_id,
                 correlation_id=str(uuid.uuid4()),
@@ -364,14 +372,14 @@ class TestGetPurchaseCount:
             count_101 = get_purchase_count(
                 seat_id=seat_id,
                 class_id=class_id,
-                product_id=101,
+                product_id=PRODUCT_LINEAGE_A,
             )
 
             # Check count for product 102
             count_102 = get_purchase_count(
                 seat_id=seat_id,
                 class_id=class_id,
-                product_id=102,
+                product_id=PRODUCT_LINEAGE_B,
             )
 
             assert count_101 == 2
@@ -391,7 +399,7 @@ class TestGetActiveRentGrant:
             grant = get_active_rent_grant(
                 seat_id=seat_id,
                 class_id=class_id,
-                product_id=101,
+                product_id=PRODUCT_LINEAGE_A,
             )
 
             assert grant is None
@@ -414,7 +422,7 @@ class TestGetActiveRentGrant:
                 entitlement_type="HALL_PASS",
                 event_type="GRANTED",
                 acquisition_type="PERK",
-                product_id=101,
+                product_id=PRODUCT_LINEAGE_A,
                 timestamp=datetime.utcnow(),
                 actor_seat_id=teacher_seat_id,
                 correlation_id=str(uuid.uuid4()),
@@ -427,7 +435,7 @@ class TestGetActiveRentGrant:
             grant = get_active_rent_grant(
                 seat_id=seat_id,
                 class_id=class_id,
-                product_id=101,
+                product_id=PRODUCT_LINEAGE_A,
             )
 
             assert grant is not None
@@ -452,7 +460,7 @@ class TestGetActiveRentGrant:
                 entitlement_type="HALL_PASS",
                 event_type="GRANTED",
                 acquisition_type="PERK",
-                product_id=101,
+                product_id=PRODUCT_LINEAGE_A,
                 timestamp=datetime.utcnow(),
                 actor_seat_id=teacher_seat_id,
                 correlation_id=str(uuid.uuid4()),
@@ -467,7 +475,7 @@ class TestGetActiveRentGrant:
                 entitlement_type="HALL_PASS",
                 event_type="CONSUMED",
                 acquisition_type="PERK",
-                product_id=101,
+                product_id=PRODUCT_LINEAGE_A,
                 timestamp=datetime.utcnow() + timedelta(seconds=1),
                 actor_seat_id=teacher_seat_id,
                 correlation_id=str(uuid.uuid4()),
@@ -480,7 +488,7 @@ class TestGetActiveRentGrant:
             grant = get_active_rent_grant(
                 seat_id=seat_id,
                 class_id=class_id,
-                product_id=101,
+                product_id=PRODUCT_LINEAGE_A,
             )
 
             assert grant is None
@@ -503,7 +511,7 @@ class TestGetActiveRentGrant:
                 entitlement_type="HALL_PASS",
                 event_type="GRANTED",
                 acquisition_type="PERK",
-                product_id=101,
+                product_id=PRODUCT_LINEAGE_A,
                 timestamp=datetime.utcnow(),
                 actor_seat_id=teacher_seat_id,
                 correlation_id=str(uuid.uuid4()),
@@ -519,7 +527,7 @@ class TestGetActiveRentGrant:
                 entitlement_type="HALL_PASS",
                 event_type="GRANTED",
                 acquisition_type="PERK",
-                product_id=101,
+                product_id=PRODUCT_LINEAGE_A,
                 timestamp=datetime.utcnow() + timedelta(seconds=1),
                 actor_seat_id=teacher_seat_id,
                 correlation_id=str(uuid.uuid4()),
@@ -532,7 +540,7 @@ class TestGetActiveRentGrant:
             grant = get_active_rent_grant(
                 seat_id=seat_id,
                 class_id=class_id,
-                product_id=101,
+                product_id=PRODUCT_LINEAGE_A,
             )
 
             assert grant is not None
@@ -559,7 +567,7 @@ class TestIsEntitlementExercisable:
                 entitlement_type="HALL_PASS",
                 event_type="GRANTED",
                 acquisition_type="PURCHASE",
-                product_id=101,
+                product_id=PRODUCT_LINEAGE_A,
                 timestamp=datetime.utcnow(),
                 actor_seat_id=teacher_seat_id,
                 correlation_id=str(uuid.uuid4()),
@@ -593,7 +601,7 @@ class TestIsEntitlementExercisable:
                 entitlement_type="HALL_PASS",
                 event_type="GRANTED",
                 acquisition_type="PURCHASE",
-                product_id=101,
+                product_id=PRODUCT_LINEAGE_A,
                 timestamp=datetime.utcnow(),
                 actor_seat_id=teacher_seat_id,
                 correlation_id=str(uuid.uuid4()),
@@ -608,7 +616,7 @@ class TestIsEntitlementExercisable:
                 entitlement_type="HALL_PASS",
                 event_type="CONSUMED",
                 acquisition_type="PURCHASE",
-                product_id=101,
+                product_id=PRODUCT_LINEAGE_A,
                 timestamp=datetime.utcnow() + timedelta(seconds=1),
                 actor_seat_id=teacher_seat_id,
                 correlation_id=str(uuid.uuid4()),
@@ -659,7 +667,7 @@ class TestGetEntitlementLineageTerminalEvent:
                 entitlement_type="HALL_PASS",
                 event_type="GRANTED",
                 acquisition_type="PURCHASE",
-                product_id=101,
+                product_id=PRODUCT_LINEAGE_A,
                 timestamp=datetime.utcnow(),
                 actor_seat_id=teacher_seat_id,
                 correlation_id=str(uuid.uuid4()),
@@ -693,7 +701,7 @@ class TestGetEntitlementLineageTerminalEvent:
                 entitlement_type="HALL_PASS",
                 event_type="GRANTED",
                 acquisition_type="PURCHASE",
-                product_id=101,
+                product_id=PRODUCT_LINEAGE_A,
                 timestamp=datetime.utcnow(),
                 actor_seat_id=teacher_seat_id,
                 correlation_id=str(uuid.uuid4()),
@@ -709,7 +717,7 @@ class TestGetEntitlementLineageTerminalEvent:
                 entitlement_type="HALL_PASS",
                 event_type="CONSUMED",
                 acquisition_type="PURCHASE",
-                product_id=101,
+                product_id=PRODUCT_LINEAGE_A,
                 timestamp=datetime.utcnow() + timedelta(seconds=1),
                 actor_seat_id=teacher_seat_id,
                 correlation_id=str(uuid.uuid4()),

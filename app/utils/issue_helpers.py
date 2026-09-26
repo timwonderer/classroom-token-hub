@@ -18,12 +18,13 @@ from app.models import (
     IssueStatusHistory,
     IssueResolutionAction,
     Transaction,
+    TransactionStatus,
     ClassEconomy,
     Seat,
     IdentityProfile,
 )
 from app.utils.ip_handler import get_real_ip
-from app.services.tlcp import create_ticket_correlation_pack
+from app.services.issue_service import attach_correlation_pack
 from app.services.ledger_balance_query_service import get_available_balances
 from app.feats.base import requires_feat_context
 
@@ -74,8 +75,8 @@ def create_context_snapshot(actor, class_id, related_transaction_id=None, relate
     if not class_id:
         raise ValueError("create_context_snapshot requires canonical class_id scope.")
     seat = _resolve_actor_seat(actor)
-    if not seat:
-        raise ValueError("create_context_snapshot requires canonical seat_id scope.")
+    if not seat or seat.class_id != class_id:
+        raise ValueError("create_context_snapshot requires a seat in the specified class.")
 
     # Get current balances (scoped by class_id + seat_id)
     # Convert Decimal to float for JSON serialization (db.JSON column)
@@ -88,7 +89,9 @@ def create_context_snapshot(actor, class_id, related_transaction_id=None, relate
 
     # If transaction-specific, include transaction details
     if related_transaction_id:
-        transaction = db.session.get(Transaction, related_transaction_id)
+        transaction = Transaction.query.filter_by(
+            id=related_transaction_id, class_id=class_id, seat_id=seat.id,
+        ).first()
         if transaction:
             snapshot['transaction'] = {
                 'id': transaction.id,
@@ -97,7 +100,7 @@ def create_context_snapshot(actor, class_id, related_transaction_id=None, relate
                 'description': transaction.description,
                 'type': transaction.type,
                 'timestamp': transaction.timestamp.isoformat() if transaction.timestamp else None,
-                'is_void': transaction.is_void
+                'is_void': transaction.status == TransactionStatus.VOID
             }
 
     # Get recent transaction history (last 10 transactions for context)
@@ -157,6 +160,9 @@ def create_issue(actor, user_id, class_id, category_id, explanation, expected_ou
     canonical_seat = _resolve_actor_seat(actor)
     if not canonical_seat:
         raise ValueError("create_issue requires canonical seat public_id scope.")
+    # Share-lock the live seat so a concurrent seat deletion cannot miss this ticket.
+    if not Seat.query.filter_by(id=canonical_seat.id, class_id=class_id).with_for_update(read=True).first():
+        raise ValueError("create_issue requires a live seat in the specified class.")
 
     # v2 public support identity is the deidentified class-scoped seat UUID.
     actor_public_id = canonical_seat.public_id
@@ -193,12 +199,11 @@ def create_issue(actor, user_id, class_id, category_id, explanation, expected_ou
     db.session.flush()  # Get the issue ID
 
     # Attach immutable correlation snapshot at submission time inside the FEAT boundary.
-    create_ticket_correlation_pack(
-        issue_id=issue.id,
+    attach_correlation_pack(
+        issue,
         actor_type='student',
         actor_public_id=actor_public_id,
         class_id=class_id,
-        ticket_created_at=now_utc,
         include_recent_error=include_recent_error,
     )
 

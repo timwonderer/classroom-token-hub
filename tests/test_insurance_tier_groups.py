@@ -121,3 +121,35 @@ def test_same_rank_across_different_groups_ok(app):
         _make_tier(classroom, "Paycheck Protection", 1)
         _make_tier(classroom, "Device Insurance", 1)
         db.session.commit()  # both basic tiers, different groups — fine
+
+
+def test_grouped_tier_can_be_edited(app):
+    """Editing a grouped tier is lawful: the predecessor vacates the rank first."""
+    classroom = _setup(app)
+    with app.app_context():
+        original = _make_tier(classroom, "Paycheck Protection", 2, premium="10.00")
+        db.session.commit()
+
+        replacement = configure_insurance_definition(
+            class_id=classroom.class_id,
+            submission=_submission(
+                tier_group="Paycheck Protection", tier_level=2, premium="14.00"
+            ),
+            canonical_context=_teacher_ctx(classroom),
+            supersedes_policy_uuid=original.policy_uuid,
+            correlation_id=f"corr_{uuid4().hex}",
+            idempotency_key=f"FEAT-CLASS-003:edit:{uuid4().hex}",
+        )
+        db.session.commit()
+
+        assert replacement.policy_uuid != original.policy_uuid
+        assert original.availability_state == defs.RETIRED
+        assert replacement.availability_state == defs.IN_USE
+        # The rank is occupied once, by the replacement.
+        active = InsurancePolicy.query.filter_by(
+            class_id=classroom.class_id,
+            tier_group="Paycheck Protection",
+            tier_level=2,
+            availability_state=defs.IN_USE,
+        ).all()
+        assert [p.policy_uuid for p in active] == [replacement.policy_uuid]

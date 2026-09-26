@@ -198,7 +198,6 @@ def test_DOM_IDEN_006__student_detail_recovers_from_stale_class_context(client):
     with FEATContext("FEAT-ADMN-001"):
         db.session.add(
             Transaction(
-                user_id=student_a_user.id,
                 seat_id=seat_a.id,
                 target_seat_id=seat_a.id,
                 actor_seat_id=seat_a.id,

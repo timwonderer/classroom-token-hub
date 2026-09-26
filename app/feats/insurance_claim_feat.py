@@ -26,7 +26,6 @@ terms (INV-ARC-009). No claim runtime reads any copied ``frozen_contract`` paylo
 
 from __future__ import annotations
 
-import calendar
 import math
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
@@ -40,6 +39,7 @@ from app.models import Seat, EntitlementEvent, Transaction
 from app.services.context_resolver import CanonicalContext
 from app.services.ledger_posting_service import create_pending_transaction_idempotent
 from app.services import insurance_claim_service
+from app.services import insurance_coverage_service as insurance_coverage
 from app.services import insurance_eligibility_contract as eligibility
 from app.services import insurance_definition_service as insurance_defs
 
@@ -54,18 +54,8 @@ class InsuranceClaimPolicyError(Exception):
     """
 
 
-def _resolve_claim_policy(entitlement_id, *, class_id, seat_id):
-    """Resolve the immutable insurance policy that governs a claimed entitlement.
-
-    The GRANTED insurance entitlement carries the `policy_uuid` of the exact
-    immutable definition purchased; that row is the sole claim-time authority for
-    coverage terms, ceilings, reimbursement, and claim limits. Terms are NEVER
-    read from the entitlement payload (no snapshot) — the entitlement proves
-    acquisition, the policy provides the terms (INV-ARC-009).
-
-    Fails closed: a missing grant, a missing `policy_uuid`, or a policy that does
-    not exist in this class (wrong-class resolution returns None) raises.
-    """
+def _resolve_claim_grant(entitlement_id, *, class_id, seat_id):
+    """Resolve the GRANTED event that proves acquisition of a claimed entitlement."""
     grant = (
         EntitlementEvent.query
         .filter_by(
@@ -81,6 +71,22 @@ def _resolve_claim_policy(entitlement_id, *, class_id, seat_id):
         raise InsuranceClaimPolicyError(
             f"No INSURANCE grant for entitlement {entitlement_id} in class {class_id}"
         )
+    return grant
+
+
+def _resolve_claim_policy(entitlement_id, *, class_id, seat_id):
+    """Resolve the immutable insurance policy that governs a claimed entitlement.
+
+    The GRANTED insurance entitlement carries the `policy_uuid` of the exact
+    immutable definition purchased; that row is the sole claim-time authority for
+    coverage terms, ceilings, reimbursement, and claim limits. Terms are NEVER
+    read from the entitlement payload (no snapshot) — the entitlement proves
+    acquisition, the policy provides the terms (INV-ARC-009).
+
+    Fails closed: a missing grant, a missing `policy_uuid`, or a policy that does
+    not exist in this class (wrong-class resolution returns None) raises.
+    """
+    grant = _resolve_claim_grant(entitlement_id, class_id=class_id, seat_id=seat_id)
     policy_uuid = (grant.payload or {}).get("policy_uuid")
     if not policy_uuid:
         raise InsuranceClaimPolicyError(
@@ -106,34 +112,48 @@ from app.payroll import get_daily_limit_seconds, get_pay_rate_for_class
 
 _TRANSACTION_INSURANCE_TYPE = "TRANSACTION"
 _PRODUCTIVITY_INSURANCE_TYPE = "PRODUCTIVITY"
+_NON_MONETARY_INSURANCE_TYPE = "NON_MONETARY"
 
 
 @dataclass
 class _CoverageTerms:
-    """Derived (never stored) economic terms for one entitlement coverage cycle.
+    """Derived (never stored) economic terms for one coverage period.
 
-    Reconstructed purely from the policy_terms contract snapshot plus the GRANTED
-    event's timestamp — the current InsurancePolicy is never re-read. Absent
-    renewal machinery in CTH, an INSURANCE entitlement has exactly ONE coverage
-    period beginning at its grant, so period-scoped sums/counts span the whole
-    entitlement lineage. When renewal events are introduced, re-scope to
-    ``[period_start, next_renewal)``.
+    The period is one bill cycle of the entitlement's premium lineage,
+    ``[cycle_boundary_at, next_assessment_at)`` (DOM-STORE-001 §VIII.E.1).
+    Claim allowance and payout capacity are scoped to it and reset at each
+    coverage boundary; a claim draws on the period containing its filing time
+    (FEAT-STOR-003 §XII). Terms come from the immutable policy version the
+    entitlement carries — the current InsurancePolicy is never re-read.
     """
 
-    coverage_start_utc: datetime
+    period: insurance_coverage.CoveragePeriod
     coverage_week_equivalent: Decimal
     period_claim_allowance: int
     maximum_policy_payout: Decimal
 
 
-def _add_one_calendar_month(d: date) -> date:
-    """Class-local calendar-month step, clamping the day to the target month end."""
-    if d.month == 12:
-        year, month = d.year + 1, 1
-    else:
-        year, month = d.year, d.month + 1
-    last_day = calendar.monthrange(year, month)[1]
-    return date(year, month, min(d.day, last_day))
+def _coverage_period_at(class_id: str, entitlement_id: str, filed_at: datetime):
+    """The coverage period containing a filing time, or ``None``."""
+    return insurance_coverage.get_coverage_period(
+        class_id, entitlement_id, reference_time_utc=ensure_utc(filed_at)
+    )
+
+
+def _period_for_claim(claim) -> "insurance_coverage.CoveragePeriod":
+    """The coverage period a filed claim draws on: the one containing its filing time.
+
+    Fixed at filing (FEAT-STOR-003 §IV): a later lapse, expiry, or termination
+    does not move it. Fails closed when the claim's filing time lies in no
+    period of the entitlement's lineage.
+    """
+    period = _coverage_period_at(claim.class_id, claim.entitlement_id, claim.submitted_at)
+    if period is None:
+        raise InsuranceClaimPolicyError(
+            f"Claim {claim.claim_id} was not filed inside a coverage period of "
+            f"entitlement {claim.entitlement_id}"
+        )
+    return period
 
 
 def _class_local_date(canonical_context: CanonicalContext, ts_utc: datetime) -> date:
@@ -173,21 +193,23 @@ def _filing_deadline_end_utc(
 def _coverage_week_equivalent(
     *,
     policy_terms,
-    coverage_start_utc: datetime,
+    period: "insurance_coverage.CoveragePeriod",
     canonical_context: CanonicalContext,
 ) -> Decimal:
     """Scale the weekly cadence to the coverage period's length.
 
     A weekly cycle is exactly ``1`` week-equivalent; a monthly cycle is
-    ``covered_days / 7`` measured in class-local calendar days. Shared by every
-    product type (TRANSACTION claim-count, PRODUCTIVITY date-count) so the period
-    scaling stays identical across the policy_terms subsets.
+    ``covered_days / 7``, the class-local calendar days between the period's
+    own boundaries (anchored roll-forward recurrence, never a clamped month).
+    Shared by every product type (TRANSACTION claim-count, PRODUCTIVITY
+    date-count) so the period scaling stays identical across the policy_terms
+    subsets.
     """
     freq = (policy_terms.charge_frequency or "WEEKLY").strip().upper()
     if freq == "MONTHLY":
-        start_date = _class_local_date(canonical_context, coverage_start_utc)
-        next_renewal = _add_one_calendar_month(start_date)
-        covered_days = (next_renewal - start_date).days
+        start_date = _class_local_date(canonical_context, period.start_utc)
+        end_date = _class_local_date(canonical_context, period.end_utc)
+        covered_days = (end_date - start_date).days
         return Decimal(covered_days) / Decimal("7")
     # Weekly coverage (and any fail-safe) is exactly one week-equivalent.
     return Decimal("1")
@@ -207,14 +229,13 @@ def _maximum_policy_payout(policy_terms) -> Decimal:
 def _derive_coverage_terms(
     *,
     policy_terms,
-    granted_event: EntitlementEvent,
+    period: "insurance_coverage.CoveragePeriod",
     canonical_context: CanonicalContext,
 ) -> _CoverageTerms:
-    """Reconstruct the coverage-cycle economics from the policy_terms snapshot."""
-    coverage_start_utc = ensure_utc(granted_event.timestamp)
+    """Reconstruct one coverage period's economics from the frozen policy terms."""
     week_equiv = _coverage_week_equivalent(
         policy_terms=policy_terms,
-        coverage_start_utc=coverage_start_utc,
+        period=period,
         canonical_context=canonical_context,
     )
 
@@ -224,19 +245,27 @@ def _derive_coverage_terms(
     period_claim_allowance = int(math.ceil(claims_per_week * week_equiv))
 
     return _CoverageTerms(
-        coverage_start_utc=coverage_start_utc,
+        period=period,
         coverage_week_equivalent=week_equiv,
         period_claim_allowance=period_claim_allowance,
         maximum_policy_payout=maximum_policy_payout,
     )
 
 
-def _sum_approved_payouts(class_id: str, entitlement_id: str) -> Decimal:
-    """Σ of APPROVED result_amounts under one entitlement coverage period."""
+def _period_bounds(period: "insurance_coverage.CoveragePeriod") -> dict:
+    """Keyword bounds selecting the claims filed in one coverage period."""
+    return {"submitted_from": period.start_utc, "submitted_before": period.end_utc}
+
+
+def _sum_approved_payouts(
+    class_id: str, entitlement_id: str, period: "insurance_coverage.CoveragePeriod"
+) -> Decimal:
+    """Σ of APPROVED result_amounts of the claims filed in one coverage period."""
     approved = insurance_claim_service.list_claims_for_entitlement(
         class_id=class_id,
         entitlement_id=entitlement_id,
         statuses=[insurance_claim_service.APPROVED],
+        **_period_bounds(period),
     )
     total = Decimal("0.00")
     for claim in approved:
@@ -245,21 +274,218 @@ def _sum_approved_payouts(class_id: str, entitlement_id: str) -> Decimal:
     return _quantize_currency(total)
 
 
+def coverage_effective_start_utc(
+    canonical_context: CanonicalContext,
+    coverage_start_utc: datetime,
+    waiting_period_days: int,
+) -> tuple[date, datetime]:
+    """Class-local effective date and the UTC instant at its start.
+
+    The date is ``purchase_date + N``.
+
+    Calendar-day semantics, matching the filing window (NOT N×24h): a policy bought
+    at 3pm with a 3-day wait becomes claimable at the start of the third class-local
+    day after purchase, not at 3pm on that day. ``N = 0`` returns the start of the
+    purchase date, which is at or before the grant, so coverage is immediate.
+    """
+    start_date = _class_local_date(canonical_context, coverage_start_utc)
+    effective_date = start_date + timedelta(days=int(waiting_period_days))
+    boundaries = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=canonical_context,
+        primitive="evaluation_day_boundaries",
+        evaluation_date=effective_date,
+    )
+    return effective_date, boundaries.boundary_start_utc
+
+
+@dataclass(frozen=True)
+class ClaimContractView:
+    """Read-only projection of the terms a claim is actually adjudicated against.
+
+    Every field is derived from the same immutable policy row and coverage
+    arithmetic the submission gates use, so a review screen cannot display a
+    number the enforcement path would contradict. Fields are ``None`` where the
+    product type has no such term (PRODUCTIVITY and NON_MONETARY have no filing
+    window; NON_MONETARY has no monetary payout capacity).
+    """
+
+    policy: object
+    coverage_start_utc: datetime
+    coverage_effective_date: date
+    allowance_unit: str
+    period_allowance: Optional[int]
+    period_consumed: Optional[int]
+    claim_window_days: Optional[int]
+    maximum_policy_payout: Optional[Decimal]
+    remaining_period_cap: Optional[Decimal]
+    # Whether THIS claim was filed within the policy's filing window, computed
+    # once here so every review surface asks the same question the same way.
+    # ``None`` for product types with no filing window (PRODUCTIVITY,
+    # NON_MONETARY) or when the source transaction cannot be resolved.
+    filed_within_window: Optional[bool]
+
+
+def describe_claim_contract(claim, *, canonical_context: CanonicalContext) -> ClaimContractView:
+    """Project the contract governing ``claim`` for read-only review surfaces.
+
+    Resolution runs through the GRANTED entitlement event, which is the only
+    lawful path to the policy — the claim's ``claim_basis`` holds submitted facts
+    only and never policy terms. Raises ``InsuranceClaimPolicyError`` when the
+    lineage cannot be resolved, so a review screen fails visibly rather than
+    rendering invented terms.
+    """
+    class_id = claim.class_id
+    seat_id = claim.target_seat_id
+    grant = _resolve_claim_grant(claim.entitlement_id, class_id=class_id, seat_id=seat_id)
+    policy = _resolve_claim_policy(claim.entitlement_id, class_id=class_id, seat_id=seat_id)
+
+    coverage_start_utc = ensure_utc(grant.timestamp)
+    effective_date, _ = coverage_effective_start_utc(
+        canonical_context, coverage_start_utc, policy.waiting_period_days or 0
+    )
+    period = _period_for_claim(claim)
+    week_equiv = _coverage_week_equivalent(
+        policy_terms=policy,
+        period=period,
+        canonical_context=canonical_context,
+    )
+    maximum_payout = _maximum_policy_payout(policy)
+
+    filed_within_window: Optional[bool] = None
+    if policy.insurance_type == _TRANSACTION_INSURANCE_TYPE:
+        allowance_unit = "claim"
+        per_week = policy.claims_per_week_equivalent or Decimal("0")
+        period_allowance = int(math.ceil(per_week * week_equiv))
+        period_consumed = len(
+            insurance_claim_service.list_claims_for_entitlement(
+                class_id=class_id,
+                entitlement_id=claim.entitlement_id,
+                target_seat_id=seat_id,
+                **_period_bounds(period),
+            )
+        )
+        claim_window_days = policy.claim_window_days
+        remaining = maximum_payout - _sum_approved_payouts(
+            class_id, claim.entitlement_id, period
+        )
+
+        source_transaction_id = (claim.claim_basis or {}).get("transaction_id")
+        source_transaction = (
+            db.session.get(Transaction, source_transaction_id)
+            if source_transaction_id is not None else None
+        )
+        if source_transaction is not None and claim_window_days is not None:
+            deadline_end_utc = _filing_deadline_end_utc(
+                canonical_context, ensure_utc(source_transaction.timestamp), claim_window_days
+            )
+            filed_within_window = ensure_utc(claim.submitted_at) < deadline_end_utc
+    elif policy.insurance_type == _PRODUCTIVITY_INSURANCE_TYPE:
+        allowance_unit = "date"
+        per_week = policy.claimable_dates_per_week_equivalent or Decimal("0")
+        period_allowance = int(math.ceil(per_week * week_equiv))
+        period_consumed = len(
+            {
+                row.claim_date
+                for row in insurance_claim_service.list_productivity_dates_for_entitlement(
+                    class_id=class_id,
+                    entitlement_id=claim.entitlement_id,
+                    **_period_bounds(period),
+                )
+            }
+        )
+        claim_window_days = None
+        remaining = maximum_payout - insurance_claim_service.sum_recognized_payout_for_entitlement(
+            class_id=class_id,
+            entitlement_id=claim.entitlement_id,
+            **_period_bounds(period),
+        )
+    else:
+        return ClaimContractView(
+            policy=policy,
+            coverage_start_utc=coverage_start_utc,
+            coverage_effective_date=effective_date,
+            allowance_unit="claim",
+            period_allowance=None,
+            period_consumed=None,
+            claim_window_days=None,
+            maximum_policy_payout=None,
+            remaining_period_cap=None,
+            filed_within_window=None,
+        )
+
+    return ClaimContractView(
+        policy=policy,
+        coverage_start_utc=coverage_start_utc,
+        coverage_effective_date=effective_date,
+        allowance_unit=allowance_unit,
+        period_allowance=period_allowance,
+        period_consumed=period_consumed,
+        claim_window_days=claim_window_days,
+        maximum_policy_payout=maximum_payout,
+        remaining_period_cap=_quantize_currency(max(remaining, Decimal("0.00"))),
+        filed_within_window=filed_within_window,
+    )
+
+
+def _enforce_waiting_period(
+    *,
+    canonical_context: CanonicalContext,
+    policy_terms,
+    granted_event: EntitlementEvent,
+    submitted_at: datetime,
+) -> Optional["InsuranceClaimSubmissionResult"]:
+    """Gate a claim of any policy type at submission on the configured waiting period.
+
+    The wait runs from this entitlement's own GRANTED timestamp, so a tier
+    upgrade/downgrade — which grants a new entitlement — restarts it, while the
+    superseded coverage is unaffected. The period is read from the frozen
+    policy_terms contract, never the live definition.
+    """
+    waiting_period_days = policy_terms.waiting_period_days
+    if not waiting_period_days:
+        return None
+
+    effective_date, effective_start = coverage_effective_start_utc(
+        canonical_context,
+        ensure_utc(granted_event.timestamp),
+        waiting_period_days,
+    )
+    if submitted_at >= effective_start:
+        return None
+
+    return InsuranceClaimSubmissionResult(
+        success=False,
+        error_code="WAITING_PERIOD_NOT_ELAPSED",
+        error_message=(
+            f"Coverage begins after a {int(waiting_period_days)}-day waiting period "
+            f"(on {effective_date.isoformat()})"
+        ),
+    )
+
+
 def _enforce_transaction_submission(
     *,
     canonical_context: CanonicalContext,
     policy_terms,
     granted_event: EntitlementEvent,
     claim_subject: dict,
-    submitted_at: datetime,
     replay_key: str,
+    period: "insurance_coverage.CoveragePeriod",
 ) -> Optional["InsuranceClaimSubmissionResult"]:
     """Gate a TRANSACTION claim at submission.
 
-    Order (SPEC): eligible transaction → within filing window → claim allowance
+    Order (SPEC): eligible transaction → within coverage → claim allowance
     available → period payout capacity available. Returns a failure result on the
     first failed gate, or ``None`` when the claim may be created. All enforcement
     reads the policy_terms contract and immutable claim history — never the live policy.
+
+    The filing window is deliberately NOT enforced here. Operator decision
+    2026-09-21: a claim filed after the window closes should still reach
+    SUBMITTED — it is a teacher's judgment call at approval time (with a
+    required written override), not a submission-time rejection. See
+    ``describe_claim_contract``'s ``filed_within_window`` and the approval gate
+    in ``_resolve_insurance_claim_impl``.
     """
     entitlement_id = granted_event.entitlement_id
     class_id = canonical_context.class_id
@@ -287,25 +513,17 @@ def _enforce_transaction_submission(
         )
 
     coverage_terms = _derive_coverage_terms(
-        policy_terms=policy_terms, granted_event=granted_event, canonical_context=canonical_context
+        policy_terms=policy_terms, period=period, canonical_context=canonical_context
     )
 
-    # (b) Coverage interval + filing window (class-local calendar days).
+    # (b) Coverage interval. The filing window is NOT gated here — see the
+    # docstring above; it is surfaced and enforced at approval instead.
     source_ts_utc = ensure_utc(source_transaction.timestamp)
-    if source_ts_utc < coverage_terms.coverage_start_utc:
+    if source_ts_utc < ensure_utc(granted_event.timestamp):
         return InsuranceClaimSubmissionResult(
             success=False,
             error_code="TRANSACTION_OUTSIDE_COVERAGE",
             error_message="Source transaction predates the purchased coverage",
-        )
-    deadline_end_utc = _filing_deadline_end_utc(
-        canonical_context, source_ts_utc, policy_terms.claim_window_days
-    )
-    if ensure_utc(submitted_at) >= deadline_end_utc:
-        return InsuranceClaimSubmissionResult(
-            success=False,
-            error_code="CLAIM_WINDOW_EXCEEDED",
-            error_message="Filing window for this transaction has closed",
         )
 
     # (c) Claim-allowance — count EVERY claim lifecycle (SUBMITTED+APPROVED+REJECTED)
@@ -319,6 +537,7 @@ def _enforce_transaction_submission(
         class_id=class_id,
         entitlement_id=entitlement_id,
         target_seat_id=seat_id,
+        **_period_bounds(period),
     )
     # A same-correlation replay is the same lifecycle, not an additional draw.
     consumed = sum(1 for claim in existing if claim.correlation_id != replay_key)
@@ -334,7 +553,7 @@ def _enforce_transaction_submission(
 
     # (d) Period payout capacity — only APPROVED payouts consume it.
     remaining = coverage_terms.maximum_policy_payout - _sum_approved_payouts(
-        class_id, entitlement_id
+        class_id, entitlement_id, period
     )
     if remaining <= Decimal("0.00"):
         return InsuranceClaimSubmissionResult(
@@ -491,6 +710,7 @@ def _enforce_productivity_submission(
     policy_terms,
     granted_event: EntitlementEvent,
     parsed_dates: list["_ProductivityClaimedDate"],
+    period: "insurance_coverage.CoveragePeriod",
 ) -> tuple[Optional["InsuranceClaimSubmissionResult"], dict]:
     """Gate a PRODUCTIVITY claim's asserted dates against the two-resource rule.
 
@@ -542,7 +762,7 @@ def _enforce_productivity_submission(
 
     week_equiv = _coverage_week_equivalent(
         policy_terms=policy_terms,
-        coverage_start_utc=ensure_utc(granted_event.timestamp),
+        period=period,
         canonical_context=canonical_context,
     )
     dates_per_week = policy_terms.claimable_dates_per_week_equivalent or Decimal("0")
@@ -553,8 +773,10 @@ def _enforce_productivity_submission(
         EntitlementEvent.event_id == granted_event.event_id
     ).with_for_update().first()
 
+    # The allowance is per coverage period: only dates of claims filed in the
+    # period containing this filing count against it (FEAT-STOR-003 §XII).
     existing_rows = insurance_claim_service.list_productivity_dates_for_entitlement(
-        class_id=class_id, entitlement_id=entitlement_id
+        class_id=class_id, entitlement_id=entitlement_id, **_period_bounds(period)
     )
     existing_dates = {row.claim_date for row in existing_rows}
     new_dates = {d.claim_date for d in parsed_dates}
@@ -575,7 +797,7 @@ def _enforce_productivity_submission(
 
     remaining = _maximum_policy_payout(policy_terms) - (
         insurance_claim_service.sum_recognized_payout_for_entitlement(
-            class_id=class_id, entitlement_id=entitlement_id
+            class_id=class_id, entitlement_id=entitlement_id, **_period_bounds(period)
         )
     )
     if remaining <= Decimal("0.00"):
@@ -806,9 +1028,10 @@ def submit_insurance_claim(
     claim_subject: dict,
     correlation_id: str | None = None,
     idempotency_key: str | None = None,
+    reference_time_utc: datetime | None = None,
 ) -> InsuranceClaimSubmissionResult:
     """
-    Submit an insurance claim against an active entitlement.
+    Submit an insurance claim against a usable entitlement.
 
     Args:
         canonical_context: CanonicalContext with user_id, class_id, seat_id, actor_role
@@ -816,6 +1039,8 @@ def submit_insurance_claim(
         claim_subject: Type-specific claim data (e.g., {transaction_id: X})
         correlation_id: Optional; generated if not provided
         idempotency_key: Optional replay guard
+        reference_time_utc: Execution context — the canonically resolved filing
+            time; omitted, the canonical current time
 
     Returns:
         InsuranceClaimSubmissionResult with claim_id or error
@@ -826,6 +1051,7 @@ def submit_insurance_claim(
         claim_subject=claim_subject,
         correlation_id=correlation_id,
         idempotency_key=idempotency_key,
+        reference_time_utc=reference_time_utc,
     )
 
 
@@ -837,6 +1063,7 @@ def _submit_insurance_claim_impl(
     claim_subject: dict,
     correlation_id: str | None = None,
     idempotency_key: str | None = None,
+    reference_time_utc: datetime | None = None,
 ) -> InsuranceClaimSubmissionResult:
     """Implementation of insurance claim submission."""
     try:
@@ -884,24 +1111,6 @@ def _submit_insurance_claim_impl(
                 error_message=f"Entitlement type is {granted_event.entitlement_type}, not INSURANCE",
             )
 
-        # Check no terminal event exists
-        terminal_event = (
-            db.session.query(EntitlementEvent)
-            .filter(
-                EntitlementEvent.entitlement_id == entitlement_id,
-                EntitlementEvent.class_id == canonical_context.class_id,
-                EntitlementEvent.event_type.in_(["CONSUMED", "EXPIRED", "REVOKED"]),
-            )
-            .first()
-        )
-
-        if terminal_event:
-            return InsuranceClaimSubmissionResult(
-                success=False,
-                error_code="ENTITLEMENT_TERMINAL",
-                error_message=f"Entitlement already has terminal event: {terminal_event.event_type}",
-            )
-
         # 3. Resolve the immutable insurance policy that governs this entitlement.
         #    Claim eligibility/economics come from the policy definition (the
         #    entitlement's policy_uuid), never from a payload snapshot. Fails
@@ -919,13 +1128,15 @@ def _submit_insurance_claim_impl(
                 error_message=str(e),
             )
 
-        # Temporal anchor for submission (class-local).
+        # Filing time (class-local authority). Eligibility is evaluated once,
+        # here, and fixed: a claim filed while usable stays adjudicable after a
+        # later lapse, and a claim cannot be filed while gated (FEAT-STOR-003 §IV).
         temporal_context = canonical_temporal_resolver(
             CLASS_LEVEL_EVALUATION,
             canonical_execution_context=canonical_context,
             primitive="current_time",
+            reference_time_utc=reference_time_utc,
         )
-
         if not temporal_context:
             return InsuranceClaimSubmissionResult(
                 success=False,
@@ -933,6 +1144,37 @@ def _submit_insurance_claim_impl(
                 error_message="Cannot determine temporal context",
             )
         now = temporal_context.canonical_now_utc
+
+        # The entitlement must be usable at the filing time (DOM-STORE-001
+        # §VIII.E.1): not expired/revoked, inside a coverage period, and every
+        # required premium of its lineage satisfied by then.
+        usability = insurance_coverage.evaluate_insurance_usability(
+            canonical_context.class_id, entitlement_id, reference_time_utc=now
+        )
+        if not usability.usable:
+            if usability.reason == "TERMINATED":
+                return InsuranceClaimSubmissionResult(
+                    success=False,
+                    error_code="ENTITLEMENT_TERMINAL",
+                    error_message=(
+                        f"Entitlement already has terminal event: "
+                        f"{usability.terminal_event.event_type}"
+                    ),
+                )
+            if usability.reason == "PREMIUM_UNPAID":
+                return InsuranceClaimSubmissionResult(
+                    success=False,
+                    error_code="COVERAGE_GATED",
+                    error_message=(
+                        "Coverage is paused until every premium due so far is paid"
+                    ),
+                )
+            return InsuranceClaimSubmissionResult(
+                success=False,
+                error_code="NO_COVERAGE_PERIOD",
+                error_message="The entitlement has no coverage period in force at filing",
+            )
+        period = usability.period
 
         # 4. Validate claim subject structure
         if not isinstance(claim_subject, dict):
@@ -976,14 +1218,25 @@ def _submit_insurance_claim_impl(
 
         parsed_productivity_dates: list[_ProductivityClaimedDate] = []
 
+        # The configured waiting period delays when coverage becomes claimable,
+        # for every policy type (operator decision, 2026-09-25).
+        enforcement = _enforce_waiting_period(
+            canonical_context=canonical_context,
+            policy_terms=policy_terms,
+            granted_event=granted_event,
+            submitted_at=now,
+        )
+        if enforcement is not None:
+            return enforcement
+
         if policy_terms.insurance_type == _TRANSACTION_INSURANCE_TYPE:
             enforcement = _enforce_transaction_submission(
                 canonical_context=canonical_context,
                 policy_terms=policy_terms,
                 granted_event=granted_event,
                 claim_subject=claim_subject,
-                submitted_at=now,
                 replay_key=replay_key,
+                period=period,
             )
             if enforcement is not None:
                 return enforcement
@@ -1004,6 +1257,7 @@ def _submit_insurance_claim_impl(
                 policy_terms=policy_terms,
                 granted_event=granted_event,
                 parsed_dates=parsed_productivity_dates,
+                period=period,
             )
             if enforcement is not None:
                 return enforcement
@@ -1264,10 +1518,12 @@ def _approve_productivity_claim(
     hourly_rate = _resolve_hourly_pay_rate(class_id)
     adjustments = date_adjustments or {}
 
-    # Remaining period payout capacity BEFORE this claim's dates are recognized.
+    # Remaining payout capacity of the period this claim was FILED in, before
+    # its dates are recognized (FEAT-STOR-003 §XII).
+    period = _period_for_claim(claim)
     remaining = _maximum_policy_payout(policy_terms) - (
         insurance_claim_service.sum_recognized_payout_for_entitlement(
-            class_id=class_id, entitlement_id=entitlement_id
+            class_id=class_id, entitlement_id=entitlement_id, **_period_bounds(period)
         )
     )
     if remaining <= Decimal("0.00"):
@@ -1432,6 +1688,7 @@ def resolve_insurance_claim(
     claim_id: str,
     approved: bool,
     override_reason: str | None = None,
+    filing_window_override_reason: str | None = None,
     date_adjustments: dict | None = None,
     idempotency_key: str | None = None,
 ) -> InsuranceClaimResolutionResult:
@@ -1449,6 +1706,9 @@ def resolve_insurance_claim(
         claim_id: ID of the InsuranceClaim to adjudicate
         approved: True for approval, False for rejection
         override_reason: Optional decision note (recorded on the claim)
+        filing_window_override_reason: Required to approve a TRANSACTION claim
+            filed after its policy's filing window closed; ignored otherwise.
+            Refused with ``FILING_WINDOW_OVERRIDE_REQUIRED`` when needed and absent.
         date_adjustments: PRODUCTIVITY-only per-date teacher adjustments, keyed by
             ISO date string → {"hours": Decimal, "note": str}. A date whose approved
             hours differ from the submitted hours REQUIRES a note.
@@ -1462,6 +1722,7 @@ def resolve_insurance_claim(
         claim_id=claim_id,
         approved=approved,
         override_reason=override_reason,
+        filing_window_override_reason=filing_window_override_reason,
         date_adjustments=date_adjustments,
         idempotency_key=idempotency_key,
     )
@@ -1474,6 +1735,7 @@ def _resolve_insurance_claim_impl(
     claim_id: str,
     approved: bool,
     override_reason: str | None = None,
+    filing_window_override_reason: str | None = None,
     date_adjustments: dict | None = None,
     idempotency_key: str | None = None,
 ) -> InsuranceClaimResolutionResult:
@@ -1618,6 +1880,27 @@ def _resolve_insurance_claim_impl(
                     error_message=f"{verdict.reason_code}: {verdict.detail}",
                 )
 
+            # Filing window is a soft, teacher-overridable gate — checked HERE
+            # (approval), never at submission. Operator decision 2026-09-21: a
+            # late claim still reaches SUBMITTED; approving it anyway requires a
+            # written justification, permanently recorded on the claim.
+            if policy_terms.claim_window_days is not None:
+                deadline_end_utc = _filing_deadline_end_utc(
+                    canonical_context,
+                    ensure_utc(source_transaction.timestamp),
+                    policy_terms.claim_window_days,
+                )
+                filed_late = ensure_utc(claim.submitted_at) >= deadline_end_utc
+                if filed_late and not (filing_window_override_reason or "").strip():
+                    return InsuranceClaimResolutionResult(
+                        success=False,
+                        error_code="FILING_WINDOW_OVERRIDE_REQUIRED",
+                        error_message=(
+                            "This claim was filed outside the policy's filing window. "
+                            "Provide a written override reason to approve it anyway."
+                        ),
+                    )
+
             gross_loss = abs(source_transaction.amount or Decimal("0.00"))
             gross_reimbursement = _quantize_currency(
                 gross_loss * policy_terms.reimbursement_percentage / Decimal("100")
@@ -1637,30 +1920,17 @@ def _resolve_insurance_claim_impl(
                 # policy pays only its remaining capacity. Zero capacity fails as
                 # CLAIM_ALLOWANCE_EXHAUSTED rather than a zero-dollar approval. Later
                 # submissions never retroactively deny an earlier claim.
-                granted_event = (
-                    db.session.query(EntitlementEvent)
-                    .filter(
-                        EntitlementEvent.entitlement_id == entitlement_id,
-                        EntitlementEvent.class_id == canonical_context.class_id,
-                        EntitlementEvent.event_type == "GRANTED",
-                        EntitlementEvent.target_seat_id == claim.target_seat_id,
-                    )
-                    .first()
-                )
-                if granted_event is None:
-                    return InsuranceClaimResolutionResult(
-                        success=False,
-                        error_code="ENTITLEMENT_INVALID",
-                        error_message="GRANTED entitlement not found for this claim",
-                    )
+                # The period is the one containing the claim's FILING time, fixed at
+                # filing — not the period in force at approval.
+                period = _period_for_claim(claim)
                 coverage_terms = _derive_coverage_terms(
                     policy_terms=policy_terms,
-                    granted_event=granted_event,
+                    period=period,
                     canonical_context=canonical_context,
                 )
                 remaining_period_payout = (
                     coverage_terms.maximum_policy_payout
-                    - _sum_approved_payouts(canonical_context.class_id, entitlement_id)
+                    - _sum_approved_payouts(canonical_context.class_id, entitlement_id, period)
                 )
                 if remaining_period_payout <= Decimal("0.00"):
                     return InsuranceClaimResolutionResult(
@@ -1679,7 +1949,6 @@ def _resolve_insurance_claim_impl(
                 target_seat_id=student_seat.id,
                 actor_seat_id=teacher_seat.id,
                 mechanism="system",
-                user_id=student_seat.user_id,
                 amount=reimbursement_amount,
                 account_type="checking",
                 type="insurance_reimbursement",
@@ -1696,6 +1965,7 @@ def _resolve_insurance_claim_impl(
                     decided_by_seat_id=teacher_seat.id,
                     approved=True,
                     decision_note=override_reason,
+                    filing_window_override_reason=filing_window_override_reason,
                     result_amount=reimbursement_amount,
                     ledger_transaction_id=ledger_transaction_id,
                 )

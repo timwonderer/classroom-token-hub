@@ -15,8 +15,7 @@ jobs:
   schema-gate-enforcement:
     name: Schema Change Gate
     runs-on: ubuntu-latest
-    environment: testing
-    
+
     # Use a service container for true migration rehearsal (Requirement 3.5)
     services:
       postgres:
@@ -205,11 +204,16 @@ jobs:
           FLASK_APP: app
           FLASK_ENV: testing
           DATABASE_URL: postgresql://user:password@localhost:5432/classroom_test_db
-
-
-          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
-          PEPPER_KEY: ${{ secrets.PEPPER_KEY }}
-          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          # `flask db` imports the app outside pytest, so conftest.py cannot
+          # supply these and app/__init__.py refuses to start without them.
+          # They are the same throwaway values conftest.py uses, not secrets.
+          # Do not read them from secrets: Dependabot and fork PRs receive
+          # none, and an unset secret expands to an empty string, which the
+          # startup check rejects.
+          SECRET_KEY: test-secret
+          PEPPER_KEY: test-primary-pepper
+          ENCRYPTION_KEY: jhe53bcYZI4_MZS4Kb8hu8-xnQHHvwqSX8LN4sDtzbw=
+          AUDIT_HMAC_KEY: test-audit-hmac-key-for-tests-only-not-for-production
         run: |
           echo "🔄 Starting Migration Rehearsal..."
 
@@ -252,11 +256,8 @@ jobs:
         env:
           FLASK_APP: app
           FLASK_ENV: testing
+          # conftest.py supplies the app keys under pytest; see Rehearse Migration.
           DATABASE_URL: postgresql://user:password@localhost:5432/classroom_test_db
-
-          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
-          PEPPER_KEY: ${{ secrets.PEPPER_KEY }}
-          SECRET_KEY: ${{ secrets.SECRET_KEY }}
         run: |
           echo "🔥 Running Smoke Tests on Critical Workflows..."
           pytest -v -m "critical or regression"

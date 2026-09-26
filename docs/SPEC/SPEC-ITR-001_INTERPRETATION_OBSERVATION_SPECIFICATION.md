@@ -171,11 +171,11 @@ Per INV-ITR-016, when the same act is recorded both by a source domain (Entitlem
 
 The event-origin classifier used throughout §6, §7, and §9 is:
 
-- **Student-originated:** `Transaction.mechanism = SELF` AND `Transaction.original_transaction_id IS NULL` AND `Transaction.is_void = FALSE` AND `Transaction.feat_code` is not in the system-FEAT set (payroll accrual, interest accrual, obligation assessment, admin adjustment, ledger resolution).
+- **Student-originated:** `Transaction.mechanism = SELF` AND `Transaction.original_transaction_id IS NULL` AND `Transaction.status != VOID` AND `Transaction.feat_code` is not in the system-FEAT set (payroll accrual, interest accrual, obligation assessment, admin adjustment, ledger resolution).
 - **Teacher-originated:** `Transaction.mechanism = TEACHER`.
 - **System-originated:** `Transaction.mechanism = SYSTEM`.
 - **Reversal:** `Transaction.original_transaction_id IS NOT NULL` (per `DOM-LED-001` INV-LED-003).
-- **Void:** `Transaction.is_void = TRUE` on the original.
+- **Void:** a monetary transaction has no lawful void state; corrections are represented by a linked reversal transaction.
 
 Per INV-ITR-015, `Transaction.type` is not consulted for this classification.
 
@@ -580,7 +580,7 @@ Candidate quantities reported as fractions or percentages SHALL always be paired
 
 Per `DOM-LED-001` INV-LED-003 and INV-LED-010:
 
-- Rows with `is_void = TRUE` are excluded from all counts and volumes.
+- Rows with `status = VOID` are excluded from all counts and volumes; new monetary corrections must use reversal rows rather than creating this legacy terminal state.
 - Rows with `original_transaction_id IS NOT NULL` are classified as reversals per §10.2 category 5 and are excluded from other categories.
 
 Per `DOM-ITR-001` INV-ITR-005, all reversals must be reflected in every downstream output.

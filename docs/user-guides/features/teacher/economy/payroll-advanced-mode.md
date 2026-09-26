@@ -86,8 +86,8 @@ The form checks three things when you save and lists any failures in a red box a
 > [!CAUTION]
 > **Rounding is not applied.** All three options behave identically. Time is measured to the second and money is rounded to the cent, whatever the dropdown says. This matters most if you chose **Per Hour** or **Per Day** as your increment expecting partial periods to be dropped — they are not, and a student who works nine minutes of an hour is paid for nine minutes.
 
-> [!WARNING]
-> **Payroll does not start running on its own.** The in-page guide describes an *Auto run* setting and *attendance rules* for choosing which tap types count. Neither control exists on the form. A scheduled run only continues a schedule that nothing currently starts, so in practice payroll runs when you press **Run Payroll**. Put the payday in your own calendar and treat **Next Payroll** on this page as a reminder rather than a promise.
+> [!NOTE]
+> **Due payroll cycles run through the scheduler.** The scheduled job checks each class's **Next Payroll** date and invokes the same completion workflow as **Run Payroll**. The page does not provide a separate auto-run toggle; saving the schedule is what makes a class eligible for automatic execution.
 
 > [!NOTE]
 > **The Current Settings summary misreports two things.** Its rounding sentence always reads *rounds down* no matter which option you selected, and its overtime sentence never appears even when overtime is enabled. The form fields themselves show what was saved — trust those over the summary.

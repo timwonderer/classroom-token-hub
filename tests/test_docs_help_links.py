@@ -113,3 +113,73 @@ def test_teacher_help_links_resolve(client, app, url):
 def test_student_help_links_resolve(client, app, url):
     initialize_as_student("chemistry_p1", client, app)
     _assert_help_links_resolve(client, url)
+
+
+def _templates_extending(layout: str) -> list[Path]:
+    """Every template that renders inside the given portal chrome.
+
+    Both quote styles are matched deliberately. Jinja accepts either, so a
+    single-quoted `extends` is an ordinary template — but a guard that only
+    looked for the double-quoted form would silently stop covering it, which is
+    exactly how `student_rent.html` shipped without a help panel while this test
+    reported the student portal clean.
+    """
+    needles = (f'extends "{layout}"', f"extends '{layout}'")
+    return sorted(
+        path
+        for path in (REPO_ROOT / "templates").glob("*.html")
+        if any(needle in path.read_text(encoding="utf-8") for needle in needles)
+    )
+
+
+def _admin_templates() -> list[Path]:
+    """Every template that renders inside the teacher chrome."""
+    return _templates_extending("layout_admin.html")
+
+
+def test_every_admin_page_explains_itself():
+    """No teacher page may fall through to the generic help panel.
+
+    `layout_admin.html` ships a one-sentence fallback body so a page without
+    guidance still renders something. That fallback is a placeholder, not
+    content: it tells the teacher nothing about the page they are looking at.
+    A page earns its help panel one of two ways — by overriding
+    `contextual_help_body` to fill the shared offcanvas, or by overriding
+    `contextual_help_trigger` to open a panel of its own. Doing neither is the
+    blank-panel defect this test exists to prevent from reappearing.
+    """
+    blank = [
+        path.name
+        for path in _admin_templates()
+        if "contextual_help_body" not in path.read_text(encoding="utf-8")
+        and "contextual_help_trigger" not in path.read_text(encoding="utf-8")
+    ]
+    assert not blank, (
+        "these teacher pages render the generic fallback help panel: "
+        + ", ".join(blank)
+    )
+
+
+def test_every_student_page_explains_itself():
+    """No student page may fall through to the generic help panel.
+
+    The same contract as the teacher shell, and the student side needs it more
+    rather than less. `layout_admin.html` only renders its "Need Help?" trigger
+    when a doc path resolved, so a teacher page with nothing to say showed no
+    button. `layout_student.html` renders the trigger unconditionally and
+    forces a fallback `help_doc_path`, so a student page with no
+    `contextual_help_body` still offers help and then answers with a
+    placeholder sentence.
+
+    That is worse than no button: it spends a student's trust on a dead end,
+    and the students are the audience least able to route around it.
+    """
+    blank = [
+        path.name
+        for path in _templates_extending("layout_student.html")
+        if "contextual_help_body" not in path.read_text(encoding="utf-8")
+    ]
+    assert not blank, (
+        "these student pages render the generic fallback help panel: "
+        + ", ".join(blank)
+    )

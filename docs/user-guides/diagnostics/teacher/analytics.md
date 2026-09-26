@@ -11,7 +11,7 @@ roles: [teacher]
 **Quick diagnostic guide for common analytics dashboard issues.**
 
 **Version:** 1.7.0+
-**Route:** `/admin/analytics`
+**Route:** `/admin/interpretation`
 
 ---
 

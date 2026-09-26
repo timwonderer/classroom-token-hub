@@ -22,13 +22,14 @@ from app.hash_utils import verify_password
 
 from app.extensions import db, limiter
 from app.models import (
-    StoreItem, Transaction, TransactionStatus, AttendanceSession,
+    Transaction, TransactionStatus, AttendanceSession,
     AttendanceReasonCode, HallPassLog, HallPassSettings,
     # Legacy tap models are unauthorized; use attendance_sessions (DOM-PROD-001).
     # StoreItemBlock removed — store_item_blocks unauthorized; use store_item_visibility (DOM-STORE-001)
     StoreItemVisibility, User,
     _quantize_currency,
     ClassEconomy, Seat, IdentityProfile, PayrollEvent,
+    PendingAction,
 )
 from app.auth import (
     login_required,
@@ -50,22 +51,29 @@ from app.feats.attendance import (
 from app.feats.prod import record_attendance_session, record_hall_pass_log
 from app.routes.student import (
     get_feature_settings_for_student,
-    get_rent_settings_for_context,
-    _calculate_rent_coverage_due_date,
-    _is_student_coverage_period_paid,
 )
 from app.services.context_resolver import resolve_canonical_context, ContextResolutionError
-from app.feats.base import FEATContext, requires_feat_context
+from app.feats.base import FEATContext, FEATContextError
 from app.feats.store_purchase_feat import execute_store_purchase
 from app.feats.ledger_resolution_feat import build_intended_ledger_plan, resolve_intended_ledger_plan, apply_resolved_ledger_plan
 from app.services import store_service
-from app.services.entitlement_read_service import get_purchase_count, get_active_rent_grant
+from app.services.entitlement_read_service import (
+    derive_display_status,
+    entitlement_terminal_event,
+    get_purchase_count,
+    latest_entitlement_grant,
+    pending_action_for_entitlement,
+)
 from app.services.class_configuration_query_service import (
     get_class_economy,
     get_all_classes_by_teacher,
     get_hall_pass_settings,
 )
 from app.services.entitlement_service import consume_entitlement, get_hall_pass_balance, grant_hall_passes
+from app.services.hall_pass_status_service import (
+    HALL_PASS_STATUS_RETURNED,
+    resolve_hall_pass_lifecycle_status,
+)
 from app.services.hall_pass_request_queue import (
     PendingHallPassRequest,
     clear_pending_hall_pass_requests_for_seat,
@@ -93,6 +101,7 @@ from app.services.attendance_service import (
     calculate_unpaid_attendance_seconds,
     calculate_worked_attendance_seconds_today,
     get_class_attendance_status,
+    is_done_for_day,
 )
 from app.services.ledger_posting_service import create_pending_transaction, create_pending_transaction_idempotent
 from app.services.ledger_balance_query_service import get_available_balances
@@ -119,49 +128,6 @@ def _safe_exception_prefix_message(exc, default_message, *, allowed_prefixes=Non
                 return allowed_prefix
     return default_message
 
-
-def _latest_entitlement_grant(entitlement_id: str):
-    return (
-        EntitlementEvent.query
-        .filter(
-            EntitlementEvent.entitlement_id == entitlement_id,
-            EntitlementEvent.event_type == "GRANTED",
-        )
-        .order_by(EntitlementEvent.timestamp.desc(), EntitlementEvent.event_id.desc())
-        .first()
-    )
-
-
-def _entitlement_terminal_event(entitlement_id: str):
-    return (
-        EntitlementEvent.query
-        .filter(
-            EntitlementEvent.entitlement_id == entitlement_id,
-            EntitlementEvent.event_type.in_(["CONSUMED", "EXPIRED", "REVOKED"]),
-        )
-        .order_by(EntitlementEvent.timestamp.desc(), EntitlementEvent.event_id.desc())
-        .first()
-    )
-
-
-def _pending_action_for_entitlement(entitlement_id: str):
-    return (
-        PendingAction.query
-        .filter(PendingAction.entitlement_id == entitlement_id)
-        .order_by(PendingAction.submitted_at.desc(), PendingAction.pending_action_id.desc())
-        .first()
-    )
-
-
-def derive_display_status(entitlement_id: str) -> str:
-    """Return the canonical display status for an entitlement lineage."""
-    if _pending_action_for_entitlement(entitlement_id):
-        return "processing"
-    if _entitlement_terminal_event(entitlement_id):
-        return "consumed"
-    if _latest_entitlement_grant(entitlement_id):
-        return "purchased"
-    return "unknown"
 
 @api_bp.errorhandler(ContextResolutionError)
 def handle_api_context_resolution_error(e):
@@ -240,9 +206,9 @@ def _resolve_class_display_label(class_id, fallback_block=None):
     return fallback_block or "Unknown Class"
 
 
-def _get_hall_pass_settings_scope(class_id):
+def _get_hall_pass_settings_scope(user_id, class_id):
     """Resolve canonical class scope for hall pass settings."""
-    return resolve_class_scope(None, class_id=class_id)
+    return resolve_class_scope(user_id, class_id=class_id)
 
 
 def _admin_has_class_scope(canonical_context, class_id):
@@ -309,6 +275,41 @@ def get_tips(user_type):
 
 # -------------------- STORE API --------------------
 
+# Student-facing copy for each way a purchase can be refused, keyed by the
+# FEAT's `error_code`. The FEAT's own `error_message` is a developer diagnostic
+# and must not reach a student: it names internal domain boundaries and can
+# carry a raw reason code. Answering the two questions a student actually has —
+# what went wrong, and what they can do — is a presentation concern, so it is
+# decided here rather than in the domain that raised it.
+_PURCHASE_ERROR_COPY = {
+    "INSUFFICIENT_FUNDS": "You do not have enough in checking to buy this right now.",
+    "HOLDING_LIMIT_EXCEEDED": "You already have as many of these as you are allowed to hold.",
+    "RENT_PAST_DUE_PURCHASE_BLOCKED": "Rent is overdue, so this item cannot be bought until it is paid.",
+    "COLLECTIVE_GOAL_EXPIRED": "This class goal has closed, so it can no longer be bought into.",
+    "QUANTITY_NOT_ALLOWED": "That quantity is not available for this item.",
+    "PRODUCT_NOT_PURCHASABLE": "This item is not on sale right now.",
+    "DIRECT_PURCHASE_NOT_ALLOWED": "This item cannot be bought directly — your teacher grants it.",
+    "PRICE_NOT_CONFIGURED": "This item has no price set yet, so it cannot be bought.",
+    "INSURANCE_NOT_PURCHASABLE_VIA_STORE": "Insurance is bought from the Insurance page, not the Store.",
+    "POLICY_NOT_FOUND": "This item is no longer available.",
+    "POLICY_INVALID": "This item is not available right now.",
+    "POLICY_SCOPE_MISMATCH": "This item belongs to a different class.",
+    "INVALID_CONTEXT": "Your class session could not be confirmed. Sign in again and retry.",
+}
+
+_PURCHASE_ERROR_FALLBACK = "The purchase could not be completed. Nothing was charged."
+
+
+def _student_purchase_error(error_code):
+    """Student-readable sentence for a purchase refusal.
+
+    An unmapped code falls back rather than leaking the code itself: a student
+    can do nothing with `POLICY_SCOPE_MISMATCH`, and a new code added to the
+    FEAT should degrade to something harmless rather than to jargon.
+    """
+    return _PURCHASE_ERROR_COPY.get(error_code, _PURCHASE_ERROR_FALLBACK)
+
+
 @api_bp.route('/purchase-item', methods=['POST'])
 @login_required
 def purchase_item():
@@ -356,12 +357,25 @@ def purchase_item():
         canonical_context=context,
         policy_uuid=policy_uuid,
         quantity=quantity,
-        instant_use=False,  # TODO: Read from product policy
     )
 
     if not result.success:
-        error_msg = result.error_message or f"Purchase failed: {result.error_code}"
-        return jsonify({"status": "error", "message": error_msg}), 400
+        # `result.error_message` is a diagnostic written for developers and
+        # logs — it names internal domains ("Purchase denied by Ledger") and the
+        # ledger branch interpolates a raw reason code, or the literal string
+        # "unknown", straight into it. Rendering it put that in front of a
+        # child. `error_code` is the classification and is already correct on
+        # every branch, so the student-facing sentence is derived from it here,
+        # at the presentation boundary, and the diagnostic stays in the log.
+        current_app.logger.info(
+            "Store purchase refused: code=%s detail=%s",
+            result.error_code,
+            result.error_message,
+        )
+        return jsonify({
+            "status": "error",
+            "message": _student_purchase_error(result.error_code),
+        }), 400
 
     return jsonify({
         "status": "success",
@@ -391,12 +405,19 @@ def use_item():
     if not all([entitlement_id, passphrase]):
         return jsonify({"status": "error", "message": "Missing entitlement ID or passphrase."}), 400
 
-    # 1. Verify passphrase
+    # 1. Verify the passphrase.
+    #
+    # FEAT-IDEN-002 "Credential boundary" is normative and assigns "using an
+    # entitlement except hall passes" to the passphrase. Hall passes are the
+    # named exception and use the PIN, but they are not redeemable here at all:
+    # a hall pass is exercised from the attendance Break flow
+    # (`/api/hall-pass/request`), which is the only surface that knows whether
+    # the student is currently clocked in. See the hall-pass refusal below.
     if not verify_password(passphrase, user.passphrase_hash or ''):
         return jsonify({"status": "error", "message": "Incorrect passphrase."}), 403
 
     # 2. Get the entitlement lineage
-    entitlement = _latest_entitlement_grant(entitlement_id)
+    entitlement = latest_entitlement_grant(entitlement_id)
     if not entitlement or entitlement.target_seat_id != student.id:
         return jsonify({"status": "error", "message": "Invalid item."}), 404
 
@@ -405,16 +426,16 @@ def use_item():
     if display_status not in ('purchased', 'processing'):
         return jsonify({"status": "error", "message": "This item is not available for redemption."}), 400
 
-    store_item = db.session.get(StoreItem, entitlement.product_id)
+    store_item = store_service.resolve_entitlement_product(entitlement)
     if not store_item or store_item.class_id != entitlement.class_id:
         return jsonify({"status": "error", "message": "Invalid item."}), 404
 
-    current_action = _pending_action_for_entitlement(entitlement.entitlement_id)
+    current_action = pending_action_for_entitlement(entitlement.entitlement_id)
     if current_action:
         return jsonify({"status": "error", "message": "This item is already pending approval."}), 400
 
     if store_item.item_type == 'immediate':
-        terminal = _entitlement_terminal_event(entitlement.entitlement_id)
+        terminal = entitlement_terminal_event(entitlement.entitlement_id)
         if terminal:
             return jsonify({"status": "error", "message": "This item is not available for redemption."}), 400
         from app.feats.entitlement_lifecycle_feat import execute_use_item_immediate
@@ -432,30 +453,55 @@ def use_item():
         return jsonify({"status": "success", "message": f"You used {store_item.name}."})
 
     if store_item.item_type == 'hall_pass':
-        action_payload = {
-            "action": "REQUEST",
-            "item_type": store_item.item_type,
-            "product_id": store_item.id,
-            "policy_uuid": str(store_item.id),
-            "details": details or None,
-            "destination": details or "Hall Pass",
-        }
-    else:
-        action_payload = {
-            "action": "REQUEST",
-            "item_type": store_item.item_type,
-            "product_id": store_item.id,
-            "policy_uuid": str(store_item.id),
-            "details": details or None,
-        }
+        # A hall pass is not redeemed from the Store. Exercising one marks the
+        # student *out of an active work session* — DOM-PROD-001 records it on
+        # the attendance timeline as `reason_code = hall_pass` carrying the
+        # consumed entitlement's `hall_pass_id` — so outside a session there is
+        # nothing to be marked out of, and this route cannot know.
+        #
+        # `/api/hall-pass/request` is the lawful path: it refuses when the seat
+        # holds no pass and when the latest attendance event is not `active`,
+        # and it is reached from the dashboard Break flow, where the control is
+        # disabled until the student starts work. This branch previously built a
+        # second request with none of those preconditions, so a student who had
+        # never clocked in — or who had already finished for the day — could
+        # request a pass from the Store tab.
+        #
+        # Purchased passes still reach the student: FEAT-STOR-001 credits the
+        # hall-pass balance at sale, which the dashboard renders as passes
+        # remaining. Nothing is lost by refusing here.
+        return jsonify({
+            "status": "error",
+            "message": "Hall passes are used from the Break button on your dashboard, once you have started work.",
+        }), 400
 
+    action_payload = {
+        "action": "REQUEST",
+        "item_type": store_item.item_type,
+        "product_id": store_item.product_lineage_uuid,
+        "policy_uuid": store_item.policy_uuid,
+        "details": details or None,
+    }
+
+    # PendingAction.correlation_id is unique, and the key below becomes that
+    # correlation. A rejected request stays on file for the audit history while
+    # `pending_action_for_entitlement` above only blocks on *unresolved* rows —
+    # so a student may legitimately re-request after a rejection, and a key
+    # derived from the entitlement alone would collide at flush. Keying on the
+    # attempt keeps each request distinct; a double submit within one attempt is
+    # already refused by the pending-action check above.
+    request_attempt = (
+        PendingAction.query
+        .filter(PendingAction.entitlement_id == entitlement.entitlement_id)
+        .count()
+    )
     from app.feats.entitlement_lifecycle_feat import execute_use_item_request
     execute_use_item_request(
         class_id=entitlement.class_id,
         seat_id=student.id,
         entitlement_id=entitlement.entitlement_id,
         action_payload=action_payload,
-        idempotency_key=f"feat:stor:use_req:{entitlement.entitlement_id}",
+        idempotency_key=f"feat:stor:use_req:{entitlement.entitlement_id}:{request_attempt}",
     )
     return jsonify({"status": "success", "message": f"You have requested to use {store_item.name}. Awaiting admin approval."})
 
@@ -478,7 +524,7 @@ def approve_redemption():
     if not entitlement_id:
         return jsonify({"status": "error", "message": "Missing entitlement ID."}), 400
 
-    entitlement = _latest_entitlement_grant(entitlement_id)
+    entitlement = latest_entitlement_grant(entitlement_id)
     if not entitlement:
         return jsonify({"status": "error", "message": "Invalid item."}), 404
 
@@ -493,14 +539,14 @@ def approve_redemption():
     if not has_membership:
         return jsonify({"status": "error", "message": "You do not have access to this class."}), 403
 
-    store_item = db.session.get(StoreItem, entitlement.product_id)
+    store_item = store_service.resolve_entitlement_product(entitlement)
     if not store_item or not store_item.class_id or store_item.class_id != entitlement.class_id:
         return jsonify({"status": "error", "message": "Unauthorized."}), 403
     if not _admin_has_class_scope(g.canonical_context, store_item.class_id):
         return jsonify({"status": "error", "message": "Unauthorized."}), 403
 
     try:
-        pending_action = _pending_action_for_entitlement(entitlement.entitlement_id)
+        pending_action = pending_action_for_entitlement(entitlement.entitlement_id)
         if not pending_action:
             return jsonify({"status": "error", "message": "Redemption request is no longer pending and cannot be approved."}), 409
 
@@ -537,7 +583,7 @@ def reject_redemption():
     if not entitlement_id:
         return jsonify({"status": "error", "message": "Missing entitlement ID."}), 400
 
-    entitlement = _latest_entitlement_grant(entitlement_id)
+    entitlement = latest_entitlement_grant(entitlement_id)
     if not entitlement:
         return jsonify({"status": "error", "message": "Invalid item."}), 404
 
@@ -548,14 +594,14 @@ def reject_redemption():
 
     # SECURITY: Verify the current admin has class scope for this store item
     user_id = g.canonical_context.user_id
-    store_item = db.session.get(StoreItem, entitlement.product_id)
+    store_item = store_service.resolve_entitlement_product(entitlement)
     if not store_item or not store_item.class_id or store_item.class_id != entitlement.class_id:
         return jsonify({"status": "error", "message": "Unauthorized."}), 403
     if not _admin_has_class_scope(g.canonical_context, store_item.class_id):
         return jsonify({"status": "error", "message": "Unauthorized."}), 403
 
     try:
-        pending_action = _pending_action_for_entitlement(entitlement.entitlement_id)
+        pending_action = pending_action_for_entitlement(entitlement.entitlement_id)
         if not pending_action:
             return jsonify({"status": "error", "message": "Redemption request could not be rejected in its current state."}), 409
 
@@ -593,6 +639,16 @@ def request_hall_pass():
     destination = (data.get("destination") or data.get("reason") or "Bathroom").strip()
     if not destination:
         return jsonify({"status": "error", "message": "Destination is required."}), 400
+
+    # FEAT-IDEN-002 "Credential boundary" is normative: hall-pass use is the
+    # explicit exception to the entitlement rule and takes the PIN. This route
+    # is the only lawful way to exercise a pass, and it previously took none —
+    # anyone with the session could spend a pass off the seat's balance and put
+    # the student on the attendance timeline as out of the room.
+    student_user = db.session.get(User, context.user_id)
+    pin = (data.get("pin") or "").strip()
+    if not student_user or not verify_password(pin, student_user.pin_hash or ''):
+        return jsonify({"status": "error", "message": "Incorrect PIN."}), 403
 
     if get_hall_pass_balance(student.id, context.class_id) <= 0:
         return jsonify({"status": "error", "message": "No hall passes available."}), 403
@@ -680,20 +736,39 @@ def handle_pending_hall_pass_request(request_id, action):
 
     idempotency_key = f"hall_pass_approve:{ctx.class_id}:{request_id}"
     try:
-        with FEATContext("FEAT-PROD-002", idempotency_key=idempotency_key):
-            record_hall_pass_log(
-                ctx=ctx,
-                requested_by_seat_id=requested_seat.id,
-                approved_by_seat_id=ctx.seat_id,
-                destination=pending_request.destination,
-                reason="teacher_approved",
-                idempotency_key=idempotency_key,
-            )
+        # The FEAT envelope belongs to ``record_hall_pass_log``, which carries its
+        # own ``@requires_feat_context("FEAT-PROD-002")`` — and that decorator
+        # OPENS a context rather than merely asserting one. A route-level
+        # ``FEATContext`` here therefore made the call nest inside itself and
+        # raise ``FEATContextError`` on every approval, which neither handler
+        # below caught: teachers could not approve a hall pass at all, and the
+        # failure surfaced as a 500. ``/tap`` documents this exact trap in its
+        # own docstring; the knowledge did not travel this far up the file.
+        #
+        # The decorator reads ``idempotency_key`` from kwargs, so the key below
+        # still reaches the envelope. A FEAT that already owns a context composes
+        # ``_record_hall_pass_log_impl`` instead — see entitlement_lifecycle_feat.
+        record_hall_pass_log(
+            ctx=ctx,
+            requested_by_seat_id=requested_seat.id,
+            approved_by_seat_id=ctx.seat_id,
+            destination=pending_request.destination,
+            reason="teacher_approved",
+            idempotency_key=idempotency_key,
+        )
         pop_pending_hall_pass_request(request_id)
         return jsonify({"status": "success", "message": "Hall pass issued."})
     except ValueError as exc:
         _log_api_client_error("handle_pending_hall_pass_request", exc, extra=f"request_id={request_id}")
         return jsonify({"status": "error", "message": "Hall pass request cannot be approved."}), 400
+    except FEATContextError as exc:
+        # A constitutional violation is a server fault, not a client one, and it
+        # must be named as such rather than escaping as an unhandled 500 with no
+        # diagnosis attached — which is how the nesting above stayed invisible.
+        current_app.logger.error(
+            "Hall pass approval violated FEAT context rules: %s", exc, exc_info=True
+        )
+        return jsonify({"status": "error", "message": "Hall pass could not be issued."}), 500
     except SQLAlchemyError as exc:
         current_app.logger.error("Hall pass approval failed: %s", exc, exc_info=True)
         return jsonify({"status": "error", "message": "Database error."}), 500
@@ -905,15 +980,17 @@ def checkin_hall_pass():
         return context_error
     
     try:
-        latest_event = (
-            AttendanceSession.query.filter_by(
-                target_seat_id=student.id,
-                class_id=log_entry.class_id,
-            )
-            .order_by(AttendanceSession.timestamp.desc(), AttendanceSession.id.desc())
-            .first()
+        # Scoped to THIS pass's own attendance sequence, not merely "is the
+        # seat's latest event active" -- an unrelated active row (an ordinary
+        # clock-in, say) sitting more recently than this pass's departure must
+        # not be read as "already checked in from this pass" (that read made
+        # checkin silently no-op and leave the pass stuck at "left" forever).
+        lifecycle = resolve_hall_pass_lifecycle_status(
+            class_id=log_entry.class_id,
+            seat_id=student.id,
+            hall_pass_id=log_entry.hall_pass_id,
         )
-        if latest_event and latest_event.status == "active":
+        if lifecycle.status == HALL_PASS_STATUS_RETURNED:
             return jsonify({"status": "success", "message": "You are already checked in."})
 
         record_attendance_session(
@@ -986,11 +1063,15 @@ def update_hall_pass_settings():
         return jsonify({"status": "error", "message": "Class context is required"}), 400
 
     data = request.get_json() or {}
+    if (not isinstance(data, dict) or set(data) != {"max_queue_limit"}
+            or type(data["max_queue_limit"]) is not int
+            or not 1 <= data["max_queue_limit"] <= 50):
+        return jsonify({"status": "error", "message": "Out Limit must be a whole number between 1 and 50."}), 400
     try:
         settings = feat_update_hall_pass_queue_settings(
             user_id=context.user_id if context else None,
             class_id=class_id,
-            max_queue_limit=data.get("max_queue_limit", 10),
+            max_queue_limit=data["max_queue_limit"],
             updated_at=utc_now(),
             correlation_id=f"corr_settings_queue_{uuid.uuid4().hex}",
             idempotency_key=f"feat:settings:hall-pass-queue:{context.user_id}:{class_id}:{uuid.uuid4().hex}",
@@ -1097,38 +1178,16 @@ def hall_pass_history():
                 or "Unknown"
             )
             class_row = get_class_economy(record.class_id)
-            attendance_rows = (
-                AttendanceSession.query.filter_by(
-                    class_id=record.class_id,
-                    target_seat_id=record.requested_by_seat_id,
-                    hall_pass_id=record.hall_pass_id,
-                )
-                .order_by(AttendanceSession.timestamp.asc(), AttendanceSession.id.asc())
-                .all()
+            # Unbounded by day: a history record has no single "today" to scope
+            # to, unlike the two other callers of this resolver.
+            lifecycle = resolve_hall_pass_lifecycle_status(
+                class_id=record.class_id,
+                seat_id=record.requested_by_seat_id,
+                hall_pass_id=record.hall_pass_id,
             )
-            left_row = next(
-                (
-                    row for row in attendance_rows
-                    if row.status == "inactive"
-                    and row.reason_code == AttendanceReasonCode.HALL_PASS.value
-                ),
-                None,
-            )
-            return_row = next(
-                (
-                    row for row in attendance_rows
-                    if left_row is not None
-                    and row.status == "active"
-                    and row.timestamp >= left_row.timestamp
-                ),
-                None,
-            )
-            if return_row is not None:
-                status = "returned"
-            elif left_row is not None:
-                status = "left"
-            else:
-                status = "approved"
+            left_row = lifecycle.left_row
+            return_row = lifecycle.return_row
+            status = lifecycle.status
             records_data.append({
                 "id": record.id,
                 "student_name": student_name,
@@ -1165,7 +1224,7 @@ def get_hall_pass_setup():
     if not current_class_id:
         return jsonify({"status": "error", "message": "Active class context is required"}), 400
 
-    scope = _get_hall_pass_settings_scope(current_class_id)
+    scope = _get_hall_pass_settings_scope(context.user_id, current_class_id)
     if not scope:
         return jsonify({"status": "error", "message": "Class scope not found"}), 404
 
@@ -1231,7 +1290,7 @@ def save_hall_pass_setup():
             return jsonify({"status": "error", "message": "Invalid pass type limits"}), 400
 
     try:
-        scope = _get_hall_pass_settings_scope(current_class_id)
+        scope = _get_hall_pass_settings_scope(context.user_id, current_class_id)
         if not scope:
             return jsonify({"status": "error", "message": "Class scope not found"}), 404
         feature_scope = resolve_feature_class_for_class(scope["class_id"], 'hall_pass')
@@ -1498,8 +1557,17 @@ def attendance_history():
         if not current_class_id:
             return jsonify({"status": "error", "message": "Class context required"}), 400
 
-        query = AttendanceSession.query.filter(
-            AttendanceSession.class_id == current_class_id
+        # Claimed student seats only. Unclaim preserves a seat's attendance
+        # facts, but an unclaimed seat is no economic participant and appears in
+        # no teacher-facing log or history (DOM-IDEN-002 §VIII).
+        query = (
+            AttendanceSession.query
+            .join(Seat, AttendanceSession.target_seat_id == Seat.id)
+            .filter(
+                AttendanceSession.class_id == current_class_id,
+                Seat.role == "student",
+                Seat.claimed_at.isnot(None),
+            )
         )
 
         if status:
@@ -1621,8 +1689,15 @@ def attendance_history():
 
 @api_bp.route('/tap', methods=['POST'])
 @limiter.limit("100 per minute")
-@requires_feat_context("FEAT-PROD-001")
 def handle_tap():
+    """Student-initiated attendance tap (FEAT-PROD-001).
+
+    The FEAT envelope belongs to ``record_attendance_session``, which carries
+    its own ``@requires_feat_context("FEAT-PROD-001")``. This route must open
+    none: a route-level decorator here makes that call nest inside it and raise
+    ``FEATContextError``. The route's own work is PIN verification and
+    resolution — reads only.
+    """
     data = request.get_json(silent=True) or {}
     safe_data = {k: ('***' if k == 'pin' else v) for k, v in data.items()}
     current_app.logger.info(f"TAP DEBUG: Received data {safe_data}")
@@ -1682,7 +1757,7 @@ def handle_tap():
 
     if normalized_action == "start_work" and currently_active:
         return jsonify({
-            "status": "ok", "active": True, "duration": 0,
+            "status": "ok", "active": True, "done": False, "duration": 0,
             "duration_today": calculate_worked_attendance_seconds_today(
                 seat_id, class_id, ctx=context
             ),
@@ -1690,7 +1765,9 @@ def handle_tap():
 
     if normalized_action == "stop_work" and not currently_active:
         return jsonify({
-            "status": "ok", "active": False, "duration": 0,
+            "status": "ok", "active": False,
+            "done": is_done_for_day(seat_id, class_id, ctx=context),
+            "duration": 0,
             "duration_today": calculate_worked_attendance_seconds_today(
                 seat_id, class_id, ctx=context
             ),
@@ -1765,6 +1842,7 @@ def handle_tap():
     return jsonify({
         "status": "ok",
         "active": is_active,
+        "done": is_done_for_day(seat_id, class_id, ctx=context),
         "duration": duration,
         "duration_today": duration_today,
         "projected_pay": float(projected_pay)

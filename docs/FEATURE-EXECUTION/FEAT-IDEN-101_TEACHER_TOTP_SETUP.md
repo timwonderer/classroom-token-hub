@@ -3,7 +3,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| FEAT-IDEN-101 | 1.0 | 2026-08-09 | N/A (new) | Normative | NEW |
+| FEAT-IDEN-101 | 1.1 | 2026-09-16 | 1.0 | Normative | NEW |
 
 ---
 
@@ -23,6 +23,18 @@ final signup transaction creates the teacher `User`, `ClassEconomy`, teacher
 `Seat`, and class-scoped `IdentityProfile` together. This FEAT's existing-user
 execution context applies to TOTP reconfiguration; it is not permission to
 attach initial signup to an existing teacher account.
+
+Initial staging is governed by INV-ARC-018's temporary signup inventory.
+FEAT-IDEN-101 owns encrypted server staging and final initial provisioning.
+The browser carries only a random 256-bit signup nonce; its purpose-separated
+SHA-256 verifier is the staging key. Every stage checks the server's fixed
+30-minute expiry. Username changes replace the pending seed. Invalid TOTP may
+redisplay the same pending enrollment within that deadline. Restart deletes the
+previous attempt; hourly cleanup removes expired attempts. Completion locks the
+attempt, rechecks username/TOTP against its encrypted payload, creates the User,
+Class, Seat and profile, and deletes the attempt in one transaction. Failure rolls
+back provisioning and consumption. Replay cannot create another account.
+No existing-user or backup-code behavior is introduced by this initial-signup change.
 
 **Governing Authority:**
 - DOM-IDEN-003 §III.B (Teacher Authentication - TOTP Required)
@@ -302,4 +314,4 @@ Revisions to this document SHALL:
 4. Maintain consistency with FEAT-CORE-000.
 5. Maintain consistency with FEAT-IDEN-103, FEAT-IDEN-104, FEAT-IDEN-106.
 
-**This is version 1.0 of FEAT-IDEN-101 (new specification, 2026-08-09).**
+**Version 1.1 adds encrypted, nonce-bound initial signup staging (2026-09-16).**

@@ -2,13 +2,13 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-ECON-003    |  1.5    |     2026-08-30 |        1.4 |       Normative |
+| SPEC-ECON-003    |  2.1    |     2026-09-24 |        2.0 |       Normative |
 
 ---
 
 ## 1. Purpose
 
-This specification is the single canonical technical source for the Economic Engine's calculations and reference values.
+This specification is the single canonical technical source for the Economic Engine's calculations, reference values, and unified CWI Helper presentation contract.
 
 The Economic Engine exists to remove pricing guesswork from classroom economy setup by deriving coherent numbers from class context instead of requiring teachers to invent them manually.
 
@@ -22,13 +22,22 @@ This specification governs:
 
 - CWI derivation,
 - policy-mode ratio bands,
-- Store pricing tiers,
+- Store economic-role reference bands,
 - weekly savings targets,
 - interest doubling-time constraints,
 - interest-growth formulas,
 - the insurance **premium pricing envelope** and the separation of premium pricing (economic-mode axis) from coverage contract (insurance-tier axis) for the three canonical insurance products,
 - economic solvency and coherence checks,
 - deterministic reference values used by the engine.
+- the unified teacher-facing CWI Helper information and consequence primitives for every pricing surface.
+
+V2 deliberately retains weekly CWI, Tight/Default/Comfortable modes, the existing
+insurance period semantics, and the interest doubling-time model. Store
+Basic/Standard/Premium/Luxury price tiers are replaced in v2 by the three economic
+roles defined in § 4.7. Dynamic economic cycles, cycle-relative CWI,
+survivability-first modeling, replacement Store roles, removal of Economic Modes,
+and predictive student-behavior modeling are deferred to v2.5 and are not
+introduced by this revision.
 
 This specification does NOT govern:
 
@@ -115,9 +124,9 @@ The engine SHALL provide a canonical weekly rent band as a percentage of `CWI`.
 
 | Economic Mode | Weekly Rent Band |
 | --- | ---: |
-| `tight` | 70% to 80% of CWI |
-| `default` | 60% to 75% of CWI |
-| `comfortable` | 50% to 65% of CWI |
+| `tight` | 30% to 40% of CWI |
+| `default` | 35% to 50% of CWI |
+| `comfortable` | 40% to 55% of CWI |
 
 Formula:
 
@@ -129,25 +138,7 @@ with `rent_rate` constrained to the mode-specific band.
 
 ---
 
-### 4.4 Utilities
-
-The engine SHALL provide a canonical utilities band as a percentage of `CWI`.
-
-| Economic Mode | Utilities Band |
-| --- | ---: |
-| `tight` | 7% to 12% of CWI |
-| `default` | 5% to 10% of CWI |
-| `comfortable` | 4% to 8% of CWI |
-
-Formula:
-
-```text
-utilities = CWI × utilities_rate
-```
-
----
-
-### 4.5 Insurance
+### 4.4 Insurance
 
 Insurance is not a single product. `FEAT-STOR-003` defines three canonical insurance
 products, each with a distinct claim lifecycle and therefore a distinct economic
@@ -163,7 +154,7 @@ over claim submission, validation, approval, and compensation execution. This
 specification is authoritative only over the CWI-relative economic reference values used
 to price and bound insurance.
 
-#### 4.5.1 Two Independent Axes
+#### 4.4.1 Two Independent Axes
 
 Insurance economics are governed by two axes that MUST be kept separate:
 
@@ -202,10 +193,10 @@ Depending on product type, tier-controlled (coverage-axis) values MAY include:
 - other product-specific coverage limits.
 
 The exact numerical coverage values for each tier are defined per product in the canonical
-preset tables (§ 4.5.3–§ 4.5.5), selected deterministically per § 4.5.8. Implementations MUST
+preset tables (§ 4.4.3–§ 4.4.5), selected deterministically per § 4.4.8. Implementations MUST
 source them from this document and MUST NOT invent or override them.
 
-#### 4.5.2 Premium Pricing Envelope (economic-mode axis)
+#### 4.4.2 Premium Pricing Envelope (economic-mode axis)
 
 The engine SHALL price insurance premiums CWI-relative, within the canonical mode-specific
 premium envelope:
@@ -232,15 +223,15 @@ Constraints on premium derivation:
 The envelope is **not independently immutable**. It is contingent on the coverage models it
 prices, and it MUST be re-evaluated as each product's coverage economics are settled:
 
-- `PRODUCTIVITY` — coverage model is now sufficiently settled (§ 4.5.4) that the envelope
-  can be tested against real exposure. The hard weekly boundaries in § 4.5.4 bound exposure
+- `PRODUCTIVITY` — coverage model is now sufficiently settled (§ 4.4.4) that the envelope
+  can be tested against real exposure. The hard weekly boundaries in § 4.4.4 bound exposure
   independently of the premium.
-- `TRANSACTION` — coverage economics remain unresolved (§ 4.5.6); the envelope is
+- `TRANSACTION` — coverage economics remain unresolved (§ 4.4.3); the envelope is
   provisional for this product until they are settled.
 - `NON_MONETARY` — the envelope is **affordability guidance only**, not an exposure-based
-  price (§ 4.5.5).
+  price (§ 4.4.5).
 
-The deterministic premium-selection rule for the canonical presets is defined in § 4.5.8.
+The deterministic premium-selection rule for the canonical presets is defined in § 4.4.8.
 No `risk_factor`, `premium = liability × risk_factor`, or equivalent exposure-multiplier
 formula is canonical under this specification; the preset premium is selected directly from
 the mode band by tier (band bottom / midpoint / top).
@@ -268,12 +259,21 @@ Weekly coverage has a `coverage_week_equivalent` of exactly `1`.
 Period-normalized values then derive from the actual duration, e.g.:
 
 ```text
-period_premium        = weekly_equivalent_premium × coverage_week_equivalent
+period_allowance      = ceil(weekly_allowance × coverage_week_equivalent)   # § 4.4.8
 maximum_policy_payout = period_premium × payout_multiple      # where applicable
 ```
 
 Example: a policy renewing August 25 → September 25 covers 31 class-local days, so
 `coverage_week_equivalent = 31 / 7 ≈ 4.4286`.
+
+**The premium is the exception.** The premium charged for each billing period is the
+frozen contractual amount of the purchased policy version. It does not scale with the
+number of days in any particular period: a monthly policy charges the same premium
+for a 28-day period and a 31-day period, as a real insurance contract does.
+`period_premium` in the formulas of this section denotes that frozen per-period
+premium. The per-week envelope and `coverage_week_equivalent` inform the Economic
+Engine Helper's premium *recommendation* while a policy is being authored (§ 4.9);
+once authored, the premium is fixed for every period of that policy version.
 
 Covered-day derivation and renewal boundaries MUST use canonical class-local temporal
 resolution — never elapsed seconds — so that DST or timezone transitions do not distort the
@@ -283,15 +283,15 @@ The upcoming renewal period MUST be calculable before renewal. Student-facing in
 SHALL surface the next coverage interval, the next premium, and other derived renewal values
 ahead of the charge so students can plan for renewal.
 
-#### 4.5.3 `TRANSACTION` Insurance
+#### 4.4.3 `TRANSACTION` Insurance
 
 `TRANSACTION` insurance reimburses part of a single posted Ledger transaction. Consistent
 with `FEAT-STOR-003`, one claim covers exactly one canonical Ledger transaction. Its
 monetary model mirrors `PRODUCTIVITY`: reimbursement is a percentage of the covered
 transaction loss, the period ceiling is `period_premium × payout_multiple`, and premiums are
-selected from the mode band per § 4.5.8.
+selected from the mode band per § 4.4.8.
 
-Canonical preset values (per week-equivalent; scale monthly per § 4.5.2):
+Canonical preset values (per week-equivalent; scale monthly per § 4.4.2):
 
 | Parameter | Single | Basic | Mid | Premium | Teacher recommended range |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -319,7 +319,7 @@ a `TRANSACTION` claim is eligible only when the referenced transaction is:
 These are mechanical eligibility gates only; the teacher retains approval authority per
 `FEAT-STOR-003`.
 
-#### 4.5.4 `PRODUCTIVITY` Insurance
+#### 4.4.4 `PRODUCTIVITY` Insurance
 
 `PRODUCTIVITY` is the canonical product name for attendance / lost-wage insurance.
 
@@ -367,10 +367,10 @@ actual_payout = min(
 ```
 
 The **period** capacity is the insurance-contract ceiling (derived from
-`maximum_policy_payout`, period-normalized per § 4.5.2) and is the monetary ceiling on any
+`maximum_policy_payout`, period-normalized per § 4.4.2) and is the monetary ceiling on any
 single approval's payout. Approval-time payout bounding — including the two-resource rule
 (remaining claim allowance and remaining period payout capacity) — is execution semantics
-owned by `FEAT-STOR-003` per the scope boundary in § 4.5; this specification states the
+owned by `FEAT-STOR-003` per the scope boundary in § 4.4; this specification states the
 CWI-relative economic reference values only and does not impose an additional approval-time
 weekly payout clamp.
 
@@ -413,7 +413,7 @@ not convert an economic modeling input into an automated judgment about whether 
 lost opportunity actually existed.
 
 **Coverage period.** Coverage may be weekly or monthly. Monthly period pricing follows the
-week-equivalent normalization in § 4.5.2. A monthly policy's total ceiling is expected to
+week-equivalent normalization in § 4.4.2. A monthly policy's total ceiling is expected to
 exceed `1× CWI` because the interval spans multiple week-equivalents; this is valid. The
 weekly economic-coherence guidance above is evaluated **independently within each canonical
 class-local week** — a larger monthly ceiling does not change the per-week `expected_weekly_hours`
@@ -443,7 +443,7 @@ capacity could actually pay, CTH MUST NOT silently rewrite the configuration; it
 surface both the calculated dollar policy ceiling and the applicable weekly `CWI` reference
 clearly.
 
-Canonical preset values (per week-equivalent; scale monthly per § 4.5.2):
+Canonical preset values (per week-equivalent; scale monthly per § 4.4.2):
 
 | Parameter | Single | Basic | Mid | Premium | Teacher recommended range | Mechanical bound |
 | --- | ---: | ---: | ---: | ---: | ---: | --- |
@@ -459,9 +459,9 @@ by the remaining period payout capacity (`actual_payout` above), and submission 
 the configured daily payroll limit and remaining claim allowance per `FEAT-STOR-003`. The
 weekly `1 CWI` and `expected_weekly_hours` figures are advisory economic-coherence guidance,
 not mechanical caps. These preset values are settled; only the monthly allowance rounding
-convention was flagged for confirmation and is fixed in § 4.5.8.
+convention was flagged for confirmation and is fixed in § 4.4.8.
 
-#### 4.5.5 `NON_MONETARY` Insurance
+#### 4.4.5 `NON_MONETARY` Insurance
 
 `NON_MONETARY` is the external-benefit insurance product. CTH records the lawful claim
 decision but does not own, price the reimbursement of, or verify the external benefit
@@ -469,7 +469,7 @@ itself.
 
 **Premium band is affordability guidance only.** Because this product has no economic
 payout and CTH cannot value the external benefit, the generic CWI-relative premium envelope
-of § 4.5.2 is applied here as **affordability guidance**, not as an exposure-based price.
+of § 4.4.2 is applied here as **affordability guidance**, not as an exposure-based price.
 The Engine's recommendation is of the form:
 
 > Suggested premium: $X–$Y based on your configured class economy. Because this benefit
@@ -493,7 +493,7 @@ The teacher remains free to set the premium outside that recommendation.
 - monetary payout ceiling;
 - actuarial / risk calculation.
 
-Canonical preset values (per week-equivalent; scale monthly per § 4.5.2):
+Canonical preset values (per week-equivalent; scale monthly per § 4.4.2):
 
 | Parameter | Single | Basic | Mid | Premium | Teacher recommended range |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -505,19 +505,19 @@ Canonical preset values (per week-equivalent; scale monthly per § 4.5.2):
 
 The premium figures are **affordability guidance**, not calculated fair value; CTH cannot
 value the external benefit. The `Single` column uses the mode-band midpoint (equivalent to
-`Mid`) per § 4.5.8. All other coverage numbers here are mechanical limits only.
+`Mid`) per § 4.4.8. All other coverage numbers here are mechanical limits only.
 
-#### 4.5.6 Resolution Status
+#### 4.4.6 Resolution Status
 
 As of v1.2 the insurance economic model is numerically complete. The canonical preset tables
-for all three products (§ 4.5.3, § 4.5.4, § 4.5.5), the deterministic premium-selection rule,
-and the monthly allowance rounding convention (§ 4.5.8) are **settled**.
+for all three products (§ 4.4.3, § 4.4.4, § 4.4.5), the deterministic premium-selection rule,
+and the monthly allowance rounding convention (§ 4.4.8) are **settled**.
 
 No insurance numerical value remains intentionally TBD. Any future change to these values is
 a normative amendment to this specification, not an implementation choice. Implementations
 MUST source these values from this document and MUST NOT invent or override them in code.
 
-#### 4.5.7 Presentation of Economic Values
+#### 4.4.7 Presentation of Economic Values
 
 CWI percentages and multiples are the Engine's internal normalization and calculation
 mechanism. Teacher-facing surfaces SHALL present the **consequences** of a configuration
@@ -528,7 +528,7 @@ SHALL present `$280 maximum policy payout` as the primary result, and MAY show `
 secondary context. This presentation rule does not change any calculation; it governs how
 results are displayed.
 
-#### 4.5.8 Deterministic Premium Selection and Period Scaling
+#### 4.4.8 Deterministic Premium Selection and Period Scaling
 
 For the canonical presets, the premium is selected directly from the mode band by tier — no
 `risk_factor` or exposure-multiplier formula is used:
@@ -546,6 +546,17 @@ coverage_week_equivalent = covered_class_local_calendar_days / 7   # half-open [
 period_premium = CWI × recommended_premium_rate × coverage_week_equivalent
 ```
 
+This is the Helper's premium **recommendation** while a policy is authored. The teacher's
+authored premium is then frozen with the policy version and charged unchanged for every
+billing period, whatever that period's length (§ 4.4.2).
+
+**Monthly authoring normalization.** No concrete period exists while a monthly policy is
+authored, so the recommendation uses a fixed normalization of **30** class-local calendar
+days: `coverage_week_equivalent = 30 / 7` for a `MONTHLY` recommendation. This constant
+applies to authoring recommendations only. It never defines a billing period (periods come
+from anchored recurrence, `SPEC-TIME-001` § IX.12), and it never replaces the actual
+covered-day count used for claim allowances and payout-period scaling.
+
 For monetary products (`TRANSACTION`, `PRODUCTIVITY`):
 
 ```text
@@ -561,30 +572,38 @@ period_allowance = ceil(weekly_allowance × coverage_week_equivalent)
 
 `ceil` is chosen deliberately: it keeps monthly allowances at least proportional to the
 weekly value, and — because every individual approval is still bounded by the remaining
-period payout capacity (§ 4.5.4) — a slightly generous **claim count** cannot inflate total
+period payout capacity (§ 4.4.4) — a slightly generous **claim count** cannot inflate total
 economic exposure. Rounding governs how many separate claims may be filed, never how much
 may be paid.
 
 ---
 
-### 4.6 Fines
+### 4.5 Fines
 
 The engine SHALL provide a canonical fine band as a percentage of `CWI`.
 
 | Economic Mode | Fine Band |
 | --- | ---: |
-| `tight` | 7% to 18% of CWI |
-| `default` | 5% to 15% of CWI |
-| `comfortable` | 4% to 12% of CWI |
+| `tight` | 5% to 10% of CWI |
+| `default` | 5% to 12% of CWI |
+| `comfortable` | 7% to 15% of CWI |
 
 Formula:
 
 ```text
 fine = CWI × fine_rate
 ```
-#### 4.6.1 Internal Fines
+#### 4.5.1 Internal Fines
 
-Fines such as overdraft or non-sufficient funds (NSF) fees and late fees shall use the same formula as generic classroom fines recommendations. These recommendations shall surface the recommended price range of the fines, not a single recommended price.
+Fines such as overdraft or non-sufficient funds (NSF) fees and late fees shall use the same formula as generic classroom fines recommendations — `fine = CWI × rate`. These recommendations shall surface the recommended price range of the fines, not a single recommended price.
+
+An internal fine may be configured in one of two shapes, and the two are priced
+against **different** reference sets:
+
+- **Flat.** Persisted as `flat_overdraft_fee`. A flat internal fee is an ordinary
+  fine and SHALL be recommended against the generic fine band of § 4.5.
+- **Progressive.** Persisted as the precomputed `progressive_overdraft_fee` JSON
+  object, using the escalating schedule below.
 
 Economic engine table shall persist the chosen overdraft fee under `flat_overdraft_fee` or persist the precomputed `progressive_overdraft_fee` as json object with the following fine schedule
 
@@ -594,9 +613,24 @@ Economic engine table shall persist the chosen overdraft fee under `flat_overdra
 | `default` | 5% CWI | 10% CWI | 15% CWI|
 | `comfortable` | 4% CWI | 8% CWI | 12% CWI |
 
+This progressive schedule is a **self-contained reference set**, not a subdivision
+of the § 4.5 generic fine band. Its purpose is escalation across repeat
+occurrences, so its upper tiers are expected to sit above the generic band's
+ceiling and its first tier may sit below the generic band's floor. Implementations
+MUST NOT clamp, rescale, or validate the progressive tiers against the § 4.5 band,
+and MUST NOT raise an out-of-band finding for a progressive tier that falls outside
+it. The § 8 instruction that system-defined fines reference the canonical table
+applies to the flat shape; the progressive shape is governed by this table.
+
+The two schedules also order the economic modes differently, and this is deliberate.
+The generic band of § 4.5 rises from `tight` to `comfortable` alongside rent and the
+savings target. The progressive schedule instead escalates hardest under `tight`,
+because repeat-occurrence pressure is the lever a leaner economy uses. A mode that
+carries a lower generic fine band may therefore carry a higher tier-3 internal fee.
+
 Internal fines are only active if their value is not `NULL` for the economic policy being enforced. When disabling fines, the backend shall create a new economic policy with the value set to `NULL`
 
-##### 4.6.1.1 Overdraft / NSF Fee Applicability
+##### 4.5.1.1 Overdraft / NSF Fee Applicability
 
 An overdraft / non-sufficient-funds (NSF) fee is a fine charged for a **failed
 agreement**: a transaction that was meant to fulfill an **intended purchase**
@@ -615,7 +649,7 @@ An NSF fee SHALL NOT be charged for:
   balance cannot cover it) and does not draw on savings to cover itself.
 
 Fee amount (authority): the **teacher sets** the fee amount. The Economic Engine
-does not determine it; per §4.6.1 the CWI helper surfaces a **CWI-normed
+does not determine it; per §4.5.1 the CWI helper surfaces a **CWI-normed
 recommended range** for the teacher's reference (not a single value) and displays
 a warning when the chosen amount falls outside that range. The teacher's chosen
 value is persisted on the engine (`flat_overdraft_fee` /
@@ -631,15 +665,15 @@ overdraft/NSF ownership question previously open in `DOM-ITR-001` §XIII.c.
 
 ---
 
-### 4.7 Collective Goals
+### 4.6 Collective Goals
 
 The engine SHALL provide a canonical collective-goal band as a multiple of `CWI`.
 
 | Economic Mode | Collective Goal Band |
 | --- | ---: |
-| `tight` | 0.75× to 7× CWI |
-| `default` | 1× to 8× CWI |
-| `comfortable` | 1.5× to 10× CWI |
+| `tight` | 1× to 3× CWI |
+| `default` | 1× to 5× CWI |
+| `comfortable` | 1.5× to 7× CWI |
 
 Formula:
 
@@ -649,24 +683,130 @@ collective_goal = CWI × goal_multiple
 
 ---
 
-### 4.8 Store Pricing Tiers
+### 4.7 Store Economic Roles
 
-Store pricing is tier-based rather than policy-mode-based.
+Store products MUST select exactly one economic role. Roles describe the intended
+economic meaning of a purchase; they do not force a price and do not silently
+reclassify a teacher's choice.
 
-| Store Tier | Recommended Price Band |
-| --- | ---: |
-| Basic | 1% to 3% of CWI |
-| Standard | 2% to 5% of CWI |
-| Premium | 5% to 15% of CWI |
-| Luxury | 15% to 30% of CWI |
+The v2 roles replace Basic/Standard/Premium/Luxury. Their reference bands are
+non-overlapping and are advisory, not enforcement boundaries:
 
-Formula:
+| Economic role | CWI reference band | Meaning |
+| --- | ---: | --- |
+| Necessity | 1% to 10% of CWI | Routine or important purchase; the role a teacher is expected to pair with an item they also mark essential during overdue rent. |
+| Convenience | 11% to 20% of CWI | Optional purchase that improves flexibility or experience. |
+| Add-on | 21% to 30% of CWI | Fully optional enhancement or reward; may reasonably require accumulated savings. |
+
+The teacher-configured price remains authoritative. A price outside the selected
+role's reference band MUST remain valid unless another authority prohibits it; the
+Helper reports the position and consequence without reclassifying the product.
+
+The price calculation is not derived from the role:
 
 ```text
-store_price = CWI × tier_rate
+store_price_share = store_price / CWI
 ```
 
-where `tier_rate` is constrained by the selected store tier.
+The Helper MUST show one, two, three, or teacher-selected purchase scenarios.
+Multipacks remain one Store unit under existing Store semantics. Scenarios MUST
+NOT predict student behavior.
+
+The economic role carries no purchase authority. When overdue-rent Store gating
+is enabled, the product's own `available_with_overdue_obligations` flag decides access, per
+SPEC-STORE-001 §IV.D; DOM-STORE-001 §XII, which outranks this specification on
+Store entitlement authority, makes the role configuration guidance only. Necessity is the role a teacher SHOULD select for a product they also
+mark essential, and the Helper MAY report a mismatch between the two as guidance;
+selecting Necessity MUST NOT grant the exemption, and selecting Convenience or
+Add-on MUST NOT withhold it.
+
+### 4.8 Economy Pricing Rebalance Review
+
+The Economic Engine MAY present one coordinated review of teacher-configured
+prices across Rent, Store products, Insurance premiums, and Fines/Fees. This is
+a review and orchestration surface, not a new owner of those policies.
+
+```text
+class_id
+  -> resolve latest effective policy for each priced feature
+  -> calculate each feature's canonical CWI/range constraint
+  -> show only out-of-range configured prices
+  -> teacher selects midpoint or enters a bounded custom amount
+  -> owning FEAT validates and supersedes that feature's policy/version
+  -> historical facts remain bound to their original policy/version
+```
+
+Each row MUST identify its owning settings page and MUST use that domain's
+canonical validator. A midpoint is a proposed value, never an implicit write;
+custom values MUST remain within the owning feature's permitted range unless
+the teacher explicitly uses the feature's documented bypass/configuration path.
+The review MUST be idempotent, class-scoped, append-only, and atomic per
+selected feature. A failure in one selected feature MUST NOT partially rewrite
+another feature's history.
+
+---
+
+### 4.9 Unified CWI Helper contract
+
+Every teacher-facing pricing or economic surface MUST answer the same questions:
+what is configured, how large is it relative to current earning capacity, where it
+sits relative to reference guidance, and what consequence follows from that value.
+Currency is primary; CWI notation is secondary.
+
+For every monetary value, the Helper MUST expose:
+
+1. configured amount in classroom currency;
+2. current CWI in classroom currency;
+3. configured amount as a CWI share;
+4. canonical reference range in currency and CWI terms;
+5. position relative to the reference (`below`, `within`, or `above`);
+6. the applicable surface-specific consequence.
+
+Reference bands are advisory. Being inside a band MUST NOT be presented as proof
+of affordability or appropriateness, and an out-of-band value MUST still receive
+the same consequence calculation.
+
+The only canonical consequence primitives are:
+
+| Primitive | Required meaning |
+|---|---|
+| `INCOME_SHARE` | amount divided by CWI |
+| `REMAINING_AFTER` | currency remaining after named recurring configured obligations |
+| `PURCHASE_SCENARIO` | price multiplied by teacher-selected quantity |
+| `SHOCK_IMPACT` | one-time amount against CWI and relevant remaining capacity |
+| `SAVINGS_HORIZON` | price divided by an explicitly modeled contribution per contributing cycle |
+| `PROTECTION_TRADEOFF` | premium liquidity cost paired with monetary payout capacity |
+| `GROWTH_PROJECTION` | configured principal's compound-growth result and doubling time |
+
+The Helper MUST label scenarios as modeled scenarios and MUST NOT predict student
+behavior. Its surface mapping is normative:
+
+| Surface | Required Helper output |
+|---|---|
+| Rent | `INCOME_SHARE` and `REMAINING_AFTER` |
+| Store | `INCOME_SHARE` and `PURCHASE_SCENARIO` |
+| Collective Goal | `INCOME_SHARE` and `SAVINGS_HORIZON` |
+| Fine or fee | `INCOME_SHARE` and `SHOCK_IMPACT` |
+| Monetary Insurance | `INCOME_SHARE`, `REMAINING_AFTER`, and `PROTECTION_TRADEOFF` |
+| Non-monetary Insurance | `INCOME_SHARE` and affordability disclosure; no monetary benefit value |
+| Savings | `INCOME_SHARE` and modeled accumulated contribution |
+| Interest | `GROWTH_PROJECTION` |
+| Rebalance | the owning surface's identical Helper projection |
+
+For Collective Goals, price is per participating student. The participant
+threshold is a separate coordination condition and MUST NOT divide the price.
+Savings-horizon results MUST be expressed as modeled contributing cycles, not a
+prediction of elapsed completion time. Savings is reserved wealth, not consumption.
+
+For monetary Insurance, the Helper MUST show both liquidity cost and protection:
+
+```text
+maximum_policy_payout = premium × payout_multiple
+```
+
+For `NON_MONETARY` Insurance, CTH MUST NOT assign a monetary value to the external
+benefit. Rebalance MUST remain review-only where changing premium changes downstream
+payout, and MUST route the teacher to Insurance Management.
 
 ---
 
@@ -782,7 +922,7 @@ The engine MUST keep values proportional to one another.
 Examples:
 
 - rent must not be so high that routine savings become impossible,
-- store prices must preserve multiple tiers of affordability,
+- Store role references must remain distinct and non-overlapping,
 - insurance must create a meaningful tradeoff,
 - goals must require sustained effort,
 - interest must reward savings without overtaking labor as the dominant money source.
@@ -808,24 +948,22 @@ The following table is the canonical reference set for the Economic Engine.
 | Measure | Tight | Default | Comfortable |
 | --- | ---: | ---: | ---: |
 | Weekly savings target | 5% CWI | 10% CWI | 15% CWI |
-| Weekly rent | 70% to 80% CWI | 60% to 75% CWI | 50% to 65% CWI |
-| Utilities | 7% to 12% CWI | 5% to 10% CWI | 4% to 8% CWI |
+| Weekly rent | 30% to 40% CWI | 35% to 50% CWI | 40% to 55% CWI |
 | Insurance premium | 6% to 14% CWI | 5% to 12% CWI | 4% to 10% CWI |
-| Fine | 7% to 18% CWI | 5% to 15% CWI | 4% to 12% CWI |
-| Collective goal | 0.75x to 7x CWI | 1x to 8x CWI | 1.5x to 10x CWI |
+| Fine | 5% to 10% CWI | 5% to 12% CWI | 7% to 15% CWI |
+| Collective goal | 1x to 3x CWI | 1x to 5x CWI | 1.5x to 7x CWI |
 
-The `Insurance premium` row is the **premium pricing envelope only** (the economic-mode / cost axis of § 4.5), and is engine guidance rather than a hard cap. It does not define any coverage, reimbursement percentage, payout cap, or claim allowance. Those belong to the insurance-tier / coverage axis and are defined by the canonical preset tables in § 4.5.3–§ 4.5.5 with the deterministic selection rule in § 4.5.8; this table MUST NOT be read as a complete insurance economic model. For `NON_MONETARY` this band is affordability guidance only (§ 4.5.5). For `PRODUCTIVITY` the settled mechanical bounds in § 4.5.4 (remaining period payout capacity and remaining claim allowance, with the configured daily payroll limit as the submission-time hours ceiling) bound exposure independently of this row; the weekly `expected_weekly_hours` and `CWI` figures are advisory economic-coherence guidance.
+The `Insurance premium` row is the **premium pricing envelope only** (the economic-mode / cost axis of § 4.4), and is engine guidance rather than a hard cap. It does not define any coverage, reimbursement percentage, payout cap, or claim allowance. Those belong to the insurance-tier / coverage axis and are defined by the canonical preset tables in § 4.4.3–§ 4.4.5 with the deterministic selection rule in § 4.4.8; this table MUST NOT be read as a complete insurance economic model. For `NON_MONETARY` this band is affordability guidance only (§ 4.4.5). For `PRODUCTIVITY` the settled mechanical bounds in § 4.4.4 (remaining period payout capacity and remaining claim allowance, with the configured daily payroll limit as the submission-time hours ceiling) bound exposure independently of this row; the weekly `expected_weekly_hours` and `CWI` figures are advisory economic-coherence guidance.
 
-System-defined fines such as rent late fees and overdraft fees shall use the above table for reference when making recommendations. Actual configured fine amount shall persist on `economic_engine` for overdraft fines and `rent_settings` for rent late fees.
+System-defined fines such as rent late fees and overdraft fees shall use the above table for reference when making recommendations, where those fines are configured as a single flat amount. Progressive internal fee schedules are the one exception: they are priced against the self-contained tier table in § 4.5.1 and are not bounded by the `Fine` row above. Actual configured fine amount shall persist on `economic_engine` for overdraft fines and `rent_settings` for rent late fees.
 
-Store tier reference:
+Store economic-role reference:
 
-| Tier | Price Band |
+| Economic role | Price Band |
 | --- | ---: |
-| Basic | 1% to 3% CWI |
-| Standard | 2% to 5% CWI |
-| Premium | 5% to 15% CWI |
-| Luxury | 15% to 30% CWI |
+| Necessity | 1% to 10% CWI |
+| Convenience | 11% to 20% CWI |
+| Add-on | 21% to 30% CWI |
 
 Interest reference:
 
@@ -843,10 +981,18 @@ The engine MUST NOT:
 
 - use arbitrary fixed prices unrelated to `CWI`,
 - recompute one value without updating dependent values,
-- mix store tier pricing with policy-mode pricing,
+- derive Store prices from a retired Basic/Standard/Premium/Luxury tier,
 - let interest exceed the doubling-time constraint,
 - allow hidden or undocumented formulas to become canonical,
 - duplicate these calculations in consuming code as alternate authority.
+- present CWI notation without classroom-currency context;
+- treat reference-band membership as proof of affordability;
+- predict Store purchases, Insurance enrollment, fines, or Collective Goal saving;
+- divide a Collective Goal price by its participant threshold;
+- assign a monetary benefit value to `NON_MONETARY` insurance;
+- treat savings as consumption or a one-time fine as recurring;
+- let Rebalance mutate Insurance when premium changes monetary protection;
+- introduce the deferred v2.5 dynamic-cycle, survivability-first, or replacement-Store model.
 
 ---
 
@@ -875,6 +1021,19 @@ Revisions to this document must:
 3. remain consistent with the class-economy authority chain.
 
 ### Revision history
+
+- **2.1 (2026-09-24)** — The premium charged each billing period is the frozen
+  contractual amount of the purchased policy version and does not scale with that
+  period's length (§ 4.4.2); `period_premium` denotes it, and § 4.4.8's scaled formula
+  is the authoring recommendation, normalized to 30 days for `MONTHLY`. Claim allowance
+  and payout formulas are unchanged.
+- **2.0 (2026-09-13)** — Preserves the complete v2 Economic Engine model and adds a
+  unified CWI Helper contract, finite consequence primitives, consistent surface
+  mapping, explicit non-prediction semantics, Collective Goal per-student and
+  contributing-cycle rules, monetary Insurance protection tradeoff, and the v2.5
+  scope boundary. Replaces Store price tiers with Necessity, Convenience, and
+  Add-on role references (1–10%, 11–20%, and 21–30% CWI), and recalibrates rent,
+  fine, and Collective Goal reference values.
 
 - **1.5 (2026-08-30)** — Corrects the § 4.6.1.1 fee-amount note: the **teacher sets** the
   overdraft/NSF fee amount (persisted on the engine as `flat_overdraft_fee` /

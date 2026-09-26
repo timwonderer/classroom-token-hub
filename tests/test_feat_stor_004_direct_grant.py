@@ -19,8 +19,8 @@ from app.feats.base import FEATContext
 from app.models import Seat, User, ClassEconomy, EntitlementEvent, UserRole
 from app.services.context_resolver import CanonicalContext
 from app.feats.direct_entitlement_grant_feat import execute_direct_grant, DirectGrantResult
-from app.services.store_policy_resolver import StorePolicyResolver
 from tests.helpers.canonical_classroom import provision_classroom
+from tests.helpers.store_products import publish_store_product
 
 
 @pytest.fixture
@@ -37,16 +37,10 @@ def test_class_with_students(app_with_class):
         classroom = provision_classroom("chemistry_p1")
 
         with FEATContext("FEAT-TEST-SETUP", idempotency_key="phase4-direct-grant:store-policy"):
-            policy = StorePolicyResolver.create_store_product(
+            policy = publish_store_product(
                 class_id=classroom.class_id,
-                payload={
-                    "product_id": 101,
-                    "is_purchasable": True,
-                    "supports_direct_grants": True,
-                    "price": "0.00",
-                    "entitlement_type": "HALL_PASS",
-                    "name": "Test Hall Pass",
-                },
+                entitlement_type="HALL_PASS",
+                name="Test Hall Pass",
                 created_by_seat_id=classroom.teacher_seat_id,
             )
         db.session.commit()
@@ -60,7 +54,8 @@ def test_class_with_students(app_with_class):
             "student_user_2_id": classroom.students[1].user_id,
             "student_seat_2_id": classroom.students[1].seat_id,
             "policy_uuid": policy.policy_uuid,
-            "product_id": policy.product_id,
+            # Entitlement events record the product, not the version.
+            "product_id": policy.product_lineage_uuid,
         }
 
 
@@ -376,31 +371,19 @@ class TestCrossClassIsolation:
             scope2 = provision_classroom("biology_block_a")
 
             with FEATContext("FEAT-TEST-SETUP", idempotency_key="phase4-direct-grant:scope1-policy"):
-                policy1 = StorePolicyResolver.create_store_product(
+                policy1 = publish_store_product(
                     class_id=scope1.class_id,
-                    payload={
-                        "product_id": 301,
-                        "is_purchasable": True,
-                        "supports_direct_grants": True,
-                        "price": "0.00",
-                        "entitlement_type": "HALL_PASS",
-                        "name": "Scope 1 Hall Pass",
-                    },
+                    entitlement_type="HALL_PASS",
+                    name="Scope 1 Hall Pass",
                     created_by_seat_id=scope1.teacher_seat_id,
                 )
             db.session.commit()
 
             with FEATContext("FEAT-TEST-SETUP", idempotency_key="phase4-direct-grant:scope2-policy"):
-                policy2 = StorePolicyResolver.create_store_product(
+                policy2 = publish_store_product(
                     class_id=scope2.class_id,
-                    payload={
-                        "product_id": 302,
-                        "is_purchasable": True,
-                        "supports_direct_grants": True,
-                        "price": "0.00",
-                        "entitlement_type": "HALL_PASS",
-                        "name": "Scope 2 Hall Pass",
-                    },
+                    entitlement_type="HALL_PASS",
+                    name="Scope 2 Hall Pass",
                     created_by_seat_id=scope2.teacher_seat_id,
                 )
             db.session.commit()

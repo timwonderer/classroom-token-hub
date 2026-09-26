@@ -1,0 +1,168 @@
+/*
+ * Design tokens for the developer docs site.
+ *
+ * SPEC-DES-001 §XIII: docs-site/ is outside the runtime token layer but is a
+ * brand surface, and MUST NOT contradict the canonical brand values in §VI.4.
+ * Every value below is transcribed from static/css/tokens.css — the base layer
+ * plus the Teacher (Advisor Green) theme, which is the default identity and the
+ * one a documentation reader has no role to select.
+ *
+ * This file is the only place in the site where a design value appears as a
+ * literal. custom.css maps Infima's variables onto these tokens and states no
+ * value of its own (§VI.4, §XII).
+ *
+ * Infima declares its own palette at `:root:not(#\#):not(#\#)` — two id-worth
+ * of specificity — so a plain `:root` block here would never win the cascade.
+ * The same escape hatch is used to state ours.
+ */
+
+:root:not(#\#):not(#\#):not(#\#) {
+  /* ── Typeface ── */
+  --font-family: 'Inter', sans-serif;
+  --font-display: 'Atkinson Hyperlegible Next', sans-serif;
+  --font-data: 'IBM Plex Mono', monospace;
+
+  /* ── Type scale — rem-based on a 16px root ── */
+  --text-2xs: 0.6875rem;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+  --text-4xl: 2.5rem;
+  --text-5xl: 3rem;
+  --text-6xl: 4rem;
+
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  --leading-tight: 1.25;
+  --leading-snug: 1.4;
+  --leading-body: 1.5;
+  --leading-normal: 1.6;
+
+  --tracking-tight: -0.01em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.05em;
+  --tracking-wider: 0.1em;
+  --tracking-widest: 0.5em;
+
+  /* ── Spacing — 4px base ── */
+  --space-0: 0;
+  --space-hairline: 1px;
+  --space-half: 2px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* ── Icon sizing ── */
+  --icon-2xs: 0.875rem;
+  --icon-xs: 1rem;
+  --icon-sm: 1.125rem;
+  --icon-md: 1.25rem;
+  --icon-lg: 1.5rem;
+  --icon-xl: 2rem;
+  --icon-2xl: 3rem;
+  --icon-3xl: 4rem;
+
+  /* ── Motion ── */
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 300ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0.2, 1);
+
+  /* ── Opacity ── */
+  --alpha-subtle: 0.08;
+  --alpha-soft: 0.16;
+  --alpha-medium: 0.35;
+  --alpha-strong: 0.6;
+  --alpha-heavy: 0.85;
+
+  /* ── Radius — sm: cards and inputs · md: buttons · lg: large containers ── */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-pill: 999px;
+
+  /* ── Elevation — overlay only, never decoration (§V.1.3) ── */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08);
+
+  /* ── Neutral palette (warm tinted) ── */
+  --neutral-50: #fafaf9;
+  --neutral-100: #f5f5f3;
+  --neutral-200: #e8e8e5;
+  --neutral-300: #d4d4d0;
+  --neutral-400: #a3a3a0;
+  --neutral-500: #737370;
+  --neutral-600: #525250;
+  --neutral-700: #404040;
+  --neutral-800: #262626;
+  --neutral-900: #171717;
+
+  /* ── Semantic surfaces ── */
+  --background: var(--neutral-100);
+  --surface: #ffffff;
+  --border-color: var(--neutral-200);
+
+  /* ── Text ── */
+  --text-primary: var(--neutral-800);
+  --text-secondary: var(--neutral-600);
+  --text-muted: var(--neutral-600);
+  --text-inverse: #ffffff;
+
+  /* Gold is a fill. #D4A857 is 2.12:1 on white and #c09840 is 2.69:1, so
+     neither may set text on a light surface; this pinned value is 6.70:1. */
+  --accent-text-on-light: #735816;
+  --text-on-dark-muted: #DEDEDE;
+
+  /* Admonition body text, darkened past the status tokens so it clears AA on
+     the matching --*-subtle fill. The site has admonitions; without these an
+     admonition reaches for a status token, which is a fill, not a text colour. */
+  --alert-warning-text: #5f3d00;
+  --alert-danger-text: #8f1f1f;
+  --alert-info-text: #1f4f73;
+
+  /* ── Teacher theme (Advisor Green) — the default identity ── */
+  --primary: #1a4d47;
+  --primary-hover: #15403b;
+  --primary-subtle: #e8f0ef;
+
+  --secondary: #D4A857;
+  --secondary-hover: #c09840;
+  --secondary-text: var(--neutral-900);
+  --secondary-subtle: #f9f5e6;
+  --accent: var(--secondary);
+
+  --success: #2e7d5b;
+  --success-hover: #276a4d;
+  --success-subtle: #e6f4ed;
+  --info: #35719a;
+  --info-hover: #2e6285;
+  --info-subtle: #e6f0f8;
+  --warning: #D4A857;
+  --warning-hover: #a87912;
+  --warning-subtle: #fef8e6;
+  --danger: #c0392b;
+  --danger-hover: #a83024;
+  --danger-subtle: #fce8e6;
+
+  /* RGB decomposition of the tokens above, for rgba() composition. These MUST
+     stay in parity with their paired token (§VII.1). */
+  --primary-rgb: 26, 77, 71;
+  --secondary-rgb: 212, 168, 87;
+}

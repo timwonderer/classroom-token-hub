@@ -40,7 +40,7 @@ Diagnostic guide for resolving errors with ledgers, student balances, and bankin
 
 ### Causes & Solutions
 **Cause 1: Banking disabled**
-- **Check:** View the Feature Settings for that class period.
+- **Check:** Open **Class Tools → Economy Features** for that class period.
 - **Fix:** Enable Banking for the period.
 
 **Cause 2: Insufficient funds or wrong passphrase**

@@ -174,7 +174,6 @@ class GuardReason(Enum):
     IDEMPOTENCY_CONFLICT = auto()
     SYSTEM_MAINTENANCE = auto()
     LEGACY_VIOLATION = auto() # Used for temporary wrapping of old code
-    MAINTENANCE_MODE = auto()
 
 def guard_ok(): 
     """Return a successful guard response."""
@@ -195,6 +194,11 @@ class InvariantViolation(Exception):
 
 # Canonical FEAT Registry
 FEAT_REGISTRY = {
+    "FEAT-IDEN-101": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Teacher Initial Signup and TOTP Setup"},
+    "FEAT-IDEN-103": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Teacher Recovery Initiation"},
+    "FEAT-IDEN-104": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Student Confirmation for Teacher Recovery"},
+    "FEAT-IDEN-105": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Teacher Recovery Code Validation"},
+    "FEAT-IDEN-106": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Teacher Recovery Credential Completion"},
     "FEAT-BYPASS-LEGACY": {"domain": "Test", "blast_radius": "LOW", "desc": "Legacy fixture bypass"},
     "FEAT-LED-000": {"domain": "Ledger", "blast_radius": "HIGH", "desc": "Canonical Monetary Resolution"},
     "FEAT-LED-001": {"domain": "Ledger", "blast_radius": "HIGH", "desc": "Overdraft Fee Application"},
@@ -211,6 +215,7 @@ FEAT_REGISTRY = {
     "FEAT-STOR-001": {"domain": "Store", "blast_radius": "MED", "desc": "Store Purchase and Entitlement Grant"},
     "FEAT-STOR-002": {"domain": "Store", "blast_radius": "MED", "desc": "Entitlement Terminal Lifecycle"},
     "FEAT-STOR-003": {"domain": "Store", "blast_radius": "MED", "desc": "Insurance Claim Lifecycle"},
+    "FEAT-STOR-007": {"domain": "Store", "blast_radius": "MED", "desc": "Insurance Coverage Renewal"},
     # Bridge aliases — retired FEAT codes kept until all call-sites are migrated
     "FEAT-STOR-004": {"domain": "Store", "blast_radius": "MED", "desc": "[RETIRED → FEAT-STOR-001] Rent Perk Purchase"},
     "FEAT-STOR-005": {"domain": "Store", "blast_radius": "LOW", "desc": "[RETIRED → FEAT-STOR-002] Redeem Item"},
@@ -225,17 +230,29 @@ FEAT_REGISTRY = {
     "FEAT-CLASS-003": {"domain": "Class Configuration", "blast_radius": "MED", "desc": "Insurance Policy Management (invokes POL domain commands)"},
     "FEAT-CLASS-004": {"domain": "Class Configuration", "blast_radius": "MED", "desc": "Feature enablement"},
     "FEAT-CLASS-005": {"domain": "Class Configuration", "blast_radius": "HIGH", "desc": "Economic engine evolution"},
+    # Destruction is a different command from creation, not a mode of it: it removes
+    # every class-scoped record and the class's seats (INV-CORE-000 §26, §33). It is
+    # FEAT-CLASS-001's counterpart, never FEAT-CLASS-001 itself.
+    "FEAT-CLASS-006": {"domain": "Class Configuration", "blast_radius": "HIGH", "desc": "Destroy class boundary"},
     "FEAT-SETTINGS-001": {"domain": "Class Configuration", "blast_radius": "MED", "desc": "Class Settings Update"},
     "FEAT-POL-001": {"domain": "Policies", "blast_radius": "MED", "desc": "Policy Reference Management (insurance policy family)"},
     "FEAT-ITR-001": {"domain": "Interpretation", "blast_radius": "LOW", "desc": "Compute Interpretation Snapshot"},
     "FEAT-ADMN-001": {"domain": "Logistics", "blast_radius": "LOW", "desc": "Bulk administration"},
     "FEAT-OBL-001": {"domain": "Obligations", "blast_radius": "MED", "desc": "Rent Payment"},
+    # FEAT-OBLI-001 is a separate workflow from FEAT-OBL-001, not a misspelling of
+    # it: it creates the immutable ASSESSMENT event, where FEAT-OBL-001 settles a
+    # rent bill. The one-letter gap between the two ids is the whole reason the
+    # assessment entry point spent its life executing under the payment id, so
+    # neither name may be "tidied" into the other without deciding which concept
+    # keeps which number (docs/TRACKING/FEAT_REGISTRY_RECONCILIATION_2026-09-19.md §V).
+    "FEAT-OBLI-001": {"domain": "Obligations", "blast_radius": "MED", "desc": "Assess Obligation"},
     "FEAT-OBL-002": {"domain": "Obligations", "blast_radius": "MED", "desc": "Scheduled Rent Cycle"},
     "FEAT-OBL-003": {"domain": "Obligations", "blast_radius": "MED", "desc": "Scheduled Insurance Cycle"},
     "FEAT-OBL-004": {"domain": "Obligations", "blast_radius": "HIGH", "desc": "Insurance Policy Purchase / Enrollment"},
     "FEAT-OBL-005": {"domain": "Obligations", "blast_radius": "MED", "desc": "Insurance Cancellation (stop renewal)"},
     "FEAT-OPS-001": {"domain": "Operations", "blast_radius": "MED", "desc": "Maintenance/Cleanup Operations"},
     "FEAT-SUP-001": {"domain": "Support", "blast_radius": "LOW", "desc": "Issue Submission and Category Setup"},
+    "FEAT-SUP-002": {"domain": "Support", "blast_radius": "LOW", "desc": "Class Announcement Management"},
 }
 
 def _is_scaffold_feat(feat_name: str) -> bool:
@@ -576,7 +593,6 @@ def audit_protected(
             protected_fields={f: getattr(row, f, None) for f in fields},
             class_id=getattr(row, "class_id", None),
             seat_id=getattr(row, "seat_id", None),
-            user_id=getattr(row, "user_id", None),
             actor_type=actor_type,
             actor_id_hash=actor_id_hash,
         )

@@ -172,6 +172,29 @@ _CLASSLESS_ADMIN_ENDPOINTS = frozenset({
 })
 
 
+def _is_background_request() -> bool:
+    """True for fetch/XHR calls, which must not queue flash messages.
+
+    A flash from a background call lands on whatever page the browser shows
+    next. The getting-started widget polls onboarding status on every teacher
+    page, so signing out while that request is in flight used to plant a
+    session error on the login page.
+    """
+    fetch_mode = (request.headers.get("Sec-Fetch-Mode") or "").lower()
+    if fetch_mode and fetch_mode != "navigate":
+        return True
+    if request.is_json or (request.headers.get("X-Requested-With") or "").lower() == "xmlhttprequest":
+        return True
+    return False
+
+
+def _teacher_session_ended(message):
+    if _is_background_request():
+        return jsonify(status="error", error="authentication_required", message=message), 401
+    flash(message)
+    return redirect(url_for('admin.login'))
+
+
 def admin_required(f):
     """
     Decorator to require admin authentication for a route.
@@ -193,12 +216,10 @@ def admin_required(f):
         try:
             ctx = resolve_canonical_context(require_class=False)
         except (ContextNotEstablished, ContextMismatch, ContextForbidden, ContextInvariantViolation):
-            flash("System admin session is invalid. Please log in again.")
-            return redirect(url_for('admin.login'))
+            return _teacher_session_ended("Your session has ended. Please log in again.")
 
         if ctx.actor_role != 'teacher':
-            flash("System admin session is invalid. Please log in again.")
-            return redirect(url_for('admin.login'))
+            return _teacher_session_ended("Your session has ended. Please log in again.")
 
         if isinstance(ctx, BoundaryContext):
             if request.endpoint not in _CLASSLESS_ADMIN_ENDPOINTS:
@@ -213,8 +234,7 @@ def admin_required(f):
             last_activity = datetime.fromisoformat(last_activity)
             if (now - last_activity) > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
                 session.clear()
-                flash("System admin session expired. Please log in again.")
-                return redirect(url_for('admin.login'))
+                return _teacher_session_ended("Your session expired. Please log in again.")
 
         session['last_activity'] = now.isoformat()
         return f(*args, **kwargs)

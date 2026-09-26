@@ -18,8 +18,8 @@ from app.feats.base import FEATContext
 from app.models import Seat, User, ClassEconomy, EntitlementEvent
 from app.services.context_resolver import CanonicalContext
 from app.feats.store_purchase_feat import execute_store_purchase, StorePurchaseResult
-from app.services.store_policy_resolver import StorePolicyResolver
 from tests.helpers.canonical_classroom import provision_classroom
+from tests.helpers.store_products import publish_store_product
 
 
 @pytest.fixture
@@ -35,16 +35,10 @@ def test_class_and_seat(app_with_class):
     with app_with_class.app_context():
         classroom = provision_classroom("chemistry_p1")
         with FEATContext("FEAT-TEST-SETUP", idempotency_key="phase4-purchase:store-policy"):
-            policy = StorePolicyResolver.create_store_product(
+            policy = publish_store_product(
                 class_id=classroom.class_id,
-                payload={
-                    "product_id": 101,
-                    "is_purchasable": True,
-                    "supports_direct_grants": True,
-                    "price": "0.00",
-                    "entitlement_type": "IMMEDIATE_USE",
-                    "name": "Test Purchase",
-                },
+                entitlement_type="DELAYED_USE",
+                name="Test Purchase",
                 created_by_seat_id=classroom.teacher_seat_id,
             )
         db.session.commit()
@@ -52,8 +46,11 @@ def test_class_and_seat(app_with_class):
             "class_id": classroom.class_id,
             "student_user_id": classroom.students[0].user_id,
             "student_seat_id": classroom.students[0].seat_id,
+            "teacher_seat_id": classroom.teacher_seat_id,
             "policy_uuid": policy.policy_uuid,
-            "product_id": policy.product_id,
+            # Entitlement events record the product, not the version they were
+            # sold under, so this is the lineage.
+            "product_id": policy.product_lineage_uuid,
         }
 
 
@@ -61,7 +58,7 @@ class TestStorePurchaseHappyPath:
     """Test ordinary purchase flow."""
 
     def test_purchase_creates_granted_events(self, app_with_class, test_class_and_seat):
-        """Purchase of quantity 3 creates 3 GRANTED EntitlementEvent rows."""
+        """A single delayed-use purchase creates one grant."""
         with app_with_class.app_context():
             class_id = test_class_and_seat["class_id"]
             student_seat_id = test_class_and_seat["student_seat_id"]
@@ -78,13 +75,13 @@ class TestStorePurchaseHappyPath:
             result = execute_store_purchase(
                 canonical_context=ctx,
                 policy_uuid=policy_uuid,
-                quantity=3,
+                quantity=1,
             )
 
             # Verify result
             assert result.success is True
-            assert result.quantity_granted == 3
-            assert len(result.entitlement_ids) == 3
+            assert result.quantity_granted == 1
+            assert len(result.entitlement_ids) == 1
             assert result.error_code is None
 
             # Verify EntitlementEvent rows created
@@ -97,11 +94,36 @@ class TestStorePurchaseHappyPath:
                 .all()
             )
 
-            assert len(events) == 3
+            assert len(events) == 1
             assert all(e.correlation_id == result.correlation_id for e in events)
             assert all(e.product_id == test_class_and_seat["product_id"] for e in events)
-            assert events[0].entitlement_id != events[1].entitlement_id  # Distinct lineages
-            assert events[1].entitlement_id != events[2].entitlement_id
+
+    def test_immediate_use_rejects_multiple_units(self, app_with_class, test_class_and_seat):
+        """Immediate-use products cannot create unredeemed multi-unit inventory."""
+        with app_with_class.app_context():
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key="store-quantity:immediate-policy"):
+                immediate = publish_store_product(
+                    class_id=test_class_and_seat["class_id"],
+                    entitlement_type="IMMEDIATE_USE",
+                    name="Immediate-only test product",
+                    created_by_seat_id=test_class_and_seat["teacher_seat_id"],
+                )
+            db.session.commit()
+            ctx = CanonicalContext(
+                user_id=test_class_and_seat["student_user_id"],
+                class_id=test_class_and_seat["class_id"],
+                seat_id=test_class_and_seat["student_seat_id"],
+                actor_role="student",
+            )
+            result = execute_store_purchase(
+                canonical_context=ctx,
+                policy_uuid=immediate.policy_uuid,
+                quantity=2,
+            )
+
+            assert result.success is False
+            assert result.error_code == "QUANTITY_NOT_ALLOWED"
+            assert result.quantity_granted == 0
 
     def test_purchase_uses_provided_correlation_id(self, app_with_class, test_class_and_seat):
         """Purchase uses provided correlation_id instead of generating one."""
@@ -132,15 +154,36 @@ class TestStorePurchaseHappyPath:
 
 
 class TestInstantUse:
-    """Test instant-use coordination (purchase + immediate consume)."""
+    """Test instant-use coordination (purchase + immediate consume).
+
+    Instant use is a property of the product, not of the caller. This test used
+    to pass ``instant_use=True`` to ``execute_store_purchase``; that argument no
+    longer exists, because a caller-supplied flag defaulting to False is exactly
+    what let every real call site omit it and leave IMMEDIATE_USE items
+    unexercised (SPEC-STORE-001 §III). The property under test is unchanged —
+    an immediate-use sale writes GRANTED and CONSUMED together — so it is now
+    expressed through the product's ``entitlement_type``.
+
+    Quantity is 1 rather than 2: FEAT-STOR-001 rejects any quantity but one for
+    IMMEDIATE_USE and PRIVILEGE, so a two-unit instant-use purchase was never a
+    reachable state.
+    """
 
     def test_instant_use_creates_consumed_events(self, app_with_class, test_class_and_seat):
-        """Instant-use purchase creates both GRANTED and CONSUMED events."""
+        """An immediate-use purchase creates both GRANTED and CONSUMED events."""
         with app_with_class.app_context():
             class_id = test_class_and_seat["class_id"]
             student_seat_id = test_class_and_seat["student_seat_id"]
             student_user_id = test_class_and_seat["student_user_id"]
-            policy_uuid = test_class_and_seat["policy_uuid"]
+
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key="phase4-purchase:instant-policy"):
+                instant_policy = publish_store_product(
+                    class_id=class_id,
+                    entitlement_type="IMMEDIATE_USE",
+                    name="Instant Purchase",
+                    created_by_seat_id=test_class_and_seat["teacher_seat_id"],
+                )
+            db.session.commit()
 
             ctx = CanonicalContext(
                 user_id=student_user_id,
@@ -151,13 +194,12 @@ class TestInstantUse:
 
             result = execute_store_purchase(
                 canonical_context=ctx,
-                policy_uuid=policy_uuid,
-                quantity=2,
-                instant_use=True,
+                policy_uuid=instant_policy.policy_uuid,
+                quantity=1,
             )
 
             assert result.success is True
-            assert result.quantity_granted == 2
+            assert result.quantity_granted == 1
 
             # Verify GRANTED events
             granted = (
@@ -166,7 +208,7 @@ class TestInstantUse:
                 .filter_by(correlation_id=result.correlation_id)
                 .all()
             )
-            assert len(granted) == 2
+            assert len(granted) == 1
 
             # Verify CONSUMED events (same count)
             consumed = (
@@ -175,12 +217,40 @@ class TestInstantUse:
                 .filter_by(correlation_id=result.correlation_id)
                 .all()
             )
-            assert len(consumed) == 2
+            assert len(consumed) == 1
 
-            # Verify each CONSUMED event references a GRANTED entitlement
-            granted_ids = {e.entitlement_id for e in granted}
-            consumed_ids = {e.entitlement_id for e in consumed}
-            assert consumed_ids == granted_ids
+            # Each CONSUMED event closes the lifecycle its GRANTED event opened,
+            # rather than some other entitlement that happens to share the sale.
+            assert {e.entitlement_id for e in consumed} == {e.entitlement_id for e in granted}
+
+    def test_a_delayed_use_purchase_is_not_consumed(self, app_with_class, test_class_and_seat):
+        """The complement: nothing else is consumed at sale.
+
+        Without this, a change that consumed every grant would satisfy the test
+        above while silently destroying items the student has not redeemed.
+        """
+        with app_with_class.app_context():
+            ctx = CanonicalContext(
+                user_id=test_class_and_seat["student_user_id"],
+                class_id=test_class_and_seat["class_id"],
+                seat_id=test_class_and_seat["student_seat_id"],
+                actor_role="student",
+            )
+
+            result = execute_store_purchase(
+                canonical_context=ctx,
+                policy_uuid=test_class_and_seat["policy_uuid"],
+                quantity=2,
+            )
+
+            assert result.success is True
+            consumed = (
+                EntitlementEvent.query
+                .filter_by(class_id=test_class_and_seat["class_id"], event_type="CONSUMED")
+                .filter_by(correlation_id=result.correlation_id)
+                .all()
+            )
+            assert consumed == []
 
 
 class TestQuantityLogic:
@@ -411,31 +481,19 @@ class TestCrossClassIsolation:
             scope2 = provision_classroom("biology_block_a")
 
             with FEATContext("FEAT-TEST-SETUP", idempotency_key="phase4-purchase:scope1-policy"):
-                policy1 = StorePolicyResolver.create_store_product(
+                policy1 = publish_store_product(
                     class_id=scope1.class_id,
-                    payload={
-                        "product_id": 201,
-                        "is_purchasable": True,
-                        "supports_direct_grants": True,
-                        "price": "0.00",
-                        "entitlement_type": "IMMEDIATE_USE",
-                        "name": "Scope 1 Purchase",
-                    },
+                    entitlement_type="DELAYED_USE",
+                    name="Scope 1 Purchase",
                     created_by_seat_id=scope1.teacher_seat.id,
                 )
             db.session.commit()
 
             with FEATContext("FEAT-TEST-SETUP", idempotency_key="phase4-purchase:scope2-policy"):
-                policy2 = StorePolicyResolver.create_store_product(
+                policy2 = publish_store_product(
                     class_id=scope2.class_id,
-                    payload={
-                        "product_id": 202,
-                        "is_purchasable": True,
-                        "supports_direct_grants": True,
-                        "price": "0.00",
-                        "entitlement_type": "IMMEDIATE_USE",
-                        "name": "Scope 2 Purchase",
-                    },
+                    entitlement_type="DELAYED_USE",
+                    name="Scope 2 Purchase",
                     created_by_seat_id=scope2.teacher_seat.id,
                 )
             db.session.commit()

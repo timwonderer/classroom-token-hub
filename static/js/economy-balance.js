@@ -114,6 +114,15 @@ class EconomyBalanceChecker {
             getParamValue(periodTarget, 'max_payout_per_period');
         }
 
+        // The Store price is reported against the role the teacher selected, so
+        // the role travels with the value rather than being inferred from it.
+        if (feature === 'store_item') {
+            const roleSelect = document.querySelector('[data-economic-role-select]');
+            if (roleSelect && roleSelect.value) {
+                additionalParams.economic_role = roleSelect.value;
+            }
+        }
+
         // For rent validation, collect additional frequency parameters from the form
         if (feature === 'rent') {
             const frequencyTypeInput = document.getElementById('frequency_type');
@@ -194,26 +203,24 @@ class EconomyBalanceChecker {
         // than the recommended minimum of $Y..."). Backends that emit
         // only `message` (no `title`) fall back to a generic level title.
         const genericTitle = {
-            danger: 'Critical Issue',
-            warning: 'Warning',
-            success: 'Looks Good',
-            info: 'Recommendations',
+            danger: 'Critical economy issue',
+            warning: 'Economy balance warning',
+            success: 'Setting looks balanced',
+            info: 'Pricing recommendations',
         };
         const iconForLevel = {
             danger: 'error',
-            warning: 'info',
+            warning: 'warning',
             success: 'check_circle',
             info: 'lightbulb',
         };
         const alertCard = (level, title, icon, bodyHtml) => {
             const textClass = level === 'warning' ? 'text-dark' : 'text-white';
             return (
-                `<div class="card shadow-sm mb-3">` +
-                    `<div class="card-header bg-${level} ${textClass} py-3">` +
-                        `<h6 class="mb-0 fw-semibold ${textClass}">` +
-                            `<span class="material-symbols-outlined me-2" style="vertical-align: text-bottom;">${icon}</span>` +
-                            title +
-                        `</h6>` +
+                `<div class="card alert-card border-${level} mb-3">` +
+                    `<div class="card-header bg-${level} ${textClass} d-flex align-items-center">` +
+                        `<span class="material-symbols-outlined me-2" aria-hidden="true">${icon}</span>` +
+                        `<h3 class="h5 fw-bold mb-0 ${textClass}">${title}</h3>` +
                     `</div>` +
                     `<div class="card-body">${bodyHtml}</div>` +
                 `</div>`
@@ -224,7 +231,7 @@ class EconomyBalanceChecker {
             items.forEach(w => {
                 const title = w.title || genericTitle[level] || 'Notice';
                 const icon = w.icon || iconForLevel[level] || 'info';
-                html += alertCard(level, title, icon, `<div>${w.message}</div>`);
+                html += alertCard(level, title, icon, `<p class="mb-0">${w.message}</p>`);
             });
         };
 
@@ -263,13 +270,14 @@ class EconomyBalanceChecker {
                 bodyHtml += `</div>`;
             }
 
-            if (recommendations.tiers) {
-                bodyHtml += '<div class="pricing-tiers mt-2">';
-                bodyHtml += '<strong>Store Item Pricing Tiers:</strong>';
+            if (recommendations.roles) {
+                bodyHtml += '<div class="economic-roles mt-2">';
+                bodyHtml += '<strong>Store reference ranges:</strong>';
                 bodyHtml += '<div class="row mt-1">';
-                Object.entries(recommendations.tiers).forEach(([tier, range]) => {
-                    bodyHtml += `<div class="col-6 col-md-3 mb-1">`;
-                    bodyHtml += `<span class="badge bg-secondary">${tier.toUpperCase()}</span><br>`;
+                Object.entries(recommendations.roles).forEach(([role, range]) => {
+                    const label = role.replace('_', '-');
+                    bodyHtml += `<div class="col-6 col-md-4 mb-1">`;
+                    bodyHtml += `<span class="badge bg-secondary">${label.toUpperCase()}</span><br>`;
                     bodyHtml += `<small>$${range.min} - $${range.max}</small>`;
                     bodyHtml += `</div>`;
                 });
@@ -277,7 +285,7 @@ class EconomyBalanceChecker {
             }
 
             if (bodyHtml.trim()) {
-                html += alertCard('info', 'Recommendations', 'lightbulb', bodyHtml);
+                html += alertCard('info', 'Pricing recommendations', 'lightbulb', bodyHtml);
             }
         }
 
@@ -410,82 +418,40 @@ class EconomyBalanceChecker {
     }
 
     /**
+     * Fetch the rent band for a cadence, as the server derives it.
+     */
+    async fetchRentBand(frequencyType, customFrequencyValue = null, customFrequencyUnit = null) {
+        const data = await this.validate('rent', 0, frequencyType, {
+            frequency_type: frequencyType,
+            custom_frequency_value: customFrequencyValue,
+            custom_frequency_unit: customFrequencyUnit,
+        });
+        const band = data.recommendations || {};
+        return { ...band, period_label: data.period_label };
+    }
+
+    /**
      * Display CWI info in a designated container
      */
-    displayCWIInfo(cwiData, containerId = '#cwi-info') {
+    displayCWIInfo(cwiData, containerId = '#cwi-info', serverBand = null) {
         const container = document.querySelector(containerId);
         if (!container) return;
 
         const fmt = (v) => (typeof v === 'number' ? `$${v.toFixed(2)}` : '—');
         const rec = cwiData.recommendations || {};
-        const rentMonthly = rec.rent || {};
-        const rentWeekly = rec.rent_weekly || {};
 
-        // Frequency-aware selection: derive the correct band for whatever
-        // rent-frequency the teacher has picked. The payload only carries
-        // weekly and monthly buckets; other frequencies are converted
-        // proportionally from weekly (the smaller unit — avoids
-        // compounding month-length approximation).
-        const freqEl = document.getElementById('frequency_type');
-        const freq = (freqEl && freqEl.value) || 'monthly';
-        const customValueEl = document.getElementById('custom_frequency_value');
-        const customUnitEl = document.getElementById('custom_frequency_unit');
-        const customValue = customValueEl ? parseFloat(customValueEl.value) : NaN;
-        const customUnit = customUnitEl ? customUnitEl.value : '';
+        // The band and its cadence wording come from the server, which derives
+        // both from the class's policy ratios and rounds once (INV-ARC-022).
+        // Scaling a rounded weekly band here produced a second, disagreeing
+        // recommendation for every non-weekly cadence.
+        const rentBand = serverBand || rec.rent_weekly || {};
+        const periodLabel = (serverBand && serverBand.period_label) || 'per week';
 
-        const scale = (band, factor) => (band && band.min != null ? {
-            min: band.min * factor,
-            max: band.max * factor,
-            recommended: band.recommended * factor,
-        } : {});
-
-        let rentBand = rentMonthly;
-        let periodLabel = 'per month';
-        let showNote = false;
-
-        if (freq === 'weekly') {
-            rentBand = rentWeekly;
-            periodLabel = 'per week';
-        } else if (freq === 'daily') {
-            rentBand = scale(rentWeekly, 1 / 7);
-            periodLabel = 'per day';
-        } else if (freq === 'biweekly') {
-            rentBand = scale(rentWeekly, 2);
-            periodLabel = 'every 2 weeks';
-        } else if (freq === 'custom') {
-            // Custom = <value> <unit>. Convert from weekly for days/weeks,
-            // from monthly for months (natural unit alignment).
-            if (Number.isFinite(customValue) && customValue > 0) {
-                if (customUnit === 'days') {
-                    rentBand = scale(rentWeekly, customValue / 7);
-                    periodLabel = `every ${customValue} day${customValue === 1 ? '' : 's'}`;
-                } else if (customUnit === 'weeks') {
-                    rentBand = scale(rentWeekly, customValue);
-                    periodLabel = `every ${customValue} week${customValue === 1 ? '' : 's'}`;
-                } else if (customUnit === 'months') {
-                    rentBand = scale(rentMonthly, customValue);
-                    periodLabel = `every ${customValue} month${customValue === 1 ? '' : 's'}`;
-                } else {
-                    // Unit not set yet — show monthly with a hint.
-                    showNote = true;
-                }
-            } else {
-                showNote = true;
-            }
-        }
-        // (else: monthly — the default.)
-
-        // Percent-of-CWI derivation for the calculation-details line.
-        // rent bands are computed as cwi × ratio; the ratio is not exposed
-        // in the payload, so recover it here from the weekly band (weekly
-        // is the base unit — closest to CWI itself which is a weekly value).
         const cwiValue = typeof cwiData.cwi === 'number' ? cwiData.cwi : null;
-        const pctLow = (cwiValue && rentWeekly.min != null)
-            ? ((rentWeekly.min / cwiValue) * 100).toFixed(0)
-            : null;
-        const pctHigh = (cwiValue && rentWeekly.max != null)
-            ? ((rentWeekly.max / cwiValue) * 100).toFixed(0)
-            : null;
+        const rentRatios = rec.rent_ratios || {};
+        const pct = (ratio) => (typeof ratio === 'number' ? (ratio * 100).toFixed(0) : null);
+        const pctLow = pct(rentRatios.min);
+        const pctHigh = pct(rentRatios.max);
 
         // Top-level card visual: dark-green header (bg-primary, role-scoped),
         // white body with the recommendation prose + collapsed calculation
@@ -501,11 +467,7 @@ class EconomyBalanceChecker {
 
         // Primary sentence: range recommendation.
         if (rentBand.min != null && rentBand.max != null) {
-            html += `<p class="mb-2">Based on your current economic settings, we recommend setting <strong>rent</strong> between <strong>${fmt(rentBand.min)}</strong> and <strong>${fmt(rentBand.max)}</strong> ${periodLabel}`;
-            if (showNote) {
-                html += ` <span class="text-muted small">(shown as monthly — set your custom frequency to refine)</span>`;
-            }
-            html += '.</p>';
+            html += `<p class="mb-2">Based on your current economic settings, we recommend setting <strong>rent</strong> between <strong>${fmt(rentBand.min)}</strong> and <strong>${fmt(rentBand.max)}</strong> ${periodLabel}.</p>`;
         } else {
             html += '<p class="mb-2 text-muted">Recommendation unavailable — insufficient data.</p>';
         }
@@ -569,26 +531,6 @@ style.textContent = `
 
     .economy-balance-feedback {
         margin-top: 1rem;
-    }
-
-    .economy-balance-feedback .alert {
-        border-left: 4px solid;
-    }
-
-    .economy-balance-feedback .alert-danger {
-        border-left-color: #dc3545;
-    }
-
-    .economy-balance-feedback .alert-warning {
-        border-left-color: #ffc107;
-    }
-
-    .economy-balance-feedback .alert-success {
-        border-left-color: #28a745;
-    }
-
-    .economy-balance-feedback .alert-info {
-        border-left-color: #17a2b8;
     }
 
     .cwi-info-box {

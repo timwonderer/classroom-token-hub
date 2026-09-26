@@ -28,43 +28,41 @@ If your dashboard shows an **Action Required: Setup Account Recovery** banner, s
 
 Nothing is collected. The banner is an acknowledgement, not a form.
 
+### Security requirement: at least 3 claimed students in every class
+
+Student-assisted recovery works only when **every class you teach has at least 3 students who have claimed their accounts**.
+
+Recovery randomly selects 2 students in each class to confirm it is you. If a class had only 2 students, anyone who knew that class would know exactly who gets picked. Requiring 3 keeps the selection unpredictable. Until every class reaches 3, recovery cannot start for your account at all.
+
+The Student Management page warns you while the active class is below 3. Have students claim their accounts early in the term, before you might need recovery.
+
 ### Recovering your account
 
 You do this from the login page, not from inside the app.
 
 1. Go to the teacher login page and choose **Account Recovery**.
-2. For each class you teach, enter a **Join Code** and one **Student Username** from that class. Use **+ Add another class** to add rows.
+2. For each class you teach, enter rows of **Join Code** and **Student Username** from that class, one student per row. Use **+ Add another row** to add rows. How many students per class depends on how many classes you teach: 6 for one class, 3 each for two, 2 each for three, and 1 each for four or more. If a class has fewer students with claimed accounts than that, enter all of them. Each student username can be used only once, even if that student is in more than one of your classes.
 3. Select **Verify Identity**.
 
-Every pair must be correct. The students you named are then notified in the app.
+Every class must be included and every entry must check out. If anything is wrong, recovery does not start and the page does not say which entry failed. The students you enter only prove you know your classes; they are not the students who help you next.
 
-### Watching the verification progress
+### What happens next
 
-You land on the **Account Recovery Status** page. It shows:
+Classroom Token Hub randomly selects 2 students in each class. They see a recovery prompt in the app. You are not told who they are, and they stay the same for this recovery attempt, which lasts five days.
 
-- an expiry date and time for the request
-- a progress bar reading **[n] / [total] Verified**
-- one row per student, marked **Verified** with a timestamp or **Pending** with the time they were notified
-
-The page does not push updates. Select **Refresh Status** to check again.
-
-When every student has verified, the page shows **All Students Verified!** and a **Proceed to Reset Credentials** button.
-
-### What your students do
-
-A student you named sees a **Verify Teacher Recovery** prompt. They enter their own passphrase, and the app shows them a unique 6-digit code once. They must write it down and hand it to you in person.
+A selected student enters their own passphrase and gets a 6-digit code that lasts 30 minutes. Students are told to hand over a code only in person, while you are with the class. One code per class is enough.
 
 See [Verify a Teacher Recovery Request](../../student/account/verify-teacher-recovery.md) for the student's view.
 
 ### Entering the codes
 
-Collect every code, then enter them all on the reset page along with your new username. Order does not matter.
+On the **Account recovery** page, save one code for each class as you collect it. The page confirms a code was received but never says whether it is correct. When every class has a code, enter your new username and select **Submit complete code set**. You get one overall result. If it fails, collect fresh codes for every class and try again.
 
 ### Saving your progress
 
-If you have some codes but not all of them, you can save what you have. The app gives you a **Resume PIN** — a 6-digit number shown **once**. Write it down immediately.
+Select **Get a PIN to resume later** to receive a 6-digit **Resume PIN**, shown **once**. Write it down immediately.
 
-To come back later: go to the teacher login page, choose **Resume Recovery**, and enter the PIN. You pick up with the codes you already saved.
+To come back later: go to the teacher login page, choose **Resume Recovery**, and enter the PIN. Codes you already saved stay accepted.
 
 ## Important notes
 
@@ -77,11 +75,11 @@ To come back later: go to the teacher login page, choose **Resume Recovery**, an
 > [!IMPORTANT]
 > **Recovery requests expire.** Both the request and the Resume PIN carry an expiry date shown on screen. Past that point you start over.
 
-> [!NOTE]
-> **You need one student per class you teach.** If a class has no students who can log in, you cannot complete recovery for that class. Make sure each active class has at least one student with working credentials.
+> [!WARNING]
+> **Every class needs at least 3 students with claimed accounts.** This is a deliberate security requirement, not a setup step you can skip. If any class you teach has fewer than 3, recovery cannot start for your account. Check the Student Management page for each class.
 
 > [!TIP]
-> The most reliable time to run recovery is during class, when the students you named are in the room and can verify on the spot.
+> The most reliable time to run recovery is during class, when the selected students are in the room and can give you a code on the spot.
 
 ## Related guides
 

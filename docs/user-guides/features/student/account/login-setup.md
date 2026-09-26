@@ -24,7 +24,7 @@ It takes four screens, and one of them shows you something you will never be sho
 
 1. On the student sign-in page, select **I need a student account**.
 2. Fill in **Join Code** (from your teacher), **First Name**, and **Last Name**. Type your name exactly as your teacher has it on the roster.
-3. Leave **Deduplication Code (Optional)** empty unless your teacher handed you one — that only happens when two students in the class share a name.
+3. Leave **Deduplication Code (Optional)** empty unless your teacher gave you one. Codes are generated automatically and only needed when another student waiting to claim in your class shares your name.
 4. **Submit**.
 
 ### 2. Create Your Username
@@ -38,7 +38,7 @@ The app builds your username by putting two of its own words around yours and ad
 Your finished username appears at the top of this page. **This is the only time it is ever shown.** Write it down.
 
 1. Tick **I have written down my username and I know it won't be shown to me again.** The submit button stays disabled until you do.
-2. Set a **PIN** — 4 to 8 digits. This is what you type to sign in.
+2. Set a **PIN** — 4 to 6 digits. This is what you type for clock actions, transfers between your own accounts, and hall passes.
 3. Set a **Passphrase** — at least four words, with symbols and numbers. Aim for easy to remember, hard to guess. This is your recovery credential, and it is also how you verify your teacher's identity if they ever lose their own account.
 4. Submit.
 
@@ -46,7 +46,7 @@ A confirmation screen greets you by name. Select **Thanks, Let's Go!** to reach 
 
 ### Logging in every day
 
-Enter your **Username** and **PIN** on the student sign-in page. That is all.
+Enter your **Username** and **Passphrase** on the student sign-in page. That is all.
 
 ## Important notes
 
@@ -57,7 +57,7 @@ Enter your **Username** and **PIN** on the student sign-in page. That is all.
 > **Your name has to match the roster.** If the app cannot find you, spelling is usually the reason. Ask your teacher what they typed — nicknames and missing hyphens are the usual culprits.
 
 > [!NOTE]
-> **PIN and passphrase do different jobs.** The PIN is for daily sign-in and clock actions. The passphrase is the stronger credential, used for recovery and for verifying a teacher's recovery request.
+> **PIN and passphrase do different jobs.** The passphrase is for logging in, recovery, and irreversible expense actions. The PIN is for clock actions, transfers between your own accounts, and routine or reversible actions.
 
 > [!TIP]
 > Locked out? **I can't log into my account** on the sign-in page starts recovery. Do not try to claim a second account — you only have one seat, and claiming is not how you get back in.

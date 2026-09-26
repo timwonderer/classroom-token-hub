@@ -20,7 +20,11 @@ from app.models import (
 )
 from app.payroll import get_pay_rate_for_class
 from app.services.context_resolver import CanonicalContext
-from app.services.entitlement_service import consume_hall_pass, get_hall_pass_balance
+from app.services.entitlement_service import (
+    consume_hall_pass,
+    get_available_hall_pass_grant,
+    get_hall_pass_balance,
+)
 from app.services.ledger_posting_service import create_pending_transaction
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
@@ -285,11 +289,15 @@ def _record_attendance_session_impl(
     target_seat = db.session.get(Seat, resolved_target_seat_id)
     if target_seat is None or target_seat.class_id != ctx.class_id:
         raise ValueError("Attendance target seat must belong to the canonical class.")
+    # Attendance is paid time, so recording it against an unclaimed seat is what
+    # made that seat payroll-eligible. An unclaimed seat has no activated runtime
+    # participation to record (DOM-IDEN-005 §VII).
+    if target_seat.claimed_at is None or target_seat.user_id is None:
+        raise ValueError("Attendance target seat must be claimed.")
     if resolved_actor_seat_id:
         actor_seat = db.session.get(Seat, resolved_actor_seat_id)
         if actor_seat is None or actor_seat.class_id != ctx.class_id:
             raise ValueError("Attendance actor seat must belong to the canonical class.")
-    target_user_id = target_seat.user_id
 
     if status == "active":
         day_bounds = canonical_temporal_resolver(
@@ -301,7 +309,7 @@ def _record_attendance_session_impl(
 
         # Reject if student already has done_for_day for this class today
         done_today = AttendanceSession.query.filter(
-            AttendanceSession.target_user_id == target_user_id,
+            AttendanceSession.target_seat_id == resolved_target_seat_id,
             AttendanceSession.class_id == ctx.class_id,
             AttendanceSession.reason_code == AttendanceReasonCode.DONE_FOR_DAY.value,
             AttendanceSession.timestamp >= day_bounds.boundary_start_utc,
@@ -331,7 +339,6 @@ def _record_attendance_session_impl(
                 target_seat_id=existing_active.target_seat_id,
                 actor_seat_id=resolved_actor_seat_id,
                 class_id=existing_active.class_id,
-                target_user_id=target_user_id,
                 status="inactive",
                 reason_code=AttendanceReasonCode.DONE_FOR_DAY.value,
                 timestamp=closing_timestamp,
@@ -340,6 +347,49 @@ def _record_attendance_session_impl(
             )
             db.session.add(closing_row)
             db.session.flush()
+
+        elif (
+            existing_active is not None
+            and existing_active.status == "inactive"
+            and existing_active.reason_code == AttendanceReasonCode.HALL_PASS.value
+        ):
+            # A "hanging hall pass" (DOM-PROD-001 §318): the seat's latest event
+            # is inactive/hall_pass, meaning the student is out of the room with
+            # no return recorded yet. Nothing distinguishes that from an ordinary
+            # break using only the seat's latest event, so a plain start_work call
+            # — one that names no hall_pass_id — was silently accepted here and
+            # overwrote the open-pass state with an unrelated active session. That
+            # desynchronized the hall-pass log's issued/out classification from
+            # ground truth: the teacher's page stopped showing the student as out,
+            # even though they still were, and there was no longer a "Return"
+            # control anywhere for either side to recover with — two extra
+            # teacher actions (re-mark left, then return) were needed to walk the
+            # state back to something coherent. Reproduced live on 2026-09-21.
+            #
+            # The legitimate return path IS a status="active" call while this
+            # branch is true — checkin_hall_pass and the teacher's "return" action
+            # both are — so the two are distinguished by whether the caller names
+            # the SAME pass it is returning from, not by status alone.
+            hall_pass_day_bounds = canonical_temporal_resolver(
+                CLASS_LEVEL_EVALUATION,
+                canonical_execution_context=ctx,
+                primitive="evaluation_day_boundaries",
+                reference_time_utc=existing_active.timestamp,
+            )
+            same_day_hanging_pass = (
+                hall_pass_day_bounds.boundary_start_utc
+                <= event_time
+                < hall_pass_day_bounds.boundary_end_utc
+            )
+            returning_from_this_pass = (
+                hall_pass_id is not None
+                and hall_pass_id == existing_active.hall_pass_id
+            )
+            if same_day_hanging_pass and not returning_from_this_pass:
+                raise ValueError(
+                    "Student is currently out on a hall pass and must check in "
+                    "before a new work session can start."
+                )
 
     resolved_reason_code = (
         reason_code.value if reason_code else AttendanceReasonCode.START_WORK.value
@@ -351,7 +401,6 @@ def _record_attendance_session_impl(
         target_seat_id=resolved_target_seat_id,
         actor_seat_id=resolved_actor_seat_id,
         class_id=ctx.class_id,
-        target_user_id=target_user_id,
         status=status,
         reason_code=resolved_reason_code,
         timestamp=event_time,
@@ -426,25 +475,63 @@ def _record_hall_pass_log_impl(
         reference_time_utc=now,
     )
 
+    settings = (
+        HallPassSettings.query
+        .filter(
+            HallPassSettings.class_id == ctx.class_id,
+            HallPassSettings.effective_date <= now,
+        )
+        .order_by(HallPassSettings.effective_date.desc(), HallPassSettings.id.desc())
+        .first()
+    )
+    pass_types = settings.get_pass_types() if settings else HallPassSettings.get_default_pass_types()
+    pass_type = next(
+        (
+            item for item in pass_types
+            if (item.get("pass_name") or "").strip().lower()
+            == (destination or "").strip().lower()
+        ),
+        None,
+    )
+    consume_pass = pass_type.get("consume_pass", True) if pass_type else True
+
     if not requested_by_seat_id or not ctx.class_id:
         raise ValueError("Hall-pass consumption requires requested_by_seat_id and class_id")
-    consume_event, _balance = consume_hall_pass(
-        requested_by_seat_id,
-        ctx.class_id,
-        trigger_id=idempotency_key or f"hall_pass_log:{ctx.class_id}:{requested_by_seat_id}:{now.isoformat()}",
-    )
-    if not consume_event.correlation_id:
-        raise ValueError("Hall-pass entitlement consumption missing correlation_id")
-    if not consume_event.entitlement_id:
-        raise ValueError("Hall-pass entitlement consumption missing entitlement_id")
+    consume_event = None
+    hall_pass_grant = get_available_hall_pass_grant(requested_by_seat_id, ctx.class_id)
+    if consume_pass and hall_pass_grant is None:
+        raise ValueError("No available hall-pass entitlement grant")
+    if consume_pass:
+        consume_event, _balance = consume_hall_pass(
+            requested_by_seat_id,
+            ctx.class_id,
+            trigger_id=idempotency_key or f"hall_pass_log:{ctx.class_id}:{requested_by_seat_id}:{now.isoformat()}",
+        )
+        if not consume_event.correlation_id:
+            raise ValueError("Hall-pass entitlement consumption missing correlation_id")
+        if not consume_event.entitlement_id:
+            raise ValueError("Hall-pass entitlement consumption missing entitlement_id")
 
+    # A non-consuming destination has no entitlement lifecycle to reference, and
+    # HallPassLog.hall_pass_id is documented as the *consumed* pass. Naming an
+    # unconsumed grant there made two claims that are not true: the grant stayed
+    # available, so a later consuming approval could consume and record the same
+    # entitlement_id (the column is indexed but not unique, so two logs would
+    # carry it while only one consumed a pass), and the copied correlation_id was
+    # the grant's own, which identifies the purchase rather than this approval.
+    fallback_correlation_id = (
+        idempotency_key
+        or f"hall_pass_log:{ctx.class_id}:{requested_by_seat_id}:{now.isoformat()}"
+    )
     log = HallPassLog(
         requested_by_seat_id=requested_by_seat_id,
         approved_by_seat_id=approved_by_seat_id,
         class_id=ctx.class_id,
         timestamp=now,
-        hall_pass_id=consume_event.entitlement_id,
-        correlation_id=consume_event.correlation_id,
+        hall_pass_id=consume_event.entitlement_id if consume_event else None,
+        correlation_id=(
+            consume_event.correlation_id if consume_event else fallback_correlation_id
+        ),
         policy_uuid=policy_uuid,
         destination=destination,
     )
@@ -487,7 +574,7 @@ def _record_payroll_event_impl(
     payroll_event_type: str,
     correlation_id: str,
     idempotency_key: str,
-    policy_version_id: int,
+    policy_version_id: int | None,
     mechanism: str,
     summary_json: dict | None = None,
     reference_time_utc=None,
@@ -495,11 +582,16 @@ def _record_payroll_event_impl(
     payroll_cycle_id: str | None = None,
 ) -> PayrollEventResult:
     ctx = _require_context(ctx)
-    if policy_version_id is None:
-        raise ValueError("FEAT-PROD-003 requires a payroll policy_version_id.")
-    policy_version = db.session.get(PolicyVersion, policy_version_id)
-    if policy_version is None or policy_version.class_id != ctx.class_id:
-        raise ValueError("FEAT-PROD-003 requires a payroll policy version owned by the current class.")
+    # DOM-PROD-001 §VIII: attendance-derived payroll is computed under a payroll
+    # policy version and must record it. A manual credit is teacher intent, not a
+    # policy computation, so it needs no payroll configuration.
+    if payroll_event_type == "payroll" and policy_version_id is None:
+        raise ValueError("FEAT-PROD-003 requires a payroll policy_version_id for payroll events.")
+    policy_version = None
+    if policy_version_id is not None:
+        policy_version = db.session.get(PolicyVersion, policy_version_id)
+        if policy_version is None or policy_version.class_id != ctx.class_id:
+            raise ValueError("FEAT-PROD-003 requires a payroll policy version owned by the current class.")
     evaluation = canonical_temporal_resolver(
         CLASS_LEVEL_EVALUATION,
         canonical_execution_context=ctx,
@@ -537,6 +629,10 @@ def _record_payroll_event_impl(
         )
         if original is None:
             raise LookupError("Unable to establish original payroll event for reversal.")
+        if policy_version is None and original.policy_version_id is not None:
+            # A reversal carries the provenance of the event it compensates.
+            policy_version = db.session.get(PolicyVersion, original.policy_version_id)
+            policy_version_id = original.policy_version_id
         if amount is None:
             active_correlation_id = get_correlation_id()
             linked = (
@@ -552,21 +648,28 @@ def _record_payroll_event_impl(
                 raise LookupError("Unable to establish original ledger transaction for reversal.")
             amount = -(Decimal(linked.amount or Decimal("0.00")))
 
-    # Look up target_seat to get user_id (required by schema for traceability)
-    target_seat = Seat.query.filter_by(id=target_seat_id).first()
+    # Validate the target seat within the class boundary.
+    target_seat = Seat.query.filter_by(id=target_seat_id, class_id=ctx.class_id).first()
     if target_seat is None:
         raise LookupError(f"Seat {target_seat_id} not found.")
-    target_user_id = target_seat.user_id
+    # Roster provisioning creates a participation opportunity and "SHALL NOT
+    # activate runtime participation"; participation becomes lawful only on
+    # Seat-to-User binding (DOM-IDEN-005 §VII-VIII). An unclaimed seat is a
+    # teacher-provisioned placeholder (INV-CORE-000 §Constraints), so it can
+    # receive no payroll or manual credit. Enforced at the single chokepoint
+    # every payroll effect passes through, rather than trusting each caller's
+    # roster query to have filtered correctly.
+    if target_seat.claimed_at is None or target_seat.user_id is None:
+        raise ValueError("A payroll event target seat must be claimed.")
 
     event = PayrollEvent(
         class_id=ctx.class_id,
         actor_seat_id=ctx.seat_id,
         target_seat_id=target_seat_id,
-        target_user_id=target_user_id,
         correlation_id=correlation_id,
         idempotency_key=idempotency_key,
         policy_version_id=policy_version_id,
-        policy_uuid=policy_version.policy_uuid,
+        policy_uuid=policy_version.policy_uuid if policy_version else None,
         mechanism=mechanism,
         payroll_event_type=payroll_event_type,
         recorded_at=recorded_at,
@@ -583,7 +686,6 @@ def _record_payroll_event_impl(
             target_seat_id=target_seat_id,
             actor_seat_id=ctx.seat_id,
             mechanism=mechanism.lower(),
-            user_id=ctx.user_id,
             amount=amount,
             account_type="checking",
             type="payroll" if payroll_event_type != "manual_credit" else "manual_payment",
@@ -604,7 +706,7 @@ def record_payroll_event(
     payroll_event_type: str,
     correlation_id: str,
     idempotency_key: str,
-    policy_version_id: int,
+    policy_version_id: int | None,
     mechanism: str,
     summary_json: dict | None = None,
     reference_time_utc=None,
@@ -633,8 +735,8 @@ def record_payroll_reversal(
     target_seat_id: int,
     correlation_id: str,
     idempotency_key: str,
-    policy_version_id: int,
     mechanism: str,
+    policy_version_id: int | None = None,
     summary_json: dict | None = None,
     reference_time_utc=None,
 ) -> PayrollEventResult:

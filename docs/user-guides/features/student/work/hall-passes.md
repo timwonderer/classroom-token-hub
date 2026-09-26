@@ -64,7 +64,7 @@ The same **Choose Break Type** dialog has a separate **Done for the day** button
 ## Important notes
 
 > [!WARNING]
-> **The destination list is currently broken.** **Choose Break Type** shows *No hall-pass destinations are currently available* no matter what your teacher has configured, which leaves **Done for the day** as the only working button in that dialog. This is a known app defect, not something you or your teacher can fix from the settings. Ask your teacher to let you out the usual way until it is repaired.
+> **If the destination list is empty, check the class and feature status first.** The **Choose Break Type** dialog lists the enabled destinations configured by your teacher. If it instead says *No hall-pass destinations are currently available*, confirm that you are in the intended class and ask your teacher to confirm Hall Pass is enabled and has at least one enabled destination.
 
 > [!IMPORTANT]
 > **Your pass is spent when your teacher approves, not when you leave.** If you get approval and then change your mind, the pass is already gone. Cancelling *before* approval costs nothing.

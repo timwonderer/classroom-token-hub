@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-POL-001 | 2.0 | 2026-07-28 | 1.0 | Constitutional |
+| DOM-POL-001 | 2.2 | 2026-09-24 | 2.1 | Constitutional |
 
 ## I. Purpose
 
@@ -135,7 +135,7 @@ It supports only these user-visible actions:
 1. Insert: record a new policy definition row with a new `policy_uuid` (may be a first-time submission or a resubmission of an existing family)
 2. Disable: mark an existing row `HIDDEN` (availability projection only; the definition payload is untouched)
 3. Retire: mark an existing row `RETIRED` (availability projection only; the definition payload is untouched)
-4. Delete: remove a retired policy row after all live dependencies have drained
+4. Delete: remove a retired policy row once no surviving downstream fact can lawfully resolve terms from it (§IX)
 
 Any submission — first-time or resubmission — produces a new `policy_uuid`. The backend MUST NOT infer whether a change is meaningful; a submission is a new contract.
 
@@ -144,22 +144,29 @@ Definition payload columns are immutable after insert. There is no "update in pl
 When a teacher resubmits Rent Settings, Store Items, Insurance settings, or any other policy family, the result is a new immutable row with a new `policy_uuid`. Prior rows remain readable for provenance.
 
 `HIDDEN` means temporarily unavailable for new selection and may later return to `IN_USE`.
-`RETIRED` means permanently unavailable for new selection and may remain readable while live dependencies drain.
+`RETIRED` means permanently unavailable for new selection. It does not by itself make the row deletable (§IX).
 
 ## VII. Downstream Domain Contract
 
-Policies is a reference library, not a runtime dependency for already-created facts.
+Policies is a reference library. It is never the authority for a downstream operational fact; the owning domain is.
 
-Downstream domains must take the terms they need at the moment they create their own authoritative fact.
+A downstream authoritative fact freezes the policy terms it depends on at the moment it is created. There are two lawful ways to freeze them, and the owning domain's document specifies which one a given fact uses:
 
-Examples:
+- **Frozen by value.** The downstream fact persists the terms it needs. It never reads the source policy again.
+- **Frozen by reference.** The downstream fact persists the exact immutable `policy_uuid` in force when it was created, and later resolves its terms from that exact version. Because a `policy_uuid` is immutable (§VI.0), resolving it is resolving a contract, not consulting policy state.
 
-- an entitlement created from a Store item must carry the terms it needs to keep executing even if the source Policy row is later removed;
-- an obligation assessment must carry the terms it needs to interpret that assessment without rereading the source Policy row later;
-- a rent-linked entitlement created from a rent cycle must be able to stand on its own until the rent-period boundary closes it out;
-- an insurance entitlement must carry the limits, benefits, and claim rules needed for later claim processing.
+Resolving a frozen reference MUST return the exact version identified by the stored `policy_uuid`. It MUST NOT substitute a newer, active, latest, successor, or otherwise different version of the same family, and it is not a read of "the current policy". A downstream fact frozen by reference is unaffected by any later submission in its family.
 
-Policies may be consulted during creation, but they are not the authority for the later operational fact.
+Where a downstream fact is frozen by reference, the referenced `policy_uuid` is part of that fact's historical contract. The referenced version MUST remain resolvable for as long as any surviving downstream fact can lawfully resolve terms from it (§IX), consistent with `INV-ARC-016`: historical facts remain interpretable from lawful state and are not rewritten by later configuration.
+
+Examples of current contracts:
+
+- an obligation assessment and the bill cycle that drives it are frozen by reference: the assessment amount, and the cycle's scheduling terms, resolve from the `policy_uuid` they carry (`DOM-OBL-001`);
+- an insurance entitlement is frozen by reference: its limits, benefits, and claim rules resolve from the `policy_uuid` in its grant (`FEAT-STOR-003`);
+- an entitlement created from a Store item carries the terms it needs to keep executing even if the source row is later removed;
+- a rent-linked entitlement created from a rent cycle stands on its own until the rent-period boundary closes it out.
+
+Policies may be consulted to create a downstream fact. After creation, the only lawful policy read is the resolution of a frozen reference.
 
 ## VIII. FEAT-POL Contract
 
@@ -183,7 +190,7 @@ The v2 persistence model is:
 - one mutable availability state per row;
 - one immutable definition payload per row;
 - no foreign keys from downstream domains to Policies;
-- downstream domains store `policy_uuid` as a non-FK locator and freeze the terms they need;
+- downstream domains store `policy_uuid` as a non-FK locator and freeze the terms they need, by value or by reference (§VII);
 - rent-linked item rows may exist before a rent cycle becomes current, but they are not reachable until OBL makes their rent UUID current.
 
 Availability states:
@@ -194,7 +201,10 @@ Availability states:
 
 Definition payloads are immutable after insert.
 Replacement creates a new `policy_uuid`.
-Deletion is allowed only after live dependencies drain.
+
+A retired or superseded policy version MAY be physically deleted only when no surviving downstream fact can lawfully resolve terms from it. Retirement, supersession, or the absence of new issuance does not by itself establish that a version is deletable. Deletion of a class boundary removes its policy rows together with every downstream fact in that class, so no dependency survives it.
+
+Because downstream references are non-FK locators, the database does not enforce this rule; the deletion path must prove it. As of 2026-09-24 no runtime path physically deletes a Policies-repository row outside class deletion (insurance "delete" retires the row), so the rule is latent rather than unenforced.
 
 ## X. Boundary Examples
 
@@ -219,3 +229,8 @@ This means Class Configuration decides whether a capability exists in the class,
 ## XI. Amendment
 
 Revisions must remain consistent with `DOM-CLASS-001`, the consuming operational domain, and the governing FEAT and temporal invariants.
+
+### Seat attribution (INV-ARC-019)
+
+Policy/product authors and transition initiators are recorded as `created_by_seat_id`
+within the explicit `class_id`. No User foreign key or principal author alias is permitted.

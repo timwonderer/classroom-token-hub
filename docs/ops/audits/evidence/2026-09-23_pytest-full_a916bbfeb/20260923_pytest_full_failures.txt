@@ -1,0 +1,1080 @@
+=======================================
+tests/test_design_token_contract.py::test_SPEC_DES_001__templates_conform[R5]
+AssertionError
+findings = [Finding(path='templates/admin_process_claim.html', line=143, rule='R5', message='static inline style="font-size:1em;v.../admin_process_claim.html', line=298, rule='R5', message='static inline style="font-size:1em;vertical-align:middle;"')]
+rule = 'R5'
+
+    @pytest.mark.parametrize("rule", sorted(RULES))
+    def test_SPEC_DES_001__templates_conform(findings, rule):
+        violations = [str(f) for f in findings if f.rule == rule]
+>       assert not violations, f"{rule}: {RULES[rule]}\n" + "\n".join(violations)
+E       AssertionError: R5: no inline style attribute that is static on every render
+E         templates/admin_process_claim.html:143: R5 static inline style="font-size:1em;vertical-align:middle;"
+E         templates/admin_process_claim.html:191: R5 static inline style="font-size:1em;vertical-align:middle;"
+E         templates/admin_process_claim.html:197: R5 static inline style="font-size:1em;vertical-align:middle;"
+E         templates/admin_process_claim.html:259: R5 static inline style="font-size:1em;vertical-align:middle;"
+E         templates/admin_process_claim.html:298: R5 static inline style="font-size:1em;vertical-align:middle;"
+E       assert not ['templates/admin_process_claim.html:143: R5 static inline style="font-size:1em;vertical-align:middle;"', 'templates/a...ign:middle;"', 'templates/admin_process_claim.html:298: R5 static inline style="font-size:1em;vertical-align:middle;"']
+
+tests/test_design_token_contract.py:50: AssertionError
+=======================================
+
+=======================================
+tests/test_hall_pass_lifecycle_classification.py::test_resolver_reports_left_after_departure
+AssertionError
+app = <Flask 'app'>, client = <FlaskClient <Flask 'app'>>
+
+    def test_resolver_reports_left_after_departure(app, client):
+        classroom = initialize_as_teacher("chemistry_p1", client, app)
+        student = classroom.students[0]
+        with app.app_context():
+            log = _approve_pass(app, client, classroom, student)
+        _leave(client, student, log)
+        with app.app_context():
+            result = resolve_hall_pass_lifecycle_status(
+                class_id=classroom.class_id, seat_id=student.seat.id,
+                hall_pass_id=log.hall_pass_id,
+                day_boundary_start_utc=datetime(2026, 9, 21, 7, 0, tzinfo=timezone.utc),
+                day_boundary_end_utc=datetime(2026, 9, 22, 7, 0, tzinfo=timezone.utc),
+            )
+>           assert result.status == HALL_PASS_STATUS_LEFT
+E           AssertionError: assert 'approved' == 'left'
+E             
+E             [0m[91m- left[39;49;00m[90m[39;49;00m
+E             [92m+ approved[39;49;00m[90m[39;49;00m
+
+tests/test_hall_pass_lifecycle_classification.py:138: AssertionError
+=======================================
+
+=======================================
+tests/test_hall_pass_lifecycle_classification.py::test_resolver_reports_returned_after_the_full_round_trip
+AssertionError
+app = <Flask 'app'>, client = <FlaskClient <Flask 'app'>>
+
+    def test_resolver_reports_returned_after_the_full_round_trip(app, client):
+        classroom = initialize_as_teacher("chemistry_p1", client, app)
+        student = classroom.students[0]
+        with app.app_context():
+            log = _approve_pass(app, client, classroom, student)
+        _leave(client, student, log)
+        _return(client, student, log)
+        with app.app_context():
+            result = resolve_hall_pass_lifecycle_status(
+                class_id=classroom.class_id, seat_id=student.seat.id,
+                hall_pass_id=log.hall_pass_id,
+                day_boundary_start_utc=datetime(2026, 9, 21, 7, 0, tzinfo=timezone.utc),
+                day_boundary_end_utc=datetime(2026, 9, 22, 7, 0, tzinfo=timezone.utc),
+            )
+>           assert result.status == HALL_PASS_STATUS_RETURNED
+E           AssertionError: assert 'approved' == 'returned'
+E             
+E             [0m[91m- returned[39;49;00m[90m[39;49;00m
+E             [92m+ approved[39;49;00m[90m[39;49;00m
+
+tests/test_hall_pass_lifecycle_classification.py:157: AssertionError
+=======================================
+
+=======================================
+tests/test_hall_pass_lifecycle_classification.py::test_history_reports_returned_and_ignores_an_unrelated_stray_active_row
+StopIteration
+app = <Flask 'app'>, client = <FlaskClient <Flask 'app'>>
+
+    def test_history_reports_returned_and_ignores_an_unrelated_stray_active_row(app, client):
+        """The exact shape of tonight's live incident (finding 42), for History.
+    
+        /api/hall-pass/history duplicated the same left_row/return_row logic a
+        third time, independently of the admin Issued/Out classifier and the
+        public verification page -- it happened to be correct, but that is luck,
+        not a guarantee, and it is exactly the kind of duplication finding 44 grew
+        out of. Migrated to the shared resolver; this proves the migration is
+        behaviour-preserving even on a messy timeline like Alex's real one
+        tonight, which included a stray active row with no hall_pass_id wedged
+        between the real leave and the real return.
+        """
+        classroom = initialize_as_teacher("chemistry_p1", client, app)
+        student = classroom.students[0]
+        with app.app_context():
+            log = _approve_pass(app, client, classroom, student)
+            log_id = log.id
+        _leave(client, student, log)
+    
+        # A stray, unrelated plain start_work row between the leave and the real
+        # return -- exactly Alex's real shape tonight. Inserted directly (not
+        # through record_attendance_session) because finding 42's own guard now
+        # correctly refuses to CREATE this shape through any domain entry point,
+        # including this one -- which is a second confirmation the fix holds. The
+        # row can still exist historically (it does, on the live host, from before
+        # that fix shipped), so history must resolve correctly around one anyway.
+        with app.app_context():
+            stray = AttendanceSession(
+                target_seat_id=student.seat.id,
+                actor_seat_id=student.seat.id,
+                class_id=classroom.class_id,
+                status="active",
+                reason_code="start_work",
+                mechanism="self",
+                hall_pass_id=None,
+            )
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"stray:{student.seat.id}"):
+                db.session.add(stray)
+                db.session.flush()
+    
+        _return(client, student, log)
+    
+        login_teacher(client, classroom)
+        response = client.get(
+            "/api/hall-pass/history",
+            query_string={"start_date": "2026-09-21", "end_date": "2026-09-21"},
+        )
+        assert response.status_code == 200, response.data
+        payload = response.get_json()
+>       record = next(r for r in payload["records"] if r["id"] == log_id)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       StopIteration
+
+tests/test_hall_pass_lifecycle_classification.py:276: StopIteration
+=======================================
+
+=======================================
+tests/test_status_page.py::test_public_page_separates_measurements_and_notices
+ModuleNotFoundError
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x110e34520>
+
+    @pytest.fixture
+    def page(monkeypatch):
+        now = datetime.now(timezone.utc)
+        snapshot = {"schema_version": SCHEMA_VERSION, "sampled_at": now.isoformat(), "source_latest_at": now.isoformat(), "window_seconds": 300,
+                    "components": [{"key": key, "collection_state": "OK", **dict.fromkeys(COUNT_FIELDS, 0), "request_count": 20,
+                                    "http_2xx_count": 20, "p80_ms": 100, "p95_ms": 200} for key in COMPONENT_KEYS]}
+        store = SimpleNamespace(current_platform=lambda: None, list_active_notices=lambda: [], current_snapshot=lambda: {"snapshot": snapshot, "received_at": now, "diagnostic": None},
+                                measurement_history=lambda: [{"date": now.date().isoformat(), "components": {}, "scheduled_minutes": 720}])
+        monkeypatch.setenv("STATUS_SERVICE_MODE", "public")
+        # Import the module-level app without real credentials or a Firestore client.
+        monkeypatch.setitem(sys.modules, "google.cloud.firestore", SimpleNamespace(Client=lambda **kwargs: store))
+        monkeypatch.setitem(sys.modules, "google.cloud", SimpleNamespace(firestore=sys.modules["google.cloud.firestore"]))
+>       module = import_module("status_service.app")
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_status_page.py:21: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+/opt/homebrew/Cellar/python@3.13/3.13.5/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1331: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:935: in _load_unlocked
+    ???
+<frozen importlib._bootstrap_external>:1026: in exec_module
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+status_service/app.py:14: in <module>
+    from .identity import authenticated_operator_email
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    """Fail-closed validation of Google Cloud IAP identity assertions."""
+    
+    from __future__ import annotations
+    
+    import http.client
+    import json
+    import logging
+    import os
+    import re
+    import threading
+    import time
+    
+>   from google.auth import exceptions as google_auth_exceptions
+E   ModuleNotFoundError: No module named 'google.auth'
+
+status_service/identity.py:13: ModuleNotFoundError
+=======================================
+
+=======================================
+tests/test_status_page.py::test_stale_snapshot_never_displays_old_latency_as_current
+ModuleNotFoundError
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1174a9be0>
+
+    @pytest.fixture
+    def page(monkeypatch):
+        now = datetime.now(timezone.utc)
+        snapshot = {"schema_version": SCHEMA_VERSION, "sampled_at": now.isoformat(), "source_latest_at": now.isoformat(), "window_seconds": 300,
+                    "components": [{"key": key, "collection_state": "OK", **dict.fromkeys(COUNT_FIELDS, 0), "request_count": 20,
+                                    "http_2xx_count": 20, "p80_ms": 100, "p95_ms": 200} for key in COMPONENT_KEYS]}
+        store = SimpleNamespace(current_platform=lambda: None, list_active_notices=lambda: [], current_snapshot=lambda: {"snapshot": snapshot, "received_at": now, "diagnostic": None},
+                                measurement_history=lambda: [{"date": now.date().isoformat(), "components": {}, "scheduled_minutes": 720}])
+        monkeypatch.setenv("STATUS_SERVICE_MODE", "public")
+        # Import the module-level app without real credentials or a Firestore client.
+        monkeypatch.setitem(sys.modules, "google.cloud.firestore", SimpleNamespace(Client=lambda **kwargs: store))
+        monkeypatch.setitem(sys.modules, "google.cloud", SimpleNamespace(firestore=sys.modules["google.cloud.firestore"]))
+>       module = import_module("status_service.app")
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_status_page.py:21: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+/opt/homebrew/Cellar/python@3.13/3.13.5/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1331: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:935: in _load_unlocked
+    ???
+<frozen importlib._bootstrap_external>:1026: in exec_module
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+status_service/app.py:14: in <module>
+    from .identity import authenticated_operator_email
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    """Fail-closed validation of Google Cloud IAP identity assertions."""
+    
+    from __future__ import annotations
+    
+    import http.client
+    import json
+    import logging
+    import os
+    import re
+    import threading
+    import time
+    
+>   from google.auth import exceptions as google_auth_exceptions
+E   ModuleNotFoundError: No module named 'google.auth'
+
+status_service/identity.py:13: ModuleNotFoundError
+=======================================
+
+=======================================
+tests/test_status_page.py::test_corrupt_persisted_snapshot_fails_closed
+ModuleNotFoundError
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10fd283d0>
+
+    @pytest.fixture
+    def page(monkeypatch):
+        now = datetime.now(timezone.utc)
+        snapshot = {"schema_version": SCHEMA_VERSION, "sampled_at": now.isoformat(), "source_latest_at": now.isoformat(), "window_seconds": 300,
+                    "components": [{"key": key, "collection_state": "OK", **dict.fromkeys(COUNT_FIELDS, 0), "request_count": 20,
+                                    "http_2xx_count": 20, "p80_ms": 100, "p95_ms": 200} for key in COMPONENT_KEYS]}
+        store = SimpleNamespace(current_platform=lambda: None, list_active_notices=lambda: [], current_snapshot=lambda: {"snapshot": snapshot, "received_at": now, "diagnostic": None},
+                                measurement_history=lambda: [{"date": now.date().isoformat(), "components": {}, "scheduled_minutes": 720}])
+        monkeypatch.setenv("STATUS_SERVICE_MODE", "public")
+        # Import the module-level app without real credentials or a Firestore client.
+        monkeypatch.setitem(sys.modules, "google.cloud.firestore", SimpleNamespace(Client=lambda **kwargs: store))
+        monkeypatch.setitem(sys.modules, "google.cloud", SimpleNamespace(firestore=sys.modules["google.cloud.firestore"]))
+>       module = import_module("status_service.app")
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_status_page.py:21: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+/opt/homebrew/Cellar/python@3.13/3.13.5/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1331: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:935: in _load_unlocked
+    ???
+<frozen importlib._bootstrap_external>:1026: in exec_module
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+status_service/app.py:14: in <module>
+    from .identity import authenticated_operator_email
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    """Fail-closed validation of Google Cloud IAP identity assertions."""
+    
+    from __future__ import annotations
+    
+    import http.client
+    import json
+    import logging
+    import os
+    import re
+    import threading
+    import time
+    
+>   from google.auth import exceptions as google_auth_exceptions
+E   ModuleNotFoundError: No module named 'google.auth'
+
+status_service/identity.py:13: ModuleNotFoundError
+=======================================
+
+=======================================
+tests/test_status_page.py::test_not_found_measurement_does_not_claim_system_failure
+ModuleNotFoundError
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x115a117f0>
+
+    @pytest.fixture
+    def page(monkeypatch):
+        now = datetime.now(timezone.utc)
+        snapshot = {"schema_version": SCHEMA_VERSION, "sampled_at": now.isoformat(), "source_latest_at": now.isoformat(), "window_seconds": 300,
+                    "components": [{"key": key, "collection_state": "OK", **dict.fromkeys(COUNT_FIELDS, 0), "request_count": 20,
+                                    "http_2xx_count": 20, "p80_ms": 100, "p95_ms": 200} for key in COMPONENT_KEYS]}
+        store = SimpleNamespace(current_platform=lambda: None, list_active_notices=lambda: [], current_snapshot=lambda: {"snapshot": snapshot, "received_at": now, "diagnostic": None},
+                                measurement_history=lambda: [{"date": now.date().isoformat(), "components": {}, "scheduled_minutes": 720}])
+        monkeypatch.setenv("STATUS_SERVICE_MODE", "public")
+        # Import the module-level app without real credentials or a Firestore client.
+        monkeypatch.setitem(sys.modules, "google.cloud.firestore", SimpleNamespace(Client=lambda **kwargs: store))
+        monkeypatch.setitem(sys.modules, "google.cloud", SimpleNamespace(firestore=sys.modules["google.cloud.firestore"]))
+>       module = import_module("status_service.app")
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_status_page.py:21: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+/opt/homebrew/Cellar/python@3.13/3.13.5/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1331: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:935: in _load_unlocked
+    ???
+<frozen importlib._bootstrap_external>:1026: in exec_module
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+status_service/app.py:14: in <module>
+    from .identity import authenticated_operator_email
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    """Fail-closed validation of Google Cloud IAP identity assertions."""
+    
+    from __future__ import annotations
+    
+    import http.client
+    import json
+    import logging
+    import os
+    import re
+    import threading
+    import time
+    
+>   from google.auth import exceptions as google_auth_exceptions
+E   ModuleNotFoundError: No module named 'google.auth'
+
+status_service/identity.py:13: ModuleNotFoundError
+=======================================
+
+=======================================
+tests/test_status_page.py::test_public_operator_endpoints_remain_unavailable
+ModuleNotFoundError
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x110caf380>
+
+    @pytest.fixture
+    def page(monkeypatch):
+        now = datetime.now(timezone.utc)
+        snapshot = {"schema_version": SCHEMA_VERSION, "sampled_at": now.isoformat(), "source_latest_at": now.isoformat(), "window_seconds": 300,
+                    "components": [{"key": key, "collection_state": "OK", **dict.fromkeys(COUNT_FIELDS, 0), "request_count": 20,
+                                    "http_2xx_count": 20, "p80_ms": 100, "p95_ms": 200} for key in COMPONENT_KEYS]}
+        store = SimpleNamespace(current_platform=lambda: None, list_active_notices=lambda: [], current_snapshot=lambda: {"snapshot": snapshot, "received_at": now, "diagnostic": None},
+                                measurement_history=lambda: [{"date": now.date().isoformat(), "components": {}, "scheduled_minutes": 720}])
+        monkeypatch.setenv("STATUS_SERVICE_MODE", "public")
+        # Import the module-level app without real credentials or a Firestore client.
+        monkeypatch.setitem(sys.modules, "google.cloud.firestore", SimpleNamespace(Client=lambda **kwargs: store))
+        monkeypatch.setitem(sys.modules, "google.cloud", SimpleNamespace(firestore=sys.modules["google.cloud.firestore"]))
+>       module = import_module("status_service.app")
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_status_page.py:21: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+/opt/homebrew/Cellar/python@3.13/3.13.5/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1331: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:935: in _load_unlocked
+    ???
+<frozen importlib._bootstrap_external>:1026: in exec_module
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+status_service/app.py:14: in <module>
+    from .identity import authenticated_operator_email
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    """Fail-closed validation of Google Cloud IAP identity assertions."""
+    
+    from __future__ import annotations
+    
+    import http.client
+    import json
+    import logging
+    import os
+    import re
+    import threading
+    import time
+    
+>   from google.auth import exceptions as google_auth_exceptions
+E   ModuleNotFoundError: No module named 'google.auth'
+
+status_service/identity.py:13: ModuleNotFoundError
+=======================================
+
+=======================================
+tests/test_status_page.py::test_notice_display_never_invents_timezone[2026-09-22T01:00:00+02:00-2026-09-21 23:00 UTC]
+ModuleNotFoundError
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x110d2a430>
+
+    @pytest.fixture
+    def page(monkeypatch):
+        now = datetime.now(timezone.utc)
+        snapshot = {"schema_version": SCHEMA_VERSION, "sampled_at": now.isoformat(), "source_latest_at": now.isoformat(), "window_seconds": 300,
+                    "components": [{"key": key, "collection_state": "OK", **dict.fromkeys(COUNT_FIELDS, 0), "request_count": 20,
+                                    "http_2xx_count": 20, "p80_ms": 100, "p95_ms": 200} for key in COMPONENT_KEYS]}
+        store = SimpleNamespace(current_platform=lambda: None, list_active_notices=lambda: [], current_snapshot=lambda: {"snapshot": snapshot, "received_at": now, "diagnostic": None},
+                                measurement_history=lambda: [{"date": now.date().isoformat(), "components": {}, "scheduled_minutes": 720}])
+        monkeypatch.setenv("STATUS_SERVICE_MODE", "public")
+        # Import the module-level app without real credentials or a Firestore client.
+        monkeypatch.setitem(sys.modules, "google.cloud.firestore", SimpleNamespace(Client=lambda **kwargs: store))
+        monkeypatch.setitem(sys.modules, "google.cloud", SimpleNamespace(firestore=sys.modules["google.cloud.firestore"]))
+>       module = import_module("status_service.app")
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_status_page.py:21: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+/opt/homebrew/Cellar/python@3.13/3.13.5/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1331: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:935: in _load_unlocked
+    ???
+<frozen importlib._bootstrap_external>:1026: in exec_module
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+status_service/app.py:14: in <module>
+    from .identity import authenticated_operator_email
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    """Fail-closed validation of Google Cloud IAP identity assertions."""
+    
+    from __future__ import annotations
+    
+    import http.client
+    import json
+    import logging
+    import os
+    import re
+    import threading
+    import time
+    
+>   from google.auth import exceptions as google_auth_exceptions
+E   ModuleNotFoundError: No module named 'google.auth'
+
+status_service/identity.py:13: ModuleNotFoundError
+=======================================
+
+=======================================
+tests/test_status_page.py::test_notice_display_never_invents_timezone[2026-09-22T01:00:00-2026-09-22 01:00 (timezone not provided)]
+ModuleNotFoundError
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1103c81a0>
+
+    @pytest.fixture
+    def page(monkeypatch):
+        now = datetime.now(timezone.utc)
+        snapshot = {"schema_version": SCHEMA_VERSION, "sampled_at": now.isoformat(), "source_latest_at": now.isoformat(), "window_seconds": 300,
+                    "components": [{"key": key, "collection_state": "OK", **dict.fromkeys(COUNT_FIELDS, 0), "request_count": 20,
+                                    "http_2xx_count": 20, "p80_ms": 100, "p95_ms": 200} for key in COMPONENT_KEYS]}
+        store = SimpleNamespace(current_platform=lambda: None, list_active_notices=lambda: [], current_snapshot=lambda: {"snapshot": snapshot, "received_at": now, "diagnostic": None},
+                                measurement_history=lambda: [{"date": now.date().isoformat(), "components": {}, "scheduled_minutes": 720}])
+        monkeypatch.setenv("STATUS_SERVICE_MODE", "public")
+        # Import the module-level app without real credentials or a Firestore client.
+        monkeypatch.setitem(sys.modules, "google.cloud.firestore", SimpleNamespace(Client=lambda **kwargs: store))
+        monkeypatch.setitem(sys.modules, "google.cloud", SimpleNamespace(firestore=sys.modules["google.cloud.firestore"]))
+>       module = import_module("status_service.app")
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_status_page.py:21: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+/opt/homebrew/Cellar/python@3.13/3.13.5/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1331: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:935: in _load_unlocked
+    ???
+<frozen importlib._bootstrap_external>:1026: in exec_module
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+status_service/app.py:14: in <module>
+    from .identity import authenticated_operator_email
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    """Fail-closed validation of Google Cloud IAP identity assertions."""
+    
+    from __future__ import annotations
+    
+    import http.client
+    import json
+    import logging
+    import os
+    import re
+    import threading
+    import time
+    
+>   from google.auth import exceptions as google_auth_exceptions
+E   ModuleNotFoundError: No module named 'google.auth'
+
+status_service/identity.py:13: ModuleNotFoundError
+=======================================
+
+=======================================
+tests/test_status_page.py::test_notice_display_never_invents_timezone[invalid-Time unavailable]
+ModuleNotFoundError
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x110c6d7f0>
+
+    @pytest.fixture
+    def page(monkeypatch):
+        now = datetime.now(timezone.utc)
+        snapshot = {"schema_version": SCHEMA_VERSION, "sampled_at": now.isoformat(), "source_latest_at": now.isoformat(), "window_seconds": 300,
+                    "components": [{"key": key, "collection_state": "OK", **dict.fromkeys(COUNT_FIELDS, 0), "request_count": 20,
+                                    "http_2xx_count": 20, "p80_ms": 100, "p95_ms": 200} for key in COMPONENT_KEYS]}
+        store = SimpleNamespace(current_platform=lambda: None, list_active_notices=lambda: [], current_snapshot=lambda: {"snapshot": snapshot, "received_at": now, "diagnostic": None},
+                                measurement_history=lambda: [{"date": now.date().isoformat(), "components": {}, "scheduled_minutes": 720}])
+        monkeypatch.setenv("STATUS_SERVICE_MODE", "public")
+        # Import the module-level app without real credentials or a Firestore client.
+        monkeypatch.setitem(sys.modules, "google.cloud.firestore", SimpleNamespace(Client=lambda **kwargs: store))
+        monkeypatch.setitem(sys.modules, "google.cloud", SimpleNamespace(firestore=sys.modules["google.cloud.firestore"]))
+>       module = import_module("status_service.app")
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_status_page.py:21: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+/opt/homebrew/Cellar/python@3.13/3.13.5/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1331: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:935: in _load_unlocked
+    ???
+<frozen importlib._bootstrap_external>:1026: in exec_module
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+status_service/app.py:14: in <module>
+    from .identity import authenticated_operator_email
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    """Fail-closed validation of Google Cloud IAP identity assertions."""
+    
+    from __future__ import annotations
+    
+    import http.client
+    import json
+    import logging
+    import os
+    import re
+    import threading
+    import time
+    
+>   from google.auth import exceptions as google_auth_exceptions
+E   ModuleNotFoundError: No module named 'google.auth'
+
+status_service/identity.py:13: ModuleNotFoundError
+=======================================
+
+=======================================
+tests/test_status_page.py::test_notice_display_never_invents_timezone[None-Time unavailable]
+ModuleNotFoundError
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x117911d30>
+
+    @pytest.fixture
+    def page(monkeypatch):
+        now = datetime.now(timezone.utc)
+        snapshot = {"schema_version": SCHEMA_VERSION, "sampled_at": now.isoformat(), "source_latest_at": now.isoformat(), "window_seconds": 300,
+                    "components": [{"key": key, "collection_state": "OK", **dict.fromkeys(COUNT_FIELDS, 0), "request_count": 20,
+                                    "http_2xx_count": 20, "p80_ms": 100, "p95_ms": 200} for key in COMPONENT_KEYS]}
+        store = SimpleNamespace(current_platform=lambda: None, list_active_notices=lambda: [], current_snapshot=lambda: {"snapshot": snapshot, "received_at": now, "diagnostic": None},
+                                measurement_history=lambda: [{"date": now.date().isoformat(), "components": {}, "scheduled_minutes": 720}])
+        monkeypatch.setenv("STATUS_SERVICE_MODE", "public")
+        # Import the module-level app without real credentials or a Firestore client.
+        monkeypatch.setitem(sys.modules, "google.cloud.firestore", SimpleNamespace(Client=lambda **kwargs: store))
+        monkeypatch.setitem(sys.modules, "google.cloud", SimpleNamespace(firestore=sys.modules["google.cloud.firestore"]))
+>       module = import_module("status_service.app")
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_status_page.py:21: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+/opt/homebrew/Cellar/python@3.13/3.13.5/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1331: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:935: in _load_unlocked
+    ???
+<frozen importlib._bootstrap_external>:1026: in exec_module
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+status_service/app.py:14: in <module>
+    from .identity import authenticated_operator_email
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    """Fail-closed validation of Google Cloud IAP identity assertions."""
+    
+    from __future__ import annotations
+    
+    import http.client
+    import json
+    import logging
+    import os
+    import re
+    import threading
+    import time
+    
+>   from google.auth import exceptions as google_auth_exceptions
+E   ModuleNotFoundError: No module named 'google.auth'
+
+status_service/identity.py:13: ModuleNotFoundError
+=======================================
+
+=======================================
+tests/test_status_page.py::test_mockup_order_and_simple_cards
+ModuleNotFoundError
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x110334c20>
+
+    @pytest.fixture
+    def page(monkeypatch):
+        now = datetime.now(timezone.utc)
+        snapshot = {"schema_version": SCHEMA_VERSION, "sampled_at": now.isoformat(), "source_latest_at": now.isoformat(), "window_seconds": 300,
+                    "components": [{"key": key, "collection_state": "OK", **dict.fromkeys(COUNT_FIELDS, 0), "request_count": 20,
+                                    "http_2xx_count": 20, "p80_ms": 100, "p95_ms": 200} for key in COMPONENT_KEYS]}
+        store = SimpleNamespace(current_platform=lambda: None, list_active_notices=lambda: [], current_snapshot=lambda: {"snapshot": snapshot, "received_at": now, "diagnostic": None},
+                                measurement_history=lambda: [{"date": now.date().isoformat(), "components": {}, "scheduled_minutes": 720}])
+        monkeypatch.setenv("STATUS_SERVICE_MODE", "public")
+        # Import the module-level app without real credentials or a Firestore client.
+        monkeypatch.setitem(sys.modules, "google.cloud.firestore", SimpleNamespace(Client=lambda **kwargs: store))
+        monkeypatch.setitem(sys.modules, "google.cloud", SimpleNamespace(firestore=sys.modules["google.cloud.firestore"]))
+>       module = import_module("status_service.app")
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_status_page.py:21: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+/opt/homebrew/Cellar/python@3.13/3.13.5/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1331: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:935: in _load_unlocked
+    ???
+<frozen importlib._bootstrap_external>:1026: in exec_module
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+status_service/app.py:14: in <module>
+    from .identity import authenticated_operator_email
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    """Fail-closed validation of Google Cloud IAP identity assertions."""
+    
+    from __future__ import annotations
+    
+    import http.client
+    import json
+    import logging
+    import os
+    import re
+    import threading
+    import time
+    
+>   from google.auth import exceptions as google_auth_exceptions
+E   ModuleNotFoundError: No module named 'google.auth'
+
+status_service/identity.py:13: ModuleNotFoundError
+=======================================
+
+=======================================
+tests/test_status_page.py::test_teacher_estimate_thresholds[20-1-Probably not]
+ModuleNotFoundError
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x11759d630>
+
+    @pytest.fixture
+    def page(monkeypatch):
+        now = datetime.now(timezone.utc)
+        snapshot = {"schema_version": SCHEMA_VERSION, "sampled_at": now.isoformat(), "source_latest_at": now.isoformat(), "window_seconds": 300,
+                    "components": [{"key": key, "collection_state": "OK", **dict.fromkeys(COUNT_FIELDS, 0), "request_count": 20,
+                                    "http_2xx_count": 20, "p80_ms": 100, "p95_ms": 200} for key in COMPONENT_KEYS]}
+        store = SimpleNamespace(current_platform=lambda: None, list_active_notices=lambda: [], current_snapshot=lambda: {"snapshot": snapshot, "received_at": now, "diagnostic": None},
+                                measurement_history=lambda: [{"date": now.date().isoformat(), "components": {}, "scheduled_minutes": 720}])
+        monkeypatch.setenv("STATUS_SERVICE_MODE", "public")
+        # Import the module-level app without real credentials or a Firestore client.
+        monkeypatch.setitem(sys.modules, "google.cloud.firestore", SimpleNamespace(Client=lambda **kwargs: store))
+        monkeypatch.setitem(sys.modules, "google.cloud", SimpleNamespace(firestore=sys.modules["google.cloud.firestore"]))
+>       module = import_module("status_service.app")
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_status_page.py:21: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+/opt/homebrew/Cellar/python@3.13/3.13.5/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1331: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:935: in _load_unlocked
+    ???
+<frozen importlib._bootstrap_external>:1026: in exec_module
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+status_service/app.py:14: in <module>
+    from .identity import authenticated_operator_email
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    """Fail-closed validation of Google Cloud IAP identity assertions."""
+    
+    from __future__ import annotations
+    
+    import http.client
+    import json
+    import logging
+    import os
+    import re
+    import threading
+    import time
+    
+>   from google.auth import exceptions as google_auth_exceptions
+E   ModuleNotFoundError: No module named 'google.auth'
+
+status_service/identity.py:13: ModuleNotFoundError
+=======================================
+
+=======================================
+tests/test_status_page.py::test_teacher_estimate_thresholds[10-5-Possibly down]
+ModuleNotFoundError
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x117abfa10>
+
+    @pytest.fixture
+    def page(monkeypatch):
+        now = datetime.now(timezone.utc)
+        snapshot = {"schema_version": SCHEMA_VERSION, "sampled_at": now.isoformat(), "source_latest_at": now.isoformat(), "window_seconds": 300,
+                    "components": [{"key": key, "collection_state": "OK", **dict.fromkeys(COUNT_FIELDS, 0), "request_count": 20,
+                                    "http_2xx_count": 20, "p80_ms": 100, "p95_ms": 200} for key in COMPONENT_KEYS]}
+        store = SimpleNamespace(current_platform=lambda: None, list_active_notices=lambda: [], current_snapshot=lambda: {"snapshot": snapshot, "received_at": now, "diagnostic": None},
+                                measurement_history=lambda: [{"date": now.date().isoformat(), "components": {}, "scheduled_minutes": 720}])
+        monkeypatch.setenv("STATUS_SERVICE_MODE", "public")
+        # Import the module-level app without real credentials or a Firestore client.
+        monkeypatch.setitem(sys.modules, "google.cloud.firestore", SimpleNamespace(Client=lambda **kwargs: store))
+        monkeypatch.setitem(sys.modules, "google.cloud", SimpleNamespace(firestore=sys.modules["google.cloud.firestore"]))
+>       module = import_module("status_service.app")
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_status_page.py:21: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+/opt/homebrew/Cellar/python@3.13/3.13.5/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1331: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:935: in _load_unlocked
+    ???
+<frozen importlib._bootstrap_external>:1026: in exec_module
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+status_service/app.py:14: in <module>
+    from .identity import authenticated_operator_email
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    """Fail-closed validation of Google Cloud IAP identity assertions."""
+    
+    from __future__ import annotations
+    
+    import http.client
+    import json
+    import logging
+    import os
+    import re
+    import threading
+    import time
+    
+>   from google.auth import exceptions as google_auth_exceptions
+E   ModuleNotFoundError: No module named 'google.auth'
+
+status_service/identity.py:13: ModuleNotFoundError
+=======================================
+
+=======================================
+tests/test_status_page.py::test_teacher_estimate_thresholds[9-5-Probably not]
+ModuleNotFoundError
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1108e33f0>
+
+    @pytest.fixture
+    def page(monkeypatch):
+        now = datetime.now(timezone.utc)
+        snapshot = {"schema_version": SCHEMA_VERSION, "sampled_at": now.isoformat(), "source_latest_at": now.isoformat(), "window_seconds": 300,
+                    "components": [{"key": key, "collection_state": "OK", **dict.fromkeys(COUNT_FIELDS, 0), "request_count": 20,
+                                    "http_2xx_count": 20, "p80_ms": 100, "p95_ms": 200} for key in COMPONENT_KEYS]}
+        store = SimpleNamespace(current_platform=lambda: None, list_active_notices=lambda: [], current_snapshot=lambda: {"snapshot": snapshot, "received_at": now, "diagnostic": None},
+                                measurement_history=lambda: [{"date": now.date().isoformat(), "components": {}, "scheduled_minutes": 720}])
+        monkeypatch.setenv("STATUS_SERVICE_MODE", "public")
+        # Import the module-level app without real credentials or a Firestore client.
+        monkeypatch.setitem(sys.modules, "google.cloud.firestore", SimpleNamespace(Client=lambda **kwargs: store))
+        monkeypatch.setitem(sys.modules, "google.cloud", SimpleNamespace(firestore=sys.modules["google.cloud.firestore"]))
+>       module = import_module("status_service.app")
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_status_page.py:21: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+/opt/homebrew/Cellar/python@3.13/3.13.5/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1331: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:935: in _load_unlocked
+    ???
+<frozen importlib._bootstrap_external>:1026: in exec_module
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+status_service/app.py:14: in <module>
+    from .identity import authenticated_operator_email
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    """Fail-closed validation of Google Cloud IAP identity assertions."""
+    
+    from __future__ import annotations
+    
+    import http.client
+    import json
+    import logging
+    import os
+    import re
+    import threading
+    import time
+    
+>   from google.auth import exceptions as google_auth_exceptions
+E   ModuleNotFoundError: No module named 'google.auth'
+
+status_service/identity.py:13: ModuleNotFoundError
+=======================================
+
+=======================================
+tests/test_status_page.py::test_teacher_estimate_thresholds[5-0-Not recently verified]
+ModuleNotFoundError
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x110334c20>
+
+    @pytest.fixture
+    def page(monkeypatch):
+        now = datetime.now(timezone.utc)
+        snapshot = {"schema_version": SCHEMA_VERSION, "sampled_at": now.isoformat(), "source_latest_at": now.isoformat(), "window_seconds": 300,
+                    "components": [{"key": key, "collection_state": "OK", **dict.fromkeys(COUNT_FIELDS, 0), "request_count": 20,
+                                    "http_2xx_count": 20, "p80_ms": 100, "p95_ms": 200} for key in COMPONENT_KEYS]}
+        store = SimpleNamespace(current_platform=lambda: None, list_active_notices=lambda: [], current_snapshot=lambda: {"snapshot": snapshot, "received_at": now, "diagnostic": None},
+                                measurement_history=lambda: [{"date": now.date().isoformat(), "components": {}, "scheduled_minutes": 720}])
+        monkeypatch.setenv("STATUS_SERVICE_MODE", "public")
+        # Import the module-level app without real credentials or a Firestore client.
+        monkeypatch.setitem(sys.modules, "google.cloud.firestore", SimpleNamespace(Client=lambda **kwargs: store))
+        monkeypatch.setitem(sys.modules, "google.cloud", SimpleNamespace(firestore=sys.modules["google.cloud.firestore"]))
+>       module = import_module("status_service.app")
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_status_page.py:21: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+/opt/homebrew/Cellar/python@3.13/3.13.5/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1331: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:935: in _load_unlocked
+    ???
+<frozen importlib._bootstrap_external>:1026: in exec_module
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+status_service/app.py:14: in <module>
+    from .identity import authenticated_operator_email
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    """Fail-closed validation of Google Cloud IAP identity assertions."""
+    
+    from __future__ import annotations
+    
+    import http.client
+    import json
+    import logging
+    import os
+    import re
+    import threading
+    import time
+    
+>   from google.auth import exceptions as google_auth_exceptions
+E   ModuleNotFoundError: No module named 'google.auth'
+
+status_service/identity.py:13: ModuleNotFoundError
+=======================================
+
+=======================================
+tests/test_status_page.py::test_global_unmapped_request_failure_controls_hero
+ModuleNotFoundError
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x110eb4830>
+
+    @pytest.fixture
+    def page(monkeypatch):
+        now = datetime.now(timezone.utc)
+        snapshot = {"schema_version": SCHEMA_VERSION, "sampled_at": now.isoformat(), "source_latest_at": now.isoformat(), "window_seconds": 300,
+                    "components": [{"key": key, "collection_state": "OK", **dict.fromkeys(COUNT_FIELDS, 0), "request_count": 20,
+                                    "http_2xx_count": 20, "p80_ms": 100, "p95_ms": 200} for key in COMPONENT_KEYS]}
+        store = SimpleNamespace(current_platform=lambda: None, list_active_notices=lambda: [], current_snapshot=lambda: {"snapshot": snapshot, "received_at": now, "diagnostic": None},
+                                measurement_history=lambda: [{"date": now.date().isoformat(), "components": {}, "scheduled_minutes": 720}])
+        monkeypatch.setenv("STATUS_SERVICE_MODE", "public")
+        # Import the module-level app without real credentials or a Firestore client.
+        monkeypatch.setitem(sys.modules, "google.cloud.firestore", SimpleNamespace(Client=lambda **kwargs: store))
+        monkeypatch.setitem(sys.modules, "google.cloud", SimpleNamespace(firestore=sys.modules["google.cloud.firestore"]))
+>       module = import_module("status_service.app")
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_status_page.py:21: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+/opt/homebrew/Cellar/python@3.13/3.13.5/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1331: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:935: in _load_unlocked
+    ???
+<frozen importlib._bootstrap_external>:1026: in exec_module
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+status_service/app.py:14: in <module>
+    from .identity import authenticated_operator_email
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    """Fail-closed validation of Google Cloud IAP identity assertions."""
+    
+    from __future__ import annotations
+    
+    import http.client
+    import json
+    import logging
+    import os
+    import re
+    import threading
+    import time
+    
+>   from google.auth import exceptions as google_auth_exceptions
+E   ModuleNotFoundError: No module named 'google.auth'
+
+status_service/identity.py:13: ModuleNotFoundError
+=======================================
+
+=======================================
+tests/test_status_page.py::test_human_notice_prevents_reassuring_hero
+ModuleNotFoundError
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x110597cb0>
+
+    @pytest.fixture
+    def page(monkeypatch):
+        now = datetime.now(timezone.utc)
+        snapshot = {"schema_version": SCHEMA_VERSION, "sampled_at": now.isoformat(), "source_latest_at": now.isoformat(), "window_seconds": 300,
+                    "components": [{"key": key, "collection_state": "OK", **dict.fromkeys(COUNT_FIELDS, 0), "request_count": 20,
+                                    "http_2xx_count": 20, "p80_ms": 100, "p95_ms": 200} for key in COMPONENT_KEYS]}
+        store = SimpleNamespace(current_platform=lambda: None, list_active_notices=lambda: [], current_snapshot=lambda: {"snapshot": snapshot, "received_at": now, "diagnostic": None},
+                                measurement_history=lambda: [{"date": now.date().isoformat(), "components": {}, "scheduled_minutes": 720}])
+        monkeypatch.setenv("STATUS_SERVICE_MODE", "public")
+        # Import the module-level app without real credentials or a Firestore client.
+        monkeypatch.setitem(sys.modules, "google.cloud.firestore", SimpleNamespace(Client=lambda **kwargs: store))
+        monkeypatch.setitem(sys.modules, "google.cloud", SimpleNamespace(firestore=sys.modules["google.cloud.firestore"]))
+>       module = import_module("status_service.app")
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_status_page.py:21: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+/opt/homebrew/Cellar/python@3.13/3.13.5/Frameworks/Python.framework/Versions/3.13/lib/python3.13/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1331: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:935: in _load_unlocked
+    ???
+<frozen importlib._bootstrap_external>:1026: in exec_module
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+status_service/app.py:14: in <module>
+    from .identity import authenticated_operator_email
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    """Fail-closed validation of Google Cloud IAP identity assertions."""
+    
+    from __future__ import annotations
+    
+    import http.client
+    import json
+    import logging
+    import os
+    import re
+    import threading
+    import time
+    
+>   from google.auth import exceptions as google_auth_exceptions
+E   ModuleNotFoundError: No module named 'google.auth'
+
+status_service/identity.py:13: ModuleNotFoundError
+=======================================

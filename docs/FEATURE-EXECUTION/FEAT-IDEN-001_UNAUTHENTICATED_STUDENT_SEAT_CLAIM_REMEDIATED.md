@@ -3,7 +3,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| FEAT-IDEN-001 | 2.0 | 2026-08-09 | 1.0 (non-compliant) | Normative | REMEDIATED |
+| FEAT-IDEN-001 | 2.3 | 2026-09-15 | 2.2 | Normative | REMEDIATED |
 
 ---
 
@@ -62,8 +62,9 @@ The following validation steps SHALL occur before any mutations:
    - `class_id` matches the resolved class
    - `user_id IS NULL` (unclaimed per DOM-IDEN-005 §VII)
 2. Compute name match hashes:
-   - `claim_first_name_hash = HMAC(server_secret, normalize(first_name))`
-   - `claim_last_name_hash = HMAC(server_secret, normalize(last_name))`
+   - `claim_first_name_hash = hash_claim_name(first_name, class_id=resolved_class_id, field="first")`
+   - `claim_last_name_hash = hash_claim_name(last_name, class_id=resolved_class_id, field="last")`
+   - Both use the normalization and purpose-separated HMAC encoding in SPEC-SEC-001 §V.2.
 3. Find all seats where both name hashes match the computed hashes.
 4. **Deduplication Logic**:
    - If exactly one seat matches: Use that seat.
@@ -128,6 +129,7 @@ Per FEAT-IDEN-001 §IV (Invariants), PII on the roster seat SHALL be scrubbed:
    - Set `claim_first_name_hash = NULL`
    - Set `claim_last_name_hash = NULL`
    - Set `dedupe_code = NULL` (if used)
+   - Set `roster_fingerprint = NULL`
 
 **Rationale**: Once a seat is claimed, these hashes are no longer needed for lookup. Leaving them creates a PII liability. If a future password reset or recovery flow were to leak the roster, the hashes would still identify the student.
 
@@ -329,4 +331,9 @@ Revisions to this document SHALL:
 4. Maintain consistency with FEAT-CORE-000.
 5. Maintain consistency with INV-CORE-000.
 
-**This is version 2.0 of FEAT-IDEN-001. Version 1.0 (2026-04-23) is superseded and withdrawn due to constitutional non-compliance.**
+**This is version 2.1 of FEAT-IDEN-001. Version 1.0 (2026-04-23) is superseded and withdrawn due to constitutional non-compliance.**
+
+
+## Claim verification lifetime
+
+Successful verification captures the Seat’s server-stored `claim_generation` in the signed onboarding session alongside its Seat reference. FEAT-IDEN-002 must recheck this generation before binding; Unclaim invalidates all earlier verification sessions by incrementing it.

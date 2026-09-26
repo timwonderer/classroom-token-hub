@@ -33,7 +33,8 @@ OPAQUE_ENCRYPTED = {
 
 # Credential hashes are security material, but are not the PII fields governed
 # by the finite identity-display/claim allowlist in INV-ARC-018 §VI.
-NON_PII_HASH_FIELDS = {"username_lookup_hash", "pin_hash", "passphrase_hash"}
+# DOM-IDEN-002 IX / SPEC-SEC-001 V.4 authorize the recovery capability verifier.
+NON_PII_HASH_FIELDS = {"username_lookup_hash", "pin_hash", "passphrase_hash", "recovery_setup_nonce_hash"}
 
 # Names that denote identity PII wherever they appear. A column matching one of
 # these, or any ``*_hash`` column, must be justified by ALLOWED or by

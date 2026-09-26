@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| INV-ARC-018      | 1.1     | 2026-09-06     | 1.0        | Constitutional |
+| INV-ARC-018      | 1.3     | 2026-09-16     | 1.2        | Constitutional |
 
 ---
 
@@ -64,6 +64,12 @@ Every PII field at rest must use exactly one of two storage forms. No other form
 
 When a single PII value serves both lookup and display purposes, it MUST be stored in two separate columns — one hashed, one encrypted. A single column MUST NOT serve both purposes.
 
+External hall-pass verification compares decrypted display names within a class
+scope already established through the verification capability and join code
+(INV-ARC-019 §X). This is a scoped check for a same-day entry, not a stored
+identity-lookup index or economic actor resolution. It creates no persistent
+lookup digest and never authenticates or authorizes from a name.
+
 ### Incorporation of SPEC-SEC-001
 
 This section names the two permitted forms. The code-level construction of each — normalization
@@ -92,10 +98,12 @@ Only the following PII fields are permitted in the v2 schema. Any PII column not
 
 | Field | Table | Storage Form | Purpose |
 |-------|-------|-------------|---------|
-| First name (encrypted) | `identity_profiles` | Encrypted | In-app display |
-| Last name (encrypted) | `identity_profiles` | Encrypted | In-app display |
+| First name (encrypted) | `identity_profiles` | Encrypted | In-app display; scoped hall-pass verification per INV-ARC-019 §X |
+| Last name (encrypted) | `identity_profiles` | Encrypted | In-app display; scoped hall-pass verification per INV-ARC-019 §X |
+| Teacher-entered seat context (`notes`) | `identity_profiles` | Encrypted | Class-scoped contextual display for the teacher; free text with no assertion about its contents |
 | First name hash | `seats` | HMAC-hashed | Roster claim verification |
 | Last name hash | `seats` | HMAC-hashed | Roster claim verification |
+| Pending signup class/display metadata and username | `teacher_signup_attempts.payload_encrypted` | Encrypted | Temporary initial provisioning only; no lookup or actor authority |
 | Username hash | `users` | HMAC-hashed | Login lookup |
 
 ---
@@ -103,7 +111,7 @@ Only the following PII fields are permitted in the v2 schema. Any PII column not
 ## VII. Prohibited Storage Patterns
 
 1. **Plaintext PII at rest** — no column, row, file, or cache entry may contain PII in plaintext form on disk or in the database.
-2. **PII in non-governed columns** — PII must not appear in `description`, `notes`, `metadata`, JSON blobs, or any free-text column.
+2. **PII in non-governed columns** — PII must not appear in ungoverned `description`, `notes`, `metadata`, JSON blobs, or free-text columns. The explicitly governed, encrypted `identity_profiles.notes` field is teacher-entered class-scoped seat context. Its contents are not inspected or classified, and no claim is made that the text does or does not contain PII. It is not an identity index and is not automatically included in support payloads.
 3. **PII in indexed plaintext** — database indexes must not expose plaintext PII. Indexes on hashed columns are permitted.
 4. **PII in backup-only retention** — PII must not survive in database backups beyond the retention window of the owning record. Backup retention policy must align with class lifecycle deletion (INV-CORE-000 §III.5).
 5. **Redundant PII** — the same PII value must not be stored in multiple tables unless each instance serves a distinct invariant-defined purpose with a distinct storage form.
@@ -114,6 +122,7 @@ Only the following PII fields are permitted in the v2 schema. Any PII column not
 
 PII retention is governed by the lifecycle of its owning identity record:
 
+0. **Successful claim** — clear seat claim name hashes, roster fingerprint, and deduplication code atomically with binding. These fields must not survive as hall-pass or roster-import lookup indexes.
 1. **Seat deletion** — when a seat is deleted, all PII on that seat (claim hashes) and its associated `identity_profiles` row (encrypted names) MUST be deleted in the same transaction.
 2. **User deletion** — when a user is deleted (no remaining seats in any class, per INV-CORE-000 §III.5), all PII on the `users` row (username hash) MUST be deleted.
 3. **Class deletion** — class deletion cascades seat deletion, which cascades PII deletion per rule 1 above.
@@ -122,6 +131,17 @@ PII retention is governed by the lifecycle of its owning identity record:
 ---
 
 ## IX. Domain Responsibilities
+
+### Temporary teacher signup
+
+Before a User, Class or Seat exists, Identity may stage only the submitted class
+label, section, time zone, teacher first/last display names, username and pending
+TOTP seed in the encrypted signup payload. A hashed random capability binds that
+staging row to its browser. No plaintext staging values may enter the session
+cookie. The row is not an identity or participant and has no user_id or seat_id.
+It expires 30 minutes after creation without extension. Completion and restart
+delete it atomically; an hourly Identity cleanup deletes expired rows.
+No staging value is copied to logs or authority context.
 
 ### Identity Domain (DOM-IDEN)
 

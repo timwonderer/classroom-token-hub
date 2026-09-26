@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-OPS-001      | 2.3     | 2026-08-31     | 2.2        | Normative       |
+| DOM-OPS-001      | 2.10    | 2026-09-25     | 2.9        | Normative       |
 
 ## 0. Authority Level and Dependencies
 
@@ -32,19 +32,19 @@ The Operations domain is the single authority over the **Operational Truth** of 
 *   **Status Page Publication State**: The public-facing representation of system health and incidents.
 *   **Retention Policy State**: The rules governing the lifespan of operational data.
 
-### External Publication During Canonical-Service Unavailability
+### Independent Operator Publication
 
-Independent status infrastructure MAY maintain and publish bounded external communication records when canonical Operations incident publication is unavailable.
+Independent status infrastructure MAY maintain and publish bounded operator communication records during normal operation and canonical-service unavailability. Operators may report independently investigated user impact and explicitly bounded guidance without requiring a fabricated automated observation or canonical incident.
 
 An `ExternalStatusNotice` is a communication artifact, not Operational Truth and not a canonical incident. It:
 
-*   may report only independently observed service conditions and explicitly bounded operator guidance;
-*   MUST NOT infer internal domain state, internal cause, or the existence of a canonical incident;
+*   may report independently observed service conditions, investigated user impact and explicitly bounded operator guidance;
+*   MUST NOT infer internal domain state, internal cause, or a canonical incident solely from telemetry; human interpretations must be grounded in the operator's investigation and identified as operator communication;
 *   MUST remain distinguishable from `incident_events` and `incident_summary`;
 *   MUST preserve its original observation and publication history without rewriting;
 *   MAY be reconciled with or linked to canonical incident lineage when canonical service becomes available, where applicable.
 
-This channel exists only to preserve useful public communication during canonical-service unavailability. It does not create a second Operations authority.
+An operator notice records its investigation evidence note or reference; links to automated snapshots are optional. This channel preserves useful independent public communication without creating a second Operations authority.
 
 ### Operations Explicitly DOES NOT Own:
 *   **Business Domain Truth**: It does not define what a balance is, whether a student is present, or if an item is purchased.
@@ -55,6 +55,61 @@ This channel exists only to preserve useful public communication during canonica
 *   **Entitlement Balances**: It does not own the count of perks or items.
 *   **Economic Policy Truth**: It does not own `policy_versions` or `policy_transitions`. Class configuration and `economic-engine` are owned by `DOM-CLASS-001`; `policy_versions` and `policy_transitions` are owned by `DOM-CLASS-003`.
 *   **Operational Boundary Legality**: It does not determine whether a rent cycle has closed, an insurance period has expired, or an accrual rollover is lawful. Those determinations belong to the owning operational domain (see §8).
+
+### Application Availability Gate
+
+Cloudflare Access is the sole infrastructure gate for restricting access to the
+application hostname during prelaunch and operational work. It replaces the
+application maintenance page, environment flag, query-token bypass, and persistent
+session bypass. The application MUST NOT implement a parallel maintenance gate.
+
+Access admission does not establish an application principal, class scope, or
+capability. Normal Identity authentication and all INV/DOM/FEAT authorization
+checks remain required after admission. Access policy is managed outside the
+application; no application FEAT or sysadmin session may bypass it. Access login
+email is handled by Cloudflare, not requested or stored by the application.
+
+The origin must remain protected against paths around Cloudflare. Public health
+probes must use an explicitly authorized service token; local deployment probes
+remain independent. Gate messaging communicates an access restriction and MUST
+NOT be treated as evidence of application health or canonical incident state.
+Genuine service errors retain their normal HTTP error handling.
+
+### Public Request Monitoring
+
+The public automated status surface reports bounded HTTP request measurements,
+not feature correctness certification. Its closed component registry is `service`,
+`login`, `attendance`, `payroll`, `roster`, and `classroom_economy`. Route groups
+identify the measured request family; they do not establish domain truth or prove
+that a user journey completed. HTTP 404, 500 and 5xx rates and p80/p95 latency may
+be displayed with request counts, observation window, source freshness and coverage.
+
+The approved numerical contract is documented in `SPEC-OPS-006`. Overall public
+availability follows the minute-by-minute application endpoint and database checks,
+with five-minute expiry if checks stop. Quiet request traffic does not revoke fresh
+connectivity evidence. Active operator notices and fresh observed server errors
+qualify the summary. Reachability never certifies business correctness.
+
+Feature cards report request outcomes without a minimum traffic count. Idle windows
+show `No recent activity` with the last observed outcome and original window timestamp
+as historical context, retained for at most seven days. Historical activity MUST NOT
+be represented as current health or cleared solely because requests stop. Failed or
+stale monitoring remains explicit. HTTP 4xx responses, including 404, remain numerical
+observations and MUST NOT by themselves declare a feature outage. One fresh 5xx is
+reported as an observed server error, not a diagnosis or canonical incident.
+
+Public current cards and historical percentages do not depend on internal integrity
+evaluator registration. Internal readiness, correctness, lineage, reconciliation
+and single-class verification requirements remain unchanged; their results MUST NOT
+be inferred from HTTP response distributions. `SPEC-OPS-005` governs those internal
+assessments independently. Raw logs, tenant identifiers, credentials, financial
+values and arbitrary diagnostic payloads MUST NOT cross the public boundary.
+
+The status service receives only closed numerical snapshots from a read-only
+monitoring source. Firestore retains immutable snapshots and replaceable current
+and historical derivatives. History describes measured windows and explicitly shows
+coverage; gaps are not successful uptime. Public GET requests read persisted state
+and MUST NOT initiate queries, samplers, verifiers or mutations.
 
 ### Interactions:
 *   **Reads From**: All domains (Identity, Ledger, Obligations, Attendance, Store, Class Config) to evaluate invariants and health.
@@ -75,7 +130,7 @@ This channel exists only to preserve useful public communication during canonica
 | **Job Execution Event** | Authoritative Event | Append-only record of background work progress/outcome. |
 | **Trace / Correlation ID** | System Guard | The technical glue ensuring causality and traceability. |
 | **Incident Summary** | Cache | Projection derived from incident events for fast current-state lookup. |
-| **Status Page State** | Derived State | Calculated from active incidents and health events. |
+| **Status Page State** | Derived State | Separately presents automated request measurements, measured-window history and operator communication. |
 | **External Status Notice** | Non-authoritative Communication Artifact | Bounded public communication based on independent external observation; never a canonical incident. |
 | **Retention Policy State**| Authoritative Directive State | Defines the legal/technical lifespan of operational records. |
 
@@ -154,8 +209,8 @@ This channel exists only to preserve useful public communication during canonica
 *   **Prohibited Action**: A background job "cleaning up" data without logging the specific records changed and the rationale.
 
 ### INV-OPS-012: Class/Seat/User Trace Boundaries
-*   **Statement**: Operational records MUST preserve the distinction between `user_id` (human), `seat_id` (economic actor), and `class_id` (universe).
-*   **Prohibited Action**: Logging only a `user_id` for a seat-scoped transaction.
+*   **Statement**: Classroom operational records MUST use `seat_id` (economic actor) under `class_id` (universe). Authentication principal IDs belong only to the Identity references allowed by INV-ARC-019.
+*   **Prohibited Action**: Persisting or logging a `user_id` as a classroom actor, including under an actor or teacher alias.
 
 ---
 
@@ -256,12 +311,33 @@ This channel exists only to preserve useful public communication during canonica
 
 ### `health_check_events`
 *   `id`: UUID
-*   `timestamp`: TIMESTAMPTZ
+*   `checked_at`: TIMESTAMPTZ (when the check completed; nullable only when no check ran)
+*   `received_at`: TIMESTAMPTZ (when Operations received the bounded result)
 *   `check_type`: ENUM ('LIVENESS', 'READINESS', 'CORRECTNESS')
 *   `component`: VARCHAR
-*   `outcome`: ENUM ('PASS', 'FAIL', 'WARN')
-*   `correlation_id`: UUID (Nullable)
-*   `payload`: JSONB
+*   `evidence_source`: bounded source from the approved Operations registry
+*   `freshness_class`: ENUM ('REALTIME', 'PERIODIC_CORRECTNESS', 'DEEP_INTEGRITY')
+*   `staleness_state_at_receipt`: ENUM ('FRESH', 'STALE', 'UNKNOWN')
+*   `outcome`: ENUM ('PASS', 'FAIL', 'UNKNOWN')
+*   `epistemic_state`: ENUM ('KNOWN', 'UNAVAILABLE')
+*   `correlation_id`: UUID
+*   `probe_version`: VARCHAR (version of the check or collector protocol)
+*   `evaluator_version`: VARCHAR (nullable only when no feature evaluator ran)
+*   `payload`: JSONB (closed, bounded diagnostic fields only; no tenant identity or raw domain result)
+
+The recorded staleness state describes the result at receipt; it is immutable
+with the event. A current projection MUST recompute freshness from `checked_at`,
+`freshness_class`, and its evaluation time rather than trusting a historical
+`FRESH` value. Missing `checked_at` yields `UNKNOWN`, never a current pass.
+For application feature results, `probe_version` identifies transport and
+`evaluator_version` identifies the owning feature evaluator; they are not
+interchangeable. A registered feature `PASS` or `FAIL` requires both.
+
+The only lawful raw pairs are `PASS + KNOWN`, `FAIL + KNOWN`,
+`FAIL + UNAVAILABLE`, and `UNKNOWN + UNAVAILABLE` as specified in
+`SPEC-OPS-002`. A feature assessment derived from several checks may preserve
+disagreement separately; it MUST NOT encode aggregate conflict as a raw
+health event.
 
 ---
 
@@ -280,7 +356,7 @@ This channel exists only to preserve useful public communication during canonica
 4.  **Auto-Fixing**: No. Invariant runners detect. Remediation must be an explicit, auditable FEAT.
 5.  **Audit Requirements**: Mandatory for every Ledger mutation, Identity claim, Store purchase, and Class deletion.
 6.  **Incident Correlation**: Incidents must anchor at least one originating correlation context.
-7.  **Status Page State**: Derived from (1) active incidents in `incident_summary`, (2) latest `health_check_events`, and (3) severity mapping rules.
+7.  **Status Page State**: Independent public request measurements and their historical rollups remain separate from operator notices. Internal health/correctness results and canonical incidents retain their own authority; request telemetry does not replace them.
 8.  **Retention Enforcement**: Must be explicit, logged, and isolated by retention class.
 9.  **Repeated Failures**: Recorded as distinct events in `job_events`, `invariant_run_events`, or `health_check_events`.
 10. **Avoiding Analytics**: Operations stores diagnostic/correctness data only.
@@ -290,7 +366,7 @@ This channel exists only to preserve useful public communication during canonica
 
 ## 7. Identity & Trace Model Alignment
 
-*   `user_id`, `seat_id`, `class_id`, `correlation_id` must all be preserved in operational records and never collapsed.
+*   `seat_id`, `class_id`, and `correlation_id` preserve classroom attribution. When no class/seat context is established, omit actor identity rather than substitute an authentication principal.
 
 ---
 

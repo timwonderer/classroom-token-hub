@@ -16,7 +16,7 @@ from datetime import datetime
 from typing import Any
 
 from app.extensions import db
-from app.models import Transaction, Seat, ClassEconomy
+from app.models import Transaction, TransactionStatus, Seat, ClassEconomy
 
 
 @dataclass(frozen=True)
@@ -215,7 +215,7 @@ def build_transaction_summary_view(
     non_void_count = 0
 
     for txn in transactions:
-        if txn.is_void:
+        if txn.status == TransactionStatus.VOID:
             continue
 
         non_void_count += 1

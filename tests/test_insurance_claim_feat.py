@@ -13,6 +13,9 @@ Uses canonical test initializer per SPEC-TEST-001.
 
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+from pathlib import Path
+
+import pytest
 from uuid import uuid4
 from app.extensions import db
 from app.feats.base import FEATContext
@@ -43,6 +46,8 @@ from app.feats.class_configuration.feat_class_004_feature_enablement import (
     execute_enable_feature,
 )
 from app.feats.insurance_claim_feat import (
+    InsuranceClaimPolicyError,
+    describe_claim_contract,
     submit_insurance_claim,
     resolve_insurance_claim,
     build_productivity_review_context,
@@ -50,6 +55,7 @@ from app.feats.insurance_claim_feat import (
 )
 from tests.helpers.ledger import create_ledger_idempotent_transaction
 from tests.helpers.classroom_initializer import initialize
+from tests.helpers.insurance_domain import establish_paid_premium_lineage
 from app.services import insurance_definition_service as insurance_defs
 
 
@@ -75,7 +81,7 @@ def _make_transaction_policy(
         definition={
             "insurance_type": "TRANSACTION",
             "premium": premium,
-            "charge_frequency": "WEEKLY",
+            "charge_frequency": "WEEKLY", "bill_preview_days": 3, "nonpayment_mode": "ACCUMULATE",
             "reimbursement_percentage": str(reimbursement_percentage),
             "payout_multiple": payout_multiple,
             "claims_per_week_equivalent": claims_per_week_equivalent,
@@ -118,6 +124,13 @@ def _add_granted_event(
     )
     db.session.add(granted_event)
     db.session.flush()
+    # A real purchase gives the entitlement a paid premium lineage; without one
+    # it has no coverage period and is not usable (DOM-STORE-001 §VIII.E.1).
+    establish_paid_premium_lineage(
+        class_id=classroom.class_id, seat_id=student.seat.id,
+        entitlement_id=entitlement_id, policy_uuid=real_policy_uuid,
+        start_utc=granted_event.timestamp,
+    )
     return granted_event
 
 
@@ -132,7 +145,6 @@ def _seed_source_loss(classroom, student, *, idem, amount=Decimal("-10.00")):
         idempotency_key=f"insurance-source-loss:{idem}",
         seat_id=student.seat.id,
         class_id=classroom.class_id,
-        user_id=student.user.id,
         amount=amount,
         account_type="checking",
         type="purchase",
@@ -477,6 +489,82 @@ class TestInsuranceClaimSubmission:
             assert r1.claim_id != r2.claim_id
             assert _terminal_events(classroom.class_id, entitlement_id) == []
 
+    def test_entitlement_stays_reusable_after_claims_are_decided_and_paid(self, app):
+        """DOM-STORE-001 §VIII.E.1: filing, approving (with a monetary payout) and
+        rejecting claims never consume the insurance entitlement, so a new claim can
+        still be filed under it afterwards. The entitlement's only event stays GRANTED."""
+        from app.services.entitlement_read_service import has_active_insurance_coverage
+
+        classroom = initialize("chemistry_p1", app)
+        teacher = classroom.teacher_seat
+        student = classroom.students[0]
+
+        with app.app_context():
+            entitlement_id = str(uuid4())
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key="insurance-claim:reusable"):
+                grant = _add_granted_event(classroom, student, entitlement_id)
+                policy_uuid = grant.payload["policy_uuid"]
+                source_ids = [
+                    _seed_source_loss(classroom, student, idem=f"reusable-{n}").id
+                    for n in range(3)
+                ]
+
+            student_context = CanonicalContext(
+                user_id=student.user.id, class_id=classroom.class_id,
+                seat_id=student.seat.id, actor_role="student",
+            )
+            teacher_context = CanonicalContext(
+                user_id=teacher.user_id, class_id=classroom.class_id,
+                seat_id=teacher.id, actor_role="teacher",
+            )
+
+            def file(source_id):
+                result = submit_insurance_claim(
+                    canonical_context=student_context,
+                    entitlement_id=entitlement_id,
+                    claim_subject={"transaction_id": source_id},
+                    correlation_id=f"corr_{uuid4().hex}",
+                )
+                assert result.success is True, result.error_message
+                return result.claim_id
+
+            def still_reusable():
+                assert _terminal_events(classroom.class_id, entitlement_id) == []
+                assert has_active_insurance_coverage(student.seat.id, classroom.class_id, policy_uuid)
+
+            paid = file(source_ids[0])
+            still_reusable()
+            approval = resolve_insurance_claim(
+                canonical_context=teacher_context, claim_id=paid, approved=True,
+            )
+            assert approval.success is True, approval.error_message
+            assert approval.ledger_transaction_id is not None  # monetary claim fulfilled
+            still_reusable()
+
+            denied = file(source_ids[1])
+            rejection = resolve_insurance_claim(
+                canonical_context=teacher_context, claim_id=denied, approved=False,
+                override_reason="Not a covered loss",
+            )
+            assert rejection.success is True, rejection.error_message
+            still_reusable()
+
+            pending = file(source_ids[2])
+            still_reusable()
+
+            statuses = {
+                claim.claim_id: claim.status
+                for claim in db.session.query(InsuranceClaim).filter_by(entitlement_id=entitlement_id)
+            }
+            assert statuses == {paid: "APPROVED", denied: "REJECTED", pending: "SUBMITTED"}
+            event_types = [
+                event.event_type
+                for event in db.session.query(EntitlementEvent).filter_by(
+                    class_id=classroom.class_id, entitlement_id=entitlement_id
+                )
+            ]
+            assert event_types == ["GRANTED"]
+
 
 class TestInsuranceClaimResolution:
     """Tests for FEAT-STOR-003-RESOLVE on the InsuranceClaim lifecycle."""
@@ -500,7 +588,6 @@ class TestInsuranceClaimResolution:
                 idempotency_key=f"insurance-source:{idem}",
                 seat_id=student.seat.id,
                 class_id=classroom.class_id,
-                user_id=student.user.id,
                 amount=loss,
                 account_type="checking",
                 type="purchase",
@@ -703,7 +790,7 @@ def _make_productivity_policy(
         definition={
             "insurance_type": "PRODUCTIVITY",
             "premium": premium,
-            "charge_frequency": "WEEKLY",
+            "charge_frequency": "WEEKLY", "bill_preview_days": 3, "nonpayment_mode": "ACCUMULATE",
             "reimbursement_percentage": str(reimbursement_percentage),
             "payout_multiple": payout_multiple,
             "claimable_dates_per_week_equivalent": claimable_dates_per_week_equivalent,
@@ -815,6 +902,13 @@ def _add_productivity_granted_event(
         granted_event.timestamp = granted_at
     db.session.add(granted_event)
     db.session.flush()
+    # A real purchase gives the entitlement a paid premium lineage; without one
+    # it has no coverage period and is not usable (DOM-STORE-001 §VIII.E.1).
+    establish_paid_premium_lineage(
+        class_id=classroom.class_id, seat_id=student.seat.id,
+        entitlement_id=entitlement_id, policy_uuid=real_policy_uuid,
+        start_utc=granted_event.timestamp,
+    )
     return granted_event
 
 
@@ -1227,7 +1321,6 @@ def _seed_worked_interval(classroom, student, *, ctx, evaluation_date, hours: fl
     common = dict(
         target_seat_id=student.seat.id,
         class_id=classroom.class_id,
-        target_user_id=student.user.id,
         actor_seat_id=student.seat.id,
         reason_code="start_work",
     )
@@ -1860,3 +1953,330 @@ class TestProductivityAdjudicationAtomicity:
                 class_id=classroom.class_id
             ).all()
             assert events == []
+
+
+def _make_non_monetary_policy(classroom, *, waiting_period_days: int) -> str:
+    """Create an immutable NON_MONETARY policy row; return its policy_uuid."""
+    row = insurance_defs.create_insurance_definition(
+        class_id=classroom.class_id,
+        actor_seat_id=classroom.teacher_seat_id,
+        definition={
+            "insurance_type": "NON_MONETARY",
+            "premium": "10.00",
+            "charge_frequency": "WEEKLY", "bill_preview_days": 3, "nonpayment_mode": "ACCUMULATE",
+            "claims_per_week_equivalent": "3",
+            "waiting_period_days": waiting_period_days,
+            "title": "Homework Pass Coverage",
+        },
+    )
+    return row.policy_uuid
+
+
+def _grant_non_monetary(classroom, student, entitlement_id, *, waiting_period_days, days_ago=0):
+    """GRANT a NON_MONETARY entitlement whose purchase happened ``days_ago`` days back."""
+    policy_uuid = _make_non_monetary_policy(
+        classroom, waiting_period_days=waiting_period_days
+    )
+    granted_event = EntitlementEvent(
+        event_id=str(uuid4()),
+        class_id=classroom.class_id,
+        entitlement_id=entitlement_id,
+        target_seat_id=student.seat.id,
+        actor_seat_id=student.seat.id,
+        product_id=None,
+        entitlement_type="INSURANCE",
+        acquisition_type="PURCHASE",
+        event_type="GRANTED",
+        payload={"policy_uuid": policy_uuid},
+        timestamp=datetime.now(timezone.utc) - timedelta(days=days_ago),
+    )
+    db.session.add(granted_event)
+    db.session.flush()
+    # A real purchase gives the entitlement a paid premium lineage; without one
+    # it has no coverage period and is not usable (DOM-STORE-001 §VIII.E.1).
+    establish_paid_premium_lineage(
+        class_id=classroom.class_id, seat_id=student.seat.id,
+        entitlement_id=entitlement_id, policy_uuid=policy_uuid,
+        start_utc=granted_event.timestamp,
+    )
+    return granted_event
+
+
+class TestNonMonetaryWaitingPeriod:
+    """The NON_MONETARY waiting period delays when coverage becomes claimable."""
+
+    @staticmethod
+    def _student_context(classroom, student):
+        return CanonicalContext(
+            user_id=student.user.id,
+            class_id=classroom.class_id,
+            seat_id=student.seat.id,
+            actor_role="student",
+        )
+
+    def test_claim_inside_waiting_period_is_rejected(self, app):
+        """A claim filed before the wait elapses fails WAITING_PERIOD_NOT_ELAPSED."""
+        classroom = initialize("chemistry_p1", app)
+        student = classroom.students[0]
+
+        with app.app_context():
+            entitlement_id = str(uuid4())
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key="waiting-period:inside"):
+                _grant_non_monetary(
+                    classroom, student, entitlement_id, waiting_period_days=7
+                )
+
+            result = submit_insurance_claim(
+                canonical_context=self._student_context(classroom, student),
+                entitlement_id=entitlement_id,
+                claim_subject={"reason": "filed minutes after purchase"},
+            )
+
+            assert result.success is False
+            assert result.error_code == "WAITING_PERIOD_NOT_ELAPSED"
+            assert db.session.query(InsuranceClaim).filter_by(
+                entitlement_id=entitlement_id
+            ).all() == []
+
+    def test_claim_after_waiting_period_is_accepted(self, app):
+        """Once the wait has elapsed the same claim is admitted."""
+        classroom = initialize("chemistry_p1", app)
+        student = classroom.students[0]
+
+        with app.app_context():
+            entitlement_id = str(uuid4())
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key="waiting-period:elapsed"):
+                _grant_non_monetary(
+                    classroom, student, entitlement_id, waiting_period_days=3, days_ago=5
+                )
+
+            result = submit_insurance_claim(
+                canonical_context=self._student_context(classroom, student),
+                entitlement_id=entitlement_id,
+                claim_subject={"reason": "filed after the wait"},
+            )
+
+            assert result.success is True, result.error_message
+
+    def test_claim_exactly_on_the_boundary_is_accepted(self, app):
+        """The wait is inclusive: a claim on the day it elapses is admitted.
+
+        ``_enforce_waiting_period`` compares
+        ``submitted_at >= effective_start``, so the boundary day belongs to the
+        covered side. Nothing else pins that down — the inside and elapsed cases
+        above sit two days either side of it — so an off-by-one here would pass
+        both of them.
+        """
+        classroom = initialize("chemistry_p1", app)
+        student = classroom.students[0]
+
+        with app.app_context():
+            entitlement_id = str(uuid4())
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key="waiting-period:boundary"):
+                _grant_non_monetary(
+                    classroom, student, entitlement_id, waiting_period_days=3, days_ago=3
+                )
+
+            result = submit_insurance_claim(
+                canonical_context=self._student_context(classroom, student),
+                entitlement_id=entitlement_id,
+                claim_subject={"reason": "filed on the boundary"},
+            )
+
+            assert result.success is True, result.error_message
+
+    def test_zero_waiting_period_is_immediately_claimable(self, app):
+        """A 0-day wait (Premium preset) leaves coverage effective at purchase."""
+        classroom = initialize("chemistry_p1", app)
+        student = classroom.students[0]
+
+        with app.app_context():
+            entitlement_id = str(uuid4())
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key="waiting-period:zero"):
+                _grant_non_monetary(
+                    classroom, student, entitlement_id, waiting_period_days=0
+                )
+
+            result = submit_insurance_claim(
+                canonical_context=self._student_context(classroom, student),
+                entitlement_id=entitlement_id,
+                claim_subject={"reason": "no wait configured"},
+            )
+
+            assert result.success is True, result.error_message
+
+
+class TestClaimContractProjection:
+    """The review projection must report the terms enforcement actually uses.
+
+    Regression for a defect where the teacher claim-review screen rendered a
+    placeholder policy (premium 0.00, waiting period 0, allowance None) while the
+    submission gates adjudicated against the real immutable policy row.
+    """
+
+    def _teacher_context(self, classroom):
+        teacher = classroom.teacher_seat
+        return CanonicalContext(
+            user_id=teacher.user_id,
+            class_id=classroom.class_id,
+            seat_id=teacher.id,
+            actor_role="teacher",
+        )
+
+    def test_projection_reports_real_transaction_terms(self, app):
+        """Every projected term is read from the policy, not invented."""
+        classroom = initialize("chemistry_p1", app)
+        student = classroom.students[0]
+
+        with app.app_context():
+            entitlement_id = str(uuid4())
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key="claim-contract:projection"):
+                _add_granted_event(
+                    classroom,
+                    student,
+                    entitlement_id,
+                    premium="100.00",
+                    payout_multiple="2",
+                    claims_per_week_equivalent="3",
+                    claim_window_days=5,
+                )
+                source = _seed_source_loss(classroom, student, idem="claim-contract")
+                source_txn_id = source.id
+
+            student_context = CanonicalContext(
+                user_id=student.user.id,
+                class_id=classroom.class_id,
+                seat_id=student.seat.id,
+                actor_role="student",
+            )
+            result = submit_insurance_claim(
+                canonical_context=student_context,
+                entitlement_id=entitlement_id,
+                claim_subject={"transaction_id": source_txn_id},
+            )
+            assert result.success is True, result.error_message
+
+            claim = db.session.query(InsuranceClaim).filter_by(claim_id=result.claim_id).first()
+            contract = describe_claim_contract(
+                claim, canonical_context=self._teacher_context(classroom)
+            )
+
+            assert contract.policy.premium == Decimal("100.00")
+            assert contract.claim_window_days == 5
+            assert contract.allowance_unit == "claim"
+            assert contract.period_allowance == 3
+            assert contract.period_consumed == 1
+            # premium × payout_multiple, with nothing approved yet.
+            assert contract.maximum_policy_payout == Decimal("200.00")
+            assert contract.remaining_period_cap == Decimal("200.00")
+
+    def test_review_template_renders_no_fabricated_terms(self):
+        """The review screen no longer consumes the placeholder-only variables."""
+        source = (
+            Path(__file__).resolve().parents[1]
+            / "templates"
+            / "admin_process_claim.html"
+        ).read_text()
+
+        for fabricated in (
+            "contract_max_claim_amount",
+            "contract_claim_time_limit_days",
+            "claims_stats.paid",
+            "validation_errors",
+            "enrollment.payment_current",
+        ):
+            assert fabricated not in source
+
+    def test_projection_fails_closed_without_policy_lineage(self, app):
+        """A grant carrying no policy_uuid raises rather than yielding blank terms."""
+        classroom = initialize("chemistry_p1", app)
+        student = classroom.students[0]
+
+        with app.app_context():
+            entitlement_id = str(uuid4())
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key="claim-contract:no-lineage"):
+                db.session.add(
+                    EntitlementEvent(
+                        event_id=str(uuid4()),
+                        class_id=classroom.class_id,
+                        entitlement_id=entitlement_id,
+                        target_seat_id=student.seat.id,
+                        actor_seat_id=student.seat.id,
+                        product_id=None,
+                        entitlement_type="INSURANCE",
+                        acquisition_type="PURCHASE",
+                        event_type="GRANTED",
+                        payload={},
+                    )
+                )
+                db.session.flush()
+                claim = insurance_claim_service.create_claim(
+                    class_id=classroom.class_id,
+                    entitlement_id=entitlement_id,
+                    target_seat_id=student.seat.id,
+                    actor_seat_id=student.seat.id,
+                    correlation_id=f"corr_no_lineage_{uuid4().hex}",
+                    claim_basis={"transaction_id": None},
+                )
+
+            with pytest.raises(InsuranceClaimPolicyError):
+                describe_claim_contract(
+                    claim, canonical_context=self._teacher_context(classroom)
+                )
+
+
+class TestWaitingPeriodAppliesToEveryType:
+    """The waiting period gates claims on every policy type (operator decision 2026-09-25).
+
+    Before, only NON_MONETARY enforced it: a TRANSACTION or PRODUCTIVITY policy
+    showed the wait to the student and greyed out the claim button, while the
+    server accepted a claim filed inside it.
+    """
+
+    @pytest.mark.parametrize("insurance_type,terms", [
+        ("TRANSACTION", {"reimbursement_percentage": "60", "payout_multiple": "5",
+                         "claims_per_week_equivalent": "1", "claim_window_days": "7"}),
+        ("PRODUCTIVITY", {"reimbursement_percentage": "60", "payout_multiple": "5",
+                          "claimable_dates_per_week_equivalent": "3"}),
+    ])
+    def test_claim_inside_waiting_period_is_rejected(self, app, insurance_type, terms):
+        classroom = initialize("chemistry_p1", app)
+        student = classroom.students[0]
+
+        with app.app_context():
+            entitlement_id = str(uuid4())
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"waiting-period:{insurance_type}"):
+                policy_uuid = insurance_defs.create_insurance_definition(
+                    class_id=classroom.class_id,
+                    actor_seat_id=classroom.teacher_seat_id,
+                    definition={
+                        "insurance_type": insurance_type, "premium": "10.00",
+                        "charge_frequency": "WEEKLY", "bill_preview_days": 3,
+                        "nonpayment_mode": "ACCUMULATE", "waiting_period_days": 7,
+                        "title": f"{insurance_type} cover", **terms,
+                    },
+                ).policy_uuid
+                granted = EntitlementEvent(
+                    event_id=str(uuid4()), class_id=classroom.class_id,
+                    entitlement_id=entitlement_id, target_seat_id=student.seat.id,
+                    actor_seat_id=student.seat.id, product_id=None,
+                    entitlement_type="INSURANCE", acquisition_type="PURCHASE",
+                    event_type="GRANTED", payload={"policy_uuid": policy_uuid},
+                    timestamp=datetime.now(timezone.utc) - timedelta(hours=1),
+                )
+                db.session.add(granted)
+                db.session.flush()
+                establish_paid_premium_lineage(
+                    class_id=classroom.class_id, seat_id=student.seat.id,
+                    entitlement_id=entitlement_id, policy_uuid=policy_uuid,
+                    start_utc=granted.timestamp,
+                )
+
+            result = submit_insurance_claim(
+                canonical_context=TestNonMonetaryWaitingPeriod._student_context(classroom, student),
+                entitlement_id=entitlement_id,
+                claim_subject={"reason": "filed an hour after purchase"},
+            )
+
+            assert result.error_code == "WAITING_PERIOD_NOT_ELAPSED"
+            assert db.session.query(InsuranceClaim).filter_by(entitlement_id=entitlement_id).all() == []

@@ -46,7 +46,6 @@ def execute_admin_adjustments(
 
         amount = Decimal(str(adjustment["amount"]))
         account_type = adjustment.get("account_type", "checking")
-        user_id = adjustment["user_id"]
         class_id = seat.class_id
         mechanism = "system" if ctx.actor_role == "sysadmin" else "teacher"
 
@@ -56,7 +55,6 @@ def execute_admin_adjustments(
             "target_seat_id": seat.id,
             "actor_seat_id": actor_seat_id,
             "mechanism": mechanism,
-            "user_id": user_id,
             "amount": amount,
             "account_type": account_type,
             "type": adjustment["type"],

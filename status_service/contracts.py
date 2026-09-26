@@ -50,5 +50,10 @@ class ExternalStatusNoticeEvent:
             raise ValueError("Notice requires a next update timestamp or explicit unavailability.")
         if self.next_update_at is not None and self.next_update_unavailable:
             raise ValueError("Notice cannot provide and disclaim a next update simultaneously.")
-        if not self.source_observation_ids:
-            raise ValueError("Notice requires bounded source observation lineage.")
+        if len(self.incident_ref) > 160 or len(self.source_observation_ids) > 20:
+            raise ValueError("Investigation reference or source links exceed limits.")
+        if any(not isinstance(value, str) or len(value) > 160 for value in self.source_observation_ids):
+            raise ValueError("Invalid source link.")
+        for value in (self.published_at, self.recovery_expectation, self.next_update_at):
+            if value is not None and (not isinstance(value, datetime) or value.utcoffset() is None):
+                raise ValueError("Notice timestamps require an explicit timezone.")

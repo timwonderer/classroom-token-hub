@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| FEAT-POL-001 | 2.0 | 2026-07-28 | 1.0 | Normative |
+| FEAT-POL-001 | 2.1 | 2026-09-24 | 2.0 | Normative |
 
 ## I. Purpose
 
@@ -14,7 +14,7 @@ This FEAT is the single lawful path for:
 - updating a policy family by creating a new immutable version;
 - hiding a policy from new selection;
 - retiring a policy definition;
-- deleting a retired policy definition once live dependencies have drained.
+- deleting a retired policy definition once no surviving downstream fact can lawfully resolve terms from it (`DOM-POL-001` §IX).
 
 This FEAT owns orchestration only.
 
@@ -95,22 +95,22 @@ Retire Policy SHALL:
 
 ## VIII. Delete Policy
 
-Delete Policy SHALL remove the retired policy definition only after all live dependencies have drained.
+Delete Policy SHALL remove the retired policy definition only when no surviving downstream fact can lawfully resolve terms from it (`DOM-POL-001` §IX). Retirement or supersession alone does not make a definition deletable.
 
-If a downstream domain still requires the policy for a live executable capability, the row SHALL remain readable until that capability ends.
+If any surviving downstream fact is frozen by reference to the definition, the row SHALL remain readable for as long as that fact can resolve terms from it.
 
 ## IX. Downstream Contract
 
-Policies are a reference library, not a runtime dependency for already-created facts.
+Policies are a reference library, never the authority for a downstream fact (`DOM-POL-001` §VII).
 
-Downstream domains must snapshot the specifics they need at creation time, or continue to retain the exact `policy_uuid` while the created fact remains executable.
+A downstream fact freezes the terms it needs at creation, either by value (it persists them) or by reference (it retains the exact immutable `policy_uuid` and later resolves that exact version, never a successor or the family's current row). The owning domain's document specifies which.
 
 Examples:
 
 - an insurance entitlement must encode or retain the limits, benefits, and claim rules it needs to keep processing claims even if the source policy is later removed;
 - a store purchase record must encode the entitlement specifics required to honor that purchase later;
 - a rent assessment must carry the policy UUID and the terms needed to continue processing that assessment;
-- a claim record must encode the rule details required to evaluate the claim without rereading the source policy.
+- a claim is evaluated against the immutable policy its insurance entitlement references, resolved by that exact `policy_uuid` (`FEAT-STOR-003`).
 
 ## X. FEAT-POL Contract
 
@@ -120,7 +120,7 @@ FEAT-POL actions:
 - `Update` creates a new policy row with a new `policy_uuid`.
 - `Disable` sets the current row to `HIDDEN`.
 - `Retire` sets the current row to `RETIRED`.
-- `Delete` removes a retired row only when live dependencies have drained.
+- `Delete` removes a retired row only when no surviving downstream fact can resolve terms from it.
 
 FEAT-POL MUST NOT mutate downstream domain facts directly.
 FEAT-POL MUST NOT rewrite historical downstream facts to match changed policy terms.
@@ -140,11 +140,11 @@ Availability states:
 
 - `IN_USE` - selectable for new work
 - `HIDDEN` - not selectable for new work, but may return to `IN_USE`
-- `RETIRED` - not selectable for new work, may remain readable while live dependencies drain, and may later be physically deleted
+- `RETIRED` - not selectable for new work; physically deletable only under `DOM-POL-001` §IX
 
 Definition payloads are immutable after insert.
 Replacement creates a new `policy_uuid`.
-Deletion is allowed only after live dependencies drain.
+Deletion is allowed only when no surviving downstream fact can resolve terms from the row (`DOM-POL-001` §IX).
 
 ## XII. Boundary Examples
 

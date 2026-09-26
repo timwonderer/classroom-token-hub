@@ -11,7 +11,7 @@ related:
 
 # Students and Join Codes Troubleshooting
 
-Diagnostic guide for resolving roster syncing, account claiming, and CSV upload errors.
+Diagnostic guide for resolving roster entry, account claiming, and join-code errors.
 
 ## Student cannot claim an account
 
@@ -32,23 +32,26 @@ Diagnostic guide for resolving roster syncing, account claiming, and CSV upload 
 - **Check:** Check the student list to see if the row already has a linked username.
 - **Fix:** If the seat is claimed by the wrong student, you must unlink the account or delete the row and recreate it.
 
-## CSV uploads fail
+## Adding students to the roster fails
 
 ### Symptoms
-- Uploading a class roster CSV results in validation errors or a silent failure.
+- Pasting names into the Add Students grid does not create the expected seats.
+- The staged-student count is wrong, or the Add Students action does not complete.
 
 ### Causes & Solutions
-**Cause 1: Missing required columns**
-- **Check:** Open the CSV in Excel or Notepad.
-- **Fix:** Ensure the header matches the current roster template before uploading.
+There is no CSV upload or CSV template. Use the **Add Students** tab and paste or type names into the grid.
+
+**Cause 1: Incorrect grid columns**
+- **Check:** Confirm the pasted data has First Name and Last Name columns; Notes is optional.
+- **Fix:** Remove headers or extra columns, then paste the names again.
 
 **Cause 2: Name formatting errors**
 - **Check:** Look for extra spaces, misspellings, or swapped first/last-name fields.
-- **Fix:** Correct the roster names and upload again.
+- **Fix:** Correct the names in the grid and stage them again. The final roster name is also the name the student must enter when claiming the seat.
 
-**Cause 3: Duplicate rows**
-- **Check:** Look for exact duplicate students in the file.
-- **Fix:** Remove duplicate rows, as they create claim conflicts.
+**Cause 3: Duplicate names**
+- **Check:** Look for the duplicate-name warning after staging the rows.
+- **Fix:** Duplicate names are allowed and create separate seats. Confirm that each row represents a different student before selecting **Add Students**.
 
 ## When to Contact Support
 Report this issue if:

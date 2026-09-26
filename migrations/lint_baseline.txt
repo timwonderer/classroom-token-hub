@@ -1,0 +1,38 @@
+# Migrations whose non-idempotent operations predate the linter gate.
+#
+# SOP-DB-009 VI accepts this debt explicitly ("Historical migration idempotency
+# concerns still exist in older parts of the migration chain"), and the project
+# rule against editing merged migrations means the fix is not to rewrite them.
+# So the set is frozen instead: anything here may fail, anything new may not,
+# and an entry that starts passing must be deleted or the gate fails.
+#
+# Do not add to this file. A new migration that cannot pass the linter is a
+# migration that needs its existence checks written.
+0001_bootstrap.py
+0f0436f6026f_class_phase_2_create_economic_engine_.py
+1761e2187234_add_canonical_entitlement_persistence.py
+1f6c2b8d4e90_drop_banking_settings_legacy_scope_.py
+2c3d4e5f6a7b_add_redemption_event_entitlement_id.py
+4aa06b69d65d_rebuild_store_entitlements_phase2.py
+4e85bf5c5594_collapse_payroll_reward_and_fine_into_.py
+5a98b288138c_drop_obligationlifecycle_table_per_dom_.py
+8b1bc35a7d58_drop_legacy_studentblock_table.py
+9bb0d3678c86_remove_purchase_id_from_redemption_.py
+9c6d5e4f3a2b_phase_2e_add_composite_key_class_scoping.py
+9f7f970f28c3_drop_teacher_blocks_table.py
+a1b2c3d4e5f7_add_canonical_ledger_actor_target_fields.py
+a3f2c8d91b47_align_store_entitlements_to_dom_store_001_v3.py
+a9b8c7d6e5f4_wave6_attendance_cutover.py
+b2c3d4e5f8a_align_prod_domain_schema_contract.py
+c3d4e5f8a9b_align_prod_domain_schema_contract_v2.py
+c5459df99053_add_rentpolicyversion_table_and_version_.py
+c9e0f1a2b3c4_hall_pass_policy_append_only.py
+cda78c55185e_canonical_obligations_schema_add_.py
+d4e5f6a7b8c_rename_seat_id_to_target_seat_id_on_attendance_sessions.py
+da1b2c3d4e5f_add_overdraft_fine_to_economic_engine.py
+dd4e5f6a7b8c_add_policy_uuid_to_payroll_provenance.py
+e6f7a8b9c0d1_canonicalize_ledger_persistence.py
+f0a1b2c3d4e5_finalize_ledger_canonical_indexes.py
+f1a2b3c4d5e6_rename_teacher_id_to_teacher_user_id_.py
+f1f1f1f1f1f1_repoint_legacy_fks_to_users.py
+f6a7b8c9d0e2_restrict_payroll_event_policy_fk.py

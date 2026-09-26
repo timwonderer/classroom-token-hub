@@ -37,24 +37,38 @@ from app.extensions import db, migrate, csrf
 from app.feats.base import FEATContext
 
 
-def maintenance_mode_enabled():
-    """Return True when maintenance mode is enabled via environment variable."""
-    return os.getenv("MAINTENANCE_MODE", "").lower() in {"1", "true", "yes", "on"}
-
-
 def get_validated_status_page_url():
     """
     Return the STATUS_PAGE_URL if it's valid, otherwise None.
     
     Validates that the URL starts with an expected domain to prevent
     potential phishing attacks if an attacker controls the environment variable.
-    
-    Currently only allows UptimeRobot status pages. To support other status
-    page providers, add their specific domain patterns to the validation.
+
+    The allowlist previously named only UptimeRobot, which silently rejected
+    this project's own status service at status.classroomtokenhub.com: the app
+    could not link to the status page it publishes. A rejected value returns
+    None and the link is simply omitted, so the symptom is a missing link with
+    no error anywhere — worth stating, because that is why it went unnoticed.
+
+    Kept as an exact-prefix allowlist rather than widened to "any https URL":
+    the whole point is that an attacker who can set this variable must not be
+    able to plant an arbitrary destination in the footer of every page.
     """
     url = os.getenv('STATUS_PAGE_URL')
-    if url and url.startswith('https://stats.uptimerobot.com/'):
-        return url
+    if not url:
+        return None
+    # Each entry is an origin. A URL matches when it *is* that origin, or when
+    # it continues with "/" — so the bare root form is accepted while a
+    # lookalike host like "…classroomtokenhub.com.example.invalid" is not.
+    # Requiring the slash unconditionally rejected the plain origin, which is
+    # how the deployment SOP writes a custom status URL.
+    allowed_origins = (
+        'https://status.classroomtokenhub.com',
+        'https://stats.uptimerobot.com',
+    )
+    for origin in allowed_origins:
+        if url == origin or url.startswith(origin + '/'):
+            return url
     return None
 
 
@@ -64,7 +78,7 @@ from app.models import (
     Transaction,
     # TapEvent removed — tap_events unauthorized; use attendance_sessions (DOM-ATT-001)
     HallPassLog,
-    StoreItem,
+    StoreProduct,
     # StudentItem removed — student_items unauthorized; use store_purchases + redemption_events (DOM-STORE-001)
     RentSettings,
     User,
@@ -124,9 +138,6 @@ else:
 @app.context_processor
 def inject_payroll_status():
     """Make payroll settings status available in all templates."""
-    if maintenance_mode_enabled():
-        return dict(has_payroll_settings=False)
-
     # Context processors must be read-only; never trigger autoflush from pending session state.
     with db.session.no_autoflush:
         has_payroll_settings = PayrollSettings.query.first() is not None
@@ -338,6 +349,28 @@ def bad_request_error(error):
         'error_400.html',
         error_message=error_msg
     ), 400
+
+
+@app.errorhandler(429)
+def too_many_requests_error(error):
+    """
+    Handle 429 Too Many Requests Error (Flask-Limiter).
+    Displays a user-friendly page instead of Flask-Limiter's bare default.
+    Logs to database to help spot limits that are too tight for real usage.
+    """
+    limit_description = str(error.description) if hasattr(error, 'description') else None
+    app.logger.warning(f"429 Too Many Requests: {request.url} - {limit_description}")
+
+    log_error_to_db(
+        error_type='429 Too Many Requests',
+        error_message=f"Rate limited on {request.path}: {limit_description}",
+        stack_trace=None
+    )
+
+    return render_template(
+        'error_429.html',
+        limit_description=limit_description
+    ), 429
 
 
 @app.errorhandler(503)

@@ -1,8 +1,21 @@
-const CACHE_NAME = 'classroom-token-hub-v8';
+// Bumped v10 -> v11 to ship the hanging-hall-pass fix in attendance.js.
+//
+// The activate handler deletes a cache only when this name changes, and the
+// fetch handler's default strategy (cacheFirst, for anything not matched by an
+// earlier branch) caches ANY same-origin GET opportunistically at runtime --
+// not only the files explicitly listed in STATIC_ASSETS below. attendance.js
+// is one such runtime-cached file. Editing any cached asset without bumping
+// this ships nothing to anyone who has already loaded the app: their service
+// worker keeps answering from the old cache indefinitely. Any change to a
+// static JS/CSS/image file needs this bumped in the same commit.
+const CACHE_NAME = 'classroom-token-hub-v11';
 const STATIC_ASSETS = [
   '/static/manifest.json',
   '/static/images/icon-192.png',
   '/static/images/icon-512.png',
+  // The offline page resolves every colour and spacing value through tokens;
+  // without this it renders unstyled exactly when the network is gone.
+  '/static/css/tokens.css',
   '/static/css/style.css',
   '/offline'
 ];
@@ -57,7 +70,13 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
   // Skip caching for authenticated routes (multi-tenancy safety)
-  const authRoutes = ['/admin', '/student', '/system-admin', '/api'];
+  // Must match the registered blueprint prefixes. '/system-admin' was never one
+  // of them — the sysadmin blueprint is registered at '/sysadmin' — so no
+  // sysadmin route ever matched this bypass and every one of them fell through
+  // to the caching strategies below, in a list whose stated purpose is
+  // multi-tenancy safety. '/recovery' is intentionally absent: it is
+  // unauthenticated by design.
+  const authRoutes = ['/admin', '/student', '/sysadmin', '/api'];
   if (authRoutes.some((route) => url.pathname.startsWith(route))) {
     // Network-only for authenticated routes
     return;

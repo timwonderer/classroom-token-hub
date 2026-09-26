@@ -3,7 +3,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-IDEN-007 | 1.1 | 2026-07-10 | 1.0 | Constitutional |
+| DOM-IDEN-007 | 1.2 | 2026-09-15 | 1.1 | Constitutional |
 
 ---
 
@@ -441,3 +441,10 @@ If a piece of information can be obtained through one of these canonical referen
 Models SHALL reference the canonical owner using its designated foreign key rather than persisting duplicate values.
 
 This principle upholds the **Don't Repeat Yourself (DRY)** invariant and ensures every identity concept has exactly one authoritative source throughout the application.
+
+### Seat claim generation
+
+`seats.claim_generation` is a nonnegative integer, initially zero. Unclaim increments
+it atomically. It identifies a claim lifecycle generation, not a principal or a
+class lifecycle state. Signed onboarding authorization and teacher Unclaim forms
+carry the generation and must match the server value at execution.

@@ -2,7 +2,9 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| FEAT-ARC-002     | 1.2     | 2026-03-30     | 1.1        | Normative       |
+| FEAT-ARC-002     | 1.2     | 2026-03-30     | 1.1        | Archived - non-normative       |
+
+> **Archived — history, not authority.** This document describes a superseded version of the system and is retained under `docs/archive/` as a record of what was once true. It governs nothing. Current authority lives in `docs/INVARIANT/`, `docs/DOMAIN/`, and `docs/STANDARD_OPERATING_PROCEDURES/`, in that order (`.claude/rules/documentation.md`).
 
 ## I. Purpose
 This feature extends the existing itemized rent system by adding distinct item types to each rent item, driving different behaviors for privileges, free-uses, and pass renewals.

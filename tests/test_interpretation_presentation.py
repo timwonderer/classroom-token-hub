@@ -191,7 +191,7 @@ def test_presents_a_real_materialized_cycle_record(app):
     with FEATContext("FEAT-PROD-001", correlation_id=f"att:{cid}", idempotency_key=f"att:{cid}"):
         student = classroom.students[0]
         db.session.add(AttendanceSession(
-            target_seat_id=student.seat.id, class_id=cid, target_user_id=student.user.id,
+            target_seat_id=student.seat.id, class_id=cid,
             actor_seat_id=classroom.teacher_seat_id, reason_code="start_work",
             timestamp=now - timedelta(minutes=30)))
         db.session.flush()

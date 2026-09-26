@@ -4,6 +4,7 @@ import sqlalchemy as sa
 
 from app.extensions import db
 from app.models import (
+    ActorRequestTrace,
     LedgerBalanceSnapshot,
     HallPassLog,
     Issue,
@@ -14,7 +15,6 @@ from app.models import (
     PendingAction,
     AttendanceSession,
     PayrollEvent,
-    PolicyTransition,
     RecoveryRequest,
     Transaction,
     Seat,
@@ -22,6 +22,38 @@ from app.models import (
     IdentityProfile,
 )
 from app.services.recovery_service import delete_recovery_codes_for_seat
+
+
+def lock_seats_for_deletion(seat_ids):
+    """Take an exclusive lock on each seat before its dependents are collected.
+
+    Support holds no foreign key into ``seats`` (DOM-SUP-001 §X, INV-ARC-021
+    §V.7): tickets and request traces reference a seat by public ID, and the
+    domain requires seat deletion to remove them *in the same transaction*.
+    Nothing in the database enforces that, so the ordering has to.
+
+    The issue and trace writers validate the live seat under ``FOR SHARE``
+    before inserting. Reading the seat unlocked here left a window: cleanup
+    could run, a writer could then take its share lock, insert a ticket and
+    commit, and the seat DELETE would still succeed — leaving the ticket and its
+    captured context behind with nothing to attach them to. ``FOR UPDATE``
+    conflicts with that share lock, so a writer either commits before the
+    deletion begins and has its ticket collected, or waits and then finds the
+    seat gone and writes nothing.
+
+    Locked in id order so that two concurrent deletions touching overlapping
+    seats cannot deadlock against each other.
+    """
+    ids = sorted({int(seat_id) for seat_id in (seat_ids or []) if seat_id})
+    if not ids:
+        return []
+    return (
+        Seat.query
+        .filter(Seat.id.in_(ids))
+        .order_by(Seat.id)
+        .with_for_update()
+        .all()
+    )
 
 
 def _collect_related_ids_for_seats(seat_ids_for_student):
@@ -82,8 +114,36 @@ def _unclaim_all_seats_for_student(student_id):
     )
 
 
-def _clear_cross_transaction_refs(tx_ids):
-    """Clear references to transactions that are about to be deleted."""
+def _clear_support_transaction_refs(tx_ids):
+    """Null support-domain references to ledger rows that are about to be deleted.
+
+    ``issues.related_transaction_id`` and
+    ``issue_resolution_actions.related_transaction_id`` are real foreign keys with
+    ``ON DELETE NO ACTION``, and ``issues`` carries no class or seat scope of its own,
+    so those rows do not cascade away with the seat. Without this sweep the delete
+    aborts on a live FK reference.
+
+    **What this deliberately does not touch.** The ledger's own
+    ``original_transaction_id`` / ``reversal_transaction_id`` self-references are
+    *not* swept, for two independent reasons:
+
+    1. They are not FK-enforced (no constraint on ``ledger_transaction`` references
+       either column), so nothing about the delete requires them to be cleared.
+    2. A reversal pair can never span economic owners. Both policy writers bind the
+       link to a single ``seat_id``: ``ledger_correction_service.reverse_transaction``
+       copies ``seat_id``/``class_id``/``target_seat_id`` from the original into the
+       reversal (only ``actor_seat_id``, a provenance column, may differ), and the
+       insurance-reimbursement path in ``insurance_claim_feat`` writes
+       ``seat_id=student_seat.id`` behind
+       ``insurance_eligibility_contract``'s ``transaction.seat_id != covered_seat_id``
+       rejection. Every other writer merely forwards a caller-supplied value.
+
+    So lawful seat deletion removes *both* ends of the pair in the same cascade;
+    a surviving row pointing at a deleted row is not a reachable state. Clearing
+    these columns would therefore rewrite a surviving financial fact, which
+    DOM-LED-001 §VII.2 forbids and the ``ledger_transaction_no_rewrite`` trigger
+    rejects outright.
+    """
     if not tx_ids:
         return
 
@@ -97,18 +157,6 @@ def _clear_cross_transaction_refs(tx_ids):
         IssueResolutionAction.related_transaction_id.in_(tx_ids)
     ).update(
         {IssueResolutionAction.related_transaction_id: None},
-        synchronize_session=False,
-    )
-    Transaction.query.filter(
-        Transaction.original_transaction_id.in_(tx_ids)
-    ).update(
-        {Transaction.original_transaction_id: None},
-        synchronize_session=False,
-    )
-    Transaction.query.filter(
-        Transaction.reversal_transaction_id.in_(tx_ids)
-    ).update(
-        {Transaction.reversal_transaction_id: None},
         synchronize_session=False,
     )
 
@@ -130,10 +178,6 @@ def _delete_student_scoped_rows(
         EntitlementEvent.query.filter(
             EntitlementEvent.entitlement_id.in_(entitlement_ids)
         ).delete(synchronize_session=False)
-    if scoped_class_id:
-        PendingAction.query.filter(
-            PendingAction.class_id == scoped_class_id
-        ).delete(synchronize_session=False)
     if issue_ids:
         IssueResolutionAction.query.filter(
             IssueResolutionAction.issue_id.in_(issue_ids)
@@ -152,12 +196,22 @@ def _delete_student_scoped_rows(
             )
         ]
     if seat_ids_for_student:
+        # Only the removed seats' queued actions; classmates' actions survive.
+        pending_query = PendingAction.query.filter(PendingAction.seat_id.in_(seat_ids_for_student))
+        if scoped_class_id:
+            pending_query = pending_query.filter(PendingAction.class_id == scoped_class_id)
+        pending_query.delete(synchronize_session=False)
         seat_pub_ids = [
             pub_id for (pub_id,) in
             db.session.query(Seat.public_id).filter(Seat.id.in_(seat_ids_for_student)).all()
         ]
         if seat_pub_ids:
+            # Support references a seat by public ID only (DOM-SUP-001 §X), so
+            # its tickets and request traces are deleted here, with the seat.
             Issue.query.filter(Issue.actor_public_id.in_(seat_pub_ids)).delete(synchronize_session=False)
+            ActorRequestTrace.query.filter(
+                ActorRequestTrace.actor_public_id.in_(seat_pub_ids)
+            ).delete(synchronize_session=False)
     for sid in (seat_ids_for_student or []):
         delete_recovery_codes_for_seat(sid)
     if tx_ids:
@@ -220,24 +274,10 @@ def delete_orphaned_users(user_ids):
     if not orphan_ids:
         return []
 
-    # Clear or remove the references that would otherwise block the delete.
-    # `attendance_sessions.target_user_id` is ON DELETE SET NULL against a
-    # NOT NULL column, so surviving rows must go rather than be nulled.
-    AttendanceSession.query.filter(
-        AttendanceSession.target_user_id.in_(orphan_ids)
-    ).delete(synchronize_session=False)
+    # Only authentication-owned artifacts depend on the detached principal.
     RecoveryRequest.query.filter(
         RecoveryRequest.user_id.in_(orphan_ids)
     ).delete(synchronize_session=False)
-    Transaction.query.filter(Transaction.user_id.in_(orphan_ids)).update(
-        {Transaction.user_id: None}, synchronize_session=False
-    )
-    Issue.query.filter(Issue.sysadmin_id.in_(orphan_ids)).update(
-        {Issue.sysadmin_id: None}, synchronize_session=False
-    )
-    PolicyTransition.query.filter(PolicyTransition.created_by.in_(orphan_ids)).update(
-        {PolicyTransition.created_by: None}, synchronize_session=False
-    )
 
     User.query.filter(User.id.in_(orphan_ids)).delete(synchronize_session=False)
     return orphan_ids
@@ -248,76 +288,22 @@ def delete_user_if_orphaned(user_id):
     return bool(delete_orphaned_users([user_id]))
 
 
-def hard_delete_student_if_orphaned(student_id):
-    """Hard-delete a student and dependent rows only when no teacher links remain."""
-    has_links = (
-        db.session.query(Seat.id)
-        .filter(Seat.user_id == student_id)
-        .all()
-    )
-    if has_links:
-        return False
-
-    entitlement_ids, issue_ids, tx_ids, seat_ids = _collect_related_ids(student_id)
-    _unclaim_all_seats_for_student(student_id)
-    _clear_cross_transaction_refs(tx_ids)
-    _delete_student_scoped_rows(student_id, entitlement_ids, issue_ids, tx_ids, seat_ids)
-    Seat.query.filter(Seat.user_id == student_id).delete(synchronize_session=False)
-    # The principal does not outlive its last seat.
-    delete_user_if_orphaned(student_id)
-    return True
-
-
 def remove_student_from_teacher_scope(seat_id, user_id):
     """
     Remove a student's seat from a specific teacher's roster and hard-delete if orphaned.
     """
-    # Detach the seat that belongs to this teacher's classes.
-    from app.models import ClassEconomy
     seat = db.session.get(Seat, seat_id)
-    if not seat:
+    if not seat or seat.role != "student":
         return False
-
+    owner = db.session.get(ClassEconomy, seat.class_id)
+    if not owner or owner.teacher_user_id != user_id:
+        raise ValueError("Student seat is outside teacher ownership")
     student_user_id = seat.user_id
-    scoped_entitlement_ids, scoped_issue_ids, scoped_tx_ids, scoped_seat_ids = (
-        _collect_related_ids_for_seats([seat_id])
-    )
-    teacher_class_ids = sa.select(ClassEconomy.class_id).where(ClassEconomy.teacher_user_id == user_id)
-    Seat.query.filter(
-        Seat.id == seat_id,
-        Seat.class_id.in_(teacher_class_ids),
-    ).update(
-        {
-            Seat.claimed_at: None,
-            Seat.user_id: None,
-        },
-        synchronize_session=False,
-    )
-    remaining_links = db.session.query(Seat.id).filter(Seat.user_id == student_user_id).all()
-    if remaining_links:
-        _clear_cross_transaction_refs(scoped_tx_ids)
-        _delete_student_scoped_rows(
-            student_user_id,
-            scoped_entitlement_ids,
-            scoped_issue_ids,
-            scoped_tx_ids,
-            scoped_seat_ids,
-            scoped_class_id=seat.class_id,
-        )
-        return False
-
-    entitlement_ids, issue_ids, tx_ids, seat_ids = _collect_related_ids_for_seats(scoped_seat_ids)
-    _clear_cross_transaction_refs(tx_ids)
-    _delete_student_scoped_rows(
-        student_user_id,
-        entitlement_ids,
-        issue_ids,
-        tx_ids,
-        seat_ids,
-    )
-    Seat.query.filter(Seat.user_id == student_user_id).delete(synchronize_session=False)
-    # The detached seat was the student's last one anywhere; the principal goes
-    # with it. The seat row itself survives as an unclaimed roster slot owned by
-    # the class, which is why the delete above is a no-op on the unclaimed seat.
-    delete_user_if_orphaned(student_user_id)
-    return True
+    lock_seats_for_deletion([seat_id])
+    entitlement_ids, issue_ids, tx_ids, seat_ids = _collect_related_ids_for_seats([seat_id])
+    _clear_support_transaction_refs(tx_ids)
+    _delete_student_scoped_rows(student_user_id, entitlement_ids, issue_ids, tx_ids,
+                               seat_ids, seat_ids_for_student=[seat_id], scoped_class_id=seat.class_id)
+    db.session.delete(seat)
+    db.session.flush()
+    return delete_user_if_orphaned(student_user_id) if student_user_id else False

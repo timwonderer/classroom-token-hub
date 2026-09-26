@@ -15,8 +15,19 @@ def admin_generate_recovery_code(client: FlaskClient, seat_id: int):
     return client.post(f"/recovery/admin/generate-code/{seat_id}", follow_redirects=False)
 
 
-def student_login(client: FlaskClient, *, username: str, pin: str, follow_redirects: bool = False):
-    return client.post("/student/login", data={"username": username, "pin": pin}, follow_redirects=follow_redirects)
+def student_login(client: FlaskClient, *, username: str, passphrase: str, follow_redirects: bool = False):
+    """Sign a student in.
+
+    Sign-in takes the passphrase (FEAT-IDEN-002 §Credential boundary); the PIN
+    is for transfers, clock actions, and hall passes. This helper used to post a
+    `pin` field, which the login route never reads, so every login it performed
+    silently failed.
+    """
+    return client.post(
+        "/student/login",
+        data={"username": username, "passphrase": passphrase},
+        follow_redirects=follow_redirects,
+    )
 
 
 def student_get_dashboard(client: FlaskClient, *, follow_redirects: bool = False):
@@ -27,13 +38,13 @@ def student_login_next(
     client: FlaskClient,
     *,
     username: str,
-    pin: str,
+    passphrase: str,
     next_path: str,
     follow_redirects: bool = False,
 ):
     return client.post(
         f"/student/login?next={next_path}",
-        data={"username": username, "pin": pin},
+        data={"username": username, "passphrase": passphrase},
         follow_redirects=follow_redirects,
     )
 

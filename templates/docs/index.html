@@ -4,6 +4,18 @@
 
 {% block title %}Documentation - Classroom Token Hub{% endblock %}
 
+{% block extra_head %}
+<style>
+/* Category glyph colours on the docs landing cards (raw status tokens, not the
+   darkened .text-* utilities, so the hue matches the prior inline colour). */
+.docs-cat-icon-info    { color: var(--info); }
+.docs-cat-icon-danger  { color: var(--danger); }
+.docs-cat-icon-success { color: var(--success); }
+.docs-cat-icon-primary { color: var(--primary); }
+.docs-cat-icon-warning { color: var(--warning); }
+</style>
+{% endblock %}
+
 {% block content %}
 {% call docs_hero(
     "Help & Support Center" if audience == 'user' else "Technical Documentation",
@@ -14,31 +26,12 @@
             <input type="search" name="q" class="form-control"
                 placeholder="Start with 1-3 keywords about your issue..." aria-label="Search the documentation">
             <button class="btn btn-secondary" type="submit">
-                <span class="material-symbols-outlined" style="vertical-align: middle;">search</span>
+                <span class="material-symbols-outlined icon-middle" aria-hidden="true">search</span>
                 Search
             </button>
         </div>
     </form>
 
-    {#
-       Only operators get an audience switch. This site is the in-app help
-       centre for teachers and students; offering them "Technical Docs" just
-       drops them into invariants and domain specs they have no use for.
-    #}
-    {% if session.get('is_system_admin') %}
-    <div class="btn-group docs-hero-toggle" role="group" aria-label="Documentation Audience Toggle">
-        <a href="{{ url_for('docs.set_audience', aud='user') }}"
-            class="btn {% if audience == 'user' %}btn-secondary active fw-bold{% else %}btn-outline-light{% endif %} px-4">
-            <span class="material-symbols-outlined" style="vertical-align: text-bottom; font-size: 1.1rem;">group</span>
-            User Guides
-        </a>
-        <a href="{{ url_for('docs.set_audience', aud='devops') }}"
-            class="btn {% if audience == 'devops' %}btn-secondary active fw-bold{% else %}btn-outline-light{% endif %} px-4">
-            <span class="material-symbols-outlined" style="vertical-align: text-bottom; font-size: 1.1rem;">terminal</span>
-            Technical Docs
-        </a>
-    </div>
-    {% endif %}
 {% endcall %}
 
 <div class="container mt-5 mb-5">
@@ -52,8 +45,7 @@
             <div class="card h-100 shadow-sm">
                 <div class="card-body">
                     <div class="text-center mb-3">
-                        <span class="material-symbols-outlined"
-                            style="font-size: 3rem; color: var(--info);">school</span>
+                        <span class="material-symbols-outlined icon-2xl docs-cat-icon-info" aria-hidden="true">school</span>
                     </div>
                     <h3 class="card-title h5 text-center">For Students</h3>
                     <p class="card-text text-muted">How everything works, one task at a time.</p>
@@ -82,8 +74,7 @@
             <div class="card h-100 shadow-sm">
                 <div class="card-body">
                     <div class="text-center mb-3">
-                        <span class="material-symbols-outlined"
-                            style="font-size: 3rem; color: var(--danger);">person</span>
+                        <span class="material-symbols-outlined icon-2xl docs-cat-icon-danger" aria-hidden="true">person</span>
                     </div>
                     <h3 class="card-title h5 text-center">For Teachers</h3>
                     <p class="card-text text-muted">Set up your classroom economy, then run it day to day.</p>
@@ -112,8 +103,7 @@
             <div class="card h-100 shadow-sm">
                 <div class="card-body">
                     <div class="text-center mb-3">
-                        <span class="material-symbols-outlined"
-                            style="font-size: 3rem; color: var(--success);">build</span>
+                        <span class="material-symbols-outlined icon-2xl docs-cat-icon-success" aria-hidden="true">build</span>
                     </div>
                     <h3 class="card-title h5 text-center">Something Is Wrong</h3>
                     <p class="card-text text-muted">Solution-first pages for when it is not behaving.</p>
@@ -124,8 +114,8 @@
                                 class="text-decoration-none">Teacher Troubleshooting</a></li>
                         <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/diagnostics/error-pages') }}"
                                 class="text-decoration-none">Error Pages (404, 500, 503)</a></li>
-                        <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/features/public/maintenance-page') }}"
-                                class="text-decoration-none">Scheduled Maintenance</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/features/public/access-gate') }}"
+                                class="text-decoration-none">Temporary Access Restrictions</a></li>
                         <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/features/public/offline-and-install') }}"
                                 class="text-decoration-none">Installing & Working Offline</a></li>
                         <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/features/public/hall-pass-verification') }}"
@@ -145,8 +135,7 @@
             <div class="card h-100 shadow-sm">
                 <div class="card-body">
                     <div class="text-center mb-3">
-                        <span class="material-symbols-outlined"
-                            style="font-size: 3rem; color: var(--primary);">timeline</span>
+                        <span class="material-symbols-outlined icon-2xl docs-cat-icon-primary" aria-hidden="true">timeline</span>
                     </div>
                     <h3 class="card-title h5 text-center">Project Timeline</h3>
                     <p class="card-text text-muted">The interactive history of Classroom Token Hub — from classroom idea
@@ -154,9 +143,9 @@
                     <ul>
                         <li><a href="{{ url_for('docs.timeline') }}"
                                 class="text-decoration-none fw-semibold text-primary">Interactive Timeline →</a></li>
-                        <li><a href="https://github.com/timwonderer/classroom-economy/blob/main/DEVELOPMENT.md"
+                        <li><a href="https://github.com/timwonderer/classroom-token-hub/blob/main/DEVELOPMENT.md"
                                 target="_blank" rel="noopener" class="text-decoration-none">Development Roadmap <span class="visually-hidden">(opens in a new tab)</span></a></li>
-                        <li><a href="{{ url_for('docs.view_doc', doc_path='STANDARD_OPERATING_PROCEDURES/SOP-DOC-002_DOCUMENTATION_INDEX') }}"
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='STANDARD_OPERATING_PROCEDURES/SOP-DOC-001_DOCUMENTATION_INDEX') }}"
                                 class="text-decoration-none">Documentation Index</a></li>
                         <li><a href="{{ url_for('docs.view_doc', doc_path='PRINCIPLES/PROJECT_PHILOSOPHY/PRN-PHL-001_Design_Principles_And_Project_History') }}"
                                 class="text-decoration-none">Design Principles &amp; Project History</a></li>
@@ -170,8 +159,7 @@
             <div class="card h-100 shadow-sm">
                 <div class="card-body">
                     <div class="text-center mb-3">
-                        <span class="material-symbols-outlined"
-                            style="font-size: 3rem; color: var(--primary);">code</span>
+                        <span class="material-symbols-outlined icon-2xl docs-cat-icon-primary" aria-hidden="true">code</span>
                     </div>
                     <h3 class="card-title h5 text-center">Developer Reference</h3>
                     <p class="card-text text-muted">Architecture, database schema, and API docs for developers and
@@ -197,14 +185,13 @@
             <div class="card h-100 shadow-sm">
                 <div class="card-body">
                     <div class="text-center mb-3">
-                        <span class="material-symbols-outlined"
-                            style="font-size: 3rem; color: var(--warning);">cloud_upload</span>
+                        <span class="material-symbols-outlined icon-2xl docs-cat-icon-warning" aria-hidden="true">cloud_upload</span>
                     </div>
                     <h3 class="card-title h5 text-center">Operations</h3>
                     <p class="card-text text-muted">Deployment, maintenance, and operational procedures for maintainers.
                     </p>
                     <ul>
-                        <li><a href="{{ url_for('docs.view_doc', doc_path='STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-023_V2_Production_Transition_Runbook') }}"
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook') }}"
                                 class="text-decoration-none">Production Transition Runbook</a></li>
                         <li><a href="{{ url_for('docs.view_doc', doc_path='SPEC/SPEC-OPS-004_SYSTEM_ADMINISTRATION_CONSOLE') }}"
                                 class="text-decoration-none">System Administration Console</a></li>
@@ -218,8 +205,7 @@
             <div class="card h-100 shadow-sm">
                 <div class="card-body">
                     <div class="text-center mb-3">
-                        <span class="material-symbols-outlined"
-                            style="font-size: 3rem; color: var(--info);">gavel</span>
+                        <span class="material-symbols-outlined icon-2xl docs-cat-icon-info" aria-hidden="true">gavel</span>
                     </div>
                     <h3 class="card-title h5 text-center">Legal & Licensing</h3>
                     <p class="card-text text-muted">License terms, commercial use policy, attributions, and project
@@ -244,7 +230,7 @@
     <div class="card bg-light">
         <div class="card-body">
             <h2 class="card-title h4">
-                <span class="material-symbols-outlined" style="vertical-align: middle;">bolt</span>
+                <span class="material-symbols-outlined icon-middle" aria-hidden="true">bolt</span>
                 Quick Links
             </h2>
             <div class="row">
@@ -266,11 +252,11 @@
                     <ul>
                         <li><a href="{{ url_for('docs.timeline') }}" class="text-decoration-none">Project Timeline</a>
                         </li>
-                        <li><a href="https://github.com/timwonderer/classroom-economy" target="_blank" rel="noopener"
+                        <li><a href="https://github.com/timwonderer/classroom-token-hub" target="_blank" rel="noopener"
                                 class="text-decoration-none">GitHub Repository <span class="visually-hidden">(opens in a new tab)</span></a></li>
-                        <li><a href="https://github.com/timwonderer/classroom-economy/blob/main/CONTRIBUTING.md"
+                        <li><a href="https://github.com/timwonderer/classroom-token-hub/blob/main/CONTRIBUTING.md"
                                 target="_blank" rel="noopener" class="text-decoration-none">Contributing Guide <span class="visually-hidden">(opens in a new tab)</span></a></li>
-                        <li><a href="https://github.com/timwonderer/classroom-economy/issues" target="_blank"
+                        <li><a href="https://github.com/timwonderer/classroom-token-hub/issues" target="_blank"
                                 rel="noopener" class="text-decoration-none">Report Issues <span class="visually-hidden">(opens in a new tab)</span></a></li>
                     </ul>
                 </div>

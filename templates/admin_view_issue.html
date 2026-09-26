@@ -1,12 +1,35 @@
 {% extends "layout_admin.html" %}
+{% import "macros/cards.html" as cards %}
 
 {% block page_title %}Issue Details for #{{ issue.id }}{% endblock %}
+
+{% block contextual_help_body %}
+{{ help.panel_lead("One student's report, everything attached to it, and the decision it is waiting on. A ticket moves forward only when you act here.") }}
+
+{% call help.topic('issue-work', 'checklist', 'Working the ticket') %}
+<ol class="ps-3 mb-0">
+    <li class="mb-2"><strong>Read the student's account first,</strong> then the related transaction if one is attached. The snapshot shows the record as it stood when they filed, not as it stands now.</li>
+    <li class="mb-2"><strong>Pick a resolution action.</strong> <em>Compensating transaction</em> posts a correcting entry and only appears when a transaction is attached. <em>Manual adjustment</em> records that you handled it elsewhere. <em>Deny</em> closes it against the student and asks you why.</li>
+    <li class="mb-0"><strong>Then close it.</strong> Resolving moves the ticket to final review; the closure summary is what makes it done.</li>
+</ol>
+{% endcall %}
+
+{% call help.topic('issue-escalate', 'arrow_upward', 'When to escalate') %}
+<p><strong>Escalate only when the tools here cannot fix it</strong> — a suspected bug, or numbers that do not reconcile. A disagreement about whether a fine was fair is yours to settle, not the developers'.</p>
+<p class="mb-0"><strong>Escalation shares an opaque reference, not your class name.</strong> The checkbox is there if the developer genuinely needs the name; leaving it unchecked is the normal case.</p>
+{% endcall %}
+
+{% call help.topic('issue-record', 'history', 'Notes and the status record') %}
+<p><strong>Notes are internal.</strong> The denial reason is the part the student is owed, so write that one for them.</p>
+<p class="mb-0 text-muted">Status History at the bottom is the record of who moved this ticket and when. Nothing is deleted from it.</p>
+{% endcall %}
+{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
     <!-- Back Button -->
     <a href="{{ url_for('admin.issues_queue') }}" class="btn btn-outline-secondary mb-3">
-        <span class="material-symbols-outlined me-2">arrow_back</span>Back to Issues Queue
+        <span class="material-symbols-outlined me-2" aria-hidden="true">arrow_back</span>Back to Issues Queue
     </a>
 
     <div class="row">
@@ -16,7 +39,7 @@
                 <div class="card-header bg-primary text-white">
                     <div class="d-flex justify-content-between align-items-center">
                         <h4 class="mb-0">
-                            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">
+                            <span class="material-symbols-outlined me-2 icon-xl icon-middle" aria-hidden="true">
                                 description
                             </span>Issue Descriptions
                         </h4>
@@ -36,7 +59,7 @@
                     <div class="mb-3">
                         <h6 class="text-muted mb-2">Student</h6>
                         <p class="mb-0">
-                            <span class="material-symbols-outlined me-2">person</span>
+                            <span class="material-symbols-outlined me-2" aria-hidden="true">person</span>
                             <strong>{{ issue.student_display_name }}</strong>
                             {% if issue.class_label %}
                             <span class="text-muted">| {{ issue.class_label }}</span>
@@ -79,7 +102,7 @@
                         <div class="col-md-6 mb-3">
                             <h6 class="text-muted mb-2">Submitted</h6>
                             <p class="mb-0">
-                                <span class="material-symbols-outlined me-2">schedule</span>
+                                <span class="material-symbols-outlined me-2" aria-hidden="true">schedule</span>
                                 {{ issue.submitted_at|fmt_timestamp }}
                             </p>
                         </div>
@@ -87,7 +110,7 @@
                         <div class="col-md-6 mb-3">
                             <h6 class="text-muted mb-2">First Reviewed</h6>
                             <p class="mb-0">
-                                <span class="material-symbols-outlined me-2">visibility</span>
+                                <span class="material-symbols-outlined me-2" aria-hidden="true">visibility</span>
                                 {{ issue.teacher_reviewed_at|fmt_timestamp }}
                             </p>
                         </div>
@@ -101,7 +124,7 @@
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-primary text-white">
                     <h5 class="mb-0">
-                        <span class="material-symbols-outlined me-2">receipt_long</span>Related Transaction
+                        <span class="material-symbols-outlined me-2" aria-hidden="true">receipt_long</span>Related Transaction
                     </h5>
                 </div>
                 <div class="card-body">
@@ -131,10 +154,9 @@
                         </div>
                     </div>
                     {% if issue.context_snapshot.transaction.is_void %}
-                    <div class="alert alert-danger mt-3 mb-0">
-                        <span class="material-symbols-outlined me-2">cancel</span>
-                        <strong>This transaction has been voided</strong>
-                    </div>
+                    {% call cards.alert_card('danger', 'Transaction voided', icon='cancel', body_class='mt-3 mb-0') %}
+                        <p class="mb-0">This transaction has been voided.</p>
+                    {% endcall %}
                     {% endif %}
                     {% else %}
                     <p class="text-muted mb-0">Transaction details not available</p>
@@ -148,7 +170,7 @@
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-primary text-white">
                     <h5 class="mb-0">
-                        <span class="material-symbols-outlined me-2">info</span>System Context
+                        <span class="material-symbols-outlined me-2" aria-hidden="true">info</span>System Context
                     </h5>
                 </div>
                 <div class="card-body">
@@ -215,7 +237,7 @@
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-secondary text-white">
                     <h5 class="mb-0">
-                        <span class="material-symbols-outlined me-2">checklist</span>Resolution Actions
+                        <span class="material-symbols-outlined me-2" aria-hidden="true">checklist</span>Resolution Actions
                     </h5>
                 </div>
                 <div class="card-body">
@@ -248,7 +270,7 @@
             <div class="card shadow-sm mb-4 border-warning">
                 <div class="card-header bg-warning text-dark">
                     <h5 class="mb-0">
-                        <span class="material-symbols-outlined me-2">build</span>Actions
+                        <span class="material-symbols-outlined me-2" aria-hidden="true">build</span>Actions
                     </h5>
                 </div>
                 <div class="card-body">
@@ -260,17 +282,26 @@
 
                         <div class="mb-3">
                             <label class="form-label fw-bold" for="actionType">Resolution Action</label>
-                            <select class="form-select" name="action_type" id="actionType" required>
+                            <select class="form-select" name="action_type" id="actionType" required{% if purchase_resolution and not purchase_resolution.eligible %} aria-describedby="actionTypeHelp"{% endif %}>
                                 <option value="">Select an action...</option>
                                 {% if issue.related_transaction_id %}
-                                <option value="compensating_transaction">Post Compensating Transaction</option>
+                                {% if purchase_resolution and purchase_resolution.eligible %}
+                                <option value="reverse_transaction">Reverse and remove item</option>
+                                <option value="refund_transaction">Refund and retain item</option>
                                 {% endif %}
+                                <option value="manual_adjustment">Manual Credit</option>
+                                {% endif %}
+                                {% if not issue.related_transaction_id %}
                                 <option value="manual_adjustment">Manual Adjustment (I'll handle it)</option>
+                                {% endif %}
                                 <option value="deny_issue">Deny Issue</option>
                             </select>
+                            {% if purchase_resolution and not purchase_resolution.eligible %}
+                            <div class="form-text" id="actionTypeHelp">{{ purchase_resolution.reason }}</div>
+                            {% endif %}
                         </div>
 
-                        <div class="mb-3" id="denialReasonDiv" style="display: none;">
+                        <div class="mb-3" id="denialReasonDiv" hidden>
                             <label class="form-label" for="denialReason">Denial Reason</label>
                             <textarea class="form-control" id="denialReason" name="denial_reason" rows="2" placeholder="Why are you denying this issue?"></textarea>
                         </div>
@@ -281,7 +312,7 @@
                         </div>
 
                         <button type="submit" class="btn btn-success w-100 mb-2">
-                            <span class="material-symbols-outlined me-2">check_circle</span>Resolve Issue
+                            <span class="material-symbols-outlined me-2" aria-hidden="true">check_circle</span>Resolve Issue
                         </button>
                     </form>
 
@@ -290,7 +321,7 @@
                     <!-- Escalate Button -->
                     {% if issue.status in ['OPEN', 'TEACHER_REVIEW', 'submitted', 'teacher_review'] %}
                     <button type="button" class="btn btn-warning w-100" data-bs-toggle="modal" data-bs-target="#escalateModal">
-                        <span class="material-symbols-outlined me-2">arrow_circle_up</span>Escalate to Developer
+                        <span class="material-symbols-outlined me-2" aria-hidden="true">arrow_circle_up</span>Escalate to Developer
                     </button>
                     {% endif %}
                 </div>
@@ -299,7 +330,7 @@
             <div class="card shadow-sm mb-4 border-primary">
                 <div class="card-header bg-primary text-white">
                     <h5 class="mb-0">
-                        <span class="material-symbols-outlined me-2">fact_check</span>Teacher Final Review
+                        <span class="material-symbols-outlined me-2" aria-hidden="true">fact_check</span>Teacher Final Review
                     </h5>
                 </div>
                 <div class="card-body">
@@ -317,7 +348,7 @@
                             <textarea class="form-control" id="resolutionSummary" name="resolution_summary" rows="3" required placeholder="Summarize the final classroom resolution for audit."></textarea>
                         </div>
                         <button type="submit" class="btn btn-success w-100">
-                            <span class="material-symbols-outlined me-2">task_alt</span>Close Ticket
+                            <span class="material-symbols-outlined me-2" aria-hidden="true">task_alt</span>Close Ticket
                         </button>
                     </form>
                 </div>
@@ -326,13 +357,13 @@
             <div class="card shadow-sm mb-4 border-info">
                 <div class="card-header bg-info text-white">
                     <h5 class="mb-0">
-                        <span class="material-symbols-outlined me-2">build_circle</span>Developer Fix Applied
+                        <span class="material-symbols-outlined me-2" aria-hidden="true">build_circle</span>Developer Fix Applied
                     </h5>
                 </div>
                 <div class="card-body">
-                    <div class="alert alert-info">
-                        <strong>Developer Fix Applied - Teacher Review Required</strong>
-                    </div>
+                    {% call cards.alert_card('info', 'Teacher review required', icon='rate_review', body_class='mb-3') %}
+                        <p class="mb-0">A developer fix has been applied. Review the issue before closing it.</p>
+                    {% endcall %}
                     <p class="mb-2"><strong>Original Escalation Reason:</strong> {{ issue.escalation_reason }}</p>
                     {% if issue.sysadmin_notes %}
                     <p class="mb-2"><strong>Developer Notes:</strong></p>
@@ -358,7 +389,7 @@
             <div class="card shadow-sm mb-4 border-warning">
                 <div class="card-header bg-warning">
                     <h5 class="mb-0 text-black">
-                        <span class="material-symbols-outlined me-2">arrow_circle_up</span>Escalated
+                        <span class="material-symbols-outlined me-2" aria-hidden="true">arrow_circle_up</span>Escalated
                     </h5>
                 </div>
                 <div class="card-body">
@@ -378,7 +409,7 @@
             <div class="card shadow-sm mb-4 border-success">
                 <div class="card-header bg-success text-white">
                     <h5 class="mb-0">
-                        <span class="material-symbols-outlined me-2">task_alt</span>Closed
+                        <span class="material-symbols-outlined me-2" aria-hidden="true">task_alt</span>Closed
                     </h5>
                 </div>
                 <div class="card-body">
@@ -399,7 +430,7 @@
             <div class="card shadow-sm">
                 <div class="card-header bg-primary text-white">
                     <h6 class="mb-0">
-                        <span class="material-symbols-outlined me-2">history</span>Status History
+                        <span class="material-symbols-outlined me-2" aria-hidden="true">history</span>Status History
                     </h6>
                 </div>
                 <div class="card-body">
@@ -408,7 +439,7 @@
                         <div class="timeline-item mb-3">
                             <div class="d-flex">
                                 <div class="timeline-marker me-3">
-                                    <span class="material-symbols-outlined text-primary">lens</span>
+                                    <span class="material-symbols-outlined text-primary" aria-hidden="true">lens</span>
                                 </div>
                                 <div class="flex-grow-1">
                                     <div class="fw-bold">{{ history.new_status|replace('_', ' ')|title }}</div>
@@ -436,18 +467,17 @@
         <div class="modal-content">
             <div class="modal-header bg-warning text-dark">
                 <h5 class="modal-title" id="escalateModalLabel">
-                    <span class="material-symbols-outlined me-2">arrow_circle_up</span>Escalate to Developer
+                    <span class="material-symbols-outlined me-2" aria-hidden="true">arrow_circle_up</span>Escalate to Developer
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form method="POST" action="{{ url_for('admin.escalate_issue', issue_ref=issue_ref) }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-body">
-                    <div class="alert alert-info">
-                        <span class="material-symbols-outlined me-2">info</span>
-                        <strong>Important:</strong> Escalate only when you cannot resolve the issue with available tools,
-                        or when you suspect a system bug or data integrity problem.
-                    </div>
+                    {% call cards.alert_card('info', 'When to escalate', icon='info', body_class='mb-3') %}
+                        <p class="mb-0">Escalate only when you cannot resolve the issue with available tools,
+                        or when you suspect a system bug or data integrity problem.</p>
+                    {% endcall %}
 
                     <div class="mb-3">
                         <label for="escalation_reason" class="form-label fw-bold">
@@ -473,11 +503,36 @@
                         </small>
                     </div>
 
+                    <fieldset class="mb-3">
+                        <legend class="fs-6 fw-bold">Optional information for system support</legend>
+                        <p class="text-muted">Route diagnostics, the correlation pack, IP address, and browser details are included. Choose each additional category separately for this ticket. These choices share the saved report information, not ongoing access to your class.</p>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" name="share_balances" id="share_balances" aria-describedby="share_balances_help">
+                            <label class="form-check-label" for="share_balances">I give permission to include balances</label>
+                            <small id="share_balances_help" class="d-block text-muted">Checking, savings, and total at the time of the report.</small>
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" name="share_transaction" id="share_transaction" aria-describedby="share_transaction_help">
+                            <label class="form-check-label" for="share_transaction">I give permission to include the reported transaction</label>
+                            <small id="share_transaction_help" class="d-block text-muted">The selected transaction, including its amount and description.</small>
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" name="share_recent_transactions" id="share_recent_transactions" aria-describedby="share_recent_transactions_help">
+                            <label class="form-check-label" for="share_recent_transactions">I give permission to include recent transactions</label>
+                            <small id="share_recent_transactions_help" class="d-block text-muted">Up to ten transactions saved with this report, including amounts and descriptions.</small>
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" name="share_student_report" id="share_student_report" aria-describedby="share_student_report_help">
+                            <label class="form-check-label" for="share_student_report">I give permission to include the student’s report</label>
+                            <small id="share_student_report_help" class="d-block text-muted">The student’s explanation and expected outcome.</small>
+                        </div>
+                    </fieldset>
+
                     <div class="mb-3">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" name="share_class_name" id="share_class_name">
                             <label class="form-check-label" for="share_class_name">
-                                Share class name/identifier with developer
+                                I give permission to include the class name
                             </label>
                             <small class="d-block text-muted mt-1">
                                 By default, only an opaque reference is shared. Check this if the developer needs the class name for investigation.
@@ -489,7 +544,7 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-warning">
-                        <span class="material-symbols-outlined me-2">arrow_circle_up</span>Escalate Issue
+                        <span class="material-symbols-outlined me-2" aria-hidden="true">arrow_circle_up</span>Escalate Issue
                     </button>
                 </div>
             </form>
@@ -504,19 +559,14 @@ if (actionType) {
     actionType.addEventListener('change', function() {
         const denialDiv = document.getElementById('denialReasonDiv');
         if (this.value === 'deny_issue') {
-            denialDiv.style.display = 'block';
+            denialDiv.hidden = false;
             denialDiv.querySelector('textarea').required = true;
         } else {
-            denialDiv.style.display = 'none';
+            denialDiv.hidden = true;
             denialDiv.querySelector('textarea').required = false;
         }
     });
 }
 </script>
 
-<style>
-.timeline-marker i {
-    font-size: 0.5rem;
-}
-</style>
 {% endblock %}

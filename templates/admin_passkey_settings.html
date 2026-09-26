@@ -1,7 +1,28 @@
 {% extends "layout_admin.html" %}
+{% import "macros/cards.html" as cards %}
 {% set page_title = "Passkey Settings" %}
 {% set page_subtitle = "Manage your passkeys" %}
 {% set current_page = "passkey_settings" %}
+
+{% block contextual_help_body %}
+{{ help.panel_lead("Passkeys let you sign in with your device instead of typing a credential. They cannot be phished, because there is no secret to hand over.") }}
+
+{% call help.topic('pk-register', 'add_circle', 'Register a passkey') %}
+<ol class="ps-3 mb-0">
+    <li class="mb-2"><strong>Register New Passkey</strong>, then follow your device's prompt — Touch ID, Face ID, Windows Hello, or a hardware key.</li>
+    <li class="mb-2"><strong>Name it something you will recognize</strong> later, like "work laptop". Deciding which passkey to remove is impossible if they are all unnamed.</li>
+    <li class="mb-0"><strong>Register a second one</strong> on a different device. One passkey on one device means a lost device is a lockout.</li>
+</ol>
+{% endcall %}
+
+{% call help.topic('pk-storage', 'lock', 'What is stored, and what removing does') %}
+<ul class="ps-3">
+    <li class="mb-2"><strong>The passkey never leaves your device.</strong> Classroom Token Hub stores only the public half, which cannot be used to sign in as you.</li>
+    <li class="mb-0"><strong>Removing a passkey here does not remove it from your device</strong> — clear it in your device or password manager settings as well.</li>
+</ul>
+<p class="mb-0 text-muted">Set up account recovery too. If every passkey becomes unavailable, recovery is the only way back in.</p>
+{% endcall %}
+{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
@@ -12,7 +33,7 @@
             <div class="card mb-4">
                 <div class="card-body">
                     <h2 class="mb-2">
-                        <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 32px;">fingerprint</span>
+                        <span class="material-symbols-outlined icon-middle icon-xl" aria-hidden="true">fingerprint</span>
                         Passkey Authentication
                     </h2>
                     <p class="text-muted">
@@ -22,28 +43,24 @@
             </div>
 
             <!-- Info Banner -->
-            <div class="alert alert-info d-flex align-items-start mb-4">
-                <span class="material-symbols-outlined me-2 mt-1">info</span>
-                <div>
-                    <strong>About Passkeys</strong><br>
-                    Passkeys use WebAuthn/FIDO2 for phishing-resistant authentication. Works with:
-                    <ul class="mb-0 mt-2">
-                        <li>Hardware security keys (YubiKey, etc.)</li>
-                        <li>Platform authenticators (Touch ID, Face ID, Windows Hello)</li>
-                        <li>Synced passkeys across devices</li>
-                    </ul>
-                </div>
-            </div>
+            {% call cards.alert_card('info', 'About passkeys', icon='passkey', body_class='mb-4') %}
+                <p class="mb-0">Passkeys use WebAuthn/FIDO2 for phishing-resistant authentication. Works with:</p>
+                <ul class="mb-0 mt-2">
+                    <li>Hardware security keys (YubiKey, etc.)</li>
+                    <li>Platform authenticators (Touch ID, Face ID, Windows Hello)</li>
+                    <li>Synced passkeys across devices</li>
+                </ul>
+            {% endcall %}
 
             <!-- Registered Passkeys -->
             <div class="card mb-4">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">
-                        <span class="material-symbols-outlined" style="vertical-align: middle;">security</span>
+                        <span class="material-symbols-outlined icon-middle" aria-hidden="true">security</span>
                         Your Passkeys
                     </h5>
                     <button type="button" class="btn btn-primary" id="registerPasskeyButton">
-                        <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 18px;">add</span>
+                        <span class="material-symbols-outlined icon-middle icon-sm" aria-hidden="true">add</span>
                         Register New Passkey
                     </button>
                 </div>
@@ -54,21 +71,21 @@
                             <div class="list-group-item px-0 d-flex justify-content-between align-items-start">
                                 <div class="flex-grow-1">
                                     <div class="d-flex align-items-center mb-2">
-                                        <span class="material-symbols-outlined text-primary me-2">security_key</span>
+                                        <span class="material-symbols-outlined text-primary me-2" aria-hidden="true">security_key</span>
                                         <h6 class="mb-0">{{ cred.authenticator_name or "Unnamed Passkey" }}</h6>
                                     </div>
                                     <div class="text-muted small">
-                                        <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 14px;">calendar_today</span>
-                                        Registered: {{ cred.created_at.strftime('%B %d, %Y at %I:%M %p') if cred.created_at else 'Unknown' }}
+                                        <span class="material-symbols-outlined icon-middle icon-2xs" aria-hidden="true">calendar_today</span>
+                                        Registered: {{ cred.created_at | fmt_timestamp if cred.created_at else 'Unknown' }}
                                     </div>
                                     {% if cred.last_used %}
                                     <div class="text-muted small">
-                                        <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 14px;">schedule</span>
-                                        Last used: {{ cred.last_used.strftime('%B %d, %Y at %I:%M %p') }}
+                                        <span class="material-symbols-outlined icon-middle icon-2xs" aria-hidden="true">schedule</span>
+                                        Last used: {{ cred.last_used | fmt_timestamp }}
                                     </div>
                                     {% else %}
                                     <div class="text-muted small">
-                                        <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 14px;">schedule</span>
+                                        <span class="material-symbols-outlined icon-middle icon-2xs" aria-hidden="true">schedule</span>
                                         Never used
                                     </div>
                                     {% endif %}
@@ -76,7 +93,7 @@
                                 <button type="button" class="btn btn-sm btn-outline-danger delete-passkey-btn"
                                         data-credential-id="{{ cred.id }}"
                                         data-credential-name="{{ cred.authenticator_name or 'Unnamed Passkey' }}">
-                                    <span class="material-symbols-outlined" style="font-size: 16px;">delete</span>
+                                    <span class="material-symbols-outlined icon-xs" aria-hidden="true">delete</span>
                                     Delete
                                 </button>
                             </div>
@@ -84,7 +101,7 @@
                         </div>
                     {% else %}
                         <div class="text-center py-5">
-                            <span class="material-symbols-outlined text-muted mb-3" style="font-size: 64px;">security_key</span>
+                            <span class="material-symbols-outlined text-muted mb-3 icon-3xl" aria-hidden="true">security_key</span>
                             <p class="text-muted">
                                 You don't have any passkeys registered yet.<br>
                                 Click "Register New Passkey" above to get started.
@@ -142,12 +159,16 @@
 
             } catch (error) {
                 const feedback = document.getElementById('passkey-feedback');
-                feedback.textContent = 'Error: ' + error.message;
-                feedback.className = 'alert alert-danger';
-                feedback.classList.remove('visually-hidden');
+                feedback.replaceChildren(window.AppCore.buildAlertCard({
+                    level: 'danger',
+                    title: 'Could not delete passkey',
+                    icon: 'error',
+                    body: error.message,
+                }));
+                feedback.className = 'mb-4';
                 feedback.focus();
                 this.disabled = false;
-                this.innerHTML = '<span class="material-symbols-outlined" style="font-size: 16px;">delete</span> Delete';
+                this.innerHTML = '<span class="material-symbols-outlined icon-xs" aria-hidden="true">delete</span> Delete';
             }
         });
     });

@@ -137,6 +137,13 @@ def upsert_payroll_settings(*, class_id: str, settings_data: dict) -> PayrollSet
     setting = PayrollSettings(class_id=class_id, availability_state='IN_USE', **carried)
     setting.created_at = utc_now()
     setting.updated_at = setting.created_at
+    # Arm the recurring scheduler cursor when a policy is first saved. On later
+    # immutable versions preserve the existing occurrence; a settings edit must
+    # not silently disable automatic payroll or move an already scheduled cycle.
+    if predecessor is not None and predecessor.next_payroll_date is not None:
+        setting.next_payroll_date = predecessor.next_payroll_date
+    else:
+        setting.next_payroll_date = setting.first_pay_date or setting.created_at
 
     # Retire the predecessor BEFORE the insert is flushed so the partial unique
     # index never sees two IN_USE rows for the scope.

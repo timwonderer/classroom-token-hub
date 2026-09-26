@@ -2,12 +2,29 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-|SEC-AUD-012| 1.1 | 2026-03-08 | 1.0 |Normative|
+|SEC-AUD-012| 1.1 | 2026-03-08 | 1.0 |Archived - non-normative|
 
 **Date:** 2025-12-22
 **Auditor:** Claude Code Security Analysis
 **Scope:** Full codebase security review - GitHub Actions, application code, dependencies, and infrastructure
 **Version:** 1.2.1+
+
+---
+
+> ## ⚠️ ARCHIVED — v1 HISTORY, NOT AN INSTRUCTION
+>
+> This document audits the **v1** application and its `deploy.yml` workflow. Both are
+> gone. It lives under `docs/archive/`, which is superseded material — history only,
+> never authority (`.claude/rules/documentation.md`).
+>
+> **Do not run the shell in this document.** Its "Remediation Recommendations"
+> sections contain `.env`-writing and `chmod` snippets aimed at a deployment path
+> that no longer exists: v2 releases through `.github/workflows/release-v2.yml`,
+> which never writes an `.env` file. Secrets are provisioned out of band per
+> `docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-023_V2_Production_Transition_Runbook.md`.
+>
+> For the current security contract read `.claude/rules/security.md` and
+> `docs/INVARIANT/ARCHITECTURE/INV-ARC-005_NO_PII_LEAKAGE_IN_EXECUTION_LAYER.md`.
 
 ---
 

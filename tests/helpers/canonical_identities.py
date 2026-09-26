@@ -45,6 +45,80 @@ TEACHERS = {
 }
 
 CLASSROOMS = {
+    # Timezone-pinned variants. Class timezone is immutable once set (enforced by
+    # the model), so a test that needs a specific one must be PROVISIONED with it
+    # rather than reach in afterwards. These exist because class-local date
+    # defects are invisible when the class, the server and the developer all sit
+    # in the same zone — the rent due-date defect passed on a Pacific machine and
+    # failed only on the UTC server.
+    "tz_pacific_p1": {
+        "teacher": "teacher_alice",
+        "display_name": "Timezone Pacific",
+        "section": "Period 1",
+        "class_timezone": "America/Los_Angeles",
+        "roster": [
+            {
+                "first_name": "Pia",
+                "last_name": "Osei",
+                "teacher_note": "",
+                "chosen_word": "harbor",
+                "pin": "1234",
+                "passphrase": "testpass",
+            },
+        ],
+    },
+    "tz_line_islands_p1": {
+        "teacher": "teacher_alice",
+        "display_name": "Timezone Line Islands",
+        "section": "Period 1",
+        # UTC+14, the earliest civil time on Earth, and the deliberately hostile
+        # half of this file.
+        #
+        # Paired with a UTC-12 session clock (Etc/GMT+12) it gives a 26-hour
+        # civil-date separation -- the widest the calendar allows. The reason it
+        # is so wide is the point: Kiritimati and Baker Island sit 2,129 km apart
+        # in the central Pacific, closer than London is to Moscow, which is about
+        # 1.3 hours of actual planetary rotation. The other ~24.7 hours are pure
+        # convention, because the International Date Line runs BETWEEN them.
+        # Kiribati put its islands on the western-calendar side; Baker and Howland
+        # stayed on the eastern. Two neighbours, two calendar days.
+        #
+        # That makes the pair adversarial in a way no ordinary zone is: the gap is
+        # not distance a naive computation might approximate, it is a discontinuity
+        # it cannot. The Pacific fixture below is environment-dependent and proves
+        # nothing on a Pacific developer machine -- the shipped naive parse that
+        # caused finding 25 produced the RIGHT instant there and the wrong one in
+        # production. This one cannot be flattered by any environment.
+        "class_timezone": "Pacific/Kiritimati",
+        "roster": [
+            {
+                "first_name": "Teraina",
+                "last_name": "Rotima",
+                "teacher_note": "",
+                "chosen_word": "compass",
+                "pin": "1234",
+                "passphrase": "testpass",
+            },
+        ],
+    },
+    "tz_tokyo_p1": {
+        "teacher": "teacher_alice",
+        "display_name": "Timezone Tokyo",
+        "section": "Period 1",
+        # East of Greenwich: class-local midnight is the PREVIOUS UTC day, the
+        # direction a US-only fixture can never exercise.
+        "class_timezone": "Asia/Tokyo",
+        "roster": [
+            {
+                "first_name": "Kenji",
+                "last_name": "Mori",
+                "teacher_note": "",
+                "chosen_word": "lantern",
+                "pin": "1234",
+                "passphrase": "testpass",
+            },
+        ],
+    },
     # Scenario A / B — Standard classroom, unique names; Ava Chen and Noah Patel also appear
     # in ap_csp_p3 (same teacher, different class) — tests multi-class identity binding.
     "chemistry_p1": {

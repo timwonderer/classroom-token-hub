@@ -23,11 +23,12 @@ related:
 
 Above the tabs sits a compact settings row:
 
-- **Hall Pass Granting** — the master switch. Off means students cannot request passes at all.
 - **Out Limit** — how many students may be out at once (1–50).
-- **Configure Pass Types** — opens the separate setup page covered below.
+- **Configure** — opens the configuration tab within Hall Pass Management.
 
 Changes here save as you make them; a green **Saved!** badge confirms it.
+
+Enable or disable Hall Pass from **Class Tools → Economy Features**. The Out Limit control becomes available after the saved setting loads. If loading or saving fails, the page displays an error; reload to check the saved value before trying again.
 
 ### Working the four tabs
 
@@ -44,9 +45,9 @@ Empty states are distinct so you can tell them apart at a glance: *No pending re
 
 ### Configuring pass types
 
-**Configure Pass Types** opens **Hall Pass Configuration**, a separate page with its own master switch, a list of destinations, and per-destination limits.
+The **Configure** tab opens **Hall Pass Configuration** within Hall Pass Management. It contains the destination list and per-destination limits; the Hall Pass feature itself is enabled from **Class Tools → Economy Features**.
 
-That page does not currently save, and your class runs on five fixed destinations whatever it shows. [Hall Pass Configuration](hall-pass-setup.md) covers what it offers and what actually applies.
+That tab controls the destinations and per-destination limits students see. [Hall Pass Configuration](hall-pass-setup.md) covers the setup fields.
 
 ### Office Verification
 
@@ -55,10 +56,10 @@ That page does not currently save, and your class runs on five fixed destination
 ## Important notes
 
 > [!WARNING]
-> **Pass type configuration does not currently save, and saving resets it.** The setup page and the server disagree about the field name, so an apparently successful save stores an empty list — which drops your class back to the five built-in destinations — and the page reloads empty. The message still reads *Configuration saved successfully!* Students also see no destinations in their break menu, for the same reason. Leave the setup page alone until this is fixed.
+> **Pass type configuration is class-scoped.** Save while the intended class is active, then reload Hall Pass Management and reopen **Configure** to confirm the saved destinations.
 
 > [!IMPORTANT]
-> **Only one student can be marked out at a time, whatever the Out Limit says.** The **Left Class** button on the Issued tab is disabled while anyone is in the **Out** tab. Mark the first student **Returned** before you can send the next one, even if the Out Limit is set to 10.
+> **Out Limit is enforced.** The **Left Class** button becomes unavailable once the configured number of students are out. Mark a student **Returned** to open a place.
 
 > [!NOTE]
 > **Approving is not the same as sending.** An approved pass sits in **Issued** until you mark **Left Class**. That is what starts the duration clock, and the History tab's Duration column measures from there — not from approval.

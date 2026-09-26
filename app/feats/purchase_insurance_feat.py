@@ -10,13 +10,21 @@ Atomic success contract (one FEAT transaction; failure anywhere before commit
 rolls back ALL of it, including the Ledger effect):
 
     resolve policy_uuid under class_id
-      -> verify IN_USE
+      -> verify IN_USE and lawful recurring terms (DOM-POL-001A §V.E)
       -> reject same-policy concurrent coverage (POLICY_ALREADY_HELD)
-      -> establish cycle-1 billing lineage (genesis) + record next boundary
+      -> grant INSURANCE / PURCHASE entitlement (references policy_uuid; no snapshot)
+      -> cycle 1 of the premium lineage ``insurance:{entitlement_id}`` through
+         bill-cycle succession: [purchase instant, anchored boundary 1)
       -> assess INSURANCE_PREMIUM for cycle 1
       -> satisfy it through the lawful Ledger path
-      -> grant INSURANCE / PURCHASE entitlement (references policy_uuid; no snapshot)
       -> commit
+
+The premium lineage derives from the entitlement alone, never from this
+command's idempotency key (DOM-OBL-001 §II.B), so a repurchase is a new
+entitlement and a new lineage. Cycle 1 begins at the purchase instant — never
+backdated to midnight — and its end is anchored boundary 1 of the purchase's
+class-local date (FEAT-STOR-007 §IV). Later periods are scheduled by the
+coverage-renewal FEAT (FEAT-STOR-007).
 
 policy_uuid IS the frozen contract: insurance_policies rows are immutable, so every
 fact written here (assessment, entitlement, bill cycle) merely carries policy_uuid
@@ -37,14 +45,16 @@ from datetime import datetime
 from decimal import Decimal
 from types import SimpleNamespace
 
-from dateutil.relativedelta import relativedelta
-
 from app.extensions import db
 from app.models import Seat, EntitlementEvent
 from app.services import insurance_definition_service as insurance_defs
-from app.services.identity_service import resolve_teacher_seat_for_class
+from app.services.insurance_coverage_service import (
+    class_local_date,
+    coverage_boundary,
+    premium_lineage_ref,
+)
 from app.services.ledger_balance_query_service import get_available_balance
-from app.services.ledger_posting_service import create_pending_transaction_idempotent
+from app.services.policy_reference_service import get_insurance_recurring_terms
 from app.services import entitlement_service
 from app.services import entitlement_read_service
 from app.services.context_resolver import CanonicalContext
@@ -52,9 +62,12 @@ from app.feats.base import requires_feat_context, FEATContext
 # Obligations DOMAIN commands (plain functions), invoked within THIS FEAT's single
 # context. Never the execute_* FEAT wrappers: a FEAT composes domain commands, not
 # other FEATs (INV-ARC-000 §VIII.2, INV-ARC-021 §V.2, INV-ARC-006).
-from app.feats.establish_bill_cycle_feat import establish_bill_cycle, EstablishBillCycleRequest
+from app.feats.schedule_next_bill_cycle_feat import (
+    ScheduleNextBillCycleRequest,
+    schedule_next_bill_cycle,
+)
 from app.feats.assess_obligation_feat import assess_obligation, AssessmentRequest
-from app.feats.satisfy_obligation_feat import satisfy_obligation, SatisfyObligationRequest
+from app.feats.insurance_premium_payment_feat import settle_insurance_premium
 from app.utils.canonical_temporal_resolver import (
     canonical_temporal_resolver,
     CLASS_LEVEL_EVALUATION,
@@ -75,33 +88,19 @@ class InsurancePurchaseResult:
     error_message: str | None = None
 
 
-def _next_premium_boundary(now_utc: datetime, charge_frequency: str) -> datetime:
-    """Next recurring-premium boundary from the policy's charge cadence.
-
-    INTERIM BINDING: DOM-POL does not yet designate a canonical cadence field, so
-    this consumes the concrete `insurance_policies.charge_frequency` (WEEKLY |
-    MONTHLY, DB-constrained). When DOM-POL fixes the cadence authority, bind to it
-    here. Derivation is anchored on the canonically resolved `now_utc`
-    (INV-ARC-015), not raw wall-clock arithmetic.
-    """
-    freq = (charge_frequency or "").upper()
-    if freq == "WEEKLY":
-        return now_utc + relativedelta(weeks=1)
-    if freq == "MONTHLY":
-        return now_utc + relativedelta(months=1)
-    raise ValueError(f"unsupported insurance charge_frequency: {charge_frequency!r}")
-
-
 @requires_feat_context("FEAT-OBL-004")
 def execute_purchase_insurance(
     *,
     canonical_context: CanonicalContext,
     policy_uuid: str,
     idempotency_key: str,
+    reference_time_utc: datetime | None = None,
 ) -> InsurancePurchaseResult:
     """Purchase (enroll in) an insurance policy for the acting student seat.
 
     Student self-purchase only: actor_seat_id == target_seat_id == context.seat_id.
+    ``reference_time_utc`` is execution context (the canonically resolved
+    purchase instant); omitted, the canonical current time.
     """
     if not policy_uuid:
         raise ValueError("execute_purchase_insurance requires a policy_uuid")
@@ -119,11 +118,25 @@ def execute_purchase_insurance(
     # One correlation ties the whole acquisition (assessment + payment + grant)
     # and embeds the command key so a same-command replay is detectable.
     correlation_id = f"insurance-purchase:{idempotency_key}"
-    # Per-purchase recurring coverage lineage (unique per command, so a later
-    # re-purchase after cancellation starts a fresh bill-cycle lineage).
-    internal_ref = f"insurance:{seat_id}:{policy_uuid}:{idempotency_key}"
 
     # ----- Phase 1: read-only validation ----------------------------------- #
+
+    # The seat row serializes this seat's money (INV-LED-015). It is taken first,
+    # before even the replay lookup: a same-key retry that waited here must see
+    # the grant its predecessor committed, or it would fall through to the
+    # coverage check and report POLICY_ALREADY_HELD for its own purchase. Held
+    # through the premium debit, it also keeps concurrent purchases, debits and
+    # settlement for this seat from passing the same balance check.
+    seat = (
+        Seat.query.filter_by(id=seat_id, class_id=class_id)
+        .with_for_update()
+        .first()
+    )
+    if seat is None:
+        return InsurancePurchaseResult(
+            success=False, correlation_id=correlation_id,
+            error_code="NO_SEAT", error_message="Seat not found in class scope",
+        )
 
     # (0) Idempotent replay: this exact command already produced a grant.
     prior_grant = (
@@ -142,13 +155,6 @@ def execute_purchase_insurance(
             success=True, already_enrolled=True,
             correlation_id=correlation_id,
             entitlement_id=prior_grant.entitlement_id,
-        )
-
-    seat = Seat.query.filter_by(id=seat_id, class_id=class_id).first()
-    if seat is None:
-        return InsurancePurchaseResult(
-            success=False, correlation_id=correlation_id,
-            error_code="NO_SEAT", error_message="Seat not found in class scope",
         )
 
     definition = insurance_defs.get_insurance_definition(policy_uuid, class_id=class_id)
@@ -208,42 +214,61 @@ def execute_purchase_insurance(
             error_message=f"Checking balance {available} < premium {premium}",
         )
 
-    # Resolve the recurring boundary in the read phase: a cadence we cannot
-    # resolve aborts BEFORE any mutation (nothing written).
-    now_eval = canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=SimpleNamespace(class_id=class_id),
-        primitive="current_time",
-    )
-    now_utc = now_eval.canonical_now_utc
+    # Resolve the recurring terms and cycle 1's boundaries in the read phase: a
+    # policy version without lawful recurring terms aborts BEFORE any mutation.
     try:
-        next_assessment_at = _next_premium_boundary(now_utc, definition.charge_frequency)
+        terms = get_insurance_recurring_terms(policy_uuid, class_id=class_id)
     except ValueError as exc:
         return InsurancePurchaseResult(
             success=False, correlation_id=correlation_id,
-            error_code="INVALID_CADENCE", error_message=str(exc),
+            error_code="INVALID_RECURRING_TERMS", error_message=str(exc),
         )
+    now_utc = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=SimpleNamespace(class_id=class_id),
+        primitive="current_time",
+        reference_time_utc=reference_time_utc,
+    ).canonical_now_utc
+    # The purchase's class-local date anchors the cadence (FEAT-STOR-007 §IV).
+    anchor_date = class_local_date(class_id, now_utc)
+    next_assessment_at = coverage_boundary(
+        class_id, anchor_date=anchor_date,
+        charge_frequency=terms.charge_frequency, index=1,
+    )
 
     # ----- Phase 2: mutation (single atomic FEAT transaction) --------------- #
 
     # Every mutation below is a DOMAIN command invoked inside THIS single FEAT
     # context — no nested FEAT executor is called (INV-ARC-000 / -021 / -006).
 
-    # (a) Genesis: establish cycle 1 for this coverage lineage, recording the
-    #     next recurring-premium boundary. Cycle 1's assessment boundary is now
-    #     (premium #1 due immediately); the next premium is due next_assessment_at.
-    cycle = establish_bill_cycle(
-        EstablishBillCycleRequest(
+    # (a) Grant the INSURANCE coverage entitlement first: its id is the premium
+    #     lineage (DOM-OBL-001 §II.B). The grant is stamped with the purchase
+    #     instant, where the first coverage period begins.
+    entitlement_id = entitlement_service.grant_insurance_entitlement(
+        seat,
+        policy_uuid,
+        actor_seat_id=seat_id,
+        correlation_id=correlation_id,
+        granted_at=now_utc,
+    )
+    internal_ref = premium_lineage_ref(entitlement_id)
+
+    # (b) Cycle 1 through bill-cycle succession of the empty lineage. Its period
+    #     is [purchase instant, anchored boundary 1); it is not backdated.
+    cycle = schedule_next_bill_cycle(
+        ScheduleNextBillCycleRequest(
             class_id=class_id,
             internal_ref=internal_ref,
             cycle_boundary_at=now_utc,
             next_assessment_at=next_assessment_at,
+            idempotency_key=f"insurance-premium:{entitlement_id}:cycle:1",
             policy_uuid=policy_uuid,
+            reference_time_utc=now_utc,
         ),
         context=None,
     )
 
-    # (b) Assess premium #1 against cycle 1.
+    # (c) Assess premium #1 against cycle 1 (due at the purchase instant).
     assess_obligation(
         AssessmentRequest(
             seat_id=seat_id,
@@ -257,39 +282,14 @@ def execute_purchase_insurance(
         context=None,
     )
 
-    # (c) Post the premium debit through the canonical idempotent ledger path,
-    #     then record the immutable PAYMENT satisfaction linked to that ledger row.
-    authority_seat_id = resolve_teacher_seat_for_class(class_id).id
-    transaction, _created = create_pending_transaction_idempotent(
-        idempotency_key=f"insurance-premium:{idempotency_key}:cycle1",
-        seat_id=seat_id,
+    # (d) Pay it through the lawful Ledger + satisfaction path.
+    transaction = settle_insurance_premium(
         class_id=class_id,
-        target_seat_id=authority_seat_id,
-        actor_seat_id=seat_id,
-        mechanism="self",
-        user_id=seat.user_id,
-        amount=-premium,
-        account_type="checking",
-        type="insurance_premium",
-        description=f"Insurance premium (policy {policy_uuid}, cycle 1)",
-    )
-    satisfy_obligation(
-        SatisfyObligationRequest(
-            correlation_id=correlation_id,
-            class_id=class_id,
-            seat_id=seat_id,
-            method="PAYMENT",
-            ledger_transaction_id=transaction.id,
-        ),
-        context=None,
-    )
-
-    # (d) Grant the INSURANCE coverage entitlement (references policy_uuid).
-    entitlement_id = entitlement_service.grant_insurance_entitlement(
-        seat,
-        policy_uuid,
-        actor_seat_id=seat_id,
+        seat_id=seat_id,
         correlation_id=correlation_id,
+        amount=premium,
+        ledger_idempotency_key=f"insurance-premium:{idempotency_key}:cycle1",
+        description=f"Insurance premium (policy {policy_uuid}, cycle 1)",
     )
 
     return InsurancePurchaseResult(

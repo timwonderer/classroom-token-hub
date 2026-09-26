@@ -1,0 +1,7 @@
+{% if contextual_help_path %}
+<div class="text-center mt-4 small">
+    <a href="{{ docs_url_for(contextual_help_path) }}" target="_blank" rel="noopener">
+        Read the guide <span class="visually-hidden">(opens in a new tab)</span>
+    </a>
+</div>
+{% endif %}

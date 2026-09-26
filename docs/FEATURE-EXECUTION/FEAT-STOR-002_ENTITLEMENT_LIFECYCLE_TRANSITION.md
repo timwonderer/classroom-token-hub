@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-STOR-002 | 2.0 | 2026-07-27 | 1.0 | Normative |
+| FEAT-STOR-002 | 2.1 | 2026-09-24 | 2.0 | Normative |
 
 ## I. Purpose
 
@@ -132,11 +132,16 @@ Expiration SHALL NOT rewrite the grant.
 
 Insurance entitlements may be exercised multiple times during an active coverage cycle according to policy and claim rules.
 
-When the coverage boundary is reached, the insurance entitlement terminates through:
+When a lawful coverage-end boundary is reached, the insurance entitlement terminates through:
 
 - `event_type = EXPIRED`.
 
-Teacher cancellation of an insurance offering is prospective and SHALL NOT cause early expiration of existing coverage.
+The lawful coverage-end boundaries are (`DOM-STORE-001` §VIII.C, §VIII.E.1):
+
+- the end of the last covered period, when renewal has stopped;
+- the nonpayment deadline of a `CANCEL_AFTER_X_DAYS` policy, when the triggering premium is still unsatisfied. This expiry carries a nonpayment cause in its payload and coordinates termination of the premium lineage in the same transaction.
+
+Teacher cancellation of an insurance offering is prospective and SHALL NOT cause early expiration of existing coverage. Nonpayment expiry is not a revocation, is not a refund, and does not reverse or forgive any assessed premium.
 
 ## IX. Revocation
 
@@ -156,14 +161,18 @@ The original grant remains immutable history.
 
 ### B. Ordinary purchase
 
-An ordinary purchased entitlement may be revoked only through a lawful coordinated Ledger reversal/refund workflow when that entitlement type permits revocation.
+An ordinary purchased entitlement may be revoked only through a lawful
+coordinated `REVERSE` workflow when that entitlement remains unused or pending.
+An authorized `REFUND` workflow may compensate the purchase while retaining the
+entitlement. The two outcomes MUST NOT be collapsed into one generic
+"compensation" action.
 
 The FEAT SHALL require:
 
 - the entitlement remains unused;
 - the capability is refundable;
 - the capability is not insurance or otherwise explicitly non-revocable;
-- the corresponding Ledger reversal/refund is authorized;
+- the corresponding Ledger reversal is authorized;
 - entitlement revocation and monetary reversal participate in the required coordinated transaction.
 
 A route or teacher action SHALL NOT directly revoke an ordinary purchased entitlement independently of Ledger reversal authority.
@@ -174,7 +183,7 @@ A lawfully purchased insurance entitlement SHALL NOT be revoked or refunded.
 
 Teacher cancellation affects future acquisition or renewal only.
 
-Existing coverage remains valid until its configured coverage boundary and then expires normally.
+Existing coverage remains valid until its configured coverage boundary and then expires normally. Nonpayment expiry (§VIII) is an expiry at a lawful coverage-end boundary, not a revocation.
 
 ### D. Obligations-derived perks
 
@@ -208,7 +217,9 @@ Every terminal event SHALL carry a lawful `correlation_id`.
 
 For manual consumption or revocation, the correlation identifies that lifecycle.
 
-For purchase reversal, correlation SHALL preserve lineage to the coordinated Ledger reversal/refund workflow.
+For purchase reverse or refund, correlation SHALL preserve the original
+purchase's `correlation_id` across the terminal Ledger compensation and any
+resulting entitlement event.
 
 For expiration, correlation SHALL identify the lawful expiration operation or batch lifecycle without converting audit lineage into business authority.
 

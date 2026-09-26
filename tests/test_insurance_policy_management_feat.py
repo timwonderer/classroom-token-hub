@@ -48,7 +48,7 @@ def _transaction_submission(**overrides):
     s = dict(
         insurance_type="TRANSACTION",
         premium="10.00",
-        charge_frequency="WEEKLY",
+        charge_frequency="WEEKLY", bill_preview_days=3, nonpayment_mode="ACCUMULATE",
         reimbursement_percentage="80",
         payout_multiple="3",
         claims_per_week_equivalent="1",
@@ -63,7 +63,7 @@ def _productivity_submission(**overrides):
     s = dict(
         insurance_type="PRODUCTIVITY",
         premium="5.00",
-        charge_frequency="WEEKLY",
+        charge_frequency="WEEKLY", bill_preview_days=3, nonpayment_mode="ACCUMULATE",
         reimbursement_percentage="50",
         payout_multiple="2",
         claimable_dates_per_week_equivalent="2",
@@ -77,7 +77,7 @@ def _non_monetary_submission(**overrides):
     s = dict(
         insurance_type="NON_MONETARY",
         premium="0.00",
-        charge_frequency="MONTHLY",
+        charge_frequency="MONTHLY", bill_preview_days=3, nonpayment_mode="ACCUMULATE",
         claims_per_week_equivalent="1",
         waiting_period_days="3",
         title="Non-Monetary Cover",
@@ -204,6 +204,45 @@ class TestEditImmutability:
                 InsurancePolicy, second.policy_uuid
             ).premium == Decimal("15.00")
 
+    def test_edit_retires_the_superseded_definition(self, app):
+        """An edit takes the old terms off the shelf; it does not sell both."""
+        classroom = initialize("chemistry_p1", app)
+        with app.app_context():
+            first = _configure(classroom, _transaction_submission(premium="10.00"))
+            second = _configure(
+                classroom,
+                _transaction_submission(premium="15.00"),
+                supersedes_policy_uuid=first.policy_uuid,
+            )
+
+            assert first.availability_state == defs.RETIRED
+            assert first.retired_at is not None
+            assert first.premium == Decimal("10.00")  # terms still readable
+            assert second.availability_state == defs.IN_USE
+
+            selectable = defs.list_insurance_definitions(
+                class_id=classroom.class_id, availability_states=[defs.IN_USE]
+            )
+            assert [p.policy_uuid for p in selectable] == [second.policy_uuid]
+
+    def test_edit_of_unknown_policy_fails_closed(self, app):
+        """Superseding a uuid outside the class raises rather than minting a row."""
+        classroom = initialize("chemistry_p1", app)
+        with app.app_context():
+            before = InsurancePolicy.query.filter_by(
+                class_id=classroom.class_id
+            ).count()
+            with pytest.raises(defs.InsuranceDefinitionNotFound):
+                _configure(
+                    classroom,
+                    _transaction_submission(),
+                    supersedes_policy_uuid=str(uuid4()),
+                )
+            db.session.rollback()
+            assert InsurancePolicy.query.filter_by(
+                class_id=classroom.class_id
+            ).count() == before
+
 
 # ---------------------------------------------------------------------------
 # Proof point 6: recommendation-range overrides remain allowed.
@@ -230,6 +269,40 @@ class TestRecommendationOverrideAllowed:
                 class_id=classroom.class_id, insurance_type="TRANSACTION"
             )
             assert hasattr(resolution, "recommended_ranges")
+
+
+# ---------------------------------------------------------------------------
+# waiting_period_days is settable-but-not-required on TRANSACTION/PRODUCTIVITY
+# (operator decision 2026-09-21, see the CHECK-constraint migration). The
+# per-type structural loop only threaded REQUIRED fields into the persisted
+# definition, so a value a teacher actually typed for one of these two types
+# was silently dropped -- observed live: set to 14, saved, came back 0.
+# ---------------------------------------------------------------------------
+class TestOptionalWaitingPeriodPersists:
+    def test_transaction_waiting_period_is_stored_when_submitted(self, app):
+        classroom = initialize("chemistry_p1", app)
+        with app.app_context():
+            row = _configure(
+                classroom,
+                _transaction_submission(waiting_period_days="14"),
+            )
+            assert row.waiting_period_days == 14
+
+    def test_productivity_waiting_period_is_stored_when_submitted(self, app):
+        classroom = initialize("chemistry_p1", app)
+        with app.app_context():
+            row = _configure(
+                classroom,
+                _productivity_submission(waiting_period_days="5"),
+            )
+            assert row.waiting_period_days == 5
+
+    def test_transaction_waiting_period_stays_null_when_not_submitted(self, app):
+        """Optional means optional -- omitting it must not raise or default."""
+        classroom = initialize("chemistry_p1", app)
+        with app.app_context():
+            row = _configure(classroom, _transaction_submission())
+            assert row.waiting_period_days is None
 
 
 # ---------------------------------------------------------------------------
@@ -431,3 +504,55 @@ class TestAvailabilityProjection:
                 _set_availability(
                     home, row.policy_uuid, defs.RETIRED, canonical_context=ctx
                 )
+
+
+# ---------------------------------------------------------------------------
+# Recurring billing terms (DOM-POL-001A §V.E): required on every definition.
+# ---------------------------------------------------------------------------
+class TestRecurringBillingTerms:
+    """``0 < bill_preview_days < minimum_period_duration(cadence)``; a nonpayment
+    mode; ``cancel_after_days > 0`` iff ``CANCEL_AFTER_X_DAYS``. The bound comes
+    from the resolver's minimum period (7 weekly, 28 monthly), not a constant."""
+
+    UNLAWFUL = [
+        dict(bill_preview_days=None),
+        dict(bill_preview_days=0),
+        dict(bill_preview_days=-1),
+        dict(bill_preview_days=7),  # a weekly period is 7 days: preview must be < 7
+        dict(charge_frequency="MONTHLY", bill_preview_days=28),  # shortest month
+        dict(nonpayment_mode=None),
+        dict(nonpayment_mode="FORGIVE"),
+        dict(nonpayment_mode="CANCEL_AFTER_X_DAYS"),  # cancel_after_days missing
+        dict(nonpayment_mode="CANCEL_AFTER_X_DAYS", cancel_after_days=0),
+        dict(nonpayment_mode="ACCUMULATE", cancel_after_days=5),  # absent otherwise
+    ]
+
+    def test_unlawful_recurring_terms_are_rejected_before_any_write(self, app):
+        classroom = initialize("chemistry_p1", app)
+        with app.app_context():
+            before = len(defs.list_insurance_definitions(class_id=classroom.class_id))
+            for overrides in self.UNLAWFUL:
+                with pytest.raises(InsuranceContractViolation):
+                    _configure(classroom, _transaction_submission(**overrides))
+            after = len(defs.list_insurance_definitions(class_id=classroom.class_id))
+            assert after == before
+
+    def test_lawful_recurring_terms_are_stored_on_the_version(self, app):
+        classroom = initialize("chemistry_p1", app)
+        with app.app_context():
+            weekly = _configure(classroom, _transaction_submission(bill_preview_days=6))
+            monthly = _configure(
+                classroom,
+                _transaction_submission(
+                    charge_frequency="MONTHLY", bill_preview_days="27",
+                    nonpayment_mode="cancel_after_x_days", cancel_after_days="45",
+                ),
+            )
+            db.session.commit()
+            assert (weekly.bill_preview_days, weekly.nonpayment_mode, weekly.cancel_after_days) == (
+                6, "ACCUMULATE", None
+            )
+            # cancel_after_days may exceed one billing period (DOM-POL-001A §V.E).
+            assert (monthly.bill_preview_days, monthly.nonpayment_mode, monthly.cancel_after_days) == (
+                27, "CANCEL_AFTER_X_DAYS", 45
+            )

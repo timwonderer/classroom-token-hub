@@ -28,8 +28,9 @@ A policy is a contract template. Students buy from it; what they buy is frozen a
 3. Choose an **Insurance Type**. This decides which of the remaining fields you are asked for.
 4. Set the **Premium** and a **Charge Frequency** of **Weekly** or **Monthly**.
 5. Fill in the type-specific fields (see below).
-6. Optionally put the policy in a tier group.
-7. Choose **Create policy**.
+6. Set the **Recurring billing** terms (see below).
+7. Optionally put the policy in a tier group.
+8. Choose **Create policy**.
 
 ### Choosing a type
 
@@ -42,11 +43,25 @@ The type is the biggest decision on the form, because it changes both what the p
 | Claims / week-equiv. | ● | — | ● |
 | Claim Window (days) | ● | — | — |
 | Claimable dates / week-equiv. | — | ● | — |
-| Waiting Period (days) | — | — | ● |
+| Waiting Period (days) | ● | ● | ● |
 
 Fields that do not apply are hidden as you switch types, and they are not submitted at all — so switching type on an existing policy discards the terms that belonged to the old type.
 
 **Claim Window** is the deadline students face: how many days after an incident they may still file. **Claims / week-equiv.** and **Claimable dates / week-equiv.** are the usage caps.
+
+### Recurring billing
+
+Every policy bills a premium each period for as long as the student keeps it. Each student's periods start from the moment they bought: weekly is every 7 days from the purchase day, monthly is the same date each month (a date the month does not have, like the 31st, rolls forward to the 1st of the next month). Every period costs the premium the student bought at, however long the month.
+
+| Field | What it does |
+| --- | --- |
+| **Bill ahead (days)** | How many days before each new period its premium is billed and automatically paid from the student's checking. At least 1, and less than a week for weekly or 28 days for monthly. |
+| **If a premium goes unpaid** | **Keep billing; coverage pauses until every premium is paid**, or **Cancel coverage after a number of days unpaid**. |
+| **Cancel after (days unpaid)** | Only for the cancel option. The count starts when the student's coverage first pauses and does not reset if they pay some of what they owe. It may be longer than one period. |
+
+A premium the automatic payment could not cover stays owing, and the student can pay it from their policy page at any time. Until every premium that has come due is paid, their coverage is **paused**: claims are refused, and paying later restores coverage from that moment on, never for the time it was paused.
+
+Under the cancel option, coverage that stays unpaid past the limit **expires** — it is not revoked. The student still owes the premiums for periods that had already started, and paying them afterwards does not bring the coverage back.
 
 ### Tier groups
 
@@ -62,39 +77,38 @@ Pick an existing group from the dropdown or choose **＋ New group…** and name
 
 Selecting a policy from the list opens the same form, prefilled, with the button relabelled **Save as new version**. That label is literal:
 
-- A **new policy** is written, with its own identifier and your edited terms.
-- The **old policy is left exactly as it was** — including its state. It is not retired, not hidden, and not removed from the list.
+- A **new policy** is written, with its own identifier and your edited terms. It takes over the old one's place on the shelf — same state, and for a grouped policy the same rank.
+- The **old policy is retired**. It stops being purchasable, but it stays readable, because it is still the contract for everyone who bought it.
 
-For an ungrouped policy this means you end up with **two policies for sale**: the original and your revision, both purchasable, both shown to students. Hide or retire the old one yourself once the new version is saved.
+So an edit is one action, not two: the revision goes on sale and the version it replaced comes off, together. Students only ever see one version of the product for sale.
 
-For a **grouped** policy it means the edit is refused. The rank is still held by the original, so saving fails with *tier group '…' already has an active tier at level …; retire it before adding another at the same level*. See *Important notes* for the way around it.
+Grouped policies edit exactly the same way. The original vacates its rank as the revision takes it, so there is nothing to retire by hand first.
 
 ### Withdrawing a policy
 
 Each row carries **Hide** and **Retire**. Both stop new purchases and neither touches anyone's existing coverage. [Insurance Coverage and Enrollment](insurance-enrollment.md) covers what those states mean for policyholders.
 
+A hidden policy also carries **Put back on sale**. Hiding is not reversible in the literal sense — a policy row never changes back — so this writes a new policy carrying the hidden one's exact terms and retires the hidden one. The result is the product back on the shelf on the terms you hid it with. Retired policies have no such control; retiring is final.
+
 ## Important notes
 
-> [!CAUTION]
-> **Editing leaves the old version on sale.** Saving a new version does not withdraw the one you edited. Until you **Hide** or **Retire** the original, students see both and can buy either. Make withdrawing the old version the second half of every edit.
-
 > [!WARNING]
-> **A policy in a tier group cannot be edited.** The original still occupies its rank, so the new version is rejected. To change a grouped plan: **Retire** the original first, then create a fresh policy at that rank with the terms you want. Retiring is permanent, so be sure of the new terms before you start — and remember that retiring does not disturb anyone already covered.
+> **An edit retires the version you edited, and retiring is permanent.** You cannot go back to the previous terms by undoing the edit — the old policy is closed to new purchases for good. To return to them you would build them again as a new policy. Read your changes back before saving.
 
-> [!WARNING]
-> **Hidden policies cannot be un-hidden.** There is no control that puts a policy back on sale, and editing a hidden policy produces another hidden policy. If you hide something you later want back, build it again as a new policy.
-
-> [!CAUTION]
-> **Waiting Period does not delay coverage.** The field saves, and the recommended values suggest a real waiting period — Basic plans are suggested at seven days. Nothing enforces it. A student can file a claim minutes after buying. Do not sell a non-monetary policy on the promise of a waiting period.
+> [!IMPORTANT]
+> **Waiting Period delays when a policyholder can claim.** On any policy type, coverage becomes claimable at the start of the class day *N* days after purchase — a seven-day wait bought on a Monday opens the following Monday. A claim filed earlier is refused. Set it to zero if you want coverage effective immediately. Switching tiers within a group is a new purchase, so the new plan's wait starts over.
 
 > [!IMPORTANT]
 > **Terms are frozen at purchase.** A new version changes what *future* buyers get. Everyone holding the old version keeps the terms they bought until their coverage period ends. This is the lesson the feature exists to teach, and it is why there is no in-place edit.
+
+> [!IMPORTANT]
+> **Choose the unpaid-premium rule deliberately.** *Keep billing* never ends a policy, so a student who stops paying piles up premiums while uncovered. *Cancel after N days* ends it and stops the pile-up, but the student loses the coverage. Neither refunds anything.
 
 > [!NOTE]
 > **Values outside the recommended range are allowed.** The Economic Engine's suggestions are advisory. Only hard limits are enforced — premium at or above zero, reimbursement at or below 100%, no negative terms.
 
 > [!TIP]
-> Because a revision is a new product and the old one lingers, it is worth getting a policy right before you announce it. Build it, buy nothing, read it back on the list, and only then tell students it exists.
+> Because each revision closes the version before it, it is worth getting a policy right before you announce it. Build it, buy nothing, read it back on the list, and only then tell students it exists.
 
 ## Related guides
 

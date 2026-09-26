@@ -1,5 +1,7 @@
 # Security Guidelines
 
+> **Not authoritative.** This file is operational guidance for agents. Normative authority lives only under `docs/INVARIANT/`, `docs/DOMAIN/`, `docs/FEATURE-EXECUTION/`, `docs/SPEC/`, and `docs/STANDARD_OPERATING_PROCEDURES/`. Where this file conflicts with one of those, the normative document wins and this file is what gets corrected.
+
 **CRITICAL:** This application handles student PII and financial data. Security is paramount.
 
 ---
@@ -415,9 +417,6 @@ DATABASE_URL=postgresql://user:password@host:port/dbname
 TURNSTILE_SITE_KEY=<cloudflare-turnstile-site-key>
 TURNSTILE_SECRET_KEY=<cloudflare-turnstile-secret>
 
-# Optional
-MAINTENANCE_MODE=false
-MAINTENANCE_BYPASS_TOKEN=<random-string>
 ```
 
 #### Generating Secure Keys

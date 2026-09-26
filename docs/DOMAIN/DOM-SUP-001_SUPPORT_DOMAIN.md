@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-SUP-001 | 1.2 | 2026-07-10 | 1.1 | Normative |
+| DOM-SUP-001 | 1.7 | 2026-09-17 | 1.6 | Normative |
 
 ## I. Purpose
 
@@ -117,7 +117,7 @@ Key fields:
 - `id`
 - `seat_id` — FK to seats (the student seat that filed the issue)
 - `class_id` — FK to `classes`
-- `escalated_by_user_id` — nullable FK to `users`; set if issue is escalated
+- `escalated_by_public_id` — teacher seat public reference scoped to the issue class
 - `category_id` — FK to issue_categories
 - `status` — `OPEN` | `TEACHER_REVIEW` | `ESCALATED_TO_DEV` | `DEV_RESOLVED` | `TEACHER_FINAL_REVIEW` | `CLOSED`
 - `issue_type` — `transaction` | `general`
@@ -128,8 +128,8 @@ Key fields:
 - Display-safe cached identity fields (written at submission; never updated):
   - `student_first_name` — encrypted
   - `student_last_initial`
-  - `actor_public_id` — UUID-encoded `seat.public_id`, used in sysadmin views instead
-    of the raw seat FK
+  - `actor_public_id` — FK to UUID-encoded `seats.public_id` with ON DELETE CASCADE,
+    used in sysadmin views instead of a raw integer seat FK
 - Class context cache:
   - `class_label` — frozen display name at submission time
 - Related record context:
@@ -144,6 +144,7 @@ Key fields:
   - `reviewer_notes`
   - `resolution`
   - `resolved_at`
+  - `support_permissions` — per-ticket boolean grants for individual diagnostic categories (§X)
   - `share_class_name_with_sysadmin` — explicit teacher consent for escalation context
   - `eligible_for_reward`
   - `escalated_at`
@@ -198,7 +199,7 @@ Key fields:
 - `issue_id` — FK to issues (CASCADE)
 - `action_type` — `reverse_transaction` | `correct_amount` | `waive_fee` | or other enumerated types
 - `action_description`
-- `performed_by_user_id` — FK to `users`; the teacher or sysadmin who took the action
+- `performed_by_type` and `performed_by_public_id` — role plus class-scoped teacher seat public reference; external operator review has no participant identifier
 - `related_transaction_id` — nullable FK to transaction (cross-domain reference)
 - `amount_changed`
 - `before_value` / `after_value`
@@ -277,12 +278,8 @@ Rules:
 Key fields:
 
 - `id`
-- `created_by_user_id` — nullable FK to `users`; the teacher or sysadmin who authored
-  the announcement
-- `target_user_id` — nullable FK to `users`; set for announcements directed at a
-  specific teacher
-- `audience_type` — `class` | `system_wide` | `all_teachers` | `all_students` | `teacher_all_classes` | `specific_class`
-- `join_code` — nullable; present when `audience_type` is class-scoped
+- `created_by_seat_id` — teacher seat author, FK to `seats`
+- `class_id` — required class boundary, FK to `classes`
 - `title`
 - `message`
 - `is_active`
@@ -294,13 +291,13 @@ Rules:
 
 - Announcements are informational only. They do not grant permissions, alter capability
   state, change configuration, or affect any other domain's tables.
-- Class-scoped announcements (`audience_type = 'class'` or `'specific_class'`) must
-  carry a `join_code`. System-wide announcements must not carry a `join_code`.
+- These announcements are class-scoped. Authentication principal IDs are neither authors nor audiences.
 - `expires_at` is a display hint. The announcement row is not deleted when it expires;
   display logic uses `expires_at` to suppress rendering.
 - A teacher may only create announcements for classes they hold a teacher seat in
-  (`join_code` must resolve to a class where `created_by_user_id` holds a teacher seat).
-  FEAT enforces this; the domain stores the result.
+  (`created_by_seat_id` must resolve to a teacher seat in the explicit `class_id`).
+  FEAT-SUP-002 enforces this on create, and on every edit, toggle and delete, for
+  the announcement's own class; the domain stores the result.
 
 ## VII. Constraints
 
@@ -311,7 +308,7 @@ Rules:
 - Issue status transitions must atomically produce a history row.
 - The Support domain reads ledger, attendance, and identity data for context but does
   not mutate those domains directly.
-- Corrective money effects (e.g., transaction reversals) must be executed via FEAT,
+- Corrective money effects (e.g., transaction reverse or refund outcomes) must be executed via FEAT,
   which invokes Ledger. The resolution action row records the declaration; Ledger owns
   the resulting transaction row.
 - Sysadmin-accessible actor references use UUID-encoded `seats.public_id`, carried as
@@ -349,6 +346,11 @@ Constraints:
 - When a resolution action involves a transaction reversal, FEAT coordinates the
   Ledger reversal and the Support resolution action row in a single operation. Ledger
   owns the resulting transaction rows; Support owns the resolution action row.
+- For an unused or pending item, the teacher resolution MUST explicitly choose
+  `REVERSE` (revoke entitlement and compensate money) or `REFUND` (retain
+  entitlement and compensate money). Both are terminal and preserve the original
+  `correlation_id`. A used item cannot take either path; a teacher manual credit
+  is a separate new transaction.
 - `related_transaction_id` on `issue_resolution_actions` is a read-only reference to
   the Ledger domain for audit traceability. It does not transfer ledger write authority.
 - Sysadmin reward delivery for `user_reports` is initiated via FEAT; the resulting
@@ -357,7 +359,70 @@ Constraints:
   issue-submission time. After pack creation, the Support domain is self-contained;
   it does not re-query observability tables for existing packs.
 
-## X. Amendment
+## X. Teacher-authorized diagnostic disclosure
+
+The correlation pack (including route information), IP address, browser details,
+page URL, and capture timestamp remain technical support context. They are not
+removed by the optional class-data permissions.
+
+`issues.support_permissions` is a JSON object of independently selected boolean
+permissions: `balances`, `transaction` (the reported transaction),
+`recent_transactions` (up to ten frozen transactions), and `student_report`
+(the student's explanation and expected outcome). Each permission defaults to
+false, is specific to one ticket, and is set only by its class-owning teacher on
+escalation. Class-name disclosure keeps its separate existing checkbox.
+No blanket permission, inferred consent, or student-supplied grant is accepted.
+Escalation records the teacher's public actor reference and time atomically with
+the selections. Missing permissions on older tickets grant no access.
+
+The student submission snapshot remains immutable context for its teacher.
+System-support projections include only selected categories from that frozen
+snapshot. The gate is server-side and applies to every operator list/detail
+surface, including alternate report URLs. Unknown snapshot fields are withheld.
+This is disclosure of a teacher-authorized diagnostic copy, not authority to
+query or mutate live class instances. Permission in one category grants no
+permission in another, and does not authorize future data capture.
+
+### Frozen capture and deletion closure
+
+Capture snapshot values and correlation rows once at submission. Never refresh,
+recompute, or overwrite them when permissions, review status, profile names,
+balances, or other source facts change. Escalation selects from saved values only;
+operator reads do not return to teacher or student seats for context. Ticket
+workflow and disclosure-permission fields are distinct from the immutable capture.
+
+There is no account-level or unscoped ticket category. Every ticket is seat-scoped
+and therefore class-scoped; a teacher reporting a problem about themselves still
+uses their active seat and class. `issues.class_public_id` is required.
+
+Every student and teacher ticket, regardless of the problem being reported, references
+its originating seat by canonical public ID. Support holds only that public ID: there is
+no foreign key to `seats`, because INV-ARC-021 §V.7 permits cross-domain foreign keys
+only to `class_id`, `seat_id`, and `user_id`. Seat deletion resolves the seat's public ID
+and deletes its issues in the same transaction; database cascades within Support then
+remove the correlation pack, history, and resolution records. Account deletion
+removes its seats and therefore these support rows; class deletion likewise
+removes its owned seats and tickets. Immutable means unchanged while retained,
+not exempt from identity deletion. Do not preserve a detached sysadmin copy.
+
+The source `actor_request_trace` rows obey the same ownership lifetime. Each
+trace requires an existing canonical Seat public ID and class ID. Deleting that Seat
+or its User deletes its traces explicitly by public ID in the same transaction;
+deleting its class deletes them through the `class_id` foreign key. Nulling the class
+reference is not deletion. TTL/count pruning is supplemental
+retention management, never a substitute for deletion closure. A request that
+finishes after destroying its own seat or class must not recreate a trace from
+cached context. The writers of issues and traces validate the live seat/class pair under a share lock
+on the seat row, so a concurrent seat deletion waits for them or they observe that the
+seat is gone and write nothing.
+
+
+A teacher's directly submitted report is an explicit submission of that text;
+class names must not be silently embedded in metadata headers. Such a form does
+not automatically attach balances, transactions, or roster notes. No assertion
+is made about the contents of user-entered free text.
+
+## XI. Amendment
 
 Revisions require version increment, effective-date update, and continued consistency
 with higher-order invariants.

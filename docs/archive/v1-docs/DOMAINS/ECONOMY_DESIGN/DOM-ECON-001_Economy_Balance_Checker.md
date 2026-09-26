@@ -2,7 +2,9 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-ECON-001     | 1.1     | 2026-03-08     | 1.0        | Normative       |
+| DOM-ECON-001     | 1.1     | 2026-03-08     | 1.0        | Archived - non-normative       |
+
+> **Archived — history, not authority.** This document describes a superseded version of the system and is retained under `docs/archive/` as a record of what was once true. It governs nothing. Current authority lives in `docs/INVARIANT/`, `docs/DOMAIN/`, and `docs/STANDARD_OPERATING_PROCEDURES/`, in that order (`.claude/rules/documentation.md`).
 
 ## I. Purpose
 The Economy Balance Checker is a centralized system that validates all economy settings against the Classroom Wage Index (CWI) per the AGENTS financial setup specification. This document outlines its implementation, components, and integration points.

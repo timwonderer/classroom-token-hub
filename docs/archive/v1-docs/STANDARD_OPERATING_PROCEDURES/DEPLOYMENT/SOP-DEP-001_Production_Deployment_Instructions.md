@@ -2,7 +2,9 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-|SOP-DEP-001| 1.2 | 2026-03-08 | 1.1 |Normative|
+|SOP-DEP-001| 1.2 | 2026-03-08 | 1.1 |Archived - non-normative|
+
+> **Archived — history, not authority.** This document describes a superseded version of the system and is retained under `docs/archive/` as a record of what was once true. It governs nothing. Current authority lives in `docs/INVARIANT/`, `docs/DOMAIN/`, and `docs/STANDARD_OPERATING_PROCEDURES/`, in that order (`.claude/rules/documentation.md`).
 
 **Branch:** `codex/v2.0`
 **Status:** Base production deployment instructions for the current v2 line

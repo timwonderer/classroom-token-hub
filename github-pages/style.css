@@ -1,18 +1,40 @@
 /* ─── Design Tokens (inlined from tokens.css for GitHub Pages) ─── */
 :root {
-    --primary-color: #236960;
-    --primary-dark: #1a4742;
-    --secondary-color: #ac8255;
-    --accent-color: #c49564;
-    --text-dark: #2c2c2c;
-    --text-light: #6b7280;
-    --bg-light: #f1f0f0c4;
-    --bg-white: #ffffff;
-    --border-color: #e5e5e3;
+    /* Legacy aliases. SPEC-DES-001 §X: a token whose value restates another
+       token will not follow it when that token changes, so these reference the
+       canonical values below rather than repeating a literal. Their previous
+       values — #236960, #1a4742, #ac8255, #c49564 — predate the unified token
+       set and were the brand split recorded in §XIII. */
+    --primary-color: var(--primary);
+    --primary-dark: var(--primary-hover);
+    --secondary-color: var(--secondary);
+    --accent-color: var(--secondary);
+    --text-dark: var(--text-primary);
+    --text-light: var(--text-secondary);
+    --bg-light: var(--background);
+    --bg-white: var(--surface);
+    --border-color: var(--border-subtle);
     --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
     --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
 
+    /* Typeface layer. status-overrides.css composes var(--font-data) and it
+       resolved to nothing here, so the capability ids rendered in Inter. */
+    --font-family: 'Inter', sans-serif;
+    --font-display: 'Atkinson Hyperlegible Next', sans-serif;
+    --font-data: 'IBM Plex Mono', monospace;
+
+    /* Content link on a light surface. Deliberately blue rather than the gold
+       accent: on the public site a link inside running prose has no other
+       affordance, and blue is the one colour a reader already reads as one.
+       6.4:1 on --background. */
+    --link-on-light: #005ea8;
+
+    /* Muted label on the dark hero band and footer. The neutral ramp is tuned
+       for dark-on-light and inverts poorly. */
+    --text-on-dark-muted: #DEDEDE;
+
     /* Tokens from unified design system */
+    --radius-xs: 2px;
     --radius-sm: 4px;
     --radius-pill: 999px;
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
@@ -35,10 +57,38 @@
     --primary: #1a4d47;
     --primary-hover: #15403b;
     --primary-subtle: #e8f0ef;
-    --secondary: #d3af37;
-    --secondary-hover: #c49f2e;
+    /* Canonical gold (SPEC-DES-001 §VI.4). #d3af37 / #c49f2e were the v1
+       values; all three role themes have since converged on this pair. */
+    --secondary: #D4A857;
+    --secondary-hover: #c09840;
     --secondary-text: var(--neutral-900);
     --secondary-subtle: #f9f5e6;
+    /* Gold is a fill: #D4A857 is 2.12:1 on white and #c09840 is 2.69:1, so
+       neither may set text on a light surface (SPEC-DES-001 §VI.6). This pinned
+       value is 6.70:1. */
+    --accent-text-on-light: #735816;
+    /* Status quartet. Part of the foundation, not of any one surface: the
+       status service consumes this stylesheet and derives every service state
+       from these four fills rather than inventing its own. */
+    --success: #2e7d5b;
+    --success-hover: #276a4d;
+    --success-subtle: #e6f4ed;
+    --info: #35719a;
+    --info-hover: #2e6285;
+    --info-subtle: #e6f0f8;
+    --warning: #D4A857;
+    --warning-hover: #a87912;
+    --warning-subtle: #fef8e6;
+    --danger: #c0392b;
+    --danger-hover: #a83024;
+    --danger-subtle: #fce8e6;
+
+    /* Alert/notice body text, darkened past the status tokens so it clears AA
+       on the matching --*-subtle fill. A status token is a fill, never type. */
+    --alert-warning-text: #5f3d00;
+    --alert-danger-text: #8f1f1f;
+    --alert-info-text: #1f4f73;
+
     --advisor-green: #1a4d47;
     --steward-blue: #2F4F7F;
     --guardian-gray: #303030;
@@ -52,16 +102,16 @@ body {
 }
 
 .landing-content a {
-    color: #005ea8;
+    color: var(--link-on-light);
 }
 
 .landing-content .landing-signin-btn,
 .landing-content .landing-learn-more-btn {
-    color: #ffffff;
+    color: var(--text-inverse);
 }
 
 .landing-content .landing-learn-more-btn {
-    color: #171717;
+    color: var(--secondary-text);
 }
 
 /* Typography */
@@ -114,8 +164,8 @@ hr {
     bottom: 2rem;
     right: 2rem;
     z-index: 1000;
-    background-color: #735816;
-    color: white;
+    background-color: var(--accent-text-on-light);
+    color: var(--text-inverse);
     padding: 0.75rem 1.25rem;
     border-radius: 50px;
     box-shadow: var(--shadow-lg);
@@ -130,7 +180,7 @@ hr {
 .floating-back-widget:hover {
     transform: translateY(-4px);
     box-shadow: 0 15px 25px -5px rgba(0, 0, 0, 0.2);
-    color: white;
+    color: var(--text-inverse);
 }
 
 .floating-back-widget .material-symbols-outlined {
@@ -181,7 +231,7 @@ hr {
 }
 
 .toc a:hover {
-    color: var(--secondary-color);
+    color: var(--accent-text-on-light);
     text-decoration: underline;
 }
 
@@ -233,8 +283,8 @@ hr {
 .version-badge {
     display: inline-block;
     padding: 0.5rem 1rem;
-    background-color: #f9d004;
-    color: #1a1a1a;
+    background-color: var(--secondary);
+    color: var(--secondary-text);
     font-size: 0.875rem;
     font-weight: 700;
     margin-bottom: 1.5rem;
@@ -335,7 +385,7 @@ body.landing-page {
 }
 
 .landing-welcome .version {
-    color: #DEDEDE;
+    color: var(--text-on-dark-muted);
     font-size: 0.7rem;
     font-weight: 500;
     letter-spacing: 0.3em;
@@ -428,7 +478,7 @@ body.landing-page {
 }
 
 .landing-signin-note-title {
-    color: #735816;
+    color: var(--accent-text-on-light);
     font-size: 1rem;
     font-weight: 600;
     display: flex;
@@ -518,7 +568,7 @@ body.landing-page {
 }
 
 .landing-footer {
-    background-color: #2c2c2c;
+    background-color: var(--neutral-800);
 }
 
 .landing-footer-links {
@@ -757,7 +807,7 @@ body.landing-page {
     border: none;
     font-size: 1.25rem;
     font-weight: 400;
-    color: #5f5f5c;
+    color: var(--text-secondary);
     padding: 0.75rem 1.5rem;
     cursor: pointer;
     position: relative;
@@ -767,17 +817,17 @@ body.landing-page {
 
 .tab-btn#student-tab:hover {
     background-color: var(--steward-blue);
-    color: white;
+    color: var(--text-inverse);
 }
 
 .tab-btn#teacher-tab:hover {
     background-color: var(--advisor-green);
-    color: white;
+    color: var(--text-inverse);
 }
 
 .tab-btn#teacher-tab.active {
     background-color: var(--advisor-green);
-    color: white;
+    color: var(--text-inverse);
 }
 
 .tab-btn#teacher-tab.active::after {
@@ -793,7 +843,7 @@ body.landing-page {
 
 .tab-btn#student-tab.active {
     background-color: var(--steward-blue);
-    color: white;
+    color: var(--text-inverse);
 }
 
 .tab-btn#student-tab.active::after {

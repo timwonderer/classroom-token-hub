@@ -1,106 +1,65 @@
 {% extends "layout_admin.html" %}
-{% import "macros/help.html" as help %}
+{% import 'macros/cards.html' as cards %}
 {% block page_title %}Economic Engine{% endblock %}
 {% block page_icon %}display_settings{% endblock %}
 {% set current_page = "economic_engine" %}
-{% block page_header_actions %}
-  <button class="btn btn-primary d-flex align-items-center gap-2 mb-0" type="button" data-bs-toggle="offcanvas" data-bs-target="#economyHealthGuide" aria-controls="economyHealthGuide">
-    <span class="material-symbols-outlined">quick_reference_all</span> <span>Need Help?</span>
-  </button>
+{% block contextual_help_body %}
+{{ help.panel_lead("Use this dashboard to balance payroll, rent, insurance, banking, and store pricing around your CWI.") }}
+
+{% call help.topic('econ-cwi', 'monitor_heart', 'Understand Your CWI') %}
+<p><strong>What is CWI?</strong> Your Classroom Wage Index represents the average weekly income students can expect to earn.</p>
+
+<p class="mb-2"><strong>How it's calculated:</strong></p>
+<p class="mb-3"><code>CWI = Pay Rate × Expected Weekly Hours</code></p>
+
+<p class="mb-2"><strong>Example:</strong></p>
+<ul class="mb-3">
+  <li>Pay rate: $10/hour</li>
+  <li>Expected hours: 5 hours/week</li>
+  <li><strong>CWI = $50/week</strong></li>
+</ul>
+
+{% call cards.alert_card('success', 'Why CWI matters', icon='payments', body_class='mb-3') %}
+  <p class="mb-0">Use the active policy's pricing recommendations and alert thresholds to balance your economy; rent and store guidance varies by policy.</p>
+{% endcall %}
+
+{% call cards.alert_card('info', 'Set up payroll first', icon='settings', body_class='mb-0') %}
+  <p class="mb-0">If payroll is not configured yet, set it up first to unlock CWI calculations.</p>
+{% endcall %}
+{% endcall %}
+
+{% call help.topic('econ-hours', 'schedule', 'Update Expected Hours') %}
+<p class="mb-0">Adjust expected hours to match your class schedule and update per class or across all classes.</p>
+{% endcall %}
+
+{% call help.topic('econ-settings', 'tune', 'Settings Breakdown') %}
+<ul class="mb-0">
+  <li><strong>Current class:</strong> this page shows the economy settings for the class currently selected in the teacher navigation.</li>
+  <li><strong>Expected weekly hours:</strong> updates the CWI and balance calculations for the selected class.</li>
+  <li><strong>Balance snapshot:</strong> flags mismatches between CWI and costs so you can adjust settings.</li>
+</ul>
+{% call cards.alert_card('info', 'Hour changes apply immediately', icon='schedule', body_class='mt-3 mb-0') %}
+  <p class="mb-0">Adjusting hours changes CWI immediately for the selected class.</p>
+{% endcall %}
+{% endcall %}
+
+{% call help.topic('econ-balance', 'balance', 'Balance Snapshot') %}
+<p>Review the balance snapshot to see how rent, insurance, fines, and store prices compare to CWI.</p>
+{% call cards.alert_card('warning', 'Watch for balance flags', icon='flag', body_class='mb-0') %}
+  <p class="mb-0">Large gaps suggest a setting may be too high or too low.</p>
+{% endcall %}
+{% endcall %}
 {% endblock %}
+
+{% block extra_head %}
+<style>
+  .cwi-hours-panel {
+    max-width: 320px;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="offcanvas offcanvas-end" tabindex="-1" id="economyHealthGuide" aria-labelledby="economyHealthGuideLabel">
-  <div class="offcanvas-header">
-    <h5 class="offcanvas-title" id="economyHealthGuideLabel">How to: Economy Health</h5>
-    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-  </div>
-  <div class="offcanvas-body">
-    <p>Use this dashboard to balance payroll, rent, insurance, banking, and store pricing around your CWI.</p>
-    <div class="accordion mt-4 mb-4" id="economyHealthGuideAccordion">
-      <div class="accordion-item">
-        <h2 class="accordion-header" id="economyHealthGuideHeadingCwi">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#economyHealthGuideCwi" aria-expanded="false" aria-controls="economyHealthGuideCwi">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">monitor_heart</span>
-            <strong>Understand Your CWI</strong>
-          </button>
-        </h2>
-        <div id="economyHealthGuideCwi" class="accordion-collapse collapse mt-2" aria-labelledby="economyHealthGuideHeadingCwi" data-bs-parent="#economyHealthGuideAccordion">
-          <div class="accordion-body">
-            <p><strong>What is CWI?</strong> Your Classroom Wage Index represents the average weekly income students can expect to earn.</p>
-
-            <p class="mb-2"><strong>How it's calculated:</strong></p>
-            <p class="mb-3"><code>CWI = Pay Rate × Expected Weekly Hours</code></p>
-
-            <p class="mb-2"><strong>Example:</strong></p>
-            <ul class="mb-3">
-              <li>Pay rate: $10/hour</li>
-              <li>Expected hours: 5 hours/week</li>
-              <li><strong>CWI = $50/week</strong></li>
-            </ul>
-
-            <div class="alert alert-success mb-3">
-              <strong><span class="material-symbols-outlined me-1">payments</span>Why CWI Matters:</strong> Use the active policy's pricing recommendations and alert thresholds to balance your economy; rent and store guidance varies by policy.
-            </div>
-
-            <div class="alert alert-info mb-0">
-              <strong><span class="material-symbols-outlined me-1">settings</span>Setup:</strong> If payroll is not configured yet, set it up first to unlock CWI calculations.
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="accordion-item">
-        <h2 class="accordion-header" id="economyHealthGuideHeadingHours">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#economyHealthGuideHours" aria-expanded="false" aria-controls="economyHealthGuideHours">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">schedule</span>
-            <strong>Update Expected Hours</strong>
-          </button>
-        </h2>
-        <div id="economyHealthGuideHours" class="accordion-collapse collapse mt-2" aria-labelledby="economyHealthGuideHeadingHours" data-bs-parent="#economyHealthGuideAccordion">
-          <div class="accordion-body">
-            <p>Adjust expected hours to match your class schedule and update per class or across all classes.</p>
-          </div>
-        </div>
-      </div>
-      <div class="accordion-item">
-        <h2 class="accordion-header" id="economyHealthGuideHeadingSettingsBreakdown">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#economyHealthGuideSettingsBreakdown" aria-expanded="false" aria-controls="economyHealthGuideSettingsBreakdown">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">tune</span>
-            <strong>Settings Breakdown</strong>
-          </button>
-        </h2>
-        <div id="economyHealthGuideSettingsBreakdown" class="accordion-collapse collapse mt-2" aria-labelledby="economyHealthGuideHeadingSettingsBreakdown" data-bs-parent="#economyHealthGuideAccordion">
-          <div class="accordion-body">
-            <ul class="mb-0">
-          <li><strong>Current class:</strong> this page shows the economy settings for the class currently selected in the teacher navigation.</li>
-              <li><strong>Expected weekly hours:</strong> updates the CWI and balance calculations for the selected class.</li>
-              <li><strong>Balance snapshot:</strong> flags mismatches between CWI and costs so you can adjust settings.</li>
-            </ul>
-            <div class="alert alert-info mt-3 mb-0">
-              <strong>Side effects:</strong> Adjusting hours changes CWI immediately for the selected class.
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="accordion-item">
-        <h2 class="accordion-header" id="economyHealthGuideHeadingBalance">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#economyHealthGuideBalance" aria-expanded="false" aria-controls="economyHealthGuideBalance">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">balance</span>
-            <strong>Balance Snapshot</strong>
-          </button>
-        </h2>
-        <div id="economyHealthGuideBalance" class="accordion-collapse collapse mt-2" aria-labelledby="economyHealthGuideHeadingBalance" data-bs-parent="#economyHealthGuideAccordion">
-          <div class="accordion-body">
-            <p>Review the balance snapshot to see how rent, insurance, fines, and store prices compare to CWI.</p>
-            <div class="alert alert-warning mb-0">
-              <strong>Watch for flags:</strong> Large gaps suggest a setting may be too high or too low.
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
 <div class="container-fluid py-3">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 mt-0 gap-3">
     <div class="d-flex align-items-center gap-2">
@@ -111,13 +70,9 @@
   </div>
 
   {% if not payroll_settings %}
-  <div class="alert alert-warning d-flex align-items-start gap-2">
-    <span class="material-symbols-outlined">warning</span>
-    <div>
-      <strong>Set up payroll to calculate CWI.</strong>
-      <div class="small">We need a pay rate and expected hours per week to compute the Classroom Wage Index. Head to <a href="{{ payroll_link }}" class="alert-link">Payroll Management</a> to configure it.</div>
-    </div>
-  </div>
+  {% call cards.alert_card('warning', 'Set up payroll to calculate CWI', icon='warning', body_class='mb-3') %}
+    <p class="mb-0">We need a pay rate and expected hours per week to compute the Classroom Wage Index. Head to <a href="{{ payroll_link }}">Payroll Management</a> to configure it.</p>
+  {% endcall %}
   {% endif %}
 
   <div class="card shadow-sm mb-3">
@@ -125,7 +80,7 @@
       <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
         <div>
           <h5 class="mb-1 d-inline-flex align-items-center gap-2">
-            <span class="material-symbols-outlined">tune</span>
+            <span class="material-symbols-outlined" aria-hidden="true">tune</span>
             <span>Economic Policy</span>
             {% if policy_summary.overall_status == 'aligned' %}
             <span class="badge bg-success">Pricing Aligned</span>
@@ -199,49 +154,71 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
           <div>
-            <h6 class="mb-1">Rebalance Preview</h6>
-            <p class="text-muted mb-0">Choose which recommended changes to apply for the {{ policy_summary.profile.label }} policy.</p>
+            <h6 class="mb-1">Economy Pricing Rebalance Preview</h6>
+            <p class="text-muted mb-0">Review every teacher-configured price outside its canonical CWI range. Select a row, then choose the midpoint or enter a bounded custom amount. Each change is applied through its owning feature.</p>
           </div>
         </div>
         <div class="table-responsive">
           <table class="table align-middle">
-            <caption class="visually-hidden">Economic engine rebalance preview</caption>
+            <caption class="visually-hidden">Economic engine rent rebalance preview</caption>
             <thead>
               <tr>
-                <th scope="col">Apply</th>
+                <th scope="col">Select</th>
                 <th scope="col">Feature</th>
                 <th scope="col">Current</th>
-                <th scope="col">Recommended</th>
+                <th scope="col">Recommended range / action</th>
               </tr>
             </thead>
             <tbody>
               {% for item in rebalance_preview %}
               <tr>
-                <td><input id="rebalance-change-{{ loop.index }}" class="form-check-input" type="checkbox" name="selected_changes" value="{{ item.key }}" {% if item.apply_by_default %}checked{% endif %}><label class="visually-hidden" for="rebalance-change-{{ loop.index }}">Apply {{ item.label }} change</label></td>
-                <td>{{ item.label }}</td>
+                <td>{% if item.selectable is not defined or item.selectable %}<input id="rebalance-change-{{ loop.index }}" class="form-check-input" type="checkbox" name="selected_changes" value="{{ item.key }}" {% if item.apply_by_default %}checked{% endif %}><label class="visually-hidden" for="rebalance-change-{{ loop.index }}">Select {{ item.label }} change</label>{% else %}<span class="badge text-bg-secondary">Review only</span>{% endif %}</td>
+                <td>{{ item.label }}{% if item.owner_url %}<br><a href="{{ item.owner_url }}" class="small">Edit in {{ item.owner_label }}</a>{% endif %}</td>
                 <td>{{ item.current }}</td>
-                <td>{{ item.recommended }}</td>
+                <td>
+                  {{ item.recommended }}
+                  {% if item.advisory_only %}<div class="small text-muted mt-2">{{ item.message }}</div>{% else %}
+                  <fieldset class="mt-2">
+                    <legend class="small fw-bold mb-1">Choose action for {{ item.label }}</legend>
+                    <div class="form-check form-check-inline">
+                      <input class="form-check-input" type="radio" id="rebalance-mode-{{ loop.index }}-midpoint" name="rebalance_mode_{{ item.key|replace(':', '-') }}" value="midpoint" checked>
+                      <label class="form-check-label small" for="rebalance-mode-{{ loop.index }}-midpoint">Set midpoint ({{ item.recommended_value }})</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                      <input class="form-check-input" type="radio" id="rebalance-mode-{{ loop.index }}-custom" name="rebalance_mode_{{ item.key|replace(':', '-') }}" value="custom">
+                      <label class="form-check-label small" for="rebalance-mode-{{ loop.index }}-custom">Custom</label>
+                    </div>
+                  </fieldset>
+                  <label class="visually-hidden" for="rebalance-amount-{{ loop.index }}">Custom amount for {{ item.label }}</label>
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text">$</span>
+                    <input class="form-control" type="number" id="rebalance-amount-{{ loop.index }}" name="rebalance_amount_{{ item.key|replace(':', '-') }}" min="{{ item.recommended_min }}" max="{{ item.recommended_max }}" step="0.01" placeholder="Custom amount" aria-describedby="rebalance-amount-{{ loop.index }}-help">
+                  </div>
+                  <div class="form-text" id="rebalance-amount-{{ loop.index }}-help">Choose any amount within the recommended range.</div>
+                  {% endif %}
+                </td>
               </tr>
               {% endfor %}
             </tbody>
           </table>
         </div>
         <div class="row g-3 mt-1">
-          <div class="col-lg-6">
-            <label class="form-label">Effective Date</label>
+          <fieldset class="col-lg-6">
+            <legend class="form-label fs-6">Effective Date</legend>
             <div class="form-check">
-              <input class="form-check-input" type="radio" name="activation_mode" id="activationNextPayroll" value="next_payroll" checked>
-              <label class="form-check-label" for="activationNextPayroll">Next Payroll Run (Recommended)</label>
+              <input class="form-check-input" type="radio" name="activation_mode" id="activationNextCycle" value="next_renewal" checked>
+              <label class="form-check-label" for="activationNextCycle">Next Cycle (Recommended)</label>
             </div>
             <div class="form-check">
               <input class="form-check-input" type="radio" name="activation_mode" id="activationImmediate" value="immediate">
               <label class="form-check-label" for="activationImmediate">Apply Immediately</label>
             </div>
-          </div>
-          <div class="col-lg-6">
-            <div class="alert alert-warning mb-2">
-              Applying changes to cycle-based settings immediately can create inconsistencies in student payroll and bills. This means students may be charged differently on rent and insurance or receive different pay rates. 
-            </div>
+            <div class="form-text">Rent is billed per cycle, so a new amount takes effect on the cycle after the upcoming bill. Store prices and the overdraft fee have no cycle to wait for, so they can only be applied immediately.</div>
+          </fieldset>
+          <div class="col-lg-6" id="immediateChangeWarning" hidden>
+            {% call cards.alert_card('warning', 'Immediate changes re-price the current cycle', icon='warning', body_class='mb-2') %}
+              <p class="mb-0">Applying a cycle-based change immediately re-prices rent part-way through a cycle, so students can be billed a different amount than the one they were told at the start of it.</p>
+            {% endcall %}
             <div class="form-check">
               <input class="form-check-input" type="checkbox" name="confirm_immediate" id="confirmImmediate" value="yes">
               <label class="form-check-label" for="confirmImmediate">I understand the immediate-change warning.</label>
@@ -254,7 +231,9 @@
         </div>
       </form>
       {% elif show_rebalance_review and payroll_settings %}
-      <div class="alert alert-success mt-3 mb-0">Current settings already match the active policy closely enough. No rebalance changes are recommended.</div>
+      {% call cards.alert_card('success', 'No rebalance needed', icon='check_circle', body_class='mt-3 mb-0') %}
+        <p class="mb-0">Current settings already match the active policy closely enough. No rebalance changes are recommended.</p>
+      {% endcall %}
       {% endif %}
     </div>
   </div>
@@ -265,7 +244,7 @@
         <div class="card-body">
           <div class="d-flex align-items-center gap-2 mb-2">
             <h5 class="mb-0 d-inline-flex align-items-center gap-2">
-              <span class="material-symbols-outlined">trending_up</span>
+              <span class="material-symbols-outlined" aria-hidden="true">trending_up</span>
               <span>Classroom Wage Index  (CWI)</span>
             </h5>
             {% if cwi_calc %}
@@ -314,13 +293,12 @@
             </ul>
           </div>
           {% elif payroll_settings %}
-          <div class="alert alert-warning mb-3">
-            <strong>Expected weekly hours not set.</strong>
-            CWI is undefined until you set an expected weekly hours value below.
+          {% call cards.alert_card('warning', 'Expected weekly hours not set', icon='schedule', body_class='mb-3') %}
+            <p class="mb-0">CWI is undefined until you set an expected weekly hours value below.
             Pricing recommendations are disabled until CWI is configured; features
-            like rent, insurance, and store will still work.
-          </div>
-          <div class="p-3 bg-light rounded" style="max-width: 320px;">
+            like rent, insurance, and store will still work.</p>
+          {% endcall %}
+          <div class="p-3 bg-light rounded cwi-hours-panel">
             <div class="text-muted small">Expected Hours/Week</div>
             <form method="post" action="{{ url_for('admin.update_expected_weekly_hours') }}">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -342,7 +320,7 @@
         <div class="card-body">
           <div class="d-flex align-items-center gap-2 mb-2">
             <h5 class="mb-0 d-inline-flex align-items-center gap-2">
-              <span class="material-symbols-outlined">price_change</span>
+              <span class="material-symbols-outlined" aria-hidden="true">price_change</span>
               <span>Economic Balance</span>
             </h5>
             {% if analysis and actionable_warning_count == 0 and banking_summary.level == 'success' %}
@@ -411,7 +389,7 @@
     <div class="col-lg-6">
       <div class="card h-100 shadow-sm">
         <div class="card-header d-inline-flex align-items-center gap-2">
-          <h6 class="mb-0 d-inline-flex align-items-center gap-2"><span class="material-symbols-outlined">savings</span>Banking & Interest</h6>
+          <h6 class="mb-0 d-inline-flex align-items-center gap-2"><span class="material-symbols-outlined" aria-hidden="true">savings</span>Banking & Interest</h6>
           {% if banking_summary.level == 'success' %}
             <span class="badge bg-success">Balanced</span>
           {% else %}
@@ -429,16 +407,16 @@
     </div>
     <div class="col-lg-6">
       <div class="card h-100 shadow-sm">
-        <h6 class="card-header d-inline-flex align-items-center gap-2"><span class="material-symbols-outlined">lightbulb</span><span>Current Recommended Settings</span></h6>
+        <h6 class="card-header d-inline-flex align-items-center gap-2"><span class="material-symbols-outlined" aria-hidden="true">lightbulb</span><span>Current Recommended Settings</span></h6>
         <div class="card-body">
           {% if recommendations %}
           <ul class="mb-2">
-            <li>Rent: ${{ recommendations.rent_weekly.min }} - ${{ recommendations.rent_weekly.max }} per week (ideal ${{ recommendations.rent_weekly.recommended }})</li>
+            <li>Rent: ${{ recommendations.rent_weekly.min }} - ${{ recommendations.rent_weekly.max }} per week</li>
             {% if insurance_recommendation %}
-            <li>Insurance (weekly premium): ${{ insurance_recommendation.weekly_min }} - ${{ insurance_recommendation.weekly_max }}{% if insurance_recommendation.weekly_recommended is not none %} (ideal ${{ insurance_recommendation.weekly_recommended }}){% endif %}. Per-policy payout ceilings depend on product &amp; tier — set them in insurance settings.</li>
+            <li>Insurance (weekly premium): ${{ insurance_recommendation.weekly_min }} - ${{ insurance_recommendation.weekly_max }}. Per-policy payout ceilings depend on product &amp; tier — set them in insurance settings.</li>
             {% endif %}
             <li>Fines: ${{ recommendations.fine.min }} - ${{ recommendations.fine.max }} per incident</li>
-            <li>Store pricing tiers scale with CWI. Basic items between ${{ recommendations.store_tiers.basic.min }} and ${{ recommendations.store_tiers.basic.max }}.</li>
+            <li>Store reference ranges scale with CWI: Necessity ${{ recommendations.store_roles.necessity.min }} - ${{ recommendations.store_roles.necessity.max }}, Convenience ${{ recommendations.store_roles.convenience.min }} - ${{ recommendations.store_roles.convenience.max }}, Add-on ${{ recommendations.store_roles.add_on.min }} - ${{ recommendations.store_roles.add_on.max }}.</li>
             <li>Students should be able to save at least ${{ recommendations.min_weekly_savings }} weekly.</li>
           </ul>
           <div class="d-flex flex-wrap gap-2">
@@ -457,19 +435,20 @@
 
   <div class="card shadow-sm">
     <div class="card-header d-flex justify-content-between align-items-center">
-      <div class="d-inline-flex align-items-center gap-2"><span class="material-symbols-outlined">tooltip_2</span><span>Additional Information</span></div>
+      <div class="d-inline-flex align-items-center gap-2"><span class="material-symbols-outlined" aria-hidden="true">tooltip_2</span><span>Additional Information</span></div>
       <small class="text-muted">Sorted by severity</small>
     </div>
     <div class="card-body">
       {% if analysis %}
         {% if warnings_by_level['critical'] or warnings_by_level['warning'] or warnings_by_level['info'] %}
           {% set severity_map = {'critical': 'danger', 'warning': 'warning', 'info': 'info'} %}
+          {% set severity_titles = {'critical': 'Critical economy issues', 'warning': 'Economy warnings', 'info': 'Balance details'} %}
+          {% set severity_icons = {'critical': 'error', 'warning': 'warning', 'info': 'info'} %}
           {% for level in ['critical','warning','info'] %}
             {% set bucket = warnings_by_level[level] %}
             {% if bucket %}
-              <div class="alert alert-{{ severity_map[level] }}">
-                <strong class="text-capitalize">{{ level }}</strong>
-                <ul class="mb-0 mt-2">
+              {% call cards.alert_card(severity_map[level], severity_titles[level], icon=severity_icons[level], body_class='mb-3') %}
+                <ul class="mb-0">
                   {% for warning in bucket %}
                     {% set feature_lower = warning.feature.lower() %}
                     {% set link = None %}
@@ -486,7 +465,7 @@
                     </li>
                   {% endfor %}
                 </ul>
-              </div>
+              {% endcall %}
             {% endif %}
           {% endfor %}
         {% else %}
@@ -498,4 +477,25 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const panel = document.getElementById('immediateChangeWarning');
+  if (!panel) return;
+  const confirmBox = document.getElementById('confirmImmediate');
+  const modes = document.querySelectorAll('input[name="activation_mode"]');
+
+  function sync() {
+    const immediate = document.getElementById('activationImmediate');
+    const show = !!(immediate && immediate.checked);
+    panel.hidden = !show;
+    if (!show && confirmBox) confirmBox.checked = false;
+  }
+
+  modes.forEach(function (input) { input.addEventListener('change', sync); });
+  sync();
+});
+</script>
 {% endblock %}

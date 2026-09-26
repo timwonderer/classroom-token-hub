@@ -9,9 +9,7 @@ import os
 import logging
 import urllib.parse
 import uuid
-import pytz
 import sqlalchemy as sa
-from datetime import datetime, date, timezone
 from logging.handlers import RotatingFileHandler
 
 from flask import Flask, request, render_template, session, g, url_for, has_request_context
@@ -76,41 +74,6 @@ def nl2br_filter(s):
         return ''
     # Replace \n with <br> and return as safe HTML
     return Markup(str(s).replace('\n', '<br>\n'))
-
-
-def format_datetime(value, fmt='%Y-%m-%d %I:%M %p'):
-    """
-    Convert a UTC datetime to the user's timezone (from session) and format it.
-    Defaults to Pacific Time if no timezone is set in the session.
-    Handles both datetime and date objects.
-    """
-    if not value:
-        return ''
-
-    # Get user's timezone from session, default to Los Angeles
-    tz_name = session.get('timezone', 'America/Los_Angeles')
-    try:
-        target_tz = pytz.timezone(tz_name)
-    except pytz.UnknownTimeZoneError:
-        # Use current_app.logger if available, otherwise print warning
-        try:
-            from flask import current_app
-            current_app.logger.warning(f"Invalid timezone '{tz_name}' in session, defaulting to LA.")
-        except RuntimeError:
-            print(f"WARNING: Invalid timezone '{tz_name}' in session, defaulting to LA.")
-        target_tz = pytz.timezone('America/Los_Angeles')
-
-    utc = pytz.utc
-
-    # Convert date objects to datetime objects at midnight
-    if isinstance(value, date) and not isinstance(value, datetime):
-        value = datetime.combine(value, datetime.min.time())
-
-    # Localize naive datetimes as UTC before converting
-    dt = value if getattr(value, 'tzinfo', None) else utc.localize(value)
-
-    local_dt = dt.astimezone(target_tz)
-    return local_dt.strftime(fmt)
 
 
 # -------------------- APPLICATION FACTORY --------------------
@@ -494,7 +457,6 @@ def create_app():
     # -------------------- JINJA2 FILTERS AND GLOBALS --------------------
     app.jinja_env.filters['url_encode'] = url_encode_filter
     app.jinja_env.filters['urlencode'] = url_encode_filter
-    app.jinja_env.filters['format_datetime'] = format_datetime
     app.jinja_env.filters['markdown'] = render_markdown
     app.jinja_env.filters['nl2br'] = nl2br_filter
 
@@ -508,114 +470,6 @@ def create_app():
     
     from app.utils.join_code import get_display_join_code
     app.jinja_env.globals['get_display_join_code'] = get_display_join_code
-
-    def is_maintenance_mode_enabled():
-        """Return True when maintenance mode is enabled via environment variable."""
-        return os.getenv("MAINTENANCE_MODE", "").lower() in {"1", "true", "yes", "on"}
-
-    def maintenance_context():
-        """Context for the maintenance page, sourced from environment variables."""
-        badge_type = os.getenv("MAINTENANCE_BADGE_TYPE", "maintenance")
-        badge_meta = {
-            "maintenance": ("construction", "Scheduled Maintenance"),
-            "bug": ("bug_report", "Bug Fix In Progress"),
-            "security": ("shield", "Security Patch"),
-            "update": ("system_update", "System Update"),
-            "feature": ("new_releases", "New Feature Deployment"),
-            "unavailable": ("cloud_off", "Server Unavailable"),
-            "error": ("error", "Unexpected Error"),
-        }
-        badge_icon, badge_text = badge_meta.get(badge_type, badge_meta["maintenance"])
-
-        return {
-            "message": os.getenv(
-                "MAINTENANCE_MESSAGE",
-                "We're performing scheduled maintenance to keep Classroom Economy running smoothly.",
-            ),
-            "expected_back": os.getenv("MAINTENANCE_EXPECTED_END", ""),
-            "contact_email": os.getenv("MAINTENANCE_CONTACT", os.getenv("SUPPORT_EMAIL", "")),
-            "badge_type": badge_type,
-            "badge_icon": badge_icon,
-            "badge_text": badge_text,
-            "status_description": os.getenv(
-                "MAINTENANCE_STATUS_DESCRIPTION",
-                "Unavailable"
-            ),
-        }
-
-    @app.before_request
-    def show_maintenance_page():
-        """Display a friendly maintenance page when maintenance mode is on."""
-        # If maintenance is not enabled, proceed normally.
-        if not is_maintenance_mode_enabled():
-            return None
-
-        # Always allow health check and static assets.
-        if request.endpoint in {"main.health_check"}:
-            return None
-        if request.path.startswith("/static/"):
-            return None
-
-        # Allow system admin login/logout routes so admins can establish a bypass session.
-        if request.endpoint in {
-            "sysadmin.login",
-            "sysadmin.logout",
-            "sysadmin.passkey_auth_start",
-            "sysadmin.passkey_auth_finish"
-        }:
-            return None
-
-        # --- Bypass Logic --------------------------------------------------
-        # Provide controlled access for sysadmin or via a token when maintenance
-        # mode is active, so production can be validated while end users see
-        # the maintenance page.
-        #
-        # Environment variables:
-        #   MAINTENANCE_SYSADMIN_BYPASS= true|1|yes|on   (allow system admin session)
-        #   MAINTENANCE_BYPASS_TOKEN= <string>           (query param maintenance_bypass=<token>)
-        #
-        # System admin detection is resolver-backed so session flags alone are not
-        # treated as authoritative.
-        sysadmin_bypass_enabled = os.getenv("MAINTENANCE_SYSADMIN_BYPASS", "").lower() in {"1","true","yes","on"}
-        bypass_token = os.getenv("MAINTENANCE_BYPASS_TOKEN", "")
-        provided_token = request.args.get("maintenance_bypass")
-
-        # Persistent session bypass for admin-enabled testing across other roles.
-        global_bypass = session.get("maintenance_global_bypass") is True
-        try:
-            from app.auth import get_current_user
-            from app.models import UserRole
-
-            _user = get_current_user()
-            is_sysadmin = _user is not None and getattr(_user.user_role, "value", _user.user_role) == UserRole.SYSADMIN.value
-        except Exception:
-            is_sysadmin = False
-        token_valid = bool(bypass_token and provided_token and provided_token == bypass_token)
-
-        # Allow if sysadmin bypass on and user is sysadmin
-        if sysadmin_bypass_enabled and is_sysadmin:
-            app.logger.debug("Maintenance bypass granted (sysadmin).")
-            # Promote to global bypass so teacher/student logins in same session do not need query param.
-            session.setdefault("maintenance_global_bypass", True)
-            g.maintenance_bypass_active = True
-            return None
-
-        # Allow if a prior sysadmin granted global bypass (sticky across role changes)
-        if global_bypass:
-            app.logger.debug("Maintenance bypass granted (global session).")
-            g.maintenance_bypass_active = True
-            return None
-
-        # Allow if valid token provided (works for any authenticated role once past initial page)
-        if token_valid:
-            app.logger.debug("Maintenance bypass granted (token).")
-            # Persist for remainder of session
-            session.setdefault("maintenance_global_bypass", True)
-            g.maintenance_bypass_active = True
-            return None
-
-        # Otherwise show maintenance page.
-        return render_template("maintenance.html", **maintenance_context()), 503
 
     @app.before_request
     def set_rls_tenant_context():
@@ -724,20 +578,11 @@ def create_app():
     @app.context_processor
     def inject_global_settings():
         """Inject global settings into all templates."""
-        bypass_flag = getattr(g, 'maintenance_bypass_active', False)
-        if is_maintenance_mode_enabled() and not bypass_flag:
-            return {
-                'global_rent_enabled': False,
-                'turnstile_site_key': app.config.get('TURNSTILE_SITE_KEY'),
-                'maintenance_bypass_active': False,
-            }
-
         # Note: Rent settings are now per-teacher, so there's no global rent enabled flag
         # Templates should check rent settings for the specific teacher context
         return {
             'global_rent_enabled': False,  # Deprecated: rent is now per-teacher
             'turnstile_site_key': app.config.get('TURNSTILE_SITE_KEY'),
-            'maintenance_bypass_active': bypass_flag,
         }
 
     # inject_view_as_student_status — REMOVED (prohibited feature)
@@ -809,14 +654,13 @@ def create_app():
             from app.services.identity.builders import build_student_layout_context_view
             from app.utils.display_metadata import get_or_resolve_display_metadata
 
-            bypass_flag = getattr(g, 'maintenance_bypass_active', False)
 
             current_seat_ctx = get_current_seat()
             current_user = get_current_user()
             if not current_seat_ctx or not current_user:
                 return {
                     'student_layout_view': build_student_layout_context_view(
-                        None, is_maintenance_bypass_active=bypass_flag,
+                        None,
                     ),
                     'available_classes': [],
                 }
@@ -825,7 +669,7 @@ def create_app():
             if not context or not getattr(context, "class_id", None):
                 return {
                     'student_layout_view': build_student_layout_context_view(
-                        None, is_maintenance_bypass_active=bypass_flag,
+                        None,
                     ),
                     'available_classes': [],
                 }
@@ -834,14 +678,38 @@ def create_app():
             if display_metadata is None:
                 return {
                     'student_layout_view': build_student_layout_context_view(
-                        None, is_maintenance_bypass_active=bypass_flag,
+                        None,
                     ),
                     'available_classes': [],
                 }
             view = build_student_layout_context_view(
-                display_metadata, is_maintenance_bypass_active=bypass_flag,
+                display_metadata,
             )
-            available_classes = [display_metadata.to_available_class_option()]
+            # Switcher must list EVERY class the student has claimed, not just
+            # the active one. Sourcing it from the single current
+            # display_metadata made the dropdown render exactly one option
+            # (the class you're already on), so a multi-class student could
+            # never switch -- confirmed live (2026-09-23): a student who had
+            # genuinely claimed two classes saw only the current one in the
+            # "Switch Class" list, with the other missing entirely. Same
+            # defect already fixed on the teacher sidebar below; this is the
+            # student-side twin, left unfixed until now.
+            from app.routes.student import _get_identity_bound_seat_options
+            from app.services.context_resolver import CanonicalContext
+
+            available_classes = []
+            for option in _get_identity_bound_seat_options(current_user.id):
+                if option["class_id"] == context.class_id:
+                    available_classes.append(display_metadata.to_available_class_option(is_current=True))
+                    continue
+                other_metadata = get_or_resolve_display_metadata(CanonicalContext(
+                    user_id=current_user.id,
+                    class_id=option["class_id"],
+                    seat_id=option["seat_id"],
+                    actor_role="student",
+                ))
+                if other_metadata is not None:
+                    available_classes.append(other_metadata.to_available_class_option(is_current=False))
 
             return {
                 'student_layout_view': view,
@@ -875,12 +743,11 @@ def create_app():
                 }
 
             cached_name = get_admin_display_name_cache(user_id=current_user.id)
-            bypass_flag = getattr(g, 'maintenance_bypass_active', False)
 
             context = resolve_canonical_context()
             if not context or not getattr(context, "class_id", None):
                 view = build_admin_layout_context_view(
-                    cached_name, None, is_maintenance_bypass_active=bypass_flag,
+                    cached_name, None,
                 )
                 return {
                     'admin_layout_view': view,
@@ -906,7 +773,7 @@ def create_app():
             resolved_teacher_name = teacher_profile.full_name if teacher_profile else ""
 
             view = build_admin_layout_context_view(
-                resolved_teacher_name, class_context, is_maintenance_bypass_active=bypass_flag,
+                resolved_teacher_name, class_context,
             )
             # Switcher must list EVERY class the teacher owns, not just the
             # active one. Sourcing it from the single current class_context made
@@ -918,7 +785,12 @@ def create_app():
             available_classes = [
                 {
                     'class_id': class_row.class_id,
-                    'class_identifier': class_row.display_name or class_row.join_code,
+                    'class_identifier': (
+                        f"{class_row.display_name or class_row.join_code}"
+                        f" — {class_row.section.strip()}"
+                        if class_row.section and class_row.section.strip()
+                        else (class_row.display_name or class_row.join_code)
+                    ),
                     'is_current': class_row.class_id == context.class_id,
                 }
                 for class_row in get_all_classes_by_teacher(context.user_id)
@@ -982,7 +854,10 @@ def create_app():
     from app.observability import metrics_payload, record_request
 
     @app.get("/metrics")
+    @limiter.exempt
     def prometheus_metrics():
+        # Exempt from the per-client default limits: only a local scraper can
+        # reach it, and a one-minute scrape alone exceeds "500 per day".
         if request.remote_addr not in {"127.0.0.1", "::1"}:
             return "Not Found", 404
         return metrics_payload(), 200, {"Content-Type": "text/plain; version=0.0.4; charset=utf-8"}
@@ -1121,7 +996,6 @@ app = create_app()
 # Re-export commonly used objects for convenience.
 from app.extensions import db  # noqa: E402
 from app.models import AttendanceSession, Transaction  # noqa: E402
-from app.routes.student import apply_savings_interest  # noqa: E402
 
 __all__ = [
     "app",
@@ -1129,5 +1003,4 @@ __all__ = [
     "db",
     "AttendanceSession",
     "Transaction",
-    "apply_savings_interest",
 ]

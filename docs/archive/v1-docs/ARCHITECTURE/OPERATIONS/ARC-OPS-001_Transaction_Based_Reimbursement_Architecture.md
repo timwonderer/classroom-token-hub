@@ -2,7 +2,9 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| ARC-OPS-001      | 1.1     | 2026-03-08     | 1.0        | Normative       |
+| ARC-OPS-001      | 1.1     | 2026-03-08     | 1.0        | Archived - non-normative       |
+
+> **Archived — history, not authority.** This document describes a superseded version of the system and is retained under `docs/archive/` as a record of what was once true. It governs nothing. Current authority lives in `docs/INVARIANT/`, `docs/DOMAIN/`, and `docs/STANDARD_OPERATING_PROCEDURES/`, in that order (`.claude/rules/documentation.md`).
 
 ## I. Purpose
 This document defines the **architecture** for transaction-based insurance reimbursement (claim type: `transaction_monetary` or of similar type). It focuses on specification, invariants, and system boundaries so the implementation remains correct under manual review, retries, and future feature growth.

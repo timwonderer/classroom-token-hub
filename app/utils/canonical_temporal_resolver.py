@@ -8,6 +8,7 @@ their own business rules.
 
 from __future__ import annotations
 
+import calendar
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
@@ -74,6 +75,8 @@ _VALID_PRIMITIVES = frozenset({
     "evaluation_period_boundaries",
     "elapsed_duration",
     "shift_timestamp",
+    "anchored_recurrence_boundary",
+    "minimum_period_duration",
 })
 
 
@@ -149,6 +152,14 @@ class CanonicalTemporalEvaluation:
     @property
     def shifted_timestamp_utc(self) -> datetime:
         return self.result.get("shifted_timestamp_utc")
+
+    @property
+    def boundary_date(self) -> date:
+        return self.result.get("boundary_date")
+
+    @property
+    def minimum_calendar_days(self) -> int:
+        return self.result.get("minimum_calendar_days")
 
 
 # ---------------------------------------------------------------------------
@@ -373,7 +384,64 @@ def _shift_timestamp(reference_utc, tz, **kw):
     }
 
 
+_RECURRENCE_CADENCES = frozenset({"week", "month"})
+_RECURRENCE_OVERFLOWS = frozenset({"roll_forward", "clamp"})
+_MINIMUM_PERIOD_DAYS = {"week": 7, "month": 28}
+
+
+def _month_after(anchor: date, months: int) -> tuple[int, int]:
+    total = anchor.year * 12 + (anchor.month - 1) + months
+    return total // 12, total % 12 + 1
+
+
+def _anchored_recurrence_boundary(reference_utc, tz, **kw):
+    """SPEC-TIME-001 §IX.12. Every boundary is derived from the anchor, never
+    from a previous boundary, so an overflowed month cannot drift later ones."""
+    anchor = kw.get("anchor_date")
+    if not isinstance(anchor, date) or isinstance(anchor, datetime):
+        raise TemporalResolutionError("anchor_date must be a date, not datetime")
+    cadence = (kw.get("cadence") or "").strip().lower()
+    if cadence not in _RECURRENCE_CADENCES:
+        raise TemporalResolutionError("cadence must be one of: week, month")
+    index = kw.get("index")
+    if not isinstance(index, int) or isinstance(index, bool) or index < 0:
+        raise TemporalResolutionError("index must be a non-negative integer")
+
+    if cadence == "week":
+        boundary_date = anchor + timedelta(days=7 * index)
+    else:
+        overflow = (kw.get("overflow") or "").strip().lower()
+        if overflow not in _RECURRENCE_OVERFLOWS:
+            raise TemporalResolutionError("month cadence requires overflow: roll_forward or clamp")
+        year, month = _month_after(anchor, index)
+        month_days = calendar.monthrange(year, month)[1]
+        if anchor.day <= month_days:
+            boundary_date = date(year, month, anchor.day)
+        elif overflow == "clamp":
+            boundary_date = date(year, month, month_days)
+        else:
+            next_year, next_month = _month_after(date(year, month, 1), 1)
+            boundary_date = date(next_year, next_month, 1)
+
+    start_local = tz.localize(datetime.combine(boundary_date, time.min))
+    return {
+        "boundary_date": boundary_date,
+        "boundary_start": start_local,
+        "boundary_start_utc": start_local.astimezone(timezone.utc),
+    }
+
+
+def _minimum_period_duration(reference_utc, tz, **kw):
+    """SPEC-TIME-001 §IX.13: shortest possible period for a cadence."""
+    cadence = (kw.get("cadence") or "").strip().lower()
+    if cadence not in _RECURRENCE_CADENCES:
+        raise TemporalResolutionError("cadence must be one of: week, month")
+    return {"minimum_calendar_days": _MINIMUM_PERIOD_DAYS[cadence]}
+
+
 _PRIMITIVE_DISPATCH = {
+    "anchored_recurrence_boundary": _anchored_recurrence_boundary,
+    "minimum_period_duration": _minimum_period_duration,
     "current_time": _current_time,
     "earlier_than": _earlier_than,
     "later_than": _later_than,

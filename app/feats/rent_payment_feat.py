@@ -33,8 +33,10 @@ that transitions the obligation from underpaid to fully paid.
 from __future__ import annotations
 
 import hashlib
+import logging
 from dataclasses import dataclass, field
 from decimal import Decimal
+from types import SimpleNamespace
 
 from app.models import ObligationAssessment, Seat, RentSettings
 from app.services import obligations_service
@@ -42,9 +44,14 @@ from app.services.identity_service import resolve_teacher_seat_for_class
 from app.services.ledger_balance_query_service import get_available_balance
 from app.services.ledger_posting_service import create_pending_transaction_idempotent
 from app.services import entitlement_service
+from app.services import store_service
 from app.services.class_configuration_query_service import get_rent_settings
-from app.feats.base import requires_feat_context, FEATContext
+from app.feats.base import get_active_feat_name, requires_feat_context, FEATContext
 from app.feats.satisfy_obligation_feat import satisfy_obligation, SatisfyObligationRequest
+from app.utils.transaction_idempotency import get_idempotent_transaction
+from app.utils.canonical_temporal_resolver import CLASS_LEVEL_EVALUATION, canonical_temporal_resolver
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -72,23 +79,109 @@ class RentPaymentRequest:
     payment_amount: Decimal | None = None  # None → pay full remaining principal
 
 
+def perks_already_granted(class_id: str, correlation_id: str) -> bool:
+    """Whether a rent obligation's satisfaction perks were already granted."""
+    from app.models import EntitlementEvent
+
+    return (
+        EntitlementEvent.query.filter_by(
+            class_id=class_id,
+            correlation_id=correlation_id,
+            acquisition_type="PERK",
+            event_type="GRANTED",
+        ).first()
+        is not None
+    )
+
+
+def _period_has_begun(class_id: str, state) -> bool:
+    """Whether the obligation's period has begun (its due boundary has arrived)."""
+    if state.due_at is None:
+        return True
+    return not canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=SimpleNamespace(class_id=class_id),
+        primitive="later_than",
+        candidate=state.due_at,
+        reference=canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=SimpleNamespace(class_id=class_id),
+            primitive="current_time",
+        ).canonical_now_utc,
+    ).is_later
+
+
 def _award_satisfaction_perks(settings: RentSettings, seat: Seat, correlation_id: str) -> int:
-    """Grant the configured PERK hall-pass entitlements for a satisfied rent obligation."""
+    """Grant the configured PERK entitlements for a satisfied rent obligation.
+
+    The benefit list is read from ``settings`` — the *frozen* rent policy the
+    obligation was assessed under, not the class's current one. That is what
+    makes rent-linked store items apply from the next cycle only: a teacher who
+    toggles an item today edits a policy version that no open obligation
+    references.
+    """
     grants = settings.get_satisfaction_benefit_grants()
+    if not grants:
+        return 0
+
     actor_seat_id = resolve_teacher_seat_for_class(seat.class_id).id
     awarded = 0
     for grant in grants:
-        # Phase-1 closed schema guarantees entitlement_type == HALL_PASS.
-        if grant["entitlement_type"] != "HALL_PASS":
-            continue
-        entitlement_service.grant_hall_passes(
-            seat,
-            grant["quantity"],
-            actor_seat_id=actor_seat_id,
-            correlation_id=correlation_id,
-            acquisition_type="PERK",
-            trigger_id=f"rent-perk:{correlation_id}",
+        lineage = grant.get("product_lineage_uuid")
+        product = (
+            store_service.get_current_version(seat.class_id, lineage)
+            if lineage
+            else None
         )
+        if lineage and product is None:
+            # The teacher deleted the product after linking it. Skip rather than
+            # fail: rent has already been paid, and refusing the perk must not
+            # unwind a settled obligation.
+            logger.warning(
+                "Rent perk references missing store product lineage=%s class=%s",
+                lineage,
+                seat.class_id,
+            )
+            continue
+
+        try:
+            if grant["entitlement_type"] == "HALL_PASS":
+                entitlement_service.grant_hall_passes(
+                    seat,
+                    grant["quantity"],
+                    actor_seat_id=actor_seat_id,
+                    correlation_id=correlation_id,
+                    acquisition_type="PERK",
+                    trigger_id=f"rent-perk:{correlation_id}",
+                    product_lineage_uuid=lineage,
+                    policy_uuid=product.policy_uuid if product else None,
+                )
+            else:
+                entitlement_service.grant_store_entitlements(
+                    seat,
+                    grant["quantity"],
+                    entitlement_type=grant["entitlement_type"],
+                    product_lineage_uuid=lineage,
+                    policy_uuid=product.policy_uuid,
+                    actor_seat_id=actor_seat_id,
+                    correlation_id=correlation_id,
+                    acquisition_type="PERK",
+                    trigger_id=f"rent-perk:{correlation_id}",
+                )
+        except entitlement_service.HoldingLimitExceeded as exc:
+            # FEAT-OBL-003 §IV.4: the refused grant is its own outcome. Rent
+            # stays satisfied, and the perk is neither issued nor trimmed.
+            logger.warning(
+                "Rent perk refused by holding limit lineage=%s class=%s seat=%s "
+                "limit=%s on_hand=%s requested=%s",
+                lineage,
+                seat.class_id,
+                seat.id,
+                exc.holding_limit,
+                exc.on_hand,
+                exc.grant_quantity,
+            )
+            continue
         awarded += grant["quantity"]
     return awarded
 
@@ -133,18 +226,64 @@ def pay_rent(
             error_message="Assessment does not belong to this seat/class",
         )
 
+    state = obligations_service.get_obligation_state(correlation_id)
+    # A withdrawn assessment never became owed; it is not payable (DOM-OBL-001 §V.8).
+    if state.is_withdrawn:
+        return RentPaymentResult(
+            success=False, correlation_id=correlation_id,
+            error_code="WITHDRAWN",
+            error_message="This bill was withdrawn before its period began and is not owed",
+        )
     # A waiver fully closes the obligation regardless of payment.
-    if obligations_service.check_idempotency_satisfaction(correlation_id, "WAIVED"):
+    if state.is_waived:
         return RentPaymentResult(
             success=True, correlation_id=correlation_id, already_satisfied=True,
             fully_paid=True,
         )
 
-    seat = Seat.query.filter_by(id=seat_id, class_id=class_id).first()
+    # The seat row serializes this seat's money (INV-LED-015). Taking it here,
+    # before the affordability read below, holds it through the debit write, so
+    # a concurrent debit or settlement for the same seat waits for this payment
+    # instead of authorizing against the same pre-payment balance.
+    seat = (
+        Seat.query.filter_by(id=seat_id, class_id=class_id)
+        .with_for_update()
+        .first()
+    )
     if seat is None:
         return RentPaymentResult(
             success=False, correlation_id=correlation_id,
             error_code="NO_SEAT", error_message="Seat not found in class scope",
+        )
+
+    # A same-key replay resolves from this command's own ledger row, and only
+    # under the seat lock, so a retry that waited here for its predecessor sees
+    # the row that predecessor committed. Recomputing instead would count the
+    # committed debit in `paid_before`, get the same row back from the idempotent
+    # write, and report the payment a second time against a remaining balance
+    # that was never actually paid down.
+    ledger_key = f"rent-payment:{idempotency_key}:principal"
+    prior_debit = get_idempotent_transaction(
+        ledger_key, class_id=class_id, seat_id=seat_id, feat_code=get_active_feat_name(),
+    )
+    if prior_debit is not None:
+        replay_assessed = obligations_service.resolve_assessment_amount(assessment)
+        prior_payment = obligations_service.get_payment_event_by_ledger(prior_debit.id)
+        if prior_payment is None:
+            raise RuntimeError("FATAL: Rent payment debit has no PAYMENT satisfaction event")
+        replay_paid = obligations_service.get_paid_magnitude_through_event(
+            correlation_id, prior_payment
+        )
+        replay_fully_paid = replay_paid >= replay_assessed
+        return RentPaymentResult(
+            success=True,
+            correlation_id=correlation_id,
+            already_satisfied=replay_fully_paid,
+            transaction_id=prior_debit.id,
+            amount_paid=abs(Decimal(str(prior_debit.amount))),
+            remaining_after=max(Decimal("0.00"), replay_assessed - replay_paid),
+            fully_paid=replay_fully_paid,
+            passes_awarded=0,
         )
 
     # Resolve the policy THIS OBLIGATION WAS ASSESSED UNDER, not whatever is
@@ -230,13 +369,12 @@ def pay_rent(
     #     distinct command posts a distinct partial debit.
     authority_seat_id = resolve_teacher_seat_for_class(class_id).id
     transaction, _created = create_pending_transaction_idempotent(
-        idempotency_key=f"rent-payment:{idempotency_key}:principal",
+        idempotency_key=ledger_key,
         seat_id=seat_id,
         class_id=class_id,
         target_seat_id=authority_seat_id,
         actor_seat_id=seat_id,
         mechanism="self",
-        user_id=seat.user_id,
         amount=-this_payment,
         account_type="checking",
         type="rent_payment",
@@ -269,9 +407,14 @@ def pay_rent(
     fully_paid = (paid_before + this_payment) >= assessed_amount
     newly_fully_paid = fully_paid and (paid_before < assessed_amount) and _created
     # Satisfaction PERKs are a RENT benefit only; settling a LATE_FEE grants none.
+    # A period paid in advance grants nothing before it begins (DOM-OBL-001
+    # §IX.13); reconciliation grants its perks once the period is current.
     passes_awarded = (
         _award_satisfaction_perks(settings, seat, correlation_id)
-        if newly_fully_paid and assessment.obligation_type == "RENT" else 0
+        if newly_fully_paid
+        and assessment.obligation_type == "RENT"
+        and _period_has_begun(class_id, state)
+        else 0
     )
 
     remaining_after = max(Decimal("0.00"), assessed_amount - (paid_before + this_payment))
@@ -348,11 +491,7 @@ def pay_rent_bill(
     slices = []
     group_remaining = Decimal("0.00")
     for ob in obligations:
-        assessed = obligations_service.resolve_assessment_amount(ob)
-        paid = obligations_service.get_paid_magnitude(ob.correlation_id)
-        remaining = assessed - paid
-        if remaining < Decimal("0.00"):
-            remaining = Decimal("0.00")
+        remaining = obligations_service.get_obligation_state(ob.correlation_id).remaining_amount
         slices.append((ob, remaining))
         group_remaining += remaining
 

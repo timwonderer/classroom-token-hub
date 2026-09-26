@@ -9,7 +9,7 @@ from __future__ import annotations
 import secrets
 
 from app.extensions import db
-from app.models import EntitlementEvent, Seat
+from app.models import EntitlementEvent, Seat, StoreProduct
 from app.feats.base import generate_correlation_id
 from app.services.entitlement_read_service import (
     get_entitlement_balance,
@@ -41,6 +41,91 @@ def _generate_entitlement_id() -> str:
     return f"hpent_{secrets.token_urlsafe(16)}"
 
 
+class HoldingLimitExceeded(ValueError):
+    """A grant would leave the seat holding more of a product than its limit allows."""
+
+    def __init__(self, *, holding_limit: int, on_hand: int, grant_quantity: int):
+        self.holding_limit = holding_limit
+        self.on_hand = on_hand
+        self.grant_quantity = grant_quantity
+        super().__init__(
+            f"Granting {grant_quantity} would exceed the holding limit of "
+            f"{holding_limit} ({on_hand} already held)"
+        )
+
+
+def get_active_holding_quantity(*, class_id: str, seat_id: int, product_lineage_uuid: str) -> int:
+    """Count a seat's active entitlements for a product lineage, from every source.
+
+    Possession is derived from immutable events: a GRANTED lineage with no
+    CONSUMED, EXPIRED or REVOKED terminal event is still held.
+    """
+    events = EntitlementEvent.query.filter_by(
+        class_id=class_id, target_seat_id=seat_id, product_id=product_lineage_uuid
+    ).all()
+    granted = {event.entitlement_id for event in events if event.event_type == "GRANTED"}
+    terminal = {
+        event.entitlement_id for event in events
+        if event.event_type in {"CONSUMED", "EXPIRED", "REVOKED"}
+    }
+    return len(granted - terminal)
+
+
+def ensure_within_holding_limit(
+    *,
+    class_id: str,
+    seat_id: int,
+    product_lineage_uuid: str | None,
+    entitlement_type: str,
+    holding_limit: int | None,
+    grant_quantity: int,
+) -> None:
+    """Refuse a grant that would exceed the product's holding limit.
+
+    The limit is source-independent (DOM-STORE-001 §VIII.A): purchase, teacher
+    grant and rent perk all count toward it and all are bound by it. A grant
+    that would exceed it is refused whole, never trimmed to fit (SPEC-STORE-001
+    §V.A), and PRIVILEGE is hard-set to one. The caller must hold the target
+    seat's row lock so the count cannot race a concurrent grant.
+    """
+    limit = 1 if entitlement_type == "PRIVILEGE" else holding_limit
+    if limit is None or not product_lineage_uuid:
+        return
+    on_hand = get_active_holding_quantity(
+        class_id=class_id, seat_id=seat_id, product_lineage_uuid=product_lineage_uuid
+    )
+    if on_hand + grant_quantity > limit:
+        raise HoldingLimitExceeded(
+            holding_limit=limit, on_hand=on_hand, grant_quantity=grant_quantity
+        )
+
+
+def _ensure_product_holding_limit(
+    seat: Seat,
+    *,
+    entitlement_type: str,
+    product_lineage_uuid: str | None,
+    policy_uuid: str | None,
+    grant_quantity: int,
+) -> None:
+    """Apply the holding limit of the exact product version being granted."""
+    if not product_lineage_uuid or not policy_uuid:
+        return
+    holding_limit = (
+        db.session.query(StoreProduct.holding_limit)
+        .filter_by(class_id=seat.class_id, policy_uuid=policy_uuid)
+        .scalar()
+    )
+    ensure_within_holding_limit(
+        class_id=seat.class_id,
+        seat_id=seat.id,
+        product_lineage_uuid=product_lineage_uuid,
+        entitlement_type=entitlement_type,
+        holding_limit=holding_limit,
+        grant_quantity=grant_quantity,
+    )
+
+
 def grant_hall_passes(
     seat: Seat,
     quantity: int,
@@ -49,6 +134,8 @@ def grant_hall_passes(
     trigger_id: str | None = None,
     correlation_id: str | None = None,
     acquisition_type: str = "GRANT",
+    product_lineage_uuid: str | None = None,
+    policy_uuid: str | None = None,
 ) -> int:
     """Grant hall passes by appending one EntitlementEvent per pass.
 
@@ -62,6 +149,12 @@ def grant_hall_passes(
         trigger_id: Optional trigger identifier for payload lineage.
         correlation_id: Cross-domain lineage ID. Generated if not provided.
         acquisition_type: GRANT (teacher direct), PURCHASE, or PERK (rent).
+        product_lineage_uuid: Store product the passes came from, when the
+            grant originates from a catalog item. DOM-STORE-001 §VII.A wants a
+            product on every entitlement; a bare teacher-issued pass has none,
+            so this stays optional.
+        policy_uuid: The exact product version, frozen into the payload so the
+            terms can be recovered after the teacher edits the product.
     """
     _VALID_ACQUISITION_TYPES = ("GRANT", "PURCHASE", "PERK")
     if acquisition_type not in _VALID_ACQUISITION_TYPES:
@@ -70,6 +163,13 @@ def grant_hall_passes(
     grant_quantity = int(quantity)
     if grant_quantity <= 0:
         raise ValueError("Hall-pass grant quantity must be positive")
+    _ensure_product_holding_limit(
+        seat,
+        entitlement_type="HALL_PASS",
+        product_lineage_uuid=product_lineage_uuid,
+        policy_uuid=policy_uuid,
+        grant_quantity=grant_quantity,
+    )
 
     now = _current_utc()
     grant_correlation_id = correlation_id or generate_correlation_id()
@@ -81,7 +181,7 @@ def grant_hall_passes(
             target_seat_id=seat.id,
             actor_seat_id=resolved_actor,
             entitlement_id=entitlement_id,
-            product_id=None,
+            product_id=product_lineage_uuid,
             entitlement_type="HALL_PASS",
             acquisition_type=acquisition_type,
             event_type="GRANTED",
@@ -89,6 +189,7 @@ def grant_hall_passes(
             payload={
                 "source": "grant_hall_passes",
                 "trigger_id": f"{trigger_id}:{index + 1}" if trigger_id else entitlement_id,
+                **({"policy_uuid": policy_uuid} if policy_uuid else {}),
             },
             timestamp=now,
         )
@@ -97,18 +198,104 @@ def grant_hall_passes(
     return get_hall_pass_balance(seat.id, seat.class_id)
 
 
+_STORE_GRANT_ENTITLEMENT_TYPES = ("IMMEDIATE_USE", "DELAYED_USE", "PRIVILEGE")
+
+
+def grant_store_entitlements(
+    seat: Seat,
+    quantity: int,
+    *,
+    entitlement_type: str,
+    product_lineage_uuid: str,
+    policy_uuid: str,
+    actor_seat_id: int | None = None,
+    trigger_id: str | None = None,
+    correlation_id: str | None = None,
+    acquisition_type: str = "GRANT",
+) -> list[str]:
+    """Grant non-hall-pass store entitlements without a purchase.
+
+    Used when a student receives a catalog item for a reason other than buying
+    it — today, satisfying rent. Per FEAT-STOR-001 §VII.E each unit is its own
+    entitlement lifecycle, so ``quantity`` units produce ``quantity`` rows
+    sharing one ``correlation_id``; the count is then derivable and is
+    deliberately not stored (DOM-STORE-001 §VII.A).
+
+    Hall passes keep their own function because their balance is derived by a
+    dedicated reader.
+
+    Returns the entitlement ids created.
+    """
+    if entitlement_type not in _STORE_GRANT_ENTITLEMENT_TYPES:
+        raise ValueError(
+            f"entitlement_type must be one of {_STORE_GRANT_ENTITLEMENT_TYPES}"
+        )
+    if acquisition_type not in ("GRANT", "PURCHASE", "PERK"):
+        raise ValueError("acquisition_type must be one of ('GRANT', 'PURCHASE', 'PERK')")
+    if not product_lineage_uuid:
+        raise ValueError("product_lineage_uuid is required for store entitlements")
+
+    grant_quantity = int(quantity)
+    if grant_quantity <= 0:
+        raise ValueError("Entitlement grant quantity must be positive")
+    _ensure_product_holding_limit(
+        seat,
+        entitlement_type=entitlement_type,
+        product_lineage_uuid=product_lineage_uuid,
+        policy_uuid=policy_uuid,
+        grant_quantity=grant_quantity,
+    )
+
+    now = _current_utc()
+    grant_correlation_id = correlation_id or generate_correlation_id()
+    resolved_actor = actor_seat_id if actor_seat_id is not None else seat.id
+
+    entitlement_ids = []
+    for index in range(grant_quantity):
+        entitlement_id = _generate_entitlement_id()
+        entitlement_ids.append(entitlement_id)
+        db.session.add(
+            EntitlementEvent(
+                class_id=seat.class_id,
+                target_seat_id=seat.id,
+                actor_seat_id=resolved_actor,
+                entitlement_id=entitlement_id,
+                product_id=product_lineage_uuid,
+                entitlement_type=entitlement_type,
+                acquisition_type=acquisition_type,
+                event_type="GRANTED",
+                correlation_id=grant_correlation_id,
+                payload={
+                    "source": "grant_store_entitlements",
+                    "policy_uuid": policy_uuid,
+                    "trigger_id": (
+                        f"{trigger_id}:{index + 1}" if trigger_id else entitlement_id
+                    ),
+                },
+                timestamp=now,
+            )
+        )
+    db.session.flush()
+    return entitlement_ids
+
+
 def grant_insurance_entitlement(
     seat: Seat,
     policy_uuid: str,
     *,
     actor_seat_id: int | None = None,
     correlation_id: str | None = None,
+    granted_at=None,
 ) -> str:
     """Grant one INSURANCE coverage entitlement (acquisition_type=PURCHASE).
 
+    ``granted_at`` is the purchase instant the coordinating FEAT resolved
+    canonically (the start of the first coverage period, DOM-STORE-001
+    §VIII.E.1); omitted, the canonical current time.
+
     The immutable insurance definition is referenced by ``policy_uuid`` carried in
-    the event payload — ``EntitlementEvent.product_id`` is an int and is not used
-    for insurance. Policy terms are retrieved later by resolving that
+    the event payload — ``EntitlementEvent.product_id`` names a *store* product
+    lineage and is not used for insurance. Policy terms are retrieved later by resolving that
     ``policy_uuid`` (the row is immutable), never snapshotted into the payload
     (DOM-STORE-001 §VII.A forbids duplicating policy rules).
 
@@ -152,7 +339,7 @@ def grant_insurance_entitlement(
             "source": "grant_insurance_entitlement",
             "policy_uuid": policy_uuid,
         },
-        timestamp=_current_utc(),
+        timestamp=granted_at or _current_utc(),
     )
     db.session.add(event)
     db.session.flush()
@@ -261,6 +448,11 @@ def consume_hall_pass(
     return event, get_hall_pass_balance(seat_id, class_id)
 
 
+def get_available_hall_pass_grant(seat_id: int, class_id: str) -> EntitlementEvent | None:
+    """Return one available hall-pass grant without consuming it."""
+    return _available_hall_pass_grant(seat_id, class_id)
+
+
 def consume_entitlement(
     *,
     entitlement_id: str,
@@ -320,8 +512,15 @@ def expire_entitlement(
     acquisition_type: str,
     correlation_id: str,
     payload: dict | None = None,
+    effective_at=None,
 ) -> EntitlementEvent:
     """Record an EXPIRED terminal event for an entitlement (FEAT-STOR-002 §VIII/§XV).
+
+    ``effective_at`` is the lawful boundary the expiry takes effect at (an
+    insurance termination instant or nonpayment deadline, which a scheduled job
+    may reach late); the event is stamped with it so usability "at or before a
+    reference time" reads the boundary, not the moment the job ran. Omitted,
+    the canonical current time.
 
     Expiration is the lawful terminal disposition when a coverage/validity boundary
     has been reached. Proving the boundary was reached is the caller's
@@ -344,7 +543,7 @@ def expire_entitlement(
             f"{existing.event_type}"
         )
 
-    now = _current_utc()
+    now = effective_at or _current_utc()
     event = EntitlementEvent(
         class_id=class_id,
         target_seat_id=target_seat_id,
@@ -363,23 +562,24 @@ def expire_entitlement(
     return event
 
 
-def expire_rent_hall_passes(
+def expire_rent_perks(
     *,
     correlation_id: str,
     class_id: str,
     actor_seat_id: int,
 ) -> int:
-    """Expire perk-based hall passes at rent cycle boundary.
+    """Expire every perk granted for a rent obligation at its cycle boundary.
 
-    Per DOM-OBL-001 §IX.9: "At rent boundary, previously granted rent perks
-    expire regardless of same policy UUID."
-    Per DOM-STORE-001 §VIII.6: hall passes with acquisition_type=PERK get
-    EXPIRED at rent period end.
+    DOM-OBL-001 §IX.9: at a rent boundary, previously granted rent perks expire
+    regardless of whether the policy UUID stays the same. DOM-STORE-001 states
+    the same for every rent-granted entitlement, and SPEC-STORE-001 §V.A derives
+    a rent-linked entitlement's expiration from the rent cycle for every
+    rent-linkable type, not only hall passes.
 
-    Finds all active PERK hall pass grants sharing the correlation_id from
-    the rent obligation and writes EXPIRED events for each.
+    Finds all active PERK grants sharing the correlation_id from the rent
+    obligation and writes EXPIRED events for each.
 
-    Returns the count of passes expired.
+    Returns the count of entitlements expired.
     """
     # Lock grant rows to serialize concurrent expiration attempts (FOR UPDATE).
     grants = (
@@ -387,7 +587,6 @@ def expire_rent_hall_passes(
         .filter(
             EntitlementEvent.class_id == class_id,
             EntitlementEvent.correlation_id == correlation_id,
-            EntitlementEvent.entitlement_type == "HALL_PASS",
             EntitlementEvent.acquisition_type == "PERK",
             EntitlementEvent.event_type == "GRANTED",
         )
@@ -409,12 +608,12 @@ def expire_rent_hall_passes(
             actor_seat_id=actor_seat_id,
             entitlement_id=grant.entitlement_id,
             product_id=grant.product_id,
-            entitlement_type="HALL_PASS",
+            entitlement_type=grant.entitlement_type,
             acquisition_type="PERK",
             event_type="EXPIRED",
             correlation_id=correlation_id,
             payload={
-                "source": "expire_rent_hall_passes",
+                "source": "expire_rent_perks",
             },
             timestamp=now,
         )

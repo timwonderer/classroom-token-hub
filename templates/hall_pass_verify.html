@@ -1,19 +1,25 @@
 <!-- Pulsetic monitoring key (monitor: hall-pass-verification). Do not remove. -->
+{% import 'macros/cards.html' as cards %}
+{% from "macros/turnstile.html" import turnstile %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hall Pass Verification</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}">
 
     <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
     <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    <style>
+        .hall-pass-container { max-width: 520px; margin-top: var(--space-12); }
+    </style>
 </head>
 <body class="hall-pass-page">
     <main id="main-content" aria-labelledby="hall-pass-heading">
-    <div class="container" style="max-width: 520px; margin-top: 3rem;">
+    <div class="container hall-pass-container">
         <div class="text-center mb-4">
             <div class="hall-pass-subtitle text-uppercase small fw-semibold mb-1">Classroom Token Hub</div>
             <h1 id="hall-pass-heading" class="d-flex justify-content-center align-items-center gap-2 mb-1">
@@ -24,23 +30,21 @@
 
         {% if unavailable %}
         {# Generic response for invalid/expired tokens — spec §8: uniform, no timing difference #}
-        <div class="alert alert-secondary text-center" role="alert">
-            {{ message }}
-        </div>
+        {% call cards.alert_card('info', 'Verification unavailable', icon='link_off', role='alert', heading_tag='h2', body_class='mb-4') %}
+            <p class="mb-0">{{ message }}</p>
+        {% endcall %}
 
         {% elif result is not none %}
         {# ---- Result display ---- #}
         {% if result.outcome == 'no_match' %}
-        <div class="alert alert-warning text-center" role="alert">
-            <strong>No hall pass record found for today.</strong><br>
-            Please contact the teacher.
-        </div>
+        {% call cards.alert_card('warning', 'No hall pass record found for today', icon='search_off', role='alert', heading_tag='h2', body_class='mb-4') %}
+            <p class="mb-0">Please contact the teacher.</p>
+        {% endcall %}
 
         {% elif result.outcome == 'ambiguous' %}
-        <div class="alert alert-warning text-center" role="alert">
-            <strong>Unable to uniquely verify.</strong><br>
-            Please contact the teacher.
-        </div>
+        {% call cards.alert_card('warning', 'Unable to uniquely verify', icon='help', role='alert', heading_tag='h2', body_class='mb-4') %}
+            <p class="mb-0">Please contact the teacher.</p>
+        {% endcall %}
 
         {% elif result.outcome == 'match' %}
         <div class="card shadow-sm mb-4">
@@ -57,7 +61,7 @@
 
                     {% if result.time_out %}
                     <dt class="col-5 text-muted small">Time Out</dt>
-                    <dd class="col-7">{{ result.time_out }}</dd>
+                    <dd class="col-7">{{ result.time_out|fmt_timestamp }}</dd>
                     {% endif %}
 
                     <dt class="col-5 text-muted small">Status</dt>
@@ -69,7 +73,7 @@
                         </span>
                         {% elif result.status == 'returned' %}
                         <span class="badge bg-success">
-                            Returned{% if result.return_time %} at {{ result.return_time }}{% endif %}
+                            Returned{% if result.return_time %} at {{ result.return_time|fmt_timestamp }}{% endif %}
                         </span>
                         {% elif result.status == 'approved' %}
                         <span class="badge bg-info text-dark">Approved (not yet out)</span>
@@ -85,23 +89,28 @@
         {# Allow re-verification #}
         <div class="text-center">
             <a href="/verify/hallpass/{{ token }}" class="btn btn-outline-secondary btn-sm">
-                <span class="material-symbols-outlined" aria-hidden="true" style="font-size:1rem; vertical-align:middle;">restart_alt</span>
+                <span class="material-symbols-outlined icon-xs icon-middle" aria-hidden="true">restart_alt</span>
                 Verify Another
             </a>
         </div>
 
         {% else %}
         {# ---- Verification form ---- #}
+        {% if turnstile_failed %}
+        {% call cards.alert_card('warning', 'Security verification failed', icon='error', role='alert', heading_tag='h2', body_class='mb-4') %}
+            <p class="mb-0">Please complete the check below and try again.</p>
+        {% endcall %}
+        {% endif %}
         <div class="card shadow-sm">
             <div class="card-body">
                 <form method="post" action="/verify/hallpass/{{ token }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="mb-3">
-                        <label for="class_id" class="form-label fw-semibold">Class</label>
-                        <select class="form-select" id="class_id" name="class_id" required>
+                        <label for="join_code" class="form-label fw-semibold">Class</label>
+                        <select class="form-select" id="join_code" name="join_code" required>
                             <option value="" disabled selected>Select a class…</option>
                             {% for cls in classes %}
-                            <option value="{{ cls.class_id }}">{{ cls.label }}</option>
+                            <option value="{{ cls.join_code }}">{{ cls.label }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -119,6 +128,8 @@
                                autocomplete="off" autocorrect="off" spellcheck="false"
                                maxlength="100" required placeholder="Last name">
                     </div>
+
+                    {{ turnstile(turnstile_site_key, "mb-3") }}
 
                     <div class="d-grid">
                         <button type="submit" class="btn btn-primary">Verify</button>

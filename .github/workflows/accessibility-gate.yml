@@ -16,8 +16,7 @@ jobs:
   accessibility-audit:
     name: WCAG 2.1 AA Compliance Audit
     runs-on: ubuntu-latest
-    environment: testing
-    
+
     # Use a service container for the test database
     services:
       postgres:
@@ -57,9 +56,16 @@ jobs:
           FLASK_APP: app
           FLASK_ENV: testing
           DATABASE_URL: postgresql://user:password@localhost:5432/classroom_test_db
-          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
-          PEPPER_KEY: ${{ secrets.PEPPER_KEY }}
-          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          # `flask db upgrade` imports the app outside pytest, so conftest.py
+          # cannot supply these and app/__init__.py refuses to start without
+          # them. They are the same throwaway values conftest.py uses, not
+          # secrets. Do not read them from secrets: Dependabot and fork PRs
+          # receive none, and an unset secret expands to an empty string,
+          # which the startup check rejects.
+          SECRET_KEY: test-secret
+          PEPPER_KEY: test-primary-pepper
+          ENCRYPTION_KEY: jhe53bcYZI4_MZS4Kb8hu8-xnQHHvwqSX8LN4sDtzbw=
+          AUDIT_HMAC_KEY: test-audit-hmac-key-for-tests-only-not-for-production
         run: |
           flask db upgrade
 
@@ -84,10 +90,8 @@ jobs:
         env:
           FLASK_APP: app
           FLASK_ENV: testing
+          # conftest.py supplies the app keys under pytest; see Initialize Database.
           DATABASE_URL: postgresql://user:password@localhost:5432/classroom_test_db
-          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
-          PEPPER_KEY: ${{ secrets.PEPPER_KEY }}
-          SECRET_KEY: ${{ secrets.SECRET_KEY }}
           ACCESSIBILITY_TEMPLATE_PATHS: ${{ steps.changed_templates.outputs.templates }}
         run: |
           echo "♿ Running template-scoped accessibility audit..."

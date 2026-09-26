@@ -10,7 +10,7 @@
 
 ### `admin_account_delete.html`
 **Extends:** `layout_admin.html` ([LAYOUT:admin])  
-**Route(s):** `admin.account_delete` — `GET, POST /admin/account-delete` — [`app/routes/admin.py:9504-9507`](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py#L9504-L9507)
+**Route(s):** `admin.account_delete` — `GET, POST /admin/account-delete` — [`app/routes/admin.py:9504-9507`](app/routes/admin.py#L9504-L9507)
 
 **Variables from route:**
 
@@ -33,7 +33,7 @@
 
 ### `admin_analytics_dashboard.html`
 **Extends:** `layout_admin.html` ([LAYOUT:admin])  
-**Route(s):** `analytics.dashboard` — `GET /admin/analytics/` — [`app/routes/analytics.py:192-194`](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/analytics.py#L192-L194)
+**Route(s):** `analytics.dashboard` — `GET /admin/analytics/` — [`app/routes/analytics.py:192-194`](app/routes/analytics.py#L192-L194)
 
 **Variables from route:**
 
@@ -96,7 +96,7 @@
 
 ### `admin_analytics_events.html`
 **Extends:** `layout_admin.html` ([LAYOUT:admin])  
-**Route(s):** `analytics.events` — `GET /admin/analytics/events` — [`app/routes/analytics.py:377-379`](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/analytics.py#L377-L379)
+**Route(s):** `analytics.events` — `GET /admin/analytics/events` — [`app/routes/analytics.py:377-379`](app/routes/analytics.py#L377-L379)
 
 **Variables from route:**
 
@@ -128,7 +128,7 @@
 
 ### `admin_analytics_student_detail.html`
 **Extends:** `layout_admin.html` ([LAYOUT:admin])  
-**Route(s):** `analytics.student_drill_down` — `GET /admin/analytics/student/<int:student_id>` — [`app/routes/analytics.py:429-431`](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/analytics.py#L429-L431)
+**Route(s):** `analytics.student_drill_down` — `GET /admin/analytics/student/<int:student_id>` — [`app/routes/analytics.py:429-431`](app/routes/analytics.py#L429-L431)
 
 **Variables from route:**
 
@@ -168,8 +168,8 @@
 ### `admin_announcement_form.html`
 **Extends:** `layout_admin.html` ([LAYOUT:admin])  
 **Route(s):**
-- `admin.announcement_create` — `GET, POST /admin/announcements/create` — [`app/routes/admin.py:9977-9980`](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py#L9977-L9980)
-- `admin.announcement_edit` — `GET, POST /admin/announcements/edit/<int:announcement_id>` — [`app/routes/admin.py:10028-10030`](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py#L10028-L10030)
+- `admin.announcement_create` — `GET, POST /admin/announcements/create` — [`app/routes/admin.py:9977-9980`](app/routes/admin.py#L9977-L9980)
+- `admin.announcement_edit` — `GET, POST /admin/announcements/edit/<int:announcement_id>` — [`app/routes/admin.py:10028-10030`](app/routes/admin.py#L10028-L10030)
 
 **Variables from route:**
 
@@ -214,7 +214,7 @@
 
 ### `admin_announcements.html`
 **Extends:** `layout_admin.html` ([LAYOUT:admin])  
-**Route(s):** `admin.announcements` — `GET /admin/announcements` — [`app/routes/admin.py:9944-9946`](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py#L9944-L9946)
+**Route(s):** `admin.announcements` — `GET /admin/announcements` — [`app/routes/admin.py:9944-9946`](app/routes/admin.py#L9944-L9946)
 
 **Variables from route:**
 
@@ -249,7 +249,7 @@
 
 ### `admin_attendance_log.html`
 **Extends:** `layout_admin.html` ([LAYOUT:admin])  
-**Route(s):** `admin.attendance_log` — `GET /admin/attendance-log` — [`app/routes/admin.py:8236-8238`](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py#L8236-L8238)
+**Route(s):** `admin.attendance_log` — `GET /admin/attendance-log` — [`app/routes/admin.py:8236-8238`](app/routes/admin.py#L8236-L8238)
 **PROD status:** REWIRED_READ — Resolved 2026-07-21. The page no longer calls legacy block tap-setting endpoints. `/api/attendance/history` reads canonical append-only `AttendanceSession` fields (`target_seat_id`, `timestamp`, `status`, `reason_code`) and uses `canonical_temporal_resolver` for class-local date filters.
 
 **Variables from route:**
@@ -299,7 +299,7 @@
 
 ### `admin_banking.html`
 **Extends:** `layout_admin.html` ([LAYOUT:admin])  
-**Route(s):** `admin.banking` — `GET /admin/banking` — [`app/routes/admin.py:9200-9202`](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py#L9200-L9202)
+**Route(s):** `admin.banking` — `GET /admin/banking` — [`app/routes/admin.py:9200-9202`](app/routes/admin.py#L9200-L9202)
 
 **Variables from route:**
 
@@ -412,7 +412,7 @@
 
 ### `admin_create_class.html`
 **Extends:** none, standalone HTML document  
-**Route(s):** `admin.onboarding` — `GET /admin/onboarding` — [`app/routes/admin.py:10302-10306`](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py#L10302-L10306)
+**Route(s):** `admin.onboarding` — `GET /admin/onboarding` — [`app/routes/admin.py:10302-10306`](app/routes/admin.py#L10302-L10306)
 
 **Variables from route:**
 
@@ -438,7 +438,7 @@
 
 ### `admin_dashboard.html`
 **Extends:** `layout_admin.html` ([LAYOUT:admin])  
-**Route(s):** `admin.dashboard` — `GET /admin/` — [`app/routes/admin.py:2573-2575`](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py#L2573-L2575)
+**Route(s):** `admin.dashboard` — `GET /admin/` — [`app/routes/admin.py:2573-2575`](app/routes/admin.py#L2573-L2575)
 
 **PROD status:** REWIRED_READ
 

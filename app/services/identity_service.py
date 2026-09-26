@@ -77,3 +77,36 @@ def get_enrolled_student_seat_ids(class_id: str) -> list[int]:
         .all()
     )
     return [row.id for row in rows]
+
+
+def match_hall_pass_profiles(*, class_id: str, first_name: str, last_name: str):
+    """Read-only name matching after the caller establishes class/capability scope."""
+    from app.hash_utils import normalize_lookup_text
+    from app.models import IdentityProfile
+
+    if not class_id:
+        raise ValueError("class_id is required for hall-pass verification")
+
+    def normalize(value):
+        return normalize_lookup_text(value or "", kind="name")
+
+    first, last = normalize(first_name), normalize(last_name)
+    if not first or not last:
+        return []
+    profiles = (
+        IdentityProfile.query.join(Seat, Seat.id == IdentityProfile.seat_id)
+        .filter(
+            IdentityProfile.class_id == class_id,
+            Seat.class_id == class_id,
+            Seat.role == "student",
+            Seat.user_id.isnot(None),
+            Seat.claimed_at.isnot(None),
+        )
+    )
+    matches = []
+    for profile in profiles.yield_per(100):
+        if normalize(profile.first_name) == first and normalize(profile.last_name) == last:
+            matches.append({"seat_id": profile.seat_id, "display_name": profile.full_name})
+            if len(matches) == 2:
+                break
+    return matches

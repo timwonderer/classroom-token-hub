@@ -21,7 +21,6 @@ from sqlalchemy.orm import Session, validates, synonym
 from sqlalchemy import event
 from sqlalchemy.dialects.postgresql import JSONB
 from app.extensions import db
-from app.hash_utils import get_random_salt, hash_hmac, hash_username, hash_username_lookup
 from app.utils.encryption import PIIEncryptedType, normalize_totp_for_storage
 from app.utils.canonical_temporal_resolver import utc_now, ensure_utc
 
@@ -121,6 +120,7 @@ class User(db.Model):
     totp_secret_encrypted = db.Column(db.String(200), nullable=True)
     pin_hash = db.Column(db.Text, nullable=True)
     passphrase_hash = db.Column(db.Text, nullable=True)
+    last_signed_in_at = db.Column(db.DateTime(timezone=True), nullable=True, index=True)
     current_session_started_at = db.Column(db.DateTime(timezone=True), nullable=True)
     current_session_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
     current_session_nonce = db.Column(db.String(128), nullable=True, index=True)
@@ -128,6 +128,8 @@ class User(db.Model):
     reset_code = db.Column(db.String(8), nullable=True)
     reset_code_generated_at = db.Column(db.DateTime(timezone=True), nullable=True)
     reset_code_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    recovery_setup_nonce_hash = db.Column(db.String(64), nullable=True)
+    recovery_setup_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
     last_active_seat_id = db.Column(
         db.Integer,
         db.ForeignKey('seats.id', ondelete='SET NULL', use_alter=True, name='fk_users_last_active_seat_id_seats'),
@@ -161,8 +163,8 @@ class User(db.Model):
         'Seat',
         backref='user',
         lazy='dynamic',
-        cascade='all, delete-orphan',
-        passive_deletes=True,
+        cascade='save-update, merge',
+        passive_deletes='all',
         foreign_keys='Seat.user_id',
     )
     last_active_seat = db.relationship('Seat', foreign_keys=[last_active_seat_id], post_update=True)
@@ -230,9 +232,11 @@ class Seat(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     public_id = db.Column(db.String(36), unique=True, nullable=False, index=True, default=lambda: str(uuid.uuid4()))
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=True, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='RESTRICT'), nullable=True, index=True)
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
     role = db.Column(db.String(20), nullable=False, default='student')
+
+    claim_generation = db.Column(db.Integer, nullable=False, default=0, server_default="0")
 
     # Canonical seat-local metadata for the identity overhaul target.
     roster_fingerprint = db.Column(db.String(128), nullable=True, index=True)
@@ -272,10 +276,6 @@ class Seat(db.Model):
             .order_by(Transaction.timestamp.desc())
             .all()
         )
-
-    @property
-    def is_rent_enabled(self):
-        return not self.has_received_rent_exemption
 
     @property
     def block(self):
@@ -457,7 +457,6 @@ class Transaction(db.Model):
     seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
     target_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
     actor_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
 
     # CRITICAL: class_id is the canonical anchor for class isolation.
     # join_code is ingress/display metadata only and may resolve to class_id
@@ -488,20 +487,23 @@ class Transaction(db.Model):
     )
     amount_cents = db.Column(db.Integer, nullable=False)  # Signed integer (e.g. 100 = $1.00)
     posted_at = db.Column(db.DateTime(timezone=True), nullable=True)
-    voided_at = db.Column(db.DateTime(timezone=True), nullable=True)
     effective_at = db.Column(db.DateTime(timezone=True), default=utc_now)
 
     description = db.Column(db.String(255))
     correlation_id = db.Column(db.String(100), nullable=False, index=True)
     feat_code = db.Column(db.String(100), nullable=True, index=True)
     idempotency_key = db.Column(db.String(128), nullable=True, index=True)
-    is_void = db.Column(db.Boolean, default=False)
     # References for compensating/reversal ledger entries.
     # Stored as IDs for backend portability.
     original_transaction_id = db.Column(db.Integer, nullable=True, index=True)
     reversal_transaction_id = db.Column(db.Integer, nullable=True, index=True)
     policy_id = db.Column(db.Integer, nullable=True, index=True)
     type = db.Column(db.String(50))  # optional field to describe the transaction type
+    # A compensating transaction persists 'REVERSAL' in `type`, never the reason
+    # it was raised for (FEAT-LED-002 §III.2.1). The reason still matters to
+    # Operations — an issue reversal and an issue compensating entry are answered
+    # differently — so it lives here rather than displacing the ledger vocabulary.
+    compensation_subtype = db.Column(db.String(50), nullable=True, index=True)
     # All times stored as UTC
     date_funds_available = db.Column(db.DateTime(timezone=True), default=utc_now)
 
@@ -522,7 +524,6 @@ class Transaction(db.Model):
     )
 
     # Relationship to track which actor and target seat the transaction binds to
-    teacher = db.relationship('User', backref=db.backref('transactions', lazy='dynamic'))
     seat = db.relationship('Seat', backref=db.backref('transactions', lazy='dynamic'), foreign_keys=[seat_id])
     target_seat = db.relationship('Seat', foreign_keys=[target_seat_id], post_update=True)
     actor_seat = db.relationship('Seat', foreign_keys=[actor_seat_id], post_update=True)
@@ -555,6 +556,12 @@ def _enforce_transaction_integrity(_mapper, _connection, target):
     if target.amount is not None:
         target.amount_cents = int(_quantize_currency(target.amount) * 100)
 
+    # A compensating Ledger effect carries the correlation of the transaction it
+    # corrects (FEAT-LED-002 §II.2, SPEC-OPS-001 §3.1A): a new row in the current
+    # FEAT whose provenance stays linked to the original. Decided once and applied
+    # to both correlation checks below, which previously disagreed about it.
+    is_compensating_effect = False
+
     # 2. FEAT Context Enforcement
     if is_feat_active():
         feat_name = get_active_feat_name()
@@ -577,11 +584,21 @@ def _enforce_transaction_integrity(_mapper, _connection, target):
         _target_state = sa.inspect(target)
         _is_new_insert = _target_state.transient or _target_state.pending
         session = db.session.object_session(target)
+        if _is_new_insert and target.original_transaction_id and target.correlation_id:
+            linked_corr = _connection.execute(
+                sa.text("SELECT correlation_id FROM ledger_transaction WHERE id = :id"),
+                {"id": target.original_transaction_id},
+            ).scalar()
+            is_compensating_effect = linked_corr == target.correlation_id
         if session and _is_new_insert:
             active_corr = session.info.get("active_correlation_id")
-            if active_corr and target.correlation_id != active_corr:
-                 raise ValueError(f"FATAL: Mixed correlation in flush. Context={active_corr}, Object={target.correlation_id}")
-            session.info["active_correlation_id"] = target.correlation_id
+            if active_corr and target.correlation_id != active_corr and not is_compensating_effect:
+                raise ValueError(f"FATAL: Mixed correlation in flush. Context={active_corr}, Object={target.correlation_id}")
+            # The session tracks the active operation's correlation. A
+            # compensating row carries historical provenance, so it must not
+            # become the yardstick for the rows that follow it in this flush.
+            if not is_compensating_effect:
+                session.info["active_correlation_id"] = target.correlation_id
     else:
         from app.feats.base import FEATContextError
         raise FEATContextError("MANDATORY FEAT CONSTITUTIONAL VIOLATION: Ledger mutation outside of FEAT context.")
@@ -649,7 +666,7 @@ def _enforce_transaction_integrity(_mapper, _connection, target):
          # Firing this on UPDATE made every cross-FEAT ledger mutation (settlement
          # under FEAT-LED-003, void under FEAT-LED-002, reversal linkage)
          # impossible; that contradiction was previously masked by FEATBypass.
-         if is_new and target.correlation_id != get_correlation_id():
+         if is_new and not is_compensating_effect and target.correlation_id != get_correlation_id():
               raise ValueError(f"FATAL: Correlation mismatch in {feat_name}. Record={target.correlation_id}, Context={get_correlation_id()}")
 
          # 2. Assert Identity Anchors (seat_id + class_id are the clean-break authority)
@@ -662,16 +679,125 @@ def _enforce_transaction_integrity(_mapper, _connection, target):
     # 4. Identity synchronization (pure assignment only)
     # seat_id is the runtime anchor; student_id is only used for seat lookup.
 
-def _resolve_seat_id(connection, student_id, *, class_id=None):
-    """Lookup seat ID for a student in a class universe."""
-    if not student_id or not class_id:
-        return None
 
-    seat_id = connection.execute(
-        sa.text("SELECT id FROM seats WHERE user_id = :student_id AND class_id = :class_id LIMIT 1"),
-        {"student_id": student_id, "class_id": class_id},
-    ).scalar()
-    return int(seat_id) if seat_id else None
+# The monetary and identity facts a posted row asserts. INV-LED-002 forbids
+# later lifecycle patching of these, and INV-LED-003 requires corrections to
+# arrive as new linked rows rather than edits — so a reversal that rewrote
+# `amount` in place would erase the very history the ledger exists to keep.
+_LEDGER_IMMUTABLE_FIELDS = frozenset({
+    'seat_id', 'target_seat_id', 'actor_seat_id', 'class_id',
+    'join_code', 'mechanism', 'amount', 'amount_cents', 'timestamp',
+    'account_type', 'effective_at', 'date_funds_available', 'description',
+    'correlation_id', 'original_transaction_id',
+    'policy_id', 'type', 'compensation_subtype', 'command_reservation_id',
+})
+
+# Fields the lawful post-insert paths populate exactly once: settlement assigns
+# `posting_sequence`/`posted_at` (INV-LED-007), correction links
+# `reversal_transaction_id` (INV-LED-013), `create_reserved_effects` stamps
+# `idempotency_key` on its effects once the reservation is held, and the audit
+# emitter stamps lineage after the row has an id. NULL -> value is the
+# assignment; value -> value' is a rewrite of a settled fact and is rejected on
+# the same grounds as the set above.
+_LEDGER_WRITE_ONCE_FIELDS = frozenset({
+    'posting_sequence', 'posted_at', 'reversal_transaction_id',
+    'idempotency_key', 'lineage_event_id', 'lineage_token', 'lineage_version',
+})
+
+
+_LEDGER_GUARDED_FIELDS = tuple(sorted(_LEDGER_IMMUTABLE_FIELDS | _LEDGER_WRITE_ONCE_FIELDS))
+
+# `status` cannot sit in either set above: settlement genuinely does rewrite it.
+# But it is a one-way street, not a free column. `ledger_settlement_service` is
+# the only post-insert writer and it only ever moves PENDING to POSTED, and
+# INV-LED-003 requires a void to arrive as a new linked row rather than as an
+# edit to the original — so POSTED -> PENDING, anything -> VOID, and a revived
+# VOID are all rewrites of a settled fact wearing a lifecycle costume.
+_LEDGER_LAWFUL_STATUS_TRANSITIONS = frozenset({
+    (TransactionStatus.PENDING.name, TransactionStatus.POSTED.name),
+})
+
+
+def _ledger_comparable(value):
+    """Flatten a value to something comparable across ORM and driver types."""
+    if isinstance(value, enum.Enum):
+        return value.value
+    return value
+
+
+def _ledger_status_name(value):
+    """Normalize a status to the label PostgreSQL actually stores.
+
+    `status` is a native enum declared as `db.Enum(TransactionStatus)` with no
+    `values_callable`, so SQLAlchemy persists the member **name** — the labels in
+    `transactionstatus` are `PENDING` / `POSTED` / `VOID`, not the lowercase
+    `.value` strings. `_ledger_comparable` returns `.value`, which is right for
+    `mechanism` (whose labels *are* its values) and wrong here: comparing
+    `'posted'` to a stored `'POSTED'` would make every update look like a status
+    change and reject the settlement path outright.
+    """
+    if isinstance(value, TransactionStatus):
+        return value.name
+    if value is None:
+        return None
+    return str(value).upper()
+
+
+@sa.event.listens_for(Transaction, "before_update")
+def _guard_ledger_immutability(_mapper, connection, target):
+    """Reject in-place edits to settled ledger facts (INV-LED-002).
+
+    The comparison is against the stored row rather than SQLAlchemy attribute
+    history, because history cannot distinguish the two UPDATEs that matter here.
+    `Transaction.target_seat` and `actor_seat` are ``post_update`` relationships,
+    so every INSERT is immediately followed by an UPDATE whose history still
+    presents the freshly-set columns as changes — and after a commit the instance
+    is expired, so a genuine rewrite presents no prior value at all. The row
+    itself is unambiguous in both cases.
+
+    `status` is guarded by transition rather than by equality — settlement moves
+    PENDING to POSTED and nothing else may move it at all. `feat_code` is the one
+    genuinely unguarded column: `_enforce_transaction_integrity` restamps it with
+    the FEAT performing the lawful update. Everything else on a persisted row is
+    history.
+    """
+    if target.id is None:
+        return
+
+    stored = connection.execute(
+        sa.text(
+            f"SELECT status, {', '.join(_LEDGER_GUARDED_FIELDS)} "
+            "FROM ledger_transaction WHERE id = :id"
+        ),
+        {"id": target.id},
+    ).mappings().first()
+    if stored is None:
+        return
+
+    previous_status = _ledger_status_name(stored['status'])
+    next_status = _ledger_status_name(getattr(target, 'status', None))
+    if next_status != previous_status and (
+        (previous_status, next_status) not in _LEDGER_LAWFUL_STATUS_TRANSITIONS
+    ):
+        raise ValueError(
+            f"ledger_transaction status may not move {previous_status} -> {next_status}. "
+            "Settlement advances PENDING to POSTED; every other change of standing "
+            "is recorded as a new linked transaction."
+        )
+
+    violations = []
+    for field in _LEDGER_GUARDED_FIELDS:
+        previous = stored[field]
+        if field in _LEDGER_WRITE_ONCE_FIELDS and previous is None:
+            continue
+        if _ledger_comparable(getattr(target, field, None)) != _ledger_comparable(previous):
+            violations.append(field)
+
+    if violations:
+        raise ValueError(
+            f"ledger_transaction fields are immutable: {sorted(violations)}. "
+            "Record a linked correcting transaction instead of editing this row."
+        )
 
 
 class LedgerBalanceSnapshot(db.Model):
@@ -744,7 +870,6 @@ class AttendanceSession(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     target_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
-    target_user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=False, index=True)
     actor_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=False, index=True)
     mechanism = db.Column(db.String(20), nullable=False, default="self")
     status = db.Column(db.String(20), nullable=False, default="active")
@@ -754,7 +879,6 @@ class AttendanceSession(db.Model):
     timestamp = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False, index=True)
 
     target_seat = db.relationship("Seat", foreign_keys=[target_seat_id], backref=db.backref("attendance_sessions", passive_deletes=True))
-    target_user = db.relationship("User", foreign_keys=[target_user_id], post_update=True)
     actor_seat = db.relationship("Seat", foreign_keys=[actor_seat_id], post_update=True)
 
 
@@ -771,7 +895,9 @@ class HallPassLog(db.Model):
     correlation_id = db.Column(db.String(100), nullable=False, index=True)
     policy_uuid = db.Column(db.String(36), nullable=False, index=True)
     # FK-style reference to EntitlementEvent.entitlement_id for the consumed pass.
-    hall_pass_id = db.Column(db.String(100), nullable=False, unique=False, index=True)
+    # Non-consuming destinations have no entitlement lifecycle to reference;
+    # the correlation_id remains the audit identity for those logs.
+    hall_pass_id = db.Column(db.String(100), nullable=True, unique=False, index=True)
     destination = db.Column(db.String(255), nullable=True)
 
     # CRITICAL: class_id is the source of truth for class isolation
@@ -788,12 +914,13 @@ class PayrollEvent(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
     target_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
-    target_user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
     actor_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=False, index=True)
     correlation_id = db.Column(db.String(100), nullable=False, index=True)
     idempotency_key = db.Column(db.String(255), nullable=False, index=True)
-    policy_version_id = db.Column(db.Integer, db.ForeignKey('policy_versions.id', ondelete='RESTRICT'), nullable=False, index=True)
-    policy_uuid = db.Column(db.String(36), nullable=False, index=True)
+    # Required for attendance-derived payroll; a manual credit needs no payroll
+    # policy (DOM-PROD-001 §VIII). Enforced by ck_payroll_event_payroll_policy.
+    policy_version_id = db.Column(db.Integer, db.ForeignKey('policy_versions.id', ondelete='RESTRICT'), nullable=True, index=True)
+    policy_uuid = db.Column(db.String(36), nullable=True, index=True)
     mechanism = db.Column(db.String(20), nullable=False, default="TEACHER")
     payroll_event_type = db.Column(db.String(20), nullable=False)
     recorded_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False, index=True)
@@ -807,6 +934,10 @@ class PayrollEvent(db.Model):
 
     __table_args__ = (
         db.UniqueConstraint('class_id', 'target_seat_id', 'correlation_id', 'idempotency_key', 'payroll_event_type', name='uq_payroll_event_replay_guard'),
+        db.CheckConstraint(
+            "payroll_event_type <> 'payroll' OR (policy_version_id IS NOT NULL AND policy_uuid IS NOT NULL)",
+            name='ck_payroll_event_payroll_policy',
+        ),
     )
 
 
@@ -938,21 +1069,78 @@ def _reject_hall_pass_policy_payload_mutation(mapper, connection, target):
 
 # -------------------- STORE MODELS --------------------
 
-class StoreItem(db.Model):
-    __tablename__ = 'store_items'
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
+class StoreProduct(db.Model):
+    """Immutable, versioned store product definition — DOM-POL-001 / DOM-STORE-001.
+
+    This is the *single* store product table. It replaces the former
+    ``store_items`` (mutable, integer-keyed catalog row) / ``store_products``
+    (JSON-payload policy row) split, in which one product was described by two
+    records joined by nothing but ``payload["product_id"]`` and kept in step by a
+    synchronization routine. That arrangement had no owner: teacher forms wrote
+    one table, purchases resolved against the other, and nothing kept them
+    honest.
+
+    The shape here is the one every other policy family in this codebase already
+    uses (``InsurancePolicy``, ``RentSettings``, ``PayrollSettings``,
+    ``HallPassSettings``): a UUID-keyed, append-only definition row with a
+    mutable availability projection.
+
+    Two identifiers, deliberately distinct (DOM-POL-001 §VI.0):
+
+    ``policy_uuid``
+        The **version**. Primary key. Every create *and* every edit mints a
+        fresh one; economic and identity fields are never rewritten in place.
+        An entitlement freezes this value, so a student keeps the exact terms
+        they bought under even after the teacher edits the product.
+
+    ``product_lineage_uuid``
+        The **product**. Stable across every version. Derived quantities
+        (units sold, collective-goal progress, inventory remaining) and
+        per-seat visibility hang off this, because they describe the product
+        rather than any one version of it. Pointing them at ``policy_uuid``
+        instead would silently reset goal progress and restore stock on every
+        edit.
+
+    Only ``availability_state`` (and its retirement metadata) may change on an
+    existing row (DOM-POL-001 §IX). Students see ``IN_USE`` only.
+
+    No mutable balance is stored. ``inventory_total`` is the ceiling the teacher
+    configured — configuration, not a balance — and the remaining count is
+    derived by counting ``GRANTED`` entitlement events for the lineage, the same
+    way collective-goal progress has always been computed. DOM-STORE-001 §VII.A
+    forbids persisting remaining balances.
+    """
+    __tablename__ = 'store_products'
+
+    # The version. Immutable once written.
+    policy_uuid = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+
+    # The product. Shared by every version in the lineage; this is what
+    # entitlement history and visibility rows point at.
+    product_lineage_uuid = db.Column(
+        db.String(36), nullable=False, index=True, default=lambda: str(uuid.uuid4())
+    )
+
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=True)
-    price = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
-    tier = db.Column(db.String(20), nullable=True) # basic, standard, premium, luxury (teacher-only organizational label)
+    price = db.Column(db.Numeric(precision=12, scale=2), nullable=True)
+    # Configuration guidance, not entitlement authority (DOM-STORE-001 §XII).
+    # It selects which CWI reference band the Helper reports the price against;
+    # it never authorizes a purchase. The overdue-obligation gate is carried by
+    # available_with_overdue_obligations alone.
+    economic_role = db.Column(db.String(20), nullable=False, default='necessity') # necessity, convenience, add_on
     item_type = db.Column(db.String(20), nullable=False, default='delayed') # immediate, delayed, collective
-    inventory = db.Column(db.Integer, nullable=True) # null for unlimited
-    limit_per_student = db.Column(db.Integer, nullable=True) # null for no limit
+    # Configured ceiling, not a balance. NULL = unlimited. Units remaining are
+    # derived from GRANTED entitlement events for the lineage; DOM-STORE-001
+    # §VII.A forbids persisting the remainder.
+    inventory_total = db.Column(db.Integer, nullable=True)
+    holding_limit = db.Column(db.Integer, nullable=True) # absolute active-entitlement cap
+    direct_purchase_allowed = db.Column(db.Boolean, default=True, nullable=False)
+    available_with_overdue_obligations = db.Column(db.Boolean, default=False, nullable=False)
+    activation_at = db.Column(db.DateTime(timezone=True), nullable=True)
     auto_delist_date = db.Column(db.DateTime(timezone=True), nullable=True)
     auto_expiry_days = db.Column(db.Integer, nullable=True) # days student has to use the item
-    is_active = db.Column(db.Boolean, default=True, nullable=False)
     is_long_term_goal = db.Column(db.Boolean, default=False, nullable=False) # if true, exclude from CWI balance checks
     bypass_cwi_warnings = db.Column(db.Boolean, default=False, nullable=False)
 
@@ -974,70 +1162,121 @@ class StoreItem(db.Model):
     # Redemption prompt (for delayed use items)
     redemption_prompt = db.Column(db.Text, nullable=True)  # Optional prompt shown to students when redeeming delayed items
 
-    # Rent Linked
-    is_rent_linked = db.Column(db.Boolean, default=False, nullable=False)
-
-    # Relationships
-    teacher = db.relationship('User', backref=db.backref('store_items', lazy='dynamic'))
-    # Seat-level visibility is the canonical replacement for legacy block visibility.
-    visible_seats = db.relationship(
-        'StoreItemVisibility',
-        back_populates='store_item',
-        lazy='dynamic',
-        cascade='all, delete-orphan'
+    # Availability projection (DOM-POL-001 §IX) — the ONLY mutable field on an
+    # otherwise immutable row. Replaces the old `is_active` boolean, which could
+    # not distinguish "teacher hid this" from "superseded by a newer version".
+    #   IN_USE  — sellable; exactly one version per lineage may hold this
+    #   HIDDEN  — withheld by the teacher, restorable
+    #   RETIRED — superseded or withdrawn; never sellable again
+    availability_state = db.Column(
+        db.String(16), nullable=False, server_default='IN_USE', default='IN_USE'
     )
 
-    @property
-    def blocks_list(self):
-        """Return block labels derived from canonical seat-level visibility."""
-        seat_ids = [row.seat_id for row in self.visible_seats.all()]
-        if not seat_ids:
-            return []
-        rows = (
-            db.session.query(ClassEconomy.section)
-            .join(Seat, Seat.class_id == ClassEconomy.class_id)
-            .filter(Seat.id.in_(seat_ids), ClassEconomy.section.isnot(None))
-            .distinct()
-            .all()
+    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+    created_by_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=True)
+    retired_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    # Relationships
+    # Seat-level visibility keys off the LINEAGE, not this version, so a teacher
+    # edit does not silently drop every per-seat visibility grant.
+    visible_seats = db.relationship(
+        'StoreItemVisibility',
+        primaryjoin='foreign(StoreItemVisibility.product_lineage_uuid) == StoreProduct.product_lineage_uuid',
+        back_populates='store_product',
+        lazy='dynamic',
+        # Read-only. The primaryjoin marks product_lineage_uuid as the foreign
+        # side, so a writable relationship would let a caller de-associate a row
+        # by NULLing a non-nullable column, failing the flush. Every visibility
+        # writer uses explicit deletes and inserts, so nothing needs to write
+        # through the relationship.
+        viewonly=True,
+    )
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "availability_state IN ('IN_USE','HIDDEN','RETIRED')",
+            name='ck_store_products_availability_state',
+        ),
+        # The catalog vocabulary is closed: every read path projects item_type
+        # through StorePolicyResolver._ITEM_TYPE_TO_ENTITLEMENT_TYPE, and an
+        # unmapped value raises PolicyValidationError for the whole class rather
+        # than for the one bad row. store_service._validate_definition refuses it
+        # at the write seam; this is the same rule where it cannot be bypassed.
+        db.CheckConstraint(
+            "item_type IN ('immediate','delayed','collective','hall_pass','privilege')",
+            name='ck_store_products_item_type',
+        ),
+        # SPEC-STORE-001 §V.C: the role vocabulary is closed. An unmapped role
+        # would have no reference band, leaving the Helper unable to report a
+        # position for the price.
+        db.CheckConstraint(
+            "economic_role IN ('necessity','convenience','add_on')",
+            name='ck_store_products_economic_role',
+        ),
+        # At most one sellable version per product. This is the constraint that
+        # makes "edit = supersede" safe: minting a new IN_USE version without
+        # retiring the old one would put two prices on one product.
+        db.Index(
+            'uq_store_products_one_live_per_lineage',
+            'product_lineage_uuid',
+            unique=True,
+            postgresql_where=db.text("availability_state = 'IN_USE'"),
+            # Without the SQLite dialect variant this index is created
+            # unconditionally there, so superseding a product — which mints a
+            # second version carrying the same lineage — raises IntegrityError
+            # even though the previous version is RETIRED.
+            sqlite_where=db.text("availability_state = 'IN_USE'"),
+        ),
+        db.Index('ix_store_products_class_availability', 'class_id', 'availability_state'),
+        db.Index('ix_store_products_class_created', 'class_id', 'created_at'),
+    )
+
+
+# Fields frozen once a version exists. An "edit" mints a new version instead of
+# rewriting these, so a student's purchased terms cannot move underneath them
+# (DOM-POL-001 §VI.0). Only the availability projection and its retirement
+# metadata may change on a persisted row.
+_STORE_PRODUCT_IMMUTABLE_FIELDS = frozenset({
+    'policy_uuid', 'product_lineage_uuid', 'class_id', 'name',
+    'description', 'price', 'economic_role', 'item_type', 'inventory_total',
+    'holding_limit', 'direct_purchase_allowed', 'available_with_overdue_obligations', 'activation_at', 'auto_delist_date', 'auto_expiry_days',
+    'is_long_term_goal', 'bypass_cwi_warnings', 'is_bundle', 'bundle_quantity',
+    'bulk_discount_enabled', 'bulk_discount_quantity', 'bulk_discount_percentage',
+    'collective_goal_type', 'collective_goal_target', 'collective_goal_expires_at',
+    'collective_goal_instance_code', 'redemption_prompt', 'created_at',
+    'created_by_seat_id',
+})
+
+
+@sa.event.listens_for(StoreProduct, "before_insert")
+def _validate_store_product_scope(_mapper, connection, target):
+    """A product definition is meaningless outside a class boundary."""
+    if not getattr(target, "class_id", None):
+        raise ValueError("store_products require canonical class_id")
+    if not getattr(target, "product_lineage_uuid", None):
+        raise ValueError("store_products require a product_lineage_uuid")
+
+
+@sa.event.listens_for(StoreProduct, "before_update")
+def _guard_store_product_immutability(_mapper, connection, target):
+    """Reject in-place edits to frozen definition fields.
+
+    This is the DB-adjacent backstop for supersession. Without it, a well-meaning
+    ``item.price = new_price`` anywhere in the codebase would silently rewrite
+    the terms of every entitlement already sold under this version — which is
+    precisely the defect the two-table split used to hide.
+    """
+    state = sa.inspect(target)
+    changed = [
+        attr.key
+        for attr in state.attrs
+        if attr.key in _STORE_PRODUCT_IMMUTABLE_FIELDS and attr.history.has_changes()
+    ]
+    if changed:
+        raise ValueError(
+            f"store_products fields are immutable: {sorted(changed)}. "
+            "Publish a new version instead of editing this one."
         )
-        return [section for (section,) in rows if section]
-
-    def set_blocks(self, block_list):
-        """Set the visibility blocks using canonical seat-level visibility rows."""
-        StoreItemVisibility.query.filter_by(store_item_id=self.id).delete()
-        if not block_list:
-            return
-        normalized_blocks = {block.strip().upper() for block in block_list if block and block.strip()}
-        if not normalized_blocks:
-            return
-        seat_ids = [
-            seat_id
-            for (seat_id,) in (
-                db.session.query(Seat.id)
-                .join(ClassEconomy, ClassEconomy.class_id == Seat.class_id)
-                .filter(
-                    ClassEconomy.section.isnot(None),
-                    ClassEconomy.section.in_(normalized_blocks),
-                    ClassEconomy.class_id == self.class_id,
-                )
-                .distinct()
-                .all()
-            )
-        ]
-        if seat_ids:
-            db.session.add_all([
-                StoreItemVisibility(store_item_id=self.id, seat_id=seat_id)
-                for seat_id in seat_ids
-            ])
-
-
-@sa.event.listens_for(StoreItem, "before_insert")
-@sa.event.listens_for(StoreItem, "before_update")
-def _sync_store_item_scope(_mapper, connection, target):
-    """Synchronize store_items class scope during the transition."""
-    class_id = getattr(target, "class_id", None)
-    if not class_id:
-        raise ValueError("store_items require canonical class_id")
 
 
 # StoreItemBlock removed — store_item_blocks unauthorized; canonical replacement: store_item_visibility (DOM-STORE-001)
@@ -1052,16 +1291,31 @@ def _sync_store_item_scope(_mapper, connection, target):
 
 
 class StoreItemVisibility(db.Model):
+    """Per-seat visibility grant for a store product.
+
+    Keyed by ``product_lineage_uuid`` rather than a version, because visibility
+    is a property of the product: a teacher who restricted an item to one class
+    section expects that restriction to hold after they edit the price. There is
+    deliberately no FK — the lineage is a locator shared by many rows, the same
+    non-FK-UUID discipline ``policy_uuid`` follows (DOM-POL-001 §VI.0).
+    """
     __tablename__ = 'store_item_visibility'
     id = db.Column(db.Integer, primary_key=True)
-    store_item_id = db.Column(db.Integer, db.ForeignKey('store_items.id', ondelete='CASCADE'), nullable=False, index=True)
+    product_lineage_uuid = db.Column(db.String(36), nullable=False, index=True)
     seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
 
     __table_args__ = (
-        db.UniqueConstraint('store_item_id', 'seat_id', name='uq_store_item_visibility_item_seat'),
+        db.UniqueConstraint(
+            'product_lineage_uuid', 'seat_id', name='uq_store_item_visibility_lineage_seat'
+        ),
     )
 
-    store_item = db.relationship('StoreItem', back_populates='visible_seats')
+    store_product = db.relationship(
+        'StoreProduct',
+        primaryjoin='foreign(StoreItemVisibility.product_lineage_uuid) == StoreProduct.product_lineage_uuid',
+        back_populates='visible_seats',
+        viewonly=True,
+    )
     seat = db.relationship('Seat', backref=db.backref('store_visibility_grants', lazy='dynamic'))
 
 # DELETED per Phase 2 Migration: StorePurchaseStatus, StorePurchase, RedemptionEventAction, RedemptionEventSource, RedemptionEvent
@@ -1085,24 +1339,53 @@ class StoreItemVisibility(db.Model):
 # ================================================================================
 
 
-# Phase-1 closed set of entitlement types a rent satisfaction benefit may grant.
-# DOM-STORE-001 defines the broader entitlement catalog; rent perks are limited to
-# HALL_PASS for now and this tuple is the single gate that must widen to add more.
-_SATISFACTION_BENEFIT_ENTITLEMENT_TYPES = ("HALL_PASS",)
+# Closed set of entitlement types a rent satisfaction benefit may grant.
+# DOM-STORE-001 defines the broader entitlement catalog; this tuple is the single
+# gate that must widen to add more.
+_SATISFACTION_BENEFIT_ENTITLEMENT_TYPES = (
+    "HALL_PASS",
+    "IMMEDIATE_USE",
+    "DELAYED_USE",
+    "PRIVILEGE",
+)
+
+_SATISFACTION_BENEFIT_KEYS = {
+    "entitlement_type",
+    "quantity",
+    "product_lineage_uuid",
+}
 
 
 def validate_satisfaction_benefits(raw):
     """Validate and normalize a rent ``satisfaction_benefits`` payload.
 
-    Contract (Option-C typed JSON, Phase-1 closed schema):
+    Contract (typed JSON, closed schema):
       - ``None`` -> ``[]`` (unset means no grants).
-      - Must be a list; each entry a dict with exactly the keys
-        ``entitlement_type`` and ``quantity``.
-      - ``entitlement_type`` must be in the Phase-1 closed set (HALL_PASS only).
+      - Must be a list; each entry a dict drawn from the keys
+        ``entitlement_type``, ``quantity`` and ``product_lineage_uuid``.
+      - ``entitlement_type`` must be in the closed set above.
       - ``quantity`` must be a positive ``int`` (bools are rejected).
+      - ``product_lineage_uuid``, when present, must be a non-empty string
+        naming a store product lineage.
 
-    Returns a fresh list of ``{"entitlement_type", "quantity"}`` dicts.
-    Raises ``ValueError`` on any violation.
+    ``product_lineage_uuid`` is what makes a store item "rent linked". The
+    linkage lives here rather than on ``store_products`` for two reasons.
+
+    First, DOM-STORE-001 §VII.A requires a granted entitlement to name "a
+    Policy-owned product definition"; without it, rent perks were granted with
+    no product at all, so nothing downstream could say *which* hall pass a
+    student had been given.
+
+    Second, it is what makes the teacher-facing rule — that changing rent-linked
+    items never disturbs the cycle already underway — true rather than merely
+    intended. Rent policy is versioned and an assessment freezes the
+    ``policy_uuid`` it was raised under, so a benefit list edited today is
+    physically a different row from the one the current cycle resolves against.
+    Storing the flag on the product instead would have made it a live read, and
+    every edit would have reached backwards into open cycles.
+
+    Returns a fresh list of normalized dicts. Raises ``ValueError`` on any
+    violation.
     """
     if raw is None:
         return []
@@ -1132,13 +1415,34 @@ def validate_satisfaction_benefits(raw):
                 f"satisfaction_benefits[{index}].quantity must be positive"
             )
 
-        extra_keys = set(entry.keys()) - {"entitlement_type", "quantity"}
+        extra_keys = set(entry.keys()) - _SATISFACTION_BENEFIT_KEYS
         if extra_keys:
             raise ValueError(
                 f"satisfaction_benefits[{index}] has unexpected keys: {sorted(extra_keys)}"
             )
 
-        normalized.append({"entitlement_type": entitlement_type, "quantity": quantity})
+        benefit = {"entitlement_type": entitlement_type, "quantity": quantity}
+
+        product_lineage_uuid = entry.get("product_lineage_uuid")
+        if product_lineage_uuid is not None:
+            if (
+                not isinstance(product_lineage_uuid, str)
+                or not product_lineage_uuid.strip()
+            ):
+                raise ValueError(
+                    f"satisfaction_benefits[{index}].product_lineage_uuid must be "
+                    "a non-empty string"
+                )
+            benefit["product_lineage_uuid"] = product_lineage_uuid.strip()
+        elif entitlement_type != "HALL_PASS":
+            # A generic hall pass is meaningful on its own; every other type is
+            # only meaningful as a specific thing from the catalog.
+            raise ValueError(
+                f"satisfaction_benefits[{index}].product_lineage_uuid is required "
+                f"for entitlement_type {entitlement_type}"
+            )
+
+        normalized.append(benefit)
 
     return normalized
 
@@ -1223,7 +1527,11 @@ class RentSettings(db.Model):
         """Return the validated, normalized list of PERK grants awarded on rent satisfaction.
 
         None (unset) normalizes to an empty list. Each entry is a
-        ``{"entitlement_type": str, "quantity": int}`` dict.
+        ``{"entitlement_type": str, "quantity": int}`` dict, optionally carrying
+        ``"product_lineage_uuid"`` when the grant names a specific store product
+        rather than a bare entitlement type. ``validate_satisfaction_benefits``
+        preserves that key, and the student item card reads it to resolve the
+        product the perk hands over.
         """
         return validate_satisfaction_benefits(self.satisfaction_benefits)
 
@@ -1333,7 +1641,7 @@ class ObligationAssessment(db.Model):
     # source obligation's correlation_id. NULL for primary obligations. This is an
     # explicit persisted relationship — never inferred by parsing correlation strings.
     source_correlation_id = db.Column(db.String(200), nullable=True, index=True)
-    event_type = db.Column(db.String(20), nullable=False, index=True)  # ASSESSMENT | PAYMENT | WAIVED (per DOM-OBL-001)
+    event_type = db.Column(db.String(20), nullable=False, index=True)  # ASSESSMENT | PAYMENT | WAIVED | WITHDRAWN (per DOM-OBL-001)
 
     obligation_type = db.Column(db.String(30), nullable=False, index=True)  # RENT, INSURANCE_PREMIUM
     policy_uuid = db.Column(db.String(36), nullable=True, index=True)
@@ -1403,6 +1711,35 @@ class BillCycle(db.Model):
     )
 
 
+class ObligationCommandReservation(db.Model):
+    """Command identity for bill-cycle succession replay — DOM-OBL-001 §V.7.
+
+    Execution/replay state, not domain state: it records that a succession command
+    with this identity already ran, under which request fingerprint, and which
+    ``bill_cycles`` row it produced. Owned solely by ``schedule_next_bill_cycle``.
+    ``internal_ref`` is recorded for lookup and audit and participates in the
+    fingerprint; it is not part of the identity scope.
+    """
+    __tablename__ = 'obligation_command_reservation'
+
+    id = db.Column(db.Integer, primary_key=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
+    command_name = db.Column(db.String(100), nullable=False)
+    idempotency_key = db.Column(db.String(255), nullable=False)
+    internal_ref = db.Column(db.String(200), nullable=False)
+    replay_fingerprint = db.Column(db.String(128), nullable=False)
+    fingerprint_version = db.Column(db.Integer, nullable=False)
+    bill_cycle_id = db.Column(db.Integer, db.ForeignKey('bill_cycles.id', ondelete='CASCADE'), nullable=False, index=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            'class_id', 'command_name', 'idempotency_key',
+            name='uq_obligation_command_reservation_identity',
+        ),
+    )
+
+
 
 
 # ---- Store/Entitlements Domain Models (DOM-STORE-001 v3.0) ----
@@ -1420,7 +1757,12 @@ class EntitlementEvent(db.Model):
     entitlement_id = db.Column(db.String(36), nullable=False, index=True)  # Stable lineage across lifecycle
     target_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
     actor_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False)
-    product_id = db.Column(db.Integer, nullable=True)  # References Policy-owned product (can be nullable if cross-domain)
+    # Policy-owned product this event concerns (DOM-STORE-001 §VII.A). This is
+    # the product LINEAGE, not the version: derived quantities (units sold,
+    # collective-goal progress, inventory remaining) aggregate over it, and they
+    # must not reset when a teacher edits the product. The exact version bought
+    # is frozen separately as ``payload["policy_uuid"]``.
+    product_id = db.Column(db.String(36), nullable=True, index=True)
     entitlement_type = db.Column(db.String(50), nullable=False)  # INSURANCE, PRIVILEGE, IMMEDIATE_USE, DELAYED_USE, COLLECTIVE_GOAL, HALL_PASS
     acquisition_type = db.Column(db.String(20), nullable=False)  # PURCHASE, GRANT, PERK
     event_type = db.Column(db.String(20), nullable=False, index=True)  # GRANTED, CONSUMED, EXPIRED, REVOKED
@@ -1513,6 +1855,11 @@ class InsuranceClaim(db.Model):
     # General decision annotation (approval or rejection). No distinct override
     # workflow exists, so this is a single free-text decision note.
     decision_note = db.Column(db.Text, nullable=True)
+    # Required, permanently-recorded justification for approving a TRANSACTION
+    # claim filed after the policy's filing window closed. Distinct from
+    # decision_note: approval of a late claim must be blocked on this field's
+    # absence specifically, so a generic note can't stand in for it.
+    filing_window_override_reason = db.Column(db.Text, nullable=True)
     result_amount = db.Column(db.Numeric(precision=12, scale=2), nullable=True)
 
     # Downstream lineage references — populated only on APPROVED. Nullable until then.
@@ -1615,8 +1962,10 @@ class ActorRequestTrace(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     actor_type = db.Column(db.String(20), nullable=False, index=True)
+    # Seat public ID only: no cross-domain FK (INV-ARC-021 §V.7). Seat deletion
+    # deletes traces explicitly (DOM-SUP-001 §X); class deletion cascades via class_id.
     actor_public_id = db.Column(db.String(64), nullable=False, index=True)
-    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='SET NULL'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
     request_id = db.Column(db.String(128), nullable=False, index=True)
     method = db.Column(db.String(10), nullable=False)
     endpoint = db.Column(db.String(500), nullable=False)
@@ -1678,14 +2027,16 @@ class Issue(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
 
-    # Public actor identifier (submitter) — resolves to seats.public_id for internal lookups
+    # Public actor identifier (submitter) — resolves to seats.public_id for internal
+    # lookups. Support holds only the public ID, with no FK into Identity
+    # (INV-ARC-021 §V.7); seat deletion deletes its issues explicitly (DOM-SUP-001 §X).
     actor_public_id = db.Column(db.String(64), nullable=False, index=True)
 
     # Public reviewer identifier (teacher) — resolves to seats.public_id in the same class
     reviewer_public_id = db.Column(db.String(64), nullable=True, index=True)
 
     # External-facing class context — resolves to classes.class_public_id
-    class_public_id = db.Column(db.String(36), nullable=True, index=True)
+    class_public_id = db.Column(db.String(36), nullable=False, index=True)
 
     # Class context cache (DOM-SUP-001 §VI). The class display name frozen at
     # submission time. It is deliberately NOT re-fetched live from ClassEconomy:
@@ -1698,6 +2049,7 @@ class Issue(db.Model):
     # Issue categorization
     category_id = db.Column(db.Integer, db.ForeignKey('issue_categories.id'), nullable=False)
     issue_type = db.Column(db.String(50), nullable=False)  # 'transaction', 'general'
+    title = db.Column(db.String(200), nullable=False, default='Support Ticket')
 
     # Student submission (immutable after submission)
     student_explanation = db.Column(db.Text, nullable=False)
@@ -1728,11 +2080,11 @@ class Issue(db.Model):
     escalated_at = db.Column(db.DateTime(timezone=True), nullable=True)
     escalation_reason = db.Column(db.String(200), nullable=True)
     teacher_diagnostic_note = db.Column(db.Text, nullable=True)  # Diagnostic note for sysadmin
+    support_permissions = db.Column(db.JSON, nullable=False, default=dict, server_default='{}')
     share_class_name_with_sysadmin = db.Column(db.Boolean, default=False, nullable=False)  # Consent for class disclosure
     eligible_for_reward = db.Column(db.Boolean, default=False, nullable=False)  # Marks if student may receive reward for a legitimate bug
 
     # Sysadmin review and resolution
-    sysadmin_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     sysadmin_reviewed_at = db.Column(db.DateTime(timezone=True), nullable=True)
     sysadmin_notes = db.Column(db.Text, nullable=True)  # Separate from student content, visible to teacher only
     sysadmin_resolved_at = db.Column(db.DateTime(timezone=True), nullable=True)
@@ -1746,7 +2098,6 @@ class Issue(db.Model):
     updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
     # Relationships
-    sysadmin = db.relationship('User', foreign_keys=[sysadmin_id], backref=db.backref('reviewed_issues', lazy='dynamic'))
     related_transaction = db.relationship('Transaction', backref='related_issues')
     status_history = db.relationship('IssueStatusHistory', backref='issue', lazy='dynamic', cascade='all, delete-orphan', order_by='IssueStatusHistory.changed_at.desc()')
     resolution_actions = db.relationship('IssueResolutionAction', backref='issue', lazy='dynamic', cascade='all, delete-orphan', order_by='IssueResolutionAction.created_at.desc()')
@@ -1901,11 +2252,31 @@ class RecoveryRequest(db.Model):
     # Partial progress - allows teacher to save progress and resume later
     partial_codes = db.Column(db.JSON, nullable=True)  # Array of entered codes (not yet validated)
     resume_pin_hash = db.Column(db.String(64), nullable=True)  # Hashed PIN to resume progress
-    resume_new_username = db.Column(db.String(100), nullable=True)  # Temporary storage for new username
+    resume_new_username = db.Column(db.Text, nullable=True)  # Temporary storage for new username
+
+    submission_round = db.Column(db.Integer, nullable=False, default=0, server_default="0")
+    required_class_ids = db.Column(db.JSON, nullable=False, default=list)
+    attempt_nonce_hash = db.Column(db.String(64), nullable=True)
+    selection_started_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    setup_nonce_hash = db.Column(db.String(64), nullable=True)
+    setup_totp_encrypted = db.Column(db.Text, nullable=True)
+    setup_username = db.Column(db.Text, nullable=True)
 
     # Relationships
     user = db.relationship('User', backref=db.backref('recovery_requests', lazy='dynamic'))
     verification_codes = db.relationship('StudentRecoveryCode', backref='recovery_request', lazy='dynamic', cascade='all, delete-orphan')
+
+
+class RecoveryClassChallenge(db.Model):
+    __tablename__ = 'recovery_class_challenges'
+    recovery_request_id = db.Column(db.Integer, db.ForeignKey('recovery_requests.id', ondelete='CASCADE'), primary_key=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), primary_key=True)
+    proof_verified_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    selected_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    selected_count = db.Column(db.Integer, nullable=True)
+    satisfied_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    satisfied_round = db.Column(db.Integer, nullable=True)
+    received_round = db.Column(db.Integer, nullable=True)
 
 
 class StudentRecoveryCode(db.Model):
@@ -1917,6 +2288,8 @@ class StudentRecoveryCode(db.Model):
     seat_id = db.Column(db.Integer, db.ForeignKey('seats.id'), nullable=False, index=True)
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
 
+    issued_round = db.Column(db.Integer, nullable=True)
+    code_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
     code_hash = db.Column(db.String(64), nullable=True)
     verified_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
@@ -1974,7 +2347,6 @@ class PayrollSettings(db.Model):
 
     # Optional: different rates for different scenarios
     overtime_multiplier = db.Column(db.Float, default=1.0)
-    bonus_rate = db.Column(db.Float, default=0.0)
 
     # Enhanced settings for simple/advanced modes
     settings_mode = db.Column(db.String(20), nullable=False, default='simple')  # 'simple' or 'advanced'
@@ -2010,7 +2382,7 @@ class PayrollSettings(db.Model):
     # the definition a teacher submits.
     _FROZEN_POLICY_FIELDS = (
         'block', 'pay_rate', 'payroll_frequency_days', 'overtime_multiplier',
-        'bonus_rate', 'settings_mode', 'daily_limit_hours', 'time_unit',
+        'settings_mode', 'daily_limit_hours', 'time_unit',
         'overtime_enabled', 'overtime_threshold', 'overtime_threshold_unit',
         'overtime_threshold_period', 'max_time_per_day', 'max_time_per_day_unit',
         'pay_schedule_type', 'pay_schedule_custom_value', 'pay_schedule_custom_unit',
@@ -2274,7 +2646,7 @@ class PolicyTransition(db.Model):
     activation_mode = db.Column(db.String(32), nullable=False)
     status = db.Column(db.String(32), nullable=False, default='pending')
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
-    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_by_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=True)
     applied_at = db.Column(db.DateTime(timezone=True), nullable=True)
     correlation_id = db.Column(db.String(64), nullable=True, index=True)
     superseded_by_transition_id = db.Column(db.Integer, db.ForeignKey('policy_transitions.id'), nullable=True)
@@ -2288,44 +2660,13 @@ class PolicyTransition(db.Model):
 # -------------------- POLICIES DOMAIN: STORE PRODUCTS --------------------
 
 
-class StoreProduct(db.Model):
-    """Immutable store product policy configuration — DOM-POL-001 / SPEC-STORE-001.
-
-    Policies domain owns product policy definitions.
-    Store and Entitlements consumes these policies when creating entitlements.
-
-    Key principle: UUID is the immutable locator (not FK).
-    Allows historical entitlements to reference deleted policies without breaking.
-    A policy may only be deleted when no executable entitlement depends on it.
-    """
-    __tablename__ = 'store_products'
-
-    id = db.Column(db.Integer, primary_key=True)
-
-    # Immutable UUID locator for cross-domain references (not FK)
-    policy_uuid = db.Column(db.String(36), unique=True, nullable=False, index=True, default=lambda: str(uuid.uuid4()))
-
-    # Class scope: policy is defined for a specific class period
-    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
-
-    # Payload: SPEC-STORE-001 schema per SPEC-STORE-001
-    # Contains required fields: product_id, is_purchasable, supports_direct_grants, price, entitlement_type
-    # And optional fields: limit_per_student, auto_expiry_days, name, description, tier, etc.
-    payload = db.Column(db.JSON, nullable=False)
-
-    # Immutable metadata
-    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
-    created_by_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=True)
-
-    # Lifecycle: is_retired indicates policy is no longer applicable for new purchases
-    # But historical entitlements created under this policy remain valid
-    is_retired = db.Column(db.Boolean, default=False, nullable=False)
-    retired_at = db.Column(db.DateTime(timezone=True), nullable=True)
-
-    __table_args__ = (
-        db.Index('ix_store_products_class_retired', 'class_id', 'is_retired'),
-        db.Index('ix_store_products_class_created', 'class_id', 'created_at'),
-    )
+# The JSON-payload ``StoreProduct`` that formerly lived here has been folded into
+# the single typed ``StoreProduct`` definition above. It was one half of a
+# two-table split (mutable ``store_items`` + immutable ``store_products`` joined
+# only by ``payload["product_id"]``) in which no code path ever wrote the policy
+# half, so no catalog item had a resolvable ``policy_uuid`` and every purchase
+# was refused. Typed columns replace the JSON payload; ``availability_state``
+# replaces ``is_retired``.
 
 
 class InsurancePolicy(db.Model):
@@ -2376,6 +2717,13 @@ class InsurancePolicy(db.Model):
     claim_window_days = db.Column(db.Integer, nullable=True)                           # TRANSACTION
     claimable_dates_per_week_equivalent = db.Column(db.Numeric(6, 3), nullable=True)   # PRODUCTIVITY
     waiting_period_days = db.Column(db.Integer, nullable=True)                         # NON_MONETARY
+
+    # Recurring billing terms (DOM-POL-001A §V.E), frozen with this version.
+    # Nullable in the database; FEAT-CLASS-003 requires them on every new
+    # definition and the purchase fails closed without them.
+    bill_preview_days = db.Column(db.Integer, nullable=True)   # 0 < preview < minimum_period_duration(cadence)
+    nonpayment_mode = db.Column(db.String(24), nullable=True)  # ACCUMULATE | CANCEL_AFTER_X_DAYS
+    cancel_after_days = db.Column(db.Integer, nullable=True)   # > 0 iff CANCEL_AFTER_X_DAYS
 
     # Presentation metadata (never claim-time economic truth).
     title = db.Column(db.String(120), nullable=True)
@@ -2437,18 +2785,23 @@ class InsurancePolicy(db.Model):
             name='ck_insurance_policies_tier_level_nonneg',
         ),
         # --- Per-type structural subset (required present / forbidden null) --
+        # waiting_period_days is deliberately absent from every branch's
+        # exclusion list below except where a type's own presence requirement
+        # already covers it (NON_MONETARY). It was previously forbidden outside
+        # NON_MONETARY, citing "SPEC §4.5.3-§4.5.5" -- a section that exists in
+        # no document under docs/. Operator decision 2026-09-21: settable on
+        # every type, not necessarily enforced on every type.
         db.CheckConstraint(
             "("
             "  insurance_type = 'TRANSACTION' AND"
             "  reimbursement_percentage IS NOT NULL AND payout_multiple IS NOT NULL AND"
             "  claims_per_week_equivalent IS NOT NULL AND claim_window_days IS NOT NULL AND"
-            "  claimable_dates_per_week_equivalent IS NULL AND waiting_period_days IS NULL"
+            "  claimable_dates_per_week_equivalent IS NULL"
             ") OR ("
             "  insurance_type = 'PRODUCTIVITY' AND"
             "  reimbursement_percentage IS NOT NULL AND payout_multiple IS NOT NULL AND"
             "  claimable_dates_per_week_equivalent IS NOT NULL AND"
-            "  claims_per_week_equivalent IS NULL AND claim_window_days IS NULL AND"
-            "  waiting_period_days IS NULL"
+            "  claims_per_week_equivalent IS NULL AND claim_window_days IS NULL"
             ") OR ("
             "  insurance_type = 'NON_MONETARY' AND"
             "  claims_per_week_equivalent IS NOT NULL AND waiting_period_days IS NOT NULL AND"
@@ -2542,7 +2895,7 @@ class Announcement(db.Model):
     id = db.Column(db.Integer, primary_key=True)
 
     # Author
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    created_by_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False)
 
     # Class scope
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
@@ -2561,10 +2914,10 @@ class Announcement(db.Model):
     expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     # Relationships
-    teacher = db.relationship('User', foreign_keys=[user_id], backref=db.backref('announcements', lazy='dynamic', passive_deletes=True))
+    author_seat = db.relationship('Seat', foreign_keys=[created_by_seat_id])
 
     def __repr__(self):
-        return f'<Announcement {self.id} - {self.title[:30]} (Teacher {self.user_id}, class {self.class_id})>'
+        return f'<Announcement {self.id} - {self.title[:30]} (Seat {self.created_by_seat_id}, class {self.class_id})>'
 
     def is_expired(self):
         if self.expires_at is None:
@@ -2574,14 +2927,15 @@ class Announcement(db.Model):
     def should_display(self):
         return self.is_active and not self.is_expired()
 
-    def get_priority_class(self):
-        priority_classes = {
-            'low': 'alert-secondary',
-            'normal': 'alert-info',
-            'high': 'alert-warning',
-            'urgent': 'alert-danger'
+    def get_priority_level(self):
+        """Semantic alert-card level (success/warning/danger/info) for this priority."""
+        priority_levels = {
+            'low': 'info',
+            'normal': 'info',
+            'high': 'warning',
+            'urgent': 'danger'
         }
-        return priority_classes.get(self.priority, 'alert-info')
+        return priority_levels.get(self.priority, 'info')
 
     def get_priority_icon(self):
         priority_icons = {
@@ -2624,7 +2978,6 @@ class AuditEvent(db.Model):
     actor_id_hash    = db.Column(db.String(64), nullable=True)
     class_id         = db.Column(db.String(36), nullable=True)
     seat_id          = db.Column(db.Integer, nullable=True)
-    teacher_id       = db.Column(db.Integer, nullable=True)
     feat_id          = db.Column(db.String(32), nullable=True)
     idempotency_key  = db.Column(db.String(128), nullable=True)
     correlation_id   = db.Column(db.String(64), nullable=True)
@@ -2703,3 +3056,11 @@ class InterpretationCycleRecord(db.Model):
 
     def __repr__(self):
         return f'<InterpretationCycleRecord class={self.class_id} cycle={self.payroll_cycle_id}>'
+
+
+class TeacherSignupAttempt(db.Model):
+    """Temporary encrypted initial provisioning, owned by FEAT-IDEN-101."""
+    __tablename__ = 'teacher_signup_attempts'
+    nonce_hash = db.Column(db.String(64), primary_key=True)
+    payload_encrypted = db.Column(db.Text, nullable=False)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False, index=True)

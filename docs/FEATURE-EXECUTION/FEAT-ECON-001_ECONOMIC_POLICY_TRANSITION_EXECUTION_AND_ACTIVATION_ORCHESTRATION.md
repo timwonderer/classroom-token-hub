@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| FEAT-ECON-001 | 2.0 | 2026-05-20 | None | FEAT |
+| FEAT-ECON-001 | 2.1 | 2026-09-15 | 2.0 | FEAT |
 
 ## I. Purpose
 
@@ -348,3 +348,8 @@ This specification establishes:
 
 The FEAT layer therefore acts as constitutional execution orchestrator rather than policy-law authority.
 
+
+### Seat attribution (INV-ARC-019)
+
+Policy/product authors and transition initiators are recorded as `created_by_seat_id`
+within the explicit `class_id`. No User foreign key or principal author alias is permitted.

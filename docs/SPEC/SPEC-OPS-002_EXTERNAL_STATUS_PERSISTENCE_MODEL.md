@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-OPS-002 | 1.2 | 2026-08-31 | 1.1 | Normative |
+| SPEC-OPS-002 | 1.5 | 2026-09-21 | 1.4 | Normative |
 
 ## I. Purpose
 
@@ -21,25 +21,57 @@ Normative (SPEC Tier). Subordinate to `INV-CORE-000`, `INV-CORE-001`, `INV-ARC-0
 - `DOM-OPS-001_OPERATIONS_DOMAIN.md`
 - `DOM-OPS-002_AUDIT_LINEAGE_INTEGRITY.md`
 - `SOP-OPS-001_SERVICE_STATUS_AND_INCIDENT_COMMUNICATION.md`
+- `SPEC-OPS-006_PUBLIC_REQUEST_MONITORING.md`
 
 ## V. Persistence Objects
 
-### 5.1 External Observation — append-only
+### 5.1 Internal/probe Evidence Observation — append-only
 
-Records one externally performed observation of one public capability or infrastructure dependency.
+This evidence schema remains distinct from public numerical request snapshots.
+It MUST NOT gate public request cards or be used to reinterpret HTTP measurements
+as domain correctness. New public request collection uses §5.5 exclusively.
+
+Records one bounded observation received by the independent status service for
+one public capability or infrastructure dependency. The condition may be
+measured by the external collector itself or evaluated within CTH and
+transported to the collector. Persistence outside CTH does not make an
+application-produced result an independently performed external probe.
 
 Required logical fields:
 
 - stable observation ID;
-- observed-at timestamp and correlation ID;
+- check time (`checked_at`, null only when no check ran), collector receipt
+  time (`received_at`), and correlation ID;
+- approved freshness class and immutable staleness state at receipt;
+- bounded evidence source, including independent `EXTERNAL_PROBE` and
+  `APPLICATION_RUNTIME_EVIDENCE` for feature results transported from CTH;
 - capability/component key from a closed registry;
 - observation class: `LIVENESS`, `READINESS`, `CORRECTNESS`, or `INFRASTRUCTURE_FAILURE`;
 - outcome: `PASS`, `FAIL`, or `UNKNOWN`;
 - epistemic state: `KNOWN` or `UNAVAILABLE`;
 - bounded diagnostic code and bounded latency/result metadata;
-- probe version.
+- probe version, identifying the external collector/check transport;
+- bounded evaluator version for a registered application feature result;
+  null only when no feature evaluator ran (including an unregistered
+  `UNKNOWN` result) or for non-feature observations.
+
+The current projection recomputes staleness from `checked_at`, freshness
+class, and evaluation time. An old recorded `FRESH` state cannot keep a
+capability green after its maximum age. A missing check time cannot establish
+current health. For an external probe, check time is the time of its own
+measurement; for an application result, the collector preserves CTH's
+original check time rather than replacing it with receipt time.
 
 Observations MUST NOT contain tenant identifiers, PII, credentials, raw response bodies, stack traces, arbitrary payloads, or inferred internal causes. They cannot be updated or deleted during their retention window. `CONFLICTING` is not a raw-observation state; it belongs to derived assessment or projection state composed from multiple observations.
+
+An external collector MUST preserve the source of the condition it transports:
+fetching an application-produced feature result does not turn that result
+into an independent external probe. Its own reachability measurement remains
+an `EXTERNAL_PROBE`, separately timestamped from the application's bounded
+feature assessment. Both records retain their original provenance. The
+collector protocol's `probe_version` is not evidence of which owning feature
+evaluator ran; a conclusive registered feature result also requires its
+separate `evaluator_version` from CTH.
 
 The fields have distinct meanings: `outcome` records the result of this observation; `epistemic_state` records whether the capability state can be established from the available evidence. A single observation cannot claim aggregate disagreement.
 
@@ -73,18 +105,27 @@ Required logical fields:
 - recovery expectation state: `KNOWN`, `ESTIMATED`, or `UNAVAILABLE`;
 - recovery expectation only when supported by the state;
 - next-update timestamp or explicit `NEXT_UPDATE_UNAVAILABLE` state;
-- source observation IDs and bounded author/provenance metadata;
+- optional source snapshot/observation IDs and bounded author/provenance metadata;
+- operator investigation evidence note or reference when no automated source is linked;
 - optional reconciliation reference.
 
 The notice is not a canonical incident. Its existence MUST NOT imply that a canonical incident exists.
 
 ### 5.3 Public Status Projection — replaceable derived state
 
-Contains the current public view derived from retained observations and notice publication events. It MAY be replaced or rebuilt. It MUST identify whether the current view is based on external observation, canonical publication, or an unresolved disagreement, and MUST NOT be treated as authoritative incident state.
+Contains separate current request measurements and operator notice publication events. It MAY be replaced or rebuilt. It MUST identify whether the current view is based on external observation, canonical publication, or an unresolved disagreement, and MUST NOT be treated as authoritative incident state.
 
 ### 5.4 Historical Rollup — optional derived state
 
-Aggregates system-level, non-tenant observations for availability and status-history presentation only. It is optional and must not be introduced until a concrete product need is identified. Rollups are replaceable derivatives, never source evidence.
+Aggregates non-tenant request snapshots for measured-window history under SPEC-OPS-006. The requested 90-day history is the concrete product need. Rollups are replaceable derivatives, never source evidence. Gaps, idle windows and monitoring failures must not be represented as successful uptime.
+
+### 5.5 Public Request Snapshot — append-only
+
+Use the closed schema, classification and history rules in SPEC-OPS-006. Persist
+source sampled time separately from collector receipt time. Append a source-minute
+snapshot once; atomically update its daily rollup and a monotonic current pointer.
+Retries must not inflate coverage. Older snapshots must not overwrite current data.
+Old evidence observations remain retained; do not convert them into request history.
 
 ## VI. Reconciliation
 
@@ -99,7 +140,7 @@ Do not copy canonical incident content into external storage. Do not require lin
 ## VII. Authority and Availability Rules
 
 - Firestore MUST NOT contain `canonical_incidents`, authoritative `incident_events`, or authoritative `incident_summary`.
-- External notices MAY be published while canonical incident publication is unavailable.
+- External notices MAY be published during normal operation or canonical-service unavailability under DOM-OPS-001.
 - When canonical publication is available, ordinary canonical incidents MUST NOT be duplicated automatically as external notices.
 - Conflicting external observations produce an explicit `CONFLICTING` state; nulls and free-form strings MUST NOT encode epistemic meaning.
 - No layer may infer internal cause or canonical domain state from external reachability alone.

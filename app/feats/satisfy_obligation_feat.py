@@ -70,6 +70,13 @@ def satisfy_obligation(
             f"got ({assessment.seat_id}, {assessment.class_id})"
         )
 
+    # A withdrawn assessment never became owed and cannot be satisfied
+    # (DOM-OBL-001 §V.8). Checked before the replay lookup: nothing may follow it.
+    if obligations_service.get_withdrawal_event(request.correlation_id) is not None:
+        raise ValueError(
+            f"Assessment {request.correlation_id} was withdrawn and cannot be satisfied"
+        )
+
     # Method validation per FEAT-OBL-003 §IV.3
     if request.method == 'WAIVED':
         if assessment.obligation_type != 'RENT':

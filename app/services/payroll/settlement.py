@@ -82,12 +82,15 @@ def _build_teacher_context(class_id: str) -> CanonicalContext:
 
 
 def _eligible_seat_ids(class_id: str) -> list[int]:
-    """Enrolled student seats with attendance activity (current PROD doctrine).
+    """Claimed student seats with attendance activity (current PROD doctrine).
 
     Payroll pays for attended time over each seat's ``[last payroll, boundary]``
-    window, so a seat is eligible only if it has attendance rows — empty/unclaimed
-    desks have none and are excluded by construction (mirrors the per-seat run
-    population in ``admin.run_payroll``). Returned ascending for determinism.
+    window. Attendance rows alone do NOT establish eligibility: unclaim preserves
+    the seat's productivity facts (DOM-IDEN-005 §Explicit Unclaim, INV-ARC-019),
+    so a seat that attended and was later unclaimed keeps that history while
+    holding no principal — and only a bound seat participates lawfully
+    (DOM-IDEN-005 §VII-VIII). Claim state is therefore filtered explicitly here,
+    never inferred from attendance. Returned ascending for determinism.
     """
     attended = {
         seat_id
@@ -103,7 +106,12 @@ def _eligible_seat_ids(class_id: str) -> list[int]:
         return []
     rows = (
         Seat.query.with_entities(Seat.id)
-        .filter(Seat.id.in_(attended), Seat.role == "student", Seat.class_id == class_id)
+        .filter(
+            Seat.id.in_(attended),
+            Seat.role == "student",
+            Seat.class_id == class_id,
+            Seat.claimed_at.isnot(None),
+        )
         .order_by(Seat.id.asc())
         .all()
     )

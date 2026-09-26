@@ -55,7 +55,30 @@ Once claimed, a student moves into **Active Students (n)**:
 | Savings | Current savings balance |
 | Hall Passes | Remaining pass count |
 | Privileges | Badges for what they have access to — green means covered by rent, blue means individually purchased |
-| Actions | Edit and Delete |
+| Actions | Edit, Unclaim and Delete |
+
+### Unclaiming a seat
+
+**Unclaim** detaches the student's sign-in account from the seat without deleting
+the seat. The balance, transactions, attendance, items and your teacher notes all
+stay on the seat for whoever claims it next. If that account has no other classes,
+it is deleted.
+
+Unclaim asks you for a first and last name, and that name becomes two things at
+once: what the seat is listed under in Unclaimed Seats, and what the student types
+to claim it. They are always the same name, so nobody can be told to claim under a
+name you cannot see.
+
+That makes Unclaim the moment to correct a name. You cannot edit an unclaimed
+seat's name — the name is what the student matches against, so changing it on its
+own would make the seat unclaimable. Your options are:
+
+- **Seat already claimed?** Use **Edit** to fix the displayed name.
+- **Seat unclaimed and the name is wrong?** Delete it and add it again, or unclaim
+  the right seat and enter the correct name.
+
+If two unclaimed seats end up with the same name, the system gives each one a claim
+code, shown in the Unclaimed Seats list. Hand that code to the student.
 
 Tick the checkboxes in the first column and a toolbar appears reading *n students selected*, with a **Bulk Actions** menu: **Start Work**, **Break**, **Adjust Hall-Pass Entitlements**, and **Delete Students**. **Clear** drops the selection.
 
@@ -100,8 +123,8 @@ Deleting several at once is deliberately harder. **Bulk Actions > Delete Student
 > [!NOTE]
 > **The roster is per-class.** Everything on this page belongs to the class selected in the sidebar. Adding a student here does not add them anywhere else.
 
-> [!WARNING]
-> **The exported Insurance Plan column always reads "None."** The export does not currently look up active policies. Every other column is accurate. This is a known defect.
+> [!NOTE]
+> **Insurance Plan is derived from active coverage.** The export shows the current policy title for each student with an active insurance entitlement; students without active coverage show “None.”
 
 > [!TIP]
 > Paste your whole class in one go on day one, then hand out the join code and let students claim at their own pace. The unclaimed-seat badge tells you who is still outstanding without your having to chase anyone.

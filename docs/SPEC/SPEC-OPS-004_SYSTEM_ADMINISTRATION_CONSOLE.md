@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-OPS-004 | 1.1 | 2026-09-06 | SPEC-OPS-003 v1.0 | Normative |
+| SPEC-OPS-004 | 1.2 | 2026-09-15 | SPEC-OPS-004 v1.1 | Normative |
 
 > [!NOTE]
 > Renumbered from `SPEC-OPS-003` on 2026-09-06. This document and
@@ -82,6 +82,10 @@ Issues are addressed by opaque reference, never by primary key, in both URLs and
 
 Issue records carry `actor_public_id` and `class_public_id`. The console reads across tenants by design — it is the one surface exempt from class scoping — and therefore MUST NOT surface identifying student or teacher data beyond those opaque references.
 
+Support views MUST apply DOM-SUP-001 §X per-category teacher permissions before
+constructing any operator-facing payload. Technical correlation diagnostics remain
+available; consent to disclose a frozen snapshot grants no live class authority.
+
 ### 6.4 Logs
 
 `/sysadmin/combined-logs` is the supported log surface, with error events and network activity as tabs over persisted records.
@@ -109,12 +113,18 @@ Permitted mutations are confined to Operations-owned records: issue status and r
 
 Any capability that would reach into class state — deleting a class period, deleting a teacher account, adjusting a student balance, broadcasting to classroom dashboards — is outside this specification and MUST NOT be added to the console without a domain-owning FEAT and an amendment here.
 
-## VIII. Known Non-Conformance
+## VIII. Historical Non-Conformance Record
 
-Recorded so implementers do not mistake these for intended behavior:
+These findings were recorded during the initial console reconciliation. They are
+retained as evidence, not as intended behavior or current open work:
 
-1. `/sysadmin/error-logs`, `/sysadmin/logs-testing`, and `/sysadmin/network-activity` render hardcoded empty result sets. They are superseded by `/sysadmin/combined-logs` and are candidates for removal.
-2. `update_user_report` assigns issue status, reviewer notes, and review metadata directly on the model without routing through a FEAT and without an explicit commit, contrary to the mutation model in `CLAUDE.md` and `app/feats/base.py`.
+1. **Resolved 2026-09-08:** `/sysadmin/error-logs`, `/sysadmin/logs-testing`,
+   and `/sysadmin/network-activity` no longer render hardcoded empty result
+   sets. The superseded routes redirect to the supported
+   `/sysadmin/combined-logs` surface.
+2. **Resolved 2026-09-08:** `update_user_report` now runs under
+   `FEAT-OPS-001`, uses the canonical issue-status/history helper, records
+   Operations-owned review metadata, and commits the mutation atomically.
 
 ## IX. Documentation Placement
 

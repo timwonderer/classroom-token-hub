@@ -15,7 +15,6 @@ def test_DOM_LED_001__payroll_transactions_stay_class_scoped(app):
         create_ledger_pending_transaction(
             seat_id=student_a.seat.id,
             class_id=class_a.class_id,
-            user_id=student_a.user.id,
             amount=100.00,
             account_type="checking",
             type="payroll",
@@ -24,7 +23,6 @@ def test_DOM_LED_001__payroll_transactions_stay_class_scoped(app):
         create_ledger_pending_transaction(
             seat_id=student_g.seat.id,
             class_id=class_g.class_id,
-            user_id=student_g.user.id,
             amount=100.00,
             account_type="checking",
             type="payroll",

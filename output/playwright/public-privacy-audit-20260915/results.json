@@ -1,0 +1,54 @@
+[
+  {
+    "page": "district.html",
+    "width": 1440,
+    "axe_violations": 0,
+    "horizontal_overflow": false,
+    "toc_links": 14,
+    "keyboard_focus": {
+      "tag": "A",
+      "text": "arrow_circle_left\nReturn to Home",
+      "outline": "auto"
+    },
+    "page_errors": []
+  },
+  {
+    "page": "district.html",
+    "width": 390,
+    "axe_violations": 0,
+    "horizontal_overflow": false,
+    "toc_links": 14,
+    "keyboard_focus": {
+      "tag": "A",
+      "text": "arrow_circle_left\nReturn to Home",
+      "outline": "auto"
+    },
+    "page_errors": []
+  },
+  {
+    "page": "privacy.html",
+    "width": 1440,
+    "axe_violations": 0,
+    "horizontal_overflow": false,
+    "toc_links": 12,
+    "keyboard_focus": {
+      "tag": "A",
+      "text": "arrow_circle_left\nReturn to Home",
+      "outline": "auto"
+    },
+    "page_errors": []
+  },
+  {
+    "page": "privacy.html",
+    "width": 390,
+    "axe_violations": 0,
+    "horizontal_overflow": false,
+    "toc_links": 12,
+    "keyboard_focus": {
+      "tag": "A",
+      "text": "arrow_circle_left\nReturn to Home",
+      "outline": "auto"
+    },
+    "page_errors": []
+  }
+]

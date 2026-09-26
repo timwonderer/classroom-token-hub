@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-POL-001A | 2.0 | 2026-07-28 | 1.0 | Constitutional Appendix |
+| DOM-POL-001A | 2.1 | 2026-09-24 | 2.0 | Constitutional Appendix |
 
 ## I. Purpose
 
@@ -92,13 +92,13 @@ Domain-level persistence notes:
 
 - `assessment_events` records liability facts and their lawful resolution history;
 - `bill_cycles` records recurring temporal progression for continuing obligation-producing relationships;
-- rent recurrence is determined by the latest assessment boundary, not by a mutable current flag;
+- the current rent cycle is the cycle whose period contains the reference time (`DOM-OBL-001` §V.7), not the latest cycle and not a mutable current flag;
 - a bill-cycle row may carry the rent `policy_uuid` that it invokes.
 
 Policy relevance:
 
 - Obligations consumes policy inputs when a liability is assessed or scheduled;
-- the assessment record must carry the source terms needed to interpret that liability without rereading the source Policy item later;
+- the assessment record freezes the source terms by reference: it carries the exact `policy_uuid` and resolves that immutable version, never the family's current row (`DOM-POL-001` §VII);
 - the obligation fact owns the resulting liability truth;
 - recurring rent changes are versioned by teacher submission, not inferred from payload diffs.
 
@@ -134,6 +134,26 @@ prior row); a partial unique index
 IS NOT NULL` backstops the FEAT-CLASS-003 command guard. The group-level semantics
 (rank set, three-tier cap, one-active-coverage-per-group at purchase) are specified in
 FEAT-CLASS-003 §VIII.
+
+### E. Recurring billing terms (rent and insurance)
+
+A recurring policy family carries the terms that schedule its obligations. Each is part of the immutable definition row; a downstream bill cycle resolves them from the exact `policy_uuid` it carries (`DOM-POL-001` §VII, frozen by reference), never from the family's current row.
+
+**Bill preview.** `bill_preview_days` is the interval before a period's coverage boundary at which the obligation for that period is assessed and becomes payable (`DOM-OBL-001` §V.7). It permits early satisfaction; it does not move the due boundary, grace, late-fee, or coverage semantics.
+
+- Rent: `bill_preview_days` MAY be `0` (the rent is assessed at its due boundary, as before). `bill_preview_enabled = false` is equivalent to `0`.
+- Insurance: `bill_preview_days` is required and MUST satisfy `0 < preview < minimum_period_duration(charge_frequency)` (`SPEC-TIME-001` §IX.12–13). A zero preview would recreate a coverage gap at every boundary.
+
+**Insurance cadence.** `charge_frequency` is the canonical cadence of an insurance definition: `WEEKLY` or `MONTHLY`, resolved as anchored recurrence from the class-local calendar date of purchase (`SPEC-TIME-001` §IX.12). Monthly recurrence rolls forward when the anchor day does not exist in a month; it never clamps backward.
+
+**Insurance nonpayment.** Each insurance definition fixes, at authoring, what happens when a required premium is not satisfied by its coverage boundary (`DOM-STORE-001` §VIII.E.1):
+
+- `nonpayment_mode` — `ACCUMULATE` or `CANCEL_AFTER_X_DAYS`;
+- `cancel_after_days` — required, and greater than zero, when the mode is `CANCEL_AFTER_X_DAYS`; absent otherwise. It may exceed one billing period.
+
+These terms are frozen with the purchased policy version: a later submission changes them only for entitlements purchased under the new `policy_uuid`.
+
+**Policies read.** Policies exposes one family-agnostic read, "the preview interval for `policy_uuid` X", used by Obligations to schedule succession. Obligations does not open `rent_settings` or `insurance_policies`, and does not branch on the family.
 
 ## VI. Deferred Policy Schema Areas
 

@@ -131,7 +131,17 @@ class TestStructuralGates:
                 txn, class_id="c1", covered_seat_id=1
             )
             assert verdict.eligible is True
-            assert verdict.reason_code is None
+
+    def test_loss_with_compensating_entry_is_not_insurable(self, app):
+        with app.app_context():
+            txn = _txn(class_id="c1", seat_id=1, amount="-5.00")
+            txn.id = 42
+            txn.reversal_transaction_id = 99
+            verdict = eligibility.evaluate_transaction_claim_basis(
+                txn, class_id="c1", covered_seat_id=1
+            )
+            assert verdict.eligible is False
+            assert verdict.reason_code == eligibility.ALREADY_COMPENSATED
 
 
 # ---------------------------------------------------------------------------

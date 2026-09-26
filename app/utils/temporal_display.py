@@ -30,6 +30,12 @@ from markupsafe import Markup
 # ---------------------------------------------------------------------------
 
 def _ensure_aware(dt: datetime) -> datetime:
+    if isinstance(dt, str):
+        # TLCP correlation packs (DOM-OPS-001) freeze request-trace timestamps
+        # as ISO strings inside a JSON column (app/services/tlcp.py:
+        # row.created_at.isoformat()) -- callers pass those straight through
+        # this filter, never a datetime.
+        dt = datetime.fromisoformat(dt)
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc)

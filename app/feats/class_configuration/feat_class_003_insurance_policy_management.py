@@ -47,6 +47,7 @@ from app.feats.base import requires_feat_context
 from app.models import InsurancePolicy, Seat
 from app.services import insurance_definition_service as defs
 from app.services import economic_engine as ee
+from app.services.policy_reference_service import insurance_recurring_terms_violation
 
 
 # Canonical insurance taxonomy (SPEC-ECON-003 §4.5).
@@ -59,9 +60,18 @@ INSURANCE_TYPES = frozenset({TRANSACTION, PRODUCTIVITY, NON_MONETARY})
 # by covered class-local days / 7; BIWEEKLY / SEMESTER are NOT lawful.
 CHARGE_FREQUENCIES = frozenset({"WEEKLY", "MONTHLY"})
 
-# Per-type structural contract (SPEC §4.5.3–§4.5.5; mirrors the
-# ck_insurance_policies_type_subset DB backstop). "required" fields MUST be
-# present & non-null; "forbidden" fields MUST be absent/null.
+# Per-type structural contract (mirrors the ck_insurance_policies_type_subset
+# DB backstop). "required" fields MUST be present & non-null; "forbidden"
+# fields MUST be absent/null.
+#
+# waiting_period_days was previously forbidden for TRANSACTION and PRODUCTIVITY,
+# citing "SPEC §4.5.3–§4.5.5" -- a section that does not exist in any document
+# under docs/. No normative document restricts it to NON_MONETARY; the
+# restriction was invented in the same commit that introduced this schema.
+# Operator decision 2026-09-21: settable on every type (not necessarily
+# enforced on every type -- only NON_MONETARY currently gates claim
+# eligibility on it, in FEAT-STOR-003), so it is required only where it is
+# actually used and forbidden nowhere.
 _TYPE_REQUIRED = {
     TRANSACTION: (
         "reimbursement_percentage",
@@ -82,12 +92,10 @@ _TYPE_REQUIRED = {
 _TYPE_FORBIDDEN = {
     TRANSACTION: (
         "claimable_dates_per_week_equivalent",
-        "waiting_period_days",
     ),
     PRODUCTIVITY: (
         "claims_per_week_equivalent",
         "claim_window_days",
-        "waiting_period_days",
     ),
     NON_MONETARY: (
         "reimbursement_percentage",
@@ -205,10 +213,19 @@ def _validate_and_build_definition(submission: dict) -> dict:
             )
 
     # --- coerce + hard-bound the economic fields that apply -----------------
+    # A field is written when it is REQUIRED for this type (already validated
+    # present above), or when it is merely PERMITTED (not forbidden) and the
+    # teacher actually supplied a value -- e.g. waiting_period_days on
+    # TRANSACTION/PRODUCTIVITY: settable everywhere, required only where a
+    # type's own submission gate reads it (NON_MONETARY). Skipping it here for
+    # every non-required field silently dropped whatever the teacher typed.
     for field in _ECONOMIC_FIELDS:
-        if field not in required:
+        if field in required:
+            raw = submission[field]
+        elif field not in forbidden and submission.get(field) not in (None, ""):
+            raw = submission[field]
+        else:
             continue
-        raw = submission[field]
         if field in _DECIMAL_FIELDS:
             val = _coerce_decimal(field, raw)
         else:
@@ -221,6 +238,32 @@ def _validate_and_build_definition(submission: dict) -> dict:
         if field == "reimbursement_percentage" and val > 100:
             raise InsuranceContractViolation("reimbursement_percentage must be <= 100")
         definition[field] = val
+
+    # --- recurring billing terms (DOM-POL-001A §V.E) --------------------------
+    # Required on every definition: the bill preview interval (strictly inside
+    # the shortest period of the cadence, per the resolver), the nonpayment
+    # mode, and cancel_after_days iff CANCEL_AFTER_X_DAYS.
+    raw_preview = submission.get("bill_preview_days")
+    bill_preview_days = (
+        None if raw_preview in (None, "") else _coerce_int("bill_preview_days", raw_preview)
+    )
+    raw_mode = submission.get("nonpayment_mode")
+    nonpayment_mode = (str(raw_mode).strip().upper() if raw_mode not in (None, "") else None)
+    raw_cancel = submission.get("cancel_after_days")
+    cancel_after_days = (
+        None if raw_cancel in (None, "") else _coerce_int("cancel_after_days", raw_cancel)
+    )
+    violation = insurance_recurring_terms_violation(
+        charge_frequency=charge_frequency,
+        bill_preview_days=bill_preview_days,
+        nonpayment_mode=nonpayment_mode,
+        cancel_after_days=cancel_after_days,
+    )
+    if violation is not None:
+        raise InsuranceContractViolation(violation)
+    definition["bill_preview_days"] = bill_preview_days
+    definition["nonpayment_mode"] = nonpayment_mode
+    definition["cancel_after_days"] = cancel_after_days
 
     # --- optional presentation / provenance metadata ------------------------
     if submission.get("tier_level") not in (None, ""):
@@ -383,6 +426,7 @@ def configure_insurance_definition(
     canonical_context,
     actor_seat_id: Optional[int] = None,
     availability_state: str = defs.IN_USE,
+    supersedes_policy_uuid: Optional[str] = None,
     correlation_id: Optional[str] = None,
     idempotency_key: Optional[str] = None,
 ) -> InsurancePolicy:
@@ -390,7 +434,14 @@ def configure_insurance_definition(
 
     Both "new" and "edit" flow through here: each lawful call produces a *new*
     immutable ``policy_uuid`` row (DOM-POL-001). A prior definition is never
-    mutated. Validation is hard-legality only — recommendation-range overrides
+    mutated.
+
+    An edit passes ``supersedes_policy_uuid``: the predecessor is retired in the
+    same context, so it leaves the shelf as the replacement arrives and a grouped
+    tier's rank is free for its own replacement (FEAT-CLASS-003 §VIII.2).
+    Retirement is an availability projection only — seats already covered under
+    the superseded terms keep them until their coverage period ends, because
+    entitlements freeze ``policy_uuid`` at purchase (DOM-POL-001 §VII). Validation is hard-legality only — recommendation-range overrides
     are permitted; hard-bound / per-type-structure violations raise
     :class:`InsuranceContractViolation` BEFORE the POL write.
 
@@ -411,6 +462,15 @@ def configure_insurance_definition(
         actor_seat_id = canonical_context.seat_id
 
     definition = _validate_and_build_definition(submission)
+
+    # Retire before the group guard runs: the predecessor must vacate its IN_USE
+    # rank so the replacement can occupy it. Class-scoped and fail-closed.
+    if supersedes_policy_uuid is not None:
+        defs.retire_insurance_definition(
+            policy_uuid=supersedes_policy_uuid,
+            class_id=class_id,
+        )
+
     _enforce_tier_group_rules(class_id, definition)
 
     return defs.create_insurance_definition(

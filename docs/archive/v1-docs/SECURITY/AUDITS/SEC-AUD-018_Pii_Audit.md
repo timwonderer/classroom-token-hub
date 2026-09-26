@@ -6,7 +6,9 @@ searchable: false
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-|SEC-AUD-018| 1.1 | 2026-03-08 | 1.0 |Normative|
+|SEC-AUD-018| 1.1 | 2026-03-08 | 1.0 |Archived - non-normative|
+
+> **Archived — history, not authority.** This document describes a superseded version of the system and is retained under `docs/archive/` as a record of what was once true. It governs nothing. Current authority lives in `docs/INVARIANT/`, `docs/DOMAIN/`, and `docs/STANDARD_OPERATING_PROCEDURES/`, in that order (`.claude/rules/documentation.md`).
 
 We reviewed the multi-tenant data model and request flows to confirm no new personally identifiable information (PII) is stored beyond the existing minimal surface:
 

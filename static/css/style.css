@@ -4,6 +4,25 @@
 */
 
 /* ─── Reset & Typography ─── */
+
+/*
+ * The `hidden` attribute must actually hide.
+ *
+ * The UA stylesheet's `[hidden] { display: none }` carries no `!important`, so
+ * ANY Bootstrap display utility on the same element beats it — `.d-flex`,
+ * `.d-block` and `.d-grid` are all declared `display: ... !important`. An
+ * element written as `<div class="alert d-flex" hidden>` is therefore visible,
+ * permanently, and no amount of `el.hidden = true` in JavaScript changes that.
+ *
+ * That shipped once: the stale-class-context banner in layout_admin.html
+ * announced itself on every admin page regardless of whether the context had
+ * actually diverged. The markup was correct and the script was correct; the
+ * cascade quietly discarded both.
+ */
+[hidden] {
+    display: none !important;
+}
+
 body {
     font-family: var(--font-family);
     background-color: var(--background);
@@ -28,7 +47,8 @@ h6 {
  * stays legible on colored backgrounds. Font-size and font-weight are
  * NOT normalized here — templates control them per level:
  *   - Top-level cards use <h5 class="fw-bold"> (larger, more prominent)
- *   - Nested / alert cards use <h6 class="fw-semibold"> (calmer)
+ *   - Nested cards use <h6 class="fw-semibold"> (calmer)
+ *   - Alert cards (macros/cards.html alert_card) use <h3 class="h5 fw-bold">
  * Both classes are supplied at the template layer so the visual
  * hierarchy is explicit in each site rather than hidden in CSS. */
 .card-header h1,
@@ -65,7 +85,7 @@ a:hover {
 /* Backgrounds */
 .bg-primary {
     background-color: var(--primary) !important;
-    color: white;
+    color: var(--text-inverse);
 }
 
 .bg-secondary {
@@ -75,12 +95,12 @@ a:hover {
 
 .bg-success {
     background-color: var(--success) !important;
-    color: white;
+    color: var(--text-inverse);
 }
 
 .bg-danger {
     background-color: var(--danger) !important;
-    color: white;
+    color: var(--text-inverse);
 }
 
 .bg-warning {
@@ -90,7 +110,7 @@ a:hover {
 
 .bg-info {
     background-color: var(--info) !important;
-    color: white;
+    color: var(--text-inverse);
 }
 
 .bg-light {
@@ -100,7 +120,7 @@ a:hover {
 
 .bg-dark {
     background-color: var(--neutral-800) !important;
-    color: white;
+    color: var(--text-inverse);
 }
 
 /* Text */
@@ -134,7 +154,7 @@ a:hover {
 }
 
 .text-white {
-    color: white !important;
+    color: var(--text-inverse) !important;
 }
 
 .text-dark {
@@ -147,12 +167,6 @@ a:hover {
 }
 
 /* ─── WCAG Contrast Overrides ─── */
-.alert-warning {
-    color: color-mix(in srgb, var(--warning) 60%, #000) !important;
-    background-color: var(--warning-subtle) !important;
-    border-color: color-mix(in srgb, var(--warning) 20%, transparent) !important;
-}
-
 .btn-outline-secondary {
     color: var(--neutral-700) !important;
     border-color: var(--neutral-400) !important;
@@ -168,9 +182,27 @@ a:hover {
     border-color: var(--info) !important;
 }
 
+/* Gold is a fill, not a text colour (tokens.css): raw --warning text is 2.2:1 on
+   white. Outline warning buttons use the gold accent text token (6.7:1 on white,
+   5.5:1 on striped rows) and dark text on the gold fill when pressed (7.9:1). */
+.btn-outline-warning {
+    color: var(--accent-text-on-light) !important;
+    border-color: var(--accent-text-on-light) !important;
+    background: transparent;
+}
+
+.btn-outline-warning:hover,
+.btn-outline-warning:focus-visible,
+.btn-outline-warning:active,
+.btn-outline-warning.active {
+    background-color: var(--warning) !important;
+    border-color: var(--warning) !important;
+    color: var(--secondary-text) !important;
+}
+
 .btn-outline-info:hover {
     background-color: var(--info) !important;
-    color: #fff !important;
+    color: var(--text-inverse) !important;
 }
 
 /* Fix hardcoded text-white on bg-secondary (Gold in Teacher theme) */
@@ -192,9 +224,49 @@ a:hover {
     font-weight: 600;
 }
 
+/* ── Checkbox, radio and switch boundaries ── */
+/* A control's boundary and its on/off state each need 3:1 against what sits
+ * next to them (WCAG 1.4.11, INV-ARC-020 VII.D). Bootstrap's resting border and
+ * switch thumb are both rgba(0, 0, 0, 0.25): 1.84:1 on a white track, and
+ * 1.30:1 on a dark section header, where the control all but vanishes.
+ * --neutral-500 measures 4.76:1 on --surface. */
+.form-check-input {
+    border-color: var(--neutral-500);
+}
+
+/* The thumb is a background image, so its colour is re-specified rather than
+ * inherited. Same --neutral-500 (#737370) as the border. */
+.form-switch .form-check-input {
+    --bs-form-switch-bg: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%23737370'/%3e%3c/svg%3e");
+}
+
 .form-check-input:checked {
     background-color: var(--primary);
     border-color: var(--primary);
+}
+
+/* Inside a dark section header the checked fill above is --primary on a
+ * --primary background: 1.00:1. The track disappeared and the white thumb read
+ * as a dot floating in the header — the Payroll Settings "Advanced Mode"
+ * switch. In that context the control takes the accent fill (--secondary on
+ * --primary is 4.34:1) and a light boundary (--text-inverse at 65% is
+ * 5.10:1), in both states. */
+.bg-primary .form-check-input,
+.bg-dark .form-check-input {
+    border-color: color-mix(in srgb, var(--text-inverse) 65%, transparent);
+}
+
+.bg-primary .form-check-input:checked,
+.bg-dark .form-check-input:checked {
+    background-color: var(--secondary);
+    border-color: var(--secondary);
+}
+
+.bg-primary .form-switch .form-check-input:checked,
+.bg-dark .form-switch .form-check-input:checked {
+    /* Dark thumb on the gold fill: #171717 is --neutral-900, which
+     * --secondary-text resolves to. 6.90:1 on --secondary. */
+    --bs-form-switch-bg: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%23171717'/%3e%3c/svg%3e");
 }
 
 .form-check-input:focus {
@@ -235,7 +307,7 @@ a:hover {
 .btn-primary {
     background-color: var(--primary) !important;
     border-color: var(--primary) !important;
-    color: white !important;
+    color: var(--text-inverse) !important;
 }
 
 .btn-primary:hover,
@@ -243,7 +315,7 @@ a:hover {
 .btn-primary:active {
     background-color: var(--primary-hover) !important;
     border-color: var(--primary-hover) !important;
-    color: white !important;
+    color: var(--text-inverse) !important;
 }
 
 .btn-secondary {
@@ -261,25 +333,25 @@ a:hover {
 .btn-success {
     background-color: var(--success);
     border-color: var(--success);
-    color: white;
+    color: var(--text-inverse);
 }
 
 .btn-success:hover {
     background-color: var(--success-hover);
     border-color: var(--success-hover);
-    color: white;
+    color: var(--text-inverse);
 }
 
 .btn-danger {
-    background-color: #b3261e;
-    border-color: #b3261e;
-    color: white;
+    background-color: var(--danger);
+    border-color: var(--danger);
+    color: var(--text-inverse);
 }
 
 .btn-danger:hover {
-    background-color: #8f1f1f;
-    border-color: #8f1f1f;
-    color: white;
+    background-color: var(--danger-hover);
+    border-color: var(--danger-hover);
+    color: var(--text-inverse);
 }
 
 .btn-warning {
@@ -297,13 +369,13 @@ a:hover {
 .btn-info {
     background-color: var(--info);
     border-color: var(--info);
-    color: white;
+    color: var(--text-inverse);
 }
 
 .btn-info:hover {
     background-color: var(--info-hover);
     border-color: var(--info-hover);
-    color: white;
+    color: var(--text-inverse);
 }
 
 .btn-light {
@@ -325,7 +397,7 @@ a:hover {
 
 .btn-outline-primary:hover {
     background-color: var(--primary) !important;
-    color: white !important;
+    color: var(--text-inverse) !important;
 }
 
 .btn-check:checked + .btn-outline-primary,
@@ -334,7 +406,7 @@ a:hover {
 .show > .btn-outline-primary.dropdown-toggle {
     background-color: var(--primary) !important;
     border-color: var(--primary) !important;
-    color: #fff !important;
+    color: var(--text-inverse) !important;
 }
 
 .btn-check:focus + .btn-outline-primary,
@@ -357,20 +429,28 @@ a:hover {
 
 /* Steward / Student Role Utilities */
 .bg-student {
-    background-color: var(--student-primary) !important;
-    color: white;
+    background-color: var(--steward-blue) !important;
+    color: var(--text-inverse);
 }
 
 .text-student {
-    color: var(--student-primary) !important;
+    color: var(--steward-blue) !important;
 }
 
 .border-student {
-    border-color: var(--student-primary) !important;
+    border-color: var(--steward-blue) !important;
 }
 
 /* ─── Cards & Containers ─── */
 .card {
+    /* Feed Bootstrap's own card radii from the token. Its
+     * `.card-header:first-child` / `.card-footer:last-child` rules outrank
+     * `.card-header` below and round the header with
+     * --bs-card-inner-border-radius; left at Bootstrap's 6px default, a
+     * colored header's corners overhang the 4px border and the card surface
+     * shows through at each corner. */
+    --bs-card-border-radius: var(--radius-sm);
+    --bs-card-inner-border-radius: calc(var(--radius-sm) - 1px);
     background-color: var(--surface);
     border: 1px solid var(--neutral-300);
     border-radius: var(--radius-sm);
@@ -390,17 +470,17 @@ a:hover {
 }
 
 .card-header.bg-primary {
-    color: white;
+    color: var(--text-inverse);
     background: var(--primary) !important;
 }
 
 .card-header.bg-success {
-    color: white;
+    color: var(--text-inverse);
     background: var(--success) !important;
 }
 
 .card-header.bg-danger {
-    color: white;
+    color: var(--text-inverse);
     background: var(--danger) !important;
 }
 
@@ -410,8 +490,23 @@ a:hover {
 }
 
 .card-header.bg-info {
-    color: white;
+    color: var(--text-inverse);
     background: var(--info) !important;
+}
+
+/* Alert-as-card (macros/cards.html `alert_card`, AppCore.buildAlertCard).
+ * The border must match the header fill, so it reads the same role-aware
+ * token rather than Bootstrap's `.border-*` utility, whose color comes from
+ * Bootstrap's own `--bs-*-rgb` palette. */
+.alert-card.border-success { border-color: var(--success) !important; }
+.alert-card.border-info    { border-color: var(--info) !important; }
+.alert-card.border-warning { border-color: var(--warning) !important; }
+.alert-card.border-danger  { border-color: var(--danger) !important; }
+
+/* The body holds explanatory prose; trim the trailing margin so a lone
+ * paragraph or list sits flush with the card padding. */
+.alert-card > .card-body > :last-child {
+    margin-bottom: 0;
 }
 
 .card-body {
@@ -466,18 +561,28 @@ a:hover {
 }
 
 /* Offcanvas help accordions use one high-contrast, consistent treatment. */
+.offcanvas .offcanvas-body {
+    display: flex;
+    flex-direction: column;
+}
+
+.offcanvas .contextual-help-resources {
+    order: 999;
+    margin-top: auto !important;
+}
+
 .offcanvas .accordion-button,
 .offcanvas .accordion-button:not(.collapsed) {
     --bs-accordion-btn-icon: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23fff' stroke-linecap='round' stroke-linejoin='round'%3e%3cpath d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
     --bs-accordion-btn-active-icon: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23fff' stroke-linecap='round' stroke-linejoin='round'%3e%3cpath d='m2 11 6-6 6 6'/%3e%3c/svg%3e");
     background-color: var(--primary) !important;
-    color: #fff !important;
+    color: var(--text-inverse) !important;
 }
 
 .offcanvas .accordion-button .material-symbols-outlined,
 .offcanvas .accordion-button:not(.collapsed) .material-symbols-outlined,
 .offcanvas .accordion-button.collapsed .material-symbols-outlined {
-    color: #fff !important;
+    color: var(--text-inverse) !important;
 }
 
 .accordion-body {
@@ -558,42 +663,11 @@ a:hover {
     border: 1px solid color-mix(in srgb, var(--secondary) 80%, black);
 }
 
-.alert {
-    border-radius: var(--radius-sm);
-    border: 1px solid transparent;
-    padding: 1rem;
-    margin-bottom: 1.5rem;
-}
-
-.alert-success {
-    background-color: var(--success-subtle);
-    color: var(--success);
-    border-color: color-mix(in srgb, var(--success) 30%, transparent);
-}
-
-.alert-danger {
-    background-color: var(--danger-subtle);
-    color: var(--danger);
-    border-color: color-mix(in srgb, var(--danger) 30%, transparent);
-}
-
-.alert-warning {
-    background-color: var(--warning-subtle);
-    color: var(--warning);
-    border-color: color-mix(in srgb, var(--warning) 30%, transparent);
-}
-
-.alert-info {
-    background-color: var(--info-subtle);
-    color: var(--info);
-    border-color: color-mix(in srgb, var(--info) 30%, transparent);
-}
-
 /* ─── Navigation (Sidebar) ─── */
 .sidebar {
     width: 280px;
     background-color: var(--primary);
-    color: white;
+    color: var(--text-inverse);
     min-height: 100vh;
     position: fixed;
     top: 0;
@@ -655,8 +729,16 @@ a:hover {
 }
 
 .sidebar a:hover {
-    color: white;
+    color: var(--text-inverse);
     background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* `.sidebar a` dims to 85% opacity white for ordinary nav links (by design --
+   full contrast is reserved for :hover/.active). A solid-color .btn-* anchor
+   (e.g. Sign Out) is not a nav link and must not inherit that dimming: on a
+   --danger background it measured 4.33:1, short of WCAG AA's 4.5:1. */
+.sidebar a.btn {
+    color: var(--text-inverse);
 }
 
 .sidebar a.active {
@@ -680,7 +762,7 @@ a:hover {
 .nav-accordion-btn:hover,
 .nav-accordion-btn:focus {
     background: rgba(255, 255, 255, 0.16);
-    color: #fff;
+    color: var(--text-inverse);
 }
 
 .nav-accordion-btn.dropdown-toggle::after {
@@ -704,7 +786,7 @@ a:hover {
 }
 
 .sidebar-brand {
-    color: white;
+    color: var(--text-inverse);
     font-size: 1.25rem;
     font-weight: 700;
     margin-bottom: 2rem;
@@ -714,7 +796,7 @@ a:hover {
 }
 
 .sidebar-brand:hover {
-    color: white;
+    color: var(--text-inverse);
 }
 
 .nav-brand-block {
@@ -743,7 +825,7 @@ a:hover {
 }
 
 .sidebar-scope-name {
-    color: #fff;
+    color: var(--text-inverse);
     font-size: 1.2rem;
     font-weight: 800;
     letter-spacing: 0.02em;
@@ -802,7 +884,7 @@ a:hover {
 .sidebar-switcher .form-select {
     background-color: rgba(255, 255, 255, 0.1);
     border: none;
-    color: #fff;
+    color: var(--text-inverse);
     font-weight: 600;
 }
 
@@ -813,13 +895,7 @@ a:hover {
 }
 
 .sidebar-switcher .form-select option {
-    color: #000;
-}
-
-.sidebar-switcher .alert {
-    background: rgba(255, 193, 7, 0.15);
-    border: 1px solid rgba(255, 193, 7, 0.4);
-    color: #fff;
+    color: var(--neutral-900);
 }
 
 .sidebar-switcher-add {
@@ -830,13 +906,13 @@ a:hover {
     justify-content: center;
     border-radius: 6px;
     background: rgba(255, 255, 255, 0.1);
-    color: #fff;
+    color: var(--text-inverse);
     text-decoration: none;
 }
 
 .sidebar-switcher-add:hover {
     background: rgba(255, 255, 255, 0.18);
-    color: #fff;
+    color: var(--text-inverse);
 }
 
 .sidebar-switcher-add .material-symbols-outlined {
@@ -860,7 +936,7 @@ a:hover {
 .student-sidebar {
     width: 260px;
     background-color: var(--primary);
-    color: white;
+    color: var(--text-inverse);
     padding: 1.5rem 1.25rem;
     position: fixed;
     top: 0;
@@ -879,7 +955,7 @@ a:hover {
     align-items: center;
     gap: 0.75rem;
     margin-bottom: 1.5rem;
-    color: #ffffff;
+    color: var(--text-inverse);
     font-weight: 700;
     font-size: 1.1rem;
     text-decoration: none;
@@ -887,7 +963,7 @@ a:hover {
 
 .student-brand:hover {
     text-decoration: none;
-    color: #ffffff;
+    color: var(--text-inverse);
 }
 
 .student-identity {
@@ -924,28 +1000,28 @@ a:hover {
 }
 
 .student-nav a.active {
-    background-color: #7f5b34;
-    color: white;
+    background-color: var(--student-nav-active-bg);
+    color: var(--text-inverse);
     font-weight: 700;
 }
 
 .student-home-icon-bill,
 .student-home-icon-store,
 .student-home-icon-stock {
-    color: #ffffff;
+    color: var(--text-inverse);
     transition: color 0.2s ease;
 }
 
 .student-brand:hover .student-home-icon-bill {
-    color: #ffd900;
+    color: var(--student-brand-bill-hover);
 }
 
 .student-brand:hover .student-home-icon-store {
-    color: #00ffbf;
+    color: var(--student-brand-store-hover);
 }
 
 .student-brand:hover .student-home-icon-stock {
-    color: #ff6c7d;
+    color: var(--student-brand-stock-hover);
 }
 
 .student-main {
@@ -962,31 +1038,24 @@ a:hover {
 
 .student-content .text-muted,
 .student-content .text-secondary {
-    color: #5f5f5c !important;
+    color: var(--text-muted) !important;
 }
 
 .student-content .badge.text-muted,
-.student-content .badge.bg-secondary,
 .student-content .badge.bg-secondary.text-muted {
-    color: #ffffff !important;
+    color: var(--text-inverse) !important;
 }
 
-.student-content .alert-warning {
-    color: #5f3d00;
-}
-
-.student-content .alert-danger {
-    color: #8f1f1f;
-}
-
-.student-content .alert-info {
-    color: #1f4f73;
-}
+/* .badge.bg-secondary alone (no .text-muted) is excluded above: it's a solid
+   gold (--secondary) background, and forcing white text on it measured
+   2.2:1 -- below WCAG AA. --secondary-text (from the base .bg-secondary
+   rule this was overriding) is the color already defined for text on this
+   exact background and clears 8.1:1. */
 
 .student-shell .sidebar a.active,
 .student-sidebar .student-nav a.active {
-    background-color: #7f5b34;
-    color: white;
+    background-color: var(--student-nav-active-bg);
+    color: var(--text-inverse);
 }
 
 /* ─── Sysadmin Shell Specifics ─── */
@@ -995,12 +1064,12 @@ body.sysadmin-shell {
 }
 
 .sysadmin-sidebar {
-    background: var(--sysadmin-sidebar-bg, #2C2C2C);
+    background: var(--sysadmin-sidebar-bg);
     width: 260px;
     min-height: 100vh;
     padding: 1.5rem;
-    color: var(--sysadmin-sidebar-text, #ffffff);
-    border-right: 1px solid rgba(212, 168, 87, 0.15);
+    color: var(--sysadmin-sidebar-text);
+    border-right: 1px solid color-mix(in srgb, var(--secondary) 15%, transparent);
     display: flex;
     flex-direction: column;
     position: fixed;
@@ -1014,7 +1083,7 @@ body.sysadmin-shell {
 
 .sysadmin-brand {
     text-decoration: none;
-    color: var(--sysadmin-sidebar-text, #ffffff);
+    color: var(--sysadmin-sidebar-text);
     margin-bottom: 1rem;
     display: block;
 }
@@ -1026,14 +1095,14 @@ body.sysadmin-shell {
 }
 
 .sysadmin-brand:hover {
-    color: var(--sysadmin-sidebar-text, #ffffff);
+    color: var(--sysadmin-sidebar-text);
 }
 
 .sysadmin-identity {
-    color: var(--sysadmin-sidebar-text, #ffffff);
+    color: var(--sysadmin-sidebar-text);
     font-weight: 500;
     padding: 1rem 0;
-    border-bottom: 1px solid rgba(212, 168, 87, 0.2);
+    border-bottom: 1px solid color-mix(in srgb, var(--secondary) 20%, transparent);
     margin-bottom: 1rem;
     font-size: 0.95rem;
 }
@@ -1050,7 +1119,7 @@ body.sysadmin-shell {
     align-items: center;
     gap: 0.75rem;
     padding: 0.65rem 0.85rem;
-    color: rgba(245, 245, 245, 0.8);
+    color: color-mix(in srgb, var(--neutral-100) 80%, transparent);
     text-decoration: none;
     border-radius: var(--radius-sm);
     border: 1px solid transparent;
@@ -1061,14 +1130,14 @@ body.sysadmin-shell {
 
 .sysadmin-nav a:hover {
     color: var(--sysadmin-accent);
-    border-color: rgba(212, 168, 87, 0.4);
-    background: rgba(212, 168, 87, 0.06);
+    border-color: color-mix(in srgb, var(--secondary) 40%, transparent);
+    background: color-mix(in srgb, var(--secondary) 6%, transparent);
 }
 
 .sysadmin-nav a.active {
     color: var(--sysadmin-accent);
     border-color: var(--sysadmin-accent);
-    background: rgba(212, 168, 87, 0.08);
+    background: color-mix(in srgb, var(--secondary) 8%, transparent);
 }
 
 .sysadmin-nav-spacer {
@@ -1077,24 +1146,24 @@ body.sysadmin-shell {
 }
 
 .sysadmin-nav-divider {
-    border-color: rgba(212, 168, 87, 0.2);
+    border-color: color-mix(in srgb, var(--secondary) 20%, transparent);
     margin: 0.5rem 0;
 }
 
 .sysadmin-nav-signout {
-    color: rgba(220, 80, 80, 0.85) !important;
+    color: var(--sysadmin-signout-accent) !important;
 }
 
 .sysadmin-nav-signout:hover {
-    color: #ff6666 !important;
-    border-color: rgba(220, 80, 80, 0.4) !important;
+    color: var(--sysadmin-signout-hover) !important;
+    border-color: color-mix(in srgb, var(--sysadmin-signout-accent) 40%, transparent) !important;
 }
 
 .sysadmin-main {
     flex-grow: 1;
     min-height: 100vh;
     margin-left: 260px;
-    background: linear-gradient(135deg, #f5f5f3 0%, #fafaf8 100%);
+    background: linear-gradient(135deg, var(--neutral-100) 0%, var(--neutral-50) 100%);
 }
 
 .sysadmin-content {
@@ -1102,7 +1171,7 @@ body.sysadmin-shell {
 }
 
 body.sysadmin-shell .page-header {
-    background: white;
+    background: var(--surface);
     padding: 1.25rem 1.5rem 1.25rem 1rem;
     border-bottom: 1px solid var(--border-color);
     margin-bottom: 0;
@@ -1113,7 +1182,12 @@ body.sysadmin-shell .eyebrow {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    color: var(--sysadmin-accent);
+    /* --sysadmin-accent (aliased to --secondary, #D4A857) measured 2.2:1 on
+       white -- no gold in this palette clears 4.5:1 as text-on-light; the
+       accent is a background/border/icon color here, not a text color.
+       --text-muted matches the non-sysadmin .page-header .eyebrow rule and
+       clears 7.8:1. */
+    color: var(--text-muted);
     margin-bottom: 0.25rem;
 }
 
@@ -1135,7 +1209,7 @@ body.sysadmin-shell .eyebrow {
         width: 44px;
         height: 44px;
         background: var(--primary);
-        color: #fff;
+        color: var(--text-inverse);
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -1306,7 +1380,7 @@ body.sysadmin-shell .eyebrow {
 
 .bg-warning-subtle {
     background-color: var(--warning-subtle) !important;
-    color: var(--warning-text, #856404);
+    color: var(--alert-warning-text);
 }
 
 .bg-danger-subtle {
@@ -1374,6 +1448,67 @@ table.js-sortable thead th:hover .sort-indicator {
     font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
 }
 
+/* Icon sizing utilities (SPEC-DES-001 §VI.2). Icons are a font, so "size" is
+   font-size; these exist so templates never set it inline. `1` on the line-height
+   keeps the glyph box square, which is what makes optical alignment predictable. */
+.icon-xs {
+    font-size: var(--icon-xs);
+}
+
+.icon-sm {
+    font-size: var(--icon-sm);
+}
+
+.icon-md {
+    font-size: var(--icon-md);
+}
+
+.icon-lg {
+    font-size: var(--icon-lg);
+}
+
+.icon-xl {
+    font-size: var(--icon-xl);
+}
+
+.icon-2xl {
+    font-size: var(--icon-2xl);
+}
+
+.icon-2xs {
+    font-size: var(--icon-2xs);
+}
+
+.icon-3xl {
+    font-size: var(--icon-3xl);
+}
+
+/* For an icon that should match the size of the text it sits inline with,
+   rather than one of the fixed token sizes above. */
+.icon-inherit {
+    font-size: 1em;
+}
+
+.icon-2xs,
+.icon-xs,
+.icon-sm,
+.icon-md,
+.icon-lg,
+.icon-xl,
+.icon-2xl,
+.icon-3xl {
+    line-height: 1;
+}
+
+/* Optical alignment against adjacent text, replacing inline vertical-align. */
+.icon-middle {
+    vertical-align: middle;
+}
+
+.icon-text-bottom {
+    vertical-align: text-bottom;
+}
+
 .icon-circle {
     width: 2.5rem;
     height: 2.5rem;
@@ -1382,6 +1517,42 @@ table.js-sortable thead th:hover .sort-indicator {
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+}
+
+/* ─── Token Utilities ───
+   One class per token, so a template can reach the scale without an inline
+   style attribute or a one-rule page <style> block (SPEC-DES-001 §IX). Each
+   restates no value; change the token and every call site follows. */
+.type-2xs { font-size: var(--text-2xs) !important; }
+.type-xs { font-size: var(--text-xs) !important; }
+.type-sm { font-size: var(--text-sm) !important; }
+.type-base { font-size: var(--text-base) !important; }
+.type-lg { font-size: var(--text-lg) !important; }
+.type-xl { font-size: var(--text-xl) !important; }
+.type-2xl { font-size: var(--text-2xl) !important; }
+.type-3xl { font-size: var(--text-3xl) !important; }
+.type-4xl { font-size: var(--text-4xl) !important; }
+.type-5xl { font-size: var(--text-5xl) !important; }
+.type-6xl { font-size: var(--text-6xl) !important; }
+
+.tracking-wide { letter-spacing: var(--tracking-wide); }
+.tracking-wider { letter-spacing: var(--tracking-wider); }
+.tracking-widest { letter-spacing: var(--tracking-widest); }
+
+.alpha-subtle { opacity: var(--alpha-subtle); }
+.alpha-soft { opacity: var(--alpha-soft); }
+.alpha-medium { opacity: var(--alpha-medium); }
+.alpha-strong { opacity: var(--alpha-strong); }
+
+/* Gold accent as text. --secondary and --secondary-hover are fills and fail
+   AA as text on a light surface; this is the legible variant. */
+.text-accent { color: var(--accent-text-on-light) !important; }
+
+/* A bounded scrolling region inside a card or modal. The cap is structural —
+   it limits one region's height rather than expressing a design scale. */
+.scroll-panel {
+    max-height: 300px;
+    overflow-y: auto;
 }
 
 /* ─── Sysadmin Components ─── */
@@ -1504,13 +1675,13 @@ table.js-sortable thead th:hover .sort-indicator {
     text-transform: uppercase;
     font-size: 0.75rem;
     letter-spacing: 0.08em;
-    color: #5f5f5c;
+    color: var(--text-muted);
     margin-bottom: 0.25rem;
     font-weight: 600;
 }
 
 .page-header .meta {
-    color: #5f5f5c;
+    color: var(--text-muted);
     font-weight: 500;
 }
 
@@ -1526,7 +1697,7 @@ table.js-sortable thead th:hover .sort-indicator {
     top: -100px;
     left: 0;
     background: var(--primary);
-    color: white;
+    color: var(--text-inverse);
     padding: 0.5rem 1rem;
     z-index: 9999;
     border-radius: 0 0 var(--radius-sm) 0;
@@ -1536,36 +1707,6 @@ table.js-sortable thead th:hover .sort-indicator {
 
 .skip-link:focus {
     top: 0;
-}
-
-/* Maintenance Banner */
-.maintenance-banner {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 2000;
-    background: var(--warning);
-    color: var(--neutral-900);
-    text-align: center;
-    padding: 0.4rem 1rem;
-    font-size: 0.85rem;
-    font-weight: 600;
-}
-
-body.maintenance-active .page-header,
-body.maintenance-active .sidebar {
-    margin-top: 2rem;
-    /* Push content down */
-}
-
-@media (min-width: 992px) {
-    body.maintenance-active .sidebar {
-        margin-top: 0;
-        /* Sidebar stays put on desktop usually, but if top banner spans full width it might need adjustment */
-        top: 34px;
-        /* Adjust sticky/fixed pos */
-    }
 }
 
 /* ─── Landing Page Styling ─── */
@@ -1600,7 +1741,7 @@ body.maintenance-active .sidebar {
     display: grid;
     gap: 0.45rem;
     padding-right: 2.8rem;
-    border-right: 2px solid var(--secondary-color);
+    border-right: 2px solid var(--secondary);
 }
 
 .landing-brand-row {
@@ -1613,7 +1754,7 @@ body.maintenance-active .sidebar {
 }
 
 .landing-brand-row .material-symbols-outlined {
-    color: var(--secondary-color);
+    color: var(--secondary);
     font-size: 2.7rem;
 }
 
@@ -1633,7 +1774,7 @@ body.maintenance-active .sidebar {
 }
 
 .landing-welcome .version {
-    color: #DEDEDE;
+    color: var(--text-on-dark-muted);
     font-size: 0.7rem;
     font-weight: 500;
     letter-spacing: 0.3em;
@@ -1656,7 +1797,7 @@ body.maintenance-active .sidebar {
 
 .landing-signin-panel {
     padding-right: 2rem;
-    border-right: 2px solid var(--secondary-color);
+    border-right: 2px solid var(--secondary);
 }
 
 .landing-about-panel {
@@ -1696,7 +1837,7 @@ body.maintenance-active .sidebar {
     font-size: 1.15rem;
     line-height: 1.2;
     transition: filter 120ms ease-in-out;
-    box-shadow: var(--shadow);
+    box-shadow: var(--shadow-md);
 }
 
 .landing-signin-btn:hover,
@@ -1704,7 +1845,7 @@ body.maintenance-active .sidebar {
 .landing-learn-more-btn:hover,
 .landing-learn-more-btn:focus-visible {
     color: var(--text-inverse);
-    box-shadow: 0 0 5px 1px var(--secondary-color);
+    box-shadow: 0 0 5px 1px var(--secondary);
 }
 
 .landing-signin-btn-main {
@@ -1732,7 +1873,7 @@ body.maintenance-active .sidebar {
 }
 
 .landing-signin-note-title {
-    color: var(--secondary-hover);
+    color: var(--accent-text-on-light);
     font-size: 1rem;
     font-style: italic;
     font-weight: 600;
@@ -1764,7 +1905,7 @@ body.maintenance-active .sidebar {
 }
 
 .landing-status-label {
-    color: var(--text-light);
+    color: var(--text-on-dark-muted);
     font-size: 0.8rem;
     font-weight: 400;
     letter-spacing: 0.05em;
@@ -1829,7 +1970,7 @@ body.maintenance-active .sidebar {
 
 .landing-footer-links a:hover,
 .landing-footer-links a:focus-visible {
-    color: var(--secondary-color);
+    color: var(--secondary);
 }
 
 .landing-footer-meta p {
@@ -1852,7 +1993,7 @@ body.maintenance-active .sidebar {
 
     .landing-brand {
         border-right: 0;
-        border-bottom: 2px solid var(--secondary-color);
+        border-bottom: 2px solid var(--secondary);
         padding-right: 0;
         padding-bottom: 1.4rem;
     }
@@ -1864,7 +2005,7 @@ body.maintenance-active .sidebar {
 
     .landing-signin-panel {
         border-right: 0;
-        border-bottom: 2px solid var(--secondary-color);
+        border-bottom: 2px solid var(--secondary);
         padding-right: 0;
         padding-bottom: 1.5rem;
     }
@@ -1960,5 +2101,379 @@ body.maintenance-active .sidebar {
     .docs-hero .landing-brand {
         border-right: none;
         padding-right: 0;
+    }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Contextual help panel
+
+   One structure for every help offcanvas, teacher and student alike:
+   an always-visible lead sentence, then collapsed topics.
+
+   The header colour is var(--primary), which resolves to advisor green
+   in the teacher shell and steward blue under body.student-shell. That
+   is the whole role split — neither shell declares a help colour of its
+   own, so the two panels cannot drift apart. Do not add bg-* utilities
+   to a help topic button; a utility class would pin one role's colour
+   onto both.
+   ───────────────────────────────────────────────────────────── */
+
+.help-panel-lead {
+    color: var(--text-primary);
+}
+
+.help-topics .help-topic {
+    background-color: transparent;
+    border: 0;
+    margin-bottom: 0.5rem;
+}
+
+.help-topics .help-topic .accordion-button {
+    background-color: var(--primary);
+    color: var(--text-inverse);
+    border-radius: 0.375rem;
+    padding: 0.75rem 1rem;
+}
+
+.help-topics .help-topic .accordion-button:not(.collapsed) {
+    background-color: var(--primary-hover);
+    color: var(--text-inverse);
+    box-shadow: none;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.help-topics .help-topic .accordion-button:focus-visible {
+    outline: 2px solid var(--text-inverse);
+    outline-offset: -4px;
+    box-shadow: none;
+}
+
+/* Bootstrap's chevron ships as a dark SVG; invert it so it stays legible
+   against the primary-filled header in both shells. */
+.help-topics .help-topic .accordion-button::after {
+    filter: brightness(0) invert(1);
+}
+
+.help-topics .help-topic .accordion-body {
+    background-color: var(--primary-subtle);
+    border-radius: 0 0 0.375rem 0.375rem;
+    padding: 0.875rem 1rem 1rem;
+}
+
+.help-topics .help-topic .accordion-body :last-child {
+    margin-bottom: 0;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Quick action tiles (teacher dashboard)
+
+   These were `btn btn-white ... border-0`, and `btn-white` is not a class
+   this project or Bootstrap defines — so the tiles rendered as bare text
+   with a shadow, giving a reader no reason to believe they were clickable.
+   A visible border, a hover that moves, and a focus ring are the whole
+   affordance.
+   ───────────────────────────────────────────────────────────── */
+
+.quick-action {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    width: 100%;
+    height: 100%;
+    padding: 1rem 0.75rem;
+    text-align: center;
+    text-decoration: none;
+    color: var(--text-primary);
+    background-color: var(--surface);
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    box-shadow: var(--shadow-sm);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease,
+                transform 0.15s ease, background-color 0.15s ease;
+}
+
+.quick-action:hover,
+.quick-action:focus-visible {
+    color: var(--text-primary);
+    background-color: var(--primary-subtle);
+    border-color: var(--primary);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+}
+
+.quick-action:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.quick-action:active {
+    transform: translateY(0);
+    box-shadow: var(--shadow-sm);
+}
+
+.quick-action .material-symbols-outlined {
+    font-size: 1.75rem;
+    line-height: 1;
+}
+
+.quick-action .quick-action-label { font-weight: 600; }
+
+/* Honour a reader who has asked the interface to stop moving. */
+@media (prefers-reduced-motion: reduce) {
+    .quick-action { transition: none; }
+    .quick-action:hover,
+    .quick-action:focus-visible,
+    .quick-action:active { transform: none; }
+}
+
+/* ─── Auth Shell ───
+   Sign-in, sign-up, and recovery pages share one stacked layout: a text brand
+   band on top, the interactive panel beneath. The band is filled with
+   var(--primary), so it takes the role theme carried on <body> without any
+   per-page override. */
+/* Explicit width, and the narrow-screen cap is measured against the viewport
+   rather than the parent. These pages center the card as a flex item, so a
+   percentage would resolve against a shrink-to-fit parent and each page would
+   end up as wide as its own longest line of copy. `max-width: 100%` cannot
+   rescue it either: a flex item's automatic minimum size is pinned by the
+   specified width, so the card would overflow instead of shrinking. */
+/* Auto margins on the card rather than `align-items: center` here. Centring from
+   the parent clips the top of a card taller than the viewport and puts it out of
+   reach; auto margins centre identically and collapse to the start edge once the
+   free space is gone. */
+.auth-page {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100dvh;
+    margin: 0;
+    padding: var(--space-8) var(--space-4);
+    background-color: var(--background);
+}
+
+.auth-container {
+    width: min(400px, calc(100vw - var(--space-12)));
+    margin: auto;
+    background: var(--surface);
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+}
+
+/* Vertical wordmark, matching the public landing hero's .landing-brand stack. */
+.auth-brand {
+    display: grid;
+    gap: var(--space-1);
+    padding: var(--space-4) var(--space-10);
+    background: var(--primary);
+    color: var(--text-inverse);
+}
+
+.auth-brand-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--text-3xl);
+    font-weight: var(--weight-medium);
+    line-height: 1;
+}
+
+.auth-brand-row .material-symbols-outlined {
+    color: var(--secondary);
+    font-size: var(--text-3xl);
+}
+
+.auth-body {
+    padding: var(--space-8);
+}
+
+/* Gold is a fill, never body text: --secondary is 2.12:1 on --surface. This
+   floor outranks a bare `a` in a page-local <style>, so a page that reaches for
+   the accent again still renders the darkened variant. Buttons are excluded —
+   they carry their own foreground against a filled background. */
+.auth-body a:not(.btn) {
+    color: var(--accent-text-on-light);
+}
+
+.auth-body a:not(.btn):hover,
+.auth-body a:not(.btn):focus-visible {
+    color: var(--accent-text-on-light);
+    text-decoration: underline;
+}
+
+/* Form chrome. The accent carries short label-like text; sentences stay neutral,
+   because a run of prose in the accent reads as a warning rather than a caption. */
+.auth-body .form-label {
+    color: var(--accent-text-on-light);
+    text-transform: uppercase;
+    font-weight: var(--weight-semibold);
+    font-size: var(--text-xs);
+    letter-spacing: var(--tracking-wide);
+}
+
+.auth-body .subtitle {
+    color: var(--text-secondary);
+    margin-bottom: var(--space-6);
+}
+
+.auth-body .form-text {
+    color: var(--accent-text-on-light);
+    font-size: var(--text-sm);
+}
+
+.auth-body .form-group {
+    margin-bottom: var(--space-6);
+}
+
+/* PIN, TOTP, and recovery-code fields. The tracking is what makes a digit group
+   countable at a glance, so it is load-bearing rather than decorative. */
+.auth-code-input {
+    font-family: var(--font-data);
+    font-size: var(--text-2xl);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-widest);
+    text-align: center;
+}
+
+.auth-body .footer-links {
+    text-align: center;
+    padding-top: var(--space-6);
+    margin-top: var(--space-8);
+    border-top: 1px solid var(--border-color);
+}
+
+.auth-body .footer-links a {
+    font-size: var(--text-sm);
+    text-decoration: none;
+}
+
+.auth-body .footer-links a:hover {
+    text-decoration: underline;
+}
+
+/* Progress and tip chrome for the sign-in wait modal. */
+.auth-loading-spinner {
+    width: var(--space-12);
+    height: var(--space-12);
+}
+
+.auth-loading-tip {
+    min-height: var(--space-12);
+    line-height: var(--leading-normal);
+}
+
+@media (max-width: 768px) {
+    .auth-container {
+        margin: var(--space-4);
+    }
+
+    .auth-brand {
+        padding: var(--space-6);
+    }
+
+    .auth-brand-row,
+    .auth-brand-row .material-symbols-outlined {
+        font-size: var(--text-2xl);
+    }
+
+    .auth-body {
+        padding: var(--space-8) var(--space-6);
+    }
+}
+
+/* ─── Error Pages ───
+   The 400, 401, 403, 404, 500 and 503 pages share one standalone shell: a
+   centered card with a var(--primary) status band on top and the explanation
+   beneath. The band takes the role theme carried by tokens.css, so no page
+   sets a role colour of its own. Every selector is scoped under
+   body.error-page so none of it reaches another surface; page-specific
+   panels (login links, request URL, status box) stay in their own template.
+   The reset is wrapped in :where() so it keeps the zero specificity of the
+   bare `*` it replaced and still yields to .card, .btn, and element rules. */
+:where(body.error-page) * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body.error-page {
+    font-family: var(--font-family);
+    background: var(--surface);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-8);
+}
+
+.error-page .error-container {
+    background: var(--surface);
+    box-shadow: var(--shadow-lg);
+    max-width: 900px;
+    width: 100%;
+    overflow: hidden;
+}
+
+.error-page .error-header {
+    background: var(--primary);
+    color: var(--text-inverse);
+    padding: var(--space-8);
+    text-align: center;
+}
+
+/* The status code is display type (--text-6xl); its label sits one step below
+   the display range. */
+.error-page .error-header h1 {
+    font-size: var(--text-6xl);
+    font-weight: var(--weight-normal);
+    margin: 0;
+    color: var(--text-inverse);
+}
+
+.error-page .error-header p {
+    font-size: var(--text-3xl);
+    margin: var(--space-2) 0 0 0;
+    opacity: calc(1 - var(--alpha-subtle));
+}
+
+.error-page .error-body {
+    padding: var(--space-8);
+}
+
+.error-page .troubleshooting {
+    padding: var(--space-6);
+    margin-bottom: var(--space-8);
+}
+
+.error-page .troubleshooting h5 {
+    margin-bottom: var(--space-4);
+    font-weight: var(--weight-semibold);
+}
+
+.error-page .troubleshooting li {
+    padding: var(--space-2) 0;
+}
+
+.error-page .actions {
+    display: flex;
+    gap: var(--space-4);
+    margin-top: var(--space-6);
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+@media (max-width: 768px) {
+    .error-page .error-header h1 {
+        font-size: var(--text-5xl);
+    }
+
+    .error-page .error-body {
+        padding: var(--space-6);
+    }
+
+    .error-page .actions {
+        flex-direction: column;
     }
 }

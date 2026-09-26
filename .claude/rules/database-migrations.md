@@ -1,5 +1,7 @@
 # Database Migration Rules
 
+> **Not authoritative.** This file is operational guidance for agents. Normative authority lives only under `docs/INVARIANT/`, `docs/DOMAIN/`, `docs/FEATURE-EXECUTION/`, `docs/SPEC/`, and `docs/STANDARD_OPERATING_PROCEDURES/`. Where this file conflicts with one of those, the normative document wins and this file is what gets corrected.
+
 **CRITICAL:** This project uses Alembic for database migrations. Following these rules prevents data loss, schema conflicts, and deployment failures.
 
 ---
@@ -8,7 +10,7 @@
 
 1. **NEVER modify `app/models.py` without creating a migration**
 2. **ALWAYS test migrations before committing** (upgrade AND downgrade)
-3. **NEVER edit old migrations after they're merged to main**
+3. **NEVER edit old migrations after they're merged to main** — sole exception: a Replay-Safety Correction under `SOP-DB-001` §V.A, which requires all six of its conditions to be proven and recorded. It is not a license to improve an old migration; read §V.A before relying on it.
 4. **ALWAYS review auto-generated migrations** before committing
 5. **NEVER skip migrations** - each schema change needs its own migration
 6. **ALWAYS include idempotency helpers** in every migration (table_exists, column_exists, index_exists, foreign_key_exists)
@@ -48,7 +50,7 @@ flask db merge heads -m "Merge migration heads"
 
 # Test the merge
 flask db upgrade
-flask db downgrade
+flask db downgrade <revision>   # bare form aborts on a merge head
 flask db upgrade
 
 # Now you have a single head and can proceed
@@ -236,8 +238,15 @@ def upgrade():
 **⚠️ NEW REQUIREMENT:** Validate migration before committing.
 
 ```bash
+# Your migration alone
 python scripts/lint_migrations.py migrations/versions/abc123def456_*.py
+
+# What CI runs: whole corpus against the frozen baseline
+python scripts/lint_migrations.py --baseline migrations/lint_baseline.txt
 ```
+
+`migrations/lint_baseline.txt` freezes the pre-gate debt SOP-DB-009 VI accepts.
+It is not a place to put your migration — it only shrinks.
 
 This checks for:
 - Missing idempotency helpers
@@ -245,7 +254,7 @@ This checks for:
 - Hardcoded constraint names
 - Other best practice violations
 
-**If linting fails:** Fix the issues before proceeding. See `docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-011_Migration_Specifications.md` for examples.
+**If linting fails:** Fix the issues before proceeding. See `docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-001_Migration_Specifications.md` for examples.
 
 ### Step 9: Test the Upgrade
 
@@ -261,7 +270,15 @@ flask db upgrade
 ### Step 10: Test the Downgrade
 
 ```bash
-flask db downgrade
+# Pass the target revision explicitly. A bare `flask db downgrade` walks back
+# from the current head, and when that head is a merge point (two parents) it
+# cannot choose between them and aborts with:
+#
+#     ERROR [flask_migrate] Error: Ambiguous walk
+#
+# The head is a merge point today, so the bare form does not work. Get the
+# revision to step back to from `flask db history`.
+flask db downgrade <revision>
 ```
 
 **Check:**
@@ -464,7 +481,7 @@ If migrations are out of order:
 flask db migrate -m "Fix migration chain issue"
 # Review and test
 flask db upgrade
-flask db downgrade
+flask db downgrade <revision>   # bare form aborts on a merge head
 flask db upgrade
 pytest tests/
 ```
@@ -564,8 +581,13 @@ pytest tests/test_critical.py
 If something goes wrong:
 
 ```bash
-# Downgrade to previous version
-flask db downgrade
+# Downgrade to a named revision. Do NOT use a bare `flask db downgrade` here:
+# when the current head is a merge point it aborts with "Ambiguous walk" and
+# nothing is rolled back. Read the target off `flask db history` first, and
+# confirm it afterwards with `flask db current`.
+flask db history          # identify the revision to return to
+flask db downgrade <revision>
+flask db current          # verify the database landed where you intended
 
 # Or restore from backup
 psql classroom_economy < backup_YYYYMMDD_HHMMSS.sql
@@ -624,8 +646,8 @@ python scripts/lint_migrations.py migrations/versions/abc123*.py
 # Apply migrations
 flask db upgrade
 
-# Revert last migration
-flask db downgrade
+# Revert last migration (explicit target; bare form aborts on a merge head)
+flask db downgrade <revision>
 
 # Show current version
 flask db current
@@ -660,7 +682,7 @@ Every time you change database schema:
 9. ✅ Review generated migration file
 10. ✅ **RUN MIGRATION LINTER:** `python scripts/lint_migrations.py migrations/versions/abc*.py`
 11. ✅ Test upgrade: `flask db upgrade`
-12. ✅ Test downgrade: `flask db downgrade`
+12. ✅ Test downgrade: `flask db downgrade <revision>` (bare form aborts on a merge head)
 13. ✅ Re-upgrade: `flask db upgrade`
 14. ✅ **Verify single head:** `flask db heads` (still must show exactly 1)
 15. ✅ Run tests: `pytest tests/`

@@ -70,7 +70,7 @@ def get_entitlement_balance(
     seat_id: int,
     class_id: str,
     entitlement_type: str,
-    product_id: Optional[int] = None,
+    product_id: Optional[str] = None,
     reference_time_utc: Optional[datetime] = None,
 ) -> int:
     """
@@ -178,7 +178,7 @@ def is_entitlement_exercisable(
 def get_entitlement_history(
     seat_id: int,
     class_id: str,
-    product_id: Optional[int] = None,
+    product_id: Optional[str] = None,
     limit: int = 100,
 ) -> list[dict]:
     """
@@ -223,7 +223,12 @@ def get_entitlement_history(
             "event_type": e.event_type,
             "acquisition_type": e.acquisition_type,
             "entitlement_type": e.entitlement_type,
+            # Product LINEAGE uuid — stable across teacher edits.
             "product_id": e.product_id,
+            # The exact product version this entitlement was created under, so
+            # a caller can render the terms actually bought rather than the
+            # current ones.
+            "policy_uuid": (e.payload or {}).get("policy_uuid"),
             "timestamp": e.timestamp.isoformat(),
             "correlation_id": e.correlation_id,
         }
@@ -348,60 +353,6 @@ def list_entitlements_for_seat(
 
 
 # ---------------------------------------------------------------------------
-# Claim Allowance Derivation (Insurance-Specific)
-# ---------------------------------------------------------------------------
-
-
-def derive_claim_allowance(
-    entitlement_id: str,
-    class_id: str,
-    policy_config: dict,
-    reference_time_utc: datetime,
-) -> int:
-    """
-    Derive remaining claims allowed from policy config + EntitlementEvent history.
-
-    INVARIANT: Do NOT query a persisted claims_remaining counter.
-    Always derive from policy rules + immutable event history.
-
-    Preconditions:
-    - entitlement_id must exist with entitlement_type='INSURANCE'
-    - class_id must be valid
-    - policy_config must have 'max_claims_per_month' key
-    - reference_time_utc must be valid datetime
-
-    Args:
-        entitlement_id: Insurance entitlement lineage
-        class_id: Class scope
-        policy_config: Dict with claim limits (e.g., {"max_claims_per_month": 3})
-        reference_time_utc: Current time for period calculation (TODO: not yet used for filtering)
-
-    Returns:
-        Remaining claims allowed (e.g., 2 if max is 3 and 1 already used)
-
-    Purity: Pure (read-only query, deterministic derivation)
-
-    Note: Period filtering (e.g., "within current month") not yet implemented.
-          Currently counts all CONSUMED events without time window.
-    """
-    # Get all CONSUMED events for this entitlement (represent claims used)
-    used_count = (
-        EntitlementEvent.query.filter(
-            EntitlementEvent.entitlement_id == entitlement_id,
-            EntitlementEvent.class_id == class_id,
-            EntitlementEvent.event_type == "CONSUMED",
-        ).count()
-    )
-
-    # TODO: Apply period filters (e.g., within current month) based on policy_config
-    # For MVP, return max_claims - used_count
-
-    max_claims = policy_config.get("max_claims_per_month", 3)
-
-    return max(0, max_claims - used_count)
-
-
-# ---------------------------------------------------------------------------
 # Entitlement Status Derivation
 # ---------------------------------------------------------------------------
 
@@ -468,8 +419,9 @@ def has_active_insurance_coverage(
 
     Effective coverage = a GRANTED insurance event referencing ``policy_uuid``
     (carried in the grant payload) whose entitlement lineage has no terminal
-    EXPIRED or REVOKED event. A CONSUMED event represents a resolved claim and
-    does NOT end coverage, so it is not treated as terminal here.
+    EXPIRED or REVOKED event. Coverage ends only through the coverage lifecycle;
+    an INSURANCE entitlement records no CONSUMED event, because claims are
+    durable claim state, not entitlement events (DOM-STORE-001 §VIII.E.1).
 
     This is the derivation behind FEAT-OBL-004's POLICY_ALREADY_HELD invariant:
     a seat may not acquire a second concurrently effective grant for the same
@@ -511,8 +463,8 @@ def get_active_insurance_grant(
     """The seat's concurrently-effective INSURANCE GRANT for a policy, if any.
 
     Same derivation as ``has_active_insurance_coverage`` (a GRANTED insurance event
-    referencing ``policy_uuid`` whose lineage has no EXPIRED/REVOKED terminal —
-    CONSUMED is a resolved claim, not a coverage terminal), but returns the grant
+    referencing ``policy_uuid`` whose lineage has no EXPIRED/REVOKED terminal;
+    insurance records no CONSUMED, DOM-STORE-001 §VIII.E.1), but returns the grant
     event so callers (e.g. the boundary-expiry job) can act on it. Under
     FEAT-OBL-004 §114 there is at most one.
 
@@ -599,7 +551,7 @@ def has_active_coverage_in_group(
 def get_active_entitlements(
     seat_id: int,
     class_id: str,
-    product_id: Optional[int] = None,
+    product_id: Optional[str] = None,
     entitlement_type: Optional[str] = None,
 ) -> list[EntitlementEvent]:
     """
@@ -750,3 +702,60 @@ def get_active_rent_grant(
             return candidate
 
     return None
+
+
+def latest_entitlement_grant(entitlement_id: str):
+    """Return the most recent GRANTED event for an entitlement lineage."""
+    return (
+        EntitlementEvent.query
+        .filter(
+            EntitlementEvent.entitlement_id == entitlement_id,
+            EntitlementEvent.event_type == "GRANTED",
+        )
+        .order_by(EntitlementEvent.timestamp.desc(), EntitlementEvent.event_id.desc())
+        .first()
+    )
+
+
+def entitlement_terminal_event(entitlement_id: str):
+    """Return the most recent terminal event for an entitlement lineage."""
+    return (
+        EntitlementEvent.query
+        .filter(
+            EntitlementEvent.entitlement_id == entitlement_id,
+            EntitlementEvent.event_type.in_(["CONSUMED", "EXPIRED", "REVOKED"]),
+        )
+        .order_by(EntitlementEvent.timestamp.desc(), EntitlementEvent.event_id.desc())
+        .first()
+    )
+
+
+def pending_action_for_entitlement(entitlement_id: str):
+    """Return the latest unresolved PendingAction for an entitlement lineage."""
+    from app.models import PendingAction
+
+    return (
+        PendingAction.query
+        .filter(
+            PendingAction.entitlement_id == entitlement_id,
+            PendingAction.payload["outcome"].as_string().is_(None),
+        )
+        .order_by(PendingAction.submitted_at.desc(), PendingAction.pending_action_id.desc())
+        .first()
+    )
+
+
+def derive_display_status(entitlement_id: str) -> str:
+    """Return the canonical display status for an entitlement lineage.
+
+    This is the UI vocabulary ('processing'/'consumed'/'purchased'), which is
+    deliberately distinct from the domain vocabulary that
+    ``get_entitlement_status`` returns.
+    """
+    if pending_action_for_entitlement(entitlement_id):
+        return "processing"
+    if entitlement_terminal_event(entitlement_id):
+        return "consumed"
+    if latest_entitlement_grant(entitlement_id):
+        return "purchased"
+    return "unknown"

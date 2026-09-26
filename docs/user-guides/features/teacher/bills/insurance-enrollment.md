@@ -24,7 +24,13 @@ That distinction drives everything else on this page. A purchased policy is a co
 
 A student buys a policy from their own insurance page. At the moment of purchase the terms are frozen onto their contract — premium, charge frequency, claim time limit, and every cap.
 
-Coverage starts at that moment. There is no delay, whatever **Waiting Period** you set on the policy — see *Important notes*. The only thing a claim is checked against is the purchase itself: an incident dated before the student bought the policy is rejected, and nothing else about timing is enforced.
+Coverage starts at that moment, unless the policy carries a **Waiting Period** — then claims open *N* days later. Any policy type can have one. Either way an incident dated before the purchase is never covered.
+
+### How coverage stays in force
+
+After the first premium, each period's premium is billed a few days before the period starts and paid automatically from the student's checking. If the student cannot cover it, the premium stays owing and their coverage **pauses** when the new period starts: their card reads **Premium overdue** and claims are refused until they pay. They pay from their policy page; coverage returns from that moment on.
+
+What happens if they never pay is set on the policy — keep billing, or cancel after a number of days. See [Recurring billing](insurance-policies.md#recurring-billing).
 
 ### Withdrawing a policy from sale
 
@@ -43,7 +49,12 @@ Neither one touches anybody's existing coverage. Both are about the shelf, not t
 
 ### How coverage actually ends
 
-Only the student can end their own coverage, and only by declining to renew it. When they cancel, the app tells them their benefits continue until the end of the current paid period, and the coverage expires at that boundary.
+Coverage ends in one of two ways, and never by your hand:
+
+- **The student cancels.** Their coverage runs to the end of the last period they are committed to — the current one, or next period if they already paid toward it — and then expires. An unpaid bill for next period is cancelled.
+- **The policy cancels for nonpayment**, if it uses that rule. Coverage expires when the unpaid limit runs out.
+
+Either way, premiums for periods that had already started stay owed, and paying them later does not restore the coverage. If you turn insurance off for the class, nothing new can be bought, but students who still owe a premium keep their insurance page so they can pay it.
 
 There is no early termination, no refund, and no way for you to revoke a policy someone is holding.
 
@@ -52,23 +63,23 @@ There is no early termination, no refund, and no way for you to revoke a policy 
 > [!IMPORTANT]
 > **Purchased policies are enforceable contracts.** Editing a policy changes what *future* buyers get. Everyone already holding it keeps the terms they bought until their coverage period ends. This is deliberate — it is the lesson the feature exists to teach.
 
-> [!CAUTION]
-> **Waiting Period does not delay coverage.** The field saves and the suggested values imply a real wait, but nothing enforces it — a student can claim minutes after buying. See [Insurance Policies](insurance-policies.md).
+> [!IMPORTANT]
+> **A Waiting Period is enforced on every policy type.** Claims filed before it elapses are refused. Set it to zero for coverage that is claimable from purchase. See [Insurance Policies](insurance-policies.md).
 
-> [!WARNING]
-> **Editing does not withdraw the version you edited.** Saving a new version leaves the original for sale alongside it, so hiding or retiring the old one is a step you have to take yourself. [Insurance Policies](insurance-policies.md) covers this.
+> [!IMPORTANT]
+> **Editing retires the version you edited.** The revision takes the original's place on the shelf and the original comes off, in one action — you do not hide or retire it yourself. [Insurance Policies](insurance-policies.md) covers this.
 
 > [!IMPORTANT]
 > **You cannot revoke a student's coverage.** Not for discipline, not for a policy change, not by hiding or retiring the product. If you need a consequence, use a different tool — insurance is not one of them.
 
 > [!NOTE]
-> **Hiding is reversible in effect, retiring is not.** A retired policy is permanently unavailable for new enrollment. If you are unsure, hide it.
+> **Hiding is reversible, retiring is not.** A hidden policy carries **Put back on sale**, which re-offers its exact terms. A retired policy is permanently unavailable for new enrollment. If you are unsure, hide it.
 
 > [!NOTE]
 > **There is no roster of who is covered.** The Insurance Management page lists your policies, not your policyholders. To check one student's coverage, ask them to show you their insurance page. A teacher-facing enrollment list is a known gap.
 
 > [!TIP]
-> If a claims dispute turns on when coverage started, the answer is the purchase date. Not the waiting period, and not the terms currently shown in your settings — the student's own insurance page carries the contract they actually bought.
+> If a claims dispute turns on when coverage started, the answer is the purchase date plus that student's own waiting period — not the terms currently shown in your settings. The student's insurance page carries the contract they actually bought.
 
 ## Related guides
 

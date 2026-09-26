@@ -34,7 +34,6 @@ def test_DOM_CLASS_001__ledger_flow_posts_pending_transaction(client, app):
 
     with FEATContext("FEAT-LED-001", idempotency_key="banking-core:test-ledger-flow"):
         tx = Transaction(
-            user_id=student_user.id,
             class_id=class_id,
             seat_id=seat.id,
             target_seat_id=seat.id,
@@ -78,7 +77,6 @@ def test_DOM_LED_001__posting_sequence_is_class_scoped_across_seats(client, app)
 
         for seat, amount in ((first, Decimal("3.00")), (second, Decimal("4.00"))):
             tx = Transaction(
-                user_id=seat.user_id,
                 class_id=classroom.class_id,
                 seat_id=seat.id,
                 target_seat_id=seat.id,
@@ -103,8 +101,8 @@ def test_DOM_LED_001__posting_sequence_is_class_scoped_across_seats(client, app)
         assert len(sequences) >= 2
         assert sequences == sorted(set(sequences))
 
-def test_DOM_CLASS_001__void_pending_transaction_does_not_create_reversal(client, app):
-    """Test voiding a PENDING transaction (no reversal)."""
+def test_DOM_CLASS_001__pending_transaction_settles_without_void_filter(client, app):
+    """A pending monetary transaction is posted; it cannot disappear via voiding."""
     with FEATContext("FEAT-TEST-SETUP", idempotency_key="banking-core:test-void-pending"):
         classroom = initialize("chemistry_p1", app)
         economy = classroom.economy
@@ -114,7 +112,6 @@ def test_DOM_CLASS_001__void_pending_transaction_does_not_create_reversal(client
 
     with FEATContext("FEAT-LED-001", idempotency_key="banking-core:test-void-pending"):
         tx = Transaction(
-            user_id=student_user.id,
             class_id=class_id,
             seat_id=seat.id,
             target_seat_id=seat.id,
@@ -126,11 +123,8 @@ def test_DOM_CLASS_001__void_pending_transaction_does_not_create_reversal(client
         db.session.add(tx)
         db.session.flush()
 
-        tx.is_void = True
-        db.session.flush()
-
         bal, _ = get_available_balances(seat_id, class_id)
-        assert bal == Decimal("0.00")
+        assert bal == Decimal("50.00")
 
         settle_balances(seat_id, class_id)
         db.session.flush()
@@ -140,12 +134,11 @@ def test_DOM_CLASS_001__void_pending_transaction_does_not_create_reversal(client
 
         db.session.expire_all()
         tx = db.session.get(Transaction, tx.id)
-        assert tx.status == TransactionStatus.VOID
-        assert tx.voided_at is not None
+        assert tx.status == TransactionStatus.POSTED
 
         cache = _snapshot(seat_id, class_id)
         if cache:
-            assert cache.posted_balance_cents == 0
+            assert cache.posted_balance_cents == 5000
 
 def test_DOM_CLASS_001__void_posted_transaction_creates_reversal(client, app):
     """Test voiding a POSTED transaction (creates reversal)."""
@@ -158,7 +151,6 @@ def test_DOM_CLASS_001__void_posted_transaction_creates_reversal(client, app):
 
     with FEATContext("FEAT-LED-001", idempotency_key="banking-core:test-void-posted"):
         tx = Transaction(
-            user_id=student_user.id,
             class_id=class_id,
             seat_id=seat.id,
             target_seat_id=seat.id,
@@ -177,10 +169,7 @@ def test_DOM_CLASS_001__void_posted_transaction_creates_reversal(client, app):
         tx = db.session.get(Transaction, tx.id)
         assert tx.status == TransactionStatus.POSTED
 
-        tx.is_void = True
-
         reversal = Transaction(
-            user_id=student_user.id,
             class_id=class_id,
             seat_id=seat.id,
             target_seat_id=seat.id,
@@ -223,16 +212,13 @@ def test_DOM_CLASS_001__settlement_sweep_processes_each_pending_context_once(cli
         student_one_class = initialize("chemistry_p1", app)
         student_two_class = initialize("biology_block_a", app)
         student_one_seat_id = student_one_class.students[0].seat.id
-        student_one_user_id = student_one_class.students[0].user.id
         student_two_seat_id = student_two_class.students[0].seat.id
-        student_two_user_id = student_two_class.students[0].user.id
         class_id_one = student_one_class.class_id
         class_id_two = student_two_class.class_id
 
     with FEATContext("FEAT-LED-001", idempotency_key="banking-core:test-settlement-sweep"):
         db.session.add_all([
             Transaction(
-                user_id=student_one_user_id,
                 class_id=class_id_one,
                 seat_id=student_one_seat_id,
                 target_seat_id=student_one_seat_id,
@@ -245,7 +231,6 @@ def test_DOM_CLASS_001__settlement_sweep_processes_each_pending_context_once(cli
                 description="Pending A",
             ),
             Transaction(
-                user_id=student_one_user_id,
                 class_id=class_id_one,
                 seat_id=student_one_seat_id,
                 target_seat_id=student_one_seat_id,
@@ -258,7 +243,6 @@ def test_DOM_CLASS_001__settlement_sweep_processes_each_pending_context_once(cli
                 description="Pending A savings",
             ),
             Transaction(
-                user_id=student_two_user_id,
                 class_id=class_id_two,
                 seat_id=student_two_seat_id,
                 target_seat_id=student_two_seat_id,
@@ -282,12 +266,12 @@ def test_DOM_CLASS_001__settlement_sweep_processes_each_pending_context_once(cli
     # --- Assert: settlement is durably persisted (survives beyond the sweep) ---
     db.session.expire_all()
     posted_statuses = {
-        (tx.user_id, tx.class_id, tx.account_type): tx.status
+        (tx.seat_id, tx.class_id, tx.account_type): tx.status
         for tx in Transaction.query.all()
     }
-    assert posted_statuses[(student_one_user_id, class_id_one, "checking")] == TransactionStatus.POSTED
-    assert posted_statuses[(student_one_user_id, class_id_one, "savings")] == TransactionStatus.POSTED
-    assert posted_statuses[(student_two_user_id, class_id_two, "checking")] == TransactionStatus.POSTED
+    assert posted_statuses[(student_one_seat_id, class_id_one, "checking")] == TransactionStatus.POSTED
+    assert posted_statuses[(student_one_seat_id, class_id_one, "savings")] == TransactionStatus.POSTED
+    assert posted_statuses[(student_two_seat_id, class_id_two, "checking")] == TransactionStatus.POSTED
 
     # Each context's balance cache reflects its own transactions only (class isolation).
     assert _snapshot(student_one_seat_id, class_id_one).posted_balance_cents == 1234

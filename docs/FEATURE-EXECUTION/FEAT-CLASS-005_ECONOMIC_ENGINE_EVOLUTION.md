@@ -182,3 +182,36 @@ Policy transitions are naturally idempotent on the (class_id, feature, effective
 No explicit idempotency token required for basic operations. Replay safety is guaranteed by primary key uniqueness.
 
 ---
+
+## XI. Unified Pricing Rebalance Boundary
+
+The Economic Engine may coordinate a class-scoped review of configured prices,
+but it does not become the authority for another domain's state.
+
+The review resolves the newest effective configuration for the canonical
+`class_id`, displays only values outside the owning feature's canonical CWI
+range, and requires an explicit teacher selection. A selected non-insurance
+row may propose the exact midpoint or a teacher-entered amount bounded by that
+range. The mutation is then delegated to the owning command:
+
+- Rent and rent late penalties use the append-only rent supersession command.
+- Store prices use Store product-version supersession.
+- Overdraft/NSF fees use the Economic Engine evolution command.
+- Insurance is advisory-only: it is never selectable or mutated here because
+  premium changes can alter payout and coverage terms. The row links to
+  Insurance Management for the complete policy edit flow.
+
+Each selected mutation remains class-scoped, append-only, idempotent, and
+atomic within the rebalance command boundary. Historical assessments,
+entitlements, claims, and ledger facts are never rewritten.
+
+## XII. Unified CWI Helper Contract
+
+Every teacher-facing pricing surface coordinated by this FEAT SHALL present the
+configured amount in classroom currency first, followed by its CWI share, the
+applicable reference range, the value's position relative to that range, and
+the owning surface's consequence primitive defined by `SPEC-ECON-003`. The
+Helper MUST NOT present a bare ratio as the primary explanation or predict
+optional purchases, claims, fines, or savings behavior.
+
+---

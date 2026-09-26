@@ -1,7 +1,7 @@
 """Unit tests for the Economic Engine savings-interest and overdraft resolvers.
 
 These resolvers are the canonical source of banking pricing guidance
-(SPEC-ECON-003 §4.2 weekly savings target, §4.6 fine band, §5 interest
+(SPEC-ECON-003 §4.2 weekly savings target, §4.5 fine band, §5 interest
 doubling-time). They are pure functions over (cwi, mode, compound_frequency),
 so we exercise them with explicit inputs — no DB scope required. Every number
 here is anchored to the spec's reference tables, not invented.
@@ -81,19 +81,19 @@ def test_savings_rejects_unknown_compound_frequency():
 
 
 # --------------------------------------------------------------------------- #
-# Overdraft / internal fine (SPEC-ECON-003 §4.6, §4.6.1)
+# Overdraft / internal fine (SPEC-ECON-003 §4.5, §4.5.1)
 # --------------------------------------------------------------------------- #
 
 @pytest.mark.parametrize(
     "mode,lower,upper",
     [
-        ("tight", Decimal("7.00"), Decimal("18.00")),
-        ("default", Decimal("5.00"), Decimal("15.00")),
-        ("comfortable", Decimal("4.00"), Decimal("12.00")),
+        ("tight", Decimal("5.00"), Decimal("10.00")),
+        ("default", Decimal("5.00"), Decimal("12.00")),
+        ("comfortable", Decimal("7.00"), Decimal("15.00")),
     ],
 )
 def test_overdraft_flat_fee_band_matches_fine_row(mode, lower, upper):
-    """§4.6 / §8: overdraft flat fee reuses the fine band × CWI."""
+    """§4.5 / §8: overdraft flat fee reuses the fine band × CWI."""
     res = resolve_overdraft_fine(cwi=Decimal("100"), mode=mode)
     assert res.flat_fee_lower == lower
     assert res.flat_fee_upper == upper
@@ -108,9 +108,36 @@ def test_overdraft_flat_fee_band_matches_fine_row(mode, lower, upper):
     ],
 )
 def test_overdraft_progressive_schedule_matches_spec_table(mode, tiers):
-    """§4.6.1: progressive tier schedule as fractions of CWI."""
+    """§4.5.1: progressive tier schedule as fractions of CWI."""
     res = resolve_overdraft_fine(cwi=Decimal("100"), mode=mode)
     assert res.progressive_fees == tiers
+
+
+@pytest.mark.parametrize("mode", ["tight", "default", "comfortable"])
+def test_progressive_tiers_are_not_clamped_to_the_generic_fine_band(mode):
+    """§4.5.1: the tier schedule is self-contained, not a subdivision of §4.5.
+
+    The two tables disagree on purpose — escalation bites hardest under ``tight``
+    while the generic band rises toward ``comfortable`` — so a reader can mistake
+    that for a transcription error and "fix" it by clamping the tiers into the
+    band. That would silently flatten repeat-occurrence pressure. This test fails
+    if anyone does, by asserting the overhang that clamping would remove.
+    """
+    res = resolve_overdraft_fine(cwi=Decimal("100"), mode=mode)
+    lower, upper = res.flat_fee_lower, res.flat_fee_upper
+
+    # Every mode has at least one tier outside the generic band, though which end
+    # differs: tight and default overshoot the ceiling (12.5/18 vs 10, 15 vs 12),
+    # while comfortable undershoots the floor (4 vs 7). Clamping to the band is
+    # exactly what would erase these, so assert the escape rather than a fixed end.
+    outside = [t for t in res.progressive_fees if t < lower or t > upper]
+    assert outside, (
+        f"{mode}: every progressive tier {res.progressive_fees} now fits inside "
+        f"the generic fine band ({lower}-{upper}) — §4.5.1 forbids clamping."
+    )
+
+    # And the schedule must still escalate monotonically.
+    assert list(res.progressive_fees) == sorted(res.progressive_fees)
 
 
 def test_overdraft_recommendation_currency_is_none_without_cwi():
@@ -120,4 +147,4 @@ def test_overdraft_recommendation_currency_is_none_without_cwi():
     assert res.progressive_fees is None
     # Rate fractions are always available (do not depend on CWI).
     assert res.fine_rate_lower == Decimal("0.05")
-    assert res.fine_rate_upper == Decimal("0.15")
+    assert res.fine_rate_upper == Decimal("0.12")

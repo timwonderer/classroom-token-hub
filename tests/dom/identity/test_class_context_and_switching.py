@@ -18,7 +18,7 @@ from sqlalchemy.exc import SAWarning
 
 from app.extensions import db
 from app.feats.base import FEATContext
-from app.models import Seat
+from app.models import Seat, User
 from app.utils.canonical_temporal_resolver import canonical_temporal_resolver, SYSTEM_LEVEL_EVALUATION
 from tests.helpers.classroom_initializer import initialize, initialize_as_student, initialize_as_teacher
 from tests.helpers.canonical_classroom import login_student, provision_classroom, _provision_roster_seat
@@ -127,12 +127,88 @@ def multi_class_student(client, app):
     }
 
 
+def test_dashboard_switcher_lists_every_claimed_class(client, app, multi_class_student):
+    """The sidebar switcher must list every class the student has claimed,
+    not just the one currently being viewed.
+
+    Reproduces a live-test report (2026-09-23): a student with two genuinely
+    claimed seats saw only the current class in "Switch Class" -- the other
+    was missing entirely, so there was nothing to switch TO even though
+    /student/switch-class/<id> itself worked correctly once given a valid
+    target (every test below this one proves that route works). The
+    dropdown's HTML came from ``available_classes = [display_metadata.
+    to_available_class_option()]`` -- a single-item list built from only the
+    current class's metadata. Same defect already fixed on the teacher
+    sidebar (see the comment on that fix in app/__init__.py), left unfixed
+    on the student side until now.
+    """
+    response = client.get('/student/dashboard')
+    assert response.status_code == 200
+    html = response.data.decode()
+
+    select_start = html.index('id="class-switcher-select"')
+    select_end = html.index('</select>', select_start)
+    select_html = html[select_start:select_end]
+
+    assert select_html.count('<option') == 3
+    assert 'Chemistry' in select_html
+    assert 'AP CSP' in select_html
+    assert 'Biology' in select_html
+
+
+def test_select_class_context_route_actually_commits_the_switch(client, app, multi_class_student):
+    """/student/select-class-context must commit the session-context switch,
+    not just redirect as if it had.
+
+    Same defect shape as finding 68 (/student/add-class): the route set
+    ``linked_user.last_active_class_id`` / ``last_active_seat_id`` directly
+    on the ORM object with no surrounding FEAT context and no explicit
+    commit -- silently discarded at request teardown, so a fresh read
+    (simulating the student's very next request) would still show the OLD
+    class despite the redirect implying success. Fixed the same way finding
+    68 was: route the write through the canonical
+    ``switch_student_session_context`` helper under its own FEAT context.
+    """
+    classrooms = multi_class_student["classrooms"]
+    student = multi_class_student["student"]
+    target_class_id = classrooms["B"].class_id
+
+    response = client.post(
+        '/student/select-class-context',
+        data={'class_id': target_class_id},
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    assert response.headers['Location'].endswith('/student/dashboard')
+
+    target_seat = Seat.query.filter_by(
+        class_id=target_class_id, user_id=student.user.id,
+    ).one()
+
+    # Force a genuinely fresh read -- an in-memory-only mutation would still
+    # pass an assertion against the same, already-mutated Python object.
+    db.session.expire_all()
+    refreshed_user = db.session.get(User, student.user.id)
+    assert refreshed_user.last_active_class_id == target_class_id
+    assert refreshed_user.last_active_seat_id == target_seat.id
+
+
 def test_switch_class_success(client, app, multi_class_student):
     target_class_id = multi_class_student["classrooms"]["B"].class_id
     response = student_switch_class(client, target_class_id)
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["status"] == "success"
+
+
+def test_switch_class_lands_on_the_new_classes_dashboard(client, app, multi_class_student):
+    """A page open in the old class may not exist in the new one (a policy, a
+    bill), so a switch never reloads it: the switcher goes to the dashboard."""
+    target_class_id = multi_class_student["classrooms"]["B"].class_id
+    payload = student_switch_class(client, target_class_id).get_json()
+    assert payload["redirect_url"] == "/student/dashboard"
+    layout = client.get("/student/dashboard").get_data(as_text=True)
+    assert "window.location.reload();" not in layout.split("class-switcher-select")[-1][:3000]
 
 
 def test_switch_class_unauthorized_class(client, app, multi_class_student):

@@ -2,8 +2,24 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-STOR-003 | 1.2 | 2026-09-01 | 1.1 | Normative |
+| FEAT-STOR-003 | 1.4 | 2026-09-24 | 1.3 | Normative |
 
+> **1.4 revision note.** Recurring coverage (`DOM-STORE-001` v5.2 §VIII.E.1). A claim
+> may be filed only while the entitlement is usable, which includes Obligations
+> reporting its required premiums satisfied; eligibility is fixed at filing. Claim
+> allowance and payout capacity are scoped to the coverage period containing the
+> filing time and reset each period. The allowance and payout formulas are unchanged.
+
+> **1.3 revision note.** Conformance with `DOM-STORE-001` v5.1, which now governs the
+> claim representation this FEAT already executed. v1.1 (2026-08-28) restored a
+> first-class claim record while `DOM-STORE-001` v5.0 still routed claims through
+> `pending_actions` and a `CONSUMED` entitlement event; the domain document was
+> never amended to match. v5.1 settles it: `insurance_claims` and
+> `insurance_claim_productivity_dates` are durable Store-owned claim state; a pending
+> action MAY carry an unresolved claim request but is never the claim record; an
+> insurance entitlement is reusable coverage and records no `CONSUMED`. No runtime
+> behavior of this FEAT changes.
+>
 > **1.2 revision note.** Claim-time authority is the **immutable `insurance_policies`
 > definition**, resolved via the GRANTED entitlement's `policy_uuid`, not a
 > `frozen_contract` payload snapshot. Because a policy edit mints a *new*
@@ -37,9 +53,16 @@ Claim activity does not consume the insurance entitlement.
 
 This FEAT does not create or satisfy debt. If an insurance product requires premium assessment or renewal settlement, that work belongs to Obligations and Ledger through the canonical debt lifecycle.
 
+Insurance premium guidance SHALL consume the Economic Engine Helper contract in
+`SPEC-ECON-003`. Economic Mode may change premium guidance, but it MUST NOT
+change coverage parameters such as reimbursement percentage, payout multiple,
+claim allowance, waiting period, or coverage boundary. Insurance rebalance is
+review-only when a premium change would alter downstream payout; policy edits
+remain owned by the Insurance Management workflow.
+
 ## II. Authority
 
-Store and Entitlements owns:
+Store and Entitlements owns (as durable claim state in `insurance_claims` and `insurance_claim_productivity_dates`, `DOM-STORE-001` §VII.C–D):
 
 - existence of the insurance claim;
 - claim status;
@@ -94,13 +117,13 @@ Before submission, the FEAT SHALL establish:
 1. the referenced `entitlement_id` exists;
 2. the entitlement belongs to the target seat and class;
 3. the entitlement references a configured insurance capability;
-4. the coverage cycle is currently active under canonical temporal resolution;
-5. no terminal `EXPIRED` event or other authoritative termination exists;
-6. configured claim allowance remains available.
+4. the entitlement is usable at the filing time (`DOM-STORE-001` §VIII.E.1): no `EXPIRED` or `REVOKED` event has taken effect, and Obligations reports the required premiums of its lineage satisfied at that time;
+5. the coverage period containing the filing time is identified; it scopes the allowance and payout capacity for this claim (§XII);
+6. configured claim allowance remains available in that period.
 
 Teacher cancellation of the insurance offering SHALL NOT invalidate an already-active entitlement.
 
-An active entitlement remains eligible for claim submission until its configured coverage boundary.
+An entitlement remains eligible for claim submission while it is usable. Eligibility is evaluated once, at filing. A claim filed while the entitlement was usable remains adjudicable after a later lapse, expiry, nonpayment, or termination; a claim cannot be filed while the entitlement is gated, and a later payment does not retroactively validate the gated interval.
 
 ## V. Claim Submission
 
@@ -145,6 +168,14 @@ nor narrow it. If the source transaction is **item-related**, the associated
 entitlement must have been purchased **and used** (a `CONSUMED` event exists) and
 must **not** be `REVOKED` or `EXPIRED` — an item that never delivered lasting
 value, or was clawed back, is not an insurable loss.
+
+A transaction with a terminal pre-use `REVERSE` or `REFUND` outcome is not an
+insurable loss, even when the entitlement was retained by `REFUND`. The claim
+predicate MUST inspect the append-only reversal linkage and compensation
+subtype, not merely the sign or type of the selected Ledger row. A used item
+cannot be reversed or refunded; it remains eligible under the ordinary
+purchase-and-used rules. Any later teacher manual credit is a separate Ledger
+transaction and MUST NOT alter the original purchase's insurance eligibility.
 
 The **filing window** is evaluated in class-local calendar dates: a transaction on
 class-local date `D` under a frozen `claim_window_days = N` may be filed through
@@ -295,7 +326,7 @@ Rejection does not revoke, consume, or expire the insurance entitlement.
 Rejected claims **do** consume the period **claim-count allowance** (see §XII, the
 two-resource rule): every submitted claim lifecycle — `SUBMITTED`, `APPROVED`, or
 `REJECTED` — draws one slot against the period allowance. A rejected claim creates
-no `CONSUMED` event and no monetary effect, so it does **not** consume period
+no monetary effect, so it does **not** consume period
 **payout capacity**. Both quantities are derived from canonical claim history; the
 claim table SHALL NOT maintain a mutable remaining-count field.
 
@@ -310,7 +341,7 @@ After cancellation:
 - covered students may continue submitting claims while coverage remains active;
 - teachers may continue approving or rejecting those claims.
 
-When the coverage boundary is reached:
+When a lawful coverage-end boundary is reached (the end of the last period after renewal stops, or a `CANCEL_AFTER_X_DAYS` nonpayment deadline):
 
 - `FEAT-STOR-002` records `EXPIRED` for the insurance entitlement.
 
@@ -321,6 +352,11 @@ Insurance claim activity never creates the terminal entitlement event.
 A monetary insurance entitlement meters two **independent** resources over each
 coverage period. Both are computed from the **frozen purchased contract** and
 canonical claim history — never from live policy edits or a mutable counter.
+
+**The period.** A claim belongs to the coverage period containing its filing time
+(`DOM-STORE-001` §VIII.E.1). Both resources are counted per period and reset at each
+coverage boundary. A claim filed in one period and decided in a later one draws on
+the period in which it was filed. `week_equivalent` below is that period's length.
 
 **Resource 1 — period claim-count allowance.** The maximum number of claim
 lifecycles that may be *filed* in the period:
@@ -439,9 +475,15 @@ The following are prohibited:
 - mutating historical productivity to justify compensation;
 - storing mutable `claims_remaining`;
 - allowing a decided claim to return to `SUBMITTED`;
-- modelling the claim lifecycle on `PendingAction` (or any generic action queue)
-  instead of the dedicated `InsuranceClaim` record, which is the sole owner of
-  claim existence, status, basis, decision, and correlation.
+- treating a `PendingAction` (or any generic action queue) as the claim record, or
+  leaving claim-specific structured data permanently in a pending-action payload.
+  A pending action MAY carry an unresolved claim request (`DOM-STORE-001` §VII.B);
+  the `InsuranceClaim` record is the sole durable owner of claim existence, status,
+  basis, decision, and correlation, and resolving a pending action never deletes or
+  rewrites it;
+- writing `CONSUMED`, `EXPIRED`, or `REVOKED` for the insurance entitlement because a
+  claim was filed, approved, rejected, or fulfilled; the entitlement terminates only
+  through its coverage lifecycle (`DOM-STORE-001` §VIII.E.1).
 
 ## XVIII. Postconditions
 

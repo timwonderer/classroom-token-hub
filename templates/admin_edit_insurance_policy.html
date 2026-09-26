@@ -1,8 +1,31 @@
 {% extends "layout_admin.html" %}
+{% import 'macros/cards.html' as cards %}
 {% set is_new = (mode == 'new') %}
 {% set page_title = "New Insurance Policy" if is_new else "Edit Insurance Policy" %}
 {% set current_page = "insurance" %}
 {% block title %}{{ page_title }}{% endblock %}
+
+{% block contextual_help_body %}
+{{ help.panel_lead("You are writing the terms of a product students will pay for. Whatever you save here is what a buyer is owed.") }}
+
+{% call help.topic('pol-type', 'category', 'Insurance type decides which fields matter') %}
+<p>The form hides the ones that do not apply:</p>
+<ul class="ps-3 mb-0">
+    <li class="mb-2"><strong>Transaction</strong> — covers a specific charge. Set reimbursement %, payout multiple, claims per week-equivalent, and the claim window (how long after a charge a student may still file).</li>
+    <li class="mb-2"><strong>Productivity</strong> — covers days of work. Set reimbursement %, payout multiple, and how many dates per week-equivalent may be claimed.</li>
+    <li class="mb-0"><strong>Non-monetary</strong> — covers a benefit rather than a payout. Set the claim allowance and a waiting period before coverage begins.</li>
+</ul>
+{% endcall %}
+
+{% call help.topic('pol-price', 'payments', 'Premium, frequency, and tiers') %}
+<p><strong>Premium and charge frequency</strong> together set the real cost. A small premium charged weekly is not a cheap policy — price it against what students actually earn.</p>
+<p class="mb-0"><strong>Tier groups</strong> put several policies on one ladder (basic / standard / premium) so students compare within a family instead of across your whole catalog.</p>
+{% endcall %}
+
+{% call help.topic('pol-versions', 'edit_note', 'What editing does to current holders') %}
+<p class="mb-0"><strong>Editing publishes a new version; it does not rewrite history.</strong> Students already covered keep the terms they bought until their coverage ends. To move everyone, hide the old policy and sell the new one.</p>
+{% endcall %}
+{% endblock %}
 
 {#- Resolve the current value of a field: prefer a rejected resubmission, then
     the existing policy row, then a default. Keeps the form sticky on validation
@@ -26,9 +49,9 @@
   </nav>
 
   {% if not is_new %}
-  <div class="alert alert-secondary py-2 small">
-    Editing publishes a <strong>new immutable version</strong> with a fresh identifier. The current definition is left unchanged; existing coverage keeps its original terms.
-  </div>
+  {% call cards.alert_card('info', 'Saving publishes a new policy version', icon='history', body_class='mb-3') %}
+    <p class="mb-0">Editing publishes a <strong>new immutable version</strong> with a fresh identifier. The current definition is left unchanged; existing coverage keeps its original terms.</p>
+  {% endcall %}
   {% endif %}
 
   <div class="card shadow-sm mb-4">
@@ -108,11 +131,49 @@
                    id="claimable_dates_per_week_equivalent" name="claimable_dates_per_week_equivalent" value="{{ cur('claimable_dates_per_week_equivalent') }}">
           </div>
 
-          <!-- NON_MONETARY only: waiting period -->
-          <div class="col-md-3 type-field" data-types="NON_MONETARY">
+          <!-- Waiting period: settable for every insurance type, per operator
+               decision 2026-09-21. It was previously restricted to NON_MONETARY by
+               a FEAT-layer forbidden-list and a matching DB CHECK constraint, both
+               citing "SPEC SS4.5.3-SS4.5.5" -- a section that does not exist anywhere
+               in docs/. No normative document restricts it; the restriction was
+               invented in the same commit as the schema itself. Only NON_MONETARY
+               currently uses it to gate claim eligibility (FEAT-STOR-003); the other
+               two types accept and store it without enforcing it yet. -->
+          <div class="col-md-3 type-field" data-types="TRANSACTION PRODUCTIVITY NON_MONETARY">
             <label class="form-label fw-bold" for="waiting_period_days">Waiting Period (days)</label>
-            <input class="form-control type-input" data-types="NON_MONETARY"
+            <input class="form-control type-input" data-types="TRANSACTION PRODUCTIVITY NON_MONETARY"
                    id="waiting_period_days" name="waiting_period_days" type="number" min="0" value="{{ cur('waiting_period_days') }}">
+          </div>
+
+          <!-- Recurring billing (DOM-POL-001A §V.E) — every insurance type. -->
+          <div class="col-12">
+            <hr class="my-2">
+            <h3 class="h6 fw-bold mb-1">Recurring billing</h3>
+            <div class="form-text mb-2">
+              Each period's premium is billed a few days before the period starts and paid
+              automatically when the student has the funds. Coverage for a period is usable only
+              once every premium due so far is paid.
+            </div>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label fw-bold" for="bill_preview_days">Bill ahead (days)</label>
+            <input class="form-control" id="bill_preview_days" name="bill_preview_days" type="number"
+                   min="1" max="27" required value="{{ cur('bill_preview_days', '3') }}">
+            <div class="form-text">At least 1; under 7 for weekly, under 28 for monthly.</div>
+          </div>
+          {% set current_nonpay = cur('nonpayment_mode', 'ACCUMULATE')|trim %}
+          <div class="col-md-6">
+            <label class="form-label fw-bold" for="nonpayment_mode">If a premium goes unpaid</label>
+            <select class="form-select" id="nonpayment_mode" name="nonpayment_mode">
+              {% for value, label in nonpayment_mode_choices %}
+              <option value="{{ value }}" {% if current_nonpay == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-3" id="cancel_after_days_wrap">
+            <label class="form-label fw-bold" for="cancel_after_days">Cancel after (days unpaid)</label>
+            <input class="form-control" id="cancel_after_days" name="cancel_after_days" type="number"
+                   min="1" value="{{ cur('cancel_after_days') }}">
           </div>
 
           <!-- Tier grouping ------------------------------------------------- -->
@@ -137,7 +198,7 @@
                   <option value="__new__">＋ New group…</option>
                 </select>
               </div>
-              <div class="col-md-4" id="tier_group_new_wrap" style="display:none;">
+              <div class="col-md-4" id="tier_group_new_wrap" hidden>
                 <label class="form-label fw-bold" for="tier_group_new">New group name</label>
                 <input class="form-control" id="tier_group_new" name="tier_group_new" maxlength="60" placeholder="e.g. Paycheck Protection">
               </div>
@@ -195,6 +256,22 @@
     applyTypeVisibility();
   })();
 
+  // --- Nonpayment mode: cancel_after_days applies only to CANCEL_AFTER_X_DAYS -- //
+  (function () {
+    var modeSel = document.getElementById('nonpayment_mode');
+    var wrap = document.getElementById('cancel_after_days_wrap');
+    var input = document.getElementById('cancel_after_days');
+    if (!modeSel || !wrap || !input) return;
+    function applyMode() {
+      var cancels = modeSel.value === 'CANCEL_AFTER_X_DAYS';
+      wrap.hidden = !cancels;
+      input.disabled = !cancels;
+      input.required = cancels;
+    }
+    modeSel.addEventListener('change', applyMode);
+    applyMode();
+  })();
+
   // --- Tier grouping ------------------------------------------------------- //
   (function () {
     var toggle = document.getElementById('tiered_toggle');
@@ -228,7 +305,7 @@
 
     function applyGroup() {
       var isNew = groupSel.value === '__new__';
-      if (newWrap) newWrap.style.display = isNew ? '' : 'none';
+      if (newWrap) newWrap.hidden = !isNew;
       if (newInput) newInput.disabled = !toggle.checked || !isNew;
 
       // Disable ranks already taken in the selected existing group (the 3-tier cap),

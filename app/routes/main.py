@@ -5,7 +5,7 @@ Contains public-facing utility routes including health checks, legal pages,
 debug endpoints, and public hall pass verification.
 """
 
-import unicodedata
+from app.hash_utils import normalize_lookup_text
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from flask import (
@@ -17,8 +17,9 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.extensions import db, limiter
 from app.models import User, UserRole
-from app.hash_utils import hash_username_lookup
-from app.utils.helpers import render_template_with_fallback as render_template, is_safe_url
+from app.utils.helpers import render_template_with_fallback as render_template, safe_redirect_target
+from app.utils.ip_handler import get_real_ip
+from app.utils.turnstile import verify_turnstile_token
 from app.utils.canonical_temporal_resolver import CLASS_LEVEL_EVALUATION, canonical_temporal_resolver
 
 # Create blueprint
@@ -78,31 +79,34 @@ def health_check():
 def health_status():
     """Return bounded capability and platform signals for status publication.
 
-    Checks:
-    - Database connectivity
-    - Seat table accessibility
-    - Administrator table accessibility
-    - Hall passes table accessibility (if accessible)
+    Exactly one check is executed: `SELECT 1`, reported as the `database`
+    platform signal (PASS/KNOWN or FAIL/UNAVAILABLE).
 
-    Returns JSON with component status for detailed monitoring.
-    Individual table checks that fail are logged but don't fail the entire check.
-    This endpoint intentionally does not expose table counts, tenant data, raw
-    errors, or internal diagnostics. Capability checks remain UNKNOWN until a
-    lawful read-only probe is registered for that capability.
+    Every other signal — the `login`, `attendance`, `payroll`, `roster` and
+    `classroom_economy` capabilities, and the `background_jobs`,
+    `external_integrations`, `monitoring_freshness` and
+    `invariant_verification` platform signals — is emitted as
+    UNKNOWN/UNAVAILABLE with `CHECK_NOT_REGISTERED`. That is the contract, not
+    a gap: a capability reports UNKNOWN until a lawful read-only probe is
+    registered for it, so the endpoint can never imply health it has not
+    observed (INV-ARC-017: executed evidence is not the same as inferred
+    coverage).
+
+    This endpoint intentionally exposes no table counts, tenant data, raw
+    errors, or internal diagnostics.
     """
-    observed_at = datetime.now(timezone.utc).isoformat()
     signals = []
 
     try:
         db.session.scalar(text('SELECT 1'))
-        signals.append({"key": "database", "layer": "platform", "outcome": "PASS", "epistemic_state": "KNOWN", "diagnostic_code": "DATABASE_REACHABLE"})
+        signals.append({"key": "database", "layer": "platform", "outcome": "PASS", "epistemic_state": "KNOWN", "diagnostic_code": "DATABASE_REACHABLE", "checked_at": datetime.now(timezone.utc).isoformat()})
     except SQLAlchemyError:
-        signals.append({"key": "database", "layer": "platform", "outcome": "FAIL", "epistemic_state": "UNAVAILABLE", "diagnostic_code": "DATABASE_UNAVAILABLE"})
+        signals.append({"key": "database", "layer": "platform", "outcome": "FAIL", "epistemic_state": "UNAVAILABLE", "diagnostic_code": "DATABASE_UNAVAILABLE", "checked_at": datetime.now(timezone.utc).isoformat()})
     for key in ("login", "attendance", "payroll", "roster", "classroom_economy"):
-        signals.append({"key": key, "layer": "capability", "outcome": "UNKNOWN", "epistemic_state": "UNAVAILABLE", "diagnostic_code": "CHECK_NOT_REGISTERED"})
+        signals.append({"key": key, "layer": "capability", "outcome": "UNKNOWN", "epistemic_state": "UNAVAILABLE", "diagnostic_code": "CHECK_NOT_REGISTERED", "checked_at": None})
     for key in ("background_jobs", "external_integrations", "monitoring_freshness", "invariant_verification"):
-        signals.append({"key": key, "layer": "platform", "outcome": "UNKNOWN", "epistemic_state": "UNAVAILABLE", "diagnostic_code": "CHECK_NOT_REGISTERED"})
-    return jsonify({"observed_at": observed_at, "signals": signals}), 200
+        signals.append({"key": key, "layer": "platform", "outcome": "UNKNOWN", "epistemic_state": "UNAVAILABLE", "diagnostic_code": "CHECK_NOT_REGISTERED", "checked_at": None})
+    return jsonify({"observed_at": datetime.now(timezone.utc).isoformat(), "signals": signals}), 200
 
 
 @main_bp.route('/privacy')
@@ -146,21 +150,24 @@ def _normalize_first_name(value):
     """Normalize first name: strip, NFKC, lowercase."""
     if not value:
         return ''
-    return unicodedata.normalize('NFKC', value.strip().lower())
+    return normalize_lookup_text(value, kind="name")
 
 
 def _normalize_last_name(value):
     """Normalize last name: strip, NFKC, lowercase."""
     if not value:
         return ''
-    return unicodedata.normalize('NFKC', value.strip().lower())
+    return normalize_lookup_text(value, kind="name")
 
 
 @main_bp.route('/verify/hallpass/<teacher_public_token>', methods=['GET', 'POST'])
 @limiter.limit("60 per minute")
 def verify_hall_pass(teacher_public_token):
     """
-    Public hall pass verification for office staff.
+    External, capability-authorized hall-pass verification for office staff.
+
+    Name comparison finds same-day entries within a resolved class; it does not
+    resolve an economic actor or establish application authority.
 
     GET:  Show a form with class dropdown, first name, last name fields.
     POST: Verify whether a specific student has a valid hall pass for today.
@@ -172,8 +179,10 @@ def verify_hall_pass(teacher_public_token):
     - Non-enumerable (token-based)
     - Rotatable
     """
-    from app.models import AttendanceReasonCode, AttendanceSession, ClassEconomy, HallPassLog, IdentityProfile, Seat
-    from app.services.class_configuration_query_service import get_all_classes_by_teacher, verify_teacher_owns_class
+    from app.models import AttendanceReasonCode, AttendanceSession, HallPassLog
+    from app.services.class_configuration_query_service import get_all_classes_by_teacher, get_class_economy_by_join_code
+    from app.services.identity_service import match_hall_pass_profiles
+    from app.services.hall_pass_status_service import resolve_hall_pass_lifecycle_status
 
     _GENERIC_UNAVAILABLE = "Verification page not available."
 
@@ -188,17 +197,17 @@ def verify_hall_pass(teacher_public_token):
 
     # SANCTIONED cross-class exception (INV-ARC-004 V.3): the hall-pass
     # verification page is the ONLY runtime surface allowed to span a teacher's
-    # classes. It is token-authorized and read-only; the POST below still
-    # resolves the selected class directly by class_id.
+    # classes. It is token-authorized and read-only; the POST resolves the supplied join code to class_id
+    # before reading profiles or activity in that class.
     classes_rows = sorted(get_all_classes_by_teacher(teacher_user.id), key=lambda c: (c.display_name or ""))
     def _class_display_label(class_row):
         label_parts = [part for part in (class_row.section, class_row.display_name) if part]
-        return " - ".join(label_parts) if label_parts else class_row.class_id
+        return " - ".join(label_parts) if label_parts else class_row.join_code
 
     classes = []
     for c in classes_rows:
         classes.append({
-            "class_id": c.class_id,
+            "join_code": c.join_code,
             "label": _class_display_label(c),
         })
 
@@ -214,13 +223,27 @@ def verify_hall_pass(teacher_public_token):
     # ---- POST: verification attempt ----
     raw_first_name = request.form.get('first_name', '')
     raw_last_name = request.form.get('last_name', '')
-    selected_class_id = request.form.get('class_id', '')
+    selected_join_code = request.form.get('join_code', '').strip().upper()
 
     first_name_norm = _normalize_first_name(raw_first_name)
     last_name_norm = _normalize_last_name(raw_last_name)
 
+    # Ingress gate: a (join_code, first_name, last_name) match against a real
+    # roster is exactly the guessable/enumerable shape Turnstile exists for,
+    # even though the token in the URL path is itself non-enumerable.
+    turnstile_token = request.form.get('cf-turnstile-response')
+    if not verify_turnstile_token(turnstile_token, get_real_ip()):
+        return render_template(
+            'hall_pass_verify.html',
+            unavailable=False,
+            token=teacher_public_token,
+            classes=classes,
+            result=None,
+            turnstile_failed=True,
+        )
+
     # Reject malformed input uniformly
-    if not first_name_norm or not last_name_norm or not selected_class_id:
+    if not first_name_norm or not last_name_norm or not selected_join_code:
         return render_template(
             'hall_pass_verify.html',
             unavailable=False,
@@ -229,19 +252,22 @@ def verify_hall_pass(teacher_public_token):
             result={'outcome': 'no_match'}
         )
 
-    first_name_hash = hash_username_lookup(first_name_norm)
-    last_name_hash = hash_username_lookup(last_name_norm)
-
-    # Validate selected class directly under the teacher's ownership boundary.
-    selected_class_row = verify_teacher_owns_class(selected_class_id, teacher_user.id)
-    if not selected_class_row:
+    selected_class_row = get_class_economy_by_join_code(selected_join_code)
+    if not selected_class_row or selected_class_row.teacher_user_id != teacher_user.id:
         return render_template(
-            'hall_pass_verify.html',
-            unavailable=False,
-            token=teacher_public_token,
-            classes=classes,
-            result={'outcome': 'no_match'}
+            'hall_pass_verify.html', unavailable=False, token=teacher_public_token,
+            classes=classes, result={'outcome': 'no_match'},
         )
+    selected_class_id = selected_class_row.class_id
+    profiles = match_hall_pass_profiles(
+        class_id=selected_class_id, first_name=raw_first_name, last_name=raw_last_name,
+    )
+    if len(profiles) != 1:
+        return render_template(
+            'hall_pass_verify.html', unavailable=False, token=teacher_public_token,
+            classes=classes, result={'outcome': 'ambiguous' if profiles else 'no_match'},
+        )
+    matched_profile = profiles[0]
 
     public_temporal_context = SimpleNamespace(class_id=selected_class_id)
     day_bounds = canonical_temporal_resolver(
@@ -262,25 +288,9 @@ def verify_hall_pass(teacher_public_token):
         HallPassLog.timestamp < day_bounds.boundary_end_utc,
     ).order_by(HallPassLog.timestamp.desc(), HallPassLog.id.desc())
 
-    # Filter via canonical seat claim hashes. IdentityProfile is display-only.
-    # Stop at 2 matches: enough to distinguish unique vs ambiguous.
-    matched = []
-    for entry in passes_query.yield_per(100):
-        seat = Seat.query.filter_by(
-            id=entry.requested_by_seat_id,
-            class_id=entry.class_id,
-            role="student",
-        ).first()
-        if not seat:
-            continue
-        if (
-            seat.claim_first_name_hash == first_name_hash
-            and seat.claim_last_name_hash == last_name_hash
-        ):
-            matched.append(entry)
-        if len(matched) >= 2:
-            # Ambiguous — stop early
-            break
+    matched = passes_query.filter(
+        HallPassLog.requested_by_seat_id == matched_profile["seat_id"]
+    ).limit(2).all()
 
     if len(matched) == 0:
         result = {'outcome': 'no_match'}
@@ -289,41 +299,20 @@ def verify_hall_pass(teacher_public_token):
     else:
         entry = matched[0]
         class_label = _class_display_label(selected_class_row)
-        profile = IdentityProfile.query.filter_by(
-            seat_id=entry.requested_by_seat_id,
+        lifecycle = resolve_hall_pass_lifecycle_status(
             class_id=entry.class_id,
-        ).first()
-        attendance_rows = (
-            AttendanceSession.query.filter_by(
-                class_id=entry.class_id,
-                target_seat_id=entry.requested_by_seat_id,
-                hall_pass_id=entry.hall_pass_id,
-            )
-            .order_by(AttendanceSession.timestamp.asc(), AttendanceSession.id.asc())
-            .all()
+            seat_id=entry.requested_by_seat_id,
+            hall_pass_id=entry.hall_pass_id,
+            day_boundary_start_utc=day_bounds.boundary_start_utc,
+            day_boundary_end_utc=day_bounds.boundary_end_utc,
         )
-        left_row = next(
-            (
-                row for row in attendance_rows
-                if row.status == "inactive"
-                and row.reason_code == AttendanceReasonCode.HALL_PASS.value
-            ),
-            None,
-        )
-        return_row = next(
-            (
-                row for row in attendance_rows
-                if left_row is not None
-                and row.status == "active"
-                and row.timestamp >= left_row.timestamp
-            ),
-            None,
-        )
-        status = "returned" if return_row else "left" if left_row else "approved"
-        time_out_str = None
+        left_row = lifecycle.left_row
+        return_row = lifecycle.return_row
+        status = lifecycle.status
+        time_out_value = None
         elapsed_mins = None
         if left_row:
-            time_out_str = left_row.timestamp.isoformat().replace('+00:00', 'Z')
+            time_out_value = left_row.timestamp
             if status == "left":
                 elapsed = canonical_temporal_resolver(
                     CLASS_LEVEL_EVALUATION,
@@ -334,24 +323,19 @@ def verify_hall_pass(teacher_public_token):
                 )
                 elapsed_mins = elapsed.elapsed_seconds // 60
 
-        return_time_str = None
+        return_time_value = None
         if return_row:
-            return_time_str = return_row.timestamp.isoformat().replace('+00:00', 'Z')
+            return_time_value = return_row.timestamp
 
         result = {
             'outcome': 'match',
-            'student_display': " ".join(
-                part for part in [
-                    getattr(profile, "first_name", None),
-                    getattr(profile, "last_name", None),
-                ] if part
-            ).strip(),
+            'student_display': matched_profile['display_name'],
             'class_label': class_label,
             'destination': entry.destination,
-            'time_out': time_out_str,
+            'time_out': time_out_value,
             'status': status,
             'elapsed_mins': elapsed_mins,
-            'return_time': return_time_str,
+            'return_time': return_time_value,
         }
 
     return render_template(
@@ -374,7 +358,4 @@ def switch_view():
     else:
         session.pop('force_desktop', None)
 
-    if not is_safe_url(next_url):
-        return redirect(url_for('main.home'))
-
-    return redirect(next_url)  # nosec # Safe: validated by is_safe_url()
+    return redirect(safe_redirect_target(next_url, url_for('main.home')))
