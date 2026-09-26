@@ -27,6 +27,20 @@
       ],
       "port": 3001,
       "url": "http://127.0.0.1:3001"
+    },
+    {
+      "name": "pages-launch",
+      "runtimeExecutable": "/Users/timothychang/Documents/GitHub/classroom-economy/venv/bin/python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "5055",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "/Users/timothychang/Documents/GitHub/cth-landing-pages/github-pages"
+      ],
+      "port": 5055
     }
   ]
 }
