@@ -21,7 +21,6 @@ premiums themselves.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import timedelta
 from decimal import Decimal
 
 from app.extensions import db
@@ -54,7 +53,7 @@ def premium_description(class_id: str, correlation_id: str) -> str:
     if cycle is None or cycle.next_assessment_at is None:
         return f"Insurance premium: {title}"
     first = class_local_date(class_id, cycle.cycle_boundary_at)
-    last = class_local_date(class_id, cycle.next_assessment_at) - timedelta(days=1)
+    last = obligations_service.last_class_day_before(class_id, cycle.next_assessment_at)
     fmt = lambda d: d.strftime("%b %d").replace(" 0", " ")
     return f"Insurance premium: {title} ({fmt(first)} – {fmt(last)})"
 

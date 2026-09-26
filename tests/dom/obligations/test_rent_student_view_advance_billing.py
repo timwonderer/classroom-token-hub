@@ -155,3 +155,23 @@ def test_no_part_payment_when_the_class_does_not_allow_it(client, app):
     html = client.get("/student/rent").get_data(as_text=True)
 
     assert 'name="payment_amount"' not in html
+
+
+def test_rent_payment_ledger_line_names_the_period_not_the_obligation_id(app):
+    """Live test 2026-09-26: the teacher dashboard showed "Rent payment (cycle
+    obligation rent:6191…:cycle:1)". The line now names the period paid for."""
+    from app.models import Transaction
+
+    classroom = _built(app)
+    with app.app_context():
+        seat_id = classroom.students[0].seat.id
+        _fund(classroom, seat_id)
+        result = _pay(classroom, seat_id, _rent_correlation(classroom, seat_id, 1))
+
+        row = Transaction.query.filter_by(
+            class_id=classroom.class_id, seat_id=seat_id, type="rent_payment"
+        ).one()
+        assert row.description.startswith("Rent: ")
+        assert " – " in row.description
+        assert "rent:" not in row.description
+        assert result.success

@@ -26,7 +26,7 @@ Which form you get depends on the policy's type, and the two are quite different
 
 ### Getting to the form
 
-Open **Bills → Insurance**, find the policy under **Your coverage**, and press **File a claim**. You can only claim against coverage you currently hold — if you cancelled it and your coverage has ended, the button is gone and going to the page directly says *You don't hold active coverage for that policy.*
+Open **Bills → Insurance**, find the policy on the **My coverage** tab, and press **File a claim**. While the waiting period runs, the button reads *Claims open [date]* instead. You can only claim against coverage you currently hold — if you cancelled it and your coverage has ended, the button is gone and going to the page directly says *You don't hold active coverage for that policy.*
 
 Your premiums must be paid when you file. If the card shows **Premium overdue**, your coverage is paused and the claim is refused — pay the premium from **View policy** first. Paying brings coverage back from that moment on, so it does not cover anything that happened while it was paused. See [Insurance Coverage](insurance-coverage.md#paying-premiums).
 
@@ -56,7 +56,7 @@ Then press **Submit claim**.
 
 ### After you file
 
-You get *Insurance claim submitted.* and land back on the insurance page, where the claim appears in **Your claims** as **Submitted**. When your teacher decides, the status becomes **Approved** (with the amount) or **Rejected**. The claim form for that policy also keeps its own **Your claims on this policy** table.
+You get *Insurance claim submitted.* and land back on the insurance page, where the claim appears on the **My claims** tab as **Waiting for review**. When your teacher decides, the status becomes **Approved** (with the amount paid to you) or **Rejected** (with your teacher's reason). The claim form for that policy also keeps its own **Your claims on this policy** table.
 
 Approved payouts go to **checking**.
 

@@ -31,13 +31,11 @@ Insurance has its own **Insurance** item in the sidebar. It is independent of Re
 
 ### Reading the page
 
-The page has three parts, top to bottom:
+The page has three tabs:
 
-1. **Your coverage** — the policies you currently hold, each with the premium, *Since {date}*, and a badge: **Active** when your premiums are paid, or **Premium overdue** when one is not. If you hold none, it reads *You have no active insurance coverage.*
-2. **Available policies** — everything you could buy.
-3. **Your claims** — a read-only table of what you have filed, appearing only once you have filed something.
-
-Each coverage card has **View policy**, **File a claim**, and **Cancel coverage**.
+1. **My coverage** — the policies you hold. Each card shows one badge — **Active**, **Waiting period**, **Premium overdue**, or **Ending** — and four facts: the **Premium**, the **Premium status** (Paid or Overdue), when **Claims** open, and the date of your **Next premium** (or, once you have cancelled, the day it **Covers you through**). The buttons on the right are **File a claim** (or *Claims open [date]* while you wait, or **Pay overdue premium** when a premium is unpaid), **View policy**, and **Cancel coverage**.
+2. **Buy coverage** — everything you could buy. The page opens here when you hold no coverage yet.
+3. **My claims** — every claim you have filed, with the date of the loss, when you filed it, its status (**Waiting for review**, **Approved**, or **Rejected**, with your teacher's reason), and what it paid you.
 
 ### Tier groups: pick one, not all
 
@@ -103,7 +101,7 @@ What happens if you never pay depends on the policy. Your teacher chose one of t
 
 ### Cancelling
 
-**Cancel coverage** sits on the card in **Your coverage**. It asks for your **passphrase** and then to confirm:
+**Cancel coverage** sits on the card in **My coverage**. It asks for your **passphrase** and then to confirm:
 
 > Cancel this coverage? It will stop renewing — your benefits continue until the end of the current period.
 
@@ -113,7 +111,7 @@ Cancelling means **stop charging me for future periods**. It is not a refund and
 - Your coverage stays live, and you can still file claims against it, until the current period runs out.
 - If next period's premium was already billed but you have **not paid any of it**, that bill is cancelled and your coverage ends when the current period does.
 - If you **already paid** next period's premium, that period is yours: your coverage runs to the end of it. If you paid only **part** of it, the period still happens and you still owe the rest — your coverage stays paused until you pay it.
-- Until then the card reads *Won't renew · covers you through [date]* in place of the cancel button. After that date it drops off **Your coverage**.
+- Until then the card reads *Won't renew · covers you through [date]* in place of the cancel button. After that date it drops off **My coverage**.
 
 You get *Coverage cancelled — it won't renew.* If you had already cancelled, it says *This coverage is already set to not renew.* If the passphrase is missing or wrong you get *Enter your passphrase to confirm the cancellation.* and nothing changes.
 

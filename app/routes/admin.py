@@ -5661,8 +5661,8 @@ def rent_settings():
         if current_cycle is not None:
             current_period_start = _class_local_date_of(current_cycle.cycle_boundary_at)
             if current_cycle.next_assessment_at is not None:
-                current_period_end = (
-                    _class_local_date_of(current_cycle.next_assessment_at) - timedelta(days=1)
+                current_period_end = obligations_service.last_class_day_before(
+                    class_id, current_cycle.next_assessment_at
                 )
         next_boundary = (
             upcoming_cycle.cycle_boundary_at
@@ -5670,7 +5670,7 @@ def rent_settings():
             else (current_cycle.next_assessment_at if current_cycle is not None else None)
         )
         if next_boundary is not None:
-            next_due_date = _class_local_date_of(next_boundary) - timedelta(days=1)
+            next_due_date = obligations_service.last_class_day_before(class_id, next_boundary)
 
     # Determine period label based on frequency type
     period_label = "Month"  # Default
@@ -6496,7 +6496,10 @@ def process_claim(claim_id):
         current_page='insurance',
         claim=claim_view,
         period_first_day=period_first_day,
-        period_last_day=(period_resets_on - timedelta(days=1)) if period_resets_on else None,
+        period_last_day=(
+            obligations_service.last_class_day_before(claim.class_id, contract.period_end_utc)
+            if period_resets_on else None
+        ),
         period_resets_on=period_resets_on,
         claim_type=claim_type,
         policy=policy,

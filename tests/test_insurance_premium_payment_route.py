@@ -104,7 +104,7 @@ def test_insurance_page_stays_reachable_but_sells_nothing_while_a_premium_surviv
     assert page.status_code == 200
     html = page.get_data(as_text=True)
     assert "closed to new purchases" in html
-    assert "Available policies" not in html
+    assert 'id="buy-tab"' not in html, "no Buy coverage tab while insurance is off"
 
 
 def test_cancelled_coverage_shows_its_end_date_not_a_cancel_button(client, world):

@@ -730,6 +730,29 @@ def get_succession_eligibility(
     return (SuccessionEligibility.NOT_DUE if not_yet else SuccessionEligibility.DUE), latest
 
 
+def last_class_day_before(class_id: str, exclusive_end_utc: datetime):
+    """The class-local day holding the last instant of a period ending at
+    ``exclusive_end_utc`` — e.g. the last covered day of ``[start, end)``.
+
+    Composed of resolver primitives only (SPEC-TIME-001 §XII: no calendar
+    arithmetic outside the resolver): step back one second, take its day.
+    """
+    ctx = SimpleNamespace(class_id=class_id)
+    last_instant = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=ctx,
+        primitive="shift_timestamp",
+        timestamp=ensure_utc(exclusive_end_utc),
+        elapsed_seconds=-1,
+    ).shifted_timestamp_utc
+    return canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=ctx,
+        primitive="current_evaluation_day",
+        reference_time_utc=last_instant,
+    ).evaluation_date
+
+
 def get_termination_instant(class_id: str, internal_ref: str) -> datetime | None:
     """The lineage's termination instant (§V.7), or ``None`` if not terminated."""
     terminal = (
