@@ -99,7 +99,8 @@ def teacher_cards(measurements, attempt, *, now):
 
 def overall_observation(checks, measurements, notices):
     """Availability follows active checks; request failures and notices qualify it."""
-    checked = [row["checked_at"] for row in checks if row["checked_at"]]
+    checked = [row["checked_at"] for row in checks
+               if row["state"] in {"PASS", "FAIL"} and row["checked_at"]]
     result = {"state": "unknown", "label": "AVAILABILITY NOT VERIFIED",
               "checked_at": min(checked, key=parse_time) if checked else None,
               "detail": "The latest availability checks could not verify the app."}

@@ -152,7 +152,7 @@ request traffic. A fresh FAIL yields `AVAILABILITY CHECK FAILED`; missing, unkno
 stale or future checks yield `AVAILABILITY NOT VERIFIED`. A current operator notice
 or fresh nonzero HTTP 5xx count qualifies the summary as `ISSUES REPORTED` unless a
 connectivity check already failed. The hero's timestamp is the older of the two
-available check timestamps, never the request snapshot time. Reachability establishes
+fresh PASS/FAIL check timestamps, never stale/future evidence or the request snapshot time. Reachability establishes
 connectivity only, not business correctness.
 
 Feature cards describe recent activity, not yes/no functionality estimates. Any

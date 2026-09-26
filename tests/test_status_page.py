@@ -142,7 +142,9 @@ def test_quiet_period_keeps_availability_and_timestamped_activity(page):
 def test_fresh_request_traffic_cannot_mask_invalid_availability_checks(page, age):
     client, store, _ = page
     store.current_platform = lambda: platform_record(datetime.now(timezone.utc) - timedelta(seconds=age))
-    assert 'AVAILABILITY NOT VERIFIED' in hero(client.get('/').get_data(as_text=True))
+    summary = hero(client.get('/').get_data(as_text=True))
+    assert 'AVAILABILITY NOT VERIFIED' in summary
+    assert 'Last checked: awaiting availability checks' in summary
 
 
 def test_platform_failure_controls_hero_without_request_traffic(page):
