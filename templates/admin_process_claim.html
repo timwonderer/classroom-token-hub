@@ -1,4 +1,5 @@
 {% extends "layout_admin.html" %}
+{% import "macros/cards.html" as cards %}
 {% set page_title = "Process Insurance Claim" %}
 {% set current_page = "insurance" %}
 {% block title %}Process Claim{% endblock %}
@@ -76,10 +77,9 @@
       <div class="card-body">
         {% if claim_type == 'PRODUCTIVITY' and productivity %}
           {% if productivity.guidance_exceeded %}
-          <div class="alert alert-warning py-2 small d-flex gap-2">
-            <span class="material-symbols-outlined icon-sm" aria-hidden="true">info</span>
-            <span>Hours worked plus hours claimed go past the expected {{ productivity.expected_weekly_hours|float|round(1) }} hours for that week. This is a prompt to look closer, not a rule.</span>
-          </div>
+          {% call cards.alert_card('warning', 'More hours than the week expects', icon='schedule', body_class='mb-3', role='note') %}
+            <p class="mb-0">Hours worked plus hours claimed go past the expected {{ productivity.expected_weekly_hours|float|round(1) }} hours for that week. This is a prompt to look closer, not a rule.</p>
+          {% endcall %}
           {% endif %}
           <div class="table-responsive">
             <table class="table align-middle mb-3" id="claim-days">
