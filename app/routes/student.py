@@ -2390,11 +2390,31 @@ def rent():
         current_block=current_block,
     )
     if view is None:
+        # No bill yet (rent just switched on, or the seat is newly claimed): show
+        # the class's rent terms and the first due date still ahead, not zeros.
+        upcoming_due = None
+        if settings is not None and settings.first_rent_due_date is not None:
+            from app.utils.canonical_temporal_resolver import (
+                CLASS_LEVEL_EVALUATION as _CLE,
+                canonical_temporal_resolver as _resolve,
+            )
+
+            first_due = ensure_utc(settings.first_rent_due_date)
+            if _resolve(
+                _CLE,
+                canonical_execution_context=SimpleNamespace(class_id=class_id),
+                primitive="later_than",
+                candidate=first_due,
+                reference=utc_now(),
+            ).is_later:
+                upcoming_due = first_due
         view = build_empty_student_obligation_view(
             seat_id=seat_id,
             class_id=class_id,
             obligation_type='RENT',
             current_block=current_block,
+            rent_settings=settings,
+            upcoming_due_date=upcoming_due,
         )
 
     checking_balance, savings_balance = get_available_balances(seat_id, class_id)

@@ -245,17 +245,29 @@ def build_empty_student_obligation_view(
     class_id: str,
     obligation_type: str,
     current_block: str = 'A',
+    rent_settings=None,
+    upcoming_due_date=None,
 ) -> StudentObligationView:
-    """Return a valid empty view for surfaces that need to render a no-assessment state."""
+    """Return a valid empty view for surfaces that need to render a no-assessment state.
+
+    With ``rent_settings``, the view carries the class's rent terms (amount,
+    grace, cadence) so a student with no bill yet sees what rent will be, not
+    zeros. Nothing is owed: no bill exists until the period is assessed.
+    """
+    amount = (
+        Decimal(str(rent_settings.rent_amount))
+        if rent_settings is not None and rent_settings.rent_amount is not None
+        else Decimal('0.00')
+    )
     return StudentObligationView(
         obligation_type=obligation_type,
         seat_id=seat_id,
         class_id=class_id,
         current_block=current_block,
         current_period={
-            'due_date': None,
+            'due_date': upcoming_due_date,
             'grace_end': None,
-            'amount_due': Decimal('0.00'),
+            'amount_due': amount,
             'amount_paid': Decimal('0.00'),
             'amount_waived': False,
             'balance': Decimal('0.00'),
@@ -282,14 +294,18 @@ def build_empty_student_obligation_view(
             'total_waived': 0,
         },
         settings={
-            'amount_expected': Decimal('0.00'),
-            'late_fee': None,
-            'grace_period_days': 0,
-            'frequency': 'monthly',
-            'frequency_type': 'monthly',
-            'allow_incremental_payment': False,
-            'custom_frequency_value': None,
-            'custom_frequency_unit': None,
+            'amount_expected': amount,
+            'late_fee': (
+                Decimal(str(rent_settings.late_penalty_amount))
+                if rent_settings is not None and rent_settings.late_penalty_amount is not None
+                else None
+            ),
+            'grace_period_days': rent_settings.grace_period_days if rent_settings is not None else 0,
+            'frequency': rent_settings.frequency_type if rent_settings is not None else 'monthly',
+            'frequency_type': rent_settings.frequency_type if rent_settings is not None else 'monthly',
+            'allow_incremental_payment': bool(rent_settings.allow_incremental_payment) if rent_settings is not None else False,
+            'custom_frequency_value': rent_settings.custom_frequency_value if rent_settings is not None else None,
+            'custom_frequency_unit': rent_settings.custom_frequency_unit if rent_settings is not None else None,
         },
         status_counts={'SATISFIED': 0, 'OUTSTANDING': 0, 'PAST_DUE': 0},
     )
