@@ -8,6 +8,11 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Status monitoring
+
+- Overall availability now follows regular endpoint/database checks rather than request volume. Feature cards show response observations with no 20-request minimum, preserve timestamped last activity through quiet periods, and distinguish 404s from server failures. DOM-OPS-001 2.10 / SPEC-OPS-006 1.2.
+- Accessibility: activity, monitoring loss, and historical window timestamps are visible text on each card; retained activity never uses a current-success color during quiet periods. Existing native history disclosures and heading order remain intact.
+
 ### Obligations
 
 - **Rent advance billing and disablement conformance (2026-09-24)** — Rent periods are now read from Obligations' bill cycles everywhere (settings summary, rent-link effective-date check, rebalance effective date, shop "paid rent" check, student policy lookup), replacing route-local schedule arithmetic. Disabling rent withdraws untouched advance rent, keeps partly or fully paid future periods committed, and never strands surviving rent: `/rent` stays reachable (the student feature gate previously 404'd it) and late fees keep accruing. Perks for a period paid in advance are granted when that period begins. The rent-settings deferral notice now distinguishes a billed-but-not-started period from one underway (DOM-OBL-001 §V.7–§V.8, §IX.15–16).

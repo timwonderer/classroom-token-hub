@@ -74,7 +74,7 @@ class FirestoreNoticeStore:
         """Atomically retain source minutes, history counters and latest attempt."""
         from google.cloud import firestore
         from status.measurements import (DIAGNOSTICS, classify_component,
-                                         parse_time, validate_fresh_snapshot)
+                                         parse_time, retained_activity, validate_fresh_snapshot)
         if received_at.utcoffset() is None:
             raise ValueError("Receipt time requires timezone.")
         received_at = received_at.astimezone(timezone.utc)
@@ -129,7 +129,17 @@ class FirestoreNoticeStore:
             if snapshot and previous and previous_source is None:
                 advance = advance and sampled >= previous_received.replace(second=0, microsecond=0)
             if advance:
-                transaction.set(current_ref, wrapper)
+                # Historical context only: idle/failed attempts never refresh activity.
+                activity = retained_activity(previous.get("last_activity") if previous else None,
+                                             now=received_at)
+                if snapshot:
+                    for component in snapshot["components"]:
+                        state = classify_component(component, snapshot, now=received_at)["state"]
+                        if component["request_count"] and state not in {"STALE", "MONITOR_UNAVAILABLE"}:
+                            activity[component["key"]] = {
+                                "sampled_at": snapshot["sampled_at"],
+                                "source_latest_at": snapshot["source_latest_at"], "component": component}
+                transaction.set(current_ref, {**wrapper, "last_activity": activity})
         write(self.client.transaction())
 
     def append_event(self, notice: dict, event_type: str, actor: str) -> str:

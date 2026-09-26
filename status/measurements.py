@@ -110,12 +110,38 @@ def classify_component(component: dict, snapshot: dict, *, now: datetime) -> dic
         reasons.append("Elevated server-error responses (5xx above 2%).")
     if result["http_404_percent"] > 5:
         reasons.append("Elevated not-found responses (404 above 5%).")
-    state = "ELEVATED_ERRORS" if reasons else "NORMAL" if count >= 20 else "LOW_TRAFFIC"
+    state = "ELEVATED_ERRORS" if reasons else "NORMAL"
     if component["p95_ms"] > 1500:
         reasons.append("High latency (p95 above 1,500 ms).")
         if state != "ELEVATED_ERRORS":
             state = "HIGH_LATENCY"
     if not reasons:
-        reasons = ["Observed requests are within the published thresholds." if state == "NORMAL" else "Fewer than 20 requests; evidence is limited."]
+        reasons = ["Observed requests are within the published thresholds."]
     result.update(state=state, reasons=reasons)
+    return result
+
+
+def retained_activity(activity: object, *, now: datetime) -> dict:
+    """Validate historical context without renewing its source timestamp."""
+    if not isinstance(activity, dict):
+        return {}
+    result = {}
+    for key in COMPONENT_KEYS:
+        value = activity.get(key)
+        try:
+            if not isinstance(value, dict) or set(value) != {"sampled_at", "source_latest_at", "component"}:
+                continue
+            historical = validate_snapshot({"schema_version": SCHEMA_VERSION,
+                "window_seconds": WINDOW_SECONDS, "sampled_at": value["sampled_at"],
+                "source_latest_at": value["source_latest_at"], "components": [
+                    value["component"] if name == key else unavailable_component(name)
+                    for name in COMPONENT_KEYS]})
+            sampled = parse_time(historical["sampled_at"])
+            component = value["component"]
+            if (0 <= (now - sampled).total_seconds() <= 7 * 86400 and component["request_count"]
+                    and classify_component(component, historical, now=sampled)["state"]
+                    not in {"STALE", "MONITOR_UNAVAILABLE"}):
+                result[key] = value
+        except (ValueError, TypeError, KeyError):
+            continue
     return result

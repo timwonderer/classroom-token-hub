@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-OPS-001      | 2.9     | 2026-09-21     | 2.8        | Normative       |
+| DOM-OPS-001      | 2.10    | 2026-09-25     | 2.9        | Normative       |
 
 ## 0. Authority Level and Dependencies
 
@@ -84,14 +84,19 @@ identify the measured request family; they do not establish domain truth or prov
 that a user journey completed. HTTP 404, 500 and 5xx rates and p80/p95 latency may
 be displayed with request counts, observation window, source freshness and coverage.
 
-The approved numerical contract is documented in `SPEC-OPS-006`. Automated evidence is limited to observed errors, latency, traffic and monitoring
-availability. Teacher/student labels may summarize that evidence as `Yes`,
-`Probably not`, `Possibly down`, or `Not recently verified` using the versioned
-request-proxy mapping in SPEC-OPS-006. These public labels are estimates, not
-internal correctness certification. Missing,
-stale, failed or insufficient monitoring MUST NOT be represented as normal activity.
-Threshold crossings are observations, not canonical incidents or inferred causes.
-A normal measured window MUST NOT be described as proof of feature correctness.
+The approved numerical contract is documented in `SPEC-OPS-006`. Overall public
+availability follows the minute-by-minute application endpoint and database checks,
+with five-minute expiry if checks stop. Quiet request traffic does not revoke fresh
+connectivity evidence. Active operator notices and fresh observed server errors
+qualify the summary. Reachability never certifies business correctness.
+
+Feature cards report request outcomes without a minimum traffic count. Idle windows
+show `No recent activity` with the last observed outcome and original window timestamp
+as historical context, retained for at most seven days. Historical activity MUST NOT
+be represented as current health or cleared solely because requests stop. Failed or
+stale monitoring remains explicit. HTTP 4xx responses, including 404, remain numerical
+observations and MUST NOT by themselves declare a feature outage. One fresh 5xx is
+reported as an observed server error, not a diagnosis or canonical incident.
 
 Public current cards and historical percentages do not depend on internal integrity
 evaluator registration. Internal readiness, correctness, lineage, reconciliation
