@@ -274,6 +274,19 @@ def _sum_approved_payouts(
     return _quantize_currency(total)
 
 
+def covered_from_utc(canonical_context: CanonicalContext, policy_terms, granted_event) -> datetime:
+    """The first instant a loss can be covered: purchase, or the end of the wait.
+
+    A loss that happens during the waiting period is not covered, whenever the
+    claim is filed (operator ruling 2026-09-26). With no wait this is the grant.
+    """
+    granted = ensure_utc(granted_event.timestamp)
+    _, effective_start = coverage_effective_start_utc(
+        canonical_context, granted, policy_terms.waiting_period_days or 0
+    )
+    return max(granted, effective_start)
+
+
 def coverage_effective_start_utc(
     canonical_context: CanonicalContext,
     coverage_start_utc: datetime,
@@ -519,11 +532,11 @@ def _enforce_transaction_submission(
     # (b) Coverage interval. The filing window is NOT gated here — see the
     # docstring above; it is surfaced and enforced at approval instead.
     source_ts_utc = ensure_utc(source_transaction.timestamp)
-    if source_ts_utc < ensure_utc(granted_event.timestamp):
+    if source_ts_utc < covered_from_utc(canonical_context, policy_terms, granted_event):
         return InsuranceClaimSubmissionResult(
             success=False,
             error_code="TRANSACTION_OUTSIDE_COVERAGE",
-            error_message="Source transaction predates the purchased coverage",
+            error_message="Source transaction happened before coverage started",
         )
 
     # (c) Claim-allowance — count EVERY claim lifecycle (SUBMITTED+APPROVED+REJECTED)
@@ -657,7 +670,7 @@ def _parse_productivity_dates(
             return [], InsuranceClaimSubmissionResult(
                 success=False,
                 error_code="PRODUCTIVITY_DATE_NOT_ELIGIBLE",
-                error_message=f"Date {claim_date.isoformat()} predates the purchased coverage",
+                error_message=f"Date {claim_date.isoformat()} is before coverage started",
             )
         if claim_date > today_local:
             return [], InsuranceClaimSubmissionResult(
@@ -1247,7 +1260,7 @@ def _submit_insurance_claim_impl(
             parsed_productivity_dates, parse_failure = _parse_productivity_dates(
                 claim_subject,
                 canonical_context=canonical_context,
-                coverage_start_utc=ensure_utc(granted_event.timestamp),
+                coverage_start_utc=covered_from_utc(canonical_context, policy_terms, granted_event),
                 submitted_at=now,
             )
             if parse_failure is not None:
@@ -1325,6 +1338,11 @@ def _submit_insurance_claim_impl(
             error_code="INTERNAL_ERROR",
             error_message=f"Submission failed: {str(e)}",
         )
+
+
+def productivity_hourly_rate(class_id: str) -> Decimal:
+    """The hourly wage a PRODUCTIVITY payout is computed from, for review screens."""
+    return _resolve_hourly_pay_rate(class_id)
 
 
 def _resolve_hourly_pay_rate(class_id: str) -> Decimal:

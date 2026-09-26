@@ -777,6 +777,7 @@ def _make_productivity_policy(
     premium: str = "100.00",
     payout_multiple: str = "1",
     claimable_dates_per_week_equivalent: str = "5",
+    waiting_period_days: int | None = None,
 ) -> str:
     """Create a real immutable PRODUCTIVITY insurance_policies row; return its policy_uuid.
 
@@ -795,6 +796,7 @@ def _make_productivity_policy(
             "payout_multiple": payout_multiple,
             "claimable_dates_per_week_equivalent": claimable_dates_per_week_equivalent,
             "title": "Productivity Insurance",
+            **({"waiting_period_days": waiting_period_days} if waiting_period_days is not None else {}),
         },
     )
     return row.policy_uuid
@@ -2280,3 +2282,45 @@ class TestWaitingPeriodAppliesToEveryType:
 
             assert result.error_code == "WAITING_PERIOD_NOT_ELAPSED"
             assert db.session.query(InsuranceClaim).filter_by(entitlement_id=entitlement_id).all() == []
+
+
+class TestLossesDuringTheWaitingPeriod:
+    """A loss that happens during the waiting period is not covered, whenever the
+    claim is filed (operator ruling 2026-09-26). Before, loss dates were judged
+    against the purchase time, so a claim filed after the wait could reach back
+    into it."""
+
+    @staticmethod
+    def _submit(classroom, student, entitlement_id, day):
+        return submit_insurance_claim(
+            canonical_context=TestNonMonetaryWaitingPeriod._student_context(classroom, student),
+            entitlement_id=entitlement_id,
+            claim_subject={"claimed_dates": [{"date": day.isoformat(), "hours": "1", "explanation": "documented loss"}]},
+        )
+
+    def _granted(self, classroom, student, key):
+        entitlement_id = str(uuid4())
+        granted_at = datetime.now(timezone.utc) - timedelta(days=10)
+        with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"wait-loss:{key}"):
+            _add_productivity_granted_event(
+                classroom, student, entitlement_id, make_policy_uuid(key),
+                granted_at=granted_at, waiting_period_days=3,
+            )
+        return entitlement_id, granted_at
+
+    def test_productivity_date_inside_the_wait_is_refused(self, app):
+        classroom = initialize("chemistry_p1", app)
+        student = classroom.students[0]
+        with app.app_context():
+            entitlement_id, granted_at = self._granted(classroom, student, "inside")
+            result = self._submit(classroom, student, entitlement_id, (granted_at + timedelta(days=1)).date())
+            assert result.error_code == "PRODUCTIVITY_DATE_NOT_ELIGIBLE", result.error_message
+
+    def test_productivity_date_after_the_wait_is_accepted(self, app):
+        classroom = initialize("chemistry_p1", app)
+        student = classroom.students[0]
+        with app.app_context():
+            entitlement_id, granted_at = self._granted(classroom, student, "after")
+            result = self._submit(classroom, student, entitlement_id, (granted_at + timedelta(days=5)).date())
+            assert result.success, result.error_message
+

@@ -10,7 +10,7 @@
 <ol class="ps-3 mb-0">
     <li class="mb-2"><strong>Read the claim against the policy that was purchased</strong>, shown in <em>Policy Information</em> — not against the policy as it reads today. A purchase freezes its terms.</li>
     <li class="mb-2"><strong>Check the claims history</strong> for this student. Repeat claims are usually the interesting signal.</li>
-    <li class="mb-0"><strong>Set the status</strong>, then submit.</li>
+    <li class="mb-0"><strong>Approve or reject.</strong> Decisions are final.</li>
 </ol>
 {% endcall %}
 
@@ -22,7 +22,7 @@
 {% endcall %}
 
 {% call help.topic('claim-payout', 'calculate', 'Who sets the payout') %}
-<p class="mb-0"><strong>You do not.</strong> Approved amounts are calculated from the linked transaction, then capped by the policy's per-claim and per-period limits.</p>
+<p class="mb-0"><strong>The policy does.</strong> A purchase claim pays the policy's share of the lost amount. A lost-time claim pays the approved hours at your class's hourly wage, times the policy's share. Both stop at what is left of the period's payout limit. For lost time you may approve fewer hours than claimed, with a note.</p>
 {% endcall %}
 {% endblock %}
 
@@ -42,278 +42,228 @@
 {% endblock %}
 
 {% block content %}
+{% set type_label = {'TRANSACTION': 'Purchase protection', 'PRODUCTIVITY': 'Lost-time protection', 'NON_MONETARY': 'Non-monetary coverage'} %}
+{% set status_badge = {
+    'SUBMITTED': ('bg-warning-subtle text-body', 'hourglass_top', 'Awaiting your decision'),
+    'APPROVED': ('bg-success-subtle text-body', 'check_circle', 'Approved'),
+    'REJECTED': ('bg-danger-subtle text-body', 'cancel', 'Rejected'),
+} %}
+{% set badge = status_badge.get(claim.status, ('bg-light text-body', 'help', claim.status|title)) %}
 
-<div class="row">
-  <div class="col-md-8">
-    <div class="card shadow mb-4">
-      <div class="card-header">
-        <h5 class="mb-0">Claim Details</h5>
-      </div>
-      <div class="card-body">
-        <dl class="row">
-          <dt class="col-sm-4">Student:</dt>
-          <dd class="col-sm-8">{{ claim.student.full_name }}</dd>
-
-          <dt class="col-sm-4">Insurance Policy:</dt>
-          <dd class="col-sm-8">{{ contract_title }}</dd>
-
-          <dt class="col-sm-4">Claim Type:</dt>
-          <dd class="col-sm-8">
-            {% if claim_type == 'TRANSACTION' %}
-              <span class="badge bg-info">[TXN] Transaction-based</span>
-            {% elif claim_type == 'NON_MONETARY' %}
-              <span class="badge bg-warning text-dark">[NON-MONETARY]</span>
-            {% else %}
-              <span class="badge bg-primary">[CUSTOM]</span>
-            {% endif %}
-          </dd>
-
-          <dt class="col-sm-4">Incident Date:</dt>
-          <dd class="col-sm-8">{{ (claim.claimed_dates[0] if claim.claimed_dates else claim.submitted_at).strftime('%B %d, %Y') }}</dd>
-
-          <dt class="col-sm-4">Filed Date:</dt>
-          <dd class="col-sm-8">
-            {% if claim.filed_date %}
-              {{ claim.filed_date|fmt_timestamp }}
-            {% else %}
-              N/A
-            {% endif %}
-          </dd>
-
-          {% if claim.transaction %}
-          <dt class="col-sm-4">Linked Transaction:</dt>
-          <dd class="col-sm-8">
-            <div class="d-flex flex-column">
-              <span class="fw-semibold">{{ claim.transaction.timestamp.strftime('%Y-%m-%d') }}</span>
-              <span class="text-muted">{{ claim.transaction.description or 'No description' }}</span>
-              <span class="badge bg-secondary mt-1">Amount: ${{ '%.2f'|format(claim.transaction.amount|abs) }}</span>
-            </div>
-          </dd>
-          {% endif %}
-
-          {% if claim.claim_amount %}
-          <dt class="col-sm-4">Claim Amount:</dt>
-          <dd class="col-sm-8">
-            ${{ "%.2f"|format(claim.claim_amount) }}
-          </dd>
-          {% endif %}
-
-          {% if claim.claim_item %}
-          <dt class="col-sm-4">Claiming:</dt>
-          <dd class="col-sm-8">
-            <span class="badge bg-warning text-dark">{{ claim.claim_item }}</span>
-          </dd>
-          {% endif %}
-
-          <dt class="col-sm-4">Current Status:</dt>
-          <dd class="col-sm-8">
-            <span class="badge
-              {% if claim.status|lower == 'submitted' %}bg-warning text-dark
-              {% elif claim.status|lower == 'approved' %}bg-success
-              {% elif claim.status|lower == 'rejected' %}bg-danger
-              {% endif %}">
-              {{ claim.status|title }}
-            </span>
-          </dd>
-        </dl>
-
-        <hr>
-
-        <h6>Claim Description:</h6>
-        <div class="bg-light p-3 rounded">{{ claim.description | markdown }}</div>
-
-        {% if claim.comments %}
-        <h6>Student Comments:</h6>
-        <div class="bg-light p-3 rounded">{{ claim.comments | markdown }}</div>
-        {% endif %}
-
-        {% if claim.rejection_reason %}
-        <h6>Rejection Reason:</h6>
-        <div class="bg-danger-subtle p-3 rounded text-danger">{{ claim.rejection_reason | markdown }}</div>
-        {% endif %}
-
-        {% if claim.teacher_notes %}
-        <h6>Teacher Notes:</h6>
-        <div class="bg-info-subtle p-3 rounded">{{ claim.teacher_notes | markdown }}</div>
-        {% endif %}
-
-        {% if claim.filing_window_override_reason %}
-        <h6>Filing Window Override:</h6>
-        <div class="alert alert-warning py-2 small">
-          <span class="material-symbols-outlined me-1 icon-inherit icon-middle" aria-hidden="true">edit_note</span>
-          {{ claim.filing_window_override_reason | markdown }}
-        </div>
-        {% endif %}
-      </div>
+<div class="card mb-4">
+  <div class="card-body d-flex flex-wrap justify-content-between align-items-start gap-3">
+    <div>
+      <h2 class="h4 mb-1">Claim from {{ claim.student_name }}</h2>
+      <p class="mb-0 text-muted">
+        {{ policy.title or 'Insurance policy' }} · {{ type_label.get(claim_type, claim_type|title) }}
+        · Filed {{ claim.submitted_at|fmt_timestamp }}
+      </p>
     </div>
-  </div>
-
-  <div class="col-md-4">
-    <div class="card shadow mb-4">
-      <div class="card-header">
-        <h5 class="mb-0">Policy Information</h5>
-      </div>
-      <div class="card-body">
-        <p><strong>Claim Type:</strong><br>
-          {% if claim_type == 'TRANSACTION' %}
-            <span class="badge bg-info">[TXN] Transaction-based</span>
-          {% elif claim_type == 'PRODUCTIVITY' %}
-            <span class="badge bg-primary">[PRODUCTIVITY]</span>
-          {% else %}
-            <span class="badge bg-warning text-dark">[NON-MONETARY]</span>
-          {% endif %}
-        </p>
-
-        <p><strong>Coverage Start:</strong><br>
-          {{ coverage_start | fmt_date }}
-        </p>
-
-        <p><strong>Waiting Period:</strong><br>
-          {% if contract_waiting_period_days %}
-            {{ contract_waiting_period_days }} days — claimable from {{ coverage_effective_date.isoformat() }}
-          {% else %}
-            None — coverage is immediate
-          {% endif %}
-        </p>
-
-        <p><strong>Filing Window:</strong><br>
-          {% if contract_claim_window_days is not none %}
-            {{ contract_claim_window_days }} days from the covered transaction
-          {% else %}
-            No filing window for this product
-          {% endif %}
-        </p>
-
-        {% if contract_claim_window_days is not none %}
-        <p><strong>Validation Status:</strong><br>
-          {% if filing_window_exceeded %}
-            <span class="badge bg-warning text-dark">
-              <span class="material-symbols-outlined me-1 icon-inherit icon-middle" aria-hidden="true">schedule</span>
-              Filed outside the filing window
-            </span>
-            <div class="text-muted small mt-1">Override available — see form below.</div>
-          {% else %}
-            <span class="badge bg-success">
-              <span class="material-symbols-outlined me-1 icon-inherit icon-middle" aria-hidden="true">check_circle</span>
-              Filed within the filing window
-            </span>
-          {% endif %}
-        </p>
-        {% endif %}
-
-        {% if contract_reimbursement_percentage is not none %}
-          <p><strong>Reimbursement:</strong><br>
-            {{ contract_reimbursement_percentage }}% of the covered loss
-          </p>
-        {% endif %}
-
-        <p><strong>Period Allowance:</strong><br>
-          {% if contract_period_allowance is not none %}
-            {{ contract_period_consumed }} of {{ contract_period_allowance }}
-            {{ contract_allowance_unit }}{{ '' if contract_period_allowance == 1 else 's' }} used this coverage period
-          {% else %}
-            Not metered for this product
-          {% endif %}
-        </p>
-
-        {% if contract_max_payout_per_period %}
-          <p><strong>Period Payout Capacity:</strong><br>
-            ${{ '%.2f'|format(remaining_period_cap) }} remaining of
-            ${{ '%.2f'|format(contract_max_payout_per_period) }}
-          </p>
-        {% endif %}
-      </div>
-    </div>
-
-    <div class="card shadow">
-      <div class="card-header">
-        <h5 class="mb-0">Student's Claims History</h5>
-      </div>
-      <div class="card-body">
-        <p class="mb-2"><strong>This Policy:</strong></p>
-        <ul class="small mb-3">
-          <li>Pending: {{ claims_stats.pending }} claims</li>
-          <li>Approved: {{ claims_stats.approved }} claims</li>
-          <li>Rejected: {{ claims_stats.rejected }} claims</li>
-        </ul>
-
-        {% if contract_period_allowance is not none %}
-          <p class="text-muted small">
-            {{ contract_period_consumed }} of {{ contract_period_allowance }}
-            {{ contract_allowance_unit }}{{ '' if contract_period_allowance == 1 else 's' }} drawn this coverage period
-          </p>
-        {% endif %}
-      </div>
-    </div>
+    <span class="badge {{ badge[0] }} fs-6 d-inline-flex align-items-center gap-1">
+      <span class="material-symbols-outlined icon-sm" aria-hidden="true">{{ badge[1] }}</span>{{ badge[2] }}
+    </span>
   </div>
 </div>
 
-<!-- Process Claim Form -->
-<div class="card shadow">
-  <div class="card-header">
-    <h5 class="mb-0">Process This Claim</h5>
-  </div>
-  <div class="card-body">
-    {% if claim.status|lower != 'submitted' %}
-      <p class="mb-0">
-        <span class="material-symbols-outlined me-1 icon-inherit icon-middle" aria-hidden="true">lock</span>
-        This claim was <strong>{{ claim.status|lower }}</strong>{% if claim.decided_at %} on {{ claim.decided_at | fmt_timestamp }}{% endif %}.
-        Decisions are final — no further changes can be made here.
-      </p>
-      {% if claim.decision_note %}
-      <div class="bg-light p-3 rounded mt-3">{{ claim.decision_note | markdown }}</div>
-      {% endif %}
-    {% else %}
-    <form method="POST" action="{{ url_for('admin.process_claim', claim_id=claim.id) }}">
-      {{ form.hidden_tag() }}
-
-      <div class="row">
-        <div class="col-md-6 mb-3">
-          {{ form.status.label(class="form-label") }}
-          {{ form.status(class="form-select") }}
-        </div>
-        {% if claim_type == 'TRANSACTION' %}
-          <div class="col-md-6 mb-3">
-            <label class="form-label">Approved Amount</label>
-            <input type="text" class="form-control" aria-label="Approved amount" value="Auto-calculated from the linked transaction" disabled>
-            <small class="text-muted">Per-claim and period caps will be applied automatically.</small>
+<div class="row g-4">
+  <div class="col-lg-8">
+    <div class="card mb-4">
+      <div class="card-header">
+        <h2 class="h6 mb-0 d-flex align-items-center gap-2">
+          <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span> What {{ claim.student_name }} is claiming
+        </h2>
+      </div>
+      <div class="card-body">
+        {% if claim_type == 'PRODUCTIVITY' and productivity %}
+          {% if productivity.guidance_exceeded %}
+          <div class="alert alert-warning py-2 small d-flex gap-2">
+            <span class="material-symbols-outlined icon-sm" aria-hidden="true">info</span>
+            <span>Hours worked plus hours claimed go past the expected {{ productivity.expected_weekly_hours|float|round(1) }} hours for that week. This is a prompt to look closer, not a rule.</span>
           </div>
+          {% endif %}
+          <div class="table-responsive">
+            <table class="table align-middle mb-2">
+              <thead>
+                <tr>
+                  <th scope="col">Day</th>
+                  <th scope="col" class="text-end">Hours claimed</th>
+                  <th scope="col" class="text-end">Hours worked that day</th>
+                  <th scope="col">Student's explanation</th>
+                  {% if claim.status == 'SUBMITTED' %}<th scope="col">Hours to approve</th>{% else %}<th scope="col" class="text-end">Hours approved</th>{% endif %}
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in productivity.dates %}
+                <tr>
+                  <td>{{ row.claim_date.strftime('%a, %b %d, %Y') }}</td>
+                  <td class="text-end">{{ '%g'|format(row.student_claimed_hours|float) }}</td>
+                  <td class="text-end">{{ '%.2f'|format(row.already_worked_seconds / 3600) }}</td>
+                  <td>{{ row.student_explanation }}</td>
+                  {% if claim.status == 'SUBMITTED' %}
+                  <td>
+                    <label class="visually-hidden" for="approve_hours-{{ row.claim_date.isoformat() }}">Hours to approve for {{ row.claim_date.strftime('%b %d') }}</label>
+                    <input type="number" class="form-control form-control-sm mb-1" form="claim-decision"
+                           id="approve_hours-{{ row.claim_date.isoformat() }}" name="approve_hours-{{ row.claim_date.isoformat() }}"
+                           min="0" max="{{ row.student_claimed_hours }}" step="0.25" value="{{ row.student_claimed_hours }}">
+                    <label class="visually-hidden" for="approve_note-{{ row.claim_date.isoformat() }}">Reason for changing hours on {{ row.claim_date.strftime('%b %d') }}</label>
+                    <input type="text" class="form-control form-control-sm" form="claim-decision"
+                           id="approve_note-{{ row.claim_date.isoformat() }}" name="approve_note-{{ row.claim_date.isoformat() }}"
+                           placeholder="Reason, if you change the hours">
+                  </td>
+                  {% else %}
+                  <td class="text-end">{{ '%g'|format(row.teacher_approved_hours|float) if row.teacher_approved_hours is not none else '—' }}</td>
+                  {% endif %}
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% if hourly_rate is not none %}
+          <p class="small text-muted mb-0">Paid at ${{ '%.2f'|format(hourly_rate) }} an hour × {{ '%g'|format(reimbursement_percentage|float) }}% coverage.</p>
+          {% endif %}
+          {% if claim.additional_information %}
+          <h3 class="h6 mt-3">Anything else the student added</h3>
+          <div class="bg-light p-3 rounded">{{ claim.additional_information }}</div>
+          {% endif %}
+
+        {% elif claim_type == 'TRANSACTION' %}
+          {% if source_transaction %}
+          <dl class="row mb-0">
+            <dt class="col-sm-4">Purchase</dt>
+            <dd class="col-sm-8">{{ source_transaction.description or 'No description' }}</dd>
+            <dt class="col-sm-4">Date</dt>
+            <dd class="col-sm-8">{{ source_transaction.timestamp|fmt_timestamp }}</dd>
+            <dt class="col-sm-4">Amount lost</dt>
+            <dd class="col-sm-8">${{ '%.2f'|format(source_transaction.amount|abs) }}</dd>
+            <dt class="col-sm-4">Filing window</dt>
+            <dd class="col-sm-8">
+              {% if filing_window_exceeded %}
+                <span class="d-inline-flex align-items-center gap-1"><span class="material-symbols-outlined icon-sm text-warning" aria-hidden="true">schedule</span>Filed after the {{ contract.claim_window_days }}-day window closed. Approving needs an override reason below.</span>
+              {% else %}
+                <span class="d-inline-flex align-items-center gap-1"><span class="material-symbols-outlined icon-sm text-success" aria-hidden="true">check_circle</span>Filed within {{ contract.claim_window_days }} days</span>
+              {% endif %}
+            </dd>
+          </dl>
+          {% else %}
+          <p class="text-muted mb-0">The purchase this claim refers to could not be found in this class.</p>
+          {% endif %}
+          {% if claim.description %}
+          <h3 class="h6 mt-3">What happened, in the student's words</h3>
+          <div class="bg-light p-3 rounded">{{ claim.description }}</div>
+          {% endif %}
+
+        {% else %}
+          <h3 class="h6">What happened, in the student's words</h3>
+          <div class="bg-light p-3 rounded">{{ claim.description or 'No description given.' }}</div>
+        {% endif %}
+
+        {% if estimated_payout is not none %}
+        <div class="border-top mt-3 pt-3 d-flex justify-content-between align-items-baseline">
+          <span class="fw-semibold">{% if claim.status == 'SUBMITTED' %}Payout if approved as claimed{% else %}Payout at the claimed amount{% endif %}</span>
+          <span class="h5 mb-0">${{ '%.2f'|format(estimated_payout) }}</span>
+        </div>
         {% endif %}
       </div>
+    </div>
 
-      <div class="mb-3">
-        {{ form.rejection_reason.label(class="form-label") }}
-        {{ form.rejection_reason(class="form-control", rows=3) }}
-        <small class="text-muted">Required if rejecting claim</small>
+    <div class="card mb-4">
+      <div class="card-header">
+        <h2 class="h6 mb-0 d-flex align-items-center gap-2">
+          <span class="material-symbols-outlined" aria-hidden="true">gavel</span> Decision
+        </h2>
       </div>
+      <div class="card-body">
+        {% if claim.status != 'SUBMITTED' %}
+          <p class="mb-0">
+            This claim was <strong>{{ claim.status|lower }}</strong>{% if claim.decided_at %} on {{ claim.decided_at|fmt_timestamp }}{% endif %}. Decisions are final.
+          </p>
+          {% if claim.decision_note %}
+          <div class="bg-light p-3 rounded mt-3">{{ claim.decision_note | markdown }}</div>
+          {% endif %}
+          {% if claim.filing_window_override_reason %}
+          <h3 class="h6 mt-3">Filing window override</h3>
+          <div class="bg-light p-3 rounded">{{ claim.filing_window_override_reason | markdown }}</div>
+          {% endif %}
+        {% else %}
+        <form method="POST" id="claim-decision" action="{{ url_for('admin.process_claim', claim_id=claim.id) }}">
+          {{ form.hidden_tag() }}
 
-      <div class="mb-3">
-        {{ form.teacher_notes.label(class="form-label") }}
-        {{ form.teacher_notes(class="form-control", rows=3) }}
-      </div>
+          {% if filing_window_exceeded %}
+          <div class="mb-3">
+            <label class="form-label fw-semibold" for="filing_window_override_reason">Why approve a late claim? <span class="text-muted fw-normal">(required to approve)</span></label>
+            {{ form.filing_window_override_reason(class="form-control", rows=3) }}
+            <small class="text-muted">Recorded permanently on the claim.</small>
+          </div>
+          {% endif %}
 
-      {% if filing_window_exceeded %}
-      <div class="mb-3 border border-warning rounded p-3 bg-warning-subtle">
-        <label class="form-label fw-bold text-warning-emphasis" for="filing_window_override_reason">
-          <span class="material-symbols-outlined me-1 icon-inherit icon-middle" aria-hidden="true">edit_note</span>
-          Filing Window Override Reason
-          <span class="badge bg-warning text-dark ms-1">Required to approve</span>
-        </label>
-        {{ form.filing_window_override_reason(class="form-control", rows=3,
-            placeholder="Explain why this claim should be approved despite being filed outside the policy's filing window...") }}
-        <small class="text-muted mt-1 d-block">
-          This claim was filed outside the policy's filing window. Provide a written explanation to
-          override the block and proceed with approval. Your reason will be permanently recorded on the claim.
-        </small>
-      </div>
-      {% endif %}
+          <div class="mb-3">
+            <label class="form-label fw-semibold" for="rejection_reason">Reason for rejecting <span class="text-muted fw-normal">(required to reject; the student sees it)</span></label>
+            {{ form.rejection_reason(class="form-control", rows=3) }}
+          </div>
 
-      <div class="d-flex gap-2">
-        {{ form.submit(class="btn btn-primary") }}
-        <a href="{{ url_for('admin.insurance_management') }}" class="btn btn-secondary">Back to Insurance</a>
+          <div class="mb-3">
+            <label class="form-label fw-semibold" for="teacher_notes">Your notes <span class="text-muted fw-normal">(optional; recorded with an approval)</span></label>
+            {{ form.teacher_notes(class="form-control", rows=2) }}
+          </div>
+
+          <div class="d-flex flex-wrap gap-2">
+            <button type="submit" name="status" value="approved" class="btn btn-primary">
+              <span class="material-symbols-outlined icon-sm icon-middle" aria-hidden="true">check</span> Approve claim
+            </button>
+            <button type="submit" name="status" value="rejected" class="btn btn-outline-danger">
+              <span class="material-symbols-outlined icon-sm icon-middle" aria-hidden="true">close</span> Reject claim
+            </button>
+            <a href="{{ url_for('admin.insurance_management') }}" class="btn btn-link">Back to Insurance</a>
+          </div>
+        </form>
+        {% endif %}
       </div>
-    </form>
-    {% endif %}
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card mb-4">
+      <div class="card-header">
+        <h2 class="h6 mb-0 d-flex align-items-center gap-2">
+          <span class="material-symbols-outlined" aria-hidden="true">description</span> Policy terms, as purchased
+        </h2>
+      </div>
+      <div class="card-body">
+        <dl class="mb-0">
+          <dt>Type</dt>
+          <dd>{{ type_label.get(claim_type, claim_type|title) }}</dd>
+          <dt>Coverage started</dt>
+          <dd>{{ contract.coverage_effective_date.strftime('%b %d, %Y') }}{% if waiting_period_days %}<br><span class="small text-muted">Bought {{ contract.coverage_start_utc|fmt_date }}, then a {{ waiting_period_days }}-day waiting period. Losses before coverage started are not covered.</span>{% endif %}</dd>
+          {% if reimbursement_percentage is not none %}
+          <dt>Pays back</dt>
+          <dd>{{ '%g'|format(reimbursement_percentage|float) }}% of the loss</dd>
+          {% endif %}
+          {% if contract.claim_window_days is not none %}
+          <dt>Filing window</dt>
+          <dd>{{ contract.claim_window_days }} days after the purchase</dd>
+          {% endif %}
+          {% if contract.period_allowance is not none %}
+          <dt>This coverage period</dt>
+          <dd>{{ contract.period_consumed }} of {{ contract.period_allowance }} {{ 'claimable days' if contract.allowance_unit == 'date' else 'claims' }} used</dd>
+          {% endif %}
+          {% if contract.maximum_policy_payout %}
+          <dt>Payout left this period</dt>
+          <dd class="mb-0">${{ '%.2f'|format(contract.remaining_period_cap) }} of ${{ '%.2f'|format(contract.maximum_policy_payout) }}</dd>
+          {% endif %}
+        </dl>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2 class="h6 mb-0 d-flex align-items-center gap-2">
+          <span class="material-symbols-outlined" aria-hidden="true">history</span> {{ claim.student_name }}'s claims on this policy
+        </h2>
+      </div>
+      <div class="card-body">
+        <p class="mb-0">{{ claims_stats.submitted }} awaiting a decision · {{ claims_stats.approved }} approved · {{ claims_stats.rejected }} rejected</p>
+      </div>
+    </div>
   </div>
 </div>
 

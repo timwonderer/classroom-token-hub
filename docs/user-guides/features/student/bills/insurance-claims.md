@@ -66,11 +66,11 @@ The app refuses some claims before your teacher ever sees them. The message tell
 
 | Message | What it means |
 | --- | --- |
-| *Source transaction predates the purchased coverage* | The purchase happened before you bought the policy. Insurance never covers backwards. |
+| *Source transaction happened before coverage started* | The purchase happened before your coverage started: before you bought the policy, or during its waiting period. Insurance never covers backwards. |
 | *Filing window for this transaction has closed* | You waited too long. The window is on the policy card at the top of the form. |
 | *Claim allowance exhausted (N/M for this period)* | You have used all your claims for this coverage period. |
 | *No remaining period payout capacity* | Approved payouts have already hit the *up to N× premium* ceiling for this period. |
-| *Date {date} predates the purchased coverage* | Same rule as above, for a productivity date. |
+| *Date {date} is before coverage started* | Same rule as above, for a day of lost time. Days during the waiting period are not covered. |
 | *Date {date} is in the future* | You can only claim days that have happened. |
 | *Date allowance exhausted (N/M distinct dates for this period)* | You have claimed as many separate days as the policy allows this period. |
 | *Claimed hours for {date} exceed the remaining daily capacity after time worked* | You are claiming more hours than that day had left after the time you actually clocked. |

@@ -26,48 +26,39 @@ Students file from their own insurance page against a policy they hold. You do n
 
 ### Reading the review screen
 
-**Claim Details** covers the incident:
+The top of the screen names the student, the policy, what kind of coverage it is, when the claim was filed, and one status: **Awaiting your decision**, **Approved**, or **Rejected**.
 
-| Field | What it tells you |
-| --- | --- |
-| Student | Who filed |
-| Insurance Policy | The product they hold |
-| Claim Type | Transaction-based, Non-monetary, or Custom |
-| Incident Date | When the thing happened |
-| Filed Date | When they submitted |
-| Linked Transaction | For transaction claims, the exact ledger entry with its amount |
-| Claim Amount | What they are asking for |
-| Current Status | Pending, Approved, Rejected, or Paid |
+**What the student is claiming** shows the claim itself, and it depends on the kind of coverage:
 
-Below that you get the student's **Claim Description** and any **Student Comments**.
+- **Purchase protection:** the purchase the student lost money on (what it was, when, and how much), whether they filed inside the policy's filing window, and their own account of what happened.
+- **Lost-time protection:** one row per day claimed, with the hours claimed, the hours the student actually worked that day, and their explanation for that day. If worked plus claimed hours run past the class's expected hours for that week, a note tells you to look closer. It is a prompt, not a rule.
+- **Non-monetary coverage:** the student's account of what happened.
 
-**Policy Information** shows the contract as it was sold to that student:
+Underneath, **Payout if approved as claimed** shows what the student would receive, after the policy's share and what is left of this period's payout limit.
+
+**Policy terms, as purchased** shows the contract as it was sold to that student:
 
 | Field | Why it matters |
 | --- | --- |
-| Claim Type | Which kind of policy the claim is against |
-| Coverage Start | When the student's coverage began, or *Still in waiting period* |
-| Waiting Period | How many days after purchase coverage takes effect |
-| Filing Window | How many days from the covered transaction they had to file, with whether this claim made it |
-| Reimbursement | The share of the loss the policy pays back |
-| Period Allowance | How many claims (or claimable dates) they have used in the coverage period this claim was filed in |
-| Period Payout Capacity | How much payout is left in that coverage period |
+| Coverage started | The day coverage began. With a waiting period, it also shows the purchase date and the length of the wait. Losses before coverage started are not covered. |
+| Pays back | The share of the loss the policy pays |
+| Filing window | Purchase protection only: how many days after the purchase the student had to file |
+| This coverage period | How many claims, or claimable days, the student has used in the coverage period this claim was filed in |
+| Payout left this period | How much payout remains in that coverage period |
 
-**Validation Status** does the arithmetic for you. It either lists the specific rules the claim breaks, or reads **Claim meets all requirements**.
-
-**Student's Claims History** counts their pending, approved, rejected, and paid claims on this policy, and how many of their allowance they have used.
+The last card counts the student's claims on this policy: awaiting a decision, approved, and rejected.
 
 ### Deciding
 
-In **Process This Claim**:
+In **Decision**:
 
-1. Set the **Status**.
-2. For transaction-based claims, enter the **Approved Amount**. Per-claim and period caps are applied automatically, so you cannot accidentally overpay.
-3. If you are rejecting, fill in the **Rejection Reason** — it is required, and the student sees it.
-4. Add **Teacher Notes** if you want a record for yourself.
-5. Submit.
+1. For lost-time claims, check **Hours to approve** on each day. It starts at the hours claimed. You may approve fewer; if you do, write the reason beside it.
+2. For a purchase claim filed after its filing window, write why you are approving it anyway. Approval is blocked without it.
+3. To reject, write the **Reason for rejecting**. It is required, and the student sees it.
+4. Add **Your notes** if you want a record with an approval.
+5. Choose **Approve claim** or **Reject claim**. Decisions are final.
 
-Approving a monetary claim deposits the approved amount into the student's checking account.
+You never type an amount. A purchase claim pays the policy's share of the lost amount; a lost-time claim pays the approved hours at your class's hourly wage, times the policy's share. Either way the payout stops at what is left of the period's limit, and it lands in the student's checking account.
 
 ## Important notes
 

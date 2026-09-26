@@ -6341,13 +6341,23 @@ def delete_insurance_policy(policy_uuid):
 @admin_bp.route('/insurance/claim/<claim_id>', methods=['GET', 'POST'])
 @admin_required
 def process_claim(claim_id):
-    """Process insurance claim with auto-deposit for monetary claims."""
+    """Review one insurance claim and record the teacher's decision.
+
+    The page shows what is actually being claimed (the lost purchase, or each
+    lost day with its hours and the student's explanation), the terms the
+    student bought, and a decision form. Payouts are computed by the claim FEAT;
+    the teacher may approve fewer hours than claimed per day, with a note.
+    """
+    from app.feats.insurance_claim_feat import (
+        build_productivity_review_context,
+        productivity_hourly_rate,
+    )
+    from app.services.insurance_policy_service import normalize_insurance_type
+
     claim = get_insurance_claim(claim_id=str(claim_id))
     if claim is None or claim.class_id != g.canonical_context.class_id:
         abort(404)
     form = AdminClaimProcessForm()
-    if request.method == 'GET':
-        form.status.data = getattr(claim.status, "value", claim.status)
     claim_basis = claim.claim_basis or {}
     try:
         contract = describe_claim_contract(claim, canonical_context=g.canonical_context)
@@ -6356,64 +6366,78 @@ def process_claim(claim_id):
         # review, and inventing them is how a teacher approves a payout blind.
         abort(404)
     policy = contract.policy
+    claim_type = normalize_insurance_type(policy.insurance_type)
+    status = getattr(claim.status, "value", claim.status)
+    reimbursement = Decimal(str(policy.reimbursement_percentage or 0)) / Decimal("100")
+
+    productivity = None
+    hourly_rate = None
+    if claim_type == "PRODUCTIVITY":
+        productivity = build_productivity_review_context(claim, canonical_context=g.canonical_context)
+        try:
+            hourly_rate = productivity_hourly_rate(claim.class_id)
+        except Exception:  # payroll not configured: show hours without money
+            hourly_rate = None
+
+    source_transaction = None
+    source_id = claim_basis.get("transaction_id")
+    if claim_type == "TRANSACTION" and source_id:
+        source_transaction = Transaction.query.filter_by(
+            id=int(source_id), class_id=claim.class_id, seat_id=claim.target_seat_id
+        ).first()
+
+    estimated_payout = None
+    if productivity is not None and hourly_rate is not None:
+        estimated_payout = sum(
+            (row.student_claimed_hours * hourly_rate * reimbursement for row in productivity.dates),
+            Decimal("0"),
+        ).quantize(Decimal("0.01"))
+    elif source_transaction is not None:
+        estimated_payout = (abs(source_transaction.amount) * reimbursement).quantize(Decimal("0.01"))
+    if estimated_payout is not None and contract.remaining_period_cap is not None:
+        estimated_payout = min(estimated_payout, contract.remaining_period_cap)
+
     claims = insurance_claim_service.list_claims_for_entitlement(
         class_id=claim.class_id,
         entitlement_id=claim.entitlement_id,
         target_seat_id=claim.target_seat_id,
     )
     student_profile = IdentityProfile.query.filter_by(seat_id=claim.target_seat_id).first()
-    incident_dates = claim_basis.get('claimed_dates') or []
-    parsed_incident_dates = []
-    for raw_date in incident_dates:
-        if isinstance(raw_date, str):
-            try:
-                parsed_incident_dates.append(datetime.fromisoformat(raw_date))
-            except ValueError:
-                continue
-        elif isinstance(raw_date, datetime):
-            parsed_incident_dates.append(raw_date)
-    if not parsed_incident_dates:
-        parsed_incident_dates = [claim.submitted_at]
-    claim_view = SimpleNamespace(
-        id=claim.claim_id,
-        claim_id=claim.claim_id,
-        student=SimpleNamespace(
-            full_name=(
-                student_profile.full_name if student_profile else getattr(claim.target_seat, "public_id", "")
-                if claim.target_seat_id else getattr(claim.target_seat, "public_id", "")
-            )
-        ),
-        target_seat=claim.target_seat,
-        transaction=(db.session.get(Transaction, claim.ledger_transaction_id)
-                     if claim.ledger_transaction_id else None),
-        submitted_at=claim.submitted_at,
-        decided_at=claim.decided_at,
-        claimed_dates=parsed_incident_dates,
-        status=getattr(claim.status, "value", claim.status),
-        entitlement=None,
-        description=claim_basis.get('description', ''),
-        comments="",
-        rejection_reason="",
-        teacher_notes="",
-        incident_date=claim.submitted_at,
-        filed_date=claim.submitted_at,
-        claim_amount=claim_basis.get('amount') or claim.result_amount,
-        claim_item=None,
-        filing_window_override_reason=claim.filing_window_override_reason,
-        decision_note=claim.decision_note,
+    student_name = (
+        student_profile.full_name if student_profile
+        else getattr(claim.target_seat, "public_id", "")
     )
-    # Only a TRANSACTION claim has a filing window at all (contract.filed_within_window
-    # is None for PRODUCTIVITY/NON_MONETARY, or when the source transaction can't be
-    # resolved) — a claim already terminal keeps showing its own true disposition.
+    # A claim filed with a transaction filing window can be late; only a
+    # TRANSACTION claim has one (None otherwise).
     filing_window_exceeded = contract.filed_within_window is False
+
     if form.validate_on_submit():
         decision = (form.status.data or "").strip().lower()
         if decision == "approved":
+            date_adjustments = None
+            if productivity is not None:
+                date_adjustments = {}
+                for row in productivity.dates:
+                    key = row.claim_date.isoformat()
+                    raw_hours = (request.form.get(f"approve_hours-{key}") or "").strip()
+                    if not raw_hours:
+                        continue
+                    try:
+                        hours = Decimal(raw_hours)
+                    except (ArithmeticError, InvalidOperation):
+                        flash(f"Hours for {key} must be a number.", "danger")
+                        return redirect(url_for("admin.process_claim", claim_id=claim.claim_id))
+                    date_adjustments[key] = {
+                        "hours": hours,
+                        "note": (request.form.get(f"approve_note-{key}") or "").strip(),
+                    }
             result = resolve_insurance_claim(
                 canonical_context=g.canonical_context,
                 claim_id=claim.claim_id,
                 approved=True,
+                override_reason=form.teacher_notes.data or None,
                 filing_window_override_reason=form.filing_window_override_reason.data,
+                date_adjustments=date_adjustments or None,
                 idempotency_key=f"admin-insurance-approve:{claim.claim_id}",
             )
             if result.success:
@@ -6421,41 +6445,52 @@ def process_claim(claim_id):
                 return redirect(url_for("admin.insurance_management"))
             flash(result.error_message or "This claim could not be approved.", "danger")
         elif decision == "rejected":
-            result = resolve_insurance_claim(
-                canonical_context=g.canonical_context,
-                claim_id=claim.claim_id,
-                approved=False,
-                override_reason=form.rejection_reason.data or form.teacher_notes.data,
-                idempotency_key=f"admin-insurance-reject:{claim.claim_id}",
-            )
-            if result.success:
-                flash("Claim rejected.", "info")
-                return redirect(url_for("admin.insurance_management"))
-            flash(result.error_message or "This claim could not be rejected.", "danger")
+            reason = (form.rejection_reason.data or "").strip()
+            if not reason:
+                flash("Give the student a reason when you reject a claim.", "danger")
+            else:
+                result = resolve_insurance_claim(
+                    canonical_context=g.canonical_context,
+                    claim_id=claim.claim_id,
+                    approved=False,
+                    override_reason=reason,
+                    idempotency_key=f"admin-insurance-reject:{claim.claim_id}",
+                )
+                if result.success:
+                    flash("Claim rejected.", "info")
+                    return redirect(url_for("admin.insurance_management"))
+                flash(result.error_message or "This claim could not be rejected.", "danger")
+
+    claim_view = SimpleNamespace(
+        id=claim.claim_id,
+        student_name=student_name,
+        submitted_at=claim.submitted_at,
+        decided_at=claim.decided_at,
+        status=status,
+        description=claim_basis.get("description") or "",
+        additional_information=(productivity.additional_information if productivity else None),
+        filing_window_override_reason=claim.filing_window_override_reason,
+        decision_note=claim.decision_note,
+    )
     return render_template(
         'admin_process_claim.html',
         current_page='insurance',
         claim=claim_view,
-        claim_type=policy.insurance_type,
-        contract_title=policy.title,
-        contract_description=policy.description or '',
-        contract_reimbursement_percentage=policy.reimbursement_percentage,
-        contract_claim_window_days=contract.claim_window_days,
-        contract_waiting_period_days=policy.waiting_period_days or 0,
-        coverage_start=contract.coverage_start_utc,
-        coverage_effective_date=contract.coverage_effective_date,
-        contract_allowance_unit=contract.allowance_unit,
-        contract_period_allowance=contract.period_allowance,
-        contract_period_consumed=contract.period_consumed,
-        contract_max_payout_per_period=contract.maximum_policy_payout,
-        remaining_period_cap=contract.remaining_period_cap,
+        claim_type=claim_type,
+        policy=policy,
+        contract=contract,
+        productivity=productivity,
+        hourly_rate=hourly_rate,
+        reimbursement_percentage=policy.reimbursement_percentage,
+        source_transaction=source_transaction,
+        estimated_payout=estimated_payout,
+        waiting_period_days=policy.waiting_period_days or 0,
         filing_window_exceeded=filing_window_exceeded,
         claims_stats=SimpleNamespace(
-            pending=sum(1 for c in claims if getattr(c.status, "value", c.status) == "SUBMITTED"),
+            submitted=sum(1 for c in claims if getattr(c.status, "value", c.status) == "SUBMITTED"),
             approved=sum(1 for c in claims if getattr(c.status, "value", c.status) == "APPROVED"),
             rejected=sum(1 for c in claims if getattr(c.status, "value", c.status) == "REJECTED"),
         ),
-        policy=policy,
         form=form,
     )
 
