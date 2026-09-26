@@ -113,7 +113,7 @@ Cancelling means **stop charging me for future periods**. It is not a refund and
 - Your coverage stays live, and you can still file claims against it, until the current period runs out.
 - If next period's premium was already billed but you have **not paid any of it**, that bill is cancelled and your coverage ends when the current period does.
 - If you **already paid** next period's premium, that period is yours: your coverage runs to the end of it. If you paid only **part** of it, the period still happens and you still owe the rest — your coverage stays paused until you pay it.
-- Only then does it drop off **Your coverage**.
+- Until then the card reads *Won't renew · covers you through [date]* in place of the cancel button. After that date it drops off **Your coverage**.
 
 You get *Coverage cancelled — it won't renew.* If you had already cancelled, it says *This coverage is already set to not renew.* If the passphrase is missing or wrong you get *Enter your passphrase to confirm the cancellation.* and nothing changes.
 

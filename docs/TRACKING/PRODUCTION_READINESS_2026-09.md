@@ -780,8 +780,9 @@ Two defects, one of which only the repository owner can clear because it is a se
   operator:** Cloudflare Access is a pre-launch/maintenance gate in front, and IAP behind it is the
   authentication. Items 2–4 below therefore still apply as written, at the new hostname. **Cleared for
   launch 2026-09-26 on the operator's report:** allowlisted sign-in through Cloudflare then IAP has worked
-  repeatedly. Not separately confirmed, and not blocking with both gates in front: a non-allowlisted
-  account's 401, and the `via=` path in the log (assertion vs trusted header). The historical note below
+  repeatedly, and a signed-in account that is not allowlisted is blocked (the operator has hit this
+  often, signing in with the wrong Google account). Not separately confirmed, and not blocking with both
+  gates in front: the `via=` path in the log (assertion vs trusted header). The historical note below
   is kept as recorded.
 - **The operator console's front door was `operator.status.classroomtokenhub.com`,** served by a
   Google Cloud load balancer (`136.68.93.205`, with a Google-managed certificate for that name). An

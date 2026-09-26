@@ -105,3 +105,20 @@ def test_insurance_page_stays_reachable_but_sells_nothing_while_a_premium_surviv
     html = page.get_data(as_text=True)
     assert "closed to new purchases" in html
     assert "Available policies" not in html
+
+
+def test_cancelled_coverage_shows_its_end_date_not_a_cancel_button(client, world):
+    """Live-test finding 66: after cancelling, the card still offered "Cancel
+    coverage". A coverage that will not renew now shows its last covered day."""
+    from tests.test_insurance_coverage_renewal_feat import _cancel
+
+    w = world()
+    w.fund(PURCHASE - timedelta(hours=1))
+    w.buy()
+    _cancel(w, local(1, 12))  # inside period 1: coverage ends at Jan 17, 2027
+    login_student(client, w.student)
+
+    html = client.get("/student/insurance").get_data(as_text=True)
+
+    assert "Won't renew · covers you through Jan 16, 2027" in html
+    assert "Cancel coverage</button>" not in html

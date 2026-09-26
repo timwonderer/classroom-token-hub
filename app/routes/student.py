@@ -1591,6 +1591,8 @@ def insurance_marketplace():
                 premiums_current=insurance_coverage.are_premiums_current(
                     class_id, grant.entitlement_id
                 ),
+                # Set once renewal is stopped: the last day the coverage runs.
+                last_covered_day=_last_covered_day(class_id, grant.entitlement_id),
             )
         )
 
@@ -1768,6 +1770,22 @@ def pay_insurance_premium(policy_uuid):
     else:
         flash(result.error_message or "The payment could not be completed.", "error")
     return redirect(url_for('student.view_policy', policy_uuid=policy_uuid))
+
+
+def _last_covered_day(class_id, entitlement_id):
+    """The last class-local day of coverage that will not renew, else None.
+
+    Stopping renewal ends the lineage at a termination instant (DOM-OBL-001
+    §V.7); coverage runs through the day before it.
+    """
+    from app.services import obligations_service
+
+    instant = obligations_service.get_termination_instant(
+        class_id, insurance_coverage.premium_lineage_ref(entitlement_id)
+    )
+    if instant is None:
+        return None
+    return insurance_coverage.class_local_date(class_id, instant) - timedelta(days=1)
 
 
 def _insurance_entitlement_owing_premium(seat_id, class_id, policy_uuid):

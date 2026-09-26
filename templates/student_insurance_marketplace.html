@@ -74,6 +74,9 @@
                  class="btn btn-outline-secondary btn-sm">View policy</a>
               <a href="{{ url_for('student.file_claim', policy_uuid=cov.policy_uuid) }}"
                  class="btn btn-outline-primary btn-sm">File a claim</a>
+              {% if cov.last_covered_day %}
+              <span class="small text-muted align-self-center">Won't renew · covers you through {{ cov.last_covered_day.strftime('%b %d, %Y') }}</span>
+              {% else %}
               {# Cancelling insurance is a passphrase action, the same as buying it
                  (FEAT-IDEN-002 §Credential boundary). #}
               <form method="POST" action="{{ url_for('student.cancel_insurance', policy_uuid=cov.policy_uuid) }}"
@@ -86,6 +89,7 @@
                        placeholder="Passphrase" autocomplete="current-password" required />
                 <button type="submit" class="btn btn-outline-danger btn-sm">Cancel coverage</button>
               </form>
+              {% endif %}
             </div>
           </div>
         </div>
