@@ -77,8 +77,8 @@
       <div class="card-body">
         {% if claim_type == 'PRODUCTIVITY' and productivity %}
           {% if productivity.guidance_exceeded %}
-          {% call cards.alert_card('warning', 'More hours than the week expects', icon='schedule', body_class='mb-3', role='note') %}
-            <p class="mb-0">Hours worked plus hours claimed go past the expected {{ productivity.expected_weekly_hours|float|round(1) }} hours for that week. This is a prompt to look closer, not a rule.</p>
+          {% call cards.alert_card('warning', 'Student work hours might need additional review', icon='schedule', body_class='mb-3', role='note') %}
+            <p class="mb-0">The expected hours of work per week was set at {{ productivity.expected_weekly_hours|float|round(1) }} hours per week. Because {{ claim.student_first_name }} has already worked this week, this claim may include hours that exceed the expected amount. </p>
           {% endcall %}
           {% endif %}
           <div class="table-responsive">
