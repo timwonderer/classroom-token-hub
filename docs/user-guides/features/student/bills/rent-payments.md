@@ -4,7 +4,7 @@ category: features
 subcategory: student-bills
 roles: [student]
 description: Read your rent status, pay a bill including any late fees, pay next period's bill early, and see what your rent covers.
-keywords: [rent, pay bill, late fee, grace period, overdue, waived, rent perk, insufficient funds, bill preview, pay early]
+keywords: [rent, pay bill, late fee, grace period, overdue, waived, rent perk, insufficient funds, partial payment, pay part, bill preview, pay early]
 related:
   - user-guides/features/student/bills/insurance-coverage
   - user-guides/diagnostics/student/rent-insurance
@@ -49,6 +49,12 @@ The card also shows the rent amount with its real frequency (**Weekly Rent**, **
 Payment is applied to the rent first, then to late fees. When that bill is settled, the card moves on to your next bill.
 
 If your checking balance is short, the button is replaced by **Insufficient Funds** telling you exactly how much more you need.
+
+### Paying part of a bill
+
+If your teacher allows paying rent a little at a time, the card also has a **Pay part of this bill now** box (or **Or pay part of it now** when you could pay the whole bill). Enter an amount, up to what you have in checking, and select **Pay this amount**. It comes off the bill the same way: rent first, then late fees. The rest stays owing, so pay it before the grace period ends to avoid a late fee.
+
+If you don't see the box, your class requires each bill to be paid in full.
 
 ### Paying early
 

@@ -42,6 +42,10 @@
     .bills-tabs .nav-link.active {
         color: var(--text-inverse);
     }
+
+    .rent-part-amount {
+        max-width: 14rem;
+    }
 </style>
 {% endblock %}
 
@@ -248,6 +252,7 @@
                     {% endfor %}
                 </ul>
             </div>
+            {% set can_pay_part = view.settings.allow_incremental_payment and checking_balance > 0 %}
             {% if checking_balance >= group_due %}
             <form action="{{ url_for('student.rent_pay', period=current_block) }}" method="POST">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
@@ -267,9 +272,39 @@
                 Insufficient Funds
             </button>
             <p class="text-danger mt-2 mb-0 small">
-                You need ${{ "%.2f"|format(group_due - checking_balance) }} more to pay this bill for Period {{
+                You need ${{ "%.2f"|format(group_due - checking_balance) }} more to pay this whole bill for Period {{
                 current_block|upper }}.
             </p>
+            {% endif %}
+            {% if can_pay_part %}
+            {# Incremental payment: the class lets students pay part of a bill. The
+               payment FEAT applies it to the rent first, then any late fees. #}
+            {% set part_max = group_due if checking_balance >= group_due else checking_balance %}
+            <form action="{{ url_for('student.rent_pay', period=current_block) }}" method="POST"
+                  class="border rounded p-3 mt-3">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                <input type="hidden" name="correlation_id" value="{{ status.correlation_id }}" />
+                <input type="hidden" name="payment_nonce" value="{{ payment_nonce }}-part" />
+                <label for="rent-payment-amount" class="form-label fw-semibold">
+                    {% if checking_balance >= group_due %}Or pay part of it now{% else %}Pay part of this bill now{% endif %}
+                </label>
+                <p class="small text-muted mb-2">Your class lets you pay rent a little at a time. Anything you pay now comes off this bill; pay the rest by {% if status.grace_end %}{{ status.grace_end.strftime('%B %d, %Y') }}{% else %}the grace deadline{% endif %} to avoid a late fee.</p>
+                <div class="d-flex flex-wrap gap-2">
+                    <div class="input-group rent-part-amount">
+                        <span class="input-group-text">$</span>
+                        <input type="number" class="form-control" id="rent-payment-amount" name="payment_amount"
+                               min="0.01" max="{{ '%.2f'|format(part_max) }}" step="0.01"
+                               value="{{ '%.2f'|format(part_max) }}" required>
+                    </div>
+                    <button type="submit" class="btn btn-outline-primary"
+                        onclick="return confirm('Pay $' + document.getElementById('rent-payment-amount').value + ' toward this bill?');">
+                        Pay this amount
+                    </button>
+                </div>
+                {% if checking_balance < group_due %}
+                <p class="small text-muted mt-2 mb-0">Up to ${{ '%.2f'|format(part_max) }}, what you have in checking.</p>
+                {% endif %}
+            </form>
             {% endif %}
         {% endif %}
         {% endif %}

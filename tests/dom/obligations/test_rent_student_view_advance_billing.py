@@ -87,3 +87,71 @@ def test_before_the_first_bill_the_page_shows_the_class_terms_not_zeros(client, 
     assert "The class rent is <strong>$0.00</strong>" not in html
     assert "<strong>5 days</strong>" in html
     assert "Rent will be due starting soon" not in html
+
+
+
+def _student_with_rent(client, app, *, checking, incremental=True):
+    from decimal import Decimal
+    from uuid import uuid4
+
+    from app.feats.base import FEATContext
+    from app.utils.canonical_temporal_resolver import utc_now
+    from tests.dom.obligations.test_rent_disablement_surviving_state import (
+        _configure_rent,
+        _reconcile,
+    )
+    from tests.helpers.class_domain import customize_rent_settings
+    from tests.helpers.classroom_initializer import initialize_as_student
+    from tests.helpers.ledger import create_ledger_idempotent_transaction
+
+    classroom, student = initialize_as_student("chemistry_p1", client, app)
+    with app.app_context():
+        _configure_rent(classroom)
+        if not incremental:
+            customize_rent_settings(classroom.class_id, allow_incremental_payment=False)
+        _reconcile(classroom, utc_now())
+        with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"fund:{uuid4().hex}"):
+            create_ledger_idempotent_transaction(
+                idempotency_key=f"fund:{uuid4().hex}", seat_id=student.seat.id,
+                class_id=classroom.class_id, amount=Decimal(checking),
+                account_type="checking", type="payroll", description="Test funding",
+            )
+    return classroom, student.seat.id
+
+
+def test_incremental_payment_is_offered_when_checking_is_short(client, app):
+    """Live test 2026-09-26: the class allowed incremental payment, but a student
+    short of the full bill saw only "Insufficient Funds" and no way to pay part."""
+    _student_with_rent(client, app, checking="20.00")
+
+    html = client.get("/student/rent").get_data(as_text=True)
+
+    assert 'name="payment_amount"' in html
+    assert 'max="20.00"' in html, "a part payment is capped at what checking holds"
+
+
+def test_part_payment_leaves_the_rest_of_the_bill_owing(client, app):
+    from decimal import Decimal
+
+    from app.services import obligations_service
+
+    classroom, seat_id = _student_with_rent(client, app, checking="20.00")
+    correlation = _rent_correlation(classroom, seat_id, 1)
+
+    client.post(
+        "/student/rent/pay/current",
+        data={"correlation_id": correlation, "payment_amount": "20.00", "payment_nonce": "part"},
+    )
+
+    with app.app_context():
+        state = obligations_service.get_obligation_state(correlation)
+        assert state.is_outstanding
+        assert state.remaining_amount == Decimal("30.00")
+
+
+def test_no_part_payment_when_the_class_does_not_allow_it(client, app):
+    _student_with_rent(client, app, checking="20.00", incremental=False)
+
+    html = client.get("/student/rent").get_data(as_text=True)
+
+    assert 'name="payment_amount"' not in html
