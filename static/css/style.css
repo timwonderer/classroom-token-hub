@@ -200,6 +200,39 @@ a:hover {
     color: var(--secondary-text) !important;
 }
 
+/* `.btn` sets a transparent border for every button, which erased Bootstrap's
+   outline colours. Danger and success restore theirs here like the variants
+   above (danger 5.4:1, success 5.2:1 on white). */
+.btn-outline-danger {
+    color: var(--danger) !important;
+    border-color: var(--danger) !important;
+    background: transparent;
+}
+
+.btn-outline-danger:hover,
+.btn-outline-danger:focus-visible,
+.btn-outline-danger:active,
+.btn-outline-danger.active {
+    background-color: var(--danger) !important;
+    border-color: var(--danger) !important;
+    color: var(--text-inverse) !important;
+}
+
+.btn-outline-success {
+    color: var(--success) !important;
+    border-color: var(--success) !important;
+    background: transparent;
+}
+
+.btn-outline-success:hover,
+.btn-outline-success:focus-visible,
+.btn-outline-success:active,
+.btn-outline-success.active {
+    background-color: var(--success) !important;
+    border-color: var(--success) !important;
+    color: var(--text-inverse) !important;
+}
+
 .btn-outline-info:hover {
     background-color: var(--info) !important;
     color: var(--text-inverse) !important;

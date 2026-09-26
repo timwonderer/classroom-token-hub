@@ -337,6 +337,12 @@ class ClaimContractView:
     # ``None`` for product types with no filing window (PRODUCTIVITY,
     # NON_MONETARY) or when the source transaction cannot be resolved.
     filed_within_window: Optional[bool]
+    # The coverage period the claim draws on: [start, end). The allowance and
+    # payout capacity above are counted within it and reset at its end.
+    period_start_utc: Optional[datetime] = None
+    period_end_utc: Optional[datetime] = None
+    # The policy's weekly rate the period allowance is scaled from.
+    allowance_per_week: Optional[Decimal] = None
 
 
 def describe_claim_contract(claim, *, canonical_context: CanonicalContext) -> ClaimContractView:
@@ -425,6 +431,9 @@ def describe_claim_contract(claim, *, canonical_context: CanonicalContext) -> Cl
             maximum_policy_payout=None,
             remaining_period_cap=None,
             filed_within_window=None,
+            period_start_utc=period.start_utc,
+            period_end_utc=period.end_utc,
+            allowance_per_week=policy.claims_per_week_equivalent,
         )
 
     return ClaimContractView(
@@ -438,6 +447,12 @@ def describe_claim_contract(claim, *, canonical_context: CanonicalContext) -> Cl
         maximum_policy_payout=maximum_payout,
         remaining_period_cap=_quantize_currency(max(remaining, Decimal("0.00"))),
         filed_within_window=filed_within_window,
+        period_start_utc=period.start_utc,
+        period_end_utc=period.end_utc,
+        allowance_per_week=(
+            policy.claimable_dates_per_week_equivalent
+            if allowance_unit == "date" else policy.claims_per_week_equivalent
+        ),
     )
 
 

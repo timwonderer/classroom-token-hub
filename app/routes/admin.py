@@ -6413,24 +6413,35 @@ def process_claim(claim_id):
 
     if form.validate_on_submit():
         decision = (form.status.data or "").strip().lower()
+        date_adjustments = None
+        if productivity is not None and decision == "approved":
+            # Lost time is decided per day. A day set to fewer hours than claimed
+            # needs a reason; every day at 0 hours is a rejection, and those
+            # per-day reasons are what the student is told.
+            date_adjustments = {}
+            for row in productivity.dates:
+                key = row.claim_date.isoformat()
+                raw_hours = (request.form.get(f"approve_hours-{key}") or "").strip()
+                try:
+                    hours = Decimal(raw_hours) if raw_hours else row.student_claimed_hours
+                except (ArithmeticError, InvalidOperation):
+                    flash(f"Hours for {key} must be a number.", "danger")
+                    return redirect(url_for("admin.process_claim", claim_id=claim.claim_id))
+                date_adjustments[key] = {
+                    "hours": hours,
+                    "note": (request.form.get(f"approve_note-{key}") or "").strip(),
+                }
+            if all(adj["hours"] == 0 for adj in date_adjustments.values()):
+                missing = [k for k, adj in date_adjustments.items() if not adj["note"]]
+                if missing:
+                    flash("Give a reason for each day you set to 0 hours.", "danger")
+                    return redirect(url_for("admin.process_claim", claim_id=claim.claim_id))
+                decision = "rejected"
+                form.rejection_reason.data = "\n".join(
+                    f"- {datetime.fromisoformat(k).strftime('%b %d')}: {adj['note']}"
+                    for k, adj in sorted(date_adjustments.items())
+                )
         if decision == "approved":
-            date_adjustments = None
-            if productivity is not None:
-                date_adjustments = {}
-                for row in productivity.dates:
-                    key = row.claim_date.isoformat()
-                    raw_hours = (request.form.get(f"approve_hours-{key}") or "").strip()
-                    if not raw_hours:
-                        continue
-                    try:
-                        hours = Decimal(raw_hours)
-                    except (ArithmeticError, InvalidOperation):
-                        flash(f"Hours for {key} must be a number.", "danger")
-                        return redirect(url_for("admin.process_claim", claim_id=claim.claim_id))
-                    date_adjustments[key] = {
-                        "hours": hours,
-                        "note": (request.form.get(f"approve_note-{key}") or "").strip(),
-                    }
             result = resolve_insurance_claim(
                 canonical_context=g.canonical_context,
                 claim_id=claim.claim_id,
@@ -6467,15 +6478,25 @@ def process_claim(claim_id):
         submitted_at=claim.submitted_at,
         decided_at=claim.decided_at,
         status=status,
+        student_first_name=(student_name.split(" ")[0] if student_name else "The student"),
         description=claim_basis.get("description") or "",
         additional_information=(productivity.additional_information if productivity else None),
         filing_window_override_reason=claim.filing_window_override_reason,
         decision_note=claim.decision_note,
     )
+    from app.services.insurance_coverage_service import class_local_date
+
+    period_first_day = period_resets_on = None
+    if contract.period_start_utc is not None and contract.period_end_utc is not None:
+        period_first_day = class_local_date(claim.class_id, contract.period_start_utc)
+        period_resets_on = class_local_date(claim.class_id, contract.period_end_utc)
     return render_template(
         'admin_process_claim.html',
         current_page='insurance',
         claim=claim_view,
+        period_first_day=period_first_day,
+        period_last_day=(period_resets_on - timedelta(days=1)) if period_resets_on else None,
+        period_resets_on=period_resets_on,
         claim_type=claim_type,
         policy=policy,
         contract=contract,

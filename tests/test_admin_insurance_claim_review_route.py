@@ -245,9 +245,8 @@ def test_rejecting_without_a_reason_is_refused(app, client):
     assert _claim_status(app, claim_id) == "SUBMITTED"
 
 
-def test_lost_time_claim_shows_each_day_and_approves_fewer_hours_with_a_note(app, client):
-    """Live test 2026-09-26: a lost-time claim's review page showed neither the
-    hours nor the student's explanation, and offered no way to adjust hours."""
+def _lost_time_claim(app, client):
+    """A PRODUCTIVITY claim for 2 hours today, teacher logged in. Returns (ids, claim_id, today)."""
     from datetime import datetime, timezone
 
     from app.feats.insurance_claim_feat import submit_insurance_claim
@@ -303,6 +302,15 @@ def test_lost_time_claim_shows_each_day_and_approves_fewer_hours_with_a_note(app
         db.session.commit()
         claim_id = filed.claim_id
     _login_teacher(app, client, ids)
+    return ids, claim_id, today
+
+
+def test_lost_time_claim_shows_each_day_and_approves_fewer_hours_with_a_note(app, client):
+    """Live test 2026-09-26: a lost-time claim's review page showed neither the
+    hours nor the student's explanation, and offered no way to adjust hours."""
+    from app.services import insurance_claim_service
+
+    ids, claim_id, today = _lost_time_claim(app, client)
 
     html = client.get(f"/admin/insurance/claim/{claim_id}").get_data(as_text=True)
     assert "sent home sick" in html
@@ -319,3 +327,33 @@ def test_lost_time_claim_shows_each_day_and_approves_fewer_hours_with_a_note(app
         rows = insurance_claim_service.list_productivity_dates_for_claim(claim_id, class_id=ids["class_id"])
         assert rows[0].teacher_approved_hours == Decimal("1.50")
         assert rows[0].adjustment_note == "Left at 1:30"
+
+
+def test_lost_time_claim_with_every_day_at_zero_is_rejected_with_the_day_reasons(app, client):
+    ids, claim_id, today = _lost_time_claim(app, client)
+
+    resp = client.post(
+        f"/admin/insurance/claim/{claim_id}",
+        data={"status": "approved", f"approve_hours-{today.isoformat()}": "0",
+              f"approve_note-{today.isoformat()}": "Was in class all period"},
+        follow_redirects=True,
+    )
+
+    assert b"Claim rejected." in resp.data
+    with app.app_context():
+        claim = InsuranceClaim.query.filter_by(claim_id=claim_id).one()
+        assert claim.status == "REJECTED"
+        assert "Was in class all period" in (claim.decision_note or "")
+
+
+def test_a_zero_hour_day_without_a_reason_is_refused(app, client):
+    ids, claim_id, today = _lost_time_claim(app, client)
+
+    resp = client.post(
+        f"/admin/insurance/claim/{claim_id}",
+        data={"status": "approved", f"approve_hours-{today.isoformat()}": "0"},
+        follow_redirects=True,
+    )
+
+    assert b"Give a reason for each day you set to 0 hours." in resp.data
+    assert _claim_status(app, claim_id) == "SUBMITTED"

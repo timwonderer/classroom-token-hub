@@ -34,7 +34,7 @@ The top of the screen names the student, the policy, what kind of coverage it is
 - **Lost-time protection:** one row per day claimed, with the hours claimed, the hours the student actually worked that day, and their explanation for that day. If worked plus claimed hours run past the class's expected hours for that week, a note tells you to look closer. It is a prompt, not a rule.
 - **Non-monetary coverage:** the student's account of what happened.
 
-Underneath, **Payout if approved as claimed** shows what the student would receive, after the policy's share and what is left of this period's payout limit.
+Underneath is the payout. For lost time it is a breakdown that updates as you change hours: hours being approved, your class's pay rate, the lost wages, the policy's coverage share, and the final payout. If the payout would exceed the benefits remaining, it is limited to what remains. For a purchase, the page shows the amount lost times the coverage share.
 
 **Policy terms, as purchased** shows the contract as it was sold to that student:
 
@@ -43,8 +43,8 @@ Underneath, **Payout if approved as claimed** shows what the student would recei
 | Coverage started | The day coverage began. With a waiting period, it also shows the purchase date and the length of the wait. Losses before coverage started are not covered. |
 | Pays back | The share of the loss the policy pays |
 | Filing window | Purchase protection only: how many days after the purchase the student had to file |
-| This coverage period | How many claims, or claimable days, the student has used in the coverage period this claim was filed in |
-| Payout left this period | How much payout remains in that coverage period |
+| Claims used | How many claims, or claimable days, the student has used out of those available in the coverage period this claim was filed in, with the period's dates. The policy sets a weekly rate; the total is counted across the whole period, so a student can use several in one week |
+| Benefits remaining | How much payout the student can still receive before the next coverage period starts, when it resets to the full amount |
 
 The last card counts the student's claims on this policy: awaiting a decision, approved, and rejected.
 
@@ -52,11 +52,21 @@ The last card counts the student's claims on this policy: awaiting a decision, a
 
 In **Decision**:
 
-1. For lost-time claims, check **Hours to approve** on each day. It starts at the hours claimed. You may approve fewer; if you do, write the reason beside it.
-2. For a purchase claim filed after its filing window, write why you are approving it anyway. Approval is blocked without it.
-3. To reject, write the **Reason for rejecting**. It is required, and the student sees it.
-4. Add **Your notes** if you want a record with an approval.
-5. Choose **Approve claim** or **Reject claim**. Decisions are final.
+**Lost-time claims are decided day by day.**
+
+1. Check **Hours to approve** on each day. It starts at the hours claimed.
+2. To approve fewer hours on a day, change its number. A reason box opens under that day; the reason is required, and the student sees it.
+3. To turn down a day entirely, set it to 0 and give a reason.
+4. If every day is at 0, the button changes to **Reject claim**, and your reasons for each day become the rejection the student sees.
+5. Choose **Approve claim** (or **Reject claim**). Decisions are final.
+
+**Purchase and non-monetary claims are decided as a whole.**
+
+1. For a purchase claim filed after its filing window, write why you are approving it anyway. Approval is blocked without it.
+2. To reject, write the **Reason for rejecting**. It is required, and the student sees it.
+3. Choose **Approve claim** or **Reject claim**. Decisions are final.
+
+For any claim, **Your notes** is optional and recorded with an approval.
 
 You never type an amount. A purchase claim pays the policy's share of the lost amount; a lost-time claim pays the approved hours at your class's hourly wage, times the policy's share. Either way the payout stops at what is left of the period's limit, and it lands in the student's checking account.
 

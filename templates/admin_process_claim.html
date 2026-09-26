@@ -82,44 +82,72 @@
           </div>
           {% endif %}
           <div class="table-responsive">
-            <table class="table align-middle mb-2">
+            <table class="table align-middle mb-3" id="claim-days">
               <thead>
                 <tr>
                   <th scope="col">Day</th>
                   <th scope="col" class="text-end">Hours claimed</th>
                   <th scope="col" class="text-end">Hours worked that day</th>
                   <th scope="col">Student's explanation</th>
-                  {% if claim.status == 'SUBMITTED' %}<th scope="col">Hours to approve</th>{% else %}<th scope="col" class="text-end">Hours approved</th>{% endif %}
+                  <th scope="col" class="text-end">{% if claim.status == 'SUBMITTED' %}Hours to approve{% else %}Hours approved{% endif %}</th>
                 </tr>
               </thead>
               <tbody>
                 {% for row in productivity.dates %}
-                <tr>
+                {% set key = row.claim_date.isoformat() %}
+                <tr class="claim-day">
                   <td>{{ row.claim_date.strftime('%a, %b %d, %Y') }}</td>
                   <td class="text-end">{{ '%g'|format(row.student_claimed_hours|float) }}</td>
                   <td class="text-end">{{ '%.2f'|format(row.already_worked_seconds / 3600) }}</td>
                   <td>{{ row.student_explanation }}</td>
                   {% if claim.status == 'SUBMITTED' %}
-                  <td>
-                    <label class="visually-hidden" for="approve_hours-{{ row.claim_date.isoformat() }}">Hours to approve for {{ row.claim_date.strftime('%b %d') }}</label>
-                    <input type="number" class="form-control form-control-sm mb-1" form="claim-decision"
-                           id="approve_hours-{{ row.claim_date.isoformat() }}" name="approve_hours-{{ row.claim_date.isoformat() }}"
-                           min="0" max="{{ row.student_claimed_hours }}" step="0.25" value="{{ row.student_claimed_hours }}">
-                    <label class="visually-hidden" for="approve_note-{{ row.claim_date.isoformat() }}">Reason for changing hours on {{ row.claim_date.strftime('%b %d') }}</label>
-                    <input type="text" class="form-control form-control-sm" form="claim-decision"
-                           id="approve_note-{{ row.claim_date.isoformat() }}" name="approve_note-{{ row.claim_date.isoformat() }}"
-                           placeholder="Reason, if you change the hours">
+                  <td class="text-end claim-hours-cell">
+                    <label class="visually-hidden" for="approve_hours-{{ key }}">Hours to approve for {{ row.claim_date.strftime('%b %d') }}</label>
+                    <input type="number" class="form-control form-control-sm text-end claim-hours" form="claim-decision"
+                           id="approve_hours-{{ key }}" name="approve_hours-{{ key }}"
+                           min="0" max="{{ row.student_claimed_hours }}" step="0.25"
+                           value="{{ row.student_claimed_hours }}" data-claimed="{{ row.student_claimed_hours }}"
+                           aria-describedby="approve_note_row-{{ key }}">
                   </td>
                   {% else %}
                   <td class="text-end">{{ '%g'|format(row.teacher_approved_hours|float) if row.teacher_approved_hours is not none else '—' }}</td>
                   {% endif %}
                 </tr>
+                {% if claim.status == 'SUBMITTED' %}
+                <tr class="claim-note-row" id="approve_note_row-{{ key }}" hidden>
+                  <td colspan="5" class="pt-0">
+                    <label class="form-label small fw-semibold mb-1" for="approve_note-{{ key }}">Why {{ row.claim_date.strftime('%b %d') }} gets <span class="claim-note-hours"></span> instead of {{ '%g'|format(row.student_claimed_hours|float) }} <span class="text-muted fw-normal">(the student sees this)</span></label>
+                    <textarea class="form-control form-control-sm" form="claim-decision" rows="2"
+                              id="approve_note-{{ key }}" name="approve_note-{{ key }}"></textarea>
+                  </td>
+                </tr>
+                {% elif row.adjustment_note %}
+                <tr><td colspan="5" class="pt-0 small text-muted">Reason for the change: {{ row.adjustment_note }}</td></tr>
+                {% endif %}
                 {% endfor %}
               </tbody>
             </table>
           </div>
+          {% if claim.status == 'SUBMITTED' %}
+          <p class="small text-muted mb-3">To turn down a day, set its hours to 0 and give a reason. Setting every day to 0 rejects the claim.</p>
+          {% endif %}
           {% if hourly_rate is not none %}
-          <p class="small text-muted mb-0">Paid at ${{ '%.2f'|format(hourly_rate) }} an hour × {{ '%g'|format(reimbursement_percentage|float) }}% coverage.</p>
+          <dl class="row mb-0 claim-breakdown" id="claim-breakdown"
+              data-rate="{{ hourly_rate }}" data-pct="{{ reimbursement_percentage }}"
+              data-cap="{{ contract.remaining_period_cap if contract.remaining_period_cap is not none else '' }}">
+            <dt class="col-7 fw-normal">Hours {% if claim.status == 'SUBMITTED' %}being approved{% else %}claimed{% endif %}</dt>
+            <dd class="col-5 text-end mb-1" data-out="hours">{{ '%g'|format(productivity.dates|sum(attribute='student_claimed_hours')|float) }}</dd>
+            <dt class="col-7 fw-normal">Pay rate</dt>
+            <dd class="col-5 text-end mb-1">${{ '%.2f'|format(hourly_rate) }} an hour</dd>
+            <dt class="col-7 fw-normal">Lost wages</dt>
+            <dd class="col-5 text-end mb-1" data-out="wages">—</dd>
+            <dt class="col-7 fw-normal">Coverage</dt>
+            <dd class="col-5 text-end mb-1">{{ '%g'|format(reimbursement_percentage|float) }}%</dd>
+            <dt class="col-7 fw-normal" data-out="cap-note" hidden>Limited to benefits remaining</dt>
+            <dd class="col-5 text-end mb-1" data-out="cap-value" hidden></dd>
+            <dt class="col-7 border-top pt-2">Payout</dt>
+            <dd class="col-5 text-end border-top pt-2 mb-0 h5" data-out="payout">{% if estimated_payout is not none %}${{ '%.2f'|format(estimated_payout) }}{% endif %}</dd>
+          </dl>
           {% endif %}
           {% if claim.additional_information %}
           <h3 class="h6 mt-3">Anything else the student added</h3>
@@ -134,7 +162,7 @@
             <dt class="col-sm-4">Date</dt>
             <dd class="col-sm-8">{{ source_transaction.timestamp|fmt_timestamp }}</dd>
             <dt class="col-sm-4">Amount lost</dt>
-            <dd class="col-sm-8">${{ '%.2f'|format(source_transaction.amount|abs) }}</dd>
+            <dd class="col-sm-8">${{ '%.2f'|format(source_transaction.amount|abs) }} × {{ '%g'|format(reimbursement_percentage|float) }}% coverage{% if contract.remaining_period_cap is not none %}, up to the ${{ '%.2f'|format(contract.remaining_period_cap) }} of benefits remaining{% endif %}</dd>
             <dt class="col-sm-4">Filing window</dt>
             <dd class="col-sm-8">
               {% if filing_window_exceeded %}
@@ -157,7 +185,7 @@
           <div class="bg-light p-3 rounded">{{ claim.description or 'No description given.' }}</div>
         {% endif %}
 
-        {% if estimated_payout is not none %}
+        {% if estimated_payout is not none and claim_type != 'PRODUCTIVITY' %}
         <div class="border-top mt-3 pt-3 d-flex justify-content-between align-items-baseline">
           <span class="fw-semibold">{% if claim.status == 'SUBMITTED' %}Payout if approved as claimed{% else %}Payout at the claimed amount{% endif %}</span>
           <span class="h5 mb-0">${{ '%.2f'|format(estimated_payout) }}</span>
@@ -196,10 +224,12 @@
           </div>
           {% endif %}
 
+          {% if claim_type != 'PRODUCTIVITY' %}
           <div class="mb-3">
             <label class="form-label fw-semibold" for="rejection_reason">Reason for rejecting <span class="text-muted fw-normal">(required to reject; the student sees it)</span></label>
             {{ form.rejection_reason(class="form-control", rows=3) }}
           </div>
+          {% endif %}
 
           <div class="mb-3">
             <label class="form-label fw-semibold" for="teacher_notes">Your notes <span class="text-muted fw-normal">(optional; recorded with an approval)</span></label>
@@ -207,13 +237,21 @@
           </div>
 
           <div class="d-flex flex-wrap gap-2">
+            {% if claim_type == 'PRODUCTIVITY' %}
+            <button type="submit" name="status" value="approved" class="btn btn-primary" id="claim-submit"
+                    data-approve-label="Approve claim" data-reject-label="Reject claim">
+              <span class="material-symbols-outlined icon-sm icon-middle" aria-hidden="true">check</span>
+              <span class="claim-submit-label">Approve claim</span>
+            </button>
+            {% else %}
             <button type="submit" name="status" value="approved" class="btn btn-primary">
               <span class="material-symbols-outlined icon-sm icon-middle" aria-hidden="true">check</span> Approve claim
             </button>
             <button type="submit" name="status" value="rejected" class="btn btn-outline-danger">
               <span class="material-symbols-outlined icon-sm icon-middle" aria-hidden="true">close</span> Reject claim
             </button>
-            <a href="{{ url_for('admin.insurance_management') }}" class="btn btn-link">Back to Insurance</a>
+            {% endif %}
+            <a href="{{ url_for('admin.insurance_management') }}" class="btn btn-outline-secondary">Back to Insurance</a>
           </div>
         </form>
         {% endif %}
@@ -243,12 +281,12 @@
           <dd>{{ contract.claim_window_days }} days after the purchase</dd>
           {% endif %}
           {% if contract.period_allowance is not none %}
-          <dt>This coverage period</dt>
-          <dd>{{ contract.period_consumed }} of {{ contract.period_allowance }} {{ 'claimable days' if contract.allowance_unit == 'date' else 'claims' }} used</dd>
+          <dt>Claims used</dt>
+          <dd>{{ claim.student_first_name }} has used {{ contract.period_consumed }} of {{ contract.period_allowance }} {{ 'claimable days' if contract.allowance_unit == 'date' else 'claims' }} available this coverage period{% if period_first_day %} ({{ period_first_day.strftime('%b %d') }} – {{ period_last_day.strftime('%b %d') }}){% endif %}.{% if contract.allowance_per_week %}<br><span class="small text-muted">The policy allows {{ '%g'|format(contract.allowance_per_week|float) }} a week, counted across the whole period.</span>{% endif %}</dd>
           {% endif %}
           {% if contract.maximum_policy_payout %}
-          <dt>Payout left this period</dt>
-          <dd class="mb-0">${{ '%.2f'|format(contract.remaining_period_cap) }} of ${{ '%.2f'|format(contract.maximum_policy_payout) }}</dd>
+          <dt>Benefits remaining</dt>
+          <dd class="mb-0">${{ '%.2f'|format(contract.remaining_period_cap) }}{% if period_resets_on %} before {{ period_resets_on.strftime('%b %d, %Y') }}{% endif %}<br><span class="small text-muted">Resets to ${{ '%.2f'|format(contract.maximum_policy_payout) }} when a new coverage period starts.</span></dd>
           {% endif %}
         </dl>
       </div>
@@ -307,6 +345,60 @@
         placeholder: "Explain why this claim should be approved despite being filed late (Markdown supported)...",
       });
     }
+  });
+</script>
+
+<script>
+  // Lost-time claims: show a day's reason box only when its hours change, keep
+  // the payout breakdown current, and turn the button into a rejection when
+  // every day is at 0 hours.
+  document.addEventListener('DOMContentLoaded', function () {
+    const inputs = Array.from(document.querySelectorAll('.claim-hours'));
+    if (!inputs.length) return;
+    const breakdown = document.getElementById('claim-breakdown');
+    const submit = document.getElementById('claim-submit');
+    const money = function (n) { return '$' + n.toFixed(2); };
+    const out = function (name) { return breakdown ? breakdown.querySelector('[data-out="' + name + '"]') : null; };
+
+    function refresh() {
+      let hours = 0;
+      inputs.forEach(function (input) {
+        const value = parseFloat(input.value) || 0;
+        const claimed = parseFloat(input.dataset.claimed) || 0;
+        hours += value;
+        const key = input.id.replace('approve_hours-', '');
+        const row = document.getElementById('approve_note_row-' + key);
+        const note = document.getElementById('approve_note-' + key);
+        const changed = Math.abs(value - claimed) > 1e-9;
+        row.hidden = !changed;
+        note.required = changed;
+        row.querySelector('.claim-note-hours').textContent = value + (value === 1 ? ' hour' : ' hours');
+      });
+      if (breakdown) {
+        const rate = parseFloat(breakdown.dataset.rate) || 0;
+        const pct = parseFloat(breakdown.dataset.pct) || 0;
+        const cap = breakdown.dataset.cap === '' ? null : parseFloat(breakdown.dataset.cap);
+        const wages = hours * rate;
+        let payout = wages * pct / 100;
+        const capped = cap !== null && payout > cap;
+        if (capped) payout = cap;
+        out('hours').textContent = hours;
+        out('wages').textContent = money(wages);
+        out('cap-note').hidden = !capped;
+        out('cap-value').hidden = !capped;
+        out('cap-value').textContent = capped ? money(cap) : '';
+        out('payout').textContent = money(payout);
+      }
+      if (submit) {
+        const reject = hours === 0;
+        submit.classList.toggle('btn-primary', !reject);
+        submit.classList.toggle('btn-danger', reject);
+        submit.querySelector('.material-symbols-outlined').textContent = reject ? 'close' : 'check';
+        submit.querySelector('.claim-submit-label').textContent = reject ? submit.dataset.rejectLabel : submit.dataset.approveLabel;
+      }
+    }
+    inputs.forEach(function (input) { input.addEventListener('input', refresh); });
+    refresh();
   });
 </script>
 
