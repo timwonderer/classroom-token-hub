@@ -66,32 +66,6 @@ def _cycle_assessments(cycle: BillCycle) -> list[ObligationAssessment]:
     )
 
 
-def _is_committed(cycle: BillCycle) -> bool:
-    """A not-yet-begun period is committed once any satisfaction is applied (§V.8)."""
-    return any(
-        obligations_service.get_satisfaction_events(a.correlation_id)
-        for a in _cycle_assessments(cycle)
-    )
-
-
-def _stop_renewal_instant(request: TerminateBillCycleRequest, latest: BillCycle) -> datetime:
-    """End of the last committed period (DOM-OBL-001 §V.7).
-
-    The current period is committed. A scheduled, not-yet-begun period (created
-    by advance assessment) is committed only if any satisfaction has been applied
-    to its assessment; then the lineage runs to that period's end.
-    """
-    current = obligations_service.get_current_bill_cycle(
-        request.class_id, request.internal_ref, reference_time_utc=request.reference_time_utc
-    )
-    if current is None or latest.id == current.id:
-        return latest.next_assessment_at
-    # ``latest`` is a scheduled upcoming cycle whose period has not begun.
-    if _is_committed(latest):
-        return latest.next_assessment_at
-    return current.next_assessment_at
-
-
 def terminate_bill_cycle(
     request: TerminateBillCycleRequest,
     *,
@@ -125,7 +99,9 @@ def terminate_bill_cycle(
     if latest.next_assessment_at is None:
         return latest
 
-    instant = request.termination_at or _stop_renewal_instant(request, latest)
+    instant = request.termination_at or obligations_service.get_stop_renewal_instant(
+        request.class_id, request.internal_ref, reference_time_utc=request.reference_time_utc
+    )
 
     # Withdraw every untouched assessment of a period that begins at or after the
     # instant; periods with any satisfaction are committed and keep theirs.

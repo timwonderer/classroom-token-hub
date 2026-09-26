@@ -199,28 +199,85 @@ def _student_login_hard_fail(*, student_id: int, reason: str, is_json: bool, sta
 
 
 def _list_insurance_claims(*, class_id: str, target_seat_id: int, entitlement_id: str | None = None):
-    """Return current insurance claim pending actions for display."""
-    query = PendingAction.query.filter(
-        PendingAction.class_id == class_id,
-        PendingAction.seat_id == target_seat_id,
-        PendingAction.authoritative_feat == "FEAT-STOR-003-RESOLVE",
+    """The seat's insurance claims in this class, newest first, for display.
+
+    Reads ``insurance_claims`` — where FEAT-STOR-003 records every claim and its
+    decision. This previously read a legacy pending-action queue that nothing
+    writes any more, so students never saw a claim, its status, or its payout.
+    """
+    from app.models import InsuranceClaim
+
+    query = InsuranceClaim.query.filter(
+        InsuranceClaim.class_id == class_id,
+        InsuranceClaim.target_seat_id == target_seat_id,
     )
     if entitlement_id is not None:
-        query = query.filter(PendingAction.entitlement_id == entitlement_id)
+        query = query.filter(InsuranceClaim.entitlement_id == entitlement_id)
+
+    titles: dict = {}
+
+    def policy_title(ent_id):
+        if ent_id not in titles:
+            grant = insurance_coverage.get_insurance_grant(class_id, ent_id)
+            policy_uuid = ((grant.payload or {}) if grant is not None else {}).get("policy_uuid")
+            definition = (
+                insurance_defs.get_insurance_definition(policy_uuid, class_id=class_id)
+                if policy_uuid else None
+            )
+            titles[ent_id] = (definition.title if definition is not None else None) or "Insurance"
+        return titles[ent_id]
+
+    def incident_at(claim, basis):
+        """When the loss happened: the first claimed day (class-local start) or
+        the source transaction's time. None falls back to the filing time."""
+        from datetime import date
+
+        from app.models import Transaction
+        from app.utils.canonical_temporal_resolver import (
+            CLASS_LEVEL_EVALUATION,
+            canonical_temporal_resolver,
+        )
+
+        dates = [
+            (d.get("date") if isinstance(d, dict) else d)
+            for d in (basis.get("claimed_dates") or [])
+        ]
+        dates = [d for d in dates if d]  # as the student listed them
+        if dates:
+            try:
+                day = date.fromisoformat(str(dates[0])[:10])
+            except ValueError:
+                return None
+            return canonical_temporal_resolver(
+                CLASS_LEVEL_EVALUATION,
+                canonical_execution_context=SimpleNamespace(class_id=class_id),
+                primitive="evaluation_day_boundaries",
+                evaluation_date=day,
+            ).boundary_start_utc
+        txn_id = basis.get("transaction_id")
+        if txn_id:
+            txn = Transaction.query.filter_by(id=int(txn_id), class_id=class_id).first()
+            return txn.timestamp if txn is not None else None
+        return None
+
     rows = []
-    for pending_action in query.order_by(PendingAction.submitted_at.desc()).all():
-        payload = pending_action.payload or {}
+    for claim in query.order_by(InsuranceClaim.submitted_at.desc()).all():
+        basis = claim.claim_basis or {}
+        status = {"SUBMITTED": "pending", "APPROVED": "approved", "REJECTED": "rejected"}.get(
+            claim.status, (claim.status or "").lower()
+        )
         rows.append(SimpleNamespace(
-            id=pending_action.pending_action_id,
-            claim_id=pending_action.pending_action_id,
-            status="SUBMITTED",
-            approved_amount=None,
-            claim_amount=None,
-            rejection_reason=None,
-            description=str(payload.get("claim_subject", {})),
-            teacher_notes=None,
-            claimed_dates=payload.get("claim_subject", {}).get("claimed_dates"),
-            submitted_at=pending_action.submitted_at,
+            id=claim.claim_id,
+            claim_id=claim.claim_id,
+            policy=SimpleNamespace(title=policy_title(claim.entitlement_id)),
+            status=status,
+            approved_amount=claim.result_amount if status == "approved" else None,
+            claim_amount=basis.get("amount"),
+            rejection_reason=claim.decision_note if status == "rejected" else None,
+            description=basis.get("description") or basis.get("additional_information") or "",
+            teacher_notes=claim.decision_note if status == "approved" else None,
+            incident_at=incident_at(claim, basis),
+            submitted_at=claim.submitted_at,
         ))
     return rows
 
@@ -1584,36 +1641,42 @@ def insurance_marketplace():
         d = insurance_defs.get_insurance_definition(policy_uuid, class_id=class_id)
         if d is None:
             continue
+        claims_open_on, renews_on = _coverage_card_dates(context, grant, d)
+        last_covered_day = _last_covered_day(class_id, grant.entitlement_id)
         owned_coverage.append(
             SimpleNamespace(
                 entitlement_id=grant.entitlement_id,
                 policy_uuid=policy_uuid,
                 title=d.title or "Insurance policy",
+                description=d.description or "",
                 insurance_type=d.insurance_type,
                 premium=d.premium,
                 charge_frequency=d.charge_frequency,
+                reimbursement_percentage=d.reimbursement_percentage,
+                payout_multiple=d.payout_multiple,
+                claim_window_days=d.claim_window_days,
                 waiting_period_days=d.waiting_period_days,
                 purchased_at=grant.timestamp,
+                # Set while the waiting period runs: the day claims open.
+                claims_open_on=claims_open_on,
+                # The day the next premium period starts.
+                renews_on=renews_on,
                 # Derived from the Obligations read (DOM-STORE-001 §VIII.E.1).
                 premiums_current=insurance_coverage.are_premiums_current(
                     class_id, grant.entitlement_id
                 ),
                 # Set once renewal is stopped: the last day the coverage runs.
-                last_covered_day=_last_covered_day(class_id, grant.entitlement_id),
+                last_covered_day=last_covered_day,
+                # If cancelled now: the last day it would still cover. Same
+                # derivation the cancel command uses (DOM-OBL-001 §V.7).
+                cancel_covers_through=(
+                    None if last_covered_day else _cancel_covers_through(class_id, grant.entitlement_id)
+                ),
             )
         )
 
     def _claim_display_row(claim):
-        raw_incident = (claim.claimed_dates or [None])[0] if getattr(claim, "claimed_dates", None) else None
-        if isinstance(raw_incident, str):
-            try:
-                incident_dt = datetime.fromisoformat(raw_incident)
-            except ValueError:
-                incident_dt = claim.submitted_at
-        elif raw_incident is not None:
-            incident_dt = raw_incident
-        else:
-            incident_dt = claim.submitted_at
+        incident_dt = claim.incident_at or claim.submitted_at
         return SimpleNamespace(
             id=claim.id,
             claim_id=claim.claim_id,
@@ -1779,6 +1842,56 @@ def pay_insurance_premium(policy_uuid):
     return redirect(url_for('student.view_policy', policy_uuid=policy_uuid))
 
 
+def _coverage_card_dates(context, grant, definition):
+    """(claims_open_on, renews_on) as class-local dates for a coverage card.
+
+    ``claims_open_on`` is set only while the waiting period is still running —
+    a loss before it is not covered (insurance_claim_feat.covered_from_utc).
+    ``renews_on`` is the start of the next premium period, else None.
+    """
+    from app.utils.canonical_temporal_resolver import (
+        CLASS_LEVEL_EVALUATION,
+        canonical_temporal_resolver,
+    )
+
+    claims_open_on = None
+    wait = int(definition.waiting_period_days or 0)
+    if wait > 0:
+        open_date, open_utc = coverage_effective_start_utc(
+            context, ensure_utc(grant.timestamp), wait
+        )
+        ctx = SimpleNamespace(class_id=context.class_id)
+        now = canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION, canonical_execution_context=ctx, primitive="current_time",
+        ).canonical_now_utc
+        if canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=ctx,
+            primitive="later_than",
+            candidate=open_utc,
+            reference=now,
+        ).is_later:
+            claims_open_on = open_date
+
+    renews_on = None
+    period = insurance_coverage.get_coverage_period(context.class_id, grant.entitlement_id)
+    if period is not None and period.end_utc is not None:
+        renews_on = insurance_coverage.class_local_date(context.class_id, period.end_utc)
+    return claims_open_on, renews_on
+
+
+def _cancel_covers_through(class_id, entitlement_id):
+    """The last class-local day of coverage if renewal were stopped now, else None."""
+    from app.services import obligations_service
+
+    instant = obligations_service.get_stop_renewal_instant(
+        class_id, insurance_coverage.premium_lineage_ref(entitlement_id)
+    )
+    if instant is None:
+        return None
+    return obligations_service.last_class_day_before(class_id, instant)
+
+
 def _last_covered_day(class_id, entitlement_id):
     """The last class-local day of coverage that will not renew, else None.
 
@@ -1792,7 +1905,7 @@ def _last_covered_day(class_id, entitlement_id):
     )
     if instant is None:
         return None
-    return insurance_coverage.class_local_date(class_id, instant) - timedelta(days=1)
+    return obligations_service.last_class_day_before(class_id, instant)
 
 
 def _insurance_entitlement_owing_premium(seat_id, class_id, policy_uuid):
@@ -2019,16 +2132,7 @@ def view_policy(policy_uuid):
     if entitlement is None:
         flash("You do not have an active insurance entitlement for this policy.", "warning")
     def _claim_display_row(claim):
-        raw_incident = (claim.claimed_dates or [None])[0] if getattr(claim, "claimed_dates", None) else None
-        if isinstance(raw_incident, str):
-            try:
-                incident_dt = datetime.fromisoformat(raw_incident)
-            except ValueError:
-                incident_dt = claim.submitted_at
-        elif raw_incident is not None:
-            incident_dt = raw_incident
-        else:
-            incident_dt = claim.submitted_at
+        incident_dt = claim.incident_at or claim.submitted_at
         return SimpleNamespace(
             id=claim.id,
             claim_id=claim.claim_id,
@@ -2074,9 +2178,8 @@ def view_policy(policy_uuid):
         if next_payment_due is not None:
             # The period is [start, end): its last covered day is the day before
             # the coverage boundary (FEAT-STOR-007 terminology).
-            covered_through = insurance_coverage.class_local_date(
-                context.class_id, next_payment_due
-            ) - timedelta(days=1)
+            from app.services import obligations_service as _obl
+            covered_through = _obl.last_class_day_before(context.class_id, next_payment_due)
         purchase_date = ensure_utc(entitlement.timestamp)
         _, coverage_start_date = coverage_effective_start_utc(
             context,

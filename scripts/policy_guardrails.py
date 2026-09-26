@@ -601,14 +601,11 @@ _CLE_DEBT = {
     ("app/services/rent_schedule_service.py", "grace_local_date = due_local_date + timedelta(days=grace_days)"),
     ("app/feats/insurance_coverage_renewal_feat.py", "_INSTANT_RESOLUTION = timedelta(microseconds=1)"),
     ("app/feats/insurance_coverage_renewal_feat.py", "evaluation_date=local_day + timedelta(days=days),"),
-    ("app/feats/insurance_premium_payment_feat.py", "last = class_local_date(class_id, cycle.next_assessment_at) - timedelta(days=1)"),
     ("app/feats/insurance_claim_feat.py", "deadline_date = txn_date + timedelta(days=int(claim_window_days))"),
     ("app/feats/insurance_claim_feat.py", "effective_date = start_date + timedelta(days=int(waiting_period_days))"),
     ("app/feats/insurance_claim_feat.py", "return day - timedelta(days=day.weekday())"),
     ("app/feats/insurance_claim_feat.py", "day = wk + timedelta(days=offset)"),
     ("app/feats/insurance_claim_feat.py", "seat_id, class_id, wk + timedelta(days=offset), ctx=canonical_context"),
-    ("app/routes/student.py", "return insurance_coverage.class_local_date(class_id, instant) - timedelta(days=1)"),
-    ("app/routes/student.py", ") - timedelta(days=1)"),
     ("app/routes/student.py", "return timedelta(days=1)"),
     ("app/routes/student.py", "return timedelta(weeks=1)"),
     ("app/routes/student.py", "return timedelta(days=value)"),
@@ -621,9 +618,6 @@ _CLE_DEBT = {
     # SLE audit-filter end widened by a second; the filter can span several
     # classes, so it has no single class calendar to move onto.
     ("app/routes/admin.py", "end_dt = _eb.boundary_end_utc + timedelta(seconds=1)"),
-    ("app/routes/admin.py", "_class_local_date_of(current_cycle.next_assessment_at) - timedelta(days=1)"),
-    ("app/routes/admin.py", "next_due_date = _class_local_date_of(next_boundary) - timedelta(days=1)"),
-    ("app/routes/admin.py", "period_last_day=(period_resets_on - timedelta(days=1)) if period_resets_on else None,"),
 }
 
 TEMPORAL_ARITHMETIC_BASELINE = frozenset(_SLE_DURATIONS | _CLE_DEBT)

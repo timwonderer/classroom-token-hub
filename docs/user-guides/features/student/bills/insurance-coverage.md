@@ -31,13 +31,11 @@ Insurance has its own **Insurance** item in the sidebar. It is independent of Re
 
 ### Reading the page
 
-The page has three parts, top to bottom:
+The page has three tabs:
 
-1. **Your coverage** — the policies you currently hold, each with the premium, *Since {date}*, and a badge: **Active** when your premiums are paid, or **Premium overdue** when one is not. If you hold none, it reads *You have no active insurance coverage.*
-2. **Available policies** — everything you could buy.
-3. **Your claims** — a read-only table of what you have filed, appearing only once you have filed something.
-
-Each coverage card has **View policy**, **File a claim**, and **Cancel coverage**.
+1. **My coverage** — the policies you hold. Each card shows one badge — **Active**, **Waiting period**, **Premium overdue**, or **Cancelled** — and four facts: the **Premium**, the **Premium status** (Paid or Overdue), when **Claims** open, and the date of your **Next premium** (or, once you have cancelled, the day it is **Covered through**). The buttons on the right are **File a claim** (or *Claims open [date]* while you wait, or **Pay overdue premium** when a premium is unpaid), **View policy**, and **Cancel coverage**.
+2. **Buy coverage** — everything you could buy. The page opens here when you hold no coverage yet.
+3. **My claims** — every claim you have filed, with the date of the loss, when you filed it, its status (**Waiting for review**, **Approved**, or **Rejected**, with your teacher's reason), and what it paid you.
 
 ### Tier groups: pick one, not all
 
@@ -47,23 +45,23 @@ Most policies are offered in **tier groups**. A group is one card with several r
 
 Each row shows the price and the terms on one line, like:
 
-> $3.00 / weekly · reimburses 60% · up to 4× payout
+> $3.00 / weekly · Pays back 60% of what you lose · up to $12.00 a week
 
-Read that as: three dollars every week; an approved claim pays back 60% of what you lost; and across one coverage period the policy will not pay out more than four times the premium in total.
+Read that as: three dollars every week; an approved claim pays back 60% of what you lost; and the policy will not pay out more than $12.00 in total in one week, however many claims you file.
 
 The button on the right tells you what you can do:
 
 | Button | Meaning |
 | --- | --- |
-| **Buy — $X** | Available. One click buys it. |
+| **Buy — $X** | Available. It opens a confirmation first. |
 | **Your plan** | You already hold this tier. |
 | **Unavailable** | You hold a *different* tier in this group. Cancel that one first. |
 
-Some policies are not in a group at all and appear as standalone cards further down, with a fuller description and a **Buy — $X now** button.
+Some policies are not in a group at all and appear as standalone cards further down, with a fuller description, the most the policy pays out in a period in dollars, and a **Buy — $X a week** (or month) button.
 
 ### Buying
 
-Type your **passphrase** into the box on the policy row, then press **Buy — $X**. Insurance is a money decision, so it is held to the same standard as a store purchase: the premium only leaves your account after the passphrase is verified. Your PIN does not work here.
+Press **Buy**. A window opens that says exactly what you're agreeing to — how much comes out of checking now and every period, what a claim pays back, and when claims open. Type your **passphrase** there and press **Buy for $X**, or **Not now** to back out. Insurance is a money decision, so it is held to the same standard as a store purchase: the premium only leaves your account after the passphrase is verified. Your PIN does not work here.
 
 If it works you get *Insurance purchased — first premium of $X paid.* The first premium comes out of **checking** immediately, and your first period of coverage starts the moment the purchase lands.
 
@@ -103,9 +101,7 @@ What happens if you never pay depends on the policy. Your teacher chose one of t
 
 ### Cancelling
 
-**Cancel coverage** sits on the card in **Your coverage**. It asks for your **passphrase** and then to confirm:
-
-> Cancel this coverage? It will stop renewing — your benefits continue until the end of the current period.
+**Cancel coverage** sits on the card in **My coverage**. It opens a window that spells out what cancelling does — including the exact date you stay covered through — and asks for your **passphrase**. Press **Cancel coverage** to go ahead, or **Keep my coverage** to back out.
 
 Cancelling means **stop charging me for future periods**. It is not a refund and not an instant switch-off:
 
@@ -113,7 +109,7 @@ Cancelling means **stop charging me for future periods**. It is not a refund and
 - Your coverage stays live, and you can still file claims against it, until the current period runs out.
 - If next period's premium was already billed but you have **not paid any of it**, that bill is cancelled and your coverage ends when the current period does.
 - If you **already paid** next period's premium, that period is yours: your coverage runs to the end of it. If you paid only **part** of it, the period still happens and you still owe the rest — your coverage stays paused until you pay it.
-- Until then the card reads *Won't renew · covers you through [date]* in place of the cancel button. After that date it drops off **Your coverage**.
+- Until then the card is outlined in yellow with a **Cancelled** badge and a note: *You cancelled this coverage* — it won't renew, and you're covered through [date]. After that date it drops off **My coverage**.
 
 You get *Coverage cancelled — it won't renew.* If you had already cancelled, it says *This coverage is already set to not renew.* If the passphrase is missing or wrong you get *Enter your passphrase to confirm the cancellation.* and nothing changes.
 
@@ -139,7 +135,7 @@ There is no upgrade button. To move from **Basic** to **Premium** in the same gr
 > **Coverage usually starts immediately.** You can file a claim against something that happens right after you buy, as long as the incident is *after* your purchase. Claims about things that happened before you bought the policy are rejected. The exception is a policy with a **waiting period** — any type of policy can have one. It becomes claimable a set number of days after you buy, and switching tiers restarts that wait because it is a new purchase.
 
 > [!TIP]
-> Insurance is only worth buying if the loss it covers is one you actually risk. Compare the premium across a whole term against the size of the thing it protects, and remember the *up to N× payout* ceiling caps what you can recover in a period no matter how much you lost.
+> Insurance is only worth buying if the loss it covers is one you actually risk. Compare the premium across a whole term against the size of the thing it protects, and remember the *up to $X a week/month* ceiling caps what you can recover in a period no matter how much you lost.
 
 ## Related guides
 

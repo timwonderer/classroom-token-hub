@@ -1,6 +1,7 @@
 {% extends "layout_student.html" %}
 {% set page_title = "Insurance" %}
 {% set current_page = "insurance" %}
+{% import "macros/cards.html" as cards %}
 {% block title %}Insurance{% endblock %}
 {% block page_icon %}shield{% endblock %}
 
@@ -31,89 +32,237 @@
 
 {% block extra_styles %}
 <style>
-  .insurance-market-column { max-width: 960px; }
-  .insurance-cancel-passphrase { max-width: 12rem; }
+  .insurance-facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+    gap: var(--space-2);
+    margin: 0;
+  }
+
+  .insurance-fact {
+    background: var(--neutral-50);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .insurance-fact dt {
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+    margin-bottom: var(--space-1);
+  }
+
+  .insurance-fact dd {
+    font-weight: var(--weight-semibold);
+    margin: 0;
+  }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid insurance-market-column">
+{% set rank_label = {1: 'Basic', 2: 'Mid', 3: 'Premium'} %}
+{% set start_tab = 'coverage' if owned_coverage or not insurance_for_sale else 'buy' %}
 
-  {# ---- Your coverage ---------------------------------------------------- #}
-  <section class="mb-4">
-    <h2 class="h5 mb-3">Your coverage</h2>
-    {% if owned_coverage %}
-    <div class="row g-3">
-      {% for cov in owned_coverage %}
-      <div class="col-md-6">
-        <div class="card shadow-sm h-100">
-          <div class="card-body">
-            <div class="d-flex justify-content-between align-items-start">
-              <h3 class="h6 mb-1">{{ cov.title }}</h3>
-              {% if cov.premiums_current %}
-              <span class="badge bg-success">Active</span>
-              {% else %}
+{% macro per(policy) -%}
+{{ {'MONTHLY': 'month', 'WEEKLY': 'week'}.get((policy.charge_frequency or '')|upper, 'period') }}
+{%- endmacro %}
+
+{% macro loss_words(policy) -%}
+{{ 'the wages you lose' if (policy.insurance_type or '')|upper == 'PRODUCTIVITY' else 'what you lose' }}
+{%- endmacro %}
+
+{% macro days(n) -%}{{ n }} day{{ '' if n == 1 else 's' }}{%- endmacro %}
+
+{% macro payout_cap(policy) -%}
+{%- if policy.payout_multiple is not none and policy.premium is not none -%}${{ '%.2f'|format(policy.premium * policy.payout_multiple) }}{%- endif -%}
+{%- endmacro %}
+
+{% macro policy_terms(policy) -%}
+{%- set parts = [] -%}
+{%- if policy.reimbursement_percentage is not none %}{% set _ = parts.append('Pays back ' ~ ('%.0f'|format(policy.reimbursement_percentage)) ~ '% of ' ~ loss_words(policy)) %}{% endif -%}
+{%- if payout_cap(policy) %}{% set _ = parts.append('up to ' ~ payout_cap(policy) ~ ' a ' ~ per(policy)) %}{% endif -%}
+{%- if policy.claim_window_days is not none %}{% set _ = parts.append('file within ' ~ days(policy.claim_window_days)) %}{% endif -%}
+{%- if policy.waiting_period_days %}{% set _ = parts.append(days(policy.waiting_period_days) ~ ' waiting period') %}{% endif -%}
+{{ parts | join(' · ') }}
+{%- endmacro %}
+
+{# One confirmation pattern for every passphrase action on this page: say
+   plainly what will happen, then ask for the passphrase (FEAT-IDEN-002
+   §Credential boundary). #}
+{% macro passphrase_modal(modal_id, title, action, submit_label, submit_class, keep_label, input_id) -%}
+<div class="modal fade" id="{{ modal_id }}" tabindex="-1" aria-labelledby="{{ modal_id }}-title" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <form class="modal-content" method="POST" action="{{ action }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+      <div class="modal-header">
+        <h2 class="modal-title h5" id="{{ modal_id }}-title">{{ title }}</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        {{ caller() }}
+        <label class="form-label fw-semibold mt-3" for="{{ input_id }}">Your passphrase</label>
+        <input type="password" class="form-control" id="{{ input_id }}" name="passphrase"
+               autocomplete="current-password" required />
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">{{ keep_label }}</button>
+        <button type="submit" class="btn {{ submit_class }}">{{ submit_label }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+{%- endmacro %}
+
+{% macro buy_modal(policy) -%}
+{% call passphrase_modal('buy-' ~ policy.policy_uuid, 'Buy ' ~ policy.title ~ '?',
+        url_for('student.purchase_insurance', policy_uuid=policy.policy_uuid),
+        'Buy for $' ~ ('%.2f'|format(policy.premium)), 'btn-primary', 'Not now', 'insurance-passphrase-' ~ policy.policy_uuid) %}
+<ul class="mb-0">
+  <li class="mb-2"><strong>${{ "%.2f"|format(policy.premium) }}</strong> comes out of checking now, and again every {{ per(policy) }} until you cancel.</li>
+  {% if policy.reimbursement_percentage is not none %}
+  <li class="mb-2">If you have a covered loss, it pays back {{ "%.0f"|format(policy.reimbursement_percentage) }}% of {{ loss_words(policy) }}{% if payout_cap(policy) %}, up to {{ payout_cap(policy) }} a {{ per(policy) }}{% endif %}.</li>
+  {% endif %}
+  <li class="mb-2">{% if policy.waiting_period_days %}Claims open {{ days(policy.waiting_period_days) }} after you buy. Losses before then aren't covered.{% else %}You can claim for losses from the moment you buy.{% endif %}</li>
+  <li>If nothing goes wrong, you don't get the premiums back — that's what insurance costs.</li>
+</ul>
+{% endcall %}
+{%- endmacro %}
+
+<ul class="nav nav-tabs mb-4" id="insuranceTabs" role="tablist">
+  <li class="nav-item" role="presentation">
+    <button class="nav-link{% if start_tab == 'coverage' %} active{% endif %}" id="coverage-tab" data-bs-toggle="tab"
+            data-bs-target="#coverage" type="button" role="tab" aria-controls="coverage"
+            aria-selected="{{ 'true' if start_tab == 'coverage' else 'false' }}">
+      <span class="material-symbols-outlined" aria-hidden="true">shield</span> My coverage
+      {% if owned_coverage %}<span class="badge bg-primary ms-1">{{ owned_coverage|length }}</span>{% endif %}
+    </button>
+  </li>
+  {% if insurance_for_sale %}
+  <li class="nav-item" role="presentation">
+    <button class="nav-link{% if start_tab == 'buy' %} active{% endif %}" id="buy-tab" data-bs-toggle="tab"
+            data-bs-target="#buy" type="button" role="tab" aria-controls="buy"
+            aria-selected="{{ 'true' if start_tab == 'buy' else 'false' }}">
+      <span class="material-symbols-outlined" aria-hidden="true">add_shopping_cart</span> Buy coverage
+    </button>
+  </li>
+  {% endif %}
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="claims-tab" data-bs-toggle="tab" data-bs-target="#claims" type="button" role="tab"
+            aria-controls="claims" aria-selected="false">
+      <span class="material-symbols-outlined" aria-hidden="true">assignment</span> My claims
+      {% if my_claims %}<span class="badge bg-secondary ms-1">{{ my_claims|length }}</span>{% endif %}
+    </button>
+  </li>
+</ul>
+
+<div class="tab-content" id="insuranceTabContent">
+
+  {# ---- My coverage ------------------------------------------------------- #}
+  <div class="tab-pane fade{% if start_tab == 'coverage' %} show active{% endif %}" id="coverage" role="tabpanel" aria-labelledby="coverage-tab">
+    {% if not insurance_for_sale %}
+    <p class="text-muted">Insurance is closed to new purchases in this class. You can still pay any premium you owe.</p>
+    {% endif %}
+    {% for cov in owned_coverage %}
+    <div class="card mb-3{% if cov.last_covered_day %} border-warning{% endif %}">
+      <div class="card-body">
+        <div class="row g-4">
+          <div class="col-lg-8">
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+              <h2 class="h5 mb-0">{{ cov.title }}</h2>
+              {% if not cov.premiums_current %}
               <span class="badge bg-danger">Premium overdue</span>
+              {% elif cov.claims_open_on %}
+              <span class="badge bg-warning text-dark">Waiting period</span>
+              {% elif cov.last_covered_day %}
+              <span class="badge bg-warning text-dark">Cancelled</span>
+              {% else %}
+              <span class="badge bg-success">Active</span>
               {% endif %}
             </div>
+            <div class="text-muted small mb-3">{{ cov.insurance_type|capitalize }} insurance{% if cov.purchased_at %} · bought {{ cov.purchased_at | fmt_date }}{% endif %}</div>
+            {% if cov.description and cov.description != cov.title %}<p class="mb-3">{{ cov.description }}</p>{% endif %}
+
+            <dl class="insurance-facts mb-3">
+              <div class="insurance-fact">
+                <dt>Premium</dt>
+                <dd>${{ "%.2f"|format(cov.premium) }} <span class="fw-normal text-muted">/ {{ cov.charge_frequency|lower }}</span></dd>
+              </div>
+              <div class="insurance-fact">
+                <dt>Premium status</dt>
+                <dd class="{{ 'text-success' if cov.premiums_current else 'text-danger' }}">{{ 'Paid' if cov.premiums_current else 'Overdue' }}</dd>
+              </div>
+              <div class="insurance-fact">
+                <dt>Claims</dt>
+                <dd>{% if cov.claims_open_on %}Open {{ cov.claims_open_on.strftime('%b %d') }}{% elif not cov.premiums_current %}Paused{% else %}Open now{% endif %}</dd>
+              </div>
+              <div class="insurance-fact">
+                {% if cov.last_covered_day %}
+                <dt>Covered through</dt>
+                <dd>{{ cov.last_covered_day.strftime('%b %d, %Y') }}</dd>
+                {% else %}
+                <dt>Next premium</dt>
+                <dd>{{ cov.renews_on.strftime('%b %d, %Y') if cov.renews_on else '—' }}</dd>
+                {% endif %}
+              </div>
+            </dl>
+
+            <p class="small text-muted mb-0">{{ policy_terms(cov) }}</p>
+
+            {% if cov.last_covered_day %}
+            {% call cards.alert_card('warning', 'You cancelled this coverage', icon='event_busy', body_class='mt-3') %}
+            <p class="mb-0">It won't renew, so you won't be charged again. You're still covered — and can file claims for losses — through <strong>{{ cov.last_covered_day.strftime('%B %-d, %Y') }}</strong>. After that it ends.</p>
+            {% endcall %}
+            {% endif %}
+
             {% if not cov.premiums_current %}
-            <p class="text-danger small mb-2">Coverage is paused until the overdue premium is paid. Open <strong>View policy</strong> to pay it.</p>
+            {% call cards.alert_card('danger', 'Coverage is paused', icon='warning', body_class='mt-3') %}
+            <p class="mb-0">A premium is unpaid, so claims are refused until you pay it. Losses while coverage is paused stay uncovered after you pay.</p>
+            {% endcall %}
+            {% elif cov.claims_open_on %}
+            <p class="small mb-0 mt-2">Events that happened before {{ cov.claims_open_on.strftime('%b %d') }} are not covered.</p>
             {% endif %}
-            <div class="text-muted small mb-2">{{ cov.insurance_type|capitalize }}</div>
-            <div class="fw-semibold">${{ "%.2f"|format(cov.premium) }}
-              <span class="text-muted fw-normal">/ {{ cov.charge_frequency|lower }} premium</span>
-            </div>
-            {% if cov.waiting_period_days is not none and cov.waiting_period_days > 0 %}
-            <div class="text-muted small mt-1">Claims begin after {{ cov.waiting_period_days }} days.</div>
-            {% endif %}
-            {% if cov.purchased_at %}
-            <div class="text-muted small mt-1">Since {{ cov.purchased_at.strftime('%b %d, %Y') }}</div>
-            {% endif %}
-            <div class="d-flex gap-2 mt-3">
-              <a href="{{ url_for('student.view_policy', policy_uuid=cov.policy_uuid) }}"
-                 class="btn btn-outline-secondary btn-sm">View policy</a>
-              <a href="{{ url_for('student.file_claim', policy_uuid=cov.policy_uuid) }}"
-                 class="btn btn-outline-primary btn-sm">File a claim</a>
-              {% if cov.last_covered_day %}
-              <span class="small text-muted align-self-center">Won't renew · covers you through {{ cov.last_covered_day.strftime('%b %d, %Y') }}</span>
+          </div>
+
+          <div class="col-lg-4">
+            <div class="d-grid gap-2">
+              {% if not cov.premiums_current %}
+              <a href="{{ url_for('student.view_policy', policy_uuid=cov.policy_uuid) }}" class="btn btn-danger">Pay overdue premium</a>
+              {% elif cov.claims_open_on %}
+              <button type="button" class="btn btn-outline-secondary" disabled>Claims open {{ cov.claims_open_on.strftime('%b %d') }}</button>
               {% else %}
-              {# Cancelling insurance is a passphrase action, the same as buying it
-                 (FEAT-IDEN-002 §Credential boundary). #}
-              <form method="POST" action="{{ url_for('student.cancel_insurance', policy_uuid=cov.policy_uuid) }}"
-                    class="d-flex align-items-center gap-2"
-                    onsubmit="return confirm('Cancel this coverage? It will stop renewing — your benefits continue until the end of the current period.');">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                <label class="visually-hidden" for="cancelPassphrase-{{ cov.policy_uuid }}">Passphrase</label>
-                <input type="password" class="form-control form-control-sm insurance-cancel-passphrase"
-                       id="cancelPassphrase-{{ cov.policy_uuid }}" name="passphrase"
-                       placeholder="Passphrase" autocomplete="current-password" required />
-                <button type="submit" class="btn btn-outline-danger btn-sm">Cancel coverage</button>
-              </form>
+              <a href="{{ url_for('student.file_claim', policy_uuid=cov.policy_uuid) }}" class="btn btn-primary">File a claim</a>
+              {% endif %}
+              <a href="{{ url_for('student.view_policy', policy_uuid=cov.policy_uuid) }}" class="btn btn-outline-secondary">View policy</a>
+
+              {% if not cov.last_covered_day %}
+              <button type="button" class="btn btn-outline-danger mt-2" data-bs-toggle="modal"
+                      data-bs-target="#cancel-{{ cov.policy_uuid }}">Cancel coverage</button>
               {% endif %}
             </div>
           </div>
         </div>
       </div>
-      {% endfor %}
     </div>
     {% else %}
-    <p class="text-muted">You have no active insurance coverage.</p>
-    {% endif %}
-  </section>
+    <div class="text-center text-muted py-5">
+      <p class="h5">You have no insurance coverage.</p>
+      {% if insurance_for_sale %}
+      <p>See what your class offers under <strong>Buy coverage</strong>.</p>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
 
-  {# ---- Available policies ----------------------------------------------- #}
-  {% if not insurance_for_sale %}
-  <p class="text-muted">Insurance is closed to new purchases in this class. You can still pay any premium you owe.</p>
-  {% else %}
-  <section class="mb-4">
-    <h2 class="h5 mb-3">Available policies</h2>
+  {# ---- Buy coverage ------------------------------------------------------ #}
+  {% if insurance_for_sale %}
+  <div class="tab-pane fade{% if start_tab == 'buy' %} show active{% endif %}" id="buy" role="tabpanel" aria-labelledby="buy-tab">
 
     {# Grouped tiers — a student picks ONE plan per group. #}
-    {% set rank_label = {1: 'Basic', 2: 'Mid', 3: 'Premium'} %}
     {% for group in grouped_policies %}
-    <div class="card shadow-sm mb-3">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <span class="fw-semibold">{{ group.name }}</span>
+    <div class="card mb-4">
+      <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <h2 class="h5 mb-0">{{ group.name }}</h2>
         {% if group.owned %}
         <span class="badge bg-success">Enrolled — one plan per group</span>
         {% else %}
@@ -122,36 +271,27 @@
       </div>
       <div class="list-group list-group-flush">
         {% for policy in group.tiers %}
-        <div class="list-group-item d-flex justify-content-between align-items-center">
-          <div>
-            <span class="badge bg-primary-subtle text-primary-emphasis border me-2">{{ rank_label.get(policy.tier_level, policy.tier_name or 'Tier') }}</span>
-            <span class="fw-semibold">{{ policy.title }}</span>
-            <div class="text-muted small">
-              ${{ "%.2f"|format(policy.premium) }} / {{ policy.charge_frequency|lower }}
-              {% if policy.reimbursement_percentage is not none %} · reimburses {{ "%.0f"|format(policy.reimbursement_percentage) }}%{% endif %}
-              {% if policy.payout_multiple is not none %} · up to {{ "%.0f"|format(policy.payout_multiple) }}× payout{% endif %}
+        <div class="list-group-item py-3">
+          <div class="row g-3 align-items-center">
+            <div class="col-md-8">
+              <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                <span class="badge bg-primary-subtle text-primary-emphasis border">{{ rank_label.get(policy.tier_level, policy.tier_name or 'Tier') }}</span>
+                <span class="fw-semibold">{{ policy.title }}</span>
+              </div>
+              <div class="fw-semibold">${{ "%.2f"|format(policy.premium) }} <span class="fw-normal text-muted">/ {{ policy.charge_frequency|lower }}</span></div>
+              <div class="small text-muted">{{ policy_terms(policy) }}</div>
             </div>
-          </div>
-          <div>
-            {% if policy.owned %}
-                            <button type="button" class="btn btn-outline-secondary btn-sm" disabled>Your plan</button>
-            {% elif group.owned %}
-                            <button type="button" class="btn btn-outline-secondary btn-sm" disabled
-                    title="Cancel your current plan in this group to switch tiers">Unavailable</button>
-            {% else %}
-            <form method="POST" action="{{ url_for('student.purchase_insurance', policy_uuid=policy.policy_uuid) }}" class="d-inline">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-              {# Namespaced per section: the grouped-tier loop and the ungrouped
-                 loop below both render a buy form, and a bare policy_uuid id
-                 appears twice in the template even though a given policy is only
-                 ever rendered by one of them. #}
-              <label class="visually-hidden" for="insurance-tier-passphrase-{{ policy.policy_uuid }}">Passphrase to buy {{ policy.title }}</label>
-              <input type="password" class="form-control form-control-sm mb-2" id="insurance-tier-passphrase-{{ policy.policy_uuid }}" name="passphrase" autocomplete="current-password" placeholder="Passphrase" required />
-              <button type="submit" class="btn btn-primary btn-sm" onclick="this.disabled=true;this.form.submit();">
-                Buy — ${{ "%.2f"|format(policy.premium) }}
-              </button>
-            </form>
-            {% endif %}
+            <div class="col-md-4">
+              {% if policy.owned %}
+              <button type="button" class="btn btn-outline-secondary btn-sm w-100" disabled>Your plan</button>
+              {% elif group.owned %}
+              <button type="button" class="btn btn-outline-secondary btn-sm w-100" disabled
+                      title="Cancel your current plan in this group to switch tiers">Unavailable</button>
+              {% else %}
+              <button type="button" class="btn btn-primary btn-sm w-100" data-bs-toggle="modal"
+                      data-bs-target="#buy-{{ policy.policy_uuid }}">Buy — ${{ "%.2f"|format(policy.premium) }}</button>
+              {% endif %}
+            </div>
           </div>
         </div>
         {% endfor %}
@@ -161,48 +301,39 @@
 
     {# Ungrouped single policies. #}
     {% if ungrouped_policies %}
-    <div class="row g-3">
+    <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-3">
       {% for policy in ungrouped_policies %}
-      <div class="col-md-6">
-        <div class="card shadow-sm h-100">
+      <div class="col">
+        <div class="card h-100">
           <div class="card-body d-flex flex-column">
-            <div class="d-flex justify-content-between align-items-start mb-1">
-              <h3 class="h6 mb-0">{{ policy.title }}</h3>
+            <div class="d-flex justify-content-between align-items-start gap-2 mb-1">
+              <h2 class="h6 mb-0">{{ policy.title }}</h2>
               <span class="badge bg-light text-dark border">{{ policy.insurance_type|capitalize }}</span>
             </div>
-            {% if policy.description %}
+            {% if policy.description and policy.description != policy.title %}
             <p class="text-muted small mb-2">{{ policy.description }}</p>
             {% endif %}
             <div class="fw-semibold mb-2">${{ "%.2f"|format(policy.premium) }}
               <span class="text-muted fw-normal">/ {{ policy.charge_frequency|lower }}</span>
             </div>
-            <ul class="list-unstyled small text-muted mb-3">
+            <ul class="list-unstyled small mb-3">
               {% if policy.reimbursement_percentage is not none %}
-              <li>Reimburses {{ "%.0f"|format(policy.reimbursement_percentage) }}% of a covered loss</li>
+              <li>Pays back {{ "%.0f"|format(policy.reimbursement_percentage) }}% of {{ loss_words(policy) }}</li>
               {% endif %}
-              {% if policy.payout_multiple is not none %}
-              <li>Period payout up to {{ "%.0f"|format(policy.payout_multiple) }}× the premium</li>
+              {% if payout_cap(policy) %}
+              <li>Pays out up to <strong>{{ payout_cap(policy) }}</strong> a {{ per(policy) }} in total</li>
               {% endif %}
               {% if policy.claim_window_days is not none %}
-              <li>File within {{ policy.claim_window_days }} days of an incident</li>
+              <li>File within {{ days(policy.claim_window_days) }} of the loss</li>
               {% endif %}
-              {% if policy.waiting_period_days is not none and policy.waiting_period_days > 0 %}
-              <li>Coverage waiting period: {{ policy.waiting_period_days }} days</li>
-              {% endif %}
+              <li>{% if policy.waiting_period_days %}Claims open {{ days(policy.waiting_period_days) }} after you buy{% else %}Claims open as soon as you buy{% endif %}</li>
             </ul>
             <div class="mt-auto">
               {% if policy.owned %}
-                        <button type="button" class="btn btn-outline-secondary w-100" disabled>You have this coverage</button>
+              <button type="button" class="btn btn-outline-secondary w-100" disabled>You have this coverage</button>
               {% else %}
-              <form method="POST" action="{{ url_for('student.purchase_insurance', policy_uuid=policy.policy_uuid) }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                <label class="visually-hidden" for="insurance-passphrase-{{ policy.policy_uuid }}">Passphrase to buy {{ policy.title }}</label>
-                <input type="password" class="form-control mb-2" id="insurance-passphrase-{{ policy.policy_uuid }}" name="passphrase" autocomplete="current-password" placeholder="Passphrase" required />
-                <button type="submit" class="btn btn-primary w-100"
-                        onclick="this.disabled=true;this.form.submit();">
-                  Buy — ${{ "%.2f"|format(policy.premium) }} now
-                </button>
-              </form>
+              <button type="button" class="btn btn-primary w-100" data-bs-toggle="modal"
+                      data-bs-target="#buy-{{ policy.policy_uuid }}">Buy — ${{ "%.2f"|format(policy.premium) }} a {{ per(policy) }}</button>
               {% endif %}
             </div>
           </div>
@@ -215,40 +346,98 @@
     {% if not grouped_policies and not ungrouped_policies %}
     <p class="text-muted">No insurance policies are available in this class yet.</p>
     {% endif %}
-  </section>
+  </div>
   {% endif %}
 
-  {# ---- Your claims (read-only) ------------------------------------------ #}
-  {% if my_claims %}
-  <section class="mb-4">
-    <h2 class="h5 mb-3">Your claims</h2>
-    <div class="table-responsive">
-      <table class="table table-sm align-middle">
-        <caption class="visually-hidden">Your insurance claims</caption>
-        <thead>
-          <tr>
-            <th scope="col">Policy</th>
-            <th scope="col">Filed</th>
-            <th scope="col">Status</th>
-            <th scope="col" class="text-end">Approved</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for claim in my_claims %}
-          <tr>
-            <td>{{ claim.policy.title }}</td>
-            <td>{{ claim.filed_date.strftime('%b %d, %Y') if claim.filed_date else '—' }}</td>
-            <td><span class="badge bg-secondary">{{ claim.status|capitalize }}</span></td>
-            <td class="text-end">
-              {% if claim.approved_amount is not none %}${{ "%.2f"|format(claim.approved_amount) }}{% else %}—{% endif %}
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+  {# ---- My claims (read-only) --------------------------------------------- #}
+  <div class="tab-pane fade" id="claims" role="tabpanel" aria-labelledby="claims-tab">
+    {% if my_claims %}
+    <div class="card">
+      <div class="table-responsive">
+        <table class="table align-middle mb-0">
+          <caption class="visually-hidden">Your insurance claims</caption>
+          <thead>
+            <tr>
+              <th scope="col">Policy</th>
+              <th scope="col">Loss on</th>
+              <th scope="col">Filed</th>
+              <th scope="col">Status</th>
+              <th scope="col" class="text-end">Paid to you</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for claim in my_claims %}
+            {% set st = claim.status|lower %}
+            <tr>
+              <td>{{ claim.policy.title }}</td>
+              <td>{{ claim.incident_date | fmt_date }}</td>
+              <td>{{ claim.filed_date | fmt_date }}</td>
+              <td>
+                {% set label = {'pending': ('Waiting for review', 'bg-warning text-dark'), 'approved': ('Approved', 'bg-success'), 'rejected': ('Rejected', 'bg-danger')}.get(st, (claim.status|capitalize, 'bg-secondary')) %}
+                <span class="badge {{ label[1] }}">{{ label[0] }}</span>
+                {% if claim.rejection_reason %}<div class="small text-muted mt-1">{{ claim.rejection_reason }}</div>{% endif %}
+              </td>
+              <td class="text-end">
+                {% if claim.approved_amount is not none %}${{ "%.2f"|format(claim.approved_amount) }}{% else %}—{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
-  </section>
-  {% endif %}
+    {% else %}
+    <p class="text-muted py-4 text-center mb-0">You haven't filed any claims.</p>
+    {% endif %}
+  </div>
 
 </div>
+
+{# ---- Confirmation modals, outside the tab panes ------------------------ #}
+{% for cov in owned_coverage if not cov.last_covered_day %}
+{% call passphrase_modal('cancel-' ~ cov.policy_uuid, 'Cancel ' ~ cov.title ~ '?',
+        url_for('student.cancel_insurance', policy_uuid=cov.policy_uuid),
+        'Cancel coverage', 'btn-danger', 'Keep my coverage', 'cancelPassphrase-' ~ cov.policy_uuid) %}
+<p>Cancelling stops this policy from renewing. Here's what that means for you:</p>
+<ul class="mb-0">
+  {% if cov.cancel_covers_through %}
+  <li class="mb-2">You're <strong>still covered through {{ cov.cancel_covers_through.strftime('%B %-d, %Y') }}</strong>, and you can file claims for losses until then.</li>
+  {% else %}
+  <li class="mb-2">You stay covered until the end of the period you've paid for, and can file claims until then.</li>
+  {% endif %}
+  <li class="mb-2">After that it ends, and you won't be charged the ${{ "%.2f"|format(cov.premium) }} premium again.</li>
+  <li class="mb-2"><strong>No refund.</strong> Premiums you've already paid stay paid.</li>
+  {% if not cov.premiums_current %}
+  <li class="mb-2">You still owe the overdue premium — cancelling doesn't erase it.</li>
+  {% endif %}
+  <li>Changed your mind later? You'd have to buy it again{% if cov.waiting_period_days %}, and wait {{ days(cov.waiting_period_days) }} before claims open{% endif %}.</li>
+</ul>
+{% endcall %}
+{% endfor %}
+
+{% if insurance_for_sale %}
+{% for group in grouped_policies if not group.owned %}{% for policy in group.tiers %}
+{{ buy_modal(policy) }}
+{% endfor %}{% endfor %}
+{% for policy in ungrouped_policies if not policy.owned %}
+{{ buy_modal(policy) }}
+{% endfor %}
+{% endif %}
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  // Open a tab named in the URL hash (#coverage, #buy, #claims) and keep the
+  // hash in step, so reloads and shared links land on the same tab.
+  (function () {
+    var tabs = document.getElementById('insuranceTabs');
+    if (!tabs || !window.bootstrap) return;
+    var target = tabs.querySelector('[data-bs-target="' + window.location.hash + '"]');
+    if (window.location.hash && target) bootstrap.Tab.getOrCreateInstance(target).show();
+    tabs.addEventListener('shown.bs.tab', function (e) {
+      history.replaceState(null, '', e.target.getAttribute('data-bs-target'));
+    });
+  })();
+</script>
 {% endblock %}

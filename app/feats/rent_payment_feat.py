@@ -54,6 +54,46 @@ from app.utils.canonical_temporal_resolver import CLASS_LEVEL_EVALUATION, canoni
 logger = logging.getLogger(__name__)
 
 
+
+def _bill_period_label(class_id: str, assessment) -> str | None:
+    """The class-local days a rent bill covers, e.g. "Sep 25 – Oct 24", else None."""
+    from app.extensions import db
+    from app.models import BillCycle
+
+    cycle = db.session.get(BillCycle, assessment.bill_cycle_id) if assessment.bill_cycle_id else None
+    if cycle is None or cycle.cycle_boundary_at is None or cycle.next_assessment_at is None:
+        return None
+
+    def local(instant):
+        return canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=SimpleNamespace(class_id=class_id),
+            primitive="current_evaluation_day",
+            reference_time_utc=instant,
+        ).evaluation_date
+
+    first = local(cycle.cycle_boundary_at)
+    last = obligations_service.last_class_day_before(class_id, cycle.next_assessment_at)
+    fmt = lambda d: d.strftime("%b %d").replace(" 0", " ")
+    return f"{fmt(first)} – {fmt(last)}"
+
+
+def rent_payment_description(class_id: str, assessment) -> str:
+    """What a student sees for a rent payment: the period it pays for.
+
+    e.g. "Rent: Sep 25 – Oct 24", or "Late fee on rent for Sep 25 – Oct 24" —
+    never the obligation's correlation id.
+    """
+    if assessment.obligation_type == "LATE_FEE":
+        source = (
+            obligations_service.get_assessment_for_correlation(assessment.source_correlation_id)
+            if assessment.source_correlation_id else None
+        )
+        period = _bill_period_label(class_id, source) if source is not None else None
+        return f"Late fee on rent for {period}" if period else "Late fee on rent"
+    period = _bill_period_label(class_id, assessment)
+    return f"Rent: {period}" if period else "Rent"
+
 @dataclass
 class RentPaymentResult:
     """Result of rent payment execution (identity-blind, replay-safe)."""
@@ -378,11 +418,7 @@ def pay_rent(
         amount=-this_payment,
         account_type="checking",
         type="rent_payment",
-        description=(
-            f"Late fee payment (obligation {correlation_id})"
-            if assessment.obligation_type == "LATE_FEE"
-            else f"Rent payment (cycle obligation {correlation_id})"
-        ),
+        description=rent_payment_description(class_id, assessment),
     )
 
     # (b) Record the immutable PAYMENT satisfaction linked to that ledger row.

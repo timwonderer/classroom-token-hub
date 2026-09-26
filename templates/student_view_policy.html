@@ -170,7 +170,7 @@
                                             {% elif claim.status == 'rejected' %}bg-danger
                                             {% elif claim.status == 'paid' %}bg-info
                                             {% endif %}">
-                                        {{ claim.status|title }}
+                                        {{ 'Waiting for review' if claim.status == 'pending' else claim.status|title }}
                                     </span>
                                 </td>
                                 <td>

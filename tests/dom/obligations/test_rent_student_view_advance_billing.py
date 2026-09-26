@@ -155,3 +155,54 @@ def test_no_part_payment_when_the_class_does_not_allow_it(client, app):
     html = client.get("/student/rent").get_data(as_text=True)
 
     assert 'name="payment_amount"' not in html
+
+
+def test_rent_payment_ledger_line_names_the_period_not_the_obligation_id(app):
+    """Live test 2026-09-26: the teacher dashboard showed "Rent payment (cycle
+    obligation rent:6191…:cycle:1)". The line now names the period paid for."""
+    from app.models import Transaction
+
+    classroom = _built(app)
+    with app.app_context():
+        seat_id = classroom.students[0].seat.id
+        _fund(classroom, seat_id)
+        result = _pay(classroom, seat_id, _rent_correlation(classroom, seat_id, 1))
+
+        row = Transaction.query.filter_by(
+            class_id=classroom.class_id, seat_id=seat_id, type="rent_payment"
+        ).one()
+        assert row.description.startswith("Rent: ")
+        assert " – " in row.description
+        assert "rent:" not in row.description
+        assert result.success
+
+
+def test_grace_deadline_is_the_last_day_a_payment_avoids_the_fee(client, app):
+    """The late fee is charged once grace_boundary_at (00:00 on due + grace days)
+    passes, so the last day to pay is the day before it. With one grace day that
+    is the due day itself; the page used to print the boundary's own date, a day
+    late."""
+    from app.models import BillCycle
+    from app.services.insurance_coverage_service import class_local_date
+    from app.utils.canonical_temporal_resolver import utc_now
+    from tests.dom.obligations.test_rent_disablement_surviving_state import (
+        _configure_rent,
+        _reconcile,
+    )
+    from tests.helpers.classroom_initializer import initialize_as_student
+
+    classroom, _student = initialize_as_student("chemistry_p1", client, app)
+    with app.app_context():
+        _configure_rent(classroom)  # weekly, due 5 days ago, grace_period_days=1
+        _reconcile(classroom, utc_now())
+        cycle_1 = BillCycle.query.filter_by(
+            class_id=classroom.class_id, cycle_number=1
+        ).filter(BillCycle.internal_ref == f"rent:{classroom.class_id}").one()
+        due_day = class_local_date(classroom.class_id, cycle_1.cycle_boundary_at)
+        boundary_day = class_local_date(classroom.class_id, cycle_1.grace_boundary_at)
+
+    html = client.get("/student/rent").get_data(as_text=True)
+
+    assert boundary_day != due_day
+    assert f"Grace period ended on {due_day.strftime('%b %-d')}" in html
+    assert f"ended on {boundary_day.strftime('%b %-d')}" not in html

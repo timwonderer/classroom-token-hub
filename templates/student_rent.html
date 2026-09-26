@@ -23,7 +23,7 @@
 {% endcall %}
 
 {% call help.topic('rent-funds', 'account_balance', 'Rent is paid from checking') %}
-<p>The Pay button only appears when your checking balance covers the full bill. Savings is not drawn on automatically — if the money you need is in savings, move it over on the Transfer page first.</p>
+<p>Paying the whole bill needs enough in checking to cover it. If your class allows paying a little at a time, you can pay part of it instead. Savings is not drawn on automatically — if the money you need is in savings, move it over on the Transfer page first.</p>
 <p class="mb-0">If you are short, the page tells you the exact amount you still need.</p>
 {% endcall %}
 
@@ -168,7 +168,7 @@
             <p class="mb-1 text-muted"><strong>{% if status.is_late %}Overdue Since:{% elif status.is_preview_period
                     %}Upcoming Due Date:{% else %}Due Date:{% endif %}</strong></p>
             <p class="mb-0">
-                {% if status.due_date %}{{ status.due_date.strftime('%B %d, %Y') }}{% else %}TBD{% endif %}
+                {% if status.due_date %}{{ status.due_date | fmt_date }}{% else %}TBD{% endif %}
                 {% if status.is_late %}
                 <span class="text-danger fw-semibold ms-2">Overdue</span>
                 {% elif status.is_preview_period %}
@@ -182,7 +182,7 @@
         {# Payment status and actions #}
         {% if not status.rent_is_active %}
         {% call cards.alert_card('info', 'Not yet due', icon='event_upcoming', body_class='mb-0') %}
-            <p class="mb-0">Rent will be due starting {% if status.due_date %}{{ status.due_date.strftime('%B %d, %Y') }}{% else %}soon{% endif %}</p>
+            <p class="mb-0">Rent will be due starting {% if status.due_date %}{{ status.due_date | fmt_date }}{% else %}soon{% endif %}</p>
         {% endcall %}
         {% else %}
         {% if status.is_waived %}
@@ -209,13 +209,13 @@
         {% endcall %}
         {% if status.is_late %}
         {% call cards.alert_card('danger', 'Rent is late', icon='error', body_class='mb-3') %}
-            <p class="mb-0">Grace period ended on {% if status.grace_end %}{{ status.grace_end.strftime('%B %d, %Y') }}{% else %}already{% endif %}.
+            <p class="mb-0">Grace period ended on {% if status.grace_last_day %}{{ status.grace_last_day.strftime('%b %-d') }}{% else %}already{% endif %}.
             <br>Late fee has been added to total.</p>
         {% endcall %}
         {% endif %}
         {% elif status.is_late %}
         {% call cards.alert_card('danger', 'Rent is late', icon='error', body_class='mb-3') %}
-            <p class="mb-0">Grace period ended on {% if status.grace_end %}{{ status.grace_end.strftime('%B %d, %Y') }}{% else %}already{% endif %}.
+            <p class="mb-0">Grace period ended on {% if status.grace_last_day %}{{ status.grace_last_day.strftime('%b %-d') }}{% else %}already{% endif %}.
             <br>A late fee has been added.</p>
         {% endcall %}
         <div class="mb-3">
@@ -224,7 +224,7 @@
         </div>
         {% else %}
         {% call cards.alert_card('info', 'Grace period', icon='schedule', body_class='mb-3') %}
-            <p class="mb-0">Pay by {% if status.grace_end %}{{ status.grace_end.strftime('%B %d, %Y') }}{% else %}the grace deadline{% endif %} to avoid late fee.</p>
+            <p class="mb-0">Pay by {% if status.grace_last_day %}{{ status.grace_last_day.strftime('%b %-d') }}{% else %}the grace deadline{% endif %} to avoid late fee.</p>
         {% endcall %}
         {% endif %}
 
@@ -245,7 +245,7 @@
                     {% for fee in status.late_fees if status.late_fees %}
                         {% if not fee.is_paid %}
                         <li class="list-group-item d-flex justify-content-between text-danger">
-                            <span>Late fee{% if fee.due_date %} &middot; {{ fee.due_date.strftime('%b %d, %Y') }}{% endif %}</span>
+                            <span>Late fee{% if fee.due_date %} &middot; {{ fee.due_date | fmt_date }}{% endif %}</span>
                             <span>${{ "%.2f"|format(fee.remaining_amount) }}</span>
                         </li>
                         {% endif %}
@@ -288,7 +288,7 @@
                 <label for="rent-payment-amount" class="form-label fw-semibold">
                     {% if checking_balance >= group_due %}Or pay part of it now{% else %}Pay part of this bill now{% endif %}
                 </label>
-                <p class="small text-muted mb-2">Your class lets you pay rent a little at a time. Anything you pay now comes off this bill; pay the rest by {% if status.grace_end %}{{ status.grace_end.strftime('%B %d, %Y') }}{% else %}the grace deadline{% endif %} to avoid a late fee.</p>
+                <p class="small text-muted mb-2">Your class lets you pay rent a little at a time. Anything you pay now comes off this bill; pay the rest by {% if status.grace_last_day %}{{ status.grace_last_day.strftime('%b %-d') }}{% else %}the grace deadline{% endif %} to avoid a late fee.</p>
                 <div class="d-flex flex-wrap gap-2">
                     <div class="input-group rent-part-amount">
                         <span class="input-group-text">$</span>
@@ -336,7 +336,7 @@
                 <li class="list-group-item d-flex justify-content-between align-items-center">
                     <span>
                         Late fee
-                        {% if fee.due_date %}&middot; assessed {{ fee.due_date.strftime('%B %d, %Y') }}{% endif %}
+                        {% if fee.due_date %}&middot; assessed {{ fee.due_date | fmt_date }}{% endif %}
                     </span>
                     <span>
                         {% if fee.is_paid %}
@@ -422,7 +422,7 @@
                     <tbody>
                         {% for payment in view.payment_history %}
                         <tr>
-                            <td>{{ payment.date.strftime('%b %d, %Y') if payment.date else '-' }}</td>
+                            <td>{{ payment.date | fmt_date }}</td>
                             <td>
                                 {% if payment.type == 'WAIVED' %}
                                 <span class="text-muted">Waived</span>

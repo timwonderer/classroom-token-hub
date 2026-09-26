@@ -33,14 +33,15 @@ def _teacher_ctx(classroom):
     )
 
 
-def _make_policy(classroom, premium="10.00"):
+def _make_policy(classroom, premium="10.00", waiting_period_days=None):
+    extra = {} if waiting_period_days is None else {"waiting_period_days": str(waiting_period_days)}
     row = configure_insurance_definition(
         class_id=classroom.class_id,
         submission=dict(
             insurance_type="TRANSACTION", premium=premium, charge_frequency="WEEKLY", bill_preview_days=3, nonpayment_mode="ACCUMULATE",
             reimbursement_percentage="80", payout_multiple="3",
             claims_per_week_equivalent="1", claim_window_days="7",
-            title="Basic Cover",
+            title="Basic Cover", **extra,
         ),
         canonical_context=_teacher_ctx(classroom),
         correlation_id=f"corr_{uuid4().hex}",
@@ -367,3 +368,102 @@ def test_cancel_without_coverage_warns(app, client):
         follow_redirects=True,
     )
     assert resp.status_code == 200  # redirected back with a warning flash
+
+
+# ---- Page layout: My coverage / Buy coverage / My claims tabs (2026-09-26) ----
+
+
+def _held_coverage(app, client, *, waiting_period_days=None):
+    with app.app_context():
+        classroom = provision_classroom("chemistry_p1")
+        enable_class_feature(class_id=classroom.class_id, feature="insurance")
+        policy_uuid = _make_policy(classroom, waiting_period_days=waiting_period_days)
+        student = classroom.students[0]
+        _fund(student.seat)
+        execute_purchase_insurance(
+            canonical_context=_student_ctx(classroom),
+            policy_uuid=policy_uuid, idempotency_key=f"ins:{uuid4().hex}")
+        db.session.commit()
+        txn_id = _make_claimable_txn(student.seat)
+        login_student(client, student)
+    return classroom, policy_uuid, txn_id
+
+
+def test_page_opens_on_buy_coverage_when_the_student_holds_none(app, client):
+    with app.app_context():
+        classroom = provision_classroom("chemistry_p1")
+        enable_class_feature(class_id=classroom.class_id, feature="insurance")
+        _make_policy(classroom)
+        login_student(client, classroom.students[0])
+
+    html = client.get("/student/insurance").get_data(as_text=True)
+
+    assert 'class="nav-link active" id="buy-tab"' in html
+    assert 'id="claims-tab"' in html
+
+
+def test_page_opens_on_my_coverage_once_the_student_holds_some(app, client):
+    _classroom, policy_uuid, _txn = _held_coverage(app, client)
+
+    html = client.get("/student/insurance").get_data(as_text=True)
+
+    assert 'class="nav-link active" id="coverage-tab"' in html
+    assert "Next premium" in html
+    assert f"/student/insurance/claim/{policy_uuid}" in html, "claims open immediately with no wait"
+
+
+def test_coverage_in_its_waiting_period_shows_when_claims_open(app, client):
+    """A loss before the wait ends is not covered, so the card says when claims
+    open instead of offering File a claim."""
+    _classroom, policy_uuid, _txn = _held_coverage(app, client, waiting_period_days=3)
+
+    html = client.get("/student/insurance").get_data(as_text=True)
+
+    assert "Waiting period</span>" in html
+    assert "Claims open " in html
+    assert f"/student/insurance/claim/{policy_uuid}" not in html
+
+
+def test_my_claims_shows_a_pending_claim_as_waiting_for_review(app, client):
+    _classroom, policy_uuid, txn_id = _held_coverage(app, client)
+    client.post(f"/student/insurance/claim/{policy_uuid}", data={"transaction_id": str(txn_id)})
+
+    html = client.get("/student/insurance").get_data(as_text=True)
+
+    assert "Waiting for review" in html
+
+
+# ---- Confirmations in modals; payout in dollars (2026-09-26) ----------------
+
+
+def test_buy_card_shows_the_payout_cap_in_dollars(app, client):
+    """premium $10 × payout multiple 3 = up to $30.00 a week, not "3× the premium"."""
+    with app.app_context():
+        classroom = provision_classroom("chemistry_p1")
+        enable_class_feature(class_id=classroom.class_id, feature="insurance")
+        policy_uuid = _make_policy(classroom)
+        login_student(client, classroom.students[0])
+
+    html = client.get("/student/insurance").get_data(as_text=True)
+
+    assert "Pays out up to <strong>$30.00</strong> a week in total" in html
+    assert "× the premium" not in html
+    assert f'id="buy-{policy_uuid}"' in html, "buying is confirmed in a modal"
+
+
+def test_cancel_modal_promises_the_date_cancelling_actually_gives(app, client):
+    """The modal's "still covered through" date comes from the same read the
+    cancel command uses, so it must equal the date shown after cancelling."""
+    import re
+
+    _classroom, policy_uuid, _txn = _held_coverage(app, client)
+    before = client.get("/student/insurance").get_data(as_text=True)
+    promised = re.search(r"still covered through ([A-Z][a-z]+ \d{1,2}, \d{4})", before)
+    assert promised, "the cancel modal names the last covered day"
+
+    client.post(f"/student/insurance/cancel/{policy_uuid}", data={"passphrase": CANONICAL_STUDENT_PASSPHRASE})
+    after = client.get("/student/insurance").get_data(as_text=True)
+
+    assert "You cancelled this coverage" in after
+    assert f"through <strong>{promised.group(1)}</strong>" in after
+    assert f'id="cancel-{policy_uuid}"' not in after, "no second cancel once cancelled"
