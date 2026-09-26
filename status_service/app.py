@@ -13,7 +13,8 @@ from itsdangerous import BadSignature, URLSafeSerializer
 from .contracts import ExternalStatusNoticeEvent, NoticeState, RecoveryExpectationState
 from .identity import authenticated_operator_email
 from .log_setup import configure_logging
-from status.measurements import COMPONENT_KEYS, classify_component, unavailable_component, validate_snapshot
+from status.measurements import (COMPONENT_KEYS, parse_time, classify_component,
+                                 retained_activity, unavailable_component, validate_snapshot)
 from status.platform import platform_rows
 from .store import FirestoreNoticeStore
 
@@ -21,7 +22,7 @@ COMPONENT_NAMES = {"service": "Application requests", "login": "Login requests",
                    "attendance": "Attendance requests", "payroll": "Payroll requests",
                    "roster": "Roster requests", "classroom_economy": "Classroom economy requests"}
 STATE_LABELS = {"NORMAL": "Within expected range", "ELEVATED_ERRORS": "Elevated response errors",
-                "HIGH_LATENCY": "High latency", "LOW_TRAFFIC": "Limited recent traffic",
+                "HIGH_LATENCY": "High latency",
                 "NO_TRAFFIC": "No recent requests", "MONITOR_UNAVAILABLE": "Monitoring unavailable",
                 "STALE": "Monitoring out of date"}
 
@@ -53,43 +54,66 @@ def measurement_cards(attempt, history, *, now):
     return cards
 
 
-SERVICE_QUESTIONS = {
-    "service": ("Application", "Can I use Classroom Token Hub?"),
-    "login": ("Login", "Can I sign in?"),
-    "attendance": ("Attendance", "Can students clock in and out?"),
-    "payroll": ("Payroll", "Can I run payroll?"),
-    "roster": ("Class roster", "Can I manage my students?"),
-    "classroom_economy": ("Classroom economy", "Can students use their classroom money?"),
+SERVICE_NAMES = {
+    "login": "Login", "attendance": "Attendance", "payroll": "Payroll",
+    "roster": "Class roster", "classroom_economy": "Classroom economy",
 }
 
 
-def teacher_cards(measurements, *, include_service=False):
-    """Present the versioned request proxy in the original simple card vocabulary."""
+def request_outcome(item):
+    """Bounded response observations, never a business-success verdict."""
+    if item["http_5xx_count"]:
+        return "degraded", "Server errors observed"
+    if item["p95_ms"] > 1500:
+        return "degraded", "Slow responses observed"
+    if item["http_2xx_count"] + item["http_3xx_count"]:
+        return "available", "Requests responding"
+    return "unknown", "Requests declined or not found"
+
+
+def teacher_cards(measurements, attempt, *, now):
+    activity = retained_activity(attempt.get("last_activity") if attempt else None, now=now)
     cards = []
     for item in measurements:
-        if item["key"] not in SERVICE_QUESTIONS or (item["key"] == "service" and not include_service):
+        if item["key"] == "service":
             continue
-        state, label = "unknown", "Not recently verified"
-        if item["state"] == "NORMAL":
-            state, label = "available", "Yes"
-        elif item["state"] in {"ELEVATED_ERRORS", "HIGH_LATENCY"}:
-            state, label = "degraded", "Probably not"
-            if (item["request_count"] or 0) >= 10 and (item["http_5xx_percent"] or 0) >= 50:
-                state, label = "unavailable", "Possibly down"
-        name, question = SERVICE_QUESTIONS[item["key"]]
-        cards.append({"key": item["key"], "name": name, "question": question,
-                      "state": state, "label": label})
+        key = item["key"]
+        state, label = "unknown", "Monitoring unavailable"
+        detail = "Recent request evidence could not be collected."
+        if item["state"] == "NO_TRAFFIC":
+            label, detail = "No recent activity", "No matching requests in the last five minutes."
+        elif item["state"] == "STALE":
+            label, detail = "Monitoring out of date", "Recent request evidence is out of date."
+        elif item["collection_state"] == "OK":
+            state, label = request_outcome(item)
+            count = item["request_count"]
+            detail = f"{count} {'request' if count == 1 else 'requests'} in the last five minutes."
+        last = None
+        value = activity.get(key)
+        if value:
+            last = {"label": request_outcome(value["component"])[1], "sampled_at": value["sampled_at"]}
+        cards.append({"key": key, "name": SERVICE_NAMES[key], "state": state,
+                      "label": label, "detail": detail, "last": last})
     return cards
 
 
-def overall_observation(cards, notices):
-    if any(card["state"] == "unavailable" for card in cards):
-        return {"state": "unavailable", "label": "POSSIBLY DOWN"}
-    if notices or any(card["state"] == "degraded" for card in cards):
-        return {"state": "degraded", "label": "SERVICE ISSUES"}
-    if cards and all(card["state"] == "available" for card in cards):
-        return {"state": "available", "label": "LOOKING GOOD"}
-    return {"state": "unknown", "label": "NOT RECENTLY VERIFIED"}
+def overall_observation(checks, measurements, notices):
+    """Availability follows active checks; request failures and notices qualify it."""
+    checked = [row["checked_at"] for row in checks if row["checked_at"]]
+    result = {"state": "unknown", "label": "AVAILABILITY NOT VERIFIED",
+              "checked_at": min(checked, key=parse_time) if checked else None,
+              "detail": "The latest availability checks could not verify the app."}
+    if any(row["state"] == "FAIL" for row in checks):
+        result.update(state="unavailable", label="AVAILABILITY CHECK FAILED",
+                      detail="An application or database availability check failed.")
+    elif notices or any(item["collection_state"] == "OK" and item["http_5xx_count"]
+                        for item in measurements):
+        result.update(state="degraded", label="ISSUES REPORTED",
+                      detail="An operator notice or recent server errors need attention.")
+    elif len(checks) == 2 and all(row["state"] == "PASS" for row in checks):
+        result.update(state="available", label="APP REACHABLE",
+                      detail="The app is responding and its database connection check passed.")
+    return result
 
 
 def parse_notice_time(value):
@@ -162,12 +186,13 @@ def create_app(store=None) -> Flask:
             except (ValueError, TypeError):
                 attempt = None
         measurements = measurement_cards(attempt, store.measurement_history(), now=now)
-        services = teacher_cards(measurements)
+        services = teacher_cards(measurements, attempt, now=now)
+        checks = platform_rows(store.current_platform(), now=now)
         return render_template("public_status.html", notices=active_notices,
                                attempt=attempt, snapshot=attempt.get("snapshot") if attempt else None,
                                capability_cards=services, measurements=measurements,
-                               platform_checks=platform_rows(store.current_platform(), now=now),
-                               overall_status=overall_observation(teacher_cards(measurements, include_service=True), active_notices))
+                               platform_checks=checks,
+                               overall_status=overall_observation(checks, measurements, active_notices))
 
     @app.get("/operator/notices")
     def operator_notices_get():

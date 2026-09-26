@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| SPEC-OPS-006 | 1.1 | 2026-09-21 | 1.0 | Subordinate implementation contract |
+| SPEC-OPS-006 | 1.2 | 2026-09-25 | 1.1 | Subordinate implementation contract |
 
 ## I. Purpose
 
@@ -94,15 +94,15 @@ Initial policy thresholds are strict greater-than comparisons:
 - p95 > 1500 ms: high latency.
 
 404 is a descriptive anomaly signal, not `SYSTEM_FAILURE`: expected resource
-absence may account for it. All threshold crossings remain visible even below
-20 requests. Normal activity requires at least 20 requests and no threshold
-crossing. Positive traffic below 20 with no crossing is `LOW_TRAFFIC`.
-Distinct states are `NORMAL`, `ELEVATED_ERRORS`, `HIGH_LATENCY`, `LOW_TRAFFIC`,
+absence may account for it. All threshold crossings remain visible regardless of sample size. Any nonempty
+window without a threshold crossing is `NORMAL`; there is no minimum count.
+This numerical classification does not certify successful classroom actions.
+Distinct states are `NORMAL`, `ELEVATED_ERRORS`, `HIGH_LATENCY`,
 `NO_TRAFFIC`, `MONITOR_UNAVAILABLE`, and `STALE`. Show all applicable reasons;
 where a single state is required, unavailable/stale takes precedence, followed by
-elevated errors, high latency, no traffic, low traffic and normal. Elevated errors
+elevated errors, high latency, no traffic and normal. Elevated errors
 must distinguish server-error responses from not-found responses in visible wording.
-These initial thresholds are disclosed publicly and changed only with a versioned
+These numerical thresholds are disclosed publicly and changed only with a versioned
 code/contract amendment. They do not diagnose user impact or create incidents.
 
 ## VII. Storage and history
@@ -117,7 +117,7 @@ current pointer backward. Reject stale source snapshots at collector ingestion.
 Daily per-component counters are `sampled`, `measured`, `normal`,
 `elevated_errors`, `high_latency`, and `other`. `sampled` counts unique persisted
 minute windows; `measured` counts eligible windows classified NORMAL,
-ELEVATED_ERRORS or HIGH_LATENCY. Low/no traffic and unavailable/stale windows do
+ELEVATED_ERRORS or HIGH_LATENCY. Empty and unavailable/stale windows do
 not establish a normal operating range and are excluded from that denominator.
 `normal / measured` is the share of eligible observed windows within thresholds.
 With no eligible windows this percentage is unavailable, never 100%.
@@ -129,6 +129,10 @@ the observation time. Sampled and eligible counts remain available for explanati
 Do not sum overlapping five-minute request counts into daily traffic totals.
 A daily single-state tally follows classification precedence while current cards
 preserve all applicable threshold reasons.
+
+Historical rollups retain the policy applied at collection; older windows may have
+required 20 requests. This distinction is disclosed beside history; old counters
+are not recomputed or relabeled as uptime.
 
 Detailed snapshots expire after seven days; daily rollups after 90 days. Use
 separate Firestore TTL expiry fields/provisioning for these collections. Do not
@@ -142,15 +146,35 @@ Public layout follows the shared public-page design in this order: overall statu
 hero, operator incident/update banner, simple teacher/student service cards, and
 platform status with database reachability plus request measurements/history.
 
-Teacher/student cards ask whether the named service is working. Their labels are
-explicitly request-observation estimates: `Yes` for NORMAL, `Probably not` for
-ELEVATED_ERRORS or HIGH_LATENCY, and `Possibly down` when at least ten observed
-requests include 50% or more HTTP 5xx responses. Missing, stale, idle or low-traffic
-observations display `Not recently verified`. This is a public presentation mapping,
-not an internal correctness evaluator, universal guarantee or canonical incident.
-The same severity mapping may summarize current service observations in the hero;
-active operator notices remain visible and must prevent an unqualified reassuring
-summary. Database reachability alone cannot establish feature functionality.
+Overall availability uses the existing independent endpoint/database checks polled
+every minute. Both fresh PASS results yield `APP REACHABLE`, including during idle
+request traffic. A fresh FAIL yields `AVAILABILITY CHECK FAILED`; missing, unknown,
+stale or future checks yield `AVAILABILITY NOT VERIFIED`. A current operator notice
+or fresh nonzero HTTP 5xx count qualifies the summary as `ISSUES REPORTED` unless a
+connectivity check already failed. The hero's timestamp is the older of the two
+available check timestamps, never the request snapshot time. Reachability establishes
+connectivity only, not business correctness.
+
+Feature cards describe recent activity, not yes/no functionality estimates. Any
+fresh 5xx is `Server errors observed`; otherwise p95 above 1,500 ms is `Slow responses
+observed`; otherwise a window containing 2xx/3xx is `Requests responding`. Windows
+with only remaining response classes say `Requests declined or not found` without
+claiming outage. These labels have no minimum count. Quiet windows say `No recent
+activity`; missing/stale collection says `Monitoring unavailable`/`Monitoring out of
+date`. All cards disclose their scope in visible text.
+
+The current telemetry projection retains `last_activity`, a map of the closed
+component keys to their latest nonempty, valid, fresh source window's `sampled_at`,
+`source_latest_at` and validated `component`. The collector updates it atomically
+with the current pointer only when that pointer advances. Idle or failed attempts
+preserve historical activity without refreshing its timestamp; duplicate or delayed
+samples cannot overwrite it. Readers validate retained data and exclude future or
+older-than-seven-day entries; advancing writes prune expired entries. No new raw
+fields, tenant labels or business data are retained. Absence means no retained
+activity. Historical outcomes use neutral styling during inactivity or monitoring
+loss, visibly labeled `Last observed` with the original five-minute window end.
+They never establish present health or conceal a monitoring failure. Public GET
+remains read-only.
 
 Counts, 404/500/5xx percentages, p80/p95, source timing and 90-day history appear in
 the lower platform section. Explain their scope and thresholds there, without long

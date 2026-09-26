@@ -126,3 +126,48 @@ def test_platform_store_rejects_unbounded_records_without_side_effects(database)
     with pytest.raises(ValueError):
         store.append_platform(value)
     assert data == {}
+
+
+def test_activity_survives_idle_and_failed_collection_then_records_recovery(database):
+    store, _ = database
+    burst = sample(count=1)
+    burst['components'][2].update(http_2xx_count=0, http_5xx_count=1, http_500_count=1)
+    store.append_snapshot(burst, NOW)
+    original = deepcopy(store.current_snapshot()['last_activity'])
+    later = NOW + timedelta(minutes=10)
+    store.append_snapshot(sample(later, count=0), later)
+    assert store.current_snapshot()['last_activity'] == original
+    store.append_snapshot(None, later + timedelta(minutes=1), 'ACCESS_DENIED')
+    assert store.current_snapshot()['last_activity'] == original
+    # A delayed duplicate cannot replace the retained error or current failure.
+    store.append_snapshot(sample(later, count=1), later + timedelta(minutes=2))
+    assert store.current_snapshot()['last_activity'] == original
+    recovery = later + timedelta(minutes=3)
+    store.append_snapshot(sample(recovery, count=1), recovery)
+    activity = store.current_snapshot()['last_activity']['attendance']
+    assert activity['component']['http_5xx_count'] == 0
+    assert activity['sampled_at'] == recovery.isoformat()
+
+
+def test_stale_source_does_not_replace_activity_and_expired_context_is_pruned(database):
+    store, _ = database
+    store.append_snapshot(sample(count=1), NOW)
+    original = deepcopy(store.current_snapshot()['last_activity'])
+    later = NOW + timedelta(minutes=10)
+    stale = sample(later)
+    stale['source_latest_at'] = NOW.isoformat()
+    store.append_snapshot(stale, later)
+    assert store.current_snapshot()['last_activity'] == original
+    expired = NOW + timedelta(days=8)
+    store.append_snapshot(sample(expired, count=0), expired)
+    assert store.current_snapshot()['last_activity'] == {}
+
+
+def test_corrupt_retained_context_cannot_poison_collector(database):
+    store, data = database
+    store.append_snapshot(sample(count=1), NOW)
+    data['telemetry_current']['current']['last_activity']['attendance']['component']['raw_log'] = 'PRIVATE'
+    later = NOW + timedelta(minutes=10)
+    store.append_snapshot(sample(later, count=0), later)
+    assert 'attendance' not in store.current_snapshot()['last_activity']
+    assert 'login' in store.current_snapshot()['last_activity']
