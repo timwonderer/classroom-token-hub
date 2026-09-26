@@ -775,12 +775,11 @@ Two defects, one of which only the repository owner can clear because it is a se
 - **Amended 2026-09-26 — the operator console moved to `operator.classroomtokenhub.com`** (operator), and
   that name is fronted by **Cloudflare Access**: an unauthenticated request to `/operator/notices` gets
   Cloudflare's 302 to `classroomtokenhub.cloudflareaccess.com`, and the old name no longer answers. The
-  service still authenticates operators only by Google IAP (`status_service/identity.py`: a signed IAP
-  assertion checked against `IAP_AUDIENCE`, with the `X-Goog-Authenticated-User-Email` fallback). Whether
-  IAP still sits behind Cloudflare, or Cloudflare replaced it, is unconfirmed; items 2–4 below were
-  written for IAP and must be re-verified against the actual chain. If IAP is gone, the header fallback
-  is trusted with nothing guaranteeing the header's origin, and the service needs to verify
-  Cloudflare's own `Cf-Access-Jwt-Assertion` instead. The historical note below is kept as recorded.
+  service authenticates operators by Google IAP (`status_service/identity.py`: a signed IAP assertion
+  checked against `IAP_AUDIENCE`, with the `X-Goog-Authenticated-User-Email` fallback). **Confirmed by the
+  operator:** Cloudflare Access is a pre-launch/maintenance gate in front, and IAP behind it is the
+  authentication. Items 2–4 below therefore still apply as written, at the new hostname. The
+  historical note below is kept as recorded.
 - **The operator console's front door was `operator.status.classroomtokenhub.com`,** served by a
   Google Cloud load balancer (`136.68.93.205`, with a Google-managed certificate for that name). An
   unauthenticated request to `/operator/notices` or `/health` gets IAP's own 302 to Google sign-in
