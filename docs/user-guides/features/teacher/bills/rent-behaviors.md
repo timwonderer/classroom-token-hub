@@ -39,13 +39,15 @@ The choice between once-per-period and recurring is the difference between a fin
 
 Expand **Student Payment Options**. Three switches, each independent.
 
-- **Enable Bill Preview** — *Students can see incoming bills before due date.* Turning it on reveals **Preview Days Before Due**: *How many days before due date students can see the bill.*
+- **Enable Bill Preview** — *Each rent bill goes out early, and students can pay it before its period starts.* Turning it on reveals **Preview Days Before Due**: how many days before the due date each bill goes out. With preview off, bills go out on the due date itself.
 - **Allow Incremental Payment** — *Students can pay partial rent throughout the period before due date.*
 - **Prevent Purchase When Late** — the label and its effect change depending on whether you have rent items configured:
   - With rent items: **Prevent Purchase of Items Not Part of Rent** — *When late on rent, students can only purchase items covered by rent (at à la carte prices), blocking all other store items.*
   - Without rent items: **Prevent Purchase/Redemption When Late** — *Block all store purchases and item redemptions if student is late on rent.*
 
 Bill preview and incremental payment are the two that change student behaviour most. A student who cannot see the bill coming cannot plan for it, and a student who can only pay in one lump has to hold the full amount rather than chipping away.
+
+Paying early does not start a period early. Perks tied to rent begin when the paid period begins, and a student who pays next period's bill during the preview is still billed for, and still owes, the current one. Students always see their oldest unpaid bill first.
 
 ## Important notes
 
@@ -57,6 +59,9 @@ Bill preview and incremental payment are the two that change student behaviour m
 
 > [!NOTE]
 > **A student is not "late" until grace ends.** Lateness is measured from the end of the grace period, not from the due date, so a three-day grace means nothing keyed on lateness fires until day four.
+
+> [!NOTE]
+> **Preview also decides when your changes land.** A policy is fixed to a period when that period's bills go out, so with a seven-day preview a change you save in the last seven days of a period starts one period later than you might expect. See [When a change takes effect](rent-settings.md#when-a-change-takes-effect).
 
 > [!TIP]
 > Turn on bill preview before you turn on penalties. A student who has never seen a bill coming and then gets fined for missing it learns that the system is arbitrary, which is the opposite of the lesson.

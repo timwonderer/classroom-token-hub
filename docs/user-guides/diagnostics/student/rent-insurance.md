@@ -13,10 +13,11 @@ related:
 If something doesn't look right with your Rent and Insurance, check this guide first before reporting an issue to your teacher.
 
 ## If rent is missing or cannot be paid, check these first:
-- Is rent enabled for your class period?
-- Are you viewing the correct class? Rent is per join code.
-- Has the rent cycle started? (First due date or preview window).
+- Is rent enabled for your class period? If your teacher turned it off and you owe nothing, the Rent page goes away. If you still owe rent, it stays so you can pay.
+- Are you viewing the correct class? Each class has its own rent.
+- Has your first bill been sent yet? Bills go out on the due date, or a few days before it if your class uses bill preview.
 - Do you have enough checking balance for the payment amount?
+- Looking for next period's bill? The page shows your oldest unpaid bill first. Pay it, and the next one appears.
 
 ## If store purchases are blocked due to rent, check these first:
 - Did your teacher enable "prevent purchases when late"?
@@ -28,10 +29,15 @@ If something doesn't look right with your Rent and Insurance, check this guide f
 - Are there repurchase cooldowns or no-repurchase rules active?
 - Do you have enough checking balance for the premium?
 
+## If your coverage says Premium overdue, check these first:
+- The automatic premium payment ran when checking was too low. The premium is still owed.
+- Open **View policy** on the coverage card, enter your passphrase, and press **Pay overdue premium**.
+- Coverage comes back from the moment you pay. Anything that happened while it was paused is not covered.
+
 ## If a claim is rejected before submission, check these first:
 - Has coverage started yet, or are you in a waiting period?
-- Is your premium current?
-- Have you reached the claim window or max claims per period?
+- Is your premium paid? Claims are refused while your coverage card shows **Premium overdue**.
+- Have you reached the claim window or max claims for this coverage period?
 
 ## This is normal and expected when:
 - Most conditions block actions appropriately, but if you have a unique case, refer to the checks above.

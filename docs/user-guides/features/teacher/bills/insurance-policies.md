@@ -28,8 +28,9 @@ A policy is a contract template. Students buy from it; what they buy is frozen a
 3. Choose an **Insurance Type**. This decides which of the remaining fields you are asked for.
 4. Set the **Premium** and a **Charge Frequency** of **Weekly** or **Monthly**.
 5. Fill in the type-specific fields (see below).
-6. Optionally put the policy in a tier group.
-7. Choose **Create policy**.
+6. Set the **Recurring billing** terms (see below).
+7. Optionally put the policy in a tier group.
+8. Choose **Create policy**.
 
 ### Choosing a type
 
@@ -42,11 +43,25 @@ The type is the biggest decision on the form, because it changes both what the p
 | Claims / week-equiv. | ● | — | ● |
 | Claim Window (days) | ● | — | — |
 | Claimable dates / week-equiv. | — | ● | — |
-| Waiting Period (days) | — | — | ● |
+| Waiting Period (days) | ● | ● | ● |
 
 Fields that do not apply are hidden as you switch types, and they are not submitted at all — so switching type on an existing policy discards the terms that belonged to the old type.
 
 **Claim Window** is the deadline students face: how many days after an incident they may still file. **Claims / week-equiv.** and **Claimable dates / week-equiv.** are the usage caps.
+
+### Recurring billing
+
+Every policy bills a premium each period for as long as the student keeps it. Each student's periods start from the moment they bought: weekly is every 7 days from the purchase day, monthly is the same date each month (a date the month does not have, like the 31st, rolls forward to the 1st of the next month). Every period costs the premium the student bought at, however long the month.
+
+| Field | What it does |
+| --- | --- |
+| **Bill ahead (days)** | How many days before each new period its premium is billed and automatically paid from the student's checking. At least 1, and less than a week for weekly or 28 days for monthly. |
+| **If a premium goes unpaid** | **Keep billing; coverage pauses until every premium is paid**, or **Cancel coverage after a number of days unpaid**. |
+| **Cancel after (days unpaid)** | Only for the cancel option. The count starts when the student's coverage first pauses and does not reset if they pay some of what they owe. It may be longer than one period. |
+
+A premium the automatic payment could not cover stays owing, and the student can pay it from their policy page at any time. Until every premium that has come due is paid, their coverage is **paused**: claims are refused, and paying later restores coverage from that moment on, never for the time it was paused.
+
+Under the cancel option, coverage that stays unpaid past the limit **expires** — it is not revoked. The student still owes the premiums for periods that had already started, and paying them afterwards does not bring the coverage back.
 
 ### Tier groups
 
@@ -81,10 +96,13 @@ A hidden policy also carries **Put back on sale**. Hiding is not reversible in t
 > **An edit retires the version you edited, and retiring is permanent.** You cannot go back to the previous terms by undoing the edit — the old policy is closed to new purchases for good. To return to them you would build them again as a new policy. Read your changes back before saving.
 
 > [!IMPORTANT]
-> **Waiting Period delays when a policyholder can claim.** On a non-monetary policy, coverage becomes claimable at the start of the class day *N* days after purchase — a seven-day wait bought on a Monday opens the following Monday. A claim filed earlier is refused. Set it to zero if you want coverage effective immediately. Switching tiers within a group is a new purchase, so the new plan's wait starts over.
+> **Waiting Period delays when a policyholder can claim.** On any policy type, coverage becomes claimable at the start of the class day *N* days after purchase — a seven-day wait bought on a Monday opens the following Monday. A claim filed earlier is refused. Set it to zero if you want coverage effective immediately. Switching tiers within a group is a new purchase, so the new plan's wait starts over.
 
 > [!IMPORTANT]
 > **Terms are frozen at purchase.** A new version changes what *future* buyers get. Everyone holding the old version keeps the terms they bought until their coverage period ends. This is the lesson the feature exists to teach, and it is why there is no in-place edit.
+
+> [!IMPORTANT]
+> **Choose the unpaid-premium rule deliberately.** *Keep billing* never ends a policy, so a student who stops paying piles up premiums while uncovered. *Cancel after N days* ends it and stops the pile-up, but the student loses the coverage. Neither refunds anything.
 
 > [!NOTE]
 > **Values outside the recommended range are allowed.** The Economic Engine's suggestions are advisory. Only hard limits are enforced — premium at or above zero, reimbursement at or below 100%, no negative terms.

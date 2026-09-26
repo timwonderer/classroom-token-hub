@@ -1525,6 +1525,10 @@ summaries below suggest:
   passing FEAT-level unit tests and zero production reachability. Verified at
   the code layer 2026-09-23; see the index's Gap 2 for the full chain.
   Reclassifying it is an operator decision and has not been made.
+  **Resolved 2026-09-25:** the operator's rule is that a waiting period applies to every policy
+  type. The submission gate now runs for all types (`_enforce_waiting_period` in
+  `app/feats/insurance_claim_feat.py`, pinned by `TestWaitingPeriodAppliesToEveryType`), which also
+  makes the claim-review page's "claimable from" wording below correct for every type.
 
 The index also records one adjacent defect found while verifying that gap:
 `admin_process_claim.html` tells a reviewing teacher "claimable from `<date>`"

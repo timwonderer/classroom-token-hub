@@ -26,7 +26,9 @@ Which form you get depends on the policy's type, and the two are quite different
 
 ### Getting to the form
 
-Open **Bills → Insurance**, find the policy under **Your coverage**, and press **File a claim**. You can only claim against coverage you currently hold — if you cancelled it and the period has ended, the button is gone and going to the page directly says *You don't hold active coverage for that policy.*
+Open **Bills → Insurance**, find the policy under **Your coverage**, and press **File a claim**. You can only claim against coverage you currently hold — if you cancelled it and your coverage has ended, the button is gone and going to the page directly says *You don't hold active coverage for that policy.*
+
+Your premiums must be paid when you file. If the card shows **Premium overdue**, your coverage is paused and the claim is refused — pay the premium from **View policy** first. Paying brings coverage back from that moment on, so it does not cover anything that happened while it was paused. See [Insurance Coverage](insurance-coverage.md#paying-premiums).
 
 The top of the form restates the policy's terms so you can check them before filing: what percentage it reimburses, the *up to N× premium* period ceiling, and how many days you have to file.
 
@@ -66,7 +68,7 @@ The app refuses some claims before your teacher ever sees them. The message tell
 | --- | --- |
 | *Source transaction predates the purchased coverage* | The purchase happened before you bought the policy. Insurance never covers backwards. |
 | *Filing window for this transaction has closed* | You waited too long. The window is on the policy card at the top of the form. |
-| *Claim allowance exhausted (N/M for this period)* | You have used all your claims for this billing period. |
+| *Claim allowance exhausted (N/M for this period)* | You have used all your claims for this coverage period. |
 | *No remaining period payout capacity* | Approved payouts have already hit the *up to N× premium* ceiling for this period. |
 | *Date {date} predates the purchased coverage* | Same rule as above, for a productivity date. |
 | *Date {date} is in the future* | You can only claim days that have happened. |
@@ -80,6 +82,9 @@ The app refuses some claims before your teacher ever sees them. The message tell
 
 > [!WARNING]
 > **Insurance never covers anything from before you bought it.** Both claim types check the incident against your purchase timestamp and refuse anything earlier. Buying a policy after the thing goes wrong does not work.
+
+> [!NOTE]
+> **Your claim is judged when you file it.** A claim filed while your coverage was active stays valid even if your coverage pauses or ends while your teacher is still reviewing it. Allowances and payout ceilings count per **coverage period** — the period your claim was filed in — and reset when the next period starts.
 
 > [!NOTE]
 > **The two ceilings are separate.** The *claim allowance* limits how many times you can file in a period and counts rejections. The *payout capacity* limits how much money you can actually receive in a period and is only consumed by approved claims. You can run out of either one first.

@@ -30,7 +30,17 @@ Diagnostic guide for resolving errors related to rent billing, late penalties, a
 
 **Cause 3: Student in wrong class context**
 - **Check:** Verify the student's dashboard class switcher.
-- **Fix:** Rent is calculated per join code. Ask the student to switch to the correct class.
+- **Fix:** Rent is billed per class. Ask the student to switch to the correct class.
+
+## A rent change has not taken effect
+
+### Symptoms
+- You saved new rent terms but students are still billed the old amount.
+
+### Causes & Solutions
+**Cause 1: The period was already billed**
+- **Check:** Look for the *These rent terms start [date]* notice on the Rent page.
+- **Fix:** Nothing to fix. Terms are fixed to a period when its bills go out. With bill preview on, a change saved during the preview window starts one period later. See [When a change takes effect](../../features/teacher/bills/rent-settings.md#when-a-change-takes-effect).
 
 ## Rent payments look wrong
 
@@ -65,6 +75,10 @@ Diagnostic guide for resolving errors related to rent billing, late penalties, a
 **Cause 2: Policy exclusivity**
 - **Check:** See if the student is already enrolled in a different tier.
 - **Fix:** One policy per tier is enforced when tiers are configured.
+
+**Cause 3: Premium overdue**
+- **Check:** Ask the student whether their coverage card reads **Premium overdue**.
+- **Fix:** Their automatic premium payment failed and coverage is paused. They pay it from **View policy** on that card; claims work again from the moment they pay. Claims about things that happened while coverage was paused stay uncovered.
 
 ## When to Contact Support
 Report this issue if:
