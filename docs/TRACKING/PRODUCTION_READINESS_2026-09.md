@@ -778,8 +778,11 @@ Two defects, one of which only the repository owner can clear because it is a se
   service authenticates operators by Google IAP (`status_service/identity.py`: a signed IAP assertion
   checked against `IAP_AUDIENCE`, with the `X-Goog-Authenticated-User-Email` fallback). **Confirmed by the
   operator:** Cloudflare Access is a pre-launch/maintenance gate in front, and IAP behind it is the
-  authentication. Items 2–4 below therefore still apply as written, at the new hostname. The
-  historical note below is kept as recorded.
+  authentication. Items 2–4 below therefore still apply as written, at the new hostname. **Cleared for
+  launch 2026-09-26 on the operator's report:** allowlisted sign-in through Cloudflare then IAP has worked
+  repeatedly. Not separately confirmed, and not blocking with both gates in front: a non-allowlisted
+  account's 401, and the `via=` path in the log (assertion vs trusted header). The historical note below
+  is kept as recorded.
 - **The operator console's front door was `operator.status.classroomtokenhub.com`,** served by a
   Google Cloud load balancer (`136.68.93.205`, with a Google-managed certificate for that name). An
   unauthenticated request to `/operator/notices` or `/health` gets IAP's own 302 to Google sign-in
