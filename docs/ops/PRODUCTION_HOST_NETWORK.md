@@ -124,16 +124,14 @@ These must stay true. Each line is a read-only check.
    `/etc/nginx/conf.d/cloudflare-realip.conf` (`set_real_ip_from`) must track the same
    list, or real-client IPs and rate limiting go wrong.
 
-   **Not true on 2026-09-27.** The cloud firewall matched Cloudflare's list, but nginx's
-   `set_real_ip_from` did not:
-   - It lacks `131.0.72.0/22` and `2c0f:f248::/32`. Traffic from those Cloudflare ranges
-     is admitted by the firewall but not unwrapped by nginx, so the app sees the
-     Cloudflare edge address as the client. Those visitors are logged under it and
-     rate-limited as one client.
-   - It also trusts `100.64.0.0/10`, the Tailscale address block, so a tailnet device
-     can set its apparent client address with `CF-Connecting-IP`. That is limited to
-     tailnet devices and may be deliberate, but it is not written down anywhere else.
-   - Fixing the two missing ranges is a production nginx change awaiting approval.
+   **Fixed on 2026-09-27.** nginx's list lacked `131.0.72.0/22` and `2c0f:f248::/32`,
+   which the firewall admits. Visitors on those ranges were seen as the Cloudflare edge
+   address and rate-limited as one client. Both ranges were added at 16:14 UTC (backup
+   `/root/cloudflare-realip.conf.bak-20260927T161412Z`; `nginx -t`, then a reload). The
+   list now equals Cloudflare's published ranges plus `100.64.0.0/10`, the Tailscale
+   address block. That entry is deliberate: the file marks it as the admin access path.
+   It lets a tailnet device set its apparent client address with `CF-Connecting-IP`,
+   which is acceptable because only tailnet devices can do it.
 3. **Public probes time out.** From a non-Cloudflare, non-tailnet address, every port
    including 443 on `24.199.127.184` should time out. A `refused` or an answer means the
    cloud firewall changed.
