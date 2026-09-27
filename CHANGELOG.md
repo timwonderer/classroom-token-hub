@@ -9,7 +9,7 @@ and this project follows semantic versioning principles.
 ## [Unreleased]
 
 ### Fixed
-- **The release workflow's health probe checked nginx instead of the application (2026-09-26)** — `release-v2.yml` curled `http://127.0.0.1/health`, which is nginx on :80 and answers with a 301 to HTTPS. `curl --fail` accepts a 301, so the probe compared the redirect page to `ok` and failed a healthy release (run 36287284998). It now probes gunicorn on `127.0.0.1:8000`, retrying for up to 30 seconds so it doesn't race the restart. The fix is workflow-only; the application code running in production is unchanged.
+- **The release workflow's health probe checked nginx instead of the application (2026-09-26)** — `release-v2.yml` curled `http://127.0.0.1/health`, which is nginx on :80 and answers with a 301 to HTTPS. `curl --fail` accepts a 301, so the probe compared the redirect page to `ok` and failed a healthy release (run 36287284998). It now probes gunicorn on `127.0.0.1:8000`, retrying against a 30-second deadline so it doesn't race the restart; each request is capped at 2 seconds (`curl --max-time 2`), so a connection that opens but never answers can't hold the probe past the deadline by more than one attempt. The fix is workflow-only; the application code running in production is unchanged.
 
 ### Documentation
 - **v2.0.0 production transition record (2026-09-26)** — `docs/ops/audits/TRANSITION_2026-09-26_26d1792b5.md` records the launch under `SOP-DEP-002` §X/§XI: the exact release SHA, the two failed runs and their fixes, the empty-schema rebuild to `d7a3e9b1c5f2`, host-local route checks, and the go decision with its sign-offs. Signed-in flows on production are recorded as deferred to first real use, not as verified.
