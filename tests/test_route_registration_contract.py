@@ -103,3 +103,58 @@ def test_removed_dead_routes_stay_removed(app, path):
         f"{path} was removed as a dead endpoint and must not be re-registered "
         "without a caller. See REF-API-001 §VII-D."
     )
+
+
+# Endpoint names also live outside the URL map, in sets that grant or route
+# behaviour by name. Removing a route leaves its name behind in them, silently:
+# `admin.onboarding_skip` stayed in `_CLASSLESS_ADMIN_ENDPOINTS` after its route
+# was deleted (2026-09-27). A stale name grants nothing today, but it is the
+# spelling a future route of the same name would inherit an exemption through.
+def _endpoint_name_registries():
+    from app.auth import _CLASSLESS_ADMIN_ENDPOINTS
+    from app.observability import CAPABILITY_BY_ENDPOINT
+    from app.routes.admin import (
+        ADMIN_CLASS_CONTEXT_ENDPOINTS,
+        ADMIN_CLASS_CONTEXT_REDIRECTS,
+        ADMIN_FEATURE_ENDPOINTS,
+    )
+    from app.routes.student import STUDENT_FEATURE_ENDPOINTS, _SURVIVING_PREMIUM_ENDPOINTS
+    from app.services.tlcp import DEFAULT_NO_CONTEXT_ENDPOINTS, DEFAULT_PUBLIC_ENDPOINTS
+
+    return {
+        "auth._CLASSLESS_ADMIN_ENDPOINTS": set(_CLASSLESS_ADMIN_ENDPOINTS),
+        "observability.CAPABILITY_BY_ENDPOINT": set(CAPABILITY_BY_ENDPOINT),
+        "admin.ADMIN_CLASS_CONTEXT_ENDPOINTS": set(ADMIN_CLASS_CONTEXT_ENDPOINTS),
+        "admin.ADMIN_CLASS_CONTEXT_REDIRECTS": set(ADMIN_CLASS_CONTEXT_REDIRECTS)
+        | set(ADMIN_CLASS_CONTEXT_REDIRECTS.values()),
+        "admin.ADMIN_FEATURE_ENDPOINTS": set(ADMIN_FEATURE_ENDPOINTS),
+        "student.STUDENT_FEATURE_ENDPOINTS": set(STUDENT_FEATURE_ENDPOINTS),
+        "student._SURVIVING_PREMIUM_ENDPOINTS": set(_SURVIVING_PREMIUM_ENDPOINTS),
+        "tlcp.DEFAULT_PUBLIC_ENDPOINTS": set(DEFAULT_PUBLIC_ENDPOINTS),
+        "tlcp.DEFAULT_NO_CONTEXT_ENDPOINTS": set(DEFAULT_NO_CONTEXT_ENDPOINTS),
+    }
+
+
+def unregistered_endpoint_names(registries, registered):
+    """Return ``registry: [names]`` for every name no rule is registered under."""
+    return {
+        registry: sorted(names - registered)
+        for registry, names in registries.items()
+        if names - registered
+    }
+
+
+def test_every_endpoint_name_in_a_registry_is_registered(app):
+    registered = {rule.endpoint for rule in _rules(app)}
+    stale = unregistered_endpoint_names(_endpoint_name_registries(), registered)
+    assert not stale, f"endpoint names with no registered route: {stale}"
+
+
+def test_unregistered_endpoint_names_reports_a_removed_route():
+    """Mutation proof (SOP-TEST-003 §IX.A): the exact stale name this guard
+    was written after, beside a live sibling that must not be reported."""
+    registries = {"auth._CLASSLESS_ADMIN_ENDPOINTS": {"admin.onboarding_skip", "admin.onboarding_skip_task"}}
+    registered = {"admin.onboarding_skip_task"}
+    assert unregistered_endpoint_names(registries, registered) == {
+        "auth._CLASSLESS_ADMIN_ENDPOINTS": ["admin.onboarding_skip"],
+    }
