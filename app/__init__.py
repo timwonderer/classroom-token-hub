@@ -534,6 +534,15 @@ def create_app():
             return None
         if request.endpoint in {"main.health_check", "main.health_status"}:
             return None
+        # A loopback request carrying no proxy header never passed through
+        # nginx: it is a host-local caller such as the Prometheus /metrics
+        # scrape or an operator's curl over Tailscale. It cannot have
+        # bypassed Cloudflare, so there is nothing to warn about.
+        if request.remote_addr in ('127.0.0.1', '::1') and not any(
+            request.headers.get(h)
+            for h in ('X-CF-Edge-IP', 'X-Real-IP', 'X-Forwarded-For', 'CF-Connecting-IP')
+        ):
+            return None
 
         # Only check in production
         if app.config.get('ENV') == 'production':
@@ -609,7 +618,16 @@ def create_app():
             # Imports are here to avoid circular dependencies
             from app.models import FeatureSettings
             from app.routes.student import get_feature_settings_for_student
-            return {'feature_settings': get_feature_settings_for_student()}
+            from app.services.context_resolver import ContextResolutionError
+            try:
+                return {'feature_settings': get_feature_settings_for_student()}
+            except ContextResolutionError:
+                # No class context is the normal state of a signed-out page,
+                # a sysadmin page, or a teacher who has not picked a class;
+                # the defaults are the right answer there, not a fallback.
+                # The resolver logs the one anomalous cell itself.
+                from app.models import ClassFeature
+                return {'feature_settings': ClassFeature.defaults_dict()}
         except Exception as e:
             # This can happen during `flask db` commands before the table exists.
             # Fallback to defaults to avoid breaking CLI commands.

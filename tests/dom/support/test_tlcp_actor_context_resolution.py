@@ -1,3 +1,4 @@
+import pytest
 from flask import session
 
 from app import db
@@ -121,57 +122,81 @@ def test_DOM_SUP_001__sysadmin_request_carrying_canonical_context_fails_closed(a
     )
 
 
-def test_DOM_SUP_001__resolve_actor_context_logs_missing_canonical_context(app):
+def _tlcp_violations(mock_error):
+    return [
+        call.args[0] for call in mock_error.call_args_list
+        if "TLCP-INVARIANT-VIOLATION" in str(call.args[0])
+    ]
+
+
+# Requests that carry no class context by nature: probes, sign-in and sign-up
+# pages, an unmatched URL, the capability-token verification page, a
+# sysadmin page. Production logged 345 "missing canonical context" ERROR lines
+# for requests like these in its first five hours (2026-09-27).
+CONTEXT_FREE_PATHS = [
+    "/health",
+    "/health/status",
+    "/",
+    "/.git/config",
+    "/student/login",
+    "/admin/login",
+    "/admin/signup",
+    "/sysadmin/login",
+    "/api/tips/teacher",
+    "/verify/hallpass/not-a-real-token",
+]
+
+
+@pytest.mark.parametrize("path", CONTEXT_FREE_PATHS)
+def test_DOM_SUP_001__a_request_without_class_context_is_not_a_violation(app, path):
+    from unittest.mock import patch
+
+    client = app.test_client()
+    with patch("app.services.tlcp.current_app.logger.error") as mock_error:
+        client.get(path)
+        assert _tlcp_violations(mock_error) == [], path
+
+
+def test_DOM_SUP_001__absent_context_records_nothing_even_when_signed_in(app):
+    """TLCP no longer decides whether a route needed context: that is the
+    admission decorators' job (see the next test). A signed-in session with no
+    context is correlated as nothing, not classified."""
     from unittest.mock import patch
 
     with app.test_request_context("/student/help-support/submit-issue", method="POST"):
+        session["user_id"] = 1
         with patch("app.services.tlcp.current_app.logger.error") as mock_error:
-            context = resolve_actor_context(None)
-            logged = [call.args[0] for call in mock_error.call_args_list]
-
-    assert context is None
-    assert any("TLCP-INVARIANT-VIOLATION: missing canonical context" in msg for msg in logged)
+            assert resolve_actor_context(None) is None
+            assert _tlcp_violations(mock_error) == []
 
 
-def test_DOM_SUP_001__resolve_actor_context_ignores_admin_signup_path(app):
-    from unittest.mock import patch
+def test_DOM_IDEN_006__a_contradictory_signed_in_context_is_still_refused_and_logged(client, caplog):
+    """Removing the TLCP classification weakens nothing: a signed-in teacher
+    whose seat pointer names another class is refused at admission, and the
+    resolver records the contradiction itself."""
+    import logging
 
-    with app.test_request_context("/admin/signup", method="POST"):
-        with patch("app.services.tlcp.current_app.logger.error") as mock_error:
-            context = resolve_actor_context(None)
-            logged = [call.args[0] for call in mock_error.call_args_list]
+    from app.feats.base import FEATContext
+    from app.models import Seat
+    from tests.helpers.classroom_initializer import initialize, initialize_as_teacher
 
-    assert context is None
-    assert logged == []
+    other = initialize("ap_csp_p3", client.application)
+    active = initialize_as_teacher("chemistry_p1", client, client.application)
+    foreign_seat = Seat.query.filter_by(class_id=other.class_id, role="teacher").one()
+    with FEATContext("FEAT-TEST-SETUP", idempotency_key="tlcp:foreign-seat-pointer"):
+        user = db.session.get(User, active.teacher_user.id)
+        user.last_active_seat_id = foreign_seat.id
+        db.session.flush()
 
+    with caplog.at_level(logging.WARNING):
+        response = client.get("/admin/students")
 
-def test_DOM_SUP_001__student_login_does_not_require_canonical_context(app):
-    """Symmetric with admin.login (already exempt): the student login page
-    is loaded and posted to before any session/context exists, so it must
-    not log an invariant violation either -- it previously wasn't in
-    DEFAULT_PUBLIC_ENDPOINTS even though admin.login was.
-    """
-    from unittest.mock import patch
-
-    client = app.test_client()
-    with patch("app.services.tlcp.current_app.logger.error") as mock_error:
-        response = client.get("/student/login")
-        logged = [call.args[0] for call in mock_error.call_args_list]
-
-    assert response.status_code == 200
-    assert logged == []
-
-
-def test_DOM_SUP_001__tips_api_does_not_require_canonical_context(app):
-    from unittest.mock import patch
-
-    client = app.test_client()
-    with patch("app.services.tlcp.current_app.logger.error") as mock_error:
-        response = client.get("/api/tips/teacher")
-        logged = [call.args[0] for call in mock_error.call_args_list]
-
-    assert response.status_code == 200
-    assert logged == []
+    assert response.status_code in (302, 401)
+    assert "/admin/students" not in response.headers.get("Location", "")
+    assert any(
+        "Canonical seat pointer crosses class boundary" in record.getMessage()
+        for record in caplog.records
+    )
 
 
 def test_DOM_SUP_001__resolve_actor_context_logs_missing_canonical_seat(app):
