@@ -23,6 +23,19 @@ from __future__ import annotations
 from tests.helpers.classroom_initializer import initialize_as_teacher
 
 
+def _persisted_passkeys(app, user_id):
+    """Read credentials the way a later request would: in a fresh app context
+    with a new session, so only committed rows are visible. The JSON listing
+    route these tests once read through was removed 2026-09-27 (REF-API-001
+    §VII-D); the Settings page renders the same list server-side."""
+    from app.extensions import db
+    from app.services.admin_identity_service import list_admin_credentials
+
+    with app.app_context():
+        db.session.remove()
+        return list_admin_credentials(user_id)
+
+
 def _register(client, name="Test Passkey"):
     return client.post(
         "/admin/passkey/register/finish",
@@ -37,11 +50,9 @@ def test_a_registered_passkey_survives_past_the_request_that_saved_it(app, clien
     assert resp.status_code == 200
     assert resp.get_json()["success"] is True
 
-    # A FRESH request (its own request-scoped session) must still see it --
-    # this is exactly what the live report showed failing.
-    listing = client.get("/admin/passkey/list")
-    assert listing.status_code == 200
-    names = [p["name"] for p in listing.get_json()["passkeys"]]
+    # A FRESH session must still see it -- this is exactly what the live
+    # report showed failing.
+    names = [p.authenticator_name for p in _persisted_passkeys(app, classroom.teacher_user.id)]
     assert "YubiKey 5" in names, (
         "the credential vanished across requests -- the write was never committed"
     )
@@ -55,16 +66,18 @@ def test_a_deleted_passkey_stays_deleted_past_the_request(app, client):
     classroom = initialize_as_teacher("chemistry_p1", client, app)
     _register(client, "Old Phone")
 
-    listing = client.get("/admin/passkey/list").get_json()
-    passkey_id = next(p["id"] for p in listing["passkeys"] if p["name"] == "Old Phone")
+    passkey_id = next(
+        p.id for p in _persisted_passkeys(app, classroom.teacher_user.id)
+        if p.authenticator_name == "Old Phone"
+    )
 
     delete_resp = client.delete(f"/admin/passkey/{passkey_id}/delete")
     assert delete_resp.status_code == 200
     assert delete_resp.get_json()["success"] is True
 
     # Fresh request again -- the deletion must have actually committed too.
-    listing_after = client.get("/admin/passkey/list").get_json()
-    assert all(p["id"] != passkey_id for p in listing_after["passkeys"]), (
+    listing_after = _persisted_passkeys(app, classroom.teacher_user.id)
+    assert all(p.id != passkey_id for p in listing_after), (
         "the deleted credential reappeared -- the delete was never committed"
     )
 

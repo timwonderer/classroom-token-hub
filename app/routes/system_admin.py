@@ -138,43 +138,6 @@ def _tail_log_lines(file_path: str, max_lines: int = 200, chunk_size: int = 8192
 
 # -------------------- AUTHENTICATION --------------------
 
-@sysadmin_bp.route('/auth-check', methods=['GET'])
-@limiter.exempt
-def auth_check():
-    """Internal auth probe for Nginx `auth_request`.
-
-    Returns:
-      - 204 if the current session is an authenticated system admin
-      - 401 otherwise
-
-    Note: Do NOT decorate with `@system_admin_required` because that may redirect
-    to the login page; `auth_request` needs a clean 2xx/401 signal.
-    """
-    # Validate sysadmin auth via canonical context.
-    from app.services.context_resolver import (
-        resolve_canonical_context, BoundaryContext,
-        ContextNotEstablished, ContextMismatch, ContextForbidden,
-    )
-    try:
-        ctx = resolve_canonical_context(require_class=False)
-    except (ContextNotEstablished, ContextMismatch, ContextForbidden):
-        raise Unauthorized("System admin authentication required")
-    if not isinstance(ctx, BoundaryContext) or ctx.actor_role != 'sysadmin':
-        raise Unauthorized("System admin authentication required")
-
-    # Enforce session timeout for security, consistent with other decorators.
-    last_activity_str = session.get("last_activity")
-    if last_activity_str:
-        last_activity = datetime.fromisoformat(last_activity_str)
-        last_activity = ensure_utc(last_activity)
-        if _system_admin_timeout_expired(last_activity):
-            _expire_system_admin_session()
-            raise Unauthorized("Session expired")
-
-    # Update activity to keep session alive.
-    session["last_activity"] = utc_now().isoformat()
-    return ("", 204)
-
 @sysadmin_bp.route('/login', methods=['GET', 'POST'])
 @limiter.limit("10 per minute", methods=["POST"])
 @requires_feat_context("FEAT-OPS-001")

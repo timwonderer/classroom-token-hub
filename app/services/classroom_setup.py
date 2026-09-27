@@ -327,27 +327,6 @@ def update_or_create_roster_seat(
     )
 
 
-def create_pending_student_seat(
-    *,
-    class_id: str,
-    dedupe_code: str,
-    has_received_rent_exemption: bool = False,
-    block: str | None = None,
-    claimed_at=None,
-) -> Seat:
-    """Create a canonical pending student seat without binding a user."""
-    seat = Seat(
-        class_id=class_id,
-        dedupe_code=dedupe_code,
-        has_received_rent_exemption=has_received_rent_exemption,
-        block=block,
-        claimed_at=claimed_at,
-    )
-    db.session.add(seat)
-    db.session.flush()
-    return seat
-
-
 def create_roster_student_seat(
     *,
     class_id: str,

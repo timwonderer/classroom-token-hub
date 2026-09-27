@@ -47,11 +47,6 @@ def seed_sysadmin_session(
         sess["last_activity"] = (utc_now() - timedelta(minutes=minutes_ago)).isoformat()
 
 
-def get_sysadmin_auth_check(client):
-    """Fetch the sysadmin auth-check route."""
-    return client.get("/sysadmin/auth-check")
-
-
 def get_sysadmin_grafana_auth_check(client):
     """Fetch the Grafana auth-check route."""
     return client.get("/sysadmin/grafana/auth-check")

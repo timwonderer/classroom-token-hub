@@ -1,7 +1,7 @@
 """Roster deletion is attributed to the FEAT that owns what it destroys.
 
-``/admin/student/delete`` and ``/admin/students/bulk-delete`` reach three
-different terminal scopes depending on what is left on the roster afterwards:
+``/admin/students/bulk-delete`` reaches three different terminal scopes
+depending on what is left on the roster afterwards:
 
 * removing some seats leaves the class and the principal standing;
 * removing the last seats destroys the class universe, including the

@@ -120,27 +120,6 @@ def admin_delete_class(client: FlaskClient, **payload: Any):
     return client.post("/admin/join-code/delete", json=dict(payload))
 
 
-def admin_add_individual_student(
-    client: FlaskClient,
-    *,
-    first_name: str,
-    last_name: str,
-    dob: str,
-    block_select: str,
-    follow_redirects: bool = False,
-):
-    return client.post(
-        "/admin/student/add-individual",
-        data={
-            "first_name": first_name,
-            "last_name": last_name,
-            "dob": dob,
-            "block_select": block_select,
-        },
-        follow_redirects=follow_redirects,
-    )
-
-
 def admin_edit_student(
     client: FlaskClient,
     *,

@@ -18,7 +18,6 @@ from app.services.class_configuration_query_service import get_payroll_settings
 from tests.helpers.canonical_session import set_canonical_context
 from tests.helpers.classroom_initializer import initialize
 from tests.dom.identity.helpers import (
-    admin_add_individual_student,
     admin_delete_class,
     valid_destruction_gate,
     admin_create_store_item,
@@ -166,125 +165,6 @@ def test_DOM_IDEN_006__issues_queue_respects_current_class_membership_scope(clie
     assert b"Issue for class B" not in response.data
 
 
-def test_DOM_IDEN_006__add_individual_student_requires_current_class_context(client):
-    class_row = initialize("chemistry_p1", client.application)
-
-    admin = class_row.teacher_user
-    teacher_seat = _teacher_seat(class_row)
-    with client.session_transaction() as sess:
-        set_canonical_context(sess, user_id=admin.id, class_id=class_row.class_id, seat_id=teacher_seat.id, role="admin")
-
-    initial_student_count = db.session.query(Seat).filter(Seat.role == "student").count()
-    response = admin_add_individual_student(
-        client,
-        first_name="Casey",
-        last_name="Guard",
-        dob="2010-01-02",
-        block_select="A",
-    )
-
-    assert response.status_code == 302
-    assert response.headers["Location"].endswith("/admin/students")
-    assert db.session.query(Seat).filter(Seat.role == "student").count() == initial_student_count + 1
-
-
-def test_DOM_IDEN_007__add_individual_student_creates_single_student_seat_for_new_student(client):
-    class_row = initialize("chemistry_p1", client.application)
-
-    admin = class_row.teacher_user
-    teacher_seat = _teacher_seat(class_row)
-    with client.session_transaction() as sess:
-        set_canonical_context(sess, user_id=admin.id, class_id=class_row.class_id, seat_id=teacher_seat.id, role="admin")
-
-    initial_student_count = db.session.query(Seat).filter(Seat.role == "student").count()
-    initial_student_seat_count = db.session.query(Seat).filter(Seat.class_id == class_row.class_id, Seat.role == "student").count()
-
-    response = admin_add_individual_student(
-        client,
-        first_name="Indivuniq",
-        last_name="Guarduniq",
-        dob="2010-01-02",
-        block_select="A",
-    )
-
-    assert response.status_code == 302
-    assert db.session.query(Seat).filter(Seat.role == "student").count() == initial_student_count + 1
-    assert db.session.query(Seat).filter(Seat.class_id == class_row.class_id, Seat.role == "student").count() == initial_student_seat_count + 1
-
-    new_seat = (
-        db.session.query(Seat)
-        .filter(Seat.class_id == class_row.class_id, Seat.role == "student")
-        .order_by(Seat.id.desc())
-        .first()
-    )
-    assert new_seat is not None
-    assert new_seat.claimed_at is None
-    assert ClassEconomy.query.filter_by(class_id=new_seat.class_id).first().join_code == class_row.join_code
-    assert new_seat.dedupe_code is not None
-
-
-def test_add_individual_student_does_not_log_the_students_name(client, caplog):
-    """The idempotency_key passed to FEATContext is written verbatim to the
-    FEAT-ENTRY log line on every context entry (app/feats/base.py's
-    log_event). It must never embed raw PII -- a student's plaintext name
-    reaching the application log this way persists indefinitely and is
-    readable by anyone with server/log access, unlike a flash message scoped
-    to the acting teacher's own session. dedupe_key already encodes
-    (class_id, first_name, last_name) via HMAC, so it carries the same
-    uniqueness the raw names did without exposing them.
-    """
-    class_row = initialize("chemistry_p1", client.application)
-    admin = class_row.teacher_user
-    teacher_seat = _teacher_seat(class_row)
-    with client.session_transaction() as sess:
-        set_canonical_context(sess, user_id=admin.id, class_id=class_row.class_id, seat_id=teacher_seat.id, role="admin")
-
-    import logging
-    caplog.set_level(logging.INFO, logger="app.feats.base")
-
-    response = admin_add_individual_student(
-        client,
-        first_name="Confidential",
-        last_name="Surnametoshow",
-        dob="2010-01-02",
-        block_select="A",
-    )
-
-    assert response.status_code == 302
-    assert "Confidential" not in caplog.text
-    assert "Surnametoshow" not in caplog.text
-
-
-def test_DOM_IDEN_006__add_individual_student_uses_selected_class_when_block_has_other_scope(client):
-    class_row_old = initialize("chemistry_p1", client.application)
-    class_row_new = initialize("ap_csp_p3", client.application)
-
-    admin = class_row_new.teacher_user
-    teacher_seat_new = _teacher_seat(class_row_new)
-    with client.session_transaction() as sess:
-        set_canonical_context(sess, user_id=admin.id, class_id=class_row_new.class_id, seat_id=teacher_seat_new.id, role="admin")
-
-    seat_ids_before = {s.id for s in Seat.query.filter_by(class_id=class_row_new.class_id, role="student").all()}
-
-    response = admin_add_individual_student(
-        client,
-        first_name="Scoped",
-        last_name="Student",
-        dob="2010-01-02",
-        block_select="A",
-    )
-
-    assert response.status_code == 302
-
-    seat_ids_after = {s.id for s in Seat.query.filter_by(class_id=class_row_new.class_id, role="student").all()}
-    new_seat_ids = seat_ids_after - seat_ids_before
-    assert len(new_seat_ids) == 1, f"Expected exactly 1 new seat, got {len(new_seat_ids)}"
-
-    linked_seat = db.session.get(Seat, new_seat_ids.pop())
-    assert linked_seat.class_id == class_row_new.class_id
-    assert ClassEconomy.query.filter_by(class_id=linked_seat.class_id).first().join_code == class_row_new.join_code
-
-
 def test_DOM_IDEN_001__students_page_does_not_render_hidden_block_input(client):
     from pathlib import Path
 
@@ -349,28 +229,6 @@ def test_DOM_IDEN_001__payroll_settings_uses_feature_scope_blocks_not_student_bl
     assert response.headers["Location"].endswith("/admin/payroll")
     saved = PayrollSettings.query.filter_by(class_id=class_row.class_id, block="B").first()
     assert saved is None
-
-
-def test_DOM_IDEN_006__class_scoped_write_rejects_stale_session_alias(client):
-    class_row = initialize("chemistry_p1", client.application)
-
-    admin = class_row.teacher_user
-    teacher_seat = _teacher_seat(class_row)
-    with client.session_transaction() as sess:
-        set_canonical_context(sess, user_id=admin.id, class_id=class_row.class_id, seat_id=teacher_seat.id, role="admin")
-
-    initial_student_count = db.session.query(Seat).filter(Seat.role == "student").count()
-    response = admin_add_individual_student(
-        client,
-        first_name="Stale",
-        last_name="Session",
-        dob="2010-01-02",
-        block_select="A",
-    )
-
-    assert response.status_code == 302
-    assert response.headers["Location"].endswith("/admin/students")
-    assert db.session.query(Seat).filter(Seat.role == "student").count() == initial_student_count + 1
 
 
 def test_DOM_IDEN_006__edit_student_requires_active_canonical_class_scope(client):

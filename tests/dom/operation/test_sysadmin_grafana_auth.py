@@ -6,7 +6,6 @@ from app.models import User
 from app.utils.canonical_temporal_resolver import utc_now
 from tests.helpers.classroom_initializer import initialize
 from tests.helpers.operation_routes import (
-    get_sysadmin_auth_check,
     get_sysadmin_dashboard,
     get_sysadmin_grafana_auth_check,
     seed_sysadmin_session,
@@ -86,7 +85,13 @@ def test_DOM_OPS_001__expired_sysadmin_dashboard_still_redirects_to_login(client
 
 
 
-def test_DOM_OPS_001__sysadmin_auth_check_rejects_non_sysadmin_user(client):
+def test_DOM_OPS_001__grafana_auth_check_rejects_non_sysadmin_user(client):
+    """A teacher session must not pass the probe nginx uses to admit Grafana.
+
+    Moved from the retired ``/sysadmin/auth-check`` route (removed 2026-09-27,
+    REF-API-001 §VII-D) to ``/sysadmin/grafana/auth-check``, the only
+    ``auth_request`` target in the deployed nginx configuration.
+    """
     _create_sysadmin_via_cli("auth_check_match")
     classroom = initialize("chemistry_p1", app)
     teacher = classroom.teacher_user
@@ -101,7 +106,7 @@ def test_DOM_OPS_001__sysadmin_auth_check_rejects_non_sysadmin_user(client):
         sess["current_session_nonce"] = teacher.current_session_nonce
         sess["last_activity"] = utc_now().isoformat()
 
-    response = get_sysadmin_auth_check(client)
+    response = get_sysadmin_grafana_auth_check(client)
 
     assert response.status_code == 401
 

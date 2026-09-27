@@ -93,6 +93,17 @@ REMOVED_ROUTES = [
     "/admin/export-class-roster",
     "/student/switch-period/<int:user_id>",
     "/student/dismiss-recovery/<int:code_id>",
+    # Second batch: superseded by live routes or unused, each with its tests
+    # moved to the live path first (REF-API-001 §VII-D).
+    "/admin/student/delete",
+    "/admin/student/archive",
+    "/admin/pending-students/delete",
+    "/admin/pending-students/bulk-delete",
+    "/admin/student/add-individual",
+    "/admin/bonuses",
+    "/admin/passkey/list",
+    "/switch-view",
+    "/sysadmin/auth-check",
 ]
 
 
@@ -113,20 +124,13 @@ def test_removed_dead_routes_stay_removed(app, path):
 def _endpoint_name_registries():
     from app.auth import _CLASSLESS_ADMIN_ENDPOINTS
     from app.observability import CAPABILITY_BY_ENDPOINT
-    from app.routes.admin import (
-        ADMIN_CLASS_CONTEXT_ENDPOINTS,
-        ADMIN_CLASS_CONTEXT_REDIRECTS,
-        ADMIN_FEATURE_ENDPOINTS,
-    )
+    from app.routes.admin import ADMIN_FEATURE_ENDPOINTS
     from app.routes.student import STUDENT_FEATURE_ENDPOINTS, _SURVIVING_PREMIUM_ENDPOINTS
     from app.services.tlcp import DEFAULT_NO_CONTEXT_ENDPOINTS, DEFAULT_PUBLIC_ENDPOINTS
 
     return {
         "auth._CLASSLESS_ADMIN_ENDPOINTS": set(_CLASSLESS_ADMIN_ENDPOINTS),
         "observability.CAPABILITY_BY_ENDPOINT": set(CAPABILITY_BY_ENDPOINT),
-        "admin.ADMIN_CLASS_CONTEXT_ENDPOINTS": set(ADMIN_CLASS_CONTEXT_ENDPOINTS),
-        "admin.ADMIN_CLASS_CONTEXT_REDIRECTS": set(ADMIN_CLASS_CONTEXT_REDIRECTS)
-        | set(ADMIN_CLASS_CONTEXT_REDIRECTS.values()),
         "admin.ADMIN_FEATURE_ENDPOINTS": set(ADMIN_FEATURE_ENDPOINTS),
         "student.STUDENT_FEATURE_ENDPOINTS": set(STUDENT_FEATURE_ENDPOINTS),
         "student._SURVIVING_PREMIUM_ENDPOINTS": set(_SURVIVING_PREMIUM_ENDPOINTS),

@@ -55,8 +55,10 @@ def test_last_students_delete_only_target_class_when_sibling_exists(client, app)
 def test_regular_student_delete_removes_seat_without_destroying_class(client, app):
     classroom = initialize_as_teacher('chemistry_p1', client, app)
     seat_id = _students(classroom.class_id)[0]
-    result = client.post('/admin/student/delete', data={'seat_id': seat_id, 'confirmation': 'DELETE'})
-    assert result.status_code == 302
+    result = client.post('/admin/students/bulk-delete', json={
+        'student_ids': [seat_id], **valid_destruction_gate('DELETE STUDENTS')})
+    assert result.status_code == 200
+    assert result.get_json()['class_deleted'] is False
     db.session.expire_all()
     assert db.session.get(Seat, seat_id) is None
     assert db.session.get(ClassEconomy, classroom.class_id) is not None
@@ -72,8 +74,9 @@ def test_student_delete_keeps_classmates_pending_actions(client, app):
                 correlation_id=f'pending-delete-{seat_id}', authoritative_feat='FEAT-STOR-002',
                 payload={'details': 'queued'},
             ))
-    result = client.post('/admin/student/delete', data={'seat_id': removed_id, 'confirmation': 'DELETE'})
-    assert result.status_code == 302
+    result = client.post('/admin/students/bulk-delete', json={
+        'student_ids': [removed_id], **valid_destruction_gate('DELETE STUDENTS')})
+    assert result.status_code == 200
     db.session.expire_all()
     remaining = {row.seat_id for row in PendingAction.query.filter_by(class_id=classroom.class_id)}
     assert remaining == {classmate_id}
@@ -144,9 +147,13 @@ def test_unclaimed_seats_count_against_last_student_deletion(client, app):
     assert response.status_code == 200
     preview = client.post('/admin/students/deletion-preview', json={'student_ids': [pending.id]}).get_json()
     assert preview['account_deleted']
-    blocked = client.post('/admin/pending-students/delete', json={'seat_id': pending.id})
+    # Removing the last (unclaimed) seat of the teacher's only class is account
+    # destruction, which is gated whatever the caller sends.
+    blocked = client.post('/admin/students/bulk-delete', json={'student_ids': [pending.id]})
     assert blocked.status_code == 400
+    db.session.expire_all()
     assert db.session.get(Seat, pending.id) is not None
+    assert db.session.get(ClassEconomy, classroom.class_id) is not None
 
 
 def test_scheduled_sweep_deletes_never_signed_in_after_30_days(client, app, monkeypatch):

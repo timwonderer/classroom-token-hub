@@ -84,16 +84,3 @@ def test_is_safe_url_still_accepts_same_origin(app):
     with app.test_request_context("/", base_url="https://school.example"):
         assert is_safe_url("/admin/dashboard") is True
         assert is_safe_url("https://school.example/admin/dashboard") is True
-
-
-def test_switch_view_ignores_off_origin_next(client):
-    """/switch-view must never bounce a visitor to an attacker-supplied host."""
-    response = client.get("/switch-view?view=desktop&next=https://evil.example")
-    assert response.status_code == 302
-    assert "evil.example" not in response.headers["Location"]
-
-
-def test_switch_view_honors_in_app_next(client):
-    response = client.get("/switch-view?view=desktop&next=/student/dashboard")
-    assert response.status_code == 302
-    assert response.headers["Location"].endswith("/student/dashboard")
