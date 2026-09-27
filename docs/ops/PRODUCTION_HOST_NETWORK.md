@@ -45,9 +45,11 @@ Read with `doctl compute firewall list -o json` on 2026-09-27.
 **This firewall protects the production droplet.** That is established in
 `docs/ops/audits/PROD_AUDIT_2026-07-01.md` (addendum: the droplet sits behind a
 DigitalOcean cloud firewall admitting 80 and 443 only from Cloudflare's ranges), and the
-2026-09-27 probe below behaves exactly as its rules predict. The local `doctl` token is
-scoped to firewall reads and cannot read droplets, so its listing shows
-`droplet_ids: []`. That is a limit of the token, not evidence against the attachment.
+2026-09-27 probe below behaves exactly as its rules predict. The API confirms it too:
+`doctl compute firewall list-by-droplet 487710074` (the production droplet's ID, from its
+metadata service) returns `Cloudflare` and `Local-Workstation`. The local token cannot
+read the droplet itself (403), and the plain firewall listing shows `droplet_ids: []`
+to it, so use `list-by-droplet` to check attachment.
 
 Tailscale needs no inbound rule: it connects outbound and falls back to relays.
 
@@ -143,8 +145,8 @@ These must stay true. Each line is a read-only check.
    including 443 on `24.199.127.184` should time out. A `refused` or an answer means the
    cloud firewall changed.
 4. **The firewall stays attached to the production droplet.** Re-check in the
-   DigitalOcean console after any droplet or firewall change. Check 3 also catches a
-   detachment from outside. The local `doctl` token cannot see attachments (above).
+   `doctl compute firewall list-by-droplet 487710074` should list `Cloudflare`. Check 3
+   also catches a detachment from outside.
 
 None of these checks runs automatically yet. The nginx configuration and these rules
 are not in git, so the host and the DigitalOcean console are the only record of them.
