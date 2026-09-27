@@ -1001,9 +1001,12 @@ def create_app():
     cli_commands.init_app(app)
 
     # -------------------- SCHEDULED TASKS --------------------
-    if not app.config.get("TESTING") and app.config.get("ENV") != "testing":
-        from app.scheduled_tasks import init_scheduled_tasks
-        init_scheduled_tasks(app)
+    # Deliberately NOT started here. Every process that imports ``app`` runs
+    # create_app() -- each flask command, script, and the release's
+    # ``flask db upgrade`` -- and each would otherwise start a second copy of
+    # every scheduled job. The gunicorn post_worker_init hook
+    # (gunicorn.conf.py) starts it, behind a PostgreSQL advisory lock
+    # (app/scheduler_ownership.py).
 
     return app
 

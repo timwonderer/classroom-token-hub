@@ -1143,8 +1143,18 @@ def init_scheduled_tasks(app):
         app: Flask application instance
     """
     from app.extensions import scheduler
+    from app.scheduler_ownership import SchedulerOwnershipError, owns_scheduler
 
     logger = logging.getLogger('scheduled_tasks')
+
+    # Only the process holding the scheduler lock may run the jobs; see
+    # app/scheduler_ownership.py. Refusing here means a stray direct call
+    # cannot start a second scheduler either.
+    if not owns_scheduler():
+        raise SchedulerOwnershipError(
+            "init_scheduled_tasks called without the scheduler lock. "
+            "Start the scheduler with start_scheduler_when_owner(app)."
+        )
 
     if scheduler.running:
         logger.info("Scheduler already running")

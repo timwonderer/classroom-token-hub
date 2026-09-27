@@ -77,7 +77,7 @@ A class with fewer students than that counts if every claimed student is entered
 
 - **Multi-tenant**: every read and write of seat or class data is scoped by `class_id`. One user can hold seats in several classes, and each class is its own economy
 - **Ledger**: every money movement is written as `PENDING` and becomes posted history only when the scheduled settlement job admits it. The database rejects any change to a posted row
-- **Scheduled jobs**: APScheduler runs settlement, payroll, savings interest, rent reconciliation, insurance expiry, collective-goal expiry, rebalance activation, and nightly maintenance and audit checks
+- **Scheduled jobs**: APScheduler runs settlement, payroll, savings interest, rent reconciliation, insurance expiry, collective-goal expiry, rebalance activation, and nightly maintenance and audit checks. They run only in the gunicorn server process, and only in the one process holding a PostgreSQL advisory lock (`app/scheduler_ownership.py`). `flask run`, `flask` commands, migrations and scripts never run them; to exercise jobs locally, start `gunicorn wsgi:app`
 - **Class time**: deadlines and "today" are calculated in each class's own timezone by one temporal resolver. The policy guardrails in CI reject `timedelta` arithmetic in services, FEATs and routes
 - **Progressive web app**: installable on a phone, with an offline fallback
 - **In-app help**: `/docs` serves the user guides in `docs/user-guides/`, with search and a choice of teacher or student view
