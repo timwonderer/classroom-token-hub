@@ -114,7 +114,6 @@
 
     /* Layout — structural, role-agnostic */
     --sidebar-width: 260px;
-    --bottom-nav-height: 64px;
 
     /* Breakpoints — mirror Bootstrap's grid tiers.
        Reference values: CSS media queries cannot read custom properties. */
@@ -293,7 +292,6 @@ body.sysadmin-shell {
     --sysadmin-sidebar-text: var(--text-inverse);
     --sysadmin-accent: var(--secondary);
     --sysadmin-accent-bright: #FDB034;
-    --sysadmin-bottom-nav-height: var(--bottom-nav-height);
     /* Sign-out chrome on the dark sysadmin sidebar. --danger is tuned for
        light surfaces and reads muddy there, so the sidebar carries its own
        pair. Both are pinned for legibility ON --sysadmin-sidebar-bg (#2C2C2C)

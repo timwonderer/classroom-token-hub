@@ -102,7 +102,7 @@ Defined on `:root`, identical in every role.
 | Motion | `--duration-fast/base/slow`, `--ease-standard` | §VI.2 |
 | Opacity | `--alpha-subtle/soft/medium/strong` | §VI.2 |
 | Icon size | `--icon-2xs` … `--icon-3xl` | §VI.2 |
-| Layout | `--sidebar-width`, `--bottom-nav-height`, `--breakpoint-*` | Structural, role-agnostic |
+| Layout | `--sidebar-width`, `--breakpoint-*` | Structural, role-agnostic |
 | Neutrals | `--neutral-50` … `--neutral-900` | Warm-tinted grayscale |
 | Surfaces | `--background`, `--surface`, `--border-color` | `--background` is `--neutral-100` |
 | Text | `--text-primary`, `--text-secondary`, `--text-muted`, `--text-inverse` | |
