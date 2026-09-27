@@ -8,6 +8,11 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Documentation
+- **Production host network exposure is recorded, and monitoring listeners moved to loopback (2026-09-27)** — `docs/ops/PRODUCTION_HOST_NETWORK.md` records each layer, the DigitalOcean firewall rules, the host listener inventory, before-and-after probes, and read-only drift checks. None of that config is in git.
+  - **Host changes:** Prometheus, node-exporter, process-exporter, Loki and Promtail listened on every interface with `ufw` inactive. The DigitalOcean cloud firewall kept them off the public internet (public probes time out). They were open to every tailnet device and dependent on that one layer. All five now bind `127.0.0.1`, since nothing off-host uses them. Scrapes, Loki ingest, and Grafana's `localhost` datasources were checked afterwards. From the tailnet, every monitoring port now refuses.
+  - **Drift fixed the same day:** nginx's `set_real_ip_from` lacked two current Cloudflare ranges (`131.0.72.0/22`, `2c0f:f248::/32`) that the firewall admits. Visitors on those ranges appeared as the Cloudflare edge address and shared one rate-limit bucket. Both were added to the host config.
+
 ### Fixed
 - **CI's Postgres service image comes from GHCR, not an anonymous public pull (2026-09-27)** — Test jobs pulled `public.ecr.aws/docker/library/postgres` anonymously. GitHub-hosted runners share egress addresses, so they share the anonymous allowance too, and on 2026-09-27 jobs failed before running any test ("toomanyrequests: Data limit exceeded"). GitHub reported no incident.
   - **New workflow:** `mirror-ci-postgres.yml` republishes `postgres:15` and `postgres:16` as `ghcr.io/timwonderer/ci-postgres`, labelled with this repository as the source. It retries its upstream pull and runs weekly, on demand, and when its own file changes on `main`. Only `main` can publish, because the tags are shared: pushes are filtered to `main`, and the job refuses any other ref, including a manual run started from another branch.
