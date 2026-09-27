@@ -1,11 +1,9 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, g, session, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session, current_app
 import uuid
 import hashlib
 import hmac
 
-from app.extensions import db, limiter
-from app.models import Seat
-from app.auth import admin_required
+from app.extensions import limiter
 from app.utils.ip_handler import get_real_ip
 from app.utils.turnstile import verify_turnstile_token
 
@@ -17,43 +15,6 @@ def _recovery_rate_limit():
     if current_app.testing:
         return "1000 per minute"
     return "10 per minute"
-
-# ----------------------------------------------------------------------
-# TEACHER ROUTES
-# ----------------------------------------------------------------------
-
-@recovery_bp.route('/admin/generate-code/<int:seat_id>', methods=['POST'])
-@admin_required
-def generate_reset_code(seat_id):
-    """
-    Step 1 — Teacher Initiates Reset (DOM-IDEN-002 §IX).
-
-    Delegates to FEAT-IDEN-003 for reset code generation.
-    """
-    from app.feats.identity_feat import generate_teacher_reset_code
-
-    result = generate_teacher_reset_code(
-        seat_id=seat_id,
-        teacher_user_id=g.canonical_context.user_id,
-        correlation_id=f"corr_iden_reset_{seat_id}_{uuid.uuid4().hex}",
-        idempotency_key=f"feat:iden:reset-code:{seat_id}",
-    )
-
-    if not result.success:
-        flash(result.error_message, "error")
-        return redirect(url_for('admin.students'))
-
-    flash(
-        f"Reset code generated for {result.display_name}: {result.code} — Expires in 10 minutes. "
-        f"Give this code to the student.",
-        "success",
-    )
-    from app.routes.admin import _build_student_detail_url
-    seat = db.session.get(Seat, seat_id)
-    detail_url = _build_student_detail_url(seat.public_id) if seat else None
-    if not detail_url:
-        return redirect(url_for('admin.students'))
-    return redirect(detail_url)
 
 # ----------------------------------------------------------------------
 # STUDENT ROUTES — Single Recovery Flow

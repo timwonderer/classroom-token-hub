@@ -91,11 +91,10 @@ The **Edit** button opens **Edit Student**:
 - **First Name** — used for the account claim process
 - **Last Name** — stored as the student's encrypted full last name
 - **Notes** — an optional teacher-facing note
-- **Reset Student Login** — a switch that issues a one-time reset code, good for 10 minutes. Account data is preserved.
 
 Then **Save Changes**.
 
-The reset code is shown to you immediately. The student goes to the login page, selects **"I can't log into my account"**, and enters that code on its own — no name, no join code — then sets a new username, PIN, and passphrase. [Student Detail Page](student-detail.md) covers this in full.
+To reset a student's login, open their detail page and select **Generate reset code**. It issues a one-time code, good for 10 minutes, and account data is preserved. The student goes to the login page, selects **"I can't log into my account"**, and enters that code on its own — no name, no join code — then sets a new username, PIN, and passphrase. [Student Detail Page](student-detail.md) covers this in full.
 
 There is no control here for moving a student to a different class. A student who changes periods claims a seat in the new class with that class's join code.
 
@@ -118,7 +117,7 @@ Deleting several at once is deliberately harder. **Bulk Actions > Delete Student
 > **The name on the roster is the name they must type.** Claiming matches on first and last name. If a student cannot get past the claim screen, check the spelling on your roster first — and if you change it, tell them, because you have just changed what they need to enter.
 
 > [!NOTE]
-> **Reset Student Login is not deletion, and it is not a re-claim.** It replaces the student's credentials via a 10-minute code. Balances, transactions, and attendance survive, and the account stays claimed. Use it when a passphrase is lost.
+> **A reset code is not deletion, and it is not a re-claim.** It replaces the student's credentials via a 10-minute code. Balances, transactions, and attendance survive, and the account stays claimed. Use it when a passphrase is lost.
 
 > [!NOTE]
 > **The roster is per-class.** Everything on this page belongs to the class selected in the sidebar. Adding a student here does not add them anywhere else.

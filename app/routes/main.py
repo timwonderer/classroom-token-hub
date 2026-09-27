@@ -10,14 +10,14 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 from flask import (
     Blueprint, redirect, url_for, jsonify, current_app,
-    session, request,
+    request,
 )
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.extensions import db, limiter
 from app.models import User, UserRole
-from app.utils.helpers import render_template_with_fallback as render_template, safe_redirect_target
+from app.utils.helpers import render_template_with_fallback as render_template
 from app.utils.ip_handler import get_real_ip
 from app.utils.turnstile import verify_turnstile_token
 from app.utils.canonical_temporal_resolver import CLASS_LEVEL_EVALUATION, canonical_temporal_resolver
@@ -345,17 +345,3 @@ def verify_hall_pass(teacher_public_token):
         classes=classes,
         result=result
     )
-
-
-@main_bp.route('/switch-view')
-def switch_view():
-    """Switches the view between mobile and desktop."""
-    view = request.args.get('view', 'mobile')
-    next_url = request.args.get('next', url_for('main.home'))
-
-    if view == 'desktop':
-        session['force_desktop'] = True
-    else:
-        session.pop('force_desktop', None)
-
-    return redirect(safe_redirect_target(next_url, url_for('main.home')))

@@ -75,3 +75,101 @@ def test_debug_routes_are_not_registered(app, path):
         f"{path} is an unauthenticated debug endpoint and must not be registered. "
         "See REF-API-001 §VIII-A."
     )
+
+
+# Removed 2026-09-27 as dead endpoints (REF-API-001 §VII-D). The first is the
+# reason this list exists: with only a teacher's hall-pass verification token it
+# returned the day's passes across that teacher's classes -- names, internal
+# seat and class ids -- without the class and full-name inputs the verification
+# page requires (INV-ARC-019 §X). The rest had no caller. A route with no caller
+# is invisible to every other test, so re-adding one would pass silently.
+REMOVED_ROUTES = [
+    "/api/hall-pass/verification/active",
+    "/admin/api/economy/calculate-cwi",
+    "/admin/onboarding/skip",
+    "/sysadmin/passkey/list",
+    "/admin/payroll/transactions/<int:transaction_id>/void",
+    "/admin/payroll/transactions/void-bulk",
+    "/admin/export-class-roster",
+    "/student/switch-period/<int:user_id>",
+    "/student/dismiss-recovery/<int:code_id>",
+    # Second batch: superseded by live routes or unused, each with its tests
+    # moved to the live path first (REF-API-001 §VII-D).
+    "/admin/student/delete",
+    "/admin/student/archive",
+    "/admin/pending-students/delete",
+    "/admin/pending-students/bulk-delete",
+    "/admin/student/add-individual",
+    "/admin/bonuses",
+    "/admin/passkey/list",
+    "/switch-view",
+    "/sysadmin/auth-check",
+    # Reset codes: one FEAT-IDEN-003 path, /admin/student/reset-code, scoped to
+    # the active class. This route checked only class ownership.
+    "/recovery/admin/generate-code/<int:seat_id>",
+]
+
+
+@pytest.mark.parametrize("path", REMOVED_ROUTES)
+def test_removed_dead_routes_stay_removed(app, path):
+    registered = {str(rule) for rule in _rules(app)}
+    assert path not in registered, (
+        f"{path} was removed as a dead endpoint and must not be re-registered "
+        "without a caller. See REF-API-001 §VII-D."
+    )
+
+
+# Endpoint names also live outside the URL map, in sets that grant or route
+# behaviour by name. Removing a route leaves its name behind in them, silently:
+# `admin.onboarding_skip` stayed in `_CLASSLESS_ADMIN_ENDPOINTS` after its route
+# was deleted (2026-09-27). A stale name grants nothing today, but it is the
+# spelling a future route of the same name would inherit an exemption through.
+def _endpoint_name_registries():
+    from app.auth import _CLASSLESS_ADMIN_ENDPOINTS
+    from app.observability import CAPABILITY_BY_ENDPOINT
+    from app.routes.admin import ADMIN_FEATURE_ENDPOINTS
+    from app.routes.student import STUDENT_FEATURE_ENDPOINTS, _SURVIVING_PREMIUM_ENDPOINTS
+    import app.services.tlcp as tlcp
+
+    # The TLCP allowlists are slated for removal (TLCP stops classifying
+    # context-free requests). A registry that no longer exists holds no names
+    # to go stale, so check each only while it is defined.
+    tlcp_registries = {
+        f"tlcp.{name}": set(getattr(tlcp, name))
+        for name in ("DEFAULT_PUBLIC_ENDPOINTS", "DEFAULT_NO_CONTEXT_ENDPOINTS")
+        if hasattr(tlcp, name)
+    }
+
+    return {
+        **tlcp_registries,
+        "auth._CLASSLESS_ADMIN_ENDPOINTS": set(_CLASSLESS_ADMIN_ENDPOINTS),
+        "observability.CAPABILITY_BY_ENDPOINT": set(CAPABILITY_BY_ENDPOINT),
+        "admin.ADMIN_FEATURE_ENDPOINTS": set(ADMIN_FEATURE_ENDPOINTS),
+        "student.STUDENT_FEATURE_ENDPOINTS": set(STUDENT_FEATURE_ENDPOINTS),
+        "student._SURVIVING_PREMIUM_ENDPOINTS": set(_SURVIVING_PREMIUM_ENDPOINTS),
+    }
+
+
+def unregistered_endpoint_names(registries, registered):
+    """Return ``registry: [names]`` for every name no rule is registered under."""
+    return {
+        registry: sorted(names - registered)
+        for registry, names in registries.items()
+        if names - registered
+    }
+
+
+def test_every_endpoint_name_in_a_registry_is_registered(app):
+    registered = {rule.endpoint for rule in _rules(app)}
+    stale = unregistered_endpoint_names(_endpoint_name_registries(), registered)
+    assert not stale, f"endpoint names with no registered route: {stale}"
+
+
+def test_unregistered_endpoint_names_reports_a_removed_route():
+    """Mutation proof (SOP-TEST-003 §IX.A): the exact stale name this guard
+    was written after, beside a live sibling that must not be reported."""
+    registries = {"auth._CLASSLESS_ADMIN_ENDPOINTS": {"admin.onboarding_skip", "admin.onboarding_skip_task"}}
+    registered = {"admin.onboarding_skip_task"}
+    assert unregistered_endpoint_names(registries, registered) == {
+        "auth._CLASSLESS_ADMIN_ENDPOINTS": ["admin.onboarding_skip"],
+    }

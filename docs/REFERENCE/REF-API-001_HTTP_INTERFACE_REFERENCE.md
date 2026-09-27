@@ -94,7 +94,7 @@ The largest cluster, and the only one with a sanctioned cross-class exception.
 | GET · POST | `/api/hall-pass/setup` | A | `hall_pass_setup.html` |
 | POST | `/api/hall-pass/verify-token/rotate` | A | `admin_hall_pass.html` |
 | POST | `/admin/students/bulk-adjust-hall-pass-entitlements` | A | `admin_students.html` |
-| GET | `/api/hall-pass/verification/active` | — | **none — see §VII-C** |
+| GET | ~~`/api/hall-pass/verification/active`~~ | — | **removed 2026-09-27 — see §VII-D** |
 
 The public hall-pass verification capability that office staff actually use is **not** in this table: it is the server-rendered `POST /verify/hallpass/<teacher_public_token>` in `main.py`, rate limited to 60/min. `/api/hall-pass/verification/active` is a JSON reimplementation of the same capability with no caller.
 
@@ -113,7 +113,7 @@ Driven entirely by `static/js/economy-balance.js`, which builds request URLs fro
 
 | Method | Path | Auth | Client |
 |--------|------|------|--------|
-| POST | `/admin/api/economy/calculate-cwi` | A | `economy-balance.js` |
+| POST | ~~`/admin/api/economy/calculate-cwi`~~ | A | **removed 2026-09-27 — see §VII-D** |
 | POST | `/admin/api/economy/analyze` | A | `economy-balance.js` |
 | POST | `/admin/api/economy/validate/<feature>` | A | `economy-balance.js` |
 
@@ -125,7 +125,7 @@ Driven entirely by `static/js/economy-balance.js`, which builds request URLs fro
 | POST | `/admin/feature-settings/update` | A | `admin_feature_settings.html` |
 | POST | `/admin/upload-students` | A | `admin_students.html` |
 | POST | `/admin/students/bulk-delete` | A | `admin_students.html` |
-| POST | `/admin/pending-students/delete` | A | `admin_students.html` |
+| POST | ~~`/admin/pending-students/delete`~~ | A | **removed 2026-09-27 — see §VII-D** (the roster had moved to `/admin/students/bulk-delete`) |
 | POST | `/admin/void-transaction/<int:transaction_id>` | A | `admin_banking.html`, `student_detail.html` |
 | POST | `/admin/announcements/toggle/<int:announcement_id>` | A | `admin_announcements.html` |
 | POST · DELETE | `/admin/join-code/delete` · `/admin/join-code` | A | `admin_account_delete.html` |
@@ -135,7 +135,7 @@ Driven entirely by `static/js/economy-balance.js`, which builds request URLs fro
 | Method | Path | Auth | Client |
 |--------|------|------|--------|
 | GET | `/admin/onboarding/status` | A | `components/getting_started_widget.html` |
-| POST | `/admin/onboarding/skip` | A | `components/getting_started_widget.html` |
+| POST | ~~`/admin/onboarding/skip`~~ | A | **removed 2026-09-27 — see §VII-D** |
 | POST | `/admin/onboarding/skip-task` | A | `components/getting_started_widget.html` |
 
 ### VI-G. Passkeys (WebAuthn)
@@ -150,8 +150,8 @@ Teacher and operator ceremonies are structurally identical and separately regist
 | POST | `/sysadmin/passkey/auth/start` · `/finish` | — ‡ | `system_admin_login.html` |
 | POST | `/sysadmin/passkey/register/start` · `/finish` | O | `system_admin_passkey_settings.html` |
 | POST | `/sysadmin/passkey/<int:credential_id>/delete` | O | `system_admin_passkey_settings.html` |
-| GET | `/admin/passkey/list` | A | **none — see §VII-C** |
-| GET | `/sysadmin/passkey/list` | O | **none — see §VII-C** |
+| GET | ~~`/admin/passkey/list`~~ | A | **removed 2026-09-27 — see §VII-D** |
+| GET | ~~`/sysadmin/passkey/list`~~ | O | **removed 2026-09-27 — see §VII-D** |
 
 ‡ The `auth/start` and `auth/finish` ceremonies are unauthenticated by definition — they *are* the login. Both are rate limited to 20/min; registration and deletion to 10/min.
 
@@ -179,28 +179,59 @@ audit and have since been removed — see §VIII-A.
 
 ## VII. Disposition Summary
 
-Counts are as-of this revision, after the §VIII-A and §VIII-B removals landed.
+Counts reflect the 2026-09-27 removals (§VII-D): the six stale endpoints, and three that §VI had listed as live but had no caller (`/admin/api/economy/calculate-cwi`, `/admin/onboarding/skip`, `/admin/pending-students/delete`).
 
 | Disposition | Count | Meaning |
 |-------------|-------|---------|
-| Live | 52 | Reachable from a shipped client. |
+| Live | 49 | Reachable from a shipped client. 52 at the 2026-09-05 audit. |
 | Operational | 2 | No in-app caller by design (`/health`, `/health/status`). |
-| Stale | 6 | Registered, functional, zero callers. §VII-C |
+| Stale | 0 | Registered, functional, zero callers. 6 at the 2026-09-05 audit, all since removed (§VII-C). |
 | Broken | 0 | Was 1 before §VIII-B was resolved. |
 | Prohibited | 0 | Was 2 before §VIII-A was resolved. |
 
 ### VII-C. Stale endpoints
 
-Each is registered and reachable, has an intact auth guard, and has no caller in `templates/`, `static/`, or any other application code.
+At the 2026-09-05 audit, each of these was registered and reachable, had an intact auth guard, and had no caller in `templates/`, `static/`, or any other application code. All six were removed on 2026-09-27 (§VII-D), so none is registered now.
 
 | Path | Assessment |
 |------|-----------|
-| `/admin/payroll/transactions/<int:transaction_id>/void` | A payroll-specific void, parallel to the live `/admin/void-transaction/<id>` used by `admin_banking.html`. Two implementations of one capability; this is the unused one. |
-| `/admin/payroll/transactions/void-bulk` | Bulk form of the same dead path. |
-| `/admin/pending-students/bulk-delete` | Referenced only by a test. The live UI calls the singular `/admin/pending-students/delete`. |
-| `/admin/passkey/list` | Both settings pages render the credential list server-side; nothing fetches it. |
-| `/sysadmin/passkey/list` | As above. |
-| `/api/hall-pass/verification/active` | Superseded by the server-rendered `/verify/hallpass/<token>`. Carries the highest residual risk of the six — see §VIII-C. |
+| `/admin/payroll/transactions/<int:transaction_id>/void` | **Removed 2026-09-27 (§VII-D).** A payroll-specific void, parallel to the live `/admin/void-transaction/<id>` used by `admin_banking.html`. Two implementations of one capability; this is the unused one. |
+| `/admin/payroll/transactions/void-bulk` | **Removed 2026-09-27 (§VII-D).** Bulk form of the same dead path. |
+| `/admin/pending-students/bulk-delete` | **Removed 2026-09-27 (§VII-D).** Referenced only by a test. At the audit the UI called the singular `/admin/pending-students/delete`; that route was removed too, and the roster now deletes through `/admin/students/bulk-delete`. |
+| `/admin/passkey/list` | **Removed 2026-09-27 (§VII-D).** Both settings pages render the credential list server-side; nothing fetches it. |
+| `/sysadmin/passkey/list` | **Removed 2026-09-27 (§VII-D).** As above. |
+| `/api/hall-pass/verification/active` | **Removed 2026-09-27 (§VII-D).** Superseded by the server-rendered `/verify/hallpass/<token>`. Carries the highest residual risk of the six — see §VIII-C. |
+
+---
+
+### VII-D. Removed 2026-09-27
+
+Re-verified against `app.url_map` and every template and script, then removed. Each had no caller, no normative reference, and no test.
+
+| Rule | Why it had no caller |
+|------|----------------------|
+| `GET /api/hall-pass/verification/active` | §VIII-C. Reproduced before removal: with only the teacher's `hall_pass_verify_token`, it returned up to ten of the day's passes across that teacher's classes, with names, internal `seat_id` and `class_id`, without the class and full-name inputs the verification page requires (INV-ARC-019 §X). |
+| `POST /admin/api/economy/calculate-cwi` | The row above listed `economy-balance.js` as its caller. That file defined a `calculateCWI()` wrapper, but nothing ever invoked it; the wrapper is removed too. `/analyze` and `/validate/<feature>` are live and stay. |
+| `POST /admin/onboarding/skip` | A no-op. The row above listed the Getting Started widget as its caller; the widget only ever calls `/admin/onboarding/skip-task`. |
+| `GET /sysadmin/passkey/list` | §VII-C. |
+| `POST /admin/payroll/transactions/<int:transaction_id>/void`, `POST /admin/payroll/transactions/void-bulk` | §VII-C. `/admin/void-transaction/<id>` is the live void. |
+| `GET /admin/export-class-roster` (CSV, not JSON) | A re-import roster export with no import to feed and no link. `/admin/export-students` is the live export. |
+| `POST /student/switch-period/<int:user_id>` (redirect) | Already disabled: it logged a warning and redirected. Class switching is `/student/switch-class/<class_id>`. |
+| `POST /student/dismiss-recovery/<int:code_id>` (redirect) | The dashboard banner closes client-side (`data-bs-dismiss`) and never posted here. Its only service function, `recovery_service.dismiss_recovery_code`, is removed with it. |
+
+**Second batch, same day.** These carried tests that exercised live behaviour, so each test was first moved to the live route (and watched fail against a broken copy of it), then the route was removed. Nothing requested any of them in the retained production access logs (2026-09-19 onward).
+
+| Rule | What replaced it |
+|------|------------------|
+| `POST /admin/student/delete`, `/admin/student/archive` (form) | `/admin/students/deletion-preview` + `/admin/students/bulk-delete`, which share `_dispatch_student_deletion` but require the destruction gate at seat scope too. `/archive` was the same hard delete under another name. |
+| `POST /admin/pending-students/delete`, `/admin/pending-students/bulk-delete` | The same live route. Its `all_pending` mode had no replacement and went with it. |
+| `POST /admin/student/add-individual` (form) | `/admin/upload-students`. v2 has no single/bulk split. The retired route made seats without claim material (unclaimable), skipped repeated names, ran under FEAT-IDEN-001, and built a profile it never added to the session (read from source; the route was not run end to end). |
+| `POST /admin/bonuses` (form) | Nothing. Its command, `execute_admin_adjustments`, is removed too: it posted ledger effects directly, without the plan resolution FEAT-LED-000 requires or a command-level unclaimed-seat refusal (DOM-IDEN-002 §VIII), and accepted any transaction type. |
+| `GET /admin/passkey/list` | The Passkey Settings page renders the list server-side. |
+| `GET /switch-view` (redirect) | Nothing. The `force_desktop` flag it set was read nowhere. |
+| `GET /sysadmin/auth-check` | `/sysadmin/grafana/auth-check`, the only `auth_request` target in the deployed nginx. |
+
+**Reset codes, same day.** `POST /recovery/admin/generate-code/<int:seat_id>` was uncalled and ran FEAT-IDEN-003, but checked only that the teacher owned the seat's class. The live reset was a switch on the two Edit Student forms, which issued the code inside FEAT-IDEN-006. Both are replaced by `POST /admin/student/reset-code` (form field `seat_id`). It runs FEAT-IDEN-003 against the request's active class, requires a claimed student seat and the actor's own teacher seat in that class, rejects trivially weak codes, and is rate limited per teacher and per teacher-and-student (FEAT-IDEN-003 §VIII). The student detail page carries its button.
 
 ---
 
@@ -254,6 +285,8 @@ Nothing calls it. It is an unmonitored, more permissive twin of a surface that w
 
 **Recommendation:** delete it. If a JSON verification surface is wanted later, it should be re-derived from the hardened page's guards rather than resurrected from this one.
 
+**Resolution (2026-09-27):** removed, per the recommendation above. `tests/test_route_registration_contract.py::test_removed_dead_routes_stay_removed` keeps it out of the URL map.
+
 ### VIII-D. `/api/tap` enforces authentication imperatively
 
 `handle_tap` is correct today — it 401s without a canonical context and 403s on a bad PIN. But it is the only mutating endpoint whose authentication lives entirely in the body, with no decorator. A refactor that reorders the early returns silently removes the check, and no reviewer scanning decorators would see it.
@@ -285,4 +318,4 @@ Cross-reference callers against `templates/**/*.html` and `static/js/**/*.js`, a
 
 ---
 
-**Last verified:** 2026-09-05 against 198 registered rules (63 JSON).
+**Last verified:** 2026-09-05 against 198 registered rules (63 JSON). Removals recorded in §VII-D (2026-09-27) postdate these counts.

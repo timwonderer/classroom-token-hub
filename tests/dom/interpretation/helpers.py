@@ -5,7 +5,6 @@ from decimal import Decimal
 
 from app.extensions import db
 from app.feats.base import FEATContext
-from app.feats.admin_adjustment_feat import execute_admin_adjustments
 from app.models import IdentityProfile, Issue, IssueCategory, Seat, Transaction, TransactionStatus
 from app.models import User, UserRole
 from app.services.classroom_setup import create_student_seat_with_profile
@@ -13,6 +12,7 @@ from app.services.context_resolver import CanonicalContext
 from app.utils.auth_username import build_hashed_username_fields
 from tests.helpers.classroom_initializer import initialize, initialize_as_student, initialize_as_teacher
 from tests.helpers.operation_routes import seed_sysadmin_session
+from tests.helpers.ledger import create_ledger_idempotent_transaction
 
 
 def teacher_issue_lifecycle(client, app):
@@ -79,52 +79,42 @@ def payroll_visibility_state(client, app):
         seat_b.user_id = student_a.user.id  # GAP: no canonical binding producer.
         db.session.flush()
 
-    # Earnings are posted through the LOWEST canonical ledger boundary
-    # (execute_admin_adjustments → create_pending_transaction). A positive
-    # amount posts a pending earnings transaction without touching attendance,
-    # payroll cycles, or interest machinery. The read path
-    # (_get_total_earnings_for_seat) counts pending rows, so this is a faithful
-    # class-scoped earnings producer.
-    ctx_a = CanonicalContext(
-        user_id=classroom_a.teacher_user.id,
-        class_id=classroom_a.class_id,
-        seat_id=classroom_a.teacher_seat.id,
-        actor_role="teacher",
-    )
-    ctx_b = CanonicalContext(
-        user_id=classroom_b.teacher_user.id,
-        class_id=classroom_b.class_id,
-        seat_id=classroom_b.teacher_seat.id,
-        actor_role="teacher",
-    )
+    # Earnings are posted as teacher-made payroll entries on the idempotent
+    # ledger path (create_idempotent_transaction -> create_pending_transaction),
+    # which checks the transaction type against IDEMPOTENT_TRANSACTION_TYPES.
+    # The teacher seat and mechanism are passed explicitly: the helper would
+    # otherwise attribute the entry to the student ("self"). A positive amount
+    # posts a pending earnings row without touching attendance, payroll cycles,
+    # or interest machinery, and the read path (_get_total_earnings_for_seat)
+    # counts pending rows, so this is a faithful class-scoped earnings producer.
+    # (This fixture used execute_admin_adjustments until that command was
+    # removed with /admin/bonuses on 2026-09-27, REF-API-001 §VII-D.)
     with FEATContext("FEAT-LED-001", idempotency_key="payroll_visibility:seed_a"):
         # $10.00 earned in the active class (seat_a).
-        execute_admin_adjustments(
-            ctx=ctx_a,
-            adjustments=[{
-                "seat": student_a.seat,
-                "user_id": classroom_a.teacher_user.id,
-                "amount": Decimal("10.00"),
-                "account_type": "checking",
-                "type": "payroll",
-                "description": "Payroll for class A",
-            }],
+        create_ledger_idempotent_transaction(
+            idempotency_key="payroll_visibility:seed_a",
+            seat_id=student_a.seat.id,
+            class_id=classroom_a.class_id,
             actor_seat_id=classroom_a.teacher_seat.id,
+            mechanism="teacher",
+            amount=Decimal("10.00"),
+            account_type="checking",
+            type="payroll",
+            description="Payroll for class A",
         )
     with FEATContext("FEAT-LED-001", idempotency_key="payroll_visibility:seed_b"):
         # $200.00 earned by the SAME user in another class (seat_b). Must not
         # appear in the class_a-scoped earnings display.
-        execute_admin_adjustments(
-            ctx=ctx_b,
-            adjustments=[{
-                "seat": seat_b,
-                "user_id": classroom_b.teacher_user.id,
-                "amount": Decimal("200.00"),
-                "account_type": "checking",
-                "type": "payroll",
-                "description": "Payroll for class B",
-            }],
+        create_ledger_idempotent_transaction(
+            idempotency_key="payroll_visibility:seed_b",
+            seat_id=seat_b.id,
+            class_id=classroom_b.class_id,
             actor_seat_id=classroom_b.teacher_seat.id,
+            mechanism="teacher",
+            amount=Decimal("200.00"),
+            account_type="checking",
+            type="payroll",
+            description="Payroll for class B",
         )
     db.session.commit()
     return classroom_a, classroom_b

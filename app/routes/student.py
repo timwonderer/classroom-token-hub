@@ -109,7 +109,6 @@ from app.services.store.builders import (
     build_collective_progress_view,
 )
 from app.services.recovery_service import (
-    dismiss_recovery_code as dismiss_recovery_code_row,
     get_pending_recovery_code_for_seat,
     get_recovery_code_for_seat,
 )
@@ -3009,18 +3008,6 @@ def switch_class(class_id):
     )
 
 
-@student_bp.route('/switch-period/<int:user_id>', methods=['POST'])
-@login_required
-def switch_period(user_id):
-    """Disabled switch-period route."""
-    current_app.logger.warning(
-        "Disabled student switch-period route called for user_id=%s",
-        user_id,
-    )
-    flash("Switch using class context.", "warning")
-    return redirect(url_for('student.dashboard'))
-
-
 # -------------------- SETUP COMPLETE --------------------
     # Note: This route is not prefixed with /student.
 
@@ -3317,28 +3304,3 @@ def verify_recovery(code_id):
     return render_template('student_verify_recovery.html',
                          recovery_code=recovery_code,
                          student=student)
-
-
-@student_bp.route('/dismiss-recovery/<int:code_id>', methods=['POST'])
-@login_required
-def dismiss_recovery(code_id):
-    """
-    Dismiss the recovery notification banner.
-    """
-    context = resolve_canonical_context()
-    student = db.session.get(Seat, context.seat_id) if context and getattr(context, "seat_id", None) else None
-
-    # Get the recovery code request
-    recovery_code = get_recovery_code_for_seat(code_id, student.id, class_id=context.class_id) if student else None
-    if recovery_code is None:
-        flash("Invalid recovery request.", "error")
-        return redirect(url_for('student.dashboard'))
-
-    # Mark as dismissed. FEAT-IDEN-002 is HIGH blast radius and requires an
-    # idempotency_key, so open it inline with a deterministic key rather than via the bare
-    # route decorator.
-    with FEATContext("FEAT-IDEN-002", idempotency_key=f"feat:iden-002:dismiss-recovery:{code_id}"):
-        dismiss_recovery_code_row(code_id)
-
-    flash("Recovery notification dismissed. You can still verify later from your notifications.", "info")
-    return redirect(url_for('student.dashboard'))

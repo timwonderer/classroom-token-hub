@@ -133,7 +133,6 @@ from app.services import insurance_claim_service
 # from app.services.store_entitlement_service import get_insurance_claim, get_last_entitlement_end_for_policy_version, derive_display_status
 from app.services.classroom_setup import (
     create_teacher,
-    create_pending_student_seat,
     delete_seat_with_profile,
 )
 from app.services.payroll_settings_service import upsert_payroll_settings
@@ -207,7 +206,6 @@ from app.utils.student_deletion import (
     delete_orphaned_users,
 )
 from app.utils.seat_scope import seat_scoped_filter, transaction_scope_filter
-from app.feats.admin_adjustment_feat import execute_admin_adjustments
 from app.feats.identity_feat import remove_pending_student_seat
 from app.feats.prod import record_attendance_session, record_payroll_event, record_payroll_reversal
 from app.feats.complete_payroll_cycle import complete_payroll_cycle
@@ -356,24 +354,11 @@ ADMIN_FEATURE_PATH_PREFIXES = {
     '/admin/insurance': 'insurance',
 }
 
-ADMIN_CLASS_CONTEXT_ENDPOINTS = {
-    'admin.add_individual_student',
-}
-
-ADMIN_CLASS_CONTEXT_REDIRECTS = {
-    'admin.add_individual_student': 'admin.students',
-}
-
-
 def _route_matches_prefix(path: str, prefix: str) -> bool:
     return path == prefix or path.startswith(f"{prefix}/")
 
 
 def _get_admin_class_context_redirect_endpoint() -> str:
-    redirect_endpoint = ADMIN_CLASS_CONTEXT_REDIRECTS.get(request.endpoint)
-    if redirect_endpoint:
-        return redirect_endpoint
-
     for prefix, feature_name in ADMIN_FEATURE_PATH_PREFIXES.items():
         if _route_matches_prefix(request.path, prefix):
             if feature_name == 'store':
@@ -440,8 +425,6 @@ def _route_uses_admin_class_context() -> bool:
         return False
     if endpoint == 'admin.set_current_class':
         return False
-    if endpoint in ADMIN_CLASS_CONTEXT_ENDPOINTS:
-        return True
     return any(_route_matches_prefix(request.path, prefix) for prefix in ADMIN_FEATURE_PATH_PREFIXES)
 
 
@@ -825,12 +808,6 @@ def _parse_dob_date(dob_str):
             continue
 
     raise ValueError("Invalid date format. Please use the date picker.")
-
-
-def _build_teacher_block_dedupe_key(class_id: str, first_name: str, last_name: str) -> str:
-    from app.hash_utils import hash_roster_fingerprint
-    return hash_roster_fingerprint(class_id=class_id, first_name=first_name,
-                                   last_name=last_name)[:8]
 
 
 def _find_admin_by_auth_username(username: str):
@@ -1491,18 +1468,6 @@ def _get_table_columns(table_name: str) -> set[str]:
 
 # _generate_unique_teacher_join_code: DELETED — join code generation is internal to
 # FEAT-CLASS-001; routes should not generate join codes independently.
-
-
-def _resolve_student_add_class_context(canonical_context, *, block_select: str, section: str | None) -> dict | None:
-    """Resolve an existing target class for the IDENTITY add-student flow."""
-
-    if canonical_context is None or not getattr(canonical_context, "user_id", None):
-        return None
-
-    if block_select == '__CREATE_NEW__':
-        return None
-    return _resolve_admin_class_context(g.canonical_context)
-
 
 
 # _link_student_to_admin: DELETED — v1 bridge function that violated INV-IDEN-001
@@ -2609,60 +2574,6 @@ def dashboard():
         show_insurance_tier_prompt=show_insurance_tier_prompt,
         current_page="dashboard"
     )
-
-
-@admin_bp.route('/bonuses', methods=['POST'])
-@admin_required
-def give_bonus_all():
-    """Give bonus or payroll adjustment to all students."""
-    from app.models import _quantize_currency
-
-    title = request.form.get('title')
-    amount = _quantize_currency(request.form.get('amount'))
-    tx_type = request.form.get('type')
-
-    ctx = g.canonical_context
-    # One canonical class, compared directly. This read used to wrap a Python
-    # list of one class_id in `sa.select(...)`, which SQLAlchemy 2.0 rejects
-    # outright, so every class-wide bonus raised before reaching the ledger.
-    #
-    # Unclaimed seats hold no principal and no activated participation
-    # (DOM-IDEN-005 §VII-VIII), so a class-wide bonus skips them.
-    seats = Seat.query.filter(
-        Seat.class_id == ctx.class_id,
-        Seat.role == 'student',
-        Seat.claimed_at.isnot(None),
-    ).all()
-    user_id = ctx.user_id
-
-    adjustments = []
-
-    for seat in seats:
-        adjustments.append({
-            'seat': seat,
-            'amount': amount,
-            'type': tx_type,
-            'description': title,
-            'account_type': 'checking',
-        })
-
-    with FEATContext(
-        "FEAT-LED-000",
-        idempotency_key=f"feat:bonus:{ctx.class_id}:{uuid.uuid4().hex}",
-    ):
-        result = execute_admin_adjustments(
-            ctx=ctx,
-            adjustments=adjustments,
-            actor_seat_id=ctx.seat_id,
-        )
-    message = f"Bonus/Payroll posted to {result.applied_count} student(s)!"
-    if result.declined_count:
-        message += f" {result.declined_count} declined for insufficient funds."
-    if result.fee_count:
-        message += f" Overdraft fee charged for {result.fee_count}."
-    flash(message, "warning" if result.declined_count else "success")
-    return redirect(url_for('admin.dashboard'))
-
 
 
 # -------------------- AUTHENTICATION --------------------
@@ -3783,17 +3694,6 @@ def edit_student():
     student_profile.last_name = last_name_input
     student_profile.notes = notes_input or None
 
-    # Handle account reset — generate recovery code per DOM-IDEN-002 §IX
-    reset_login = request.form.get('reset_login') == 'on'
-    if reset_login:
-        from app.services.student_recovery import issue_student_recovery_code
-        code = issue_student_recovery_code(student.user_id) if student.user_id else None
-        if code:
-            flash(f"Reset code generated for {student_profile.full_name}: {code} — Expires in 10 minutes. "
-                  f"Give this code to the student.", "warning")
-        else:
-            flash("Student has no linked account.", "error")
-
     try:
         if name_changed:
             flash(f"Successfully updated {student_profile.full_name}'s information.", "success")
@@ -3804,10 +3704,58 @@ def edit_student():
         flash("Error updating student due to internal error", "error")
         return redirect(url_for('admin.students'))
 
-    if reset_login:
-        return _redirect_to_student_detail(student.public_id)
-
     return redirect(url_for('admin.students'))
+
+
+def _reset_code_teacher_key():
+    return f"reset-code:teacher:{session.get('user_id')}"
+
+
+def _reset_code_student_key():
+    return f"reset-code:teacher:{session.get('user_id')}:seat:{request.form.get('seat_id', '')}"
+
+
+@admin_bp.route('/student/reset-code', methods=['POST'])
+@admin_required
+@limiter.limit("5 per hour", key_func=_reset_code_student_key)
+@limiter.limit("20 per hour", key_func=_reset_code_teacher_key)
+def generate_student_reset_code():
+    """Issue a student reset code under FEAT-IDEN-003 (DOM-IDEN-002 §IX Step 1).
+
+    Its own request, not a side effect of the roster edit form: roster editing
+    runs under FEAT-IDEN-006, and a FEAT may not execute inside another
+    (FEAT-CORE-000 §V.1). Limits follow FEAT-IDEN-003 §VIII, keyed on the
+    teacher rather than the client address.
+    """
+    from app.feats.identity_feat import generate_teacher_reset_code
+
+    seat_id = request.form.get('seat_id', type=int)
+    if not seat_id:
+        flash("Select a student first.", "error")
+        return redirect(url_for('admin.students'))
+
+    result = generate_teacher_reset_code(
+        canonical_context=g.canonical_context,
+        seat_id=seat_id,
+        correlation_id=generate_correlation_id(),
+        idempotency_key=f"identity:reset-code:{g.canonical_context.class_id}:{seat_id}:{uuid.uuid4().hex}",
+    )
+    if not result.success:
+        flash(result.error_message, "error")
+        if result.error_code == "INVALID_SEAT_STATE":
+            seat = Seat.query.filter_by(id=seat_id, class_id=g.canonical_context.class_id).first()
+            if seat is not None:
+                return _redirect_to_student_detail(seat.public_id)
+        return redirect(url_for('admin.students'))
+
+    flash(f"Reset code generated for {result.display_name or 'this student'}: {result.code} — "
+          f"Expires in 10 minutes. Give this code to the student.", "warning")
+    # The code is already issued; if the seat vanished since (a concurrent
+    # delete), land on the roster rather than failing the request.
+    seat = Seat.query.filter_by(id=seat_id, class_id=g.canonical_context.class_id).first()
+    if seat is None:
+        return redirect(url_for('admin.students'))
+    return _redirect_to_student_detail(seat.public_id)
 
 
 def _student_deletion_plan(context, seat_ids):
@@ -4033,21 +3981,6 @@ def unclaim_student():
     return jsonify(result)
 
 
-@admin_bp.route('/student/archive', methods=['GET', 'POST'])
-@admin_bp.route('/student/delete', methods=['GET', 'POST'])
-@admin_required
-def delete_student():
-    current_app.logger.info("Delete student route accessed. method=%s form_keys=%s",
-                            request.method, sorted(request.form.keys()))
-    if request.method != 'POST':
-        return redirect(url_for('admin.students'))
-    if request.form.get('confirmation', '').strip() != 'DELETE':
-        flash("Delete cancelled: confirmation text did not match.", "warning")
-        return redirect(url_for('admin.students'))
-    return _dispatch_student_deletion([request.form.get('seat_id')], request.form,
-                                     require_gate=False, form_response=True)
-
-
 @admin_bp.route('/students/bulk-delete', methods=['POST'])
 @admin_required
 def bulk_delete_students():
@@ -4160,106 +4093,6 @@ def delete_join_code():
         db.session.rollback()
         current_app.logger.error(f"Error deleting class {class_id} (join code {display_join_code}): {e}")
         return jsonify({"status": "error", "message": "An error occurred while deleting the class. Please try again."}), 500
-
-
-@admin_bp.route('/pending-students/delete', methods=['POST'])
-@admin_required
-def delete_pending_student():
-    data = request.get_json(silent=True) or {}
-    seat = Seat.query.filter_by(id=data.get('seat_id'), class_id=g.canonical_context.class_id,
-                               role='student', user_id=None, claimed_at=None).first()
-    if seat is None:
-        abort(404)
-    return _dispatch_student_deletion([seat.id], data, require_gate=False)
-
-
-@admin_bp.route('/pending-students/bulk-delete', methods=['POST'])
-@admin_required
-def bulk_delete_pending_students():
-    data = request.get_json(silent=True) or {}
-    rows = Seat.query.filter_by(class_id=g.canonical_context.class_id, role='student',
-                               user_id=None, claimed_at=None).all()
-    allowed = {row.id for row in rows}
-    ids = list(allowed) if data.get('all_pending') else data.get('seat_ids', [])
-    try:
-        if not {int(value) for value in ids}.issubset(allowed):
-            abort(404)
-    except (ValueError, TypeError):
-        abort(400)
-    return _dispatch_student_deletion(ids, data, require_gate=False)
-
-
-@admin_bp.route('/student/add-individual', methods=['POST'])
-@admin_required
-def add_individual_student():
-    """Add a single student (same as bulk upload but for one student)."""
-    try:
-        first_name = request.form.get('first_name', '').strip()
-        last_name = request.form.get('last_name', '').strip()
-        block_select = (request.form.get('block_select') or '').strip()
-        additional_notes = (request.form.get('additional_notes') or '').strip()
-
-        if not all([first_name, last_name, block_select]):
-            flash("All fields are required.", "error")
-            return redirect(url_for('admin.students'))
-
-        section = block_select.upper()
-        # Student.block is VARCHAR(10) in the DB; enforce before insert to avoid flush-time errors.
-        if len(section) > 10:
-            flash("Class section name must be 10 characters or fewer.", "error")
-            return redirect(url_for('admin.students'))
-
-        user_id = g.canonical_context.user_id
-        class_context = _resolve_student_add_class_context(
-            g.canonical_context,
-            block_select=block_select,
-            section=section,
-        )
-        if not class_context:
-            flash("Select a class before making changes.", "error")
-            return redirect(url_for('admin.students'))
-
-        join_code = class_context['join_code']
-        class_id = class_context['class_id']
-        dedupe_key = _build_teacher_block_dedupe_key(class_id, first_name, last_name)
-
-        existing_seat_in_class = Seat.query.filter_by(
-            class_id=class_id,
-            dedupe_code=dedupe_key,
-        ).first()
-        if existing_seat_in_class:
-            flash(f"Student {first_name} {last_name} is already in your class.", "info")
-            return redirect(url_for('admin.students'))
-
-        # dedupe_key already encodes (class_id, first_name, last_name) via HMAC --
-        # raw names must not appear here, since idempotency_key is written verbatim
-        # to the FEAT-ENTRY log line on every FEATContext entry (app/feats/base.py).
-        with FEATContext("FEAT-IDEN-001", idempotency_key=f"admin:add-individual-student:{class_id}:{dedupe_key}"):
-            # Seat only — no User until student completes claim (DOM-IDEN-002 §VIII).
-            profile = IdentityProfile(
-                profile_type='student',
-                first_name=first_name,
-                last_name=last_name,
-                notes=additional_notes or None,
-            )
-
-            # Verify class exists before creating Seat
-            if not get_class_economy(class_id):
-                raise ValueError(f"Class {class_id} does not exist")
-
-            new_seat = create_pending_student_seat(
-                class_id=class_id,
-                dedupe_code=dedupe_key,
-            )
-
-            profile.seat_id = new_seat.id
-
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error("Error adding individual student")
-        flash(f"Cannot add student due to internal error", "error")
-
-    return redirect(url_for('admin.students'))
 
 
 def _class_local_date_start_utc(date_str):
@@ -8088,105 +7921,6 @@ def update_expected_weekly_hours():
 
 # -------------------- PAYROLL REWARDS & FINES --------------------
 
-@admin_bp.route('/payroll/transactions/<int:transaction_id>/void', methods=['POST'])
-@admin_required
-def void_payroll_transaction(transaction_id):
-    """Void a single transaction from payroll interface."""
-    try:
-        selected_scope = _require_payroll_feature_scope_from_request()
-        transaction = (
-            Transaction.query
-            .filter(Transaction.id == transaction_id)
-            .filter(Transaction.class_id == selected_scope['class_id'])
-            .first_or_404()
-        )
-
-        if transaction.status == TransactionStatus.VOID:
-            return jsonify({'success': False, 'message': 'Transaction is already voided'}), 400
-
-        idempotency_key = (
-            f"feat:led:payroll-void:{selected_scope['class_id']}:{transaction.id}"
-        )
-        db.session.rollback()
-        transaction = (
-            Transaction.query
-            .filter(Transaction.id == transaction_id)
-            .filter(Transaction.class_id == selected_scope['class_id'])
-            .first_or_404()
-        )
-
-        if transaction.status == TransactionStatus.VOID:
-            return jsonify({'success': False, 'message': 'Transaction is already voided'}), 400
-
-        execute_void_transaction(
-            transaction,
-            correlation_id=f"{transaction.correlation_id}:void:{transaction_id}",
-            idempotency_key=idempotency_key,
-        )
-
-        return jsonify({'success': True, 'message': 'Transaction voided successfully'})
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error voiding transaction: {e}")
-        return jsonify({'success': False, 'message': 'Error voiding transaction'}), 500
-
-
-@admin_bp.route('/payroll/transactions/void-bulk', methods=['POST'])
-@admin_required
-def void_transactions_bulk():
-    """Void multiple transactions at once."""
-    try:
-        data = request.get_json()
-        transaction_ids = data.get('transaction_ids', [])
-        selected_scope = _require_payroll_feature_scope_from_request()
-
-        if not transaction_ids:
-            return jsonify({'success': False, 'message': 'No transactions selected'}), 400
-
-        payload_hash = hashlib.sha256(
-            json.dumps(
-                {
-                    "class_id": selected_scope["class_id"],
-                    "transaction_ids": [int(tx_id) for tx_id in transaction_ids],
-                },
-                sort_keys=True,
-                default=str,
-            ).encode("utf-8")
-        ).hexdigest()[:16]
-        idempotency_key = (
-            f"feat:led:payroll-void-bulk:{selected_scope['class_id']}:{payload_hash}"
-        )
-
-        db.session.rollback()
-        transactions_to_void = []
-        for tx_id in transaction_ids:
-            transaction = (
-                Transaction.query
-                .filter(Transaction.id == int(tx_id))
-                .filter(Transaction.class_id == selected_scope['class_id'])
-                .first()
-            )
-            if transaction and transaction.status != TransactionStatus.VOID:
-                transactions_to_void.append(transaction)
-        execute_void_transactions(
-            transactions_to_void,
-            correlation_id=f"corr_void_bulk_{selected_scope['class_id']}_{uuid.uuid4().hex}",
-            idempotency_key=idempotency_key,
-        )
-        count = len(transactions_to_void)
-        return jsonify({'success': True, 'message': f'{count} transaction(s) voided successfully'})
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error voiding transactions in bulk: {e}")
-        return jsonify({'success': False, 'message': 'Error voiding transactions'}), 500
-
-
-
-
 @admin_bp.route('/payroll/manual-payment', methods=['POST'])
 @admin_required
 def payroll_manual_payment():
@@ -8347,56 +8081,6 @@ def upload_students():
     except ValueError as exc:
         return jsonify(status="error", message=str(exc), created=0), 400
     return jsonify(status="success", created=created, join_code=join_code, errors=[])
-
-
-@admin_bp.route('/export-class-roster')
-@admin_required
-def export_class_roster():
-    """Export the current class roster as the editable sync CSV."""
-    user_id = g.canonical_context.user_id
-    class_id = (getattr(getattr(g, "canonical_context", None), "class_id", None) or "").strip()
-    if not class_id:
-        flash("Select a class before exporting roster.", "error")
-        return redirect(url_for("admin.students"))
-
-    class_row = verify_teacher_owns_class(class_id, user_id)
-    if not class_row:
-        flash("Select a class before exporting roster.", "error")
-        return redirect(url_for("admin.students"))
-
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(["join_code", "actor_public_id", "first_name", "last_name", "notes", "checking_balance", "savings_balance"])
-
-    seats = (
-        Seat.query
-        .options(sa.orm.joinedload(Seat.identity_profiles))
-        .join(IdentityProfile, IdentityProfile.seat_id == Seat.id)
-        .filter(Seat.class_id == class_id, Seat.role == "student")
-        .order_by(Seat.id.asc())
-        .all()
-    )
-
-    for seat in seats:
-        profile = next((p for p in seat.identity_profiles if p.profile_type == "student"), None)
-        checking_balance, savings_balance = get_available_balances(seat.id, class_id)
-        writer.writerow([
-            get_display_join_code(class_row.class_id),
-            seat.public_id or "",
-            _sanitize_csv_field(getattr(profile, "first_name", "") or ""),
-            _sanitize_csv_field(getattr(profile, "last_name", "") or ""),
-            _sanitize_csv_field(getattr(profile, "notes", "") or ""),
-            f"{checking_balance:.2f}",
-            f"{savings_balance:.2f}",
-        ])
-
-    output.seek(0)
-    filename = f"class_roster_{get_display_join_code(class_row.class_id)}_{utc_now().strftime('%Y%m%d_%H%M%S')}.csv"
-    return Response(
-        output.getvalue(),
-        mimetype="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
-    )
 
 
 @admin_bp.route('/export-students')
@@ -10018,13 +9702,6 @@ def create_new_class():
     return redirect(url_for('admin.dashboard'))
 
 
-@admin_bp.route('/onboarding/skip', methods=['POST'])
-@admin_required
-def onboarding_skip():
-    """No-op — onboarding status is derived live."""
-    return jsonify({'status': 'success'})
-
-
 @admin_bp.route('/onboarding/skip-task', methods=['POST'])
 @admin_required
 def onboarding_skip_task():
@@ -10036,71 +9713,6 @@ def onboarding_skip_task():
 
 
 # ==================== ECONOMY BALANCE CHECKER API ====================
-
-@admin_bp.route('/api/economy/calculate-cwi', methods=['POST'])
-@admin_required
-def api_calculate_cwi():
-    """
-    Calculate CWI (Classroom Wage Index) based on payroll settings.
-
-    Expected JSON payload:
-    {
-        "pay_rate": 15.0,          // Per hour rate
-        "expected_weekly_hours": 5.0,
-        "block": "A" (optional)
-    }
-
-    Returns CWI calculation with breakdown.
-    """
-    try:
-        user_id = g.canonical_context.user_id
-        data = request.get_json()
-
-        # Get pay rate and convert to per-minute (as stored in DB)
-        pay_rate_per_hour = float(data.get('pay_rate', 15.0))
-        pay_rate_per_minute = pay_rate_per_hour / 60.0
-        expected_weekly_hours = float(data.get('expected_weekly_hours', 5.0))
-        section = data.get('block')
-
-        # Create a temporary PayrollSettings-like object for calculation
-        class TempPayrollSettings:
-            def __init__(self, pay_rate, time_unit='minutes', frequency_days=7, expected_weekly_hours=None):
-                self.pay_rate = pay_rate
-                self.time_unit = time_unit
-                self.payroll_frequency_days = frequency_days
-                self.expected_weekly_hours = expected_weekly_hours
-
-        temp_settings = TempPayrollSettings(pay_rate_per_minute, expected_weekly_hours=expected_weekly_hours)
-
-        # Calculate CWI
-        checker = EconomyBalanceChecker(user_id)
-        cwi_calc = checker.calculate_cwi(temp_settings, expected_weekly_hours)
-        if cwi_calc is None:
-            return jsonify({
-                'status': 'cwi_unconfigured',
-                'message': 'Expected weekly hours not configured. Set it on the Economic Engine page to enable pricing recommendations.',
-                'cwi': None,
-            })
-
-        recommendations = get_price_recommendation_context(checker.policy_mode, cwi_calc.cwi)
-
-        return jsonify({
-            'status': 'success',
-            'cwi': cwi_calc.cwi,
-            'breakdown': {
-                'pay_rate_per_hour': pay_rate_per_hour,
-                'pay_rate_per_minute': cwi_calc.pay_rate_per_minute,
-                'expected_weekly_hours': expected_weekly_hours,
-                'expected_weekly_minutes': cwi_calc.expected_weekly_minutes,
-                'notes': cwi_calc.notes
-            },
-            'recommendations': recommendations
-        })
-
-    except Exception as e:
-        current_app.logger.error(f"Error calculating CWI: {e}")
-        return jsonify({'status': 'error', 'message': 'Failed to calculate CWI'}), 500
-
 
 def _resolve_admin_payroll_settings_for_class_id(canonical_context, class_id: str | None):
     """
@@ -10569,28 +10181,6 @@ def passkey_auth_finish():
     except Exception as e:
         current_app.logger.error(f"Error finishing passkey authentication: {e}")
         return jsonify({"error": "Authentication failed"}), 401
-
-
-@admin_bp.route('/passkey/list', methods=['GET'])
-@admin_required
-def passkey_list():
-    """List all passkeys for current teacher."""
-    try:
-        user_id = g.canonical_context.user_id
-        credentials = list_admin_credentials(user_id)
-
-        return jsonify({
-            "passkeys": [{
-                "id": cred.id,
-                "name": cred.authenticator_name or "Unnamed Passkey",
-                "created_at": cred.created_at.isoformat() if cred.created_at else None,
-                "last_used": cred.last_used.isoformat() if cred.last_used else None
-            } for cred in credentials]
-        }), 200
-
-    except Exception as e:
-        current_app.logger.error(f"Error listing passkeys: {e}")
-        return jsonify({"error": "Failed to list passkeys"}), 500
 
 
 @admin_bp.route('/passkey/<int:passkey_id>/delete', methods=['DELETE'])

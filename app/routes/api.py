@@ -66,7 +66,6 @@ from app.services.entitlement_read_service import (
 )
 from app.services.class_configuration_query_service import (
     get_class_economy,
-    get_all_classes_by_teacher,
     get_hall_pass_settings,
 )
 from app.services.entitlement_service import consume_entitlement, get_hall_pass_balance, grant_hall_passes
@@ -1414,127 +1413,6 @@ def get_available_hall_pass_types():
     return jsonify({
         "status": "success",
         "pass_type_payload": enabled_pass_types
-    })
-
-
-@api_bp.route('/hall-pass/verification/active', methods=['GET'])
-def hall_pass_verification_active():
-    """Return current-day hall passes for the teacher resolved by public token."""
-    from types import SimpleNamespace
-
-    token = (request.args.get('token') or '').strip()
-    if not token:
-        return jsonify({"status": "error", "message": "token is required"}), 400
-
-    teacher_user = User.query.filter_by(hall_pass_verify_token=token).first()
-    if not teacher_user:
-        return jsonify({"status": "error", "message": "Verification page not available."}), 404
-
-    # SANCTIONED cross-class exception (INV-ARC-004 V.3): the hall-pass
-    # verification capability is the ONLY runtime path allowed to span a
-    # teacher's classes. It is token-authorized, read-only, and limited to the
-    # current class-local day. No other surface may reconstruct a class set.
-    class_rows = get_all_classes_by_teacher(teacher_user.id)
-    class_ids = [row.class_id for row in class_rows]
-    class_by_id = {row.class_id: row for row in class_rows}
-    passes = []
-    for class_id in class_ids:
-        public_temporal_context = SimpleNamespace(class_id=class_id)
-        day_bounds = canonical_temporal_resolver(
-            CLASS_LEVEL_EVALUATION,
-            canonical_execution_context=public_temporal_context,
-            primitive="evaluation_day_boundaries",
-        )
-        passes.extend(
-            HallPassLog.query
-            .filter(
-                HallPassLog.class_id == class_id,
-                HallPassLog.timestamp >= day_bounds.boundary_start_utc,
-                HallPassLog.timestamp < day_bounds.boundary_end_utc,
-            )
-            .order_by(HallPassLog.timestamp.desc(), HallPassLog.id.desc())
-            .all()
-        )
-    passes.sort(key=lambda log: (log.timestamp, log.id), reverse=True)
-    passes = passes[:10]
-
-    def _hall_pass_state(log):
-        rows = (
-            AttendanceSession.query.filter_by(
-                class_id=log.class_id,
-                target_seat_id=log.requested_by_seat_id,
-                hall_pass_id=log.hall_pass_id,
-            )
-            .order_by(AttendanceSession.timestamp.asc(), AttendanceSession.id.asc())
-            .all()
-        )
-        left_row = None
-        return_row = None
-        left_row = next(
-            (
-                row for row in rows
-                if row.status == "inactive"
-                and row.reason_code == AttendanceReasonCode.HALL_PASS.value
-            ),
-            None,
-        )
-        return_row = next(
-            (
-                row for row in rows
-                if left_row is not None
-                and row.status == "active"
-                and row.timestamp >= left_row.timestamp
-            ),
-            None,
-        )
-        status = "returned" if return_row is not None else "left" if left_row is not None else "approved"
-        return status, left_row, return_row
-
-    def _profile_for(log):
-        return IdentityProfile.query.filter_by(
-            seat_id=log.requested_by_seat_id,
-            class_id=log.class_id,
-        ).first()
-
-    def _iso_timestamp(row):
-        if row is None or row.timestamp is None:
-            return None
-        return row.timestamp.isoformat().replace("+00:00", "Z")
-
-    pass_rows = []
-    for log in passes:
-        profile = _profile_for(log)
-        status, left_row, return_row = _hall_pass_state(log)
-        class_row = class_by_id.get(log.class_id)
-        student_name = ""
-        if profile is not None:
-            student_name = " ".join(
-                part for part in (
-                    profile.first_name,
-                    f"{profile.last_initial}." if profile.last_initial else None,
-                )
-                if part
-            ).strip()
-        pass_rows.append({
-            "id": log.id,
-            "seat_id": log.requested_by_seat_id,
-            "student_name": student_name,
-            "destination": log.destination,
-            "status": status,
-            "left_time": _iso_timestamp(left_row),
-            "return_time": _iso_timestamp(return_row),
-            "period": (class_row.section if class_row else None) or "",
-            "class_id": log.class_id,
-            "class_label": (
-                class_row.display_name
-                or class_row.section
-                or log.class_id
-            ) if class_row else log.class_id,
-        })
-
-    return jsonify({
-        "status": "success",
-        "passes": pass_rows,
     })
 
 

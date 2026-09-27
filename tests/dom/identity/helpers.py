@@ -12,7 +12,8 @@ from flask.testing import FlaskClient
 
 
 def admin_generate_recovery_code(client: FlaskClient, seat_id: int):
-    return client.post(f"/recovery/admin/generate-code/{seat_id}", follow_redirects=False)
+    """Issue a student reset code (FEAT-IDEN-003) for a seat in the active class."""
+    return client.post("/admin/student/reset-code", data={"seat_id": seat_id}, follow_redirects=False)
 
 
 def student_login(client: FlaskClient, *, username: str, passphrase: str, follow_redirects: bool = False):
@@ -118,27 +119,6 @@ def admin_delete_class(client: FlaskClient, **payload: Any):
     anything passed here is gate evidence or deliberately-ignored noise.
     """
     return client.post("/admin/join-code/delete", json=dict(payload))
-
-
-def admin_add_individual_student(
-    client: FlaskClient,
-    *,
-    first_name: str,
-    last_name: str,
-    dob: str,
-    block_select: str,
-    follow_redirects: bool = False,
-):
-    return client.post(
-        "/admin/student/add-individual",
-        data={
-            "first_name": first_name,
-            "last_name": last_name,
-            "dob": dob,
-            "block_select": block_select,
-        },
-        follow_redirects=follow_redirects,
-    )
 
 
 def admin_edit_student(

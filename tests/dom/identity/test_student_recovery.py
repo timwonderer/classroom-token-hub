@@ -564,8 +564,13 @@ def test_recovery_completion_rechecks_authorization(client, recovery_data, monke
         monkeypatch.setattr(identity_feat, "utc_now", lambda: deadline)
     elif reason == "reissued":
         from app.feats.identity_feat import generate_teacher_reset_code
+        from app.services.context_resolver import CanonicalContext
         result = generate_teacher_reset_code(
-            seat_id=recovery_data["seat"].id, teacher_user_id=recovery_data["teacher"].id,
+            canonical_context=CanonicalContext(
+                user_id=recovery_data["teacher"].id, class_id=recovery_data["class_id"],
+                seat_id=recovery_data["teacher_seat"].id, actor_role="teacher",
+            ),
+            seat_id=recovery_data["seat"].id,
             correlation_id="corr_recovery_reissue", idempotency_key="recovery:reissue",
         )
         assert result.success
@@ -750,17 +755,18 @@ def test_recovery_server_revocation_blocks_each_setup_step(client, recovery_data
     assert _credential_state(user) == before
 
 
-def test_teacher_edit_reissuance_revokes_recovery_session(client, recovery_data):
+def test_teacher_reissuance_revokes_recovery_session(client, recovery_data):
+    """A fresh reset code revokes a recovery session already in progress.
+
+    Reissuance moved from the roster edit form to its own FEAT-IDEN-003
+    request on 2026-09-27; the property is unchanged."""
     user = recovery_data["user"]
     authorization = _authorize_recovery(user)
     with client.session_transaction() as sess:
         set_canonical_context(sess, user_id=recovery_data["teacher"].id,
                               class_id=recovery_data["class_id"],
                               seat_id=recovery_data["teacher_seat"].id, role="admin")
-    response = client.post("/admin/student/edit", data={
-        "seat_id": recovery_data["seat"].id,
-        "first_name": "Original", "last_name": "Student", "reset_login": "on",
-    })
+    response = admin_generate_recovery_code(client, recovery_data["seat"].id)
     assert response.status_code == 302
     db.session.refresh(user)
     assert user.reset_code is not None

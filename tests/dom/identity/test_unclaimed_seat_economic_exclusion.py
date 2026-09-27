@@ -9,7 +9,8 @@ Regression: the teacher dashboard counted every student seat in the class, so a
 class with three claimed students and thirteen unclaimed roster seats reported 16
 "Active Students" and an economy value that included a balance stranded on an
 unclaimed seat, while Banking and Payroll reported 3 students and $0.00 for the
-same class. The class-wide bonus paid unclaimed seats too.
+same class. The class-wide bonus paid unclaimed seats too; that route, `/admin/bonuses`,
+was removed 2026-09-27 (REF-API-001 §VII-D).
 """
 
 from __future__ import annotations
@@ -87,36 +88,6 @@ def test_DOM_IDEN_001__banking_stats_and_transaction_log_skip_unclaimed_seats(cl
 
     assert str(STRANDED) not in body
     assert "before the seat was unclaimed" not in body
-
-
-def test_DOM_IDEN_001__class_wide_bonus_pays_only_claimed_seats(client):
-    """An unclaimed seat holds no principal, so a bonus must not credit it."""
-    classroom = initialize_as_teacher("chemistry_p1", client, client.application)
-    seat = _unclaimed_seat_holding_money(classroom)
-
-    before = Transaction.query.filter_by(seat_id=seat.id).count()
-    response = client.post(
-        "/admin/bonuses",
-        data={"title": "Field day bonus", "amount": "5.00", "type": "bonus"},
-    )
-    assert response.status_code in (200, 302)
-
-    assert Transaction.query.filter_by(seat_id=seat.id).count() == before
-    assert not Transaction.query.filter(
-        Transaction.seat_id == seat.id, Transaction.description.ilike("%Field day bonus%")
-    ).first()
-    # The claimed roster did receive it, so the bonus itself still works.
-    claimed_ids = [
-        row.id for row in Seat.query.filter(
-            Seat.class_id == classroom.class_id,
-            Seat.role == "student",
-            Seat.claimed_at.isnot(None),
-        ).all()
-    ]
-    assert Transaction.query.filter(
-        Transaction.seat_id.in_(claimed_ids),
-        Transaction.description.ilike("%Field day bonus%"),
-    ).count() == len(claimed_ids)
 
 
 def test_DOM_IDEN_001__unclaiming_preserves_the_seats_rows(client):

@@ -364,59 +364,77 @@ def activate_student_credentials(
 @requires_feat_context("FEAT-IDEN-003")
 def generate_teacher_reset_code(
     *,
+    canonical_context: CanonicalContext,
     seat_id: int,
-    teacher_user_id: int,
     correlation_id: str,
     idempotency_key: str,
 ) -> ResetCodeResult:
     """
-    FEAT-IDEN-003: Teacher initiates password reset for a student.
+    FEAT-IDEN-003: a teacher issues a reset code for a claimed student seat.
 
-    Resolves the Seat to its bound User, generates a time-limited recovery
-    code, and writes it to the users table. Overwrites any existing code
-    (single active code invariant per DOM-IDEN-002 §IX).
+    The seat must belong to the request's active class (INV-ARC-004 §V.1), and
+    the actor must hold the teacher seat in that class and own it
+    (DOM-IDEN-002 §IX Step 1, FEAT-IDEN-003 §III.A). Recovery itself stays
+    user-owned: the code is issued on the student's ``users`` row by the
+    Identity command ``issue_student_recovery_code``, which overwrites any
+    earlier code (single active code). This is the only issuance path; roster
+    editing (FEAT-IDEN-006) no longer issues codes.
+
+    Error messages do not reveal whether a seat outside the active class exists.
     """
-    from app.models import ClassEconomy
-
-    seat = db.session.get(Seat, seat_id)
-    if not seat:
+    ctx = canonical_context
+    if not ctx or ctx.actor_role != "teacher" or not ctx.class_id or not ctx.seat_id:
         return ResetCodeResult(
-            success=False,
-            error_code="SEAT_NOT_FOUND",
-            error_message="Seat not found.",
+            success=False, error_code="UNAUTHORIZED",
+            error_message="You do not have permission to recover accounts in this class.",
         )
 
-    # Verify teacher owns this seat's class (IDOR prevention).
-    class_row = ClassEconomy.query.filter_by(class_id=seat.class_id).first()
-    if not class_row or class_row.teacher_user_id != teacher_user_id:
+    # §III.A Step 1: a claimed student seat in the active class. A seat in any
+    # other class, including another class this teacher owns, reads as absent.
+    seat = Seat.query.filter_by(id=seat_id, class_id=ctx.class_id, role="student").first()
+    if seat is None:
         return ResetCodeResult(
-            success=False,
-            error_code="UNAUTHORIZED",
-            error_message="You are not authorized to reset credentials for this student.",
+            success=False, error_code="STUDENT_SEAT_NOT_FOUND",
+            error_message="Student seat not found.",
+        )
+    # Claimed means both halves of DOM-IDEN-002's claimed state.
+    if seat.claimed_at is None or seat.user_id is None:
+        return ResetCodeResult(
+            success=False, error_code="INVALID_SEAT_STATE",
+            error_message="This student has not completed account setup yet.",
         )
 
+    # §III.A Step 3: the actor's own teacher seat in this class, on a class the
+    # actor owns.
+    teacher_seat = Seat.query.filter_by(
+        id=ctx.seat_id, user_id=ctx.user_id, class_id=ctx.class_id, role="teacher",
+    ).first()
+    classroom = get_class_economy(ctx.class_id)
+    if teacher_seat is None or classroom is None or classroom.teacher_user_id != ctx.user_id:
+        return ResetCodeResult(
+            success=False, error_code="UNAUTHORIZED",
+            error_message="You do not have permission to recover accounts in this class.",
+        )
+
+    # §III.A Step 2 is enforced by the issuer, which locks and loads only a
+    # users row whose role is student.
     from app.services.student_recovery import issue_student_recovery_code
-    code = issue_student_recovery_code(seat.user_id) if seat.user_id else None
+    code = issue_student_recovery_code(seat.user_id)
     if code is None:
         return ResetCodeResult(
-            success=False, error_code="NO_LINKED_USER",
-            error_message="Student has no linked account.",
+            success=False, error_code="STUDENT_USER_NOT_FOUND",
+            error_message="Student account not found.",
         )
 
+    # Never log the code itself (FEAT-IDEN-003 §III.B Step 3).
     logger.info(
-        "Reset code generated for seat %s (user %s) by user %s",
-        seat.id, seat.user_id, teacher_user_id,
+        "Reset code generated for seat %s in class %s by teacher seat %s",
+        seat.id, ctx.class_id, teacher_seat.id,
     )
 
-    display_name = (
-        seat.identity_profile.first_name if seat.identity_profile else str(seat.id)
-    )
+    display_name = seat.identity_profile.full_name if seat.identity_profile else None
+    return ResetCodeResult(success=True, code=code, display_name=display_name)
 
-    return ResetCodeResult(
-        success=True,
-        code=code,
-        display_name=display_name,
-    )
 
 
 # ---------------------------------------------------------------------------
