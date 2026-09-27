@@ -20,7 +20,7 @@ and this project follows semantic versioning principles.
   - Earnings display: the interpretation fixture now seeds its two-class earnings on the idempotent ledger path, with the teacher seat and `mechanism="teacher"` given explicitly.
   - Roster import: add-individual's five tests are replaced by new negative tests on `/admin/upload-students`. It refuses with no active class, writes only into the active class, is never redirected by a request-body `class_id`, fails closed on a seat pointer from another class, and never logs names. Two of the old tests had names their bodies did not check.
   - Mutation proofs: every moved or new test failed against a deliberately broken copy of what it guards. The import-isolation mutations had to break both the route and `import_student_seats`, which independently require a teacher seat in the target class.
-  - Removed-route guard: `REMOVED_ROUTES` covers all eighteen paths.
+  - Removed-route guard: `REMOVED_ROUTES` covers all nineteen removed paths, including `/recovery/admin/generate-code/<int:seat_id>` from the reset-code change below.
 
 ### Fixed
 - **Student reset codes have one path, scoped to the active class, under FEAT-IDEN-003 (2026-09-27)** — Two paths issued reset codes, and neither fully followed FEAT-IDEN-003:
