@@ -1,6 +1,10 @@
+![Classroom Token Hub banner](github-pages/assets/CTH_horizontal_header_logo.png)
+
 # Classroom Token Hub (CTH)
 
-A classroom economy platform. Students earn tokens for the time they work, and spend them on rent, insurance and a class store. Teachers run the class economy without handing over student email addresses, phone numbers or school SSO. Built with Flask, SQLAlchemy and PostgreSQL. Each class period is its own isolated economy.
+A classroom behavior management and reward platform with built-in simulated financial products and economic engines (and an absurd amount of documentation, pytests, and opinions.) 
+
+Students earn tokens for the time they work, and spend them on rent, insurance and a class store. Teachers run the class economy without handing over student email addresses, phone numbers or school SSO. Built with Flask, SQLAlchemy and PostgreSQL. Each class period is its own isolated economy.
 
 **Current release:** [v2.0.0](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.0.0), in production since 2026-09-26 · **Branch:** `main` · **License:** [PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/)
 
