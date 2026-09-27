@@ -60,15 +60,10 @@ def test_mobile_sidebar_hides_closed_controls_from_sequential_focus():
     assert "sidebar.removeAttribute('inert')" in script
 
 
-def test_admin_compact_navigation_exposes_current_page_state():
-    soup = _template("layout_admin.html")
-    compact_nav = soup.select_one(".mobile-bottom-nav")
-    assert compact_nav is not None
-    links = compact_nav.find_all("a")
-    assert len(links) == 4
-    for page in ("dashboard", "attendance", "students", "store"):
-        assert f"current_page == '{page}'" in str(compact_nav)
-    assert all(link.get("aria-label") for link in links)
+def test_portal_layouts_do_not_render_redundant_mobile_bottom_navigation():
+    for name in ("layout_admin.html", "layout_system_admin.html"):
+        soup = _template(name)
+        assert soup.select_one(".mobile-bottom-nav") is None
 
 
 def test_public_new_tab_links_announce_context_change():
