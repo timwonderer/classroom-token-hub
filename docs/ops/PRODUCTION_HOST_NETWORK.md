@@ -19,8 +19,9 @@ Last verified: 2026-09-27, against host `app-server` (Tailscale name `cth`, publ
 | Host firewall (`ufw`) | Inactive | — | — |
 
 The cloud firewall is the only layer between the public internet and anything that
-listens on a public interface, so the host keeps every non-web service off those
-interfaces (next section).
+listens on a public interface. So every monitoring and application service binds to
+loopback (next section). The exception is SSH: sshd still listens on every interface,
+and public blocking of port 22 rests on the cloud firewall.
 
 ## DigitalOcean cloud firewall
 
@@ -35,7 +36,10 @@ Read with `doctl compute firewall list -o json` on 2026-09-27.
   `172.64.0.0/13`, `173.245.48.0/20`, `188.114.96.0/20`, `190.93.240.0/20`,
   `197.234.240.0/22`, `198.41.128.0/17`, `2400:cb00::/32`, `2405:8100::/32`,
   `2405:b500::/32`, `2606:4700::/32`, `2803:f800::/32`, `2a06:98c0::/29`, `2c0f:f248::/32`.
-- No other inbound rule, so SSH (22) and every other port are closed publicly.
+- No other inbound rule. So if this firewall is attached to the production droplet
+  (see below), SSH (22) and every other port are closed publicly. The public probe in the
+  next section observed exactly that behaviour, but it cannot say which firewall
+  produced it.
 - Outbound: all TCP, UDP and ICMP.
 
 **`Local-Workstation`** (`57af9a74-…`): no inbound rules; outbound all.
@@ -99,6 +103,11 @@ process-exporter change is a drop-in, so deleting it restores the unit's own
 |---|---|---|
 | 9090, 9100, 9256, 3100, 9096, 9080, 3000, 8000 | timeout (filtered) | refused (nothing listening) |
 | 443 | timeout (filtered; the workstation is not a Cloudflare address) | open |
+| 22 | timeout (filtered; probed before the change at ~15:58 UTC) | open (sshd) |
+
+The public column shows observed filtering. It matches the `Cloudflare` rule set, but
+until the firewall's attachment is confirmed (above), attributing it to that firewall
+is an inference.
 
 The tailnet reaches nginx on 443 directly, without Cloudflare Access. That is how
 operators and CI reach the origin (`SOP-DEP-002` §VI: host-local probes do not traverse
@@ -114,8 +123,9 @@ Cloudflare-origin check has preferred that header since 2026-09-19.
 These must stay true. Each line is a read-only check.
 
 1. **Only nginx, sshd and Tailscale listen off loopback.**
-   `ssh cth 'ss -ltnH | awk "{print \$4}" | grep -vE "^(127\.|\[::1\])"'` should list
-   only `:80`, `:443`, `:22` and Tailscale addresses. A new service goes on `127.0.0.1`
+   `ssh cth 'ss -ltunH | awk "{print \$1, \$5}" | grep -vE " (127\.|\[::1\])"'` lists
+   TCP and UDP listeners off loopback. It should show only TCP `:80`, `:443` and `:22`,
+   Tailscale's UDP `41641`, and Tailscale-address listeners. A new service goes on `127.0.0.1`
    unless something off-host genuinely needs it, and then that need is written here.
 2. **The cloud firewall admits only Cloudflare to 80 and 443.** Its source list should
    equal Cloudflare's published ranges. Cloudflare changes them rarely but does change
