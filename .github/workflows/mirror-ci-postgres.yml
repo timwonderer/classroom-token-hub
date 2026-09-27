@@ -1,0 +1,74 @@
+name: Mirror CI Postgres image to GHCR
+
+# CI test jobs run Postgres as a service container. Pulled anonymously from a
+# public registry, the image failed intermittently ("toomanyrequests: Data limit
+# exceeded", 2026-09-27): GitHub-hosted runners share egress addresses, so the
+# anonymous allowance is shared too. The test jobs now pull
+# ghcr.io/timwonderer/ci-postgres instead, authenticated with GITHUB_TOKEN, and
+# this is the one job that still pulls from the public registry.
+#
+# It runs weekly for upstream patch releases, on demand, and when this file
+# changes on main. The tags are shared, so a branch must not be able to replace
+# the image main's CI pulls: pushes are filtered to main, and the job itself
+# refuses any other ref, since a manual run can be started from any branch.
+
+on:
+  schedule:
+    - cron: '0 7 * * 1'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mirror-ci-postgres.yml'
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: mirror-ci-postgres
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    name: Mirror postgres:${{ matrix.version }}
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ['15', '16']
+    steps:
+      - name: Log in to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+
+      - name: Pull upstream, with retry
+        env:
+          UPSTREAM: public.ecr.aws/docker/library/postgres:${{ matrix.version }}
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5; do
+            if docker pull "$UPSTREAM"; then exit 0; fi
+            echo "Pull attempt $attempt failed; retrying in $((attempt * 30))s"
+            sleep $((attempt * 30))
+          done
+          echo "Could not pull $UPSTREAM"; exit 1
+
+      - name: Label and push
+        env:
+          UPSTREAM: public.ecr.aws/docker/library/postgres:${{ matrix.version }}
+          TARGET: ghcr.io/timwonderer/ci-postgres:${{ matrix.version }}
+          SOURCE: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # The source label links the package to this repository, which is
+          # what lets the other workflows' GITHUB_TOKEN read it.
+          printf 'FROM %s\n' "$UPSTREAM" | docker build \
+            --label "org.opencontainers.image.source=$SOURCE" \
+            --label "org.opencontainers.image.description=CI mirror of $UPSTREAM" \
+            -t "$TARGET" -
+          docker push "$TARGET"
+          docker image inspect "$TARGET" --format 'Pushed {{index .RepoDigests 0}}'

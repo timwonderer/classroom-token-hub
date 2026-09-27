@@ -16,6 +16,8 @@ on:
 
 permissions:
   contents: read
+  # Pull the CI Postgres image from GHCR (mirror-ci-postgres.yml).
+  packages: read
 
 jobs:
   full-suite:
@@ -26,7 +28,10 @@ jobs:
 
     services:
       postgres:
-        image: public.ecr.aws/docker/library/postgres:16
+        image: ghcr.io/timwonderer/ci-postgres:16
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
         env:
           POSTGRES_USER: user
           POSTGRES_PASSWORD: password
