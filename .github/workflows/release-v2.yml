@@ -113,6 +113,7 @@ jobs:
         # old probe compared nginx's redirect page to "ok" and failed a healthy
         # release (2026-09-27, run 36287284998). A host-local probe does not
         # traverse Cloudflare Access (SOP-DEP-002 §VI). Retried briefly: the
-        # probe otherwise races the restart by milliseconds.
+        # probe otherwise races the restart by milliseconds. Each request is
+        # capped at 2s so a hung connection cannot stretch the 30s deadline.
         run: |
-          ssh root@"$PRODUCTION_SERVER_HOST" 'for i in $(seq 1 15); do if [ "$(curl --fail --silent http://127.0.0.1:8000/health || true)" = "ok" ]; then echo "Production health passed"; exit 0; fi; sleep 2; done; echo "Health check failed: /health on 127.0.0.1:8000 did not return ok within 30s"; exit 1'
+          ssh root@"$PRODUCTION_SERVER_HOST" 'deadline=$((SECONDS + 30)); while [ "$SECONDS" -lt "$deadline" ]; do if [ "$(curl --fail --silent --max-time 2 http://127.0.0.1:8000/health || true)" = "ok" ]; then echo "Production health passed"; exit 0; fi; sleep 2; done; echo "Health check failed: /health on 127.0.0.1:8000 did not return ok within 30s"; exit 1'
