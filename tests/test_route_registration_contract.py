@@ -104,6 +104,9 @@ REMOVED_ROUTES = [
     "/admin/passkey/list",
     "/switch-view",
     "/sysadmin/auth-check",
+    # Reset codes: one FEAT-IDEN-003 path, /admin/student/reset-code, scoped to
+    # the active class. This route checked only class ownership.
+    "/recovery/admin/generate-code/<int:seat_id>",
 ]
 
 
@@ -126,16 +129,24 @@ def _endpoint_name_registries():
     from app.observability import CAPABILITY_BY_ENDPOINT
     from app.routes.admin import ADMIN_FEATURE_ENDPOINTS
     from app.routes.student import STUDENT_FEATURE_ENDPOINTS, _SURVIVING_PREMIUM_ENDPOINTS
-    from app.services.tlcp import DEFAULT_NO_CONTEXT_ENDPOINTS, DEFAULT_PUBLIC_ENDPOINTS
+    import app.services.tlcp as tlcp
+
+    # The TLCP allowlists are slated for removal (TLCP stops classifying
+    # context-free requests). A registry that no longer exists holds no names
+    # to go stale, so check each only while it is defined.
+    tlcp_registries = {
+        f"tlcp.{name}": set(getattr(tlcp, name))
+        for name in ("DEFAULT_PUBLIC_ENDPOINTS", "DEFAULT_NO_CONTEXT_ENDPOINTS")
+        if hasattr(tlcp, name)
+    }
 
     return {
+        **tlcp_registries,
         "auth._CLASSLESS_ADMIN_ENDPOINTS": set(_CLASSLESS_ADMIN_ENDPOINTS),
         "observability.CAPABILITY_BY_ENDPOINT": set(CAPABILITY_BY_ENDPOINT),
         "admin.ADMIN_FEATURE_ENDPOINTS": set(ADMIN_FEATURE_ENDPOINTS),
         "student.STUDENT_FEATURE_ENDPOINTS": set(STUDENT_FEATURE_ENDPOINTS),
         "student._SURVIVING_PREMIUM_ENDPOINTS": set(_SURVIVING_PREMIUM_ENDPOINTS),
-        "tlcp.DEFAULT_PUBLIC_ENDPOINTS": set(DEFAULT_PUBLIC_ENDPOINTS),
-        "tlcp.DEFAULT_NO_CONTEXT_ENDPOINTS": set(DEFAULT_NO_CONTEXT_ENDPOINTS),
     }
 
 

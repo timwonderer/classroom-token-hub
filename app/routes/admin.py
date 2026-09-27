@@ -3694,17 +3694,6 @@ def edit_student():
     student_profile.last_name = last_name_input
     student_profile.notes = notes_input or None
 
-    # Handle account reset — generate recovery code per DOM-IDEN-002 §IX
-    reset_login = request.form.get('reset_login') == 'on'
-    if reset_login:
-        from app.services.student_recovery import issue_student_recovery_code
-        code = issue_student_recovery_code(student.user_id) if student.user_id else None
-        if code:
-            flash(f"Reset code generated for {student_profile.full_name}: {code} — Expires in 10 minutes. "
-                  f"Give this code to the student.", "warning")
-        else:
-            flash("Student has no linked account.", "error")
-
     try:
         if name_changed:
             flash(f"Successfully updated {student_profile.full_name}'s information.", "success")
@@ -3715,10 +3704,54 @@ def edit_student():
         flash("Error updating student due to internal error", "error")
         return redirect(url_for('admin.students'))
 
-    if reset_login:
-        return _redirect_to_student_detail(student.public_id)
-
     return redirect(url_for('admin.students'))
+
+
+def _reset_code_teacher_key():
+    return f"reset-code:teacher:{session.get('user_id')}"
+
+
+def _reset_code_student_key():
+    return f"reset-code:teacher:{session.get('user_id')}:seat:{request.form.get('seat_id', '')}"
+
+
+@admin_bp.route('/student/reset-code', methods=['POST'])
+@admin_required
+@limiter.limit("5 per hour", key_func=_reset_code_student_key)
+@limiter.limit("20 per hour", key_func=_reset_code_teacher_key)
+def generate_student_reset_code():
+    """Issue a student reset code under FEAT-IDEN-003 (DOM-IDEN-002 §IX Step 1).
+
+    Its own request, not a side effect of the roster edit form: roster editing
+    runs under FEAT-IDEN-006, and a FEAT may not execute inside another
+    (FEAT-CORE-000 §V.1). Limits follow FEAT-IDEN-003 §VIII, keyed on the
+    teacher rather than the client address.
+    """
+    from app.feats.identity_feat import generate_teacher_reset_code
+
+    seat_id = request.form.get('seat_id', type=int)
+    if not seat_id:
+        flash("Select a student first.", "error")
+        return redirect(url_for('admin.students'))
+
+    result = generate_teacher_reset_code(
+        canonical_context=g.canonical_context,
+        seat_id=seat_id,
+        correlation_id=generate_correlation_id(),
+        idempotency_key=f"identity:reset-code:{g.canonical_context.class_id}:{seat_id}:{uuid.uuid4().hex}",
+    )
+    if not result.success:
+        flash(result.error_message, "error")
+        if result.error_code == "INVALID_SEAT_STATE":
+            seat = Seat.query.filter_by(id=seat_id, class_id=g.canonical_context.class_id).first()
+            if seat is not None:
+                return _redirect_to_student_detail(seat.public_id)
+        return redirect(url_for('admin.students'))
+
+    flash(f"Reset code generated for {result.display_name or 'this student'}: {result.code} — "
+          f"Expires in 10 minutes. Give this code to the student.", "warning")
+    seat = Seat.query.filter_by(id=seat_id, class_id=g.canonical_context.class_id).first()
+    return _redirect_to_student_detail(seat.public_id)
 
 
 def _student_deletion_plan(context, seat_ids):

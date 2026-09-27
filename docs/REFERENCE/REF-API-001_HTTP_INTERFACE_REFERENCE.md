@@ -231,7 +231,7 @@ Re-verified against `app.url_map` and every template and script, then removed. E
 | `GET /switch-view` (redirect) | Nothing. The `force_desktop` flag it set was read nowhere. |
 | `GET /sysadmin/auth-check` | `/sysadmin/grafana/auth-check`, the only `auth_request` target in the deployed nginx. |
 
-`/recovery/admin/generate-code/<seat_id>` is also uncalled but is kept pending a separate change: it is the only FEAT-IDEN-003 entry point, while the live reset issues its code inside FEAT-IDEN-006.
+**Reset codes, same day.** `POST /recovery/admin/generate-code/<int:seat_id>` was uncalled and ran FEAT-IDEN-003, but checked only that the teacher owned the seat's class. The live reset was a switch on the two Edit Student forms, which issued the code inside FEAT-IDEN-006. Both are replaced by `POST /admin/student/reset-code` (form field `seat_id`). It runs FEAT-IDEN-003 against the request's active class, requires a claimed student seat and the actor's own teacher seat in that class, rejects trivially weak codes, and is rate limited per teacher and per teacher-and-student (FEAT-IDEN-003 §VIII). The student detail page carries its button.
 
 ---
 

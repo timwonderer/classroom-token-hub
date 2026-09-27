@@ -52,6 +52,8 @@ Two alert cards appear on this tab only when they apply.
 
 **Account Recovery / Setup** (yellow) shows on any account still Pending. It gives you the student's **Name** and **Join Code(s)** to read out so they can claim.
 
+**Generate reset code** appears under the student's information once their account is set up. It is a button of its own, separate from **Edit Student**, and issues a reset code immediately. If a code is already active it reads **Generate a new reset code**, and the new code replaces the old one.
+
 **Account Recovery In Progress** (red) shows when you have issued a reset code. It displays the code in large monospace, the join code, and the exact time the code expires, with the instruction that the student goes to the login page and clicks **"I can't log into my account"**.
 
 ### Transactions tab
@@ -97,9 +99,12 @@ Removing does not erase history. It records a reversal against passes the studen
 - **First Name** — used during the account claim
 - **Last Name** — stored encrypted
 - **Teacher Notes** — for you; the student never sees them
-- **Reset Student Login** — a switch
 
-Turning the reset switch on and saving generates an 8-character reset code that expires in **10 minutes**. The code is flashed to you immediately and also appears in the red **Account Recovery In Progress** card on the Overview tab until it expires.
+Resetting a student's login is not part of this modal. Use **Generate reset code** on the Overview tab.
+
+### Resetting a student's login
+
+**Generate reset code** issues an 8-character reset code that expires in **10 minutes**. The code is flashed to you immediately and also appears in the red **Account Recovery In Progress** card on the Overview tab until it expires. It only works for a student whose account is set up; a Pending student claims their seat instead.
 
 The student then goes to the login page, selects **"I can't log into my account"**, and enters that code. The code alone gets them in — they are not asked for their name or join code — and they go straight to choosing a new username, PIN, and passphrase.
 
@@ -109,7 +114,7 @@ The student then goes to the login page, selects **"I can't log into my account"
 > **A reset is not a re-claim.** Resetting does not delete the account or return it to Pending. The student's balances, items, and history are untouched; only their login credentials are replaced.
 
 > [!WARNING]
-> **Reset codes expire in 10 minutes.** Issue one when the student is in front of you and ready to use it. If it lapses, flip the switch again for a fresh code.
+> **Reset codes expire in 10 minutes.** Issue one when the student is in front of you and ready to use it. If it lapses, select **Generate a new reset code** for a fresh one.
 
 > [!CAUTION]
 > **Voiding is per-transaction and immediate.** There is one confirmation dialog and no undo. If you meant to correct an amount rather than cancel the entry, void it and post a replacement so the record shows what happened.

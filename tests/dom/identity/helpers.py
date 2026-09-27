@@ -12,7 +12,8 @@ from flask.testing import FlaskClient
 
 
 def admin_generate_recovery_code(client: FlaskClient, seat_id: int):
-    return client.post(f"/recovery/admin/generate-code/{seat_id}", follow_redirects=False)
+    """Issue a student reset code (FEAT-IDEN-003) for a seat in the active class."""
+    return client.post("/admin/student/reset-code", data={"seat_id": seat_id}, follow_redirects=False)
 
 
 def student_login(client: FlaskClient, *, username: str, passphrase: str, follow_redirects: bool = False):
