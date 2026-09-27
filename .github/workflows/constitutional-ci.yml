@@ -11,6 +11,8 @@ on:
 
 permissions:
   contents: read
+  # Pull the CI Postgres image from GHCR (mirror-ci-postgres.yml).
+  packages: read
 
 concurrency:
   group: constitutional-ci-${{ github.event.pull_request.number || github.ref }}
@@ -22,7 +24,10 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: public.ecr.aws/docker/library/postgres:15
+        image: ghcr.io/timwonderer/ci-postgres:15
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
         env:
           POSTGRES_USER: user
           POSTGRES_PASSWORD: password
