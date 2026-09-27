@@ -36,20 +36,18 @@ Read with `doctl compute firewall list -o json` on 2026-09-27.
   `172.64.0.0/13`, `173.245.48.0/20`, `188.114.96.0/20`, `190.93.240.0/20`,
   `197.234.240.0/22`, `198.41.128.0/17`, `2400:cb00::/32`, `2405:8100::/32`,
   `2405:b500::/32`, `2606:4700::/32`, `2803:f800::/32`, `2a06:98c0::/29`, `2c0f:f248::/32`.
-- No other inbound rule. So if this firewall is attached to the production droplet
-  (see below), SSH (22) and every other port are closed publicly. The public probe in the
-  next section observed exactly that behaviour, but it cannot say which firewall
-  produced it.
+- No other inbound rule, so SSH (22) and every other port are closed publicly. The
+  public probe in the next section observed exactly that.
 - Outbound: all TCP, UDP and ICMP.
 
 **`Local-Workstation`** (`57af9a74-…`): no inbound rules; outbound all.
 
-**Attachment is not confirmed through the API.** The local `doctl` token is scoped to
-firewall reads: the firewall listing shows `droplet_ids: []` and `tags: []`, and droplet
-and account reads return 403. Behaviour matches the `Cloudflare` rule set exactly (see
-the probe below: from a non-Cloudflare address, even 443 on the origin IP times out), but
-which firewall is attached should be confirmed in the DigitalOcean console or with a
-token that can read droplets.
+**This firewall protects the production droplet.** That is established in
+`docs/ops/audits/PROD_AUDIT_2026-07-01.md` (addendum: the droplet sits behind a
+DigitalOcean cloud firewall admitting 80 and 443 only from Cloudflare's ranges), and the
+2026-09-27 probe below behaves exactly as its rules predict. The local `doctl` token is
+scoped to firewall reads and cannot read droplets, so its listing shows
+`droplet_ids: []`. That is a limit of the token, not evidence against the attachment.
 
 Tailscale needs no inbound rule: it connects outbound and falls back to relays.
 
@@ -60,7 +58,7 @@ After the 2026-09-27 change, `ss -ltnp` shows only these on a non-loopback addre
 | Address | Process | Why it is not loopback |
 |---|---|---|
 | `0.0.0.0:80`, `0.0.0.0:443` | nginx | The public entry point |
-| `0.0.0.0:22`, `[::]:22` | sshd | Reached over Tailscale. Public access to 22 was observed filtered, as the `Cloudflare` firewall rules would do if attached (attachment unconfirmed; see above). Rebinding to the Tailscale address was not done: a mistake would need the DigitalOcean console to recover. |
+| `0.0.0.0:22`, `[::]:22` | sshd | Reached over Tailscale. Blocked publicly by the `Cloudflare` cloud firewall; the public probe of 22 times out. Rebinding to the Tailscale address was not done: a mistake would need the DigitalOcean console to recover. |
 | Tailscale addresses, UDP 41641 | tailscaled | Tailscale itself |
 
 Everything else listens on `127.0.0.1`:
@@ -105,9 +103,8 @@ process-exporter change is a drop-in, so deleting it restores the unit's own
 | 443 | timeout (filtered; the workstation is not a Cloudflare address) | open |
 | 22 | timeout (filtered; probed before the change at ~15:58 UTC) | open (sshd) |
 
-The public column shows observed filtering. It matches the `Cloudflare` rule set, but
-until the firewall's attachment is confirmed (above), attributing it to that firewall
-is an inference.
+The public column is the `Cloudflare` firewall at work: only Cloudflare's ranges reach
+80 and 443, and nothing else is admitted.
 
 The tailnet reaches nginx on 443 directly, without Cloudflare Access. That is how
 operators and CI reach the origin (`SOP-DEP-002` §VI: host-local probes do not traverse
@@ -145,8 +142,9 @@ These must stay true. Each line is a read-only check.
 3. **Public probes time out.** From a non-Cloudflare, non-tailnet address, every port
    including 443 on `24.199.127.184` should time out. A `refused` or an answer means the
    cloud firewall changed.
-4. **The firewall is attached to the production droplet.** Confirm in the console after
-   any droplet or firewall change. The local token cannot see attachments (above).
+4. **The firewall stays attached to the production droplet.** Re-check in the
+   DigitalOcean console after any droplet or firewall change. Check 3 also catches a
+   detachment from outside. The local `doctl` token cannot see attachments (above).
 
 None of these checks runs automatically yet. The nginx configuration and these rules
 are not in git, so the host and the DigitalOcean console are the only record of them.
