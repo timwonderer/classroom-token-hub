@@ -60,7 +60,7 @@ After the 2026-09-27 change, `ss -ltnp` shows only these on a non-loopback addre
 | Address | Process | Why it is not loopback |
 |---|---|---|
 | `0.0.0.0:80`, `0.0.0.0:443` | nginx | The public entry point |
-| `0.0.0.0:22`, `[::]:22` | sshd | Reached over Tailscale; blocked publicly by the cloud firewall. Rebinding to the Tailscale address was not done: a mistake would need the DigitalOcean console to recover. |
+| `0.0.0.0:22`, `[::]:22` | sshd | Reached over Tailscale. Public access to 22 was observed filtered, as the `Cloudflare` firewall rules would do if attached (attachment unconfirmed; see above). Rebinding to the Tailscale address was not done: a mistake would need the DigitalOcean console to recover. |
 | Tailscale addresses, UDP 41641 | tailscaled | Tailscale itself |
 
 Everything else listens on `127.0.0.1`:
