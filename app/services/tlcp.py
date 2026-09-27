@@ -29,39 +29,6 @@ DEFAULT_NOISE_ENDPOINT_PREFIXES = (
     "/api/set-timezone",
 )
 
-# TODO: No namespaced authority doc (INV-*, DOM-*, FEAT-*) currently governs
-# which endpoints are public vs authenticated. Create an authoritative doc
-# (e.g. INV-ARC-0XX_ROUTE_ACCESS_CLASSIFICATION) that defines:
-#   1. The classification tiers (public, authenticated, class-scoped)
-#   2. The criteria for each tier
-#   3. The canonical list of public endpoints and the rationale for each
-#   4. The enforcement mechanism (this set + TLCP gating)
-# Until then, changes to these sets have no constitutional audit trail.
-DEFAULT_PUBLIC_ENDPOINTS = {
-    "docs.index",
-    "docs.timeline",
-    "docs.view_doc",
-    "docs.search",
-    "admin.login",
-    "student.login",
-    "main.district",
-    "main.offline",
-    "main.service_worker",
-    "main.verify_hall_pass",
-    "api.get_tips",
-}
-
-# TODO: Same gap — no authoritative doc governs which endpoints bypass
-# canonical context resolution. Document alongside the route access
-# classification spec above.
-DEFAULT_NO_CONTEXT_ENDPOINTS = {
-    "admin.onboarding",
-    "admin.signup",
-    "admin.select_class_context",
-    "student.select_class_context",
-}
-
-
 def _int_env(name: str, default: int) -> int:
     raw = os.getenv(name)
     if raw is None:
@@ -119,14 +86,6 @@ def _is_noise_endpoint(endpoint: str | None) -> bool:
     return any(endpoint.startswith(prefix) for prefix in _noise_endpoint_prefixes())
 
 
-def _is_public_request(endpoint: str | None, path: str | None) -> bool:
-    if endpoint in DEFAULT_PUBLIC_ENDPOINTS:
-        return True
-    if path and any(path.startswith(prefix) for prefix in _noise_endpoint_prefixes()):
-        return True
-    return False
-
-
 def _log_invariant_violation(message: str, *, context: CanonicalContext | None = None) -> None:
     extra = {
         "actor_type": "-",
@@ -146,19 +105,32 @@ def _log_invariant_violation(message: str, *, context: CanonicalContext | None =
 def resolve_actor_context(context: CanonicalContext | None) -> dict | None:
     """Convert canonical request context into correlation logging fields.
 
-    The class-context/sysadmin matrix is symmetric and both failure cells
-    fail closed (INV-ARC-019 -- "System administrators cannot possess Class
-    Context"):
+    TLCP correlates requests; it does not decide authority. It runs in
+    ``before_request``, before any route has admitted the request, so it
+    cannot know whether a route needs class context at all. Admission does:
+    ``login_required``, ``admin_required`` and ``system_admin_required`` fail
+    closed when the context a route needs is missing, and
+    ``resolve_canonical_context`` logs each contradiction it finds in a
+    signed-in session (a seat pointer in another class, a missing seat, a
+    missing class) at WARNING.
 
-        Teacher/student request, context present -> expected
-        Teacher/student request, context absent  -> FAIL CLOSED + invariant violation
-        Sysadmin request, context absent         -> expected
-        Sysadmin request, context present        -> FAIL CLOSED + invariant violation
+    So an absent context is simply a request with no actor to correlate --
+    a health probe, a sign-in page, a sysadmin page, an unmatched URL, a
+    capability-token page -- and records nothing. Until 2026-09-27 this branch
+    logged ``TLCP-INVARIANT-VIOLATION: missing canonical context`` for any
+    such request whose endpoint was missing from two hand-kept allowlists:
+    345 ERROR lines in the first five production hours, every one a signed-out
+    request, and none of them a violation.
 
-    The last row is not merely hypothetical: a sysadmin session should never
-    produce a CanonicalContext at all, so if one ever reaches here it is
-    itself the violation -- a scope leak, not a legitimate actor -- and must
-    not be silently trusted as though sysadmin were class-scoped.
+    Only a context that is present and contradictory is a violation here:
+
+        Context present, seat exists            -> correlate
+        Context present, seat missing           -> invariant violation, no trace
+        Context present on a sysadmin endpoint  -> invariant violation, no trace
+                                                   (INV-ARC-019: system
+                                                   administrators cannot
+                                                   possess class context)
+        Context absent                          -> nothing to correlate
     """
     if not has_request_context():
         return None
@@ -179,20 +151,6 @@ def resolve_actor_context(context: CanonicalContext | None) -> dict | None:
             _log_invariant_violation("missing canonical seat", context=context)
             return None
     else:
-        if request.endpoint in DEFAULT_NO_CONTEXT_ENDPOINTS:
-            return None
-        if _is_public_request(endpoint, request.path):
-            return None
-        # Sysadmins are structurally forbidden from holding canonical class
-        # context -- every request to the whole sysadmin blueprint is
-        # therefore context-free by design, not a violation. This is a
-        # blueprint-wide exemption rather than a per-endpoint allowlist entry
-        # because the alternative is re-adding every new sysadmin route here
-        # forever; DEFAULT_NO_CONTEXT_ENDPOINTS stays for endpoints outside a
-        # blueprint where "no context" is a genuine per-route exception.
-        if is_sysadmin_endpoint:
-            return None
-        _log_invariant_violation("missing canonical context")
         return None
 
     actor_type = seat.role
