@@ -8,9 +8,9 @@ name: Mirror CI Postgres image to GHCR
 # this is the one job that still pulls from the public registry.
 #
 # It runs weekly for upstream patch releases, on demand, and when this file
-# changes on main. Publishing is limited to main (and the schedule and manual
-# runs, which use the default branch) because the tags are shared: a branch
-# must not be able to replace the image main's CI pulls.
+# changes on main. The tags are shared, so a branch must not be able to replace
+# the image main's CI pulls: pushes are filtered to main, and the job itself
+# refuses any other ref, since a manual run can be started from any branch.
 
 on:
   schedule:
@@ -32,6 +32,7 @@ concurrency:
 jobs:
   mirror:
     name: Mirror postgres:${{ matrix.version }}
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
