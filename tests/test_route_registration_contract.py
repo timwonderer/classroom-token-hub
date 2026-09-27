@@ -75,3 +75,31 @@ def test_debug_routes_are_not_registered(app, path):
         f"{path} is an unauthenticated debug endpoint and must not be registered. "
         "See REF-API-001 §VIII-A."
     )
+
+
+# Removed 2026-09-27 as dead endpoints (REF-API-001 §VII-D). The first is the
+# reason this list exists: with only a teacher's hall-pass verification token it
+# returned the day's passes across that teacher's classes -- names, internal
+# seat and class ids -- without the class and full-name inputs the verification
+# page requires (INV-ARC-019 §X). The rest had no caller. A route with no caller
+# is invisible to every other test, so re-adding one would pass silently.
+REMOVED_ROUTES = [
+    "/api/hall-pass/verification/active",
+    "/admin/api/economy/calculate-cwi",
+    "/admin/onboarding/skip",
+    "/sysadmin/passkey/list",
+    "/admin/payroll/transactions/<int:transaction_id>/void",
+    "/admin/payroll/transactions/void-bulk",
+    "/admin/export-class-roster",
+    "/student/switch-period/<int:user_id>",
+    "/student/dismiss-recovery/<int:code_id>",
+]
+
+
+@pytest.mark.parametrize("path", REMOVED_ROUTES)
+def test_removed_dead_routes_stay_removed(app, path):
+    registered = {str(rule) for rule in _rules(app)}
+    assert path not in registered, (
+        f"{path} was removed as a dead endpoint and must not be re-registered "
+        "without a caller. See REF-API-001 §VII-D."
+    )

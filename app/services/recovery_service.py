@@ -128,12 +128,6 @@ def get_recovery_code_for_seat(code_id: int, seat_id: int, *, class_id: str) -> 
     return _code_row_to_view(row) if row else None
 
 
-def dismiss_recovery_code(code_id: int) -> None:
-    _requests, codes = _tables()
-    stmt = sa.update(codes).where(codes.c.id == code_id).values(dismissed=True)
-    db.session.execute(stmt)
-
-
 def get_active_recovery_request_for_user(user_id: int, now_utc: datetime) -> RecoveryRequestView | None:
     requests, _codes = _tables()
     stmt = (

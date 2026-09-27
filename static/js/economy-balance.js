@@ -314,39 +314,6 @@ class EconomyBalanceChecker {
     }
 
     /**
-     * Calculate CWI based on pay rate
-     */
-    async calculateCWI(payRate, expectedWeeklyHours = null) {
-        const hours = expectedWeeklyHours || this.expectedWeeklyHours;
-
-        try {
-            const response = await fetch(`${this.apiBaseUrl}/calculate-cwi`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': this.getCsrfToken()
-                },
-                body: JSON.stringify({
-                    pay_rate: payRate,
-                    expected_weekly_hours: hours
-                })
-            });
-
-            const data = await response.json();
-
-            if (data.status === 'success') {
-                this.currentCWI = data.cwi;
-                return data;
-            } else {
-                throw new Error(data.message || 'Failed to calculate CWI');
-            }
-        } catch (error) {
-            console.error('Error calculating CWI:', error);
-            throw error;
-        }
-    }
-
-    /**
      * Validate a specific value against CWI
      */
     async validate(feature, value, frequency = 'weekly', additionalParams = {}) {

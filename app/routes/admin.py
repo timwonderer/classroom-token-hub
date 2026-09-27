@@ -8088,105 +8088,6 @@ def update_expected_weekly_hours():
 
 # -------------------- PAYROLL REWARDS & FINES --------------------
 
-@admin_bp.route('/payroll/transactions/<int:transaction_id>/void', methods=['POST'])
-@admin_required
-def void_payroll_transaction(transaction_id):
-    """Void a single transaction from payroll interface."""
-    try:
-        selected_scope = _require_payroll_feature_scope_from_request()
-        transaction = (
-            Transaction.query
-            .filter(Transaction.id == transaction_id)
-            .filter(Transaction.class_id == selected_scope['class_id'])
-            .first_or_404()
-        )
-
-        if transaction.status == TransactionStatus.VOID:
-            return jsonify({'success': False, 'message': 'Transaction is already voided'}), 400
-
-        idempotency_key = (
-            f"feat:led:payroll-void:{selected_scope['class_id']}:{transaction.id}"
-        )
-        db.session.rollback()
-        transaction = (
-            Transaction.query
-            .filter(Transaction.id == transaction_id)
-            .filter(Transaction.class_id == selected_scope['class_id'])
-            .first_or_404()
-        )
-
-        if transaction.status == TransactionStatus.VOID:
-            return jsonify({'success': False, 'message': 'Transaction is already voided'}), 400
-
-        execute_void_transaction(
-            transaction,
-            correlation_id=f"{transaction.correlation_id}:void:{transaction_id}",
-            idempotency_key=idempotency_key,
-        )
-
-        return jsonify({'success': True, 'message': 'Transaction voided successfully'})
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error voiding transaction: {e}")
-        return jsonify({'success': False, 'message': 'Error voiding transaction'}), 500
-
-
-@admin_bp.route('/payroll/transactions/void-bulk', methods=['POST'])
-@admin_required
-def void_transactions_bulk():
-    """Void multiple transactions at once."""
-    try:
-        data = request.get_json()
-        transaction_ids = data.get('transaction_ids', [])
-        selected_scope = _require_payroll_feature_scope_from_request()
-
-        if not transaction_ids:
-            return jsonify({'success': False, 'message': 'No transactions selected'}), 400
-
-        payload_hash = hashlib.sha256(
-            json.dumps(
-                {
-                    "class_id": selected_scope["class_id"],
-                    "transaction_ids": [int(tx_id) for tx_id in transaction_ids],
-                },
-                sort_keys=True,
-                default=str,
-            ).encode("utf-8")
-        ).hexdigest()[:16]
-        idempotency_key = (
-            f"feat:led:payroll-void-bulk:{selected_scope['class_id']}:{payload_hash}"
-        )
-
-        db.session.rollback()
-        transactions_to_void = []
-        for tx_id in transaction_ids:
-            transaction = (
-                Transaction.query
-                .filter(Transaction.id == int(tx_id))
-                .filter(Transaction.class_id == selected_scope['class_id'])
-                .first()
-            )
-            if transaction and transaction.status != TransactionStatus.VOID:
-                transactions_to_void.append(transaction)
-        execute_void_transactions(
-            transactions_to_void,
-            correlation_id=f"corr_void_bulk_{selected_scope['class_id']}_{uuid.uuid4().hex}",
-            idempotency_key=idempotency_key,
-        )
-        count = len(transactions_to_void)
-        return jsonify({'success': True, 'message': f'{count} transaction(s) voided successfully'})
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error voiding transactions in bulk: {e}")
-        return jsonify({'success': False, 'message': 'Error voiding transactions'}), 500
-
-
-
-
 @admin_bp.route('/payroll/manual-payment', methods=['POST'])
 @admin_required
 def payroll_manual_payment():
@@ -8347,56 +8248,6 @@ def upload_students():
     except ValueError as exc:
         return jsonify(status="error", message=str(exc), created=0), 400
     return jsonify(status="success", created=created, join_code=join_code, errors=[])
-
-
-@admin_bp.route('/export-class-roster')
-@admin_required
-def export_class_roster():
-    """Export the current class roster as the editable sync CSV."""
-    user_id = g.canonical_context.user_id
-    class_id = (getattr(getattr(g, "canonical_context", None), "class_id", None) or "").strip()
-    if not class_id:
-        flash("Select a class before exporting roster.", "error")
-        return redirect(url_for("admin.students"))
-
-    class_row = verify_teacher_owns_class(class_id, user_id)
-    if not class_row:
-        flash("Select a class before exporting roster.", "error")
-        return redirect(url_for("admin.students"))
-
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(["join_code", "actor_public_id", "first_name", "last_name", "notes", "checking_balance", "savings_balance"])
-
-    seats = (
-        Seat.query
-        .options(sa.orm.joinedload(Seat.identity_profiles))
-        .join(IdentityProfile, IdentityProfile.seat_id == Seat.id)
-        .filter(Seat.class_id == class_id, Seat.role == "student")
-        .order_by(Seat.id.asc())
-        .all()
-    )
-
-    for seat in seats:
-        profile = next((p for p in seat.identity_profiles if p.profile_type == "student"), None)
-        checking_balance, savings_balance = get_available_balances(seat.id, class_id)
-        writer.writerow([
-            get_display_join_code(class_row.class_id),
-            seat.public_id or "",
-            _sanitize_csv_field(getattr(profile, "first_name", "") or ""),
-            _sanitize_csv_field(getattr(profile, "last_name", "") or ""),
-            _sanitize_csv_field(getattr(profile, "notes", "") or ""),
-            f"{checking_balance:.2f}",
-            f"{savings_balance:.2f}",
-        ])
-
-    output.seek(0)
-    filename = f"class_roster_{get_display_join_code(class_row.class_id)}_{utc_now().strftime('%Y%m%d_%H%M%S')}.csv"
-    return Response(
-        output.getvalue(),
-        mimetype="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
-    )
 
 
 @admin_bp.route('/export-students')
@@ -10018,13 +9869,6 @@ def create_new_class():
     return redirect(url_for('admin.dashboard'))
 
 
-@admin_bp.route('/onboarding/skip', methods=['POST'])
-@admin_required
-def onboarding_skip():
-    """No-op — onboarding status is derived live."""
-    return jsonify({'status': 'success'})
-
-
 @admin_bp.route('/onboarding/skip-task', methods=['POST'])
 @admin_required
 def onboarding_skip_task():
@@ -10036,71 +9880,6 @@ def onboarding_skip_task():
 
 
 # ==================== ECONOMY BALANCE CHECKER API ====================
-
-@admin_bp.route('/api/economy/calculate-cwi', methods=['POST'])
-@admin_required
-def api_calculate_cwi():
-    """
-    Calculate CWI (Classroom Wage Index) based on payroll settings.
-
-    Expected JSON payload:
-    {
-        "pay_rate": 15.0,          // Per hour rate
-        "expected_weekly_hours": 5.0,
-        "block": "A" (optional)
-    }
-
-    Returns CWI calculation with breakdown.
-    """
-    try:
-        user_id = g.canonical_context.user_id
-        data = request.get_json()
-
-        # Get pay rate and convert to per-minute (as stored in DB)
-        pay_rate_per_hour = float(data.get('pay_rate', 15.0))
-        pay_rate_per_minute = pay_rate_per_hour / 60.0
-        expected_weekly_hours = float(data.get('expected_weekly_hours', 5.0))
-        section = data.get('block')
-
-        # Create a temporary PayrollSettings-like object for calculation
-        class TempPayrollSettings:
-            def __init__(self, pay_rate, time_unit='minutes', frequency_days=7, expected_weekly_hours=None):
-                self.pay_rate = pay_rate
-                self.time_unit = time_unit
-                self.payroll_frequency_days = frequency_days
-                self.expected_weekly_hours = expected_weekly_hours
-
-        temp_settings = TempPayrollSettings(pay_rate_per_minute, expected_weekly_hours=expected_weekly_hours)
-
-        # Calculate CWI
-        checker = EconomyBalanceChecker(user_id)
-        cwi_calc = checker.calculate_cwi(temp_settings, expected_weekly_hours)
-        if cwi_calc is None:
-            return jsonify({
-                'status': 'cwi_unconfigured',
-                'message': 'Expected weekly hours not configured. Set it on the Economic Engine page to enable pricing recommendations.',
-                'cwi': None,
-            })
-
-        recommendations = get_price_recommendation_context(checker.policy_mode, cwi_calc.cwi)
-
-        return jsonify({
-            'status': 'success',
-            'cwi': cwi_calc.cwi,
-            'breakdown': {
-                'pay_rate_per_hour': pay_rate_per_hour,
-                'pay_rate_per_minute': cwi_calc.pay_rate_per_minute,
-                'expected_weekly_hours': expected_weekly_hours,
-                'expected_weekly_minutes': cwi_calc.expected_weekly_minutes,
-                'notes': cwi_calc.notes
-            },
-            'recommendations': recommendations
-        })
-
-    except Exception as e:
-        current_app.logger.error(f"Error calculating CWI: {e}")
-        return jsonify({'status': 'error', 'message': 'Failed to calculate CWI'}), 500
-
 
 def _resolve_admin_payroll_settings_for_class_id(canonical_context, class_id: str | None):
     """

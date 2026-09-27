@@ -428,28 +428,6 @@ def passkey_auth_finish():
         return jsonify({"error": "Authentication failed"}), 401
 
 
-@sysadmin_bp.route('/passkey/list', methods=['GET'])
-@system_admin_required
-def passkey_list():
-    """List all passkeys for current system admin."""
-    try:
-        user = get_current_user()
-        if not user:
-            return jsonify({"error": "Canonical system admin identity is missing"}), 409
-        credentials = list_admin_credentials(user.id)
-
-        return jsonify([{
-            "id": cred.id,
-            "name": cred.authenticator_name or "Unnamed Passkey",
-            "created_at": cred.created_at.isoformat() if cred.created_at else None,
-            "last_used": cred.last_used.isoformat() if cred.last_used else None
-        } for cred in credentials]), 200
-
-    except Exception as e:
-        current_app.logger.error(f"Error listing passkeys: {e}")
-        return jsonify({"error": "Failed to list passkeys"}), 500
-
-
 @sysadmin_bp.route('/passkey/<int:credential_id>/delete', methods=['DELETE'])
 @system_admin_required
 @requires_feat_context("FEAT-OPS-001")
