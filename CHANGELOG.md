@@ -8,6 +8,17 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Fixed
+- **The release workflow's health probe checked nginx instead of the application (2026-09-26)** — `release-v2.yml` curled `http://127.0.0.1/health`, which is nginx on :80 and answers with a 301 to HTTPS. `curl --fail` accepts a 301, so the probe compared the redirect page to `ok` and failed a healthy release (run 36287284998). It now probes gunicorn on `127.0.0.1:8000`, retrying for up to 30 seconds so it doesn't race the restart. The fix is workflow-only; the application code running in production is unchanged.
+
+### Documentation
+- **v2.0.0 production transition record (2026-09-26)** — `docs/ops/audits/TRANSITION_2026-09-26_26d1792b5.md` records the launch under `SOP-DEP-002` §X/§XI: the exact release SHA, the two failed runs and their fixes, the empty-schema rebuild to `d7a3e9b1c5f2`, host-local route checks, and the go decision with its sign-offs. Signed-in flows on production are recorded as deferred to first real use, not as verified.
+- **README rewritten for the released v2 (2026-09-26)** — Replaces the pre-launch framing with the release state, the public hostnames, the component layout (application, status service, docs site, public site), the exact-SHA release procedure, and the known limits of the v2.0.0 evidence. Corrects two stale claims: the "Maintenance Mode" feature, which Cloudflare Access replaced on 2026-09-21, and the teacher-recovery description, which predated the per-class username counts and the three-student minimum. Adds the repository's clone URL.
+
+## [2.0.0] - 2026-09-26 — Version 2
+
+Version 2 is a ground-up rebuild of Classroom Token Hub. It keeps no v1 accounts or data. It went into production on 2026-09-26 at `26d1792b5` (release run 36287556574); see `docs/ops/audits/TRANSITION_2026-09-26_26d1792b5.md`. The v1 line and its history live on `main_legacy_v1.10.0` and the `v1.*` tags. The entries below span the whole v2 development period, newest first.
+
 ### Status monitoring
 
 - Overall availability now follows regular endpoint/database checks rather than request volume. Feature cards show response observations with no 20-request minimum, preserve timestamped last activity through quiet periods, and distinguish 404s from server failures. DOM-OPS-001 2.10 / SPEC-OPS-006 1.2.

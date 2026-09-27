@@ -1,101 +1,144 @@
 # Classroom Token Hub (CTH)
 
-A classroom management platform that uses a simulated token economy to drive student engagement and participation. Built with Flask + SQLAlchemy + PostgreSQL, designed for multi-tenant deployment across multiple schools and class periods.
+A classroom economy platform. Students earn tokens for the time they work, and spend them on rent, insurance and a class store. Teachers run the class economy without handing over student email addresses, phone numbers or school SSO. Built with Flask, SQLAlchemy and PostgreSQL. Each class period is its own isolated economy.
 
-**Version:** v2.0 (pre-launch; unreleased changes are tracked under `[Unreleased]` in the [changelog](CHANGELOG.md)) — **Branch:** `main`
-**License:** [PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/)
+**Current release:** [v2.0.0](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.0.0), in production since 2026-09-26 · **Branch:** `main` · **License:** [PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/)
 
-> [!NOTE]
->
-> `main` is the v2 deployment branch; the v1 line lives on `main_legacy_v1.10.0`. The public GitHub Pages artifact currently serves a `launching soon` holding page, and the v2 landing pages are kept on the separate `launch/v2-landing-pages` branch until launch. The application and the static marketing site are separate hosts, and the application is not exposed through a Flask `/gh/` mirror.
+| | |
+| --- | --- |
+| Website | [classroomtokenhub.com](https://classroomtokenhub.com) |
+| Application | [app.classroomtokenhub.com](https://app.classroomtokenhub.com) |
+| Service status | [status.classroomtokenhub.com](https://status.classroomtokenhub.com) |
+| Developer docs | [classroomtokenhub.com/docs](https://classroomtokenhub.com/docs/) |
+| Changelog | [CHANGELOG.md](CHANGELOG.md) |
+
+---
+
+## Contents
+
+- [Features](#features)
+- [Privacy](#privacy)
+- [Architecture](#architecture)
+- [Quick start](#quick-start)
+- [Releases and deployment](#releases-and-deployment)
+- [Documentation](#documentation)
+- [Version history](#version-history)
+- [Contributing](#contributing)
+- [License](#license)
+- [Support](#support)
 
 ---
 
 ## Features
 
-### For Teachers
+### For teachers
 
-- **Sign Up Without PII** — Three steps: name the class, choose a username and scan a TOTP code, confirm the code. No email or phone
-- **Roster Management** — Upload or add students individually; export the roster
-- **Payroll** — Per-minute pay rates, pay frequency, daily time caps, overtime thresholds and multipliers. Payroll runs automatically on schedule, with manual payments, voids and history
-- **Classroom Store** — Immediate, delayed-use and collective items; bundles, bulk discounts, auto-expiry; redemption approval
-- **Rent** — Recurring bill cycles with grace periods, one-time or recurring late penalties, and waivers
-- **Insurance** — Create policies with tiers, review and resolve student claims
-- **Banking** — Savings interest paid monthly on posted balances; overdraft fees on failed purchases and obligations
-- **Economic Engine** — Derives pricing guidance from the Classroom Wage Index (CWI) and the class's economic policy mode, with a reviewable rebalance
-- **Hall Passes** — Requests, approval, check-out/check-in, and a rotating verification page
-- **Interpretation** — Read-only report of each completed cycle, built from immutable history. It observes; it does not alert or prescribe
-- **Issues** — Resolve or escalate student-reported issues about a transaction, an attendance session, or anything else
-- **Announcements** — Class-scoped, with expiry, shown on the student dashboard
-- **Feature Settings** — Turn store, rent, insurance and other features on per class
+- **Sign up without PII**: three steps. Name the class, pick a username and scan a TOTP code, then confirm the code. No email or phone number is asked for
+- **Roster management**: upload a roster or add students one at a time, then export it. Each unclaimed seat has a claim code. An unclaimed seat keeps its balance but takes no part in the economy until a student claims it
+- **Payroll**: set per-minute pay rates, pay frequency, daily time caps, and overtime thresholds and multipliers. Payroll runs on a schedule by local calendar day. Manual payments, reversals and history are also available
+- **Classroom store**: sell immediate-use, delayed-use and collective-goal items. Each item declares its economic role. Bundles, bulk discounts, holding limits, start and delist dates, and redemption approval are supported
+- **Rent**: recurring bill cycles with grace periods, one-time or recurring late penalties, and waivers. The teacher can allow partial payment and choose store perks that come with rent
+- **Insurance**: tiered policies, a waiting period, and claims that students file and teachers review and pay out. Students see their own claims, and cancelling a policy stops it from renewing at the next cycle boundary
+- **Banking**: savings interest paid monthly on posted balances. Overdraft fees apply only to failed purchases and failed obligations, never to transfers
+- **Economic engine**: pricing guidance derived from the Classroom Wage Index (CWI) and the class's economic policy mode, with a rebalance the teacher reviews before it takes effect
+- **Hall passes**: requests, approval, check-out and check-in, and a verification page with a rotating token
+- **Interpretation**: a read-only report on each completed cycle, built from immutable history. It describes what happened; it doesn't raise alerts or recommend actions
+- **Issues**: resolve or escalate student reports about a transaction, an attendance session, or anything else
+- **Announcements**: class-scoped, with an expiry date, shown on the student dashboard
+- **Feature settings**: turn store, rent, insurance and other features on or off per class
 
-### For Students
+### For students
 
-- **Portal** — Balances, transactions, attendance (start/stop work), store, rent, payroll, insurance
-- **Account Transfers** — Move funds between checking and savings
-- **Seat Claim** — Claim a seat the teacher provisioned by matching your name against the class roster, then create a username, PIN and passphrase. Join further classes with a join code
-- **Account Recovery** — A teacher issues a short-lived reset code; the student redeems it to set new credentials
-- **Hall Pass Requests** — Request a pass and follow its status on the dashboard
-- **Report an Issue** — About a specific transaction, an attendance session, or a general problem
+- **Portal**: balances, transactions, attendance (start and stop work), store, rent, payroll and insurance
+- **Account transfers**: move money between checking and savings, confirmed with a PIN
+- **Seat claim**: claim the seat your teacher set up by matching your name against the roster, then create a username, PIN and passphrase. Join more classes with a join code
+- **Account recovery**: a teacher issues a short-lived reset code, and the student redeems it to set new credentials
+- **Hall pass requests**: ask for a pass and follow its status on the dashboard
+- **Report an issue**: about a specific transaction, an attendance session, or a general problem
 
-### For System Admins
+### For system admins
 
-- **Portal** — Teacher, student and open-issue counts, escalated issues, user reports
-- **Logs and Monitoring** — Combined, error and application logs; network activity; Grafana proxy
-- **Accounts** — Sysadmins are created from the CLI (`flask create-sysadmin`) and manage their own passkeys
+- **Portal**: counts of teachers, students and open issues, plus escalated issues and user reports
+- **Logs and monitoring**: combined application and error logs and a Grafana proxy
+- **Accounts**: sysadmins are created from the CLI (`flask create-sysadmin`) and manage their own passkeys
 
-### Teacher Account Recovery
+### Teacher account recovery
 
-A teacher who loses access submits a join code and one student username for each class they teach. Those students each confirm the request from their own account and receive a code to hand back; with all codes, the teacher resets their credentials. No email is involved at any step.
+No email is involved. A teacher who loses access starts recovery by entering the usernames of students in their classes:
+
+- one class: 6 usernames
+- two classes: 3 per class
+- three classes: 2 per class
+- four or more classes: 1 per class
+
+A class with fewer students than that counts if every claimed student is entered. The system then picks students at random in each class to confirm the request from their own accounts, and each confirming student gets a code to hand back. With all the codes, the teacher resets their credentials. Recovery needs at least 3 claimed students in each class, so that the random pick can't be predicted. See DOM-IDEN-003 §IX and FEAT-IDEN-103.
 
 ### Platform
 
-- **Multi-Tenant** — Every query is scoped by `class_id`. One user can hold seats in several classes, and each class is its own isolated economy
-- **Ledger** — Every effect is written `PENDING` and admitted to posted history only by the scheduled settlement job; posted rows are immutable in the database
-- **Scheduled Jobs** — APScheduler runs settlement, payroll, savings interest, rent reconciliation, insurance expiry, collective-goal expiry, rebalance activation, and nightly maintenance and audit checks
-- **Progressive Web App** — Installable on mobile; offline fallback included
-- **In-App Documentation** — `/docs` renders the user guides in `docs/user-guides/`, with search and audience selection
-- **Accessibility** — Built against WCAG 2.1 AA: keyboard navigation, ARIA state on disclosure controls, screen-reader labelling. Pull requests that change templates run an accessibility check on the changed files; full-corpus conformance has not been independently certified
-- **Design System** — One token layer with three role themes, governed by [SPEC-DES-001](docs/SPEC/SPEC-DES-001_DESIGN_SYSTEM_AND_VISUAL_IDENTITY.md) and checked over every template
-- **Security** — PII encryption at rest, TOTP 2FA, passkeys (WebAuthn via passwordless.dev) for teachers and sysadmins, CSRF protection, scrypt password hashing, Cloudflare Turnstile
-- **Health Signals** — `/health` for liveness and bounded `/health/status` signals that expose no tenant data or raw exceptions
-- **Rate Limiting** — Flask-Limiter with Cloudflare IP detection; off in development unless `DEV_ENABLE_RATELIMIT=1`
-- **Maintenance Mode** — Environment-driven maintenance page with a sysadmin bypass
-
-> [!IMPORTANT]
->
-> **Privacy First Design:** CTH minimizes PII collection (no email, phone, SSO). We do not ask for identities or physical locations. This reduces breach impact: data is meaningless without external reference.
->
-> We do not support native SSO. If your district wants to self-host with SSO integration, fork this project and implement your own auth layer. We provide technical support for architecture; you retain full operational control.
->
-> See [PRN-SNP-001](docs/PRINCIPLES/SECURITY_AND_PRIVACY/PRN-SNP-001_Why_Classroom_Token_Hub_Does_Not_Implement_SSO.md) for rationale.
+- **Multi-tenant**: every read and write of seat or class data is scoped by `class_id`. One user can hold seats in several classes, and each class is its own economy
+- **Ledger**: every money movement is written as `PENDING` and becomes posted history only when the scheduled settlement job admits it. The database rejects any change to a posted row
+- **Scheduled jobs**: APScheduler runs settlement, payroll, savings interest, rent reconciliation, insurance expiry, collective-goal expiry, rebalance activation, and nightly maintenance and audit checks
+- **Class time**: deadlines and "today" are calculated in each class's own timezone by one temporal resolver. The policy guardrails in CI reject `timedelta` arithmetic in services, FEATs and routes
+- **Progressive web app**: installable on a phone, with an offline fallback
+- **In-app help**: `/docs` serves the user guides in `docs/user-guides/`, with search and a choice of teacher or student view
+- **Accessibility**: built to WCAG 2.1 AA. An automated axe-core check covers every page template the app renders, and pull requests that change templates run it on those files. This is automated coverage only; no independent accessibility audit has been done
+- **Design system**: one set of design tokens with three role themes, governed by [SPEC-DES-001](docs/SPEC/SPEC-DES-001_DESIGN_SYSTEM_AND_VISUAL_IDENTITY.md) and checked against every template
+- **Security**: PII encrypted at rest, TOTP two-factor sign-in, passkeys (WebAuthn via passwordless.dev) for teachers and sysadmins, CSRF protection on every form, scrypt password hashing, Cloudflare Turnstile, and rate limiting with Flask-Limiter. See [SECURITY.md](SECURITY.md) to report a vulnerability
+- **Health signals**: `/health` for liveness, and `/health/status` for bounded status signals that expose no tenant data or raw exceptions
+- **Access gating**: Cloudflare Access on the application hostname controls who can reach the app during maintenance. The application itself has no maintenance-mode flag or bypass (DOM-OPS-001)
 
 ---
 
-## Quick Start
+## Privacy
+
+> [!IMPORTANT]
+>
+> CTH collects as little PII as it can: no email, no phone number, no SSO, no physical location. Student names are encrypted at rest. Usernames are stored only as keyed digests, never as plaintext. If the database leaks, it can't be linked to real people without information held somewhere else.
+>
+> CTH doesn't support native SSO. A district that needs SSO can fork the project and add its own auth layer; see [PRN-SNP-001](docs/PRINCIPLES/SECURITY_AND_PRIVACY/PRN-SNP-001_Why_Classroom_Token_Hub_Does_Not_Implement_SSO.md) for why.
+
+---
+
+## Architecture
+
+```text
+Route ──▶ FEAT (app/feats/) ──▶ Domain services (app/services/) ──▶ commit
+```
+
+1. **Identity**: `User` is the global sign-in account. `Seat` is that user's place in one class, and every activity record keys off `seat_id`. `IdentityProfile` holds display names. `ClassEconomy` is the tenant boundary, identified by `class_id`, with `join_code` as its public alias. INV-ARC-019 and DOM-IDEN-001 govern this model
+2. **Domains**: ten bounded domains, each with an authority spec under [docs/DOMAIN/](docs/DOMAIN/). They are Identity, Class Configuration, Ledger, Productivity & Payroll, Obligations, Store & Entitlements, Operations, Interpretation, Policies and Support, and they share one Core foundation
+3. **FEAT layer**: every state change goes through a Feature Execution Transaction in `app/feats/`. Routes never call `db.session.commit()` on domain models, and GET handlers never write to the database (INV-ARC-007)
+
+| Component | Where | What it does |
+| --- | --- | --- |
+| Flask application | `app/`, `templates/`, `static/`, `wsgi.py` | Teacher, student and sysadmin surfaces; served by gunicorn behind nginx |
+| Status service | `status_service/`, `status/` | Public status page and an IAP-protected operator console; deployed by `deploy-status.yml` |
+| Developer docs site | `docs-site/` | Docusaurus build of the documentation tree |
+| Public site | `github-pages/` | Marketing pages and the public timeline, published by `github-pages.yml` |
+
+The application doesn't serve the marketing site, and the marketing site doesn't serve the application.
+
+---
+
+## Quick start
 
 ### Prerequisites
 
-- Python 3.10+ (`runtime.txt` pins 3.10; CI jobs run 3.10, 3.11 and 3.13)
+- Python 3.10 or later (`runtime.txt` pins 3.10; CI runs 3.10, 3.11 and 3.13)
 - PostgreSQL 15 or 16 (the versions CI runs against)
-- Virtual environment (recommended)
-
-Tests run against a real PostgreSQL database named by `TEST_DATABASE_URL`. There is no SQLite path.
+- A virtual environment
 
 ### Setup
 
 ```bash
-# Clone and create venv
-git clone <repo-url>
+git clone https://github.com/timwonderer/classroom-token-hub.git
 cd classroom-token-hub
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
-# Create .env
-# Note: the heredoc delimiter is deliberately unquoted so the $(...) calls are
-# evaluated. With 'EOF' quoted, the file receives the literal command text as
-# each key's value and the app starts with unusable secrets.
+# The heredoc delimiter is deliberately unquoted so the $(...) calls run.
+# With 'EOF' quoted, each key gets the literal command text as its value.
 cat > .env << EOF
 SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
 DATABASE_URL=postgresql://user:password@localhost:5432/classroom_economy
@@ -105,165 +148,142 @@ AUDIT_HMAC_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
 FLASK_ENV=development
 EOF
 
-# Initialize database
 flask db upgrade
-flask create-sysadmin  # Follow prompts; scan QR with authenticator
-
-# Run
-flask run  # Navigate to http://localhost:5000
+flask create-sysadmin   # follow the prompts and scan the QR code with an authenticator
+flask run               # http://localhost:5000
 ```
 
-The app refuses to start without the six keys above. Everything else is optional:
+The app won't start without the six keys above. Everything else is optional:
 
 | Variable | Purpose |
 | -------- | ------- |
-| `TEST_DATABASE_URL` | PostgreSQL database the test suite rebuilds |
-| `CSRF_SECRET_KEY` | Separate CSRF signing key (defaults to `SECRET_KEY`) |
-| `SECRET_KEY_FALLBACKS` | Previous secret keys, for rotation without logging everyone out |
-| `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | Cloudflare Turnstile; verification is skipped when unset |
+| `TEST_DATABASE_URL` | PostgreSQL database that the test suite rebuilds |
+| `CSRF_SECRET_KEY` | A separate CSRF signing key (defaults to `SECRET_KEY`) |
+| `SECRET_KEY_FALLBACKS` | Previous secret keys, so a rotation doesn't sign everyone out |
+| `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | Cloudflare Turnstile; verification is skipped when these are unset |
 | `PASSWORDLESS_API_KEY`, `PASSWORDLESS_API_PUBLIC`, `PASSWORDLESS_API_URL` | Passkey sign-in |
-| `REDIS_URL`, `RATELIMIT_STORAGE_URI`, `DEV_ENABLE_RATELIMIT` | Rate-limit storage; enable limits in development |
+| `REDIS_URL`, `RATELIMIT_STORAGE_URI`, `DEV_ENABLE_RATELIMIT` | Rate-limit storage; rate limits are off in development unless `DEV_ENABLE_RATELIMIT=1` |
 | `EXTERNAL_DOCS_BASE_URL`, `MARKETING_SITE_URL`, `STATUS_PAGE_URL`, `GRAFANA_URL`, `SUPPORT_EMAIL` | External links |
 | `LOG_LEVEL`, `LOG_FILE` | Logging |
 
-### Running Tests
+Don't rotate `ENCRYPTION_KEY` or `PEPPER_KEY` casually. `ENCRYPTION_KEY` protects PII and TOTP secrets and needs a re-encryption to change. `PEPPER_KEY` keys the username digests, so changing it resets identities. To run your own instance, start with [docs/self-hosting/](docs/self-hosting/README.md).
+
+### Running tests
+
+Tests run against a real PostgreSQL database named by `TEST_DATABASE_URL`; there's no SQLite path. `conftest.py` drops the schema and rebuilds it through the real migration chain, so triggers and constraints are live in every test.
 
 ```bash
-# Targeted tests (preferred during development)
-pytest tests/dom/operation/test_health.py -v
-pytest tests/test_status_contracts.py tests/test_status_projection.py -v
-
-# Specific domain
-pytest tests/dom/obligations/ -v
-
-# Full suite (requires TEST_DATABASE_URL). Takes over an hour: conftest.py drops
-# and rebuilds the schema by running the real migration chain, so triggers and
-# constraints are live in every test.
-TEST_DATABASE_URL=postgresql://... pytest
-
-# With coverage
-pytest --cov=app tests/
+pytest tests/dom/obligations/ -v          # one domain
+pytest tests/test_status_contracts.py -v  # one file
+pytest -k recovery                        # by pattern
+pytest                                    # full suite: 3,800+ tests, over an hour
+pytest --cov=app tests/                   # with coverage
 ```
 
-Templates are held to the design-token contract by `tests/test_design_token_contract.py`. While editing a template, run the checker on just that file:
+Tests provision a whole classroom through `tests/helpers/classroom_initializer.py` rather than creating rows by hand (SPEC-TEST-001).
+
+Templates are held to the design-token contract. While editing one, check just that file:
 
 ```bash
 python scripts/lint_design_tokens.py templates/your_page.html
 ```
 
-### Database Migrations
+### Database migrations
 
 ```bash
-flask db heads                  # Must show exactly 1 head
-flask db migrate -m "Description"
-flask db upgrade                # Apply
-flask db history                # Find the revision to return to
-flask db downgrade <revision>   # Roll back to that revision
+flask db heads                  # must show exactly one head
+flask db migrate -m "Add X to Y"
+flask db upgrade
+flask db history                # find the revision to go back to
+flask db downgrade <revision>   # always pass an explicit revision
+python scripts/lint_migrations.py --baseline migrations/lint_baseline.txt
 ```
 
 > [!WARNING]
 >
-> Always pass an explicit revision to `flask db downgrade`. The bare form walks back one step from wherever the database is, and if that revision is a merge point it cannot choose between parents and aborts with `ERROR [flask_migrate] Error: Ambiguous walk`, rolling nothing back. Read the target off `flask db history` first and confirm with `flask db current` afterward.
+> A bare `flask db downgrade` stops with `Ambiguous walk` when the current revision is a merge point, and rolls nothing back. Always name the target revision, then confirm it with `flask db current`.
 
-All migrations must include idempotency helpers and pass the linter before commit:
+Every migration needs the idempotency helpers from `migrations/migration_template.py.mako` and has to pass the linter. `migrations/lint_baseline.txt` records older debt, can only shrink, and is never the place for a new migration. [SOP-DB-001](docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-001_Migration_Specifications.md) is the governing specification.
+
+---
+
+## Releases and deployment
+
+Production is released by the **Release v2 to Production** workflow ([`release-v2.yml`](.github/workflows/release-v2.yml)), which is started by hand with an exact 40-character commit SHA. The workflow:
+
+1. refuses any SHA that isn't an ancestor of the approved lineage (`main`)
+2. connects to the production host over Tailscale and checks out that SHA exactly
+3. installs the pinned requirements, runs `flask db upgrade`, and restarts the service
+4. probes `/health` on gunicorn (`127.0.0.1:8000`) until it answers `ok`
 
 ```bash
-python scripts/lint_migrations.py --baseline migrations/lint_baseline.txt
+curl http://localhost:5000/health          # 200 "ok" if the database answers SELECT 1
+curl http://localhost:5000/health/status   # bounded status signals; no tenant data
+gunicorn wsgi:app --workers 4 --bind 0.0.0.0:8000
 ```
 
-`migrations/lint_baseline.txt` freezes pre-gate debt and only ever shrinks — a new migration does not belong in it. The normative specification is [SOP-DB-001](docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-001_Migration_Specifications.md); [.claude/rules/database-migrations.md](.claude/rules/database-migrations.md) is a non-authoritative working summary of it.
+Tags mark the exact commit production is running. `v2.0.0` points at `26d1792b5`, the commit released on 2026-09-26. The full procedure is [SOP-DEP-002](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md), and each release is recorded under [docs/ops/audits/](docs/ops/audits/) (v2.0.0: [TRANSITION_2026-09-26_26d1792b5.md](docs/ops/audits/TRANSITION_2026-09-26_26d1792b5.md)).
 
----
+### Known limits of the v2.0.0 evidence
 
-## v2 Launch Readiness
+Evidence that was actually run isn't the same as coverage that was inferred (INV-ARC-017). These surfaces haven't been exercised yet:
 
-The v2 runtime is governed by the documented authority chain rather than by route-local behavior:
-
-```text
-INV-CORE → INV-ARC → DOM-* → FEAT-*
-```
-
-The repository includes the v2 bounded domains, canonical FEAT mutation boundaries, class-scoped tenancy, canonical Ledger persistence and monetary resolution, Interpretation reporting, constitutional CI evidence selection, and production documentation/link checks. These are implementation and evidence updates, not a declaration that every launch gate is green. In particular, authenticated rendered journeys and any evidence marked `NOT_EVALUATED`, `BLOCKED`, or otherwise unresolved in the tracking documents remain launch work.
-
-Known unproven surfaces, stated plainly rather than left to inference: daylight-saving and midnight-boundary transitions have not been exercised live; full-corpus template accessibility, keyboard, focus and contrast behavior needs a real browser; concurrent settlement, payroll batch runs and scheduled jobs have not been tested under load; and the production host itself has only been rehearsed against a local PostgreSQL cluster. Executed evidence is not the same as inferred coverage (`INV-ARC-017`).
-
-Before launch, use the [v2 production transition runbook](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md), the [production readiness tracker](docs/TRACKING/PRODUCTION_READINESS_2026-09.md), and the [changelog](CHANGELOG.md) as the current source for release evidence. Do not infer application availability from the GitHub Pages holding page: verify application maintenance mode, login routes, deployment health, and the exact release SHA independently.
-
----
-
-## Architecture
-
-CTH v2 uses a three-layer architecture with strict domain boundaries:
-
-1. **Identity Layer** — `User` (auth principal) → `Seat` (class-local actor) → `ClassEconomy` (tenant boundary via `class_id`)
-2. **Domain Services** — Ten bounded domains, each with an authority spec under [docs/DOMAIN/](docs/DOMAIN/): Identity, Class Configuration, Ledger, Productivity & Payroll, Obligations, Store & Entitlements, Operations, Interpretation, Policies, and Support. They sit on a shared Core foundation
-3. **FEAT Layer** — All state mutations go through Feature Execution Transactions; no direct `db.session.commit` in routes
-
-All queries must be scoped by `class_id`, never by `teacher_id` alone.
+- **Signed-in flows on the production host**: covered by the automated suite and by live test rounds on the same host before launch, but not repeated after the launch wipe. They'll first run in production when teachers start using it
+- **Daylight-saving and midnight transitions**: class-timezone handling is tested, but no live daylight-saving change has happened since launch
+- **Load**: concurrent settlement, payroll batch runs and scheduled jobs haven't been tested under load
+- **Browser accessibility**: axe covers every rendered template, but keyboard, focus and contrast behavior across the whole app still needs a person using a real browser. The signed-in insurance page's buy and cancel dialogs haven't had an axe audit yet
 
 ---
 
 ## Documentation
 
-Documentation is ordered by authority, and the order is load-bearing. When two documents disagree, the higher one wins and the lower one is what gets corrected.
+When two documents disagree, the one higher in this order wins, and the lower one gets corrected:
 
-**Normative — these govern:**
+```text
+INV-CORE → INV-ARC → DOM-* → FEAT-*
+```
 
-| Document | Purpose |
-| ---------- | --------- |
-| **[docs/INVARIANT/](docs/INVARIANT/)** | Core runtime invariants and architectural rules |
-| **[docs/DOMAIN/](docs/DOMAIN/)** | Per-domain authority specs |
-| **[docs/FEATURE-EXECUTION/](docs/FEATURE-EXECUTION/)** | FEAT mutation contracts |
-| **[docs/SPEC/](docs/SPEC/)** | Technical contracts |
-| **[docs/STANDARD_OPERATING_PROCEDURES/](docs/STANDARD_OPERATING_PROCEDURES/)** | Operational procedures |
-
-**Descriptive — these summarize, and may drift:**
+**Normative (these govern):**
 
 | Document | Purpose |
 | ---------- | --------- |
-| **[docs/TRACKING/](docs/TRACKING/)** | Release readiness and audit status |
-| **[docs/PRINCIPLES/](docs/PRINCIPLES/)** | Why a given design was chosen |
-| **[DEVELOPMENT.md](DEVELOPMENT.md)** | Roadmap and current priorities |
-| **[CHANGELOG.md](CHANGELOG.md)** | Version history |
-| **[.claude/CLAUDE.md](.claude/CLAUDE.md)** and **[.claude/rules/](.claude/rules/)** | Working guidance for AI coding agents |
+| [docs/INVARIANT/](docs/INVARIANT/) | Core runtime invariants and architectural rules |
+| [docs/DOMAIN/](docs/DOMAIN/) | Per-domain authority specs |
+| [docs/FEATURE-EXECUTION/](docs/FEATURE-EXECUTION/) | FEAT mutation contracts |
+| [docs/SPEC/](docs/SPEC/) | Technical contracts |
+| [docs/STANDARD_OPERATING_PROCEDURES/](docs/STANDARD_OPERATING_PROCEDURES/) | Operational procedures |
 
-Nothing under `.claude/` is authoritative. It is orientation for agents, not a specification, and it must never be cited to justify a design decision — cite the INV/DOM/FEAT/SPEC/SOP document instead.
+**Descriptive (these summarize and can drift):**
 
-User guides live in `docs/user-guides/` and are served in the app at `/docs`. `docs-site/` is a separately published Docusaurus site, which the app can link to through `EXTERNAL_DOCS_BASE_URL`.
+| Document | Purpose |
+| ---------- | --------- |
+| [docs/TRACKING/](docs/TRACKING/) | Readiness and audit status |
+| [docs/PRINCIPLES/](docs/PRINCIPLES/) | Why a design was chosen |
+| [docs/REFERENCE/](docs/REFERENCE/) | Interface references, including [REF-API-001](docs/REFERENCE/REF-API-001_HTTP_INTERFACE_REFERENCE.md) for HTTP endpoints |
+| [DEVELOPMENT.md](DEVELOPMENT.md) | Roadmap and current priorities |
+| [CHANGELOG.md](CHANGELOG.md) | Version history |
+| [.claude/CLAUDE.md](.claude/CLAUDE.md) and [.claude/rules/](.claude/rules/) | Working guidance for AI coding agents |
+
+Nothing under `.claude/` is authoritative. It helps agents find their way around the codebase, and it should never be cited to justify a design decision. Cite the INV, DOM, FEAT, SPEC or SOP document instead.
+
+The user guides in `docs/user-guides/` are served inside the app at `/docs`. The whole documentation tree is published separately as the developer docs site, built from `docs-site/`.
 
 ---
 
-## Deployment
+## Version history
 
-```bash
-# Liveness — 200 "ok" if the database answers SELECT 1; 500 with a JSON error otherwise
-curl http://localhost:5000/health
+| Line | Status | Where it lives |
+| --- | --- | --- |
+| **v2** | Current. v2.0.0 released 2026-09-26 | `main` |
+| **v1** | Retired. v1.10.0 (2026-06-14) was the final v1 release | Branch `main_legacy_v1.10.0` and the `v1.*` tags |
 
-# Bounded status signals for public publication. Every capability reports
-# UNKNOWN until a lawful read-only probe is registered for it, so the endpoint
-# cannot imply health it has not observed. It exposes no tenant data, table
-# counts, or raw exceptions.
-curl http://localhost:5000/health/status
-
-# Application production
-gunicorn wsgi:app --workers 4 --bind 0.0.0.0:8000
-```
-
-See [SOP-DEP-002](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md) for the full runbook.
-
-The static public site is published separately from `github-pages/`. Until launch, `github-pages/index.html` is the holding page; the launch branch supplies the public landing pages. The application does not serve the marketing site as a Flask route.
+v2 is a ground-up rebuild. It's a clean break: no v1 accounts or data carry over. See the [v2.0.0 release notes](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.0.0).
 
 ---
 
 ## Contributing
 
-Read the invariants first, then domain specs, then tracking docs. Authority flows downward:
-
-```text
-INV-CORE (what must be true) → INV-ARC (architectural rules) → DOM-* (domain authority) → FEAT-* (execution specs)
-```
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+Read the invariants first, then the domain spec for the area you're changing, then the FEAT contracts that execute it. [CONTRIBUTING.md](CONTRIBUTING.md) has the details, and pull requests use [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md).
 
 ---
 
@@ -271,22 +291,18 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 
 [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/)
 
-**Permitted:** Classrooms, clubs, nonprofits, research, personal learning.  
-**Prohibited:** Commercial products, SaaS, paid services, for-profit use.
+**Allowed:** classrooms, clubs, nonprofits, research and personal learning.
+**Not allowed:** commercial products, SaaS, paid services and other for-profit use.
 
-See [LICENSE](LICENSE) for complete terms. [Third-party notices](docs/user-guides/legal/third-party-notices.md).
+See [LICENSE](LICENSE) for the full terms and the [third-party notices](docs/user-guides/legal/third-party-notices.md).
 
 ---
 
 ## Support
 
-- **Questions about architecture?** Read the relevant [domain spec](docs/DOMAIN/), then the [invariants](docs/INVARIANT/) it answers to
-- **Found a bug?** Open an issue
-- **Ready to contribute?** See [CONTRIBUTING.md](CONTRIBUTING.md)
+- **Is the service down?** Check [status.classroomtokenhub.com](https://status.classroomtokenhub.com)
+- **Found a bug?** Open an issue. For a security problem, follow [SECURITY.md](SECURITY.md) instead
+- **Questions about the architecture?** Start with the relevant [domain spec](docs/DOMAIN/), then the [invariants](docs/INVARIANT/) it answers to
 - **Contact:** [dev@classroomtokenhub.com](mailto:dev@classroomtokenhub.com)
 
-This project is developed, deployed, maintained, operated, and tested by a single full-time high school teacher who lives by the motto of *"fine, I'll build one myself."*
-
-Application availability restrictions are managed through Cloudflare Access on the
-application hostname. The application has no maintenance-mode flag or bypass.
-See `docs/DOMAIN/DOM-OPS-001_OPERATIONS_DOMAIN.md` and the deployment runbooks.
+This project is developed, deployed, maintained, operated and tested by one full-time high school teacher, who lives by the motto *"fine, I'll build one myself."*
