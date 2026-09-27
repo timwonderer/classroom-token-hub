@@ -108,5 +108,11 @@ jobs:
       - name: Verify production health
         env:
           PRODUCTION_SERVER_HOST: ${{ secrets.PRODUCTION_TAILSCALE_HOST }}
+        # Probe gunicorn directly on :8000. Port 80 is nginx, which answers
+        # plain HTTP with a 301 to HTTPS; `curl --fail` accepts a 301, so the
+        # old probe compared nginx's redirect page to "ok" and failed a healthy
+        # release (2026-09-27, run 36287284998). A host-local probe does not
+        # traverse Cloudflare Access (SOP-DEP-002 §VI). Retried briefly: the
+        # probe otherwise races the restart by milliseconds.
         run: |
-          ssh root@"$PRODUCTION_SERVER_HOST" 'set -e; curl --fail --silent --show-error http://127.0.0.1/health >/tmp/cth-health; test "$(cat /tmp/cth-health)" = "ok"; echo "Production health passed"'
+          ssh root@"$PRODUCTION_SERVER_HOST" 'for i in $(seq 1 15); do if [ "$(curl --fail --silent http://127.0.0.1:8000/health || true)" = "ok" ]; then echo "Production health passed"; exit 0; fi; sleep 2; done; echo "Health check failed: /health on 127.0.0.1:8000 did not return ok within 30s"; exit 1'
