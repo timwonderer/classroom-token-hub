@@ -109,7 +109,6 @@ def test_no_axe_violations_across_pages_needing_no_domain_setup(app, client, wca
         ("/admin/signup", None),
         ("/docs/", None),
         ("/docs/search", None),
-        ("/docs/timeline", None),
         ("/docs/user-guides/teacher_manual", None),
         ("/offline", None),
         ("/recovery/lookup", None),

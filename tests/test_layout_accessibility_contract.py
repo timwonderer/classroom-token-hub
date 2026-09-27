@@ -359,20 +359,20 @@ def test_admin_dashboard_exposes_current_location_to_assistive_technology():
     assert 'aria-current="page"' in str(dashboard)
 
 
-def test_documentation_timeline_disclosures_have_keyboard_contract():
+def test_public_timeline_disclosures_are_native_and_named():
+    """Every timeline entry is a native <details>/<summary>, so it opens from the
+    keyboard with no script, and each summary carries the entry's heading."""
     soup = BeautifulSoup(
-        (REPO_ROOT / "templates" / "docs" / "timeline.html").read_text(encoding="utf-8"),
+        (REPO_ROOT / "github-pages" / "timeline.html").read_text(encoding="utf-8"),
         "html.parser",
     )
-    headers = soup.select(".tl-card-header")
-    assert headers
-    # The script promotes legacy div headers at runtime; retain an explicit
-    # keyboard handler on the already-compliant first entry as a source guard.
-    assert all(header.get("onclick") or header.get("role") == "button" for header in headers)
-    assert "header.click()" in soup.get_text() or "header.click();" in str(soup)
-    assert len(headers) > 1
-    assert "querySelectorAll('.tl-card-header')" in str(soup)
-    assert "aria-expanded" in str(soup)
+    entries = soup.select("li.tl-entry")
+    assert len(entries) > 1
+    for entry in entries:
+        summary = entry.select_one("details > summary")
+        assert summary is not None
+        assert summary.find("h3", recursive=False) is not None
+    assert not soup.select("[onclick]")
 
 
 def test_public_pages_load_an_icon_font():

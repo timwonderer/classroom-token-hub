@@ -46,3 +46,12 @@ def test_root_redirects_off_origin_to_the_marketing_site(client):
     assert response.headers['Location'].startswith(
         client.application.config['MARKETING_SITE_URL']
     )
+
+
+def test_docs_timeline_redirects_to_the_public_timeline(client):
+    """The project timeline is a public page beside learn-more; the old in-app
+    URL forwards there instead of rendering a second copy."""
+    response = client.get('/docs/timeline')
+    assert response.status_code == 302
+    marketing = client.application.config['MARKETING_SITE_URL'].rstrip('/')
+    assert response.headers['Location'] == f"{marketing}/timeline.html"
