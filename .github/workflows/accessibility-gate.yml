@@ -10,6 +10,8 @@ on:
 
 permissions:
   contents: read
+  # Pull the CI Postgres image from GHCR (mirror-ci-postgres.yml).
+  packages: read
   pull-requests: write
 
 jobs:
@@ -20,7 +22,10 @@ jobs:
     # Use a service container for the test database
     services:
       postgres:
-        image: public.ecr.aws/docker/library/postgres:15
+        image: ghcr.io/timwonderer/ci-postgres:15
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
         env:
           POSTGRES_USER: user
           POSTGRES_PASSWORD: password
