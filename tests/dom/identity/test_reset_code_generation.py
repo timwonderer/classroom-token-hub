@@ -153,3 +153,22 @@ def test_FEAT_IDEN_003__a_weak_draw_is_never_issued(client, monkeypatch):
     admin_generate_recovery_code(client, seat.id)
 
     assert _reset_code(seat) == "A7F2K9M3"
+
+
+def test_FEAT_IDEN_003__a_seat_deleted_after_issue_lands_on_the_roster(client, monkeypatch):
+    """The code can be issued and the seat deleted by a concurrent request before
+    the route redirects to it. That must not turn an issued code into a 500."""
+    from app.feats import identity_feat
+    from app.feats.identity_feat import ResetCodeResult
+
+    initialize_as_teacher("chemistry_p1", client, client.application)
+    monkeypatch.setattr(
+        identity_feat,
+        "generate_teacher_reset_code",
+        lambda **_kwargs: ResetCodeResult(success=True, code="A7F2K9M3", display_name="Gone"),
+    )
+
+    response = admin_generate_recovery_code(client, 999_999_999)
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/admin/students")

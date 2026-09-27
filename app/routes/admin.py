@@ -3750,7 +3750,11 @@ def generate_student_reset_code():
 
     flash(f"Reset code generated for {result.display_name or 'this student'}: {result.code} — "
           f"Expires in 10 minutes. Give this code to the student.", "warning")
+    # The code is already issued; if the seat vanished since (a concurrent
+    # delete), land on the roster rather than failing the request.
     seat = Seat.query.filter_by(id=seat_id, class_id=g.canonical_context.class_id).first()
+    if seat is None:
+        return redirect(url_for('admin.students'))
     return _redirect_to_student_detail(seat.public_id)
 
 

@@ -179,25 +179,25 @@ audit and have since been removed — see §VIII-A.
 
 ## VII. Disposition Summary
 
-Counts are as-of this revision, after the §VIII-A and §VIII-B removals landed.
+Counts reflect the 2026-09-27 removals (§VII-D): the six stale endpoints, and three that §VI had listed as live but had no caller (`/admin/api/economy/calculate-cwi`, `/admin/onboarding/skip`, `/admin/pending-students/delete`).
 
 | Disposition | Count | Meaning |
 |-------------|-------|---------|
-| Live | 52 | Reachable from a shipped client. |
+| Live | 49 | Reachable from a shipped client. 52 at the 2026-09-05 audit. |
 | Operational | 2 | No in-app caller by design (`/health`, `/health/status`). |
-| Stale | 6 | Registered, functional, zero callers. §VII-C |
+| Stale | 0 | Registered, functional, zero callers. 6 at the 2026-09-05 audit, all since removed (§VII-C). |
 | Broken | 0 | Was 1 before §VIII-B was resolved. |
 | Prohibited | 0 | Was 2 before §VIII-A was resolved. |
 
 ### VII-C. Stale endpoints
 
-Each is registered and reachable, has an intact auth guard, and has no caller in `templates/`, `static/`, or any other application code.
+At the 2026-09-05 audit, each of these was registered and reachable, had an intact auth guard, and had no caller in `templates/`, `static/`, or any other application code. All six were removed on 2026-09-27 (§VII-D), so none is registered now.
 
 | Path | Assessment |
 |------|-----------|
 | `/admin/payroll/transactions/<int:transaction_id>/void` | **Removed 2026-09-27 (§VII-D).** A payroll-specific void, parallel to the live `/admin/void-transaction/<id>` used by `admin_banking.html`. Two implementations of one capability; this is the unused one. |
 | `/admin/payroll/transactions/void-bulk` | **Removed 2026-09-27 (§VII-D).** Bulk form of the same dead path. |
-| `/admin/pending-students/bulk-delete` | **Removed 2026-09-27 (§VII-D).** Referenced only by a test. The live UI calls the singular `/admin/pending-students/delete`. |
+| `/admin/pending-students/bulk-delete` | **Removed 2026-09-27 (§VII-D).** Referenced only by a test. At the audit the UI called the singular `/admin/pending-students/delete`; that route was removed too, and the roster now deletes through `/admin/students/bulk-delete`. |
 | `/admin/passkey/list` | **Removed 2026-09-27 (§VII-D).** Both settings pages render the credential list server-side; nothing fetches it. |
 | `/sysadmin/passkey/list` | **Removed 2026-09-27 (§VII-D).** As above. |
 | `/api/hall-pass/verification/active` | **Removed 2026-09-27 (§VII-D).** Superseded by the server-rendered `/verify/hallpass/<token>`. Carries the highest residual risk of the six — see §VIII-C. |
