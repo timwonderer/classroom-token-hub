@@ -2,6 +2,10 @@
 Default issue categories for the Issue Resolution System.
 
 Categories guide students to provide relevant context for their issues.
+
+Production gets these rows from migration e1c7a4b9d2f3, which carries the same
+list. Keep the two in step. ``init_default_categories`` is a FEAT command for
+tests and setup, never something a GET handler calls (INV-ARC-007).
 """
 
 from app.extensions import db
@@ -78,6 +82,24 @@ DEFAULT_GENERAL_CATEGORIES = [
         'description': 'My job disappeared or changed',
         'category_type': 'general',
         'display_order': 5
+    },
+    {
+        'name': 'General question',
+        'description': 'A question about using Classroom Token Hub',
+        'category_type': 'general',
+        'display_order': 10
+    },
+    {
+        'name': 'Bug report',
+        'description': 'Something in Classroom Token Hub is broken',
+        'category_type': 'general',
+        'display_order': 11
+    },
+    {
+        'name': 'Feature request',
+        'description': 'An idea for something Classroom Token Hub should do',
+        'category_type': 'general',
+        'display_order': 12
     },
     {
         'name': 'Other Issue',

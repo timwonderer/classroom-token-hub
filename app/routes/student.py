@@ -3026,20 +3026,12 @@ def setup_complete():
 @login_required
 def help_support():
     """Show the student help and support page with issue tracking."""
-    from app.utils.issue_categories import init_default_categories
-
     class_context = resolve_canonical_context()
     student = db.session.get(Seat, class_context.seat_id) if class_context and getattr(class_context, "seat_id", None) else None
 
     if not class_context or not student:
         flash("Please select a class first.", "warning")
         return redirect(url_for('student.dashboard'))
-
-    # Initialize default categories if they don't exist
-    init_default_categories(
-        correlation_id=f"corr_support_categories_{uuid.uuid4().hex}",
-        idempotency_key="feat:sup:categories:initialize",
-    )
 
     # Get student's issues for current class (last 20)
     class_economy = get_class_economy(class_context.class_id)
