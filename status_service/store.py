@@ -5,6 +5,10 @@ from __future__ import annotations
 from datetime import datetime, timezone, timedelta
 from uuid import uuid4
 
+class ResolutionTooLarge(ValueError):
+    """The report cannot fit within Firestore's atomic write envelope."""
+
+
 class FirestoreNoticeStore:
     def __init__(self, client):
         self.client = client
@@ -22,11 +26,17 @@ class FirestoreNoticeStore:
                 active.append({"id": snapshot.id, **snapshot.to_dict()})
         return sorted(active, key=lambda notice: notice["updated_at"], reverse=True)
 
-    def list_resolved_notices(self) -> list[dict]:
-        """Read resolved notices independently of the recent-notice limit."""
-        query = self.client.collection("external_status_notices").where("state", "==", "RESOLVED")
+    def list_resolved_notices(self, page: int = 1, page_size: int = 20) -> tuple[list[dict], bool]:
+        """Read only one ordered page plus a lookahead record from Firestore."""
+        if page < 1 or not 1 <= page_size <= 20:
+            raise ValueError("Invalid history page.")
+        query = (self.client.collection("external_status_notices")
+                 .where("state", "==", "RESOLVED")
+                 .order_by("updated_at", direction="DESCENDING")
+                 .order_by("__name__", direction="DESCENDING")
+                 .offset((page - 1) * page_size).limit(page_size + 1))
         notices = [{"id": snapshot.id, **snapshot.to_dict()} for snapshot in query.stream()]
-        return sorted(notices, key=lambda notice: (notice["updated_at"], notice["id"]), reverse=True)
+        return notices[:page_size], len(notices) > page_size
 
     def list_notice_events(self, notice_id: str) -> list[dict]:
         """Read original publication events in chronological order."""
@@ -178,6 +188,14 @@ class FirestoreNoticeStore:
 
         if not selections or len(selections) > 100 or not message.strip():
             raise ValueError("Select 1–100 issues and provide a resolution.")
+        # Each resolution is written twice per selection (event and projection).
+        # Firestore allows 1 MiB/doc and 10 MiB/request; reserve room for metadata
+        # and index updates. This is a storage byte budget, not a character cap.
+        report_bytes = len(message.strip().encode("utf-8"))
+        if report_bytes > 900_000 or report_bytes * 2 * len(selections) > 8 * 1024 * 1024:
+            raise ResolutionTooLarge(
+                "This report is too large for the database write. "
+                "Resolve fewer issues at once, or shorten the report and link to the full document.")
         if any(not key or "/" in key or not version for key, version in selections.items()):
             raise ValueError("Invalid issue selection.")
         current = self.client.collection("external_status_notices")

@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "external_status_notices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "state", "order": "ASCENDING"},
+        {"fieldPath": "updated_at", "order": "DESCENDING"}
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

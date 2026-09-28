@@ -1,0 +1,11 @@
+{% extends "base_public_v2.html" %}
+{% block title %}Resolution not published — Classroom Token Hub{% endblock %}
+{% block content %}
+<main class="operator-page"><section class="landing-content"><div class="landing-shell operator-content">
+  <h1>Resolution not published</h1>
+  <p>{{ error }}</p>
+  <p>No issues were resolved. Copy your report below before returning to the console.</p>
+  <label>Your report<textarea rows="15" readonly>{{ message }}</textarea></label>
+  <p><a href="{{ url_for('operator_notices_get') }}">Back to operator console</a></p>
+</div></section></main>
+{% endblock %}

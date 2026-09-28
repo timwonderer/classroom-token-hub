@@ -16,7 +16,7 @@ from .log_setup import configure_logging
 from status.measurements import (COMPONENT_KEYS, parse_time, classify_component,
                                  retained_activity, unavailable_component, validate_snapshot)
 from status.platform import platform_rows
-from .store import FirestoreNoticeStore
+from .store import FirestoreNoticeStore, ResolutionTooLarge
 
 COMPONENT_NAMES = {"service": "Application requests", "login": "Login requests",
                    "attendance": "Attendance requests", "payroll": "Payroll requests",
@@ -205,14 +205,13 @@ def create_app(store=None) -> Flask:
             abort(400)
         if page < 1:
             abort(400)
-        notices = store.list_resolved_notices()
-        start = (page - 1) * 20
-        if page > 1 and start >= len(notices):
+        notices, has_more = store.list_resolved_notices(page=page)
+        if page > 1 and not notices:
             abort(404)
         entries = [{"notice": notice, "events": store.list_notice_events(notice["id"])}
-                   for notice in notices[start:start + 20]]
+                   for notice in notices]
         return render_template("incident_history.html", entries=entries, page=page,
-                               has_more=start + 20 < len(notices),
+                               has_more=has_more,
                                operator=app.config["STATUS_SERVICE_MODE"] == "operator")
 
     @app.get("/operator/notices")
@@ -252,6 +251,8 @@ def create_app(store=None) -> Flask:
             abort(400, description="Invalid selection. Refresh the issue list.")
         try:
             store.resolve_notices(selections, message, actor)
+        except ResolutionTooLarge as exc:
+            return render_template("resolution_error.html", message=message, error=str(exc)), 413
         except ValueError:
             abort(409, description="No issues were resolved. An issue changed or lacks required lineage. Refresh and review the selection.")
         return redirect(url_for("operator_notices_get"))
