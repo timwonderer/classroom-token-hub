@@ -9137,7 +9137,29 @@ def help_support():
                 "please try again later.",
                 "error",
             )
-            return redirect(url_for('admin.help_support'))
+            my_reports = _support_report_views(
+                Issue.query.filter(
+                    Issue.actor_public_id == actor_public_id,
+                    Issue.class_public_id == active_class_row.class_public_id,
+                    Issue.issue_type == 'general',
+                ).order_by(Issue.submitted_at.desc()).limit(20).all()
+            )
+            return render_template(
+                'admin_support_tickets.html',
+                current_page='help',
+                page_title='Help & Support',
+                selected_class_id=selected_class_id,
+                class_scope_options=class_scope_options,
+                actor_public_id=actor_public_id,
+                my_reports=my_reports,
+                help_content=HELP_ARTICLES['teacher'],
+                format_utc_iso=format_utc_iso,
+                form_issue_category=issue_category,
+                form_title=title,
+                form_description=description,
+                form_expected_behavior=expected_behavior,
+                form_page_url=page_url,
+            )
 
         try:
             with FEATContext(

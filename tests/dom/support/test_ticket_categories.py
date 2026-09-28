@@ -85,6 +85,9 @@ def test_DOM_SUP_001__missing_category_refuses_the_ticket_instead_of_500(client)
 
     assert response.status_code == 200
     assert b"Your ticket was not sent" in response.data
+    # The draft is handed back, so the teacher can retry without retyping it.
+    assert b"Nothing to file under." in response.data
+    assert b'value="No category"' in response.data
     assert Issue.query.filter_by(title="No category").count() == 0
 
 
