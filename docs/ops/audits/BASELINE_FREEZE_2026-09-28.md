@@ -19,6 +19,32 @@ live-ORM bootstrap it replaces, both immediately after revision `0001` and at he
 - **Compared object:** the whole `public` schema, excluding `alembic_version` at step 0, with comment
   lines and psql meta lines removed. Nothing else is excluded.
 
+## Source trees
+
+All four runs used a single git worktree, detached at `7f2bb2562`.
+
+- **Live-ORM side** (`cth_freeze_base_test`, `cth_freeze_old_test`): ran with a clean working tree
+  at `7f2bb2562`, before any file was changed.
+- **Frozen side** (`cth_freeze_b2_test`, `cth_freeze_new_test`): ran from the same worktree after the
+  freeze was written. At that point `git status --porcelain --ignored` (excluding `__pycache__`)
+  showed exactly two differences from `7f2bb2562`:
+
+  ```
+   M migrations/versions/0001_bootstrap.py
+  !! migrations/baseline/
+  ```
+
+  Both files are byte-identical to the versions committed in `70ed32883` and at the head of #1433:
+
+  | File | SHA-256 (first 16), worktree = `70ed32883` = PR head |
+  |---|---|
+  | `migrations/versions/0001_bootstrap.py` | `50a81a191340530a` |
+  | `migrations/baseline/0001_baseline_schema.sql` | `ac82a43c16dc392e` |
+
+The only thing that differs between the two sides is therefore the bootstrap under test, and the
+frozen side is the code this PR ships. The step-0 schema on the frozen side comes from the SQL file
+alone, because the frozen bootstrap does not import the models.
+
 ## Procedure
 
 `$R` is the Postgres server URL without a database name. Each database starts empty.
