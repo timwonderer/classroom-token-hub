@@ -40,4 +40,13 @@ jobs:
       - uses: actions/checkout@v7
       # --min-urls guards against the crawl reaching the index, finding no
       # onward links, and reporting success while having proven nothing.
-      - run: python scripts/check_production_docs.py --base-url https://app.classroomtokenhub.com --crawl --start-path /docs/ --max-urls 300 --min-urls 10 --timeout 20 --delay 2
+      # --max-urls stays under the app's default 200 requests/hour per client:
+      # the help centre is ~110 pages, which cost ~130 requests with the
+      # trailing-slash redirects (measured 2026-09-28 against a local app).
+      # The CF_ACCESS_* secrets are an optional Cloudflare Access service token.
+      # Without them a maintenance window fails this job, naming the Access
+      # redirect; with them the crawl reaches the app through the gate.
+      - run: python scripts/check_production_docs.py --base-url https://app.classroomtokenhub.com --crawl --start-path /docs/ --max-urls 180 --min-urls 10 --timeout 20 --delay 2
+        env:
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
