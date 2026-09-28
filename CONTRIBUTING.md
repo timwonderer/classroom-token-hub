@@ -133,8 +133,10 @@ heads). The governing specification is
 - ✅ **DO:** Keep migrations small and focused (one change per migration)
 - ✅ **DO:** Test both upgrade and downgrade paths
 - ❌ **DON'T:** Create migrations without syncing first
-- ❌ **DON'T:** Edit migration files after they're merged to main (the only exception
-  is a Replay-Safety Correction under SOP-DB-001 §V.A, with all of its conditions met)
+- ❌ **DON'T:** Edit migration files after they're merged to main. SOP-DB-001 allows two
+  narrow exceptions, each only with all of its conditions proven and recorded: a
+  Replay-Safety Correction (§V.A) and a Bootstrap-Replay Correction (§V.B, an existence
+  guard only)
 - ❌ **DON'T:** Delete merged migration files; write a new corrective migration instead
 
 ### If You Encounter Multiple Heads

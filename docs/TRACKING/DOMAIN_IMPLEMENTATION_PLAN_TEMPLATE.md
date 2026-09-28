@@ -12,7 +12,7 @@
 2. **Copy this template** → rename to `DOMAIN_[NAME]_IMPLEMENTATION_2026-0X-XX.md`
 3. **Fill in sections below** for your domain
 4. **Create PRs aligned with phase assignments** → each PR advances one or two phases
-5. **Delete this plan** after domain reaches Phase 10 (audit certified)
+5. **Archive this plan** after the domain reaches Phase 10 (audit certified); see *Cleanup* below
 
 ---
 

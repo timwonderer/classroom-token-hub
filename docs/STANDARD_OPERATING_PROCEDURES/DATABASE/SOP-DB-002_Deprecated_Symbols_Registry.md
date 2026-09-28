@@ -86,8 +86,13 @@ This registry derives its authority from:
 - SOP-DB-001 §VIII, *Schema Contraction Policy* ("Expand and Contract")
 - SOP-DB-003, the Schema Change Gate (PR-blocking checklist)
 
-A violation of this registry is a Schema Change Gate failure. The gate runs its deprecated-symbol
-audit on pull requests that change the model or migrations.
+A violation of this registry is a Schema Change Gate failure. The gate runs only on pull requests that
+touch `migrations/versions/**`, `app/models.py` or `app/models/**`. On those, it runs the deprecated-symbol
+audit unless the pull request is classified `NON-MODEL CHANGE`. That classification is allowed only when
+no migration file changed and the model files show no structural AST change once comments and docstrings
+are removed; otherwise the classification check fails the gate. A pull request that changes only
+`app/`, `templates/` or `scripts/` outside those paths does not trigger the audit, so review remains the
+backstop there.
 
 ## IX. Amendment
 

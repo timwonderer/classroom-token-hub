@@ -60,15 +60,18 @@ def access_headers(environ=os.environ):
     return {}
 
 class _SameHostRedirects(request.HTTPRedirectHandler):
-    """Follow redirects within a host; stop at one that leaves it.
+    """Follow redirects within a host and scheme; stop at one that leaves either.
 
     The check is about this host. A hand-off to another host (the public site,
     or the Access login during a maintenance window) is judged by the redirect
     itself, so the other host is never fetched and the service token is never
-    sent to it.
+    sent to it. A same-host downgrade from https to http is refused too:
+    urllib copies request headers onto a followed redirect, so following it
+    would send the service token in cleartext.
     """
     def redirect_request(self, req, fp, code, msg, headers, newurl):
-        if urlparse(newurl).netloc != urlparse(req.full_url).netloc:
+        new, old = urlparse(newurl), urlparse(req.full_url)
+        if new.netloc != old.netloc or new.scheme != old.scheme:
             return None  # urllib then raises HTTPError carrying the 3xx
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 

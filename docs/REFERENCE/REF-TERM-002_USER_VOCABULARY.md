@@ -6,7 +6,7 @@
 
 ## I. Purpose
 
-Define the authoritative user-facing vocabulary for the Classroom Token Hub. These are the terms that appear in teacher and student interfaces, user guides, help text, and support communications.
+Define the recommended user-facing vocabulary for the Classroom Token Hub (Informative; see §III). These are the terms that appear in teacher and student interfaces, user guides, help text, and support communications.
 
 ## II. Scope
 

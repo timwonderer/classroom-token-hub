@@ -414,8 +414,10 @@ def upgrade():
     if not column_exists('announcements', 'author_seat_id'):
         op.add_column('announcements', sa.Column('author_seat_id', sa.Integer(), nullable=True))
 
-    # Add foreign key constraint
-    if not get_foreign_keys_by_column('announcements', 'author_seat_id'):
+    # Add the foreign key unless this migration's FK (to seats.id) is already there.
+    # Match on the target, not on "any FK on the column", so an unrelated
+    # constraint neither suppresses this one nor gets dropped by downgrade().
+    if not _author_seat_fks():
         op.create_foreign_key(
             'fk_announcements_author_seat_id',  # Constraint name
             'announcements',                     # Source table
@@ -426,11 +428,19 @@ def upgrade():
         )
 
 def downgrade():
-    # Discover the FK by column; never drop by a hardcoded name (Golden Rule 7)
-    for fk in get_foreign_keys_by_column('announcements', 'author_seat_id'):
+    # Discover the FK by column and target; never drop by a hardcoded name (Golden Rule 7).
+    for fk in _author_seat_fks():
         op.drop_constraint(fk['name'], 'announcements', type_='foreignkey')
+    # Dropping the column is the inverse of add_column() and discards its data;
+    # take a backup before downgrading past a column that holds live data.
     if column_exists('announcements', 'author_seat_id'):
         op.drop_column('announcements', 'author_seat_id')
+
+def _author_seat_fks():
+    return [
+        fk for fk in get_foreign_keys_by_column('announcements', 'author_seat_id')
+        if fk['referred_table'] == 'seats' and fk['referred_columns'] == ['id']
+    ]
 ```
 
 ### Scenario 4: Data Migration

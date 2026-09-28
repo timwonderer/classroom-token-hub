@@ -3,7 +3,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| FEAT-IDEN-002 | 2.1 | 2026-09-28 | 2.0 | Normative | ACTIVE |
+| FEAT-IDEN-002 | 2.2 | 2026-09-28 | 2.1 | Normative | ACTIVE |
 
 ---
 
@@ -63,8 +63,12 @@ Reject mixed initial-claim and recovery references; do not infer a User from a
 Seat or fall back to a Seat bound to the User.
 
 For initial claim, the FEAT MUST:
-* Lock the Seat's `ClassEconomy` row, then lock and reload the `Seat` matching `seat_id`.
-* Take `class_id` from the locked Seat.
+* Read the `Seat` matching the session's `seat_id` without a lock, only to learn its `class_id`. That
+  `class_id` comes from the database, never from the request. A Seat's `class_id` is fixed at provisioning:
+  bindings do not migrate between classes (DOM-IDEN-005 §VIII), and no command reassigns it.
+* Lock that `ClassEconomy` row, then lock and reload the `Seat`, and use `class_id` from the locked Seat.
+  The class lock is always taken before the Seat lock, the order every class-scoped command uses. A Seat
+  deleted between the read and the lock fails with `INVALID_SEAT_STATE`.
 * Resolve no `User`. None exists for an initial claim, and none may be inferred (DOM-IDEN-005 §VII).
 
 ---
@@ -261,8 +265,9 @@ The `DOM-OPS` audit log **MUST** contain:
 | `passphrase` | String | ✗ | DO NOT log (security) |
 | `error_code` | String | ⚠️ | Only if outcome is `FAILED` |
 
-**Outcomes (Only One Possible):**
-- `CREDENTIAL_ACTIVATED`: For initial claim, the User was created with credentials and bound. For recovery, the credentials were replaced.
+**Outcomes:**
+- `CREDENTIAL_ACTIVATED`: the only successful outcome. For initial claim, the User was created with credentials and bound. For recovery, the credentials were replaced.
+- `FAILED`: any failure, with `error_code` set to a code from §VI.
 
 ---
 
@@ -346,6 +351,8 @@ Revisions to this document SHALL:
 3. Maintain consistency with INV-ARC-019, DOM-IDEN-005 §V, §VII and §VIII, and DOM-IDEN-002 §VI, §VII and §VIII.
 4. Maintain consistency with FEAT-CORE-000.
 5. Maintain consistency with FEAT-IDEN-001.
+
+**Version 2.2 (2026-09-28):** §II.2 states the lock sequence: an unlocked read of the Seat's database `class_id`, then the class lock, then the Seat lock. §VII lists `FAILED` beside the only successful outcome.
 
 **Version 2.1 (2026-09-28):** §II and §IV.1: sign-in uses the username and passphrase, following DOM-IDEN-002 2.8 and the credential matrix. It had said username and PIN.
 

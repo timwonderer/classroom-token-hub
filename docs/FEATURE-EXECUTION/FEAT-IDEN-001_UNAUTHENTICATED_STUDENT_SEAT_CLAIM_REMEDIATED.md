@@ -76,7 +76,7 @@ This FEAT has only a read-only phase. It SHALL perform no database write.
    - If several match, keep those whose `dedupe_code` equals the given code. Exactly one must remain; otherwise abort with `INVALID_DEDUPE_CODE`.
    - If none match, abort with `INVALID_CREDENTIALS`.
 5. Take `roster_seat_id` and its `claim_generation` from the resolved seat.
-6. **Failure Behavior**: Abort at the first failing step. A failure reveals nothing about which seats or users exist.
+6. **Failure Behavior**: Abort at the first failing step. A failure reveals no `User`, no seat identifier and no other student's data (see §VII on what a claimant can learn).
 
 #### Step 3: Identity Inference Prohibition
 Per DOM-IDEN-005 §VII:
@@ -157,7 +157,15 @@ Per FEAT-CORE-000 §III.4, the verification attempt **MUST** emit an audit recor
 
 ## VII. Failure Scenarios
 
-A failure performs no write. It emits the audit record in §VI and returns an error. Messages SHALL NOT reveal whether a given name or seat exists.
+A failure performs no write. It emits the audit record in §VI and returns an error. Messages SHALL NOT
+reveal any `User`, seat identifier, class membership beyond the submitted join code, or another student's data.
+
+What a claimant can learn is bounded by the flow itself. Anyone holding the join code learns that a submitted
+roster name matches, because a match proceeds to setup. `AMBIGUOUS_IDENTITY` adds only that the name matches
+more than one seat, and it is required: DOM-IDEN-002 §VIII (*Claim Flow* step 6 and *DOPO Handling*) makes the
+teacher-issued dedupe code mandatory for duplicate names, so the claimant must be asked for it. The join code is
+the first gate on this surface. Every submission must also pass Cloudflare Turnstile verification
+(`student.claim_account`), and the application-wide default rate limit applies.
 
 | Scenario | Error Code | HTTP Status | Message |
 |----------|-----------|-------------|---------|
@@ -217,6 +225,7 @@ Revisions to this document SHALL:
   performed them. Version 2.x put an uncredentialed `User` and the binding here. That
   contradicted DOM-IDEN-005 §VIII (binding associates an *authenticated* User) and INV-ARC-019
   §XII.
+- §VII states what a claimant can learn, and why `AMBIGUOUS_IDENTITY` is required (DOM-IDEN-002 §VIII).
 - Removed the step that created a `ClassMembership` "or equivalent" record. Membership is the bound Seat
   (DOM-IDEN-005 §V, INV-ARC-013), and `ClassMembership` does not exist in v2.
 - Removed the `IdempotencyRecord` entity, because a read-only phase has nothing to replay. Idempotency is

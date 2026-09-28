@@ -183,3 +183,32 @@ def test_fetch_follows_same_host_redirects_and_stops_at_cross_host_ones():
         server.shutdown()
     assert all(host.startswith("127.0.0.1") for host, _, _ in hits)
     assert [path for _, path, _ in hits] == ["/docs/dir", "/docs/dir/", "/docs/away"]
+
+
+def test_fetch_stops_at_a_same_host_scheme_change():
+    """urllib copies headers onto a followed redirect; a scheme change could leak the token."""
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    hits = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            hits.append(self.path)
+            self.send_response(302)
+            self.send_header("Location", f"https://127.0.0.1:{self.server.server_port}/docs/next")
+            self.end_headers()
+
+        def log_message(self, *args):
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{server.server_port}"
+    try:
+        status, final, body, _ = cpd.fetch(f"{base}/docs/", 5, {"CF-Access-Client-Id": "id"})
+    finally:
+        server.shutdown()
+    assert (status, body) == (302, b"")
+    assert final == f"https://127.0.0.1:{server.server_port}/docs/next"
+    assert hits == ["/docs/"]
