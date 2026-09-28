@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| INV-ARC-018      | 1.3     | 2026-09-16     | 1.2        | Constitutional |
+| INV-ARC-018      | 1.4     | 2026-09-28     | 1.3        | Constitutional |
 
 ---
 
@@ -149,10 +149,13 @@ No staging value is copied to logs or authority context.
 - Owns the encryption/decryption boundary: decryption happens at read time within the identity service, not in templates or routes.
 - Must not expose decrypted values beyond the service return boundary except as display-ready strings.
 
-### Seat Claim (FEAT-IDEN-001)
+### Seat Provisioning and Claim (FEAT-IDEN-006, FEAT-IDEN-001, FEAT-IDEN-002)
 
-- Owns the creation of HMAC-hashed claim verification columns on `seats`.
-- Must hash incoming roster names at write time; plaintext must not persist beyond the FEAT transaction.
+- FEAT-IDEN-006 (roster provisioning and Unclaim) owns the creation of the HMAC-hashed claim verification columns on `seats`. It must hash incoming roster names at write time; plaintext must not persist beyond the FEAT transaction.
+- FEAT-IDEN-001 (claim verification) hashes the names a student enters only to compare them with those columns. It persists neither the names nor their digests.
+- FEAT-IDEN-002 clears the claim verification columns in the binding transaction (INV-ARC-019 §X).
+
+*Amended in 1.4 (2026-09-28): version 1.3 attributed column creation to FEAT-IDEN-001. FEAT-IDEN-001 v3.0 is read-only verification, and FEAT-IDEN-006 has always written these columns. The storage rule itself is unchanged.*
 
 ### Operations Domain (DOM-OPS)
 

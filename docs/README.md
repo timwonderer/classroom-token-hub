@@ -15,10 +15,11 @@ the authority; where they differ, SOP-DOC-000 wins.
 | **0 — Foundational** | Non-negotiable laws of the system | `INV-CORE-*` (`INVARIANT/CORE/`) |
 | **1 — Constitutional** | Enforcement mechanisms and bounded domain rules | `INV-ARC-*` (`INVARIANT/ARCHITECTURE/`), `DOM-*` (`DOMAIN/`) |
 | **2 — Normative** | Implementation flows, transactions, procedures | `FEAT-*`, `SOP-*`, `SPEC-*` (binding when incorporated by an INV, DOM or FEAT contract) |
-| **3 — Informative** | Memory, rationale, plans, guides; defines no runtime rule | `MAP-*`, `PRN-*`, `user-guides/`, `archive/`, root files |
+| **3 — Informative** | Memory, rationale, plans, guides; defines no runtime rule | `MAP-*`, `PRN-*`, `user-guides/`, `self-hosting/`, `TRACKING/`, `ops/`, `archive/`, root files |
 
-`REFERENCE/`, `TRACKING/`, `ops/` and `self-hosting/` are not assigned a tier by SOP-DOC-000.
-They are descriptive: they summarise and can drift, and they are never cited as authority.
+Tier 3 documents describe; they can drift, and they are never cited as authority. `REFERENCE/` has no tier yet: each
+`REF-*` document's own Authority Level applies, and none overrides Tiers 0–2 (SOP-DOC-000 §V).
+`.claude/` is outside the tier system.
 
 ---
 
@@ -40,11 +41,11 @@ They are descriptive: they summarise and can drift, and they are never cited as 
 |-----------|------|---------|
 | **[MAP/](MAP/)** | 3 | Domain-to-FEAT capability maps and UI wiring maps |
 | **[PRINCIPLES/](PRINCIPLES/)** | 3 | Why a design was chosen (security, privacy, SSO, project philosophy) |
-| **[REFERENCE/](REFERENCE/)** | descriptive | Vocabulary and interface references (`REF-TERM-*`, `REF-API-001`, `REF-DES-001`) |
+| **[REFERENCE/](REFERENCE/)** | unassigned | Vocabulary and interface references (`REF-TERM-*`, `REF-API-001`, `REF-DES-001`) |
 | **[user-guides/](user-guides/)** | 3 | Teacher and student help served by the in-app `/docs` site |
-| **[self-hosting/](self-hosting/README.md)** | descriptive | Running your own instance |
-| **[TRACKING/](TRACKING/)** | descriptive | The post-launch tracker and open decision packages |
-| **[ops/](ops/)** | descriptive | Production host notes and dated release and audit records (`ops/audits/`) |
+| **[self-hosting/](self-hosting/README.md)** | 3 | Running your own instance |
+| **[TRACKING/](TRACKING/)** | 3 | The post-launch tracker and open decision packages |
+| **[ops/](ops/)** | 3 | Production host notes and dated release and audit records (`ops/audits/`) |
 | **[archive/](archive/)** | 3 | Superseded material, kept for history only (see below) |
 
 ### Outside `docs/`

@@ -76,10 +76,27 @@ Each item was verified on 2026-09-28 unless it says otherwise.
 | Ledger | `Transaction.join_code` remains as a nullable, indexed column documented as ingress/display metadata. No domain query may filter on it | `app/models.py:478` |
 | Productivity | `AttendanceReasonCode` has no `daily_limit` member (`hall_pass`, `done_for_day`, `start_work`). Confirm whether the daily-limit auto tap-out needs one before adding it | `app/models.py:72-76` |
 | Productivity | Payroll reversal correlation is heuristic | not re-verified |
+| Access policy | `assert_can_void_transaction` has no caller and reads `transaction.teacher_id`, a column `Transaction` does not have. Delete it, or rewrite it on `class_id` before any use | `app/services/access_policy_service.py:91-104` |
+| Scripts | `verify_runtime_session_attacks.py` imports the retired `Student` model and cannot run | `scripts/adversarial/verify_runtime_session_attacks.py:13` |
 
 **Closed since the pre-launch list:** the teardown helpers left `app/routes/admin.py` for
 `app/services/teacher_destruction.py`, `context_resolver.py` has no `print()` calls left,
 `StoreItem` is gone (single `StoreProduct` catalog), and `update_user_report` is gone.
+
+---
+
+## IV-A. Contract gaps and decisions (found 2026-09-28, amending FEAT-IDEN-001/002)
+
+- [ ] **`ACT-IDEN-001` / `ACT-IDEN-002` audit events are not emitted.** FEAT-CORE-000 §III.4 requires an
+  audit record for every FEAT execution. FEAT-IDEN-001 v3.0 §VI and FEAT-IDEN-002 §VII specify them;
+  `app/feats/identity_feat.py` emits neither. This is the same gap as `ACT-IDEN-003` (#1427); design them
+  together.
+- [ ] **Decision: student login credential.** DOM-IDEN-002 §VII (Constitutional) says students log in with
+  username and **PIN**. The code (`student.login`) and FEAT-IDEN-002's credential table ("fixed and
+  normative") use the **passphrase**. Either amend DOM-IDEN-002 §VII to the passphrase, or change the code.
+  FEAT-IDEN-002 §IV.1 still says "username and PIN" and is left for this decision.
+- [ ] **Decision: tier of `docs/REFERENCE/`.** SOP-DOC-000 v3.3 leaves it unassigned. `REF-TERM-001` and
+  `REF-TERM-002` declare themselves Normative; `REF-API-001` and `REF-DES-001` are descriptive.
 
 ---
 

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-CLASS-002 | 0.1 | 2026-07-12 | N/A | Normative |
+| FEAT-CLASS-002 | 0.2 | 2026-09-28 | 0.1 | Normative |
 
 ---
 
@@ -100,7 +100,7 @@ The following values SHALL be inherited from CanonicalContext:
 
 Student Users SHALL NOT be provisioned.
 
-Student account creation remains owned by FEAT-IDEN-001.
+Student account creation remains owned by the claim flow: FEAT-IDEN-001 verifies the claim, and FEAT-IDEN-002 creates the student `User` and binds its Seat. (Version 0.2, 2026-09-28: corrected from "owned by FEAT-IDEN-001", following FEAT-IDEN-001 v3.0.)
 
 ---
 
