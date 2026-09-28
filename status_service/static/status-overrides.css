@@ -1000,3 +1000,7 @@ body:has(.status-mockup-page) {
 .working-section .capability-card .capability-result {
     margin-top: auto
 }
+.incident-message {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

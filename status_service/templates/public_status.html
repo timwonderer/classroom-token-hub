@@ -25,6 +25,7 @@
     <div class="landing-shell status-main-shell">
       <section aria-labelledby="happening-heading">
         <h2 id="happening-heading">What’s happening?</h2>
+        <p><a href="{{ url_for('incident_history') }}">Past incidents and resolutions</a></p>
         {% for notice in notices %}<article class="happening-banner happening-banner--{{ notice.state|lower }}">
           <div class="happening-banner-title"><span class="material-symbols-outlined" aria-hidden="true">{{ "info" if
               notice.state == "MONITORING" else "warning" }}</span><strong>{{ notice.capability|replace('_',' ')|title

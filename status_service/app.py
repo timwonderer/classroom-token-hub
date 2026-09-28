@@ -16,7 +16,7 @@ from .log_setup import configure_logging
 from status.measurements import (COMPONENT_KEYS, parse_time, classify_component,
                                  retained_activity, unavailable_component, validate_snapshot)
 from status.platform import platform_rows
-from .store import FirestoreNoticeStore
+from .store import FirestoreNoticeStore, ResolutionTooLarge
 
 COMPONENT_NAMES = {"service": "Application requests", "login": "Login requests",
                    "attendance": "Attendance requests", "payroll": "Payroll requests",
@@ -195,6 +195,25 @@ def create_app(store=None) -> Flask:
                                platform_checks=checks,
                                overall_status=overall_observation(checks, measurements, active_notices))
 
+    @app.get("/incidents")
+    def incident_history():
+        if app.config["STATUS_SERVICE_MODE"] == "operator":
+            require_operator()
+        try:
+            page = int(request.args.get("page", "1"))
+        except ValueError:
+            abort(400)
+        if page < 1:
+            abort(400)
+        notices, has_more = store.list_resolved_notices(page=page)
+        if page > 1 and not notices:
+            abort(404)
+        entries = [{"notice": notice, "events": store.list_notice_events(notice["id"])}
+                   for notice in notices]
+        return render_template("incident_history.html", entries=entries, page=page,
+                               has_more=has_more,
+                               operator=app.config["STATUS_SERVICE_MODE"] == "operator")
+
     @app.get("/operator/notices")
     def operator_notices_get():
         if app.config["STATUS_SERVICE_MODE"] != "operator":
@@ -218,8 +237,8 @@ def create_app(store=None) -> Flask:
             abort(403)
         tokens = request.form.getlist("selected_issue")
         message = request.form.get("resolution_message", "").strip()
-        if not tokens or len(tokens) > 100 or not message or len(message) > 500:
-            abort(400, description="Select 1–100 open issues and enter a resolution (maximum 500 characters).")
+        if not tokens or len(tokens) > 100 or not message:
+            abort(400, description="Select 1–100 open issues and enter a resolution.")
         signer = URLSafeSerializer(app.secret_key, salt="notice-resolution")
         selections = {}
         try:
@@ -232,6 +251,8 @@ def create_app(store=None) -> Flask:
             abort(400, description="Invalid selection. Refresh the issue list.")
         try:
             store.resolve_notices(selections, message, actor)
+        except ResolutionTooLarge as exc:
+            return render_template("resolution_error.html", message=message, error=str(exc)), 413
         except ValueError:
             abort(409, description="No issues were resolved. An issue changed or lacks required lineage. Refresh and review the selection.")
         return redirect(url_for("operator_notices_get"))

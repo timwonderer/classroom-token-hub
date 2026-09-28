@@ -42,12 +42,51 @@ def setup(monkeypatch):
                 data[ref.collection][ref.key] = value
         return run
 
-    client = SimpleNamespace(transaction=Transaction, collection=lambda name:
-                             SimpleNamespace(document=lambda key: Ref(name, key)))
+    class Collection:
+        def __init__(self, name, filters=()):
+            self.name, self.filters = name, filters
+            self.orders, self.skip, self.maximum = [], 0, None
+
+        def document(self, key):
+            return Ref(self.name, key)
+
+        def where(self, field, operator, value):
+            assert operator == "=="
+            return Collection(self.name, (*self.filters, (field, value)))
+
+        def order_by(self, field, direction):
+            self.orders.append((field, direction))
+            return self
+
+        def offset(self, count):
+            self.skip = count
+            return self
+
+        def limit(self, count):
+            self.maximum = count
+            return self
+
+        def stream(self):
+            rows = [(key, value) for key, value in data[self.name].items()
+                    if all(value.get(field) == expected for field, expected in self.filters)]
+            for field, direction in reversed(self.orders):
+                rows.sort(key=lambda row: row[0] if field == "__name__" else row[1][field],
+                          reverse=direction == "DESCENDING")
+            rows = rows[self.skip:]
+            if self.maximum is not None:
+                rows = rows[:self.maximum]
+            if self.name == "external_status_notices":
+                assert self.maximum == 21, "History query must be bounded at the store boundary"
+                store.history_reads.append(len(rows))
+            return [SimpleNamespace(id=key, to_dict=lambda value=deepcopy(value): value)
+                    for key, value in rows]
+
+    client = SimpleNamespace(transaction=Transaction, collection=Collection)
     firestore = SimpleNamespace(transactional=transactional, Client=lambda **kwargs: client)
     monkeypatch.setitem(sys.modules, "google.cloud.firestore", firestore)
     monkeypatch.setitem(sys.modules, "google.cloud", SimpleNamespace(firestore=firestore))
     store = FirestoreNoticeStore(client)
+    store.history_reads = []
     for key in ("one", "two", "three"):
         data["external_status_notices"][key] = dict(
             external_notice_id=key, incident_ref="incident-" + key, last_event_id="event-" + key,
@@ -113,7 +152,7 @@ def test_stale_or_invalid_selection_is_atomic(setup, change):
     assert data == before
 
 
-@pytest.mark.parametrize("case", ["empty", "tampered", "duplicate", "blank-message", "long-message", "csrf", "unauthenticated", "manual"])
+@pytest.mark.parametrize("case", ["empty", "tampered", "duplicate", "blank-message", "csrf", "unauthenticated", "manual"])
 def test_rejected_requests_do_not_write(setup, case, monkeypatch):
     data, _, client, module = setup
     csrf, tokens, _ = form(client)
@@ -124,7 +163,6 @@ def test_rejected_requests_do_not_write(setup, case, monkeypatch):
     if case == "tampered": body["selected_issue"] = ["invalid"]
     if case == "duplicate": body["selected_issue"] *= 2
     if case == "blank-message": body["resolution_message"] = " "
-    if case == "long-message": body["resolution_message"] = "x" * 501
     if case == "csrf": body["csrf_token"] = "bad"; expected = 403
     if case == "unauthenticated":
         monkeypatch.setattr(module, "authenticated_operator_email", lambda *args: None)
@@ -184,6 +222,7 @@ def test_publish_investigated_notice_without_automated_source(setup):
     {"next_update_at": "not-a-time"},
     {"state": "arbitrary"},
     {"capability": "unregistered"},
+    {"impact_statement": "x" * 501},
 ])
 def test_invalid_notice_fields_do_not_write(setup, fields):
     _, store, client, _ = setup
@@ -200,3 +239,88 @@ def test_invalid_notice_fields_do_not_write(setup, fields):
     if fields.get("recovery_state") == "UNAVAILABLE":
         assert "Clear the recovery time or select a known or estimated recovery state." in response.get_data(as_text=True)
     assert not published
+
+
+@pytest.mark.parametrize("length", [501, 12000])
+def test_detailed_resolution_saved_and_visible_in_history(setup, length):
+    data, _, client, _ = setup
+    csrf, tokens, page = form(client)
+    textarea = re.search(r'<textarea[^>]*name="resolution_message"[^>]*>', page).group()
+    assert "maxlength" not in textarea and "required" in textarea
+    now = datetime.now(timezone.utc)
+    data["external_status_notice_events"]["original"] = dict(
+        external_notice_id="one", event_id="original", published_at=now,
+        state="INVESTIGATING", impact_statement="Original incident report",
+        recommended_user_action="Please wait.", actor="PRIVATE-OPERATOR@example.com")
+    message = "Detailed investigation: " + "x" * length + "\n\nRecovery verified. <script>alert(1)</script>"
+    response = client.post("/operator/notices/resolve", data={
+        "csrf_token": csrf, "selected_issue": tokens[:1], "resolution_message": message})
+    assert response.status_code == 302
+    assert data["external_status_notices"]["one"]["impact_statement"] == message
+    events = list(data["external_status_notice_events"].values())
+    assert events[-1]["impact_statement"] == message
+    before = deepcopy(data)
+    client.application.config["STATUS_SERVICE_MODE"] = "public"
+    current = client.get("/").get_data(as_text=True)
+    assert 'href="/incidents"' in current
+    assert "Detailed investigation" not in current
+    history = client.get("/incidents").get_data(as_text=True)
+    assert "Original incident report" in history and "x" * length in history
+    assert "&lt;script&gt;" in history and "<script>" not in history
+    assert "PRIVATE-OPERATOR" not in history and "operator@example.com" not in history
+    assert history.index("Original incident report") < history.index("Resolved —")
+    assert history.count("<h1>") == 1
+    assert data == before
+
+
+def test_history_pagination_includes_older_resolutions_and_excludes_open_issues(setup):
+    data, store, client, _ = setup
+    from datetime import timedelta
+    now = datetime.now(timezone.utc)
+    for i in range(55):
+        data["external_status_notices"][f"resolved-{i}"] = dict(
+            state="RESOLVED", capability="login", incident_ref=f"past-{i}",
+            updated_at=now - timedelta(days=i), impact_statement=f"Report {i}.")
+    client.application.config["STATUS_SERVICE_MODE"] = "public"
+    first = client.get("/incidents").get_data(as_text=True)
+    assert "Report 0." in first and "Report 20." not in first
+    assert "Issue one" not in first and "Older incidents" in first
+    last = client.get("/incidents?page=3").get_data(as_text=True)
+    assert "Report 54." in last and "Newer incidents" in last
+    assert "Older incidents" not in last
+    assert store.history_reads == [21, 15]
+    assert client.get("/incidents?page=4").status_code == 404
+    for page in ("0", "-1", "abc"):
+        assert client.get("/incidents?page=" + page).status_code == 400
+
+
+def test_history_empty_state_and_operator_authentication(setup, monkeypatch):
+    _, _, client, module = setup
+    assert 'href="/incidents"' in form(client)[2]
+    assert "No resolved incidents" in client.get("/incidents").get_data(as_text=True)
+    monkeypatch.setattr(module, "authenticated_operator_email", lambda *args: None)
+    assert client.get("/incidents").status_code == 401
+    client.application.config["STATUS_SERVICE_MODE"] = "public"
+    assert client.get("/incidents").status_code == 200
+
+
+@pytest.mark.parametrize("report,selections", [("é" * 450001, 1), ("x" * 50000, 100)],
+                         ids=["document-utf8-budget", "transaction-batch-budget"])
+def test_storage_budget_rejects_before_writes_and_preserves_report(setup, report, selections):
+    from status_service.store import ResolutionTooLarge
+    data, store, client, _ = setup
+    before = deepcopy(data)
+    with pytest.raises(ResolutionTooLarge):
+        store.resolve_notices({str(i): "version" for i in range(selections)}, report, "operator")
+    assert data == before
+    if selections == 100:
+        from itsdangerous import URLSafeSerializer
+        signer = URLSafeSerializer(client.application.secret_key, salt="notice-resolution")
+        csrf, _, _ = form(client)
+        response = client.post("/operator/notices/resolve", data={
+            "csrf_token": csrf, "selected_issue": [signer.dumps([str(i), "version"]) for i in range(selections)],
+            "resolution_message": report})
+        assert response.status_code == 413
+        assert report in response.get_data(as_text=True)
+        assert "No issues were resolved" in response.get_data(as_text=True)
+        assert data == before

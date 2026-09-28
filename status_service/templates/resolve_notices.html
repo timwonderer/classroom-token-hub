@@ -18,7 +18,7 @@
       </label>
       {% endfor %}
     </fieldset>
-    <label>Resolution message<textarea name="resolution_message" maxlength="500" required></textarea></label>
+    <label>Resolution message<textarea name="resolution_message" rows="10" required></textarea></label>
     <button class="operator-submit" type="submit">Resolve selected issues</button>
   </form>
   {% else %}<p>No open issues to resolve.</p>{% endif %}
