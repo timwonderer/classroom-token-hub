@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| INV-ARC-019      | 1.5     | 2026-09-15     | 1.4 | Constitutional |
+| INV-ARC-019      | 1.6     | 2026-09-28     | 1.5 | Constitutional |
 
 ---
 
@@ -51,6 +51,11 @@ No identifier answers more than its assigned question.
 ### `users.id`
 
 `users.id` identifies the authenticated human principal.
+
+`users.id` is a randomly generated UUID, stored as a PostgreSQL `uuid` with an explicit UNIQUE
+constraint in addition to the primary key. It is never sequential and never reissued. A value that is
+not a UUID names no principal, so an identifier issued by an earlier numbering, whether held in a
+session or by an external system, cannot come to name a different person.
 
 `users` owns:
 
@@ -317,7 +322,7 @@ is available.
 
 ## XIV. Settled Decisions
 
-- `users.id` = authentication principal
+- `users.id` = authentication principal, a random UUID
 - `seats.id` = operational actor
 - `classes.class_id` = isolation boundary
 - `seats.public_id` = canonical deidentified public actor identity

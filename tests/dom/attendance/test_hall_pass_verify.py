@@ -440,15 +440,14 @@ def test_DOM_PROD_002__rotate_token_invalidates_old_token(client):
 
 
 def test_DOM_PROD_002__token_not_derived_from_teacher_id(verification_context):
-    """The public token must not be derived from the teacher's numeric ID."""
+    """The public token must not be derived from the teacher's principal id."""
     teacher = verification_context["teacher"]
     token = verification_context["token"]
 
     assert len(token) == 64
     assert all(c in "0123456789abcdef" for c in token)
     assert token != str(teacher.id)
-    assert token != hex(teacher.id)
-    assert token != f"{teacher.id:064d}"
+    assert str(teacher.id).replace("-", "") not in token
 
 
 def test_profile_edit_changes_verification_without_claim_material(client, verification_context):

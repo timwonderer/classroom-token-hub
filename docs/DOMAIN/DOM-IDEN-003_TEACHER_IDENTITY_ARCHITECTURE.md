@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-IDEN-003 | 2.9 | 2026-09-24 | 2.8 | Constitutional |
+| DOM-IDEN-003 | 2.10 | 2026-09-28 | 2.9 | Constitutional |
 
 ---
 
@@ -87,7 +87,10 @@ Teacher-specific fields on `users`: `totp_secret_encrypted`.
 
 - `recovery_requests`: At most one `status = 'pending'` row per user at any time. `expires_at` is a hard TTL (5 days). Rows past `expires_at` are inert regardless of status. `partial_codes` and `resume_new_username` must be cleared when `status` transitions to `verified` or `expired`.
 - `student_recovery_codes`: One row per selected student seat per recovery request. `code_hash` is `HMAC(6-digit-code, b'')`. Plaintext code is never stored. `code_hash` is set to NULL and `verified_at` is cleared on any failed submission (all-or-nothing invalidation per §IX invariant 6). Rows become inert when the parent `recovery_request.expires_at` passes.
-- `passkey_credentials`: Passwordless external IDs use `user_<User.id>`. Legacy external IDs such as `admin_<id>` are invalid v2 principals. Passkey metadata does not authorize class access, seat access, recovery, or economic actions.
+- `passkey_credentials`: Passwordless external IDs use `user_<users.id>`, where `users.id` is a UUID (INV-ARC-019 §VI). An external ID that does not name a current UUID principal names no principal; this includes the integer forms issued before 2026-09-28 and legacy forms such as `admin_<id>`. Passkey metadata does not authorize class access, seat access, recovery, or economic actions.
+  - **Credential binding.** Every row carries the passwordless.dev `credential_id`, NOT NULL and UNIQUE. It is recorded only from a registration token verified server-side, of type `passkey_register`, naming the registering principal.
+  - **Sign-in.** A passkey authenticates a principal only when the verified token is a successful `passkey_signin` token whose `credential_id` is recorded for the `users.id` the token names, and that principal holds the expected role. When sign-in began from a username, the principal must be the one that username resolves to. A token proves that some credential in the tenant was used; the recorded binding is what makes it this principal's.
+  - **Removal.** Removing a passkey deletes the credential on passwordless.dev before the row. Destroying a principal deletes its passwordless.dev user, with its credentials and aliases, before any local row. If the remote deletion fails, nothing local changes.
 - `teacher_signup_attempts`: Temporary state only. It references no `users`, `classes` or `seats` row and grants no identity, lookup or classroom authority. The plaintext nonce is never stored. A row past `expires_at` is inert and is removed by cleanup; a restart deletes the previous attempt; successful provisioning deletes the attempt in the same transaction that creates the `User`, `Class`, `Seat` and `IdentityProfile`, so a replay cannot provision a second account.
 
 ### Derived / Cross-Domain Rules

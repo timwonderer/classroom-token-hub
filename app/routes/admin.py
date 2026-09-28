@@ -187,11 +187,7 @@ from app.utils.ip_handler import get_real_ip
 from app.utils.turnstile import verify_turnstile_token
 from app.utils.help_content import HELP_ARTICLES
 from app.utils.encryption import encrypt_totp, decrypt_totp
-from app.utils.passwordless_client import (
-    create_register_token,
-    verify_signin_token,
-    get_public_api_key
-)
+from app.utils.passwordless_client import get_public_api_key
 from app.utils.display_name_session import (
     set_admin_display_name_cache,
     clear_admin_display_name_cache,
@@ -234,13 +230,9 @@ from app.services import operational_event_service
 from app.services.ledger_balance_query_service import get_available_balances
 from app.services.admin_identity_service import (
     admin_has_passkeys,
-    create_admin_credential,
-    delete_admin_credential,
-    delete_admin_credentials_for_user,
-    get_admin_credential,
     list_admin_credentials,
-    touch_admin_credentials_last_used,
 )
+from app.services import passkey_service
 from app.services.recovery_service import (
     delete_recovery_rows_for_user,
     find_recovery_request_by_resume_pin,
@@ -1365,7 +1357,7 @@ def _issue_student_detail_nav_token(*, actor_public_id: str, class_id: str | Non
     payload = {
         "actor_public_id": str(actor_public_id),
         "class_id": str(class_id) if class_id else None,
-        "user_id": int(getattr(getattr(g, "canonical_context", None), "user_id", 0) or 0),
+        "user_id": str(getattr(getattr(g, "canonical_context", None), "user_id", "") or ""),
     }
     return _student_detail_nav_serializer().dumps(payload)
 
@@ -3325,8 +3317,9 @@ def student_detail_public(actor_public_id):
     if not nav_payload:
         abort(404)
 
-    expected_user_id = int(nav_payload.get("user_id") or 0)
-    if expected_user_id and expected_user_id != int(user_id or 0):
+    # The token is bound to the teacher it was issued to. A token without a
+    # principal, or from before users.id became a UUID, matches no one.
+    if not user_id or str(nav_payload.get("user_id") or "") != str(user_id):
         abort(404)
     expected_public_id = str(nav_payload.get("actor_public_id") or "")
     expected_class_id = str(nav_payload.get("class_id") or "")
@@ -8912,6 +8905,11 @@ def account_delete():
             session.pop("last_activity", None)
             flash('Your account and associated class data were permanently deleted.', 'success')
             return redirect(url_for('admin.login'))
+        except passkey_service.PasskeyServiceUnavailable as e:
+            db.session.rollback()
+            current_app.logger.error("Account deletion stopped before any change: %s", e)
+            flash(e.public_message, 'error')
+            return redirect(url_for('admin.account_delete'))
         except Exception as e:
             db.session.rollback()
             current_app.logger.exception(f"Error deleting admin account: {e}")
@@ -10036,18 +10034,19 @@ def passkey_register_start():
         if not user or getattr(user.user_role, "value", user.user_role) != "teacher":
             abort(404)
 
-        # Generate registration token using official SDK
-        user_id = f"user_{user.id}"
         username = session.get("admin_auth_username") or f"user_{user.id}"
-        displayname = user.get_display_username()
-
-        token = create_register_token(user_id, username, displayname)
+        token = passkey_service.create_registration_token(
+            user, alias=username, display_name=user.get_display_username(),
+        )
 
         return jsonify({
             "token": token,
             "apiKey": get_public_api_key()
         }), 200
 
+    except passkey_service.PasskeyAliasConflict as e:
+        current_app.logger.warning("Passkey registration refused: %s", e)
+        return jsonify({"error": e.public_message}), 409
     except ValueError as e:
         current_app.logger.error(f"Passwordless.dev configuration error: {e}")
         return jsonify({"error": "Passkey service not configured"}), 503
@@ -10067,24 +10066,25 @@ def passkey_register_finish():
     After frontend completes WebAuthn ceremony, store credential metadata.
     """
     try:
-        user_id = g.canonical_context.user_id
-        data = request.get_json()
+        user = get_current_user()
+        if not user or getattr(user.user_role, "value", user.user_role) != "teacher":
+            abort(404)
+        data = request.get_json(silent=True) or {}
 
-        # No need to check for or use 'token' in the request payload.
-
-        # Note: Credential is stored on passwordless.dev servers
-        # We just track that registration occurred for UX purposes
-        authenticator_name = data.get('authenticatorName', 'Unnamed Passkey')
-
-        # Save credential metadata (credential_id is optional, stored on passwordless.dev)
-        create_admin_credential(
-            user_id=user_id,
-            credential_id=None,  # Not needed - stored on passwordless.dev servers
-            authenticator_name=authenticator_name,
+        # The token from p.register() is verified here, and the credential it
+        # names is recorded for this teacher only.
+        passkey_service.complete_registration(
+            user,
+            data.get('token'),
+            authenticator_name=data.get('authenticatorName', 'Unnamed Passkey'),
         )
         flash("Passkey registered successfully!", "success")
         return jsonify({"success": True}), 200
 
+    except passkey_service.PasskeyError as e:
+        db.session.rollback()
+        current_app.logger.warning("Passkey registration refused: %s", e)
+        return jsonify({"error": e.public_message}), 400
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error finishing passkey registration: {e}")
@@ -10102,6 +10102,7 @@ def passkey_auth_start():
     try:
         data = request.get_json()
         session.pop('passkey_auth_username', None)
+        session.pop('passkey_auth_user_id', None)
 
         if not data or 'username' not in data:
             return jsonify({"error": "Missing username"}), 400
@@ -10118,6 +10119,7 @@ def passkey_auth_start():
             return jsonify({"error": "Invalid credentials"}), 401
 
         session['passkey_auth_username'] = username
+        session['passkey_auth_user_id'] = user.id
 
         return jsonify({
             "apiKey": get_public_api_key()
@@ -10146,28 +10148,18 @@ def passkey_auth_finish():
         if not data or 'token' not in data:
             return jsonify({"error": "Missing token"}), 400
 
-        # Verify token using official SDK
-        verified_user = verify_signin_token(data['token'])
-
-        # Extract canonical user ID from Passwordless user_id (format: "user_{id}").
-        external_user_id = verified_user.user_id
-        if not external_user_id or not external_user_id.startswith('user_'):
-            return jsonify({"error": "Invalid user ID"}), 401
-
+        # The token must name a credential recorded for the teacher it names,
+        # and, when sign-in began from a username, that teacher.
         try:
-            user_id = int(external_user_id.replace('user_', ''))
-        except ValueError:
-            current_app.logger.error(f"Invalid userId format: {external_user_id}")
-            return jsonify({"error": "Invalid user ID format"}), 401
-
-        user = db.session.get(User, user_id)
-        if not user or getattr(user.user_role, "value", user.user_role) != "teacher":
-            return jsonify({"error": "Invalid user ID"}), 401
-        # Update credential last_used timestamp.
-        # Credentials are stored without credential_id (managed by passwordless.dev),
-        # so update last_used for all credentials belonging to this canonical user.
+            user = passkey_service.verify_sign_in(
+                data['token'],
+                expected_role="teacher",
+                expected_user_id=session.pop('passkey_auth_user_id', None),
+            )
+        except passkey_service.PasskeyError as e:
+            current_app.logger.warning("Passkey sign-in refused: %s", e)
+            return jsonify({"error": "Authentication failed"}), 401
         now = utc_now()
-        touch_admin_credentials_last_used(user.id, now)
 
         from app.services.teacher_lifecycle import record_teacher_sign_in
         user = record_teacher_sign_in(user.id)
@@ -10205,15 +10197,16 @@ def passkey_delete(passkey_id):
     """Delete a passkey."""
     try:
         user_id = g.canonical_context.user_id
-        credential = get_admin_credential(passkey_id, user_id)
-
-        if not credential:
+        # passwordless.dev first: a passkey removed only here would still work.
+        if not passkey_service.remove_passkey(user_id, passkey_id):
             return jsonify({"error": "Passkey not found"}), 404
-
-        delete_admin_credential(passkey_id, user_id)
         flash("Passkey deleted successfully", "success")
         return jsonify({"success": True}), 200
 
+    except passkey_service.PasskeyServiceUnavailable as e:
+        db.session.rollback()
+        current_app.logger.error("Passkey removal failed remotely: %s", e)
+        return jsonify({"error": e.public_message}), 503
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error deleting passkey: {e}")

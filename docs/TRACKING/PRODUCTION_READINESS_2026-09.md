@@ -1448,6 +1448,12 @@ none for **columns**.
 schema it was actually written against. The bootstrap is itself a merged migration, so this is a
 baseline replacement, not an edit under `SOP-DB-001` §V.B.
 
+**Status (2026-09-28): freeze landed, reconstruction open.** `0001_bootstrap` now executes
+`migrations/baseline/0001_baseline_schema.sql`, the schema the live-model bootstrap produced that
+day, and a fresh chain reaches a byte-identical head. Later model changes no longer reach step 0.
+Elements removed before the freeze are still absent there, so the two §V.B corrections stay. See
+`SOP-DB-001` §V.B *Standing remedy*.
+
 **Interim position (accepted, not permanent):** `SOP-DB-001` §V.B defines a Bootstrap-Replay
 Correction — a guard that declines a historical operation when the bootstrap has left its target
 column absent. It may not change what the migration does when the column is present and may not

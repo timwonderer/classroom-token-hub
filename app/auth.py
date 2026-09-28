@@ -322,16 +322,6 @@ def _first_present_session_value(*keys):
     return None
 
 
-def _safe_int_id(value):
-    """Return int(value) for integer ID fields when possible, otherwise None."""
-    try:
-        if value is None:
-            return None
-        return int(value)
-    except (TypeError, ValueError):
-        return None
-
-
 def get_current_seat():
     """
     Return the current Seat from session context.
@@ -426,7 +416,8 @@ def get_current_user():
     if hasattr(g, "_auth_current_user_cache"):
         return g._auth_current_user_cache
 
-    user_id = _safe_int_id(session.get('user_id'))
+    from app.utils.user_ids import session_user_id
+    user_id = session_user_id(session)
     if user_id:
         user = db.session.get(User, user_id)
         if user:

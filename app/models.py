@@ -108,8 +108,20 @@ class User(db.Model):
     """Global authentication, recovery, and session principal."""
 
     __tablename__ = 'users'
+    # users.id is a random UUID (INV-ARC-019 §VI). A sequential id is guessable
+    # and restarts after a reset, so an external system still holding an old id
+    # (passwordless.dev's "user_<id>") would name a different person. The PK
+    # already implies uniqueness; uq_users_id states it explicitly.
+    __table_args__ = (
+        db.UniqueConstraint('id', name='uq_users_id'),
+    )
 
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(
+        db.Uuid(as_uuid=False),
+        primary_key=True,
+        default=lambda: str(uuid.uuid4()),
+        server_default=db.text('gen_random_uuid()'),
+    )
     user_role = db.Column(
         db.Enum(UserRole, values_callable=lambda x: [e.value for e in x], name='user_role_enum'),
         nullable=True,
@@ -232,7 +244,7 @@ class Seat(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     public_id = db.Column(db.String(36), unique=True, nullable=False, index=True, default=lambda: str(uuid.uuid4()))
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='RESTRICT'), nullable=True, index=True)
+    user_id = db.Column(db.Uuid(as_uuid=False), db.ForeignKey('users.id', ondelete='RESTRICT'), nullable=True, index=True)
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=True, index=True)
     role = db.Column(db.String(20), nullable=False, default='student')
 
@@ -304,7 +316,7 @@ class ClassEconomy(db.Model):
     join_code = db.Column(db.String(20), unique=True, nullable=False, index=True)
     section = db.Column(db.String(50), nullable=True)
     teacher_user_id = db.Column(
-        db.Integer,
+        db.Uuid(as_uuid=False),
         db.ForeignKey('users.id', ondelete='CASCADE'),
         nullable=True,
         index=True,
@@ -438,8 +450,10 @@ class PasskeyCredential(db.Model):
     __tablename__ = 'passkey_credentials'
 
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
-    credential_id = db.Column(db.Text, unique=False, nullable=True, index=False)
+    user_id = db.Column(db.Uuid(as_uuid=False), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    # The passwordless.dev credential id, verified server-side at registration.
+    # Sign-in requires a row matching both user_id and credential_id.
+    credential_id = db.Column(db.Text, unique=True, nullable=False)
     authenticator_name = db.Column(db.String(100))
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
     last_used = db.Column(db.DateTime(timezone=True))
@@ -2237,7 +2251,7 @@ class RecoveryRequest(db.Model):
     __tablename__ = 'recovery_requests'
 
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    user_id = db.Column(db.Uuid(as_uuid=False), db.ForeignKey('users.id'), nullable=False, index=True)
 
     # Status tracking
     status = db.Column(
@@ -2577,7 +2591,6 @@ class FeatureSettings(db.Model):
     economy_policy_updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
     economy_policy_alignment_status = db.Column(db.String(32), nullable=True)
     economy_last_rebalanced_at = db.Column(db.DateTime(timezone=True), nullable=True)
-    economy_last_rebalanced_by = db.Column(db.Integer, nullable=True)
 
     # Timestamps
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now)

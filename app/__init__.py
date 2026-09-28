@@ -407,9 +407,15 @@ def create_app():
             return None
 
         from app.models import User
-        user_id = session.get("user_id")
+        from app.utils.user_ids import session_user_id
+        if not session.get("user_id"):
+            return None
+        # A session naming no valid principal, such as one from before users.id
+        # became a UUID, is ended rather than queried.
+        user_id = session_user_id(session)
         session_nonce = session.get("current_session_nonce")
-        if not user_id:
+        if user_id is None:
+            session.clear()
             return None
         user = db.session.get(User, user_id)
         if not user:
@@ -486,7 +492,8 @@ def create_app():
             return None
 
         # Set tenant context for both admin and student requests.
-        user_id = session.get("user_id")
+        from app.utils.user_ids import session_user_id
+        user_id = session_user_id(session)
         try:
             from app.auth import get_current_seat, get_current_class_id
             from app.models import ClassEconomy

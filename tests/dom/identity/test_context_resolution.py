@@ -13,7 +13,11 @@ from app.services.context_resolver import (
 )
 
 
-def _seed_request_session(*, user_id=1, nonce="nonce"):
+USER_ID = "7a1c2e4b-9d3f-4c8a-b6e2-1f0d9c8b7a65"
+OTHER_USER_ID = "3e5f7a9b-1c2d-4e6f-8a0b-2c4d6e8f0a1b"
+
+
+def _seed_request_session(*, user_id=USER_ID, nonce="nonce"):
     session["user_id"] = user_id
 
 
@@ -35,7 +39,7 @@ class _SeatQueryStub:
 def test_DOM_IDEN_006__resolve_canonical_context_rejects_sysadmin(mock_get, app):
     with app.test_request_context():
         _seed_request_session()
-        mock_get.return_value = User(id=1, user_role=UserRole.SYSADMIN)
+        mock_get.return_value = User(id=USER_ID, user_role=UserRole.SYSADMIN)
         with pytest.raises(ContextForbidden, match="System administrators cannot possess Class Context."):
             resolve_canonical_context()
 
@@ -51,7 +55,7 @@ def test_DOM_IDEN_006__resolve_canonical_context_missing_keys(mock_get, app):
 def test_DOM_IDEN_006__resolve_canonical_context_missing_scope_fails_closed(mock_get, app):
     with app.test_request_context():
         _seed_request_session()
-        mock_get.return_value = User(id=1, user_role=UserRole.TEACHER, last_active_class_id=None)
+        mock_get.return_value = User(id=USER_ID, user_role=UserRole.TEACHER, last_active_class_id=None)
         with pytest.raises(ContextInvariantViolation, match="Missing canonical class_id in user context."):
             resolve_canonical_context()
 
@@ -62,7 +66,7 @@ def test_DOM_IDEN_006__resolve_canonical_context_missing_seat_pointer_fails_clos
     with app.test_request_context():
         _seed_request_session()
         mock_get.return_value = User(
-            id=1,
+            id=USER_ID,
             user_role=UserRole.STUDENT,
             last_active_class_id="some-uuid",
             last_active_seat_id=None,
@@ -74,7 +78,7 @@ def test_DOM_IDEN_006__resolve_canonical_context_missing_seat_pointer_fails_clos
 @patch("app.services.context_resolver.db.session.get")
 def test_DOM_IDEN_006__resolve_canonical_context_invalid_format(mock_get, app):
     with app.test_request_context():
-        session["user_id"] = "not-an-int"
+        session["user_id"] = "not-a-uuid"
         with pytest.raises(ContextNotEstablished, match="Invalid format for user_id."):
             resolve_canonical_context()
 
@@ -86,7 +90,7 @@ def test_DOM_IDEN_006__resolve_canonical_context_seat_not_found(mock_get, mock_q
         _seed_request_session()
         def fake_get(model, ident):
             if model is User:
-                return User(id=1, last_active_class_id="some-uuid", last_active_seat_id=2)
+                return User(id=USER_ID, last_active_class_id="some-uuid", last_active_seat_id=2)
             return None
         mock_get.side_effect = fake_get
         mock_query.return_value = _SeatQueryStub(None)
@@ -101,12 +105,12 @@ def test_DOM_IDEN_006__resolve_canonical_context_seat_unclaimed(mock_get, mock_q
         _seed_request_session()
         def fake_get(model, ident):
             if model is User:
-                return User(id=1, last_active_class_id="some-uuid", last_active_seat_id=1)
+                return User(id=USER_ID, last_active_class_id="some-uuid", last_active_seat_id=1)
             if model is Seat:
-                return Seat(id=1, user_id=1, class_id="some-uuid", role="student", claimed_at=None)
+                return Seat(id=1, user_id=USER_ID, class_id="some-uuid", role="student", claimed_at=None)
             return None
         mock_get.side_effect = fake_get
-        mock_query.return_value = _SeatQueryStub(Seat(id=1, user_id=1, class_id="some-uuid", role="student", claimed_at=None))
+        mock_query.return_value = _SeatQueryStub(Seat(id=1, user_id=USER_ID, class_id="some-uuid", role="student", claimed_at=None))
         with pytest.raises(ContextInvariantViolation, match="Student seat is not claimed."):
             resolve_canonical_context()
 
@@ -118,12 +122,12 @@ def test_DOM_IDEN_006__resolve_canonical_context_class_mismatch(mock_get, mock_q
         _seed_request_session()
         def fake_get(model, ident):
             if model is User:
-                return User(id=1, last_active_class_id="some-uuid", last_active_seat_id=2)
+                return User(id=USER_ID, last_active_class_id="some-uuid", last_active_seat_id=2)
             if model is Seat:
-                return Seat(id=1, user_id=1, class_id="different-uuid", claimed_at="2023-01-01")
+                return Seat(id=1, user_id=USER_ID, class_id="different-uuid", claimed_at="2023-01-01")
             return None
         mock_get.side_effect = fake_get
-        mock_query.return_value = _SeatQueryStub(Seat(id=1, user_id=1, class_id="different-uuid", claimed_at="2023-01-01"))
+        mock_query.return_value = _SeatQueryStub(Seat(id=1, user_id=USER_ID, class_id="different-uuid", claimed_at="2023-01-01"))
         with pytest.raises(ContextMismatch, match="last_active_seat_id does not belong to last_active_class_id."):
             resolve_canonical_context()
 
@@ -135,12 +139,12 @@ def test_DOM_IDEN_006__resolve_canonical_context_user_mismatch(mock_get, mock_qu
         _seed_request_session()
         def fake_get(model, ident):
             if model is User:
-                return User(id=1, last_active_class_id="some-uuid", last_active_seat_id=2)
+                return User(id=USER_ID, last_active_class_id="some-uuid", last_active_seat_id=2)
             if model is Seat:
-                return Seat(id=1, user_id=2, class_id="some-uuid", claimed_at="2023-01-01")
+                return Seat(id=1, user_id=OTHER_USER_ID, class_id="some-uuid", claimed_at="2023-01-01")
             return None
         mock_get.side_effect = fake_get
-        mock_query.return_value = _SeatQueryStub(Seat(id=1, user_id=2, class_id="some-uuid", claimed_at="2023-01-01"))
+        mock_query.return_value = _SeatQueryStub(Seat(id=1, user_id=OTHER_USER_ID, class_id="some-uuid", claimed_at="2023-01-01"))
         with pytest.raises(ContextMismatch, match="last_active_seat_id does not belong to authenticated user."):
             resolve_canonical_context()
 
@@ -152,14 +156,14 @@ def test_DOM_IDEN_006__resolve_canonical_context_success(mock_get, mock_query, a
         _seed_request_session()
         def fake_get(model, ident):
             if model is User:
-                return User(id=1, last_active_class_id="some-uuid", last_active_seat_id=1)
+                return User(id=USER_ID, last_active_class_id="some-uuid", last_active_seat_id=1)
             if model is Seat:
-                return Seat(id=1, user_id=1, class_id="some-uuid", claimed_at="2023-01-01", role="student")
+                return Seat(id=1, user_id=USER_ID, class_id="some-uuid", claimed_at="2023-01-01", role="student")
             return None
         mock_get.side_effect = fake_get
-        mock_query.return_value = _SeatQueryStub(Seat(id=1, user_id=1, class_id="some-uuid", claimed_at="2023-01-01", role="student"))
+        mock_query.return_value = _SeatQueryStub(Seat(id=1, user_id=USER_ID, class_id="some-uuid", claimed_at="2023-01-01", role="student"))
         context = resolve_canonical_context()
-        assert context.user_id == 1
+        assert context.user_id == USER_ID
         assert context.class_id == "some-uuid"
         assert context.seat_id == 1
         assert context.actor_role == "student"
@@ -171,7 +175,7 @@ def test_DOM_IDEN_006__resolve_canonical_context_teacher_exception_returns_none(
         _seed_request_session()
         def fake_get(model, ident):
             if model is User:
-                return User(id=1, user_role=UserRole.TEACHER, last_active_class_id=None)
+                return User(id=USER_ID, user_role=UserRole.TEACHER, last_active_class_id=None)
             return None
         mock_get.side_effect = fake_get
         with pytest.raises(ContextInvariantViolation, match="Missing canonical class_id in user context."):
@@ -179,7 +183,7 @@ def test_DOM_IDEN_006__resolve_canonical_context_teacher_exception_returns_none(
 
 
 def test_DOM_IDEN_006__canonical_context_guards():
-    context = CanonicalContext(user_id=1, class_id="uuid", seat_id=1, actor_role="student")
+    context = CanonicalContext(user_id=USER_ID, class_id="uuid", seat_id=1, actor_role="student")
 
     with pytest.raises(AttributeError, match="Strict context invariant violation: cannot access join_code"):
         _ = context.join_code

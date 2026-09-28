@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DB-001       | 1.3     | 2026-09-17     | 1.2 | Normative |
+| SOP-DB-001       | 1.4     | 2026-09-28     | 1.3 | Normative |
 
 > [!NOTE]
 > v1.1 (2026-09-14) adds §V.A, a named exception to Golden Rule 3. Rule 3 is not weakened:
@@ -197,6 +197,20 @@ Proven by execution, not by argument, and reported with its exact command and sc
   absent from it is an unrecorded edit to a merged migration and a Rule 3 violation.
 
 #### Standing remedy (not optional, deferred)
+
+> [!NOTE]
+> **Freeze landed 2026-09-28 (v1.4).** `0001_bootstrap` no longer reads the ORM. It executes
+> `migrations/baseline/0001_baseline_schema.sql`, the exact schema the live-model bootstrap
+> produced on that date. A fresh chain was shown to reach a byte-identical schema, both after step 0
+> and at head, compared with `pg_dump --schema-only`. From that date a model change can no longer
+> reach back into step 0. The trigger was the conversion of `users.id` to a UUID: the live bootstrap
+> would have created a UUID `users.id` beneath historical migrations that add integer foreign keys
+> to it. That is a type change, not an absent element, so §V.B could not cover it.
+>
+> This is a freeze of the 2026-09-28 schema, **not** a reconstruction of the original baseline.
+> Elements removed from the ORM before that date are still absent at step 0, so the two corrections
+> in the register below remain load-bearing. What remains of the remedy is the reconstruction; no
+> new §V.B correction can arise from a model change made after the freeze.
 
 `0001_bootstrap` must stop materializing live ORM metadata and instead emit a frozen baseline
 schema, so historical migrations execute against the schema they were written against. Until that

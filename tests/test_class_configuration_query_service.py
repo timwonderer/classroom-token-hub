@@ -10,6 +10,8 @@ Test Structure: 3 tests per function (51+ total)
 - Multi-tenancy: Query respects class_id scope
 """
 
+import uuid
+
 import pytest
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal
@@ -543,7 +545,7 @@ class TestConfigurationStateQueries:
 
     def test_get_all_classes_by_teacher_returns_empty_for_new_teacher(self, app):
         """Empty state: returns empty list for teacher with no classes."""
-        classes = get_all_classes_by_teacher(9999)  # Non-existent teacher ID
+        classes = get_all_classes_by_teacher(str(uuid.uuid4()))  # Non-existent teacher ID
         assert classes == []
 
     def test_get_all_classes_by_teacher_ordered_by_creation(self, client, app):

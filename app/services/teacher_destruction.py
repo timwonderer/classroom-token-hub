@@ -339,6 +339,14 @@ def _destroy_teacher_account_rows(*, canonical_context, admin_user=None):
         raise ValueError("canonical_context is required for account deletion")
     user_id = canonical_context.user_id
 
+    # passwordless.dev first. Its credentials and alias outlive our rows
+    # otherwise, and a leftover alias blocks that username from ever
+    # registering a passkey again. If this raises, nothing local has changed.
+    # If the local teardown fails after it succeeds, the account survives
+    # without passkeys and signs in with TOTP, which every teacher holds.
+    from app.services.passkey_service import forget_principal_remotely
+    forget_principal_remotely(user_id)
+
     class_ids = [
         value for (value,) in db.session.query(ClassEconomy.class_id).filter(
             ClassEconomy.teacher_user_id == user_id,

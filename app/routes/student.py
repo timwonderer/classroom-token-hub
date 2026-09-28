@@ -440,6 +440,10 @@ def _get_credential_setup_state():
     if user_ref is not None:
         if seat_ref is not None:
             return None, None
+        from app.utils.user_ids import parse_user_id
+        user_ref = parse_user_id(user_ref)
+        if user_ref is None:
+            return None, None
         user = db.session.get(User, user_ref, populate_existing=True)
         from app.feats.identity_feat import recovery_setup_is_valid
         if not recovery_setup_is_valid(user, session.get('recovery_setup_authorization')):

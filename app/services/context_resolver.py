@@ -49,7 +49,7 @@ class ContextInvariantViolation(ContextResolutionError):
 
 @dataclass(frozen=True)
 class CanonicalContext:
-    user_id: int
+    user_id: str
     class_id: str
     seat_id: int
     actor_role: str
@@ -63,7 +63,7 @@ class CanonicalContext:
 
 @dataclass(frozen=True)
 class BoundaryContext:
-    user_id: int
+    user_id: str
     actor_role: str  # "teacher" or "sysadmin"
 
     def __getattr__(self, name):
@@ -90,13 +90,13 @@ def resolve_canonical_context(require_class: bool = True) -> CanonicalContext | 
         ContextNotEstablished: If no valid class_id or seat_id is found (when require_class=True).
         ContextMismatch: If the seat does not belong to the class, or the user does not own the seat.
     """
-    user_id = session.get("user_id")
-    if not user_id:
+    raw_user_id = session.get("user_id")
+    if not raw_user_id:
         raise ContextNotEstablished("Missing user_id in session.")
 
-    try:
-        user_id = int(user_id)
-    except (ValueError, TypeError):
+    from app.utils.user_ids import parse_user_id
+    user_id = parse_user_id(raw_user_id)
+    if user_id is None:
         raise ContextNotEstablished("Invalid format for user_id.")
 
     user = db.session.get(User, user_id)
