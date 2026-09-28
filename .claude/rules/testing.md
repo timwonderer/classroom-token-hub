@@ -54,6 +54,8 @@ tests/
 ├── conftest.py                 # rebuilds the schema by running the real migration chain
 ├── helpers/                    # SPEC-TEST-001 classroom provisioning (see below)
 ├── dom/                        # per-domain invariant tests, mirrors docs/DOMAIN
+├── guards/                     # detector modules used by structural guard tests
+├── simulated/                  # simulated page-group tests (own conftest.py)
 ├── test_*.py                   # feature and regression tests
 └── ...
 ```
@@ -212,13 +214,13 @@ pytest
 ### Run Specific Test File
 
 ```bash
-pytest tests/test_teacher_recovery.py
+pytest tests/dom/identity/test_teacher_recovery_completion.py
 ```
 
 ### Run Specific Test Function
 
 ```bash
-pytest tests/test_teacher_recovery.py::test_teacher_recovery_full_flow
+pytest tests/dom/identity/test_teacher_recovery_completion.py::test_selection_is_random_hidden_and_frozen
 ```
 
 ### Run Tests Matching Pattern
@@ -430,7 +432,7 @@ supplies incidental protection that makes a broken implementation look correct.
 
 ### Current Status
 
-- **55 test files**
+- **281 test files** (`tests/**/test_*.py`: 154 top-level, 123 under `dom/`, 4 under `simulated/`)
 - Coverage target: 80%+ for core features
 - All routes should have at least one test
 
@@ -462,7 +464,7 @@ supplies incidental protection that makes a broken implementation look correct.
 pytest
 
 # Run specific file
-pytest tests/test_teacher_recovery.py
+pytest tests/dom/identity/test_teacher_recovery_completion.py
 
 # Run with coverage
 pytest --cov=app tests/
@@ -482,7 +484,7 @@ pytest -s
 
 ---
 
-**Last Updated:** 2026-09-09
+**Last Updated:** 2026-09-28
 **Framework:** pytest with Flask test client, against real PostgreSQL
 **Coverage Tool:** pytest-cov
 

@@ -16,9 +16,8 @@ const GROUPS = [
   ["MAP", "Interface maps", "Domain-to-FEAT capability and UI wiring maps."],
   ["REFERENCE", "Reference", "Vocabulary and interface references."],
   ["PRINCIPLES", "Principles", "Why a design was chosen. Informative."],
-  ["ops", "Operations", "Operational notes, audits, and evidence."],
   ["self-hosting", "Self-hosting", "Running your own instance."],
-  ["TRACKING", "Tracking", "Readiness and migration status. Descriptive, never authoritative."],
+  ["TRACKING", "Tracking", "Documentation roadmap and the domain plan template. Descriptive, never authoritative."],
 ];
 
 // FEAT-CLASS-001_CREATING_NEW_CLASS_BOUNDARY -> "FEAT-CLASS-001 · Creating new class boundary"

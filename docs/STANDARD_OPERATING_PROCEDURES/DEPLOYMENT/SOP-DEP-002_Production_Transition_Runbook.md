@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-002 | 1.5 | 2026-09-21 | 1.4 | Normative |
+| SOP-DEP-002 | 1.6 | 2026-09-28 | 1.5 | Normative |
 
 ## I. Purpose
 
@@ -177,7 +177,8 @@ Record:
 ## XII. Deferral Boundary
 
 - This runbook is limited to launch-critical transition steps and operator records.
-- Broader operational taxonomy changes, route-family cleanup, and post-port architecture alignment are deferred until after `../../SPECS/V2_ADMIN_ROUTE_REFACTOR.md` and `../../MAP/MAP-CLASS-002_CLASS_SCOPE_NORMALIZATION_TARGET.md`.
+- Broader operational taxonomy changes and route-family cleanup are outside this runbook and are tracked in `docs/TRACKING/POST_LAUNCH_TRACKER_2026.md`.
+- Version 1.5 deferred them until after two documents. One, `SPECS/V2_ADMIN_ROUTE_REFACTOR.md`, was never written. The other, `MAP-CLASS-002` (archived 2026-09-28), described the `class_id`-first model that INV-ARC-019 and DOM-IDEN-001 now govern. Version 1.6 changes no procedure in this runbook.
 
 
 

@@ -27,7 +27,7 @@ When possible, include:
 
 > [!WARNING]
 > Do not include student names, credentials, authentication secrets, or other
-personally identifiable information in the report. 
+> personally identifiable information in the report.
 
 ## Responsible Testing
 
@@ -45,7 +45,7 @@ Please do not:
 - publish an unresolved vulnerability before coordinated disclosure
 
 If you unexpectedly gain access to data or privileges outside your authorized
-scope, stop testing that path and report what occurred. 
+scope, stop testing that path and report what occurred.
 
 > [!CAUTION]
 > Certain data processed by the platform may constitute education records protected under the Family Educational Rights and Privacy Act (FERPA). Accessing education records without authorization, or accessing more information than is necessary to demonstrate a vulnerability, may have legal consequences.
@@ -76,7 +76,7 @@ When a vulnerability is confirmed, the project may:
 
 1. reproduce and contain the issue
 2. develop and validate a fix
-3. deploy or release the correction
+3. release the correction to production
 4. monitor for recurrence
 5. publish a security advisory when appropriate
 
@@ -92,11 +92,17 @@ After remediation, coordinated public disclosure is welcome.
 
 ## Supported Versions
 
-CTH is currently under active development.
+| Version | Status | Security fixes |
+| ------- | ------ | -------------- |
+| v2.0.x | Current. Latest release is v2.0.1 (2026-09-28); v2.0.0 was released 2026-09-26 | Yes |
+| v1.x | Retired. v1.10.0 was the final v1 release | No |
 
-Security fixes are provided for the current supported release and active
-development version. Older or superseded versions may not receive security
-updates.
+Security fixes are made on the `main` branch and reach production through a
+release of an exact commit. The retired v1 line (the `main_legacy_v1.10.0` branch
+and the `v1.*` tags) receives no security updates; reports that affect only v1 are
+out of scope.
+
+When reporting, please name the v2 release tag or the commit you tested.
 
 ## Good-Faith Research
 

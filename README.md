@@ -6,7 +6,7 @@ A classroom behavior management and reward platform with built-in simulated fina
 
 Students earn tokens for the time they work, and spend them on rent, insurance and a class store. Teachers run the class economy without handing over student email addresses, phone numbers or school SSO. Built with Flask, SQLAlchemy and PostgreSQL. Each class period is its own isolated economy.
 
-**Current release:** [v2.0.0](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.0.0), in production since 2026-09-26 · **Branch:** `main` · **License:** [PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0)
+**Current release:** [v2.0.1](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.0.1), a security release in production since 2026-09-28 (v2 launched 2026-09-26) · **Branch:** `main` · **License:** [PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0)
 
 | | |
 | --- | --- |
@@ -180,7 +180,7 @@ Tests run against a real PostgreSQL database named by `TEST_DATABASE_URL`; there
 pytest tests/dom/obligations/ -v          # one domain
 pytest tests/test_status_contracts.py -v  # one file
 pytest -k recovery                        # by pattern
-pytest                                    # full suite: 3,800+ tests, over an hour
+pytest                                    # full suite: 3,900+ tests, over an hour
 pytest --cov=app tests/                   # with coverage
 ```
 
@@ -226,13 +226,23 @@ curl http://localhost:5000/health/status   # bounded status signals; no tenant d
 gunicorn wsgi:app --workers 4 --bind 0.0.0.0:8000
 ```
 
-Tags mark the exact commit production is running. `v2.0.0` points at `26d1792b5`, the commit released on 2026-09-26. The full procedure is [SOP-DEP-002](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md), and each release is recorded under [docs/ops/audits/](docs/ops/audits/) (v2.0.0: [TRANSITION_2026-09-26_26d1792b5.md](docs/ops/audits/TRANSITION_2026-09-26_26d1792b5.md)).
+Tags mark the exact commit production is running: `v2.0.0` is `26d1792b5` (released 2026-09-26) and `v2.0.1` is `ad64a473f` (released 2026-09-28). The full procedure is [SOP-DEP-002](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md), and each release is recorded under [docs/ops/audits/](docs/ops/audits/):
 
-### Known limits of the v2.0.0 evidence
+- v2.0.0: [TRANSITION_2026-09-26_26d1792b5.md](docs/ops/audits/TRANSITION_2026-09-26_26d1792b5.md)
+- v2.0.1: [DEPLOY_2026-09-28_ad64a473f.md](docs/ops/audits/DEPLOY_2026-09-28_ad64a473f.md), which also covers the unrecorded `efdf09eda` release of 2026-09-27
 
-Evidence that was actually run isn't the same as coverage that was inferred (INV-ARC-017). These surfaces haven't been exercised yet:
+### Known limits of the release evidence
 
-- **Signed-in flows on the production host**: covered by the automated suite and by live test rounds on the same host before launch, but not repeated after the launch wipe. They'll first run in production when teachers start using it
+Evidence that was actually run isn't the same as coverage that was inferred (INV-ARC-017). As of v2.0.1, production has verified:
+
+- the migrations to `f4b8d2a6c1e9` (`users.id` as UUID) and the integrity of every reference to `users`
+- a single scheduler owner (the gunicorn process), with none started by migrations
+- teacher passkey registration and sign-in end to end, run by the operator after release
+
+These surfaces haven't been exercised yet:
+
+- **Other signed-in flows on the production host**: covered by the automated suite and by live test rounds on the same host before launch, but not repeated since the launch wipe. They'll first run in production when teachers start using it
+- **Public routes after v2.0.1**: not checked at release, because the Cloudflare Access maintenance window was still in place
 - **Daylight-saving and midnight transitions**: class-timezone handling is tested, but no live daylight-saving change has happened since launch
 - **Load**: concurrent settlement, payroll batch runs and scheduled jobs haven't been tested under load
 - **Browser accessibility**: axe covers every rendered template, but keyboard, focus and contrast behavior across the whole app still needs a person using a real browser. The signed-in insurance page's buy and cancel dialogs haven't had an axe audit yet
@@ -261,7 +271,8 @@ INV-CORE → INV-ARC → DOM-* → FEAT-*
 
 | Document | Purpose |
 | ---------- | --------- |
-| [docs/TRACKING/](docs/TRACKING/) | Readiness and audit status |
+| [docs/TRACKING/](docs/TRACKING/) | Working state: the post-launch tracker and open decisions |
+| [docs/ops/](docs/ops/) | Production host notes and dated release and audit records |
 | [docs/PRINCIPLES/](docs/PRINCIPLES/) | Why a design was chosen |
 | [docs/REFERENCE/](docs/REFERENCE/) | Interface references, including [REF-API-001](docs/REFERENCE/REF-API-001_HTTP_INTERFACE_REFERENCE.md) for HTTP endpoints |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Roadmap and current priorities |
@@ -270,7 +281,7 @@ INV-CORE → INV-ARC → DOM-* → FEAT-*
 
 Nothing under `.claude/` is authoritative. It helps agents find their way around the codebase, and it should never be cited to justify a design decision. Cite the INV, DOM, FEAT, SPEC or SOP document instead.
 
-The user guides in `docs/user-guides/` are served inside the app at `/docs`. The whole documentation tree is published separately as the developer docs site, built from `docs-site/`.
+The user guides in `docs/user-guides/` are served inside the app at `/docs`. The developer docs site at [classroomtokenhub.com/docs](https://classroomtokenhub.com/docs/), built from `docs-site/`, publishes the normative tree plus principles, references, maps and the self-hosting guide. It leaves out the user guides, dated release and audit records (`docs/ops/`), working-state tracking files, and [docs/archive/](docs/archive/), which holds superseded material kept for history.
 
 ---
 
@@ -278,10 +289,10 @@ The user guides in `docs/user-guides/` are served inside the app at `/docs`. The
 
 | Line | Status | Where it lives |
 | --- | --- | --- |
-| **v2** | Current. v2.0.0 released 2026-09-26 | `main` |
+| **v2** | Current. v2.0.0 released 2026-09-26; v2.0.1 (security) released 2026-09-28 | `main` |
 | **v1** | Retired. v1.10.0 (2026-06-14) was the final v1 release | Branch `main_legacy_v1.10.0` and the `v1.*` tags |
 
-v2 is a ground-up rebuild. It's a clean break: no v1 accounts or data carry over. See the [v2.0.0 release notes](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.0.0).
+v2 is a ground-up rebuild. It's a clean break: no v1 accounts or data carry over. See the [v2.0.0](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.0.0) and [v2.0.1](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.0.1) release notes. Upgrading every 2.0.0 deployment to 2.0.1 is recommended: it ties each passkey to the account it was registered to.
 
 ---
 

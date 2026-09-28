@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DB-001       | 1.4     | 2026-09-28     | 1.3 | Normative |
+| SOP-DB-001       | 1.5     | 2026-09-28     | 1.4 | Normative |
 
 > [!NOTE]
 > v1.1 (2026-09-14) adds §V.A, a named exception to Golden Rule 3. Rule 3 is not weakened:
@@ -218,7 +218,8 @@ Proven by execution, not by argument, and reported with its exact command and sc
 The full remedy is a baseline that reconstructs the schema as it stood when the historical
 migrations were written, so each one executes against the schema it was written against. The
 freeze above stopped new drift; the reconstruction is still open, tracked as post-launch
-architectural debt in `docs/TRACKING/PRODUCTION_READINESS_2026-09.md` §VI. The bootstrap is itself a
+architectural debt in `docs/TRACKING/POST_LAUNCH_TRACKER_2026.md` §VI (carried from the pre-launch
+ship tracker, archived 2026-09-28). The bootstrap is itself a
 merged migration, so the remedy is a baseline replacement, not an edit under this section.
 
 #### Register of corrections

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001      | 3.8     | 2026-09-21     | 3.7        | Normative |
+| SOP-DOC-001      | 3.9     | 2026-09-28     | 3.8        | Normative |
 
 ---
 
@@ -188,7 +188,6 @@ Archived material is deliberately absent; see §VI.
 
 ### Maps (MAP)
 - [MAP-ADV-001 — Adversarial Evidence Documentation Protocol](../MAP/MAP-ADV-001_ADVERSARIAL_EVIDENCE_DOCUMENTATION_PROTOCOL.md)
-- [MAP-CLASS-002 — Class Scope Normalization Target](../MAP/MAP-CLASS-002_CLASS_SCOPE_NORMALIZATION_TARGET.md)
 - [MAP-CORE-001 — Domain to FEAT Capability Map](../MAP/MAP-CORE-001_DOMAIN_TO_FEAT_CAPABILITY_MAP.md)
 - [MAP-UI-001 — Template to FEAT Wiring Map](../MAP/MAP-UI-001_TEMPLATE_TO_FEAT_WIRING_MAP.md)
 - [MAP-UI-002 — Request Context and View Model Pipeline](../MAP/MAP-UI-002_REQUEST_CONTEXT_AND_VIEW_MODEL_PIPELINE.md)
@@ -215,7 +214,7 @@ on the site — and a normative index is the wrong place to depend on a descript
 published at all.
 
 - `docs/TRACKING/BATCH-B_OPERATIONS_VERIFIER_POLICY_DECISION_PACKAGE_20260901.md` — Operations freshness, aggregation, and evidence-registry owner decisions
-- `docs/TRACKING/V2_INVARIANT_VERIFIER_RECONCILIATION_20260831.md` — v1 economic checker to v2 verifier disposition
+- `docs/archive/v2-tracking-2026/V2_INVARIANT_VERIFIER_RECONCILIATION_20260831.md` — v1 economic checker to v2 verifier disposition (archived 2026-09-28; its §VIII records the reconciliation as closed)
 
 ---
 
@@ -241,7 +240,9 @@ The material itself is preserved and browsable:
 | `docs/archive/v1-architecture/` | Early v1 identity and core architectural specs (`ARC-*`) |
 | `docs/archive/v1-docs/` | v1 security audits (`SEC-*`), deployment SOPs, `ARC-*` specs, `FEATURES/*`, `DOMAINS/*` |
 | `docs/archive/v1-development/` | v1→v2 migration planning and legacy schema analysis |
-| `docs/archive/v2-tracking-2026/` | Superseded v2 tracking, audits, and migration plans |
+| `docs/archive/v2-tracking-2026/` | Superseded v2 tracking, audits, and migration plans, including the pre-launch ship tracker `PRODUCTION_READINESS_2026-09.md` (archived 2026-09-28) |
+| `docs/archive/STANDARD_OPERATING_PROCEDURES/` | Retired SOPs, at their original namespace paths (`DATABASE/`, `DEPLOYMENT/`, `DEVOPS/`) |
+| `docs/archive/MAP/` | Retired maps: `MAP-CLASS-002` (class-scope normalization target, archived 2026-09-28; its `class_id`-first target is the current model under INV-ARC-019 and DOM-IDEN-001) |
 | `docs/archive/PHASE_PLANNING/` | Phase 3–5 roadmaps and store domain implementation tracking |
 | `docs/archive/github-pages/` | Historical GitHub Pages landing site assets |
 
@@ -266,6 +267,17 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.9 (2026-09-28):**
+- Removed `MAP-CLASS-002` from the Maps listing and recorded it under §VI as archived. The
+  `class_id`-first scoping it described as a future target is the current model (INV-ARC-019,
+  DOM-IDEN-001). Its text still called `join_code` the main operational class boundary.
+- Added the `docs/archive/STANDARD_OPERATING_PROCEDURES/` and `docs/archive/MAP/` locations to the
+  §VI archive table.
+- Repointed the `V2_INVARIANT_VERIFIER_RECONCILIATION_20260831.md` tracking record to its archived
+  location.
+- Versions 3.7 and 3.8 were published without change notes; their content is in the repository
+  history.
 
 **Version 3.6 (2026-09-20):**
 - Registered `REF-DES-001`, an informative, commit-cited history of visual identity,

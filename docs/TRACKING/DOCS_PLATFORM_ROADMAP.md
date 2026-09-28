@@ -21,7 +21,7 @@ the remaining documentation work.
 >   belongs in `docs/PRINCIPLES/`, chronology in root `CHANGELOG.md`. Any step below that proposes
 >   promoting content *into* `docs/LOGS/` is void.
 > - **`docs/archive/v1-user-guides/` no longer exists.** Its 100 files were promoted to
->   `docs/user-guides/` — see `docs/TRACKING/USER_GUIDE_INVENTORY_2026-09.md`. Phase 2's premise
+>   `docs/user-guides/` — see `docs/archive/v2-tracking-2026/USER_GUIDE_INVENTORY_2026-09.md` (archived). Phase 2's premise
 >   that the guides are still archived is stale; the open work is content quality, not relocation.
 >
 > References to `docs/archive/` below are deliberate and point at genuinely superseded v1 material.
@@ -76,7 +76,9 @@ Two separate platforms, each serving a different audience and use case.
 > **Built 2026-09-19, and narrower than described below.** The site publishes the
 > developer-facing tree only — `INVARIANT/`, `DOMAIN/`, `FEATURE-EXECUTION/`,
 > `SPEC/`, `STANDARD_OPERATING_PROCEDURES/`, `MAP/`, `REFERENCE/`,
-> `PRINCIPLES/`, `ops/`, `self-hosting/`, `TRACKING/`. The four content areas
+> `PRINCIPLES/`, `self-hosting/`, and from `TRACKING/` only this roadmap and
+> the domain plan template. `ops/` (dated release and audit records) and
+> `archive/` are not published. The four content areas
 > below assumed it would also carry the teacher and student guides; it does
 > not. `docs/user-guides` belongs to the Flask application, which serves it at
 > `app.classroomtokenhub.com/docs/`, and no document is rendered by both. Read
@@ -140,9 +142,9 @@ Features:
    - Interactive diagnostic flows where applicable
 
 #### Acceptance Criteria
-- [ ] In-app docs route serves role-appropriate content
-- [ ] Diagnostics guides ported from v1 and updated for v2 UX
-- [ ] Context-sensitive help available on key pages
+- [x] In-app docs route serves role-appropriate content (teacher and student feature guides under `docs/user-guides/features/`)
+- [x] Diagnostics guides ported from v1 and updated for v2 UX (`docs/user-guides/diagnostics/`)
+- [x] Context-sensitive help available on key pages (`help_doc_map` in `templates/layout_admin.html` and `layout_student.html`, pinned by `tests/test_docs_help_links.py`)
 - [ ] Content loads without external dependencies (fully self-contained)
 
 ---
