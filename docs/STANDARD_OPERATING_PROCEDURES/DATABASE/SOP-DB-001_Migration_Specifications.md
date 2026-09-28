@@ -204,7 +204,8 @@ Proven by execution, not by argument, and reported with its exact command and sc
 > **Freeze landed 2026-09-28 (v1.4).** `0001_bootstrap` no longer reads the ORM. It executes
 > `migrations/baseline/0001_baseline_schema.sql`, the exact schema the live-model bootstrap
 > produced on that date. A fresh chain was shown to reach a byte-identical schema, both after step 0
-> and at head, compared with `pg_dump --schema-only`. From that date a model change can no longer
+> and at head, compared with `pg_dump --schema-only`. The exact commands, scope and hashes are in
+> [`docs/ops/audits/BASELINE_FREEZE_2026-09-28.md`](../../ops/audits/BASELINE_FREEZE_2026-09-28.md). From that date a model change can no longer
 > reach back into step 0. The trigger was the conversion of `users.id` to a UUID: the live bootstrap
 > would have created a UUID `users.id` beneath historical migrations that add integer foreign keys
 > to it. That is a type change, not an absent element, so §V.B could not cover it.

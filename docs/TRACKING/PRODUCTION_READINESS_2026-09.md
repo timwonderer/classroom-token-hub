@@ -1450,7 +1450,8 @@ baseline replacement, not an edit under `SOP-DB-001` §V.B.
 
 **Status (2026-09-28): freeze landed, reconstruction open.** `0001_bootstrap` now executes
 `migrations/baseline/0001_baseline_schema.sql`, the schema the live-model bootstrap produced that
-day, and a fresh chain reaches a byte-identical head. Later model changes no longer reach step 0.
+day, and a fresh chain reaches a byte-identical head (evidence:
+[`docs/ops/audits/BASELINE_FREEZE_2026-09-28.md`](../ops/audits/BASELINE_FREEZE_2026-09-28.md)). Later model changes no longer reach step 0.
 Elements removed before the freeze are still absent there, so the two §V.B corrections stay. See
 `SOP-DB-001` §V.B *Standing remedy*.
 
