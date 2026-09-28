@@ -91,7 +91,7 @@ def test_registration_refuses_a_token_it_cannot_verify(client, fake_passwordless
 
     response = _register_finish(client, "made-up-token")
 
-    assert response.status_code in (400, 500)
+    assert response.status_code == 400
     assert PasskeyCredential.query.count() == 0
 
 

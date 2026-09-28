@@ -63,10 +63,15 @@ def _credentials() -> sa.Table:
 
 
 def _verify(token: str):
-    from passwordless import VerifySignIn
+    from passwordless import PasswordlessError, VerifySignIn
     if not token or not isinstance(token, str):
         raise PasskeyError("missing token")
-    return _client().sign_in(VerifySignIn(token))
+    try:
+        return _client().sign_in(VerifySignIn(token))
+    except PasswordlessError as exc:
+        # An invalid, expired or already-used token is a refused credential,
+        # not a server error.
+        raise PasskeyError("passwordless.dev rejected the token") from exc
 
 
 def create_registration_token(user: User, *, alias: str, display_name: str) -> str:
