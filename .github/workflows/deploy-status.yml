@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: public.ecr.aws/docker/library/postgres:16
+        image: ghcr.io/timwonderer/ci-postgres:16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
