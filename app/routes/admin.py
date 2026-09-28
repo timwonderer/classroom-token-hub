@@ -9012,10 +9012,12 @@ def help_support():
             'clean_description': issue.student_explanation or '',
         } for issue in issues]
 
+    # Form topic -> the system IssueCategory it files under. The rows are seeded
+    # by migration e1c7a4b9d2f3 (app/utils/issue_categories.py).
     category_to_report_type = {
-        'general': 'comment',
-        'bug': 'bug',
-        'feature': 'suggestion',
+        'general': 'General question',
+        'bug': 'Bug report',
+        'feature': 'Feature request',
     }
 
     if not selected_class_id and request.method == 'GET':
@@ -9122,16 +9124,28 @@ def help_support():
             ).encode("utf-8")
         ).hexdigest()[:16]
 
+        category = IssueCategory.query.filter_by(
+            name=category_to_report_type[issue_category],
+            is_active=True,
+        ).first()
+        if category is None:
+            # Filing under some other category would misroute the ticket, and
+            # there may be no category at all. Refuse; keep the teacher's text.
+            current_app.logger.error(
+                "Support ticket category missing: %s", category_to_report_type[issue_category]
+            )
+            flash(
+                "Support tickets can't be submitted right now. Your ticket was not sent; "
+                "please try again later.",
+                "error",
+            )
+            return redirect(url_for('admin.help_support'))
+
         try:
             with FEATContext(
                 "FEAT-SUP-001",
                 idempotency_key=f"admin_help_support:{user_id}:{payload_hash}",
             ):
-                category = IssueCategory.query.filter_by(
-                    name=category_to_report_type[issue_category],
-                ).first()
-                if not category:
-                    category = IssueCategory.query.first()
                 create_support_ticket(
                     actor_public_id=anonymous_code,
                     class_public_id=ticket_class_public_id,
@@ -10333,20 +10347,12 @@ def issues_queue():
     Shows all student-submitted issues for this teacher's classes.
     """
     from app.models import Issue
-    from app.utils.issue_categories import init_default_categories
 
     user_id = g.canonical_context.user_id
     canonical_context = getattr(g, "canonical_context", None)
     class_id = getattr(canonical_context, "class_id", None)
     if class_id and not _admin_owns_class(g.canonical_context, class_id):
         class_id = None
-
-    # INV-ARC-007: keep GET route read-only.
-    if not getattr(g, "read_only", False):
-        init_default_categories(
-            correlation_id=f"corr_support_categories_{uuid.uuid4().hex}",
-            idempotency_key="feat:sup:categories:initialize",
-        )
 
     # Filter by the active class scope; v2 issues are class-scoped by class_public_id.
     if class_id:
