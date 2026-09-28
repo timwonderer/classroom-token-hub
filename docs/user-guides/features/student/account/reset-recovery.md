@@ -25,7 +25,7 @@ If you forget your username, forget your PIN, or simply cannot log in, your teac
 
 ## Important Notes
 > [!TIP]
-> **Keep your details safe:** Write down your new username and PIN in a safe, secure location (like a planner or notes app) so you do not have to ask for a reset again.
+> **Keep your details safe:** Write down your new username, PIN, and passphrase in a safe, secure location (like a planner or notes app) so you do not have to ask for a reset again.
 
 ## Related guides
 - [Troubleshooting Login and Setup](../../../diagnostics/student/login.md)

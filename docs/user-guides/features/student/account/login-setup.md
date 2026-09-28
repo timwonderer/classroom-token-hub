@@ -39,7 +39,7 @@ Your finished username appears at the top of this page. **This is the only time 
 
 1. Tick **I have written down my username and I know it won't be shown to me again.** The submit button stays disabled until you do.
 2. Set a **PIN** — 4 to 6 digits. This is what you type for clock actions, transfers between your own accounts, and hall passes.
-3. Set a **Passphrase** — at least four words, with symbols and numbers. Aim for easy to remember, hard to guess. This is your recovery credential, and it is also how you verify your teacher's identity if they ever lose their own account.
+3. Set a **Passphrase** — at least four words, with symbols and numbers. Aim for easy to remember, hard to guess. You type it every time you sign in, and again for purchases and payments. It is also how you verify your teacher's identity if they ever lose their own account.
 4. Submit.
 
 A confirmation screen greets you by name. Select **Thanks, Let's Go!** to reach your dashboard.

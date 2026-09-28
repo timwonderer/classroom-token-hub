@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-IDEN-002 | 2.7 | 2026-09-17 | 2.6 | Constitutional |
+| DOM-IDEN-002 | 2.8 | 2026-09-28 | 2.7 | Constitutional |
 
 ---
 
@@ -145,8 +145,8 @@ Defined by DOM-IDEN-001. No student-specific delta. Profiles do not store claim 
 1. Student submits username.
 2. Backend computes username_lookup_hash and finds the users row.
 3. Backend verifies user_role == 'student'.
-4. Student submits PIN.
-5. Backend verifies pin_hash.
+4. Student submits passphrase.
+5. Backend verifies passphrase_hash.
 6. On success: write current_session_started_at, current_session_expires_at,
    current_session_nonce.
 ```
@@ -164,7 +164,11 @@ Request-time session validation is governed by DOM-IDEN-006.
 
 ### Financial Action Gate
 
-Student financial actions (transfers, purchases, insurance claims) require passphrase re-verification. The passphrase gate is separate from the PIN used at login.
+The passphrase is the sign-in credential. It is also re-verified for irreversible expense actions
+(store and insurance purchases, insurance and rent payments, cancelling insurance, and using an
+entitlement other than a hall pass). The PIN covers non-monetary and reversible actions: clock
+actions, transfers between the student's own accounts, and hall-pass use. The authoritative
+per-action assignment is the credential matrix in FEAT-IDEN-002 §II (*Credential boundary*).
 
 ---
 
@@ -374,8 +378,9 @@ The student recovery system SHALL NOT:
 | Credential | Student |
 |------------|---------|
 | Username | `username_hash` / `username_lookup_hash` |
-| Primary auth factor | PIN (`pin_hash`) |
-| Financial action gate | Passphrase (`passphrase_hash`) |
+| Sign-in | Username + passphrase (`passphrase_hash`) |
+| Irreversible expense actions | Passphrase (`passphrase_hash`) |
+| Non-monetary and reversible actions | PIN (`pin_hash`) |
 | Recovery | Teacher-initiated reset code → credential re-establishment |
 | Session | Nonce + fixed-window expiry |
 
@@ -400,3 +405,8 @@ Revisions to this document SHALL:
 2. Update the effective date.
 3. Maintain consistency with DOM-IDEN-001 and DOM-IDEN-005.
 4. Maintain consistency with INV-CORE-000.
+
+**Version 2.8 (2026-09-28):** students sign in with username and **passphrase** (operator ruling).
+Version 2.7 said username and PIN at §VII and §X, contradicting FEAT-IDEN-002's credential matrix and
+the implementation. §VII's financial-action gate now defers to that matrix; it had listed transfers,
+which use the PIN.

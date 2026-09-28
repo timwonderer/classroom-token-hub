@@ -91,12 +91,14 @@ Each item was verified on 2026-09-28 unless it says otherwise.
   audit record for every FEAT execution. FEAT-IDEN-001 v3.0 §VI and FEAT-IDEN-002 §VII specify them;
   `app/feats/identity_feat.py` emits neither. This is the same gap as `ACT-IDEN-003` (#1427); design them
   together.
-- [ ] **Decision: student login credential.** DOM-IDEN-002 §VII (Constitutional) says students log in with
-  username and **PIN**. The code (`student.login`) and FEAT-IDEN-002's credential table ("fixed and
-  normative") use the **passphrase**. Either amend DOM-IDEN-002 §VII to the passphrase, or change the code.
-  FEAT-IDEN-002 §IV.1 still says "username and PIN" and is left for this decision.
-- [ ] **Decision: tier of `docs/REFERENCE/`.** SOP-DOC-000 v3.3 leaves it unassigned. `REF-TERM-001` and
-  `REF-TERM-002` declare themselves Normative; `REF-API-001` and `REF-DES-001` are descriptive.
+- [x] **Decision: student login credential — passphrase (operator ruling, 2026-09-28).** DOM-IDEN-002 2.8
+  (§VII login flow, §X summary) and FEAT-IDEN-002 2.1 now say username and passphrase, matching the
+  code and the credential matrix. The student guides are corrected too. `diagnostics/student/login.md`
+  had told students to sign in with their PIN.
+- [x] **Decision: tier of `docs/REFERENCE/` (operator ruling, 2026-09-28).** `REF-TERM-001` (developer
+  vocabulary) is Normative, Tier 2. `REF-TERM-002` (user-facing) is Informative but highly recommended for
+  standardization; accessibility takes precedence (INV-CORE-000 §III.7, INV-ARC-020). `REF-API-001` and
+  `REF-DES-001` are Informative. Recorded in SOP-DOC-000 3.4 and REF-TERM-002 1.1.
 
 ---
 

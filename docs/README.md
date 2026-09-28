@@ -14,11 +14,12 @@ the authority; where they differ, SOP-DOC-000 wins.
 |------|-----------|------------------------|
 | **0 — Foundational** | Non-negotiable laws of the system | `INV-CORE-*` (`INVARIANT/CORE/`) |
 | **1 — Constitutional** | Enforcement mechanisms and bounded domain rules | `INV-ARC-*` (`INVARIANT/ARCHITECTURE/`), `DOM-*` (`DOMAIN/`) |
-| **2 — Normative** | Implementation flows, transactions, procedures | `FEAT-*`, `SOP-*`, `SPEC-*` (binding when incorporated by an INV, DOM or FEAT contract) |
-| **3 — Informative** | Memory, rationale, plans, guides; defines no runtime rule | `MAP-*`, `PRN-*`, `user-guides/`, `self-hosting/`, `TRACKING/`, `ops/`, `archive/`, root files |
+| **2 — Normative** | Implementation flows, transactions, procedures | `FEAT-*`, `SOP-*`, `SPEC-*` (binding when incorporated by an INV, DOM or FEAT contract), `REF-TERM-001` (developer vocabulary) |
+| **3 — Informative** | Memory, rationale, plans, guides; defines no runtime rule | `MAP-*`, `PRN-*`, other `REF-*`, `user-guides/`, `self-hosting/`, `TRACKING/`, `ops/`, `archive/`, root files |
 
-Tier 3 documents describe; they can drift, and they are never cited as authority. `REFERENCE/` has no tier yet: each
-`REF-*` document's own Authority Level applies, and none overrides Tiers 0–2 (SOP-DOC-000 §V).
+Tier 3 documents describe; they can drift, and they are never cited as authority. `REF-TERM-002` (user-facing vocabulary) is
+highly recommended for standardization, but accessibility wins: INV-CORE-000 §III.7 and INV-ARC-020
+govern wording where a term would create a barrier.
 `.claude/` is outside the tier system.
 
 ---
@@ -41,7 +42,7 @@ Tier 3 documents describe; they can drift, and they are never cited as authority
 |-----------|------|---------|
 | **[MAP/](MAP/)** | 3 | Domain-to-FEAT capability maps and UI wiring maps |
 | **[PRINCIPLES/](PRINCIPLES/)** | 3 | Why a design was chosen (security, privacy, SSO, project philosophy) |
-| **[REFERENCE/](REFERENCE/)** | unassigned | Vocabulary and interface references (`REF-TERM-*`, `REF-API-001`, `REF-DES-001`) |
+| **[REFERENCE/](REFERENCE/)** | 2 (`REF-TERM-001`); 3 (others) | Vocabulary and interface references (`REF-TERM-*`, `REF-API-001`, `REF-DES-001`) |
 | **[user-guides/](user-guides/)** | 3 | Teacher and student help served by the in-app `/docs` site |
 | **[self-hosting/](self-hosting/README.md)** | 3 | Running your own instance |
 | **[TRACKING/](TRACKING/)** | 3 | The post-launch tracker and open decision packages |

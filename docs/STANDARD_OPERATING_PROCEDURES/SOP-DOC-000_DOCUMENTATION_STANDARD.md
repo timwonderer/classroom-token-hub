@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-000      | 3.3     | 2026-09-28     | SOP-DOC-000 v3.2 | Foundational |
+| SOP-DOC-000      | 3.4     | 2026-09-28     | SOP-DOC-000 v3.3 | Foundational |
 
 ---
 
@@ -53,6 +53,7 @@ All documents are classified into four tiers representing their normative author
   - `docs/SPEC/` (Technical specifications)
   - `docs/FEATURE-EXECUTION/` (Prefix: `FEAT-*`)
   - `docs/STANDARD_OPERATING_PROCEDURES/` (Prefix: `SOP-*`)
+  - `docs/REFERENCE/REF-TERM-001_DEVELOPER_VOCABULARY.md` — the developer vocabulary. Specifications, code review and internal documentation MUST use its terms as defined
 
 `SPEC` documents are technical contracts, not an independent runtime authority
 namespace. Their requirements bind implementation only when incorporated by the
@@ -64,17 +65,13 @@ alter the `INV → DOM → FEAT` runtime hierarchy established by `INV-CORE-001`
 - **Location**:
   - `docs/MAP/` (Prefix: `MAP-*`)
   - `docs/PRINCIPLES/` (Prefix: `PRN-*`) — rationale documents explaining *why* a design was chosen
+  - `docs/REFERENCE/` (Prefix: `REF-*`), except `REF-TERM-001`. `REF-TERM-002` (user-facing vocabulary) is highly recommended for standardization. Accessibility takes precedence over it: where a term would create an unnecessary barrier, INV-CORE-000 §III.7 and INV-ARC-020 govern the wording. `REF-API-001` and `REF-DES-001` are descriptive references
   - `docs/user-guides/` (User guides)
   - `docs/self-hosting/` — guidance for running an instance
   - `docs/TRACKING/` — the live tracker and open decision packages (working state)
   - `docs/ops/` — production host notes and dated release and audit records (`docs/ops/audits/`)
   - `docs/archive/` — superseded material, retained for history only: the v1 documentation (`v1-*`), v2 migration and launch tracking retired after release (`v2-tracking-2026/`, `PHASE_PLANNING/`), and retired numbered documents kept at their namespace paths (`STANDARD_OPERATING_PROCEDURES/`, `MAP/`)
   - Root directory files (`README.md`, `CHANGELOG.md`, `DEVELOPMENT.md`, `CONTRIBUTING.md`, `SECURITY.md`)
-
-`docs/REFERENCE/` (`REF-*`) is **not yet assigned** a tier. `REF-TERM-001` and `REF-TERM-002` declare
-themselves Normative, and `REF-API-001` and `REF-DES-001` are descriptive. Until an amendment assigns
-the namespace, each `REF-*` document's own Authority Level applies, and no `REF-*` document may
-override a Tier 0–2 document.
 
 Agent guidance under `.claude/` is outside the tier system. It is never authoritative, and where it
 conflicts with a document above, the `.claude/` text is corrected.
@@ -108,7 +105,7 @@ The structure under `docs/` is:
 6. **`STANDARD_OPERATING_PROCEDURES/`**: Procedures by area: `DATABASE/`, `DEPLOYMENT/`, `DEVOPS/`, `OPERATIONS/`, `SECURITY/`, `TESTING/`, plus the documentation SOPs at its root (Tier 2).
 7. **`MAP/`**: Capability and wiring maps (Tier 3).
 8. **`PRINCIPLES/`**: Rationale documents (Tier 3).
-9. **`REFERENCE/`**: Vocabulary and interface references (tier not yet assigned; see §V).
+9. **`REFERENCE/`**: Vocabulary and interface references. `REF-TERM-001` is Tier 2; the others are Tier 3 (see §V).
 10. **`user-guides/`**: The in-app help centre (Tier 3; see §X).
 11. **`self-hosting/`**: Instance setup guidance (Tier 3).
 12. **`TRACKING/`**: The live tracker and open decision packages (Tier 3). A document that stops describing live work moves to `archive/v2-tracking-2026/`, with its reason recorded in that directory's README.
@@ -242,6 +239,11 @@ The following checks enforce this; run them before merging a relocation:
 ---
 
 ## XII. Change Notes
+
+**Version 3.4 (2026-09-28):**
+- Assigned `docs/REFERENCE/` by operator ruling: `REF-TERM-001` (developer vocabulary) is Tier 2
+  Normative, and the rest are Tier 3. `REF-TERM-002` (user-facing vocabulary) is Informative but highly
+  recommended for standardization, subject to INV-CORE-000 §III.7 and INV-ARC-020.
 
 **Version 3.3 (2026-09-28):**
 - §V: `docs/archive/` holds superseded v1 **and** v2 material: retired v2 tracking and retired

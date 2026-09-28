@@ -265,6 +265,7 @@ INV-CORE → INV-ARC → DOM-* → FEAT-*
 | [docs/DOMAIN/](docs/DOMAIN/) | Per-domain authority specs |
 | [docs/FEATURE-EXECUTION/](docs/FEATURE-EXECUTION/) | FEAT mutation contracts |
 | [docs/SPEC/](docs/SPEC/) | Technical contracts |
+| [REF-TERM-001](docs/REFERENCE/REF-TERM-001_DEVELOPER_VOCABULARY.md) | Developer vocabulary |
 | [docs/STANDARD_OPERATING_PROCEDURES/](docs/STANDARD_OPERATING_PROCEDURES/) | Operational procedures |
 
 **Descriptive (these summarize and can drift):**
@@ -274,7 +275,7 @@ INV-CORE → INV-ARC → DOM-* → FEAT-*
 | [docs/TRACKING/](docs/TRACKING/) | Working state: the post-launch tracker and open decisions |
 | [docs/ops/](docs/ops/) | Production host notes and dated release and audit records |
 | [docs/PRINCIPLES/](docs/PRINCIPLES/) | Why a design was chosen |
-| [docs/REFERENCE/](docs/REFERENCE/) | Interface references, including [REF-API-001](docs/REFERENCE/REF-API-001_HTTP_INTERFACE_REFERENCE.md) for HTTP endpoints |
+| [docs/REFERENCE/](docs/REFERENCE/) | Interface references, including [REF-API-001](docs/REFERENCE/REF-API-001_HTTP_INTERFACE_REFERENCE.md) for HTTP endpoints, and the user-facing vocabulary [REF-TERM-002](docs/REFERENCE/REF-TERM-002_USER_VOCABULARY.md) (recommended, subject to accessibility) |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Roadmap and current priorities |
 | [CHANGELOG.md](CHANGELOG.md) | Version history |
 | [.claude/CLAUDE.md](.claude/CLAUDE.md) and [.claude/rules/](.claude/rules/) | Working guidance for AI coding agents |

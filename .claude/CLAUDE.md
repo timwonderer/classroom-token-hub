@@ -133,12 +133,13 @@ Normative documents live **only** under these roots:
 - `docs/FEATURE-EXECUTION/` — FEAT contracts (execution-level, subordinate to above)
 - `docs/SPEC/` — technical contracts (SPEC-*)
 - `docs/STANDARD_OPERATING_PROCEDURES/` — SOPs (SOP-*)
+- `docs/REFERENCE/REF-TERM-001_DEVELOPER_VOCABULARY.md` — the one normative file in `REFERENCE/`: developer vocabulary; use its terms in specs, code review and internal docs
 
 When specs and implementation disagree, the constitutional docs (`INV-*`, `DOM-*`) define the target state.
 
 ### Nothing under `.claude/` is authoritative
 
-This file and every file under `.claude/rules/` are **operational guidance for agents, not normative documents**. They summarize; they do not govern. The same applies to `docs/TRACKING/`, `docs/MAP/`, `docs/PRINCIPLES/`, `docs/REFERENCE/`, `CHANGELOG.md`, and agent memory — all descriptive, none binding.
+This file and every file under `.claude/rules/` are **operational guidance for agents, not normative documents**. They summarize; they do not govern. The same applies to `docs/TRACKING/`, `docs/MAP/`, `docs/PRINCIPLES/`, `docs/REFERENCE/` (except `REF-TERM-001`), `CHANGELOG.md`, and agent memory — all descriptive, none binding. `REF-TERM-002` (user-facing vocabulary) is informative but strongly recommended for UI text and user guides, unless a term would breach the accessibility invariants (INV-CORE-000 §III.7, INV-ARC-020).
 
 Consequences:
 
