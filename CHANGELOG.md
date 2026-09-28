@@ -8,6 +8,13 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Documentation
+- **v2.0.1 production release record (2026-09-28)** — `docs/ops/audits/DEPLOY_2026-09-28_ad64a473f.md` records the release of `ad64a473f` and the verification of its migrations, the scheduler and the database. It also records the `efdf09eda` release of 2026-09-27, which had no record, and the passwordless.dev tenant cleanup. That cleanup's pre-deletion listing is preserved there as evidence.
+
+## [2.0.1] - 2026-09-28 — Security release
+
+Released as `ad64a473f`. The passkey fix below is the reason for this release. A security advisory is drafted and pending publication; this entry will link it once it is published.
+
 ### Security
 - **A passkey signs in only the account it was registered to; `users.id` is a random UUID (2026-09-28)** — Passkey sign-in trusted the `user_<id>` that passwordless.dev returned and checked only the account's role. It never checked that the credential belonged to that account here. `users.id` was a sequential integer that restarted at 1 in the 2026-09-26 launch wipe, and passwordless.dev still held pre-launch passkeys, so a passkey registered as `user_3` before the wipe would sign in whoever is user 3 today. Only the maintainer had pre-launch passkeys, so no one else could have been signed in this way. The same leftovers broke new registrations: a leftover alias made passwordless.dev refuse every registration for that username with `409 alias_conflict`, which the app reported as a 500. The fixes:
   - **Registration is verified.** The finish step verifies the `passkey_register` token on the server, requires it to name the signed-in account, and records its `credential_id`. `credential_id` is now `NOT NULL` and `UNIQUE`. Before, registration recorded nothing that identified the credential.
