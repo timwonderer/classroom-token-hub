@@ -53,30 +53,30 @@
                         <div class="mb-3">
                             <label for="issue_category" class="form-label">Issue Type <span class="text-danger">*</span></label>
                             <select class="form-select" id="issue_category" name="issue_category" required>
-                                <option value="general">General Support</option>
-                                <option value="bug">Bug / Error</option>
-                                <option value="feature">Feature Request</option>
+                                <option value="general"{% if form_issue_category == 'general' %} selected{% endif %}>General Support</option>
+                                <option value="bug"{% if form_issue_category == 'bug' %} selected{% endif %}>Bug / Error</option>
+                                <option value="feature"{% if form_issue_category == 'feature' %} selected{% endif %}>Feature Request</option>
                             </select>
                         </div>
 
                         <div class="mb-3">
                             <label for="title" class="form-label">Title <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="title" name="title" maxlength="200" required>
+                            <input type="text" class="form-control" id="title" name="title" maxlength="200" value="{{ form_title or '' }}" required>
                         </div>
 
                         <div class="mb-3">
                             <label for="description" class="form-label">What happened? <span class="text-danger">*</span></label>
-                            <textarea class="form-control" id="description" name="description" rows="4" maxlength="2000" required></textarea>
+                            <textarea class="form-control" id="description" name="description" rows="4" maxlength="2000" required>{{ form_description or '' }}</textarea>
                         </div>
 
                         <div class="mb-3">
                             <label for="expected_behavior" class="form-label">What did you expect to happen?</label>
-                            <textarea class="form-control" id="expected_behavior" name="expected_behavior" rows="3" maxlength="1000"></textarea>
+                            <textarea class="form-control" id="expected_behavior" name="expected_behavior" rows="3" maxlength="1000">{{ form_expected_behavior or '' }}</textarea>
                         </div>
 
                         <div class="mb-3">
                             <label for="page_url" class="form-label">Page URL (optional)</label>
-                            <input type="text" class="form-control" id="page_url" name="page_url" maxlength="500" placeholder="/admin/students">
+                            <input type="text" class="form-control" id="page_url" name="page_url" maxlength="500" placeholder="/admin/students" value="{{ form_page_url or '' }}">
                         </div>
 
                         <div class="form-check mb-3">

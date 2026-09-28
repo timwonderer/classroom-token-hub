@@ -198,17 +198,9 @@ def upgrade():
 
 
 def downgrade():
-    # Remove only seeded categories no issue refers to; a referenced category
-    # is part of an issue's history and stays.
-    if not table_exists('issue_categories'):
-        return
-    conn = op.get_bind()
-    names = [row[0] for row in DEFAULT_CATEGORIES]
-    conn.execute(
-        sa.text(
-            "DELETE FROM issue_categories c WHERE c.name = ANY(:names)"
-            " AND NOT EXISTS (SELECT 1 FROM issues i WHERE i.category_id = c.id)"
-        ),
-        {"names": names},
-    )
-    print("❌ Removed unreferenced seeded issue categories")
+    # Deliberately a no-op. ON CONFLICT DO NOTHING means some of these rows may
+    # have existed before this revision (seeded by the old GET handlers), and
+    # nothing records which ones this revision inserted. Deleting by name could
+    # remove categories that predate it. Leftover reference rows are harmless
+    # to the previous revision, which reads this table the same way.
+    print("⚠️  Leaving issue categories in place; they are reference data")
