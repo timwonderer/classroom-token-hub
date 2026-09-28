@@ -40,7 +40,9 @@ class ExternalStatusNoticeEvent:
             raise ValueError("Notice identity and event type are required.")
         if not self.capability or not self.impact_statement or not self.recommended_user_action:
             raise ValueError("Notice communication fields are required.")
-        if len(self.impact_statement) > 500 or len(self.recommended_user_action) > 240:
+        # Resolutions carry the full incident report, rather than a short active-impact summary.
+        if ((self.state != NoticeState.RESOLVED and len(self.impact_statement) > 500)
+                or len(self.recommended_user_action) > 240):
             raise ValueError("Notice communication fields exceed bounded limits.")
         if self.recovery_state == RecoveryExpectationState.UNAVAILABLE and self.recovery_expectation is not None:
             raise ValueError("Unavailable recovery expectation cannot carry a timestamp.")

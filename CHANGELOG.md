@@ -8,6 +8,9 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Fixed
+- **Status incident reports and history (2026-09-27)** — Removed the 500-character resolution cap in the operator form and server validation. Added a separate paginated past-incidents page showing full resolution reports and original publication timelines. Reports preserve paragraph breaks, wrap long text, and escape HTML; history uses native keyboard-accessible disclosures and links from both status and operator pages.
+
 ### Documentation
 - **v2.0.1 production release record (2026-09-28)** — `docs/ops/audits/DEPLOY_2026-09-28_ad64a473f.md` records the release of `ad64a473f` and the verification of its migrations, the scheduler and the database. It also records the `efdf09eda` release of 2026-09-27, which had no record, and the passwordless.dev tenant cleanup. That cleanup's pre-deletion listing is preserved there as evidence.
 

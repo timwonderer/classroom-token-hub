@@ -195,6 +195,26 @@ def create_app(store=None) -> Flask:
                                platform_checks=checks,
                                overall_status=overall_observation(checks, measurements, active_notices))
 
+    @app.get("/incidents")
+    def incident_history():
+        if app.config["STATUS_SERVICE_MODE"] == "operator":
+            require_operator()
+        try:
+            page = int(request.args.get("page", "1"))
+        except ValueError:
+            abort(400)
+        if page < 1:
+            abort(400)
+        notices = store.list_resolved_notices()
+        start = (page - 1) * 20
+        if page > 1 and start >= len(notices):
+            abort(404)
+        entries = [{"notice": notice, "events": store.list_notice_events(notice["id"])}
+                   for notice in notices[start:start + 20]]
+        return render_template("incident_history.html", entries=entries, page=page,
+                               has_more=start + 20 < len(notices),
+                               operator=app.config["STATUS_SERVICE_MODE"] == "operator")
+
     @app.get("/operator/notices")
     def operator_notices_get():
         if app.config["STATUS_SERVICE_MODE"] != "operator":
@@ -218,8 +238,8 @@ def create_app(store=None) -> Flask:
             abort(403)
         tokens = request.form.getlist("selected_issue")
         message = request.form.get("resolution_message", "").strip()
-        if not tokens or len(tokens) > 100 or not message or len(message) > 500:
-            abort(400, description="Select 1–100 open issues and enter a resolution (maximum 500 characters).")
+        if not tokens or len(tokens) > 100 or not message:
+            abort(400, description="Select 1–100 open issues and enter a resolution.")
         signer = URLSafeSerializer(app.secret_key, salt="notice-resolution")
         selections = {}
         try:

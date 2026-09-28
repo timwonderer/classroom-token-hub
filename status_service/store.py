@@ -22,6 +22,19 @@ class FirestoreNoticeStore:
                 active.append({"id": snapshot.id, **snapshot.to_dict()})
         return sorted(active, key=lambda notice: notice["updated_at"], reverse=True)
 
+    def list_resolved_notices(self) -> list[dict]:
+        """Read resolved notices independently of the recent-notice limit."""
+        query = self.client.collection("external_status_notices").where("state", "==", "RESOLVED")
+        notices = [{"id": snapshot.id, **snapshot.to_dict()} for snapshot in query.stream()]
+        return sorted(notices, key=lambda notice: (notice["updated_at"], notice["id"]), reverse=True)
+
+    def list_notice_events(self, notice_id: str) -> list[dict]:
+        """Read original publication events in chronological order."""
+        query = self.client.collection("external_status_notice_events").where(
+            "external_notice_id", "==", notice_id)
+        events = [snapshot.to_dict() for snapshot in query.stream()]
+        return sorted(events, key=lambda event: (event["published_at"], event["event_id"]))
+
     def current_snapshot(self) -> dict | None:
         """Read persisted current attempt; callers evaluate freshness at render time."""
         value = self.client.collection("telemetry_current").document("current").get()
@@ -163,8 +176,8 @@ class FirestoreNoticeStore:
         from google.cloud import firestore
         from .contracts import ExternalStatusNoticeEvent, NoticeState, RecoveryExpectationState
 
-        if not selections or len(selections) > 100 or not message.strip() or len(message) > 500:
-            raise ValueError("Select 1–100 issues and provide a resolution of at most 500 characters.")
+        if not selections or len(selections) > 100 or not message.strip():
+            raise ValueError("Select 1–100 issues and provide a resolution.")
         if any(not key or "/" in key or not version for key, version in selections.items()):
             raise ValueError("Invalid issue selection.")
         current = self.client.collection("external_status_notices")

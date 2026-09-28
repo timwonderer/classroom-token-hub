@@ -1,0 +1,44 @@
+{% extends "base_public_v2.html" %}
+{% block title %}Past incidents — Classroom Token Hub{% endblock %}
+{% block content %}
+<main class="operator-page">
+  <section class="landing-hero">
+    <div class="landing-shell landing-welcome">
+      <h1>Past incidents</h1>
+      <p>Resolved issues, original updates, and resolution reports from CTH Operations.</p>
+    </div>
+  </section>
+  <section class="landing-content">
+    <div class="landing-shell operator-content">
+      <p><a href="{{ url_for('operator_notices_get' if operator else 'public_status') }}">{{ 'Back to operator console' if operator else 'Back to current status' }}</a></p>
+      {% for entry in entries %}
+      <article class="operator-history">
+        <h2>{{ entry.notice.capability|replace('_', ' ')|title }} — {{ entry.notice.incident_ref }}</h2>
+        <p><span class="status-pill">Resolved</span> {{ entry.notice.updated_at|status_time }}</p>
+        <h3>Resolution report</h3>
+        <p class="incident-message">{{ entry.notice.impact_statement }}</p>
+        <details class="history-disclosure">
+          <summary>View original updates and timeline</summary>
+          {% for event in entry.events %}
+          <section class="operator-notice">
+            <h3>{{ event.state|replace('_', ' ')|title }} — {{ event.published_at|status_time }}</h3>
+            <p class="incident-message">{{ event.impact_statement }}</p>
+            <p><strong>User action:</strong> {{ event.recommended_user_action }}</p>
+            {% if event.recovery_expectation %}<p>Recovery {{ event.recovery_state|lower }}: {{ event.recovery_expectation|status_time }}</p>{% endif %}
+            {% if event.next_update_at %}<p>Next update: {{ event.next_update_at|status_time }}</p>{% endif %}
+          </section>
+          {% else %}<p>No earlier publication events are available.</p>{% endfor %}
+        </details>
+      </article>
+      {% else %}<p>No resolved incidents have been published yet.</p>{% endfor %}
+      {% if page > 1 or has_more %}
+      <nav aria-label="Incident history pages">
+        {% if page > 1 %}<a href="{{ url_for('incident_history', page=page - 1) }}">Newer incidents</a>{% endif %}
+        <span>Page {{ page }}</span>
+        {% if has_more %}<a href="{{ url_for('incident_history', page=page + 1) }}">Older incidents</a>{% endif %}
+      </nav>
+      {% endif %}
+    </div>
+  </section>
+</main>
+{% endblock %}
