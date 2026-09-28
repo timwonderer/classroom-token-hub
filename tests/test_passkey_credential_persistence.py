@@ -21,6 +21,7 @@ FEATContext owns the transaction and commits on clean exit.
 from __future__ import annotations
 
 from tests.helpers.classroom_initializer import initialize_as_teacher
+from tests.helpers.passkey import fake_passwordless  # noqa: F401  (fixture)
 
 
 def _persisted_passkeys(app, user_id):
@@ -36,17 +37,17 @@ def _persisted_passkeys(app, user_id):
         return list_admin_credentials(user_id)
 
 
-def _register(client, name="Test Passkey"):
+def _register(client, fake, user_id, name="Test Passkey"):
     return client.post(
         "/admin/passkey/register/finish",
-        json={"token": "opaque-passwordless-dev-token", "authenticatorName": name},
+        json={"token": fake.complete_registration(user_id), "authenticatorName": name},
     )
 
 
-def test_a_registered_passkey_survives_past_the_request_that_saved_it(app, client):
+def test_a_registered_passkey_survives_past_the_request_that_saved_it(app, client, fake_passwordless):
     classroom = initialize_as_teacher("chemistry_p1", client, app)
 
-    resp = _register(client, "YubiKey 5")
+    resp = _register(client, fake_passwordless, classroom.teacher_user.id, "YubiKey 5")
     assert resp.status_code == 200
     assert resp.get_json()["success"] is True
 
@@ -62,9 +63,9 @@ def test_a_registered_passkey_survives_past_the_request_that_saved_it(app, clien
         assert admin_has_passkeys(classroom.teacher_user.id) is True
 
 
-def test_a_deleted_passkey_stays_deleted_past_the_request(app, client):
+def test_a_deleted_passkey_stays_deleted_past_the_request(app, client, fake_passwordless):
     classroom = initialize_as_teacher("chemistry_p1", client, app)
-    _register(client, "Old Phone")
+    _register(client, fake_passwordless, classroom.teacher_user.id, "Old Phone")
 
     passkey_id = next(
         p.id for p in _persisted_passkeys(app, classroom.teacher_user.id)
@@ -82,7 +83,7 @@ def test_a_deleted_passkey_stays_deleted_past_the_request(app, client):
     )
 
 
-def test_registered_and_last_used_times_show_class_timezone_not_utc(app, client):
+def test_registered_and_last_used_times_show_class_timezone_not_utc(app, client, fake_passwordless):
     """The Passkey Settings page rendered created_at/last_used with a bare
     ``.strftime()`` -- the raw UTC instant, with no conversion and no timezone
     label -- while every other timestamp in the app goes through the
@@ -90,8 +91,8 @@ def test_registered_and_last_used_times_show_class_timezone_not_utc(app, client)
     timezone. Test classrooms default to America/Los_Angeles; a September
     date there is Pacific Daylight Time.
     """
-    initialize_as_teacher("chemistry_p1", client, app)
-    _register(client, "livetest1")
+    classroom = initialize_as_teacher("chemistry_p1", client, app)
+    _register(client, fake_passwordless, classroom.teacher_user.id, "livetest1")
 
     page = client.get("/admin/passkey/settings").data.decode()
 

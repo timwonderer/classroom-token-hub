@@ -95,7 +95,8 @@ def test_migration_maps_author_only_with_exact_class_teacher_binding(client):
     with db.engine.connect() as conn:
         transaction = conn.begin()
         try:
-            conn.execute(sa.text('CREATE TABLE legacy_authors (id INT, class_id TEXT, user_id INT)'))
+            # user_id carries users.id's current type (uuid since f4b8d2a6c1e9).
+            conn.execute(sa.text('CREATE TABLE legacy_authors (id INT, class_id TEXT, user_id UUID)'))
             conn.execute(sa.text('INSERT INTO legacy_authors VALUES (1, :class_id, :user_id)'),
                          {'class_id': classroom.class_id, 'user_id': classroom.teacher_user.id})
             _migration(conn)._replace_author(conn, 'legacy_authors', 'user_id', 'created_by_seat_id', nullable=False)
@@ -110,7 +111,7 @@ def test_migration_rejects_an_author_outside_the_class(client):
     with db.engine.connect() as conn:
         transaction = conn.begin()
         try:
-            conn.execute(sa.text('CREATE TABLE legacy_authors (id INT, class_id TEXT, user_id INT)'))
+            conn.execute(sa.text('CREATE TABLE legacy_authors (id INT, class_id TEXT, user_id UUID)'))
             conn.execute(sa.text('INSERT INTO legacy_authors VALUES (1, :class_id, :user_id)'),
                          {'class_id': classroom.class_id, 'user_id': classroom.students[0].user.id})
             with pytest.raises(RuntimeError, match='exactly one teacher seat'):

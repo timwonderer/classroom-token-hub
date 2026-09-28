@@ -17,6 +17,7 @@ from app.models import (
     UserRole,
 )
 from tests.helpers.classroom_initializer import initialize, initialize_as_student, initialize_as_teacher
+from tests.helpers.passkey import fake_passwordless  # noqa: F401  (fixture)
 from tests.dom.identity.helpers import (
     admin_passkey_auth_finish,
     admin_passkey_register_start,
@@ -78,45 +79,33 @@ def test_DOM_IDEN_006__student_login_missing_last_active_class_shows_selector(cl
 
 
 
-def test_DOM_IDEN_006__admin_passkey_register_uses_canonical_user_external_id(client, monkeypatch):
-    captured = {}
-
-    def fake_create_register_token(user_id, username, displayname):
-        captured.update(user_id=user_id, username=username, displayname=displayname)
-        return "register-token"
-
-    monkeypatch.setattr("app.routes.admin.create_register_token", fake_create_register_token)
-    monkeypatch.setattr("app.routes.admin.get_public_api_key", lambda: "public-key")
-
+def test_DOM_IDEN_006__admin_passkey_register_uses_canonical_user_external_id(client, fake_passwordless):
     classroom = initialize_as_teacher("chemistry_p1", client, client.application)
     user = classroom.teacher_user
-    teacher_seat = classroom.teacher_seat
 
     response = admin_passkey_register_start(client)
 
     assert response.status_code == 200, f"Expected 200 but got {response.status_code}. Redirecting to: {response.location if response.status_code == 302 else 'N/A'}"
-    assert response.get_json()["token"] == "register-token"
-    assert captured["user_id"] == f"user_{user.id}"
+    assert response.get_json()["token"].startswith("register_")
+    assert fake_passwordless.calls == [("register_token", f"user_{user.id}")]
 
 
-def test_DOM_IDEN_006__admin_passkey_finish_sets_canonical_user_session(client, monkeypatch):
+def test_DOM_IDEN_006__admin_passkey_finish_sets_canonical_user_session(client, fake_passwordless):
     classroom = initialize_as_teacher("chemistry_p1", client, client.application)
     user = classroom.teacher_user
+    fake_passwordless.credentials["cred-admin"] = f"user_{user.id}"
     with FEATContext("FEAT-IDEN-001", idempotency_key="test:passkey-credential:admin"):
-        db.session.add(PasskeyCredential(user_id=user.id, authenticator_name="Key"))
+        db.session.add(PasskeyCredential(user_id=user.id, credential_id="cred-admin", authenticator_name="Key"))
         db.session.flush()
 
-    monkeypatch.setattr(
-        "app.routes.admin.verify_signin_token",
-        lambda _token: SimpleNamespace(user_id=f"user_{user.id}"),
-    )
-
-    response = admin_passkey_auth_finish(client, token="signed")
+    response = admin_passkey_auth_finish(client, token=fake_passwordless.sign_in_token("cred-admin"))
 
     assert response.status_code == 200
+    with client.session_transaction() as sess:
+        assert sess["user_id"] == user.id
 
 
-def test_DOM_IDEN_006__system_admin_passkey_finish_sets_canonical_user_session(client, monkeypatch):
+def test_DOM_IDEN_006__system_admin_passkey_finish_sets_canonical_user_session(client, fake_passwordless):
     with FEATContext("FEAT-IDEN-001", idempotency_key="test:passkey-credential:sysadmin"):
         user = User(
             user_role=UserRole.SYSADMIN,
@@ -125,17 +114,15 @@ def test_DOM_IDEN_006__system_admin_passkey_finish_sets_canonical_user_session(c
         )
         db.session.add(user)
         db.session.flush()
-        db.session.add(PasskeyCredential(user_id=user.id, authenticator_name="Key"))
+        db.session.add(PasskeyCredential(user_id=user.id, credential_id="cred-sysadmin", authenticator_name="Key"))
         db.session.flush()
+    fake_passwordless.credentials["cred-sysadmin"] = f"user_{user.id}"
 
-    monkeypatch.setattr(
-        "app.routes.system_admin.verify_signin_token",
-        lambda _token: SimpleNamespace(user_id=f"user_{user.id}"),
-    )
-
-    response = sysadmin_passkey_auth_finish(client, token="signed")
+    response = sysadmin_passkey_auth_finish(client, token=fake_passwordless.sign_in_token("cred-sysadmin"))
 
     assert response.status_code == 200
+    with client.session_transaction() as sess:
+        assert sess["user_id"] == user.id
 
 
 def test_DOM_IDEN_006__canonical_user_session_rejects_role_mismatch(client):

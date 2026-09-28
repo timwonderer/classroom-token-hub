@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DB-001       | 1.3     | 2026-09-17     | 1.2 | Normative |
+| SOP-DB-001       | 1.4     | 2026-09-28     | 1.3 | Normative |
 
 > [!NOTE]
 > v1.1 (2026-09-14) adds §V.A, a named exception to Golden Rule 3. Rule 3 is not weakened:
@@ -116,14 +116,16 @@ it operates on is absent — and it permits that only because of a defect in the
 
 #### The condition it exists for
 
-`0001_bootstrap` materializes the baseline by calling `metadata.create_all` against the **current**
-ORM metadata. Its own docstring states the consequence: "deleting a model retroactively removes a
+Until 2026-09-28, `0001_bootstrap` materialized the baseline by calling `metadata.create_all` against
+the **current** ORM metadata. The frozen baseline replaced that (see *Standing remedy* below), and
+the rest of this subsection describes the bootstrap as it was, which the register's corrections
+were made against. Its own docstring states the consequence: "deleting a model retroactively removes a
 table that existed at baseline time — and later migrations in the chain still legitimately reference
 it." The revision graph is unchanged by such a deletion, so nothing signals that a historical
 revision has lost its precondition.
 
-The bootstrap already remedies this for whole **tables**, in `_create_retired_baseline_tables`.
-There is no equivalent remedy for **columns**. A column present at baseline time and since removed
+The live bootstrap remedied this for whole **tables**, in `_create_retired_baseline_tables`. It had
+no equivalent remedy for **columns**. A column present at baseline time and since removed
 from the ORM is therefore absent on a fresh chain, and the historical migration that alters it
 raises. That failure is not a defect in the historical migration; it is the bootstrap presenting a
 schema the migration was never written against.
@@ -196,14 +198,28 @@ Proven by execution, not by argument, and reported with its exact command and sc
 - Each correction is listed in the register below. The register is the complete set; a correction
   absent from it is an unrecorded edit to a merged migration and a Rule 3 violation.
 
-#### Standing remedy (not optional, deferred)
+#### Standing remedy (freeze landed 2026-09-28; reconstruction deferred)
 
-`0001_bootstrap` must stop materializing live ORM metadata and instead emit a frozen baseline
-schema, so historical migrations execute against the schema they were written against. Until that
-lands, every model removal can retroactively break another historical revision, and this section
-will keep being invoked. Tracked as post-launch architectural debt in
-`docs/TRACKING/PRODUCTION_READINESS_2026-09.md` §VI. Note that the bootstrap is itself a merged
-migration, so the remedy is a baseline replacement, not an edit under this section.
+> [!NOTE]
+> **Freeze landed 2026-09-28 (v1.4).** `0001_bootstrap` no longer reads the ORM. It executes
+> `migrations/baseline/0001_baseline_schema.sql`, the exact schema the live-model bootstrap
+> produced on that date. A fresh chain was shown to reach a byte-identical schema, both after step 0
+> and at head, compared with `pg_dump --schema-only`. The exact commands, scope and hashes are in
+> `docs/ops/audits/BASELINE_FREEZE_2026-09-28.md`. From that date a model change can no longer
+> reach back into step 0. The trigger was the conversion of `users.id` to a UUID: the live bootstrap
+> would have created a UUID `users.id` beneath historical migrations that add integer foreign keys
+> to it. That is a type change, not an absent element, so §V.B could not cover it.
+>
+> This is a freeze of the 2026-09-28 schema, **not** a reconstruction of the original baseline.
+> Elements removed from the ORM before that date are still absent at step 0, so the two corrections
+> in the register below remain load-bearing. What remains of the remedy is the reconstruction; no
+> new §V.B correction can arise from a model change made after the freeze.
+
+The full remedy is a baseline that reconstructs the schema as it stood when the historical
+migrations were written, so each one executes against the schema it was written against. The
+freeze above stopped new drift; the reconstruction is still open, tracked as post-launch
+architectural debt in `docs/TRACKING/PRODUCTION_READINESS_2026-09.md` §VI. The bootstrap is itself a
+merged migration, so the remedy is a baseline replacement, not an edit under this section.
 
 #### Register of corrections
 

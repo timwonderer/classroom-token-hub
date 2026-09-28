@@ -8,7 +8,6 @@
 #
 # Do not add to this file. A new migration that cannot pass the linter is a
 # migration that needs its existence checks written.
-0001_bootstrap.py
 0f0436f6026f_class_phase_2_create_economic_engine_.py
 1761e2187234_add_canonical_entitlement_persistence.py
 1f6c2b8d4e90_drop_banking_settings_legacy_scope_.py

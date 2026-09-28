@@ -9,6 +9,6 @@ class Scope:
     join_code: str
     actor_id: int
     role: str
-    user_id: int
+    user_id: str
     block: str | None
     seat_id: int | None

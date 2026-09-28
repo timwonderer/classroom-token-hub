@@ -1433,20 +1433,27 @@ entering `FEAT-CLASS-006` — a FEAT never executes another FEAT (INV-ARC-000 §
 
 ### Frozen migration baseline — replace the live-ORM bootstrap (post-launch, architectural)
 
-`0001_bootstrap` builds the baseline by calling `metadata.create_all` against **today's** ORM
+*Historical, before 2026-09-28:* `0001_bootstrap` built the baseline by calling `metadata.create_all` against **today's** ORM
 metadata instead of a frozen snapshot of the schema as it stood at baseline time. Its own docstring
 states the consequence: "deleting a model retroactively removes a table that existed at baseline
 time — and later migrations in the chain still legitimately reference it."
 
 So removing a model or a column can retroactively break an unrelated historical revision, and the
 revision graph looks untouched while it happens. The failure surfaces only on a fresh chain — a new
-production database or a `conftest` schema rebuild — never on an already-migrated one. The bootstrap
-already carries a partial remedy for whole **tables** (`_create_retired_baseline_tables`); there is
-none for **columns**.
+production database or a `conftest` schema rebuild — never on an already-migrated one. The live bootstrap
+carried a partial remedy for whole **tables** (`_create_retired_baseline_tables`), and none for
+**columns**.
 
-**Remedy:** emit a frozen baseline DDL snapshot, so every historical migration executes against the
-schema it was actually written against. The bootstrap is itself a merged migration, so this is a
+**Remedy:** a baseline that reconstructs the schema each historical migration was written against.
+The 2026-09-28 freeze (below) stopped new drift; the reconstruction is what remains. The bootstrap is itself a merged migration, so this is a
 baseline replacement, not an edit under `SOP-DB-001` §V.B.
+
+**Status (2026-09-28): freeze landed, reconstruction open.** `0001_bootstrap` now executes
+`migrations/baseline/0001_baseline_schema.sql`, the schema the live-model bootstrap produced that
+day, and a fresh chain reaches a byte-identical head (evidence:
+[`docs/ops/audits/BASELINE_FREEZE_2026-09-28.md`](../ops/audits/BASELINE_FREEZE_2026-09-28.md)). Later model changes no longer reach step 0.
+Elements removed before the freeze are still absent there, so the two §V.B corrections stay. See
+`SOP-DB-001` §V.B *Standing remedy*.
 
 **Interim position (accepted, not permanent):** `SOP-DB-001` §V.B defines a Bootstrap-Replay
 Correction — a guard that declines a historical operation when the bootstrap has left its target
@@ -1457,10 +1464,10 @@ alter its intended end state. Two corrections are recorded in that section's reg
 
 **Why this is not merely cosmetic debt:** without the two guards a fresh `flask db upgrade` fails at
 `3a69db4907b4`, so the first DigitalOcean deployment would not boot. The guards are load-bearing for
-deployment today. Each further model removal is a new opportunity to break the chain silently, and
-the cost of the remedy does not fall over time.
+deployment today. Since the freeze, a model removal no longer reaches step 0, so no new correction can arise from
+one; the remaining risk is confined to elements removed before 2026-09-28.
 
-**Scheduled:** post-launch. Every additional correction under §V.B raises the priority.
+**Scheduled:** post-launch, for the reconstruction.
 
 ### Bug-hunter badge system (backlog)
 

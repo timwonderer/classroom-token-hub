@@ -51,20 +51,14 @@ from app.services.operational_event_service import (
     get_error_events,
     get_recent_error_events,
 )
-from app.utils.passwordless_client import (
-    create_register_token,
-    verify_signin_token,
-    get_public_api_key
-)
+from app.utils.passwordless_client import get_public_api_key
 from app.utils.auth_username import normalize_auth_username
 from app.utils.opaque_refs import make_opaque_ref, resolve_opaque_ref
 from app.services.admin_identity_service import (
-    create_admin_credential,
-    delete_admin_credential,
     admin_has_passkeys,
     list_admin_credentials,
-    touch_admin_credentials_last_used,
 )
+from app.services import passkey_service
 from app.utils.issue_helpers import record_resolution_action, update_issue_status
 
 # Create blueprint
@@ -229,18 +223,19 @@ def passkey_register_start():
         if not user or ctx.actor_role != 'sysadmin':
             abort(404)
 
-        # Generate registration token using official SDK
-        user_id = f"user_{user.id}"
         username = session.get("sysadmin_auth_username") or user.auth_username or f"sysadmin_{user.id}"
-        displayname = f"System administrator: {username}"
-
-        token = create_register_token(user_id, username, displayname)
+        token = passkey_service.create_registration_token(
+            user, alias=username, display_name=f"System administrator: {username}",
+        )
 
         return jsonify({
             "token": token,
             "apiKey": get_public_api_key()
         }), 200
 
+    except passkey_service.PasskeyAliasConflict as e:
+        current_app.logger.warning("Passkey registration refused: %s", e)
+        return jsonify({"error": e.public_message}), 409
     except ValueError as e:
         current_app.logger.error(f"Passwordless.dev configuration error: {e}")
         return jsonify({"error": "Passkey service not configured"}), 503
@@ -262,27 +257,29 @@ def passkey_register_finish():
     try:
         ctx = g.canonical_context
         user = get_current_user()
-        if not user or ctx.actor_role != 'sysadmin':
+        if (
+            not user
+            or ctx.actor_role != 'sysadmin'
+            or getattr(user.user_role, "value", user.user_role) != UserRole.SYSADMIN.value
+        ):
             return jsonify({"error": "Canonical system admin identity is missing"}), 409
-        sysadmin = User.query.filter_by(
-            username_lookup_hash=user.username_lookup_hash,
-            user_role=UserRole.SYSADMIN,
-        ).first()
-        if not sysadmin:
-            return jsonify({"error": "System admin record not found"}), 404
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
 
-        # No token is required in the payload for registration finish; nothing to check here.
-
-        # Note: Credential is stored on passwordless.dev servers
-        # We just track that registration occurred for UX purposes
-        authenticator_name = data.get('authenticatorName', 'Unnamed Passkey')
-
-        create_admin_credential(user.id, authenticator_name, credential_id=None)
+        # The token from p.register() is verified here, and the credential it
+        # names is recorded for this system admin only.
+        passkey_service.complete_registration(
+            user,
+            data.get('token'),
+            authenticator_name=data.get('authenticatorName', 'Unnamed Passkey'),
+        )
 
         flash("Passkey registered successfully!", "success")
         return jsonify({"success": True}), 200
 
+    except passkey_service.PasskeyError as e:
+        db.session.rollback()
+        current_app.logger.warning("Passkey registration refused: %s", e)
+        return jsonify({"error": e.public_message}), 400
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error finishing passkey registration: {e}")
@@ -300,6 +297,7 @@ def passkey_auth_start():
     try:
         data = request.get_json()
         session.pop("passkey_sysadmin_auth_username", None)
+        session.pop("passkey_sysadmin_auth_user_id", None)
 
         if not data or 'username' not in data:
             return jsonify({"error": "Missing username"}), 400
@@ -316,6 +314,7 @@ def passkey_auth_start():
             return jsonify({"error": "Invalid credentials"}), 401
 
         session["passkey_sysadmin_auth_username"] = username
+        session["passkey_sysadmin_auth_user_id"] = user.id
 
         return jsonify({
             "apiKey": get_public_api_key()
@@ -344,25 +343,18 @@ def passkey_auth_finish():
         if not data or 'token' not in data:
             return jsonify({"error": "Missing token"}), 400
 
-        # Verify token using official SDK
-        verified_user = verify_signin_token(data['token'])
-
-        # Extract canonical user ID from Passwordless user_id (format: "user_{id}").
-        external_user_id = verified_user.user_id
-        if not external_user_id or not external_user_id.startswith('user_'):
-            return jsonify({"error": "Invalid user ID"}), 401
-
+        # The token must name a credential recorded for the system admin it
+        # names, and, when sign-in began from a username, that system admin.
         try:
-            canonical_user_id = int(external_user_id.replace('user_', ''))
-        except ValueError:
-            current_app.logger.error(f"Invalid userId format: {external_user_id}")
-            return jsonify({"error": "Invalid user ID format"}), 401
-
-        user = db.session.get(User, canonical_user_id)
-        if not user or getattr(user.user_role, "value", user.user_role) != "sysadmin":
-            return jsonify({"error": "Invalid user ID"}), 401
+            user = passkey_service.verify_sign_in(
+                data['token'],
+                expected_role="sysadmin",
+                expected_user_id=session.pop("passkey_sysadmin_auth_user_id", None),
+            )
+        except passkey_service.PasskeyError as e:
+            current_app.logger.warning("Passkey sign-in refused: %s", e)
+            return jsonify({"error": "Authentication failed"}), 401
         now = utc_now()
-        touch_admin_credentials_last_used(user.id, now)
 
         # Create session — canonical keys only
         establish_sysadmin_session(user)
@@ -401,13 +393,17 @@ def passkey_delete(credential_id):
         user = get_current_user()
         if not user:
             return jsonify({"error": "Canonical system admin identity is missing"}), 409
-        deleted = delete_admin_credential(credential_id, user.id)
-        if not deleted:
+        # passwordless.dev first: a passkey removed only here would still work.
+        if not passkey_service.remove_passkey(user.id, credential_id):
             return jsonify({"error": "Passkey not found"}), 404
 
         flash("Passkey deleted successfully.", "success")
         return jsonify({"success": True}), 200
 
+    except passkey_service.PasskeyServiceUnavailable as e:
+        db.session.rollback()
+        current_app.logger.error("Passkey removal failed remotely: %s", e)
+        return jsonify({"error": e.public_message}), 503
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error deleting passkey: {e}")
@@ -462,7 +458,7 @@ def dashboard():
     # System admins — resolve to view dicts (no raw models in templates)
     system_admins_query = (
         User.query.filter(User.user_role == UserRole.SYSADMIN)
-        .order_by(User.id.asc())
+        .order_by(User.created_at.asc(), User.id.asc())
         .all()
     )
     system_admins = [

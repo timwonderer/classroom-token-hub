@@ -48,9 +48,7 @@ from tests.helpers.ledger import create_ledger_idempotent_transaction
 from tests.helpers.support_domain import create_class_announcement
 
 CLASS_ID = "6135423f-80cf-43ec-9ce3-4e05ffb98fad"
-TEACHER_USER_ID = 1
 TEACHER_SEAT_ID = 1
-STUDENT_USER_ID = 4
 STUDENT_SEAT_ID = 3
 STUDENT_PUBLIC_ID = "a8eff5cf-ac8a-41a9-9ab4-2c40c22515da"
 ISSUE_ID = 1
@@ -59,6 +57,14 @@ ISSUE_ID = 1
 # is still active coverage -- required for student.file_claim to render a form
 # instead of redirecting with a flash ("you don't hold active coverage").
 POLICY_UUID = "a5a7e107-3e16-4eb0-bc11-a900887fcd44"
+
+
+def _user_id_of(seat_id: int) -> str:
+    """The principal bound to a fixed world seat. users.id is a random UUID
+    (f4b8d2a6c1e9), so it is read from the seat rather than hard-coded."""
+    from app.models import Seat
+    seat = Seat.query.filter_by(id=seat_id, class_id=CLASS_ID).one()
+    return seat.user_id
 
 
 def _find_or_create_announcement(client) -> int:
@@ -92,13 +98,13 @@ FIXTURE_POLICY_TITLE = "Group D Accessibility Fixture Cover"
 
 def _teacher_ctx() -> CanonicalContext:
     return CanonicalContext(
-        user_id=TEACHER_USER_ID, class_id=CLASS_ID, seat_id=TEACHER_SEAT_ID, actor_role="teacher",
+        user_id=_user_id_of(TEACHER_SEAT_ID), class_id=CLASS_ID, seat_id=TEACHER_SEAT_ID, actor_role="teacher",
     )
 
 
 def _student_ctx() -> CanonicalContext:
     return CanonicalContext(
-        user_id=STUDENT_USER_ID, class_id=CLASS_ID, seat_id=STUDENT_SEAT_ID, actor_role="student",
+        user_id=_user_id_of(STUDENT_SEAT_ID), class_id=CLASS_ID, seat_id=STUDENT_SEAT_ID, actor_role="student",
     )
 
 
@@ -210,7 +216,7 @@ def test_no_axe_violations_across_group_d_pages(app, client, wcag_live_server):
     admin_announcement_form (edit mode), and student_detail.
     """
     teacher_session = _build_teacher_session(
-        client, user_id=TEACHER_USER_ID, class_id=CLASS_ID, seat_id=TEACHER_SEAT_ID,
+        client, user_id=_user_id_of(TEACHER_SEAT_ID), class_id=CLASS_ID, seat_id=TEACHER_SEAT_ID,
     )
 
     announcement_id = _find_or_create_announcement(client)
@@ -232,7 +238,7 @@ def test_no_axe_violations_across_group_d_pages(app, client, wcag_live_server):
     admin_session = _build_sysadmin_session("axe_sweep_group_d_sysadmin")
 
     student_session = _build_student_session(
-        client, user_id=STUDENT_USER_ID, class_id=CLASS_ID, seat_id=STUDENT_SEAT_ID,
+        client, user_id=_user_id_of(STUDENT_SEAT_ID), class_id=CLASS_ID, seat_id=STUDENT_SEAT_ID,
     )
 
     pages: list[tuple[str, dict | None]] = [
