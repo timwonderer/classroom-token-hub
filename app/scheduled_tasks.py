@@ -482,6 +482,7 @@ def run_automatic_payroll_job():
     from app.extensions import db
     from app.feats.base import FEATContext
     from app.feats.complete_payroll_cycle import complete_payroll_cycle
+    from app.services.payroll.settlement import NoPayableAttendanceError
     from app.models import ClassEconomy, PayrollSettings
     from app.services.class_configuration_query_service import is_feature_enabled
     from app.services.context_resolver import CanonicalContext
@@ -561,6 +562,14 @@ def run_automatic_payroll_job():
                     scheduled_occurrence, frequency_days, ctx
                 )
             ran += 1
+        except NoPayableAttendanceError:
+            # Nothing closed and unpaid yet. The occurrence stays due, so the next
+            # hourly tick pays it once a student has clocked out; the schedule
+            # still advances from the occurrence, so paydays do not drift.
+            skipped += 1
+            db.session.rollback()
+            logger.info("Automatic payroll for class %s deferred: no payable attendance", class_id)
+            continue
         except Exception:
             failed += 1
             db.session.rollback()

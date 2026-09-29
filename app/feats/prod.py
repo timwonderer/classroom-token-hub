@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
-from datetime import datetime
-
 
 from app.extensions import db
 from app.feats.base import requires_feat_context, get_correlation_id
@@ -19,6 +17,10 @@ from app.models import (
     Transaction,
 )
 from app.payroll import get_pay_rate_for_class
+from app.services.attendance_service import (
+    CLOSED_SESSION_SETTLEMENT_RULE,
+    calculate_payable_attendance_seconds,
+)
 from app.services.context_resolver import CanonicalContext
 from app.services.entitlement_service import (
     consume_hall_pass,
@@ -153,86 +155,6 @@ def _enforce_hall_pass_settings(
         if len(destination_out) >= int(simultaneous_limit):
             raise ValueError("Hall-pass destination limit reached.")
     return settings.policy_uuid if settings else "default"
-
-
-def _last_payroll_event_time(*, seat_id: int, class_id: str) -> datetime | None:
-    event = (
-        PayrollEvent.query.filter(
-            PayrollEvent.class_id == class_id,
-            PayrollEvent.target_seat_id == seat_id,
-            PayrollEvent.payroll_event_type == "payroll",
-        )
-        .order_by(PayrollEvent.recorded_at.desc(), PayrollEvent.id.desc())
-        .first()
-    )
-    return event.recorded_at if event else None
-
-
-def _calculate_attendance_seconds_since(
-    *,
-    ctx: CanonicalContext,
-    seat_id: int,
-    class_id: str,
-    since_utc,
-    current_time_utc,
-) -> int:
-    """Calculate attendance seconds from the append-only timeline.
-
-    Each ``status='active'`` row marks a start; the next ``status='inactive'``
-    row for the same target_seat_id+class_id marks the end. If no inactive row
-    follows, the current payroll evaluation timestamp is used.
-    """
-    query = AttendanceSession.query.filter(
-        AttendanceSession.target_seat_id == seat_id,
-        AttendanceSession.class_id == class_id,
-    )
-    if since_utc:
-        query = query.filter(AttendanceSession.timestamp >= since_utc)
-    rows = query.order_by(AttendanceSession.timestamp.asc(), AttendanceSession.id.asc()).all()
-
-    def _cap_at_active_day_end(active_ts, proposed_end):
-        # DOM-PROD-001 §312: an `active` session automatically terminates at end
-        # of day in the canonical class timezone (reason_code = done_for_day),
-        # with the inactive entry dated to the same day as the originating active
-        # entry. No legitimate session crosses a day boundary, so cap every
-        # interval at the end-of-day of its own active entry's canonical day.
-        # This guards both an unclosed trailing session AND any inactive row that
-        # was (historically) persisted with a later day's timestamp — overnight /
-        # cross-day time is never paid.
-        day_bounds = canonical_temporal_resolver(
-            CLASS_LEVEL_EVALUATION,
-            canonical_execution_context=ctx,
-            primitive="evaluation_day_boundaries",
-            reference_time_utc=active_ts,
-        )
-        return min(proposed_end, day_bounds.boundary_end_utc)
-
-    intervals = []
-    active_start = None
-    for row in rows:
-        ts = row.timestamp
-        if since_utc and ts < since_utc:
-            continue
-        if row.status == "active":
-            active_start = ts
-        elif row.status == "inactive" and active_start is not None:
-            intervals.append((active_start, _cap_at_active_day_end(active_start, ts)))
-            active_start = None
-    if active_start is not None:
-        intervals.append(
-            (active_start, _cap_at_active_day_end(active_start, current_time_utc))
-        )
-    if not intervals:
-        return 0
-
-    evaluation = canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=ctx,
-        primitive="elapsed_duration",
-        reference_time_utc=current_time_utc,
-        intervals=intervals,
-    )
-    return evaluation.elapsed_seconds
 
 
 def _record_attendance_session_impl(
@@ -605,16 +527,17 @@ def _record_payroll_event_impl(
     _resolve_class_economy(ctx.class_id)
 
     if payroll_event_type == "payroll" and amount is None:
-        last_payroll_time = _last_payroll_event_time(seat_id=target_seat_id, class_id=ctx.class_id)
-        attendance_seconds = _calculate_attendance_seconds_since(
-            ctx=ctx,
-            seat_id=target_seat_id,
-            class_id=ctx.class_id,
-            since_utc=last_payroll_time,
-            current_time_utc=recorded_at,
+        # Only closed, unpaid sessions are payable; an open session is settled
+        # in full by the run after it closes (DOM-PROD-001 §VI.3).
+        attendance_seconds = calculate_payable_attendance_seconds(
+            target_seat_id, ctx.class_id, ctx=ctx, as_of_utc=recorded_at
         )
         rate_per_second = _resolve_pay_rate_per_second(ctx.class_id)
         amount = (Decimal(attendance_seconds) * rate_per_second).quantize(Decimal("0.01"))
+        summary_json = {
+            **(summary_json or {}),
+            "settlement_rule": CLOSED_SESSION_SETTLEMENT_RULE,
+        }
     elif payroll_event_type == "manual_credit" and amount is None:
         raise ValueError("manual_credit payroll events require an amount.")
     elif payroll_event_type == "reversal":
