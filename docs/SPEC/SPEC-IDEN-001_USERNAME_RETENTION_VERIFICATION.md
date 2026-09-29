@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-IDEN-001 | 1.1 | 2026-09-29 | 1.0 draft | Technical Specification |
+| SPEC-IDEN-001 | 1.2 | 2026-09-29 | 1.1 | Technical Specification |
 
 ## I. Purpose
 
@@ -155,7 +155,9 @@ Username and typed values, lookup digests, clipboard contents and names must not
 enter logs, including FEAT idempotency keys. Keys use an opaque generation/request
 identifier. Optional aggregate events contain only outcome, attempt count, flow
 and accommodation flag. Setup responses use `Cache-Control: no-store` and
-`Referrer-Policy: no-referrer`.
+`Referrer-Policy: same-origin`: HTTPS CSRF validation retains the required
+same-origin referrer, while cross-origin requests disclose none. Setup URLs
+contain no username. CSRF tokens and strict HTTPS origin checks remain required.
 
 The earlier draft's NC-IDEN-001-1 (readable username cookie) is resolved by removing
 `generated_username` and cookie-held proof authority. Its regression is an ordinary

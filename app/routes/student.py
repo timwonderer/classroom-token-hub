@@ -477,7 +477,8 @@ def _setup_state_expired(error):
 def _private_setup_response(response):
     if request.endpoint in {'student.create_username', 'student.verify_saved_username', 'student.setup_pin_passphrase'}:
         response.headers['Cache-Control'] = 'no-store'
-        response.headers['Referrer-Policy'] = 'no-referrer'
+        # HTTPS CSRF checks require a same-origin Referer; disclose nothing cross-origin.
+        response.headers['Referrer-Policy'] = 'same-origin'
     return response
 
 

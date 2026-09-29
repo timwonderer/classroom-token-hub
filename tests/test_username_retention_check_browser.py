@@ -276,3 +276,28 @@ def test_missing_script_keeps_standalone_verification_disabled(page):
     assert page.is_disabled('#saved-username')
     assert page.is_disabled('button[type=submit]')
     assert USERNAME not in page.content()
+
+
+def test_setup_policy_sends_referrer_only_to_same_origin(page):
+    """Use Chromium's actual request headers rather than constructing Referer."""
+    from flask import Response
+    from app.routes.student import _private_setup_response
+    origin = 'https://cth.test'
+    with flask_app.test_request_context('/student/setup-pin-passphrase'):
+        policy = _private_setup_response(Response()).headers['Referrer-Policy']
+    page.route(origin + '/student/setup-pin-passphrase', lambda route: route.fulfill(
+        content_type='text/html', body='<html><title>Policy test</title></html>',
+        headers={'Referrer-Policy': policy}))
+    observed = {}
+    def capture(route):
+        observed[route.request.url] = route.request.headers.get('referer')
+        route.fulfill(body='ok', headers={'Access-Control-Allow-Origin': '*'})
+    page.route(origin + '/student/verify-username', capture)
+    page.route('https://external.test/probe', capture)
+    page.goto(origin + '/student/setup-pin-passphrase')
+    page.evaluate("""async () => {
+        await fetch('/student/verify-username', {method: 'POST'});
+        await fetch('https://external.test/probe');
+    }""")
+    assert observed[origin + '/student/verify-username'] == origin + '/student/setup-pin-passphrase'
+    assert observed['https://external.test/probe'] is None
