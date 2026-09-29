@@ -123,8 +123,7 @@ def test_DOM_PROD_001__calculate_unpaid_attendance_seconds(client):
     end = start + timedelta(minutes=15)
     _record_active_interval(ctx, start=start, end=end)
 
-    last_payroll_time = start - timedelta(days=1)
-    unpaid_seconds = calculate_unpaid_attendance_seconds(student.seat.id, classroom.class_id, last_payroll_time)
+    unpaid_seconds = calculate_unpaid_attendance_seconds(student.seat.id, classroom.class_id)
 
     assert unpaid_seconds == 900
 

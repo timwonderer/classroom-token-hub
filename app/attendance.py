@@ -37,14 +37,13 @@ def get_last_payroll_time(*, seat_id: int, class_id: str):
 
 
 
-def calculate_unpaid_attendance_seconds(seat_id, class_id, last_payroll_time):
+def calculate_unpaid_attendance_seconds(seat_id, class_id):
     """Calculate unpaid attendance seconds for one canonical seat/class scope."""
     if not seat_id or not class_id:
         raise ValueError("calculate_unpaid_attendance_seconds requires seat_id and class_id.")
     return _calculate_unpaid_attendance_seconds(
         seat_id,
         class_id,
-        last_payroll_time,
         ctx=SimpleNamespace(class_id=class_id),
     )
 
@@ -184,9 +183,7 @@ def get_session_status(seat_id, class_id):
         is not None
     )
 
-    # Calculate unpaid duration
-    last_payroll_time = get_last_payroll_time(seat_id=seat_id, class_id=class_id)
-    duration = calculate_unpaid_attendance_seconds(seat_id, class_id, last_payroll_time)
+    duration = calculate_unpaid_attendance_seconds(seat_id, class_id)
 
     return is_active, done, duration
 

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from app.extensions import db
 from app.models import (
     AttendanceReasonCode,
     AttendanceSession,
     HallPassLog,
+    PayrollEvent,
     Seat,
 )
 from app.services.hall_pass_request_queue import list_pending_hall_pass_requests_for_class
@@ -161,23 +164,167 @@ def _derive_hall_pass_state(seat_id: int, class_id: str):
     }
 
 
-def calculate_unpaid_attendance_seconds(seat_id: int, class_id: str, last_payroll_time, *, ctx):
-    """Calculate unpaid attendance from a caller-supplied payroll anchor."""
-    canonical_rows = AttendanceSession.query.filter(
+# Stamped into ``payroll_event.summary_json["settlement_rule"]`` by every
+# attendance-derived payroll event settled under the closed-session rule. A
+# ``payroll`` event without it was settled by the earlier rule, which paid the
+# elapsed part of a still-open session; see ``_legacy_paid_through``.
+CLOSED_SESSION_SETTLEMENT_RULE = "closed_sessions"
+
+
+@dataclass(frozen=True)
+class SeatPayrollAttendance:
+    """What a seat's attendance timeline owes, as of one instant.
+
+    ``payable_seconds`` is closed, unpaid work: exactly what a payroll run at that
+    instant settles. ``in_progress_seconds`` is the still-open session, which no
+    run pays until it closes. Their sum is everything not yet paid.
+    """
+
+    payable_seconds: int
+    in_progress_seconds: int
+
+    @property
+    def unpaid_seconds(self) -> int:
+        return self.payable_seconds + self.in_progress_seconds
+
+
+def _day_end_utc(ctx, timestamp):
+    return canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=ctx,
+        primitive="evaluation_day_boundaries",
+        reference_time_utc=timestamp,
+    ).boundary_end_utc
+
+
+def _split_sessions(rows, *, ctx, as_of_utc):
+    """Pair the timeline into closed sessions plus at most one open session.
+
+    An ``active`` row opens a session and the next ``inactive`` row closes it. A
+    further ``active`` row while a session is open continues that session rather
+    than restarting it, so no elapsed time is dropped. DOM-PROD-001 §VI.1
+    terminates every session at the end of its class-local day, so a session whose
+    day has ended is closed at that boundary even if the ``done_for_day`` row has
+    not been written yet, and a later-dated row cannot extend it overnight.
+    """
+    closed = []
+    open_start = None
+    open_day_end = None
+    for row in rows:
+        timestamp = ensure_utc(row.timestamp)
+        if timestamp > as_of_utc:
+            break
+        if open_start is not None and timestamp >= open_day_end:
+            closed.append((open_start, open_day_end))
+            open_start = None
+        if row.status == "active":
+            if open_start is None:
+                open_start = timestamp
+                open_day_end = _day_end_utc(ctx, timestamp)
+        elif row.status == "inactive" and open_start is not None:
+            closed.append((open_start, timestamp))
+            open_start = None
+
+    in_progress = None
+    if open_start is not None:
+        if open_day_end <= as_of_utc:
+            closed.append((open_start, open_day_end))
+        else:
+            in_progress = (open_start, as_of_utc)
+    return closed, in_progress
+
+
+def _legacy_paid_through(legacy_times, session_end):
+    """Latest legacy payroll instant strictly inside a session, else ``None``.
+
+    A payroll event settled before the closed-session rule paid a session that was
+    open at that instant up to the instant itself. That part is already paid, so a
+    session closing afterwards is settled only from the latest such instant.
+    """
+    earlier = [instant for instant in legacy_times if instant < session_end]
+    return max(earlier) if earlier else None
+
+
+def calculate_seat_payroll_attendance(
+    seat_id: int, class_id: str, *, ctx, as_of_utc=None
+) -> SeatPayrollAttendance:
+    """The single PROD reading of what a seat's attendance owes (DOM-PROD-001 §VI.3).
+
+    A session is payable once it has closed after the seat's last ``payroll``
+    event, and it is paid in full by the payroll window in which it closes. A
+    still-open session is never payable. Every session is therefore paid exactly
+    once and never split across windows. The payroll run and every unpaid-time
+    preview read this function, so what a teacher is shown and what the run pays
+    cannot diverge.
+    """
+    if not seat_id or not class_id:
+        raise ValueError("calculate_seat_payroll_attendance requires seat_id and class_id.")
+    if as_of_utc is None:
+        as_of_utc = canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=ctx,
+            primitive="current_time",
+        ).canonical_now_utc
+    as_of_utc = ensure_utc(as_of_utc)
+
+    rows = AttendanceSession.query.filter(
         AttendanceSession.target_seat_id == seat_id,
         AttendanceSession.class_id == class_id,
     ).order_by(AttendanceSession.timestamp.asc(), AttendanceSession.id.asc()).all()
-    now_evaluation = canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=ctx,
-        primitive="current_time",
+    closed, in_progress = _split_sessions(rows, ctx=ctx, as_of_utc=as_of_utc)
+
+    payroll_events = (
+        PayrollEvent.query.with_entities(PayrollEvent.recorded_at, PayrollEvent.summary_json)
+        .filter(
+            PayrollEvent.class_id == class_id,
+            PayrollEvent.target_seat_id == seat_id,
+            PayrollEvent.payroll_event_type == "payroll",
+            PayrollEvent.recorded_at <= as_of_utc,
+        )
+        .all()
     )
-    intervals = _pair_active_intervals(
-        canonical_rows,
-        start_boundary=last_payroll_time,
-        end_boundary=now_evaluation.canonical_now_utc,
+    paid_through = max((ensure_utc(e.recorded_at) for e in payroll_events), default=None)
+    legacy_times = [
+        ensure_utc(e.recorded_at)
+        for e in payroll_events
+        if (e.summary_json or {}).get("settlement_rule") != CLOSED_SESSION_SETTLEMENT_RULE
+    ]
+
+    payable = []
+    for start, end in closed:
+        if paid_through is not None and end <= paid_through:
+            continue
+        legacy = _legacy_paid_through(legacy_times, end)
+        if legacy is not None and legacy > start:
+            start = legacy
+        if end > start:
+            payable.append((start, end))
+
+    open_intervals = []
+    if in_progress is not None:
+        start, end = in_progress
+        legacy = _legacy_paid_through(legacy_times, end)
+        if legacy is not None and legacy > start:
+            start = legacy
+        if end > start:
+            open_intervals.append((start, end))
+
+    return SeatPayrollAttendance(
+        payable_seconds=_elapsed_seconds(ctx, payable),
+        in_progress_seconds=_elapsed_seconds(ctx, open_intervals),
     )
-    return _elapsed_seconds(ctx, intervals)
+
+
+def calculate_unpaid_attendance_seconds(seat_id: int, class_id: str, *, ctx):
+    """Everything not yet paid: closed unpaid work plus the open session."""
+    return calculate_seat_payroll_attendance(seat_id, class_id, ctx=ctx).unpaid_seconds
+
+
+def calculate_payable_attendance_seconds(seat_id: int, class_id: str, *, ctx, as_of_utc=None):
+    """Closed unpaid work only: what a payroll run at ``as_of_utc`` settles."""
+    return calculate_seat_payroll_attendance(
+        seat_id, class_id, ctx=ctx, as_of_utc=as_of_utc
+    ).payable_seconds
 
 
 def calculate_worked_attendance_seconds_for_date(seat_id: int, class_id: str, evaluation_date, *, ctx):
@@ -262,7 +409,7 @@ def is_done_for_day(seat_id: int, class_id: str, *, ctx) -> bool:
     return rows is not None
 
 
-def get_class_attendance_status(student, *, class_id: str, payroll_anchor_utc=None, ctx=None):
+def get_class_attendance_status(student, *, class_id: str, ctx=None):
     """Return PROD attendance facts for one canonical class scope."""
     if not class_id:
         raise ValueError("get_class_attendance_status requires class_id.")
@@ -290,12 +437,7 @@ def get_class_attendance_status(student, *, class_id: str, payroll_anchor_utc=No
     is_active = bool(latest and latest.status == "active")
 
     done = is_done_for_day(seat.id, class_id, ctx=ctx)
-    duration = calculate_unpaid_attendance_seconds(
-        seat.id,
-        class_id,
-        payroll_anchor_utc,
-        ctx=ctx,
-    )
+    duration = calculate_unpaid_attendance_seconds(seat.id, class_id, ctx=ctx)
     # "Time Today" must be the day-bounded worked figure, not the unbounded
     # unpaid-since-payroll duration (which can span days if payroll has not run).
     duration_today = calculate_worked_attendance_seconds_today(

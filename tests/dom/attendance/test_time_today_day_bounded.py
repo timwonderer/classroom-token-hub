@@ -8,8 +8,8 @@ report — even though only minutes had elapsed today.
 
 `calculate_worked_attendance_seconds_today` and the `duration_today` key on
 `get_class_attendance_status` must count only the current evaluation day, clipped
-at the canonical now, while the legacy `duration` (used for pay) still spans the
-whole unpaid window.
+at the canonical now, while `duration` is the unpaid figure, which ends a session
+at the end of the day it began.
 """
 
 from __future__ import annotations
@@ -43,8 +43,8 @@ def _student_ctx(classroom, student) -> CanonicalContext:
 def test_time_today_excludes_time_before_today(client):
     """An active session started 3h before today's start counts only today.
 
-    unpaid-since-payroll (anchor=None) spans the whole open interval, but
-    duration_today counts only from the class-local day start to now.
+    duration_today counts only from the class-local day start to now; the unpaid
+    duration counts the session up to the end of the day it began.
     """
     app = client.application
     classroom = initialize("chemistry_p1", app)
@@ -70,7 +70,7 @@ def test_time_today_excludes_time_before_today(client):
         )
 
         status = get_class_attendance_status(
-            student, class_id=classroom.class_id, payroll_anchor_utc=None, ctx=ctx
+            student, class_id=classroom.class_id, ctx=ctx
         )
 
         seconds_since_day_start = int((now - day_start_utc).total_seconds())
@@ -78,10 +78,9 @@ def test_time_today_excludes_time_before_today(client):
         # duration_today counts only today's slice (day_start -> now), not the
         # 3h that elapsed yesterday.
         assert status["duration_today"] <= seconds_since_day_start + 2
-        # The legacy unpaid figure includes the pre-today portion, so it must be
-        # strictly larger (by ~3h) than the day-bounded figure.
-        assert status["duration"] > status["duration_today"]
-        assert status["duration"] - status["duration_today"] >= 3 * 3600 - 5
+        # The unpaid figure follows DOM-PROD-001 §VI.1: the session ended at the
+        # end of the day it began, so exactly the 3h before today's start is owed.
+        assert status["duration"] == 3 * 3600
 
         # The standalone helper agrees with the status dict.
         assert (
