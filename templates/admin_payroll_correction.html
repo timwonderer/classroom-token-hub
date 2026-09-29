@@ -1,0 +1,69 @@
+{% extends "layout_admin.html" %}
+{% set page_title = "Payroll Correction" %}
+{% block title %}Payroll Correction{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-header cth-section-header">
+      <h2 class="h5 mb-0"><span class="material-symbols-outlined align-middle me-2" aria-hidden="true">fact_check</span>Payroll correction</h2>
+    </div>
+    <div class="card-body">
+      <p>Classroom Token Hub identified unpaid work caused by the Sep. 28 payroll issue. The amounts below were calculated from the affected attendance and payroll records.</p>
+      <p>Review the proposed corrections before approving them. You may exclude a student if you need to review their record first. Correction amounts cannot be edited.</p>
+      <p class="mb-0">Approving authorizes Classroom Token Hub to post the selected corrections. Your teacher account will be recorded as the approving actor, and each entry will identify the payment as a system-calculated payroll correction.</p>
+    </div>
+  </div>
+
+  <div class="card shadow-sm border-0">
+    <div class="card-header cth-section-header">
+      <h2 class="h5 mb-0"><span class="material-symbols-outlined align-middle me-2" aria-hidden="true">group</span>Students affected in {{ view.class_label }}</h2>
+    </div>
+    <div class="card-body">
+      {% if not view.rows %}
+      <p class="mb-0">No student in this class needs a correction.</p>
+      {% else %}
+      <form method="post" action="{{ url_for('admin.payroll_correction') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="table-responsive">
+          <table class="table table-striped align-middle">
+            <caption class="visually-hidden">Proposed payroll corrections</caption>
+            <thead>
+              <tr>
+                <th scope="col">Approve</th>
+                <th scope="col">Student</th>
+                <th scope="col">Unpaid time</th>
+                <th scope="col">Correction</th>
+                <th scope="col">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in view.rows %}
+              <tr>
+                <td>
+                  {% if row.approvable %}
+                  <input class="form-check-input" type="checkbox" name="seat_ids" value="{{ row.seat_id }}" id="correction-{{ row.seat_id }}" checked aria-label="Approve correction for {{ row.student_name }}">
+                  {% else %}
+                  <span class="text-muted" aria-hidden="true">—</span>
+                  {% endif %}
+                </td>
+                <td>{% if row.approvable %}<label for="correction-{{ row.seat_id }}" class="mb-0">{{ row.student_name }}</label>{% else %}{{ row.student_name }}{% endif %}</td>
+                <td>{{ row.display_unpaid_time }}</td>
+                <td>{{ row.display_amount }}</td>
+                <td>{{ row.display_status }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if view.has_approvable %}
+        <p>Total proposed: <strong>{{ view.display_proposed_total }}</strong></p>
+        <button type="submit" class="btn btn-primary">Approve selected corrections</button>
+        {% endif %}
+      </form>
+      {% endif %}
+      <p class="text-muted small mt-3 mb-0">This review is open until {{ view.display_expires_on }}. After that, use Manual Payment for any remaining adjustment.</p>
+    </div>
+  </div>
+</div>
+{% endblock %}
