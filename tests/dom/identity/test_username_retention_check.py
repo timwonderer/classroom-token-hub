@@ -397,7 +397,7 @@ def test_setup_http_responses_do_not_cache_the_username(client, claiming):
     for path in ('/student/setup-pin-passphrase', '/student/verify-username'):
         response = client.get(path)
         assert 'no-store' in response.cache_control
-        assert response.headers['Referrer-Policy'] == 'no-referrer'
+        assert response.headers['Referrer-Policy'] == 'same-origin'
     assert client.get('/student/login').headers['Referrer-Policy'] == 'strict-origin-when-cross-origin'
 
 
@@ -427,3 +427,46 @@ def test_feat_rechecks_consumed_proof_before_activation(client, claiming, monkey
     response = _finish(client)
     assert response.status_code == 302
     assert not _seat_claimed(claiming['seat_id'])
+
+
+def test_https_csrf_protected_verification_and_completion(client, claiming, monkeypatch):
+    """Exercise both production HTTPS POSTs with CSRF and strict referrer checks."""
+    from app import app
+    monkeypatch.setitem(app.config, 'WTF_CSRF_ENABLED', True)
+    monkeypatch.setitem(app.config, 'WTF_CSRF_SSL_STRICT', True)
+    origin = 'https://localhost'
+    page = client.get('/student/setup-pin-passphrase', base_url=origin)
+    assert page.headers['Referrer-Policy'] == 'same-origin'
+    html = BeautifulSoup(page.data, 'html.parser')
+    token = html.select_one('[name="retention_page_token"]')['value']
+    csrf = html.select_one('[name="csrf_token"]')['value']
+    checked = client.post('/student/verify-username', base_url=origin,
+        headers={'Referer': origin + '/student/setup-pin-passphrase'}, data={
+            'csrf_token': csrf, 'retention_page_token': token,
+            'saved_username': claiming['username']})
+    assert checked.status_code == 200
+    assert b'Username saved and checked' in checked.data
+    csrf = BeautifulSoup(checked.data, 'html.parser').select_one('[name="csrf_token"]')['value']
+    finished = client.post('/student/setup-pin-passphrase', base_url=origin,
+        headers={'Referer': origin + '/student/verify-username'}, data={
+            'csrf_token': csrf, 'retention_page_token': token,
+            'pin': '4826', 'confirm_pin': '4826',
+            'passphrase': PASSPHRASE, 'confirm_passphrase': PASSPHRASE})
+    assert finished.status_code == 302 and finished.location.endswith('/student/setup-complete')
+    assert _seat_claimed(claiming['seat_id'])
+
+
+@pytest.mark.parametrize('referrer', [None, 'https://untrusted.example/'])
+def test_https_verification_still_rejects_missing_or_foreign_referrer(client, claiming, monkeypatch, referrer):
+    """The policy repair must preserve strict HTTPS CSRF rejection."""
+    from app import app
+    monkeypatch.setitem(app.config, 'WTF_CSRF_ENABLED', True)
+    monkeypatch.setitem(app.config, 'WTF_CSRF_SSL_STRICT', True)
+    html = BeautifulSoup(client.get('/student/setup-pin-passphrase', base_url='https://localhost').data, 'html.parser')
+    response = client.post('/student/verify-username', base_url='https://localhost',
+        headers={'Referer': referrer} if referrer else {}, data={
+            'csrf_token': html.select_one('[name="csrf_token"]')['value'],
+            'retention_page_token': html.select_one('[name="retention_page_token"]')['value'],
+            'saved_username': claiming['username']})
+    assert response.status_code == 400
+    assert not _record(client)['verified_page']
