@@ -16,7 +16,7 @@ related:
 
 Your teacher has already put your name on a roster. Setting up is not creating an account from nothing — it is finding the one waiting for you and locking it with credentials only you know.
 
-It takes four screens, and one of them shows you something you will never be shown again. Read that part carefully.
+It takes four screens, and one of them asks you to save your username and type it back. Read that part carefully.
 
 ## Step-by-step instructions
 
@@ -33,14 +33,18 @@ You get a **Theme** prompt and enter one word that fits it. The word must be let
 
 The app builds your username by putting two of its own words around yours and adding two characters on the end, so the result looks something like `silver-otter-canyon4B`. You pick one piece of it; the rest is what keeps your username unique.
 
-### 3. Set Your PIN and Passphrase
+### 3. Save Your Username, Then Set Your PIN and Passphrase
 
-Your finished username appears at the top of this page. **This is the only time it is ever shown.** Write it down.
+Your finished username appears at the top of this page. **Classroom Token Hub does not keep a readable copy of it, so your teacher cannot look it up for you.** Save it somewhere you will still have next month. **Copy username** puts it on your clipboard if you want to paste it into a note.
 
-1. Tick **I have written down my username and I know it won't be shown to me again.** The submit button stays disabled until you do.
-2. Set a **PIN** — 4 to 6 digits. This is what you type for clock actions, transfers between your own accounts, and hall passes.
-3. Set a **Passphrase** — at least four words, with symbols and numbers. Aim for easy to remember, hard to guess. This is your recovery credential, and it is also how you verify your teacher's identity if they ever lose their own account.
-4. Submit.
+1. Select **I've saved my username**. The username disappears and a box asks you to **Enter your saved username**.
+2. Type it from the copy you saved, exactly as written — capital letters count. Pasting is turned off in this box, because the point is to show you can find your username without this page.
+   - If it doesn't match, check your saved copy and try again as many times as you need. Your username stays hidden until you select **Show my username again**.
+   - **Show my username again** closes the box without checking, if you want another look first.
+   - If you use assistive technology that can only enter text by pasting, open **Can't type in this box?** and turn pasting back on.
+3. Once your username matches, set a **PIN** — 4 to 6 digits. This is what you type for clock actions, transfers between your own accounts, and hall passes.
+4. Set a **Passphrase** — at least four words, with symbols and numbers. Aim for easy to remember, hard to guess. This is your recovery credential, and it is also how you verify your teacher's identity if they ever lose their own account.
+5. Submit.
 
 A confirmation screen greets you by name. Select **Thanks, Let's Go!** to reach your dashboard.
 
@@ -51,7 +55,7 @@ Enter your **Username** and **Passphrase** on the student sign-in page. That is 
 ## Important notes
 
 > [!CAUTION]
-> **The username is shown once and never again.** Not by the app, not by your teacher. Losing it means going through account recovery. Write it somewhere you will still have next month.
+> **Once setup is finished, your username is never shown again.** Not by the app, not by your teacher. Losing it means going through account recovery. Save it somewhere you will still have next month.
 
 > [!IMPORTANT]
 > **Your name has to match the roster.** If the app cannot find you, spelling is usually the reason. Ask your teacher what they typed — nicknames and missing hyphens are the usual culprits.

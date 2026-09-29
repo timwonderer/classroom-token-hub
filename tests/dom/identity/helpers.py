@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from bs4 import BeautifulSoup
+
 from flask.testing import FlaskClient
 
 
@@ -62,6 +64,21 @@ def student_create_username(client: FlaskClient, write_in_word: str, *, follow_r
     )
 
 
+def student_verify_saved_username(client: FlaskClient, typed: str | None = None, *, as_json: bool = False):
+    """Type a saved value from a setup page, preserving that page's token."""
+    page = BeautifulSoup(client.get('/student/setup-pin-passphrase').data, 'html.parser')
+    token = page.select_one('[name="retention_page_token"]')
+    client.retention_page_token = token['value'] if token else ''
+    if typed is None:
+        shown = page.select_one('[data-generated-username]')
+        typed = shown.get_text(strip=True) if shown else ''
+    headers = {"Accept": "application/json"} if as_json else {}
+    return client.post("/student/verify-username", data={
+        "saved_username": typed,
+        "retention_page_token": client.retention_page_token,
+    }, headers=headers)
+
+
 def student_setup_pin_passphrase(
     client: FlaskClient,
     *,
@@ -70,10 +87,16 @@ def student_setup_pin_passphrase(
     passphrase: str,
     confirm_passphrase: str,
     follow_redirects: bool = True,
+    verify_username: bool = True,
 ):
+    """Finish setup. By default first passes the username retention check, as a
+    student must; pass ``verify_username=False`` to submit without it."""
+    if verify_username:
+        student_verify_saved_username(client)
     return client.post(
         "/student/setup-pin-passphrase",
         data={
+            "retention_page_token": getattr(client, "retention_page_token", ""),
             "pin": pin,
             "confirm_pin": confirm_pin,
             "passphrase": passphrase,
@@ -187,3 +210,21 @@ def api_get_attendance_history(client: FlaskClient):
 
 def student_help_support(client: FlaskClient, *, follow_redirects: bool = True):
     return client.get("/student/help-support", follow_redirects=follow_redirects)
+
+
+def prepared_credential_attempt(*, username, seat_id=None, user_id=None, authorization=None):
+    """Prepare the real server proof when a test exercises the FEAT directly."""
+    from app import db
+    from app.models import Seat, User
+    from app.services import student_setup
+    seat = db.session.get(Seat, seat_id) if seat_id is not None else None
+    user = db.session.get(User, user_id) if user_id is not None else None
+    if seat is None and user is None:
+        return {'setup_token': 'missing-setup-token-0000000000000000', 'setup_generation': ''}
+    owner, binding = student_setup.scope(seat, user, recovery_authorization=authorization)
+    token = student_setup.begin(owner, binding)
+    student_setup.generate(token, binding, lambda: username)
+    page = 'test-page-token-0123456789012345'
+    student_setup.verify(token, binding, page, username)
+    taken = student_setup.take_verified(token, binding, page)
+    return {'setup_token': token, 'setup_generation': taken['generation']}

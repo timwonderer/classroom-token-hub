@@ -951,7 +951,8 @@ def create_app():
 
         # Referrer Policy
         # Only send full URL to same origin, origin only to other HTTPS sites
-        response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+        # Sensitive flows may set a stricter route-specific policy.
+        response.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
 
         # Content Security Policy (CSP)
         # Restricts resource loading to prevent XSS attacks

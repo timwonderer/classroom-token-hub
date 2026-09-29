@@ -37,6 +37,8 @@ def issue_student_recovery_code(user_id: int) -> str | None:
             .with_for_update().one_or_none())
     if user is None:
         return None
+    from app.services.student_setup import forget_owner
+    forget_owner(f'user:{user.id}')
     code = _generate_reset_code()
     now = utc_now()
     user.recovery_setup_nonce_hash = None

@@ -1431,6 +1431,19 @@ The prior designation is treated as normative debt exposed by review, not as pre
 remains `FEAT-IDEN-007`, which composes the plain `_destroy_class_scope_rows` command rather than
 entering `FEAT-CLASS-006` — a FEAT never executes another FEAT (INV-ARC-000 §VIII.2).
 
+### NC-IDEN-001-1 — Student onboarding username cookie (implementation resolved)
+
+The username-retention branch removes the readable `generated_username` cookie
+and cookie-held proof. FEAT-IDEN-002 / SPEC-IDEN-001 use a fixed-expiry,
+memory-only server store. The cookie privacy test is no longer marked xfail.
+No username staging table or migration is introduced.
+
+**Deployment prerequisite:** provision and verify the dedicated non-persistent
+Redis service in `infra/student-setup/README.md`, including disabled disk
+persistence, replication, swap, core dumps and command capture. Repository tests
+do not certify that production satisfies these settings. No production change
+was made as part of this implementation.
+
 ### Frozen migration baseline — replace the live-ORM bootstrap (post-launch, architectural)
 
 *Historical, before 2026-09-28:* `0001_bootstrap` built the baseline by calling `metadata.create_all` against **today's** ORM

@@ -23,7 +23,7 @@ from bs4 import BeautifulSoup
 from flask import render_template
 
 from app import app as flask_app
-from app.forms import StudentCreateUsernameForm, StudentPinPassphraseForm
+from app.forms import StudentCreateUsernameForm, StudentPinPassphraseForm, StudentVerifySavedUsernameForm
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -201,7 +201,18 @@ def _route_map(client) -> dict:
         "templates/student_pin_setup.html": lambda: _render_direct(
             "student_pin_setup.html",
             username="example-student",
-            context_builder=lambda: {"form": StudentPinPassphraseForm()},
+            username_verified=False,
+            retention_page_token="accessibility-test-page-token",
+            context_builder=lambda: {
+                "form": StudentPinPassphraseForm(),
+                "verify_form": StudentVerifySavedUsernameForm(),
+            },
+        ),
+        "templates/student_verify_username.html": lambda: _render_direct(
+            "student_verify_username.html",
+            retention_page_token="accessibility-test-page-token",
+            error_message="That doesn't match your username. Check the copy you saved and try again.",
+            context_builder=lambda: {"verify_form": StudentVerifySavedUsernameForm()},
         ),
     }
 

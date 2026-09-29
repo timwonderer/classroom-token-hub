@@ -48,6 +48,8 @@ def account_lookup():
             flash("Security verification failed. Please complete the check and try again.", "error")
             return redirect(url_for('recovery.account_lookup'))
 
+        from app.services import student_setup
+        student_setup.client()  # Refuse a known outage before consuming the recovery code.
         from app.feats.identity_feat import validate_recovery_code
 
         result = validate_recovery_code(
@@ -70,13 +72,24 @@ def account_lookup():
             flash(result.error_message, "error")
             return redirect(url_for('recovery.account_lookup'))
 
+        from app.routes.student import _clear_username_retention_state, _begin_username_setup, _get_credential_setup_state
+        _clear_username_retention_state()
         # Set session for credential setup flow.
         session.pop('onboarding_seat_ref', None)
+        session.pop('onboarding_claim_generation', None)
         session.pop('generated_username', None)
+        session.pop('username_generation_id', None)
+        session.pop('username_retention_proof', None)
+        session.pop('username_retention_attempts', None)
+        session.pop('username_collision', None)
         session.pop('theme_prompt', None)
         session.pop('theme_slug', None)
         session['onboarding_user_ref'] = result.user_id
         session['recovery_setup_authorization'] = result.setup_authorization
+        _, user = _get_credential_setup_state()
+        if user is None:
+            return redirect(url_for('recovery.account_lookup'))
+        _begin_username_setup(None, user)
         session.permanent = False
         session.pop('recovery_student_ref', None)
 

@@ -274,11 +274,17 @@ def delete_orphaned_users(user_ids):
     if not orphan_ids:
         return []
 
+    # Serialize volatile setup creation with erasure of the owning principal.
+    User.query.filter(User.id.in_(orphan_ids)).order_by(User.id).with_for_update().all()
+
     # Only authentication-owned artifacts depend on the detached principal.
     RecoveryRequest.query.filter(
         RecoveryRequest.user_id.in_(orphan_ids)
     ).delete(synchronize_session=False)
 
+    from app.services.student_setup import forget_owner
+    for uid in orphan_ids:
+        forget_owner(f'user:{uid}')
     User.query.filter(User.id.in_(orphan_ids)).delete(synchronize_session=False)
     return orphan_ids
 
@@ -304,6 +310,8 @@ def remove_student_from_teacher_scope(seat_id, user_id):
     _clear_support_transaction_refs(tx_ids)
     _delete_student_scoped_rows(student_user_id, entitlement_ids, issue_ids, tx_ids,
                                seat_ids, seat_ids_for_student=[seat_id], scoped_class_id=seat.class_id)
+    from app.services.student_setup import forget_owner
+    forget_owner(f'seat:{seat.id}')
     db.session.delete(seat)
     db.session.flush()
     return delete_user_if_orphaned(student_user_id) if student_user_id else False

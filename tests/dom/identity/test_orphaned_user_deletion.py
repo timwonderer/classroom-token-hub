@@ -107,6 +107,13 @@ def test_B3__class_destruction_deletes_principals_it_orphans(client, app):
     assert student_user_ids
     assert all(db.session.get(User, uid) is not None for uid in student_user_ids)
 
+    from app.services import student_setup
+    staged = []
+    for owner in (f'seat:{classroom.students[0].seat.id}', f'user:{student_user_ids[0]}'):
+        token = student_setup.begin(owner, 'deletion-test')
+        student_setup.generate(token, 'deletion-test', lambda: 'saved-test-username')
+        staged.append(token)
+
     resp = admin_delete_class(
         client, **valid_destruction_gate(_class_delete_phrase(class_id))
     )
@@ -114,6 +121,8 @@ def test_B3__class_destruction_deletes_principals_it_orphans(client, app):
 
     db.session.expire_all()
     assert db.session.get(ClassEconomy, class_id) is None
+    for token in staged:
+        assert student_setup.client().get(student_setup._key(token)) is None
     for uid in student_user_ids:
         assert db.session.get(User, uid) is None, f"user {uid} outlived its last seat"
 

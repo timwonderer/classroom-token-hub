@@ -1,0 +1,56 @@
+{% from "macros/auth_brand.html" import auth_brand %}
+{% import 'macros/cards.html' as cards %}
+{#- The username retention check as its own page, for browsers where the modal cannot run. The setup page normally runs
+    the same form in a modal; this page never shows the username. -#}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enter Your Saved Username - Classroom Token Hub</title>
+    <meta name="theme-color" content="slateblue">
+    <link rel="manifest" href="{{ static_url('manifest.json') }}">
+    <link rel="apple-touch-icon" href="{{ static_url('images/icon-192.png') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}">
+    <link href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}" rel="stylesheet">
+    <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
+    <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
+</head>
+
+<body class="student-shell auth-page">
+    <main id="main-content" aria-labelledby="verify-username-heading">
+    <div class="auth-container">
+        {{ auth_brand() }}
+        <div class="auth-body">
+            <div class="mb-3">
+                <small class="text-muted">STUDENT SETUP</small>
+                <h1 id="verify-username-heading" class="h3 fw-bold text-primary">Enter your saved username</h1>
+            </div>
+
+            <p>Type the username you just saved. This makes sure you'll be able to find it the next time you sign in.</p>
+
+            {% if error_message %}
+            {% call cards.alert_card('danger', 'Check your saved copy', icon='error', id='retention-check-error', role='alert', body_class='mb-3', attrs='tabindex="-1"') %}
+                <p class="mb-0">{{ error_message }}</p>
+            {% endcall %}
+            {% endif %}
+
+            {% include 'components/username_retention_check_form.html' %}
+
+            <a href="{{ url_for('student.setup_pin_passphrase') }}" class="btn btn-link w-100 mt-2">Show my username again</a>
+        </div>
+    </div>
+
+    <script src="{{ static_url('js/username_retention_check.js') }}"></script>
+    <script>
+        // Put focus where the student needs to act: the error when there is one.
+        (function () {
+            const error = document.getElementById('retention-check-error');
+            (error || document.getElementById('saved-username')).focus();
+        })();
+    </script>
+    </main>
+</body>
+
+</html>
