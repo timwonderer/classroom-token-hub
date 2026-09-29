@@ -1,0 +1,8 @@
+{# Shown while the active class has a payroll correction awaiting its teacher (incident PROD-PAY-001). #}
+{% import 'macros/cards.html' as cards %}
+{% if payroll_correction_pending %}
+{% call cards.alert_card('warning', 'Payroll correction needs your review', icon='fact_check', body_class='mb-4', role='status') %}
+<p class="mb-2">A payroll issue on Sep 28 left some students' work time unpaid. Classroom Token Hub has calculated the missing pay for your review.</p>
+<a class="btn btn-sm btn-dark" href="{{ url_for('admin.payroll_correction') }}">Review payroll correction</a>
+{% endcall %}
+{% endif %}

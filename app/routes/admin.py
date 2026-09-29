@@ -206,6 +206,16 @@ from app.feats.identity_feat import remove_pending_student_seat
 from app.feats.prod import record_attendance_session, record_payroll_event, record_payroll_reversal
 from app.feats.complete_payroll_cycle import complete_payroll_cycle
 from app.services.payroll.settlement import NoPayableAttendanceError
+from app.services.payroll.corrections import (
+    CORRECTED,
+    NEEDS_REVIEW,
+    PROD_PAY_001,
+    PROPOSED,
+    approve_class_corrections,
+    build_class_correction_proposal,
+    class_has_pending_correction,
+    incident_is_open,
+)
 from app.services.payroll.cycle_completion import get_completed_cycle_window
 from app.feats.direct_entitlement_grant_feat import execute_direct_grant, execute_hall_pass_adjustment
 # execute_insurance_claim_resolution removed — insurance_claim_feat.py deleted; insurance feature broken pending DOM-OBL-001 migration
@@ -2549,6 +2559,7 @@ def dashboard():
         # Lookup table (v2: keyed by seat_id → IdentityProfile)
         seat_profiles=seat_profiles,
         show_insurance_tier_prompt=show_insurance_tier_prompt,
+        payroll_correction_pending=class_has_pending_correction(active_class_id),
         current_page="dashboard"
     )
 
@@ -7312,6 +7323,88 @@ def _run_payroll():
         return redirect(url_for('admin.dashboard'))
 
 
+def _format_unpaid_time(seconds: int) -> str:
+    minutes = max(0, int(seconds)) // 60
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours}h {minutes}m" if hours else f"{minutes} min"
+
+
+def _build_payroll_correction_view(proposal, class_label: str) -> dict:
+    """Pre-formatted view of a class's correction proposal for the review page."""
+    rows = []
+    for row in proposal.rows:
+        if row.status == CORRECTED:
+            local_date = _class_local_date_of(row.corrected_at)
+            status = f"Paid {local_date.strftime('%b %d')}" if local_date else "Paid"
+        elif row.status == NEEDS_REVIEW:
+            status = "Needs review: records do not match what was paid; use Manual Payment if pay is owed"
+        else:
+            status = "Proposed"
+        rows.append({
+            "seat_id": row.seat_id,
+            "student_name": row.student_name,
+            "display_unpaid_time": _format_unpaid_time(row.unpaid_seconds),
+            "display_amount": f"${row.amount:.2f}",
+            "display_status": status,
+            "approvable": row.status == PROPOSED,
+        })
+    return {
+        "class_label": class_label,
+        "rows": rows,
+        "has_approvable": any(row["approvable"] for row in rows),
+        "display_proposed_total": f"${proposal.proposed_total:.2f}",
+        "display_expires_on": proposal.incident.expires_on_label,
+    }
+
+
+@admin_bp.route('/payroll/correction', methods=['GET', 'POST'])
+@admin_required
+def payroll_correction():
+    """Teacher review of the one-time PROD-PAY-001 payroll correction.
+
+    GET is a pure read of the proposal. POST posts only what the teacher approves,
+    at amounts recomputed on the server; submitted amounts are never read.
+    """
+    if not incident_is_open(PROD_PAY_001):
+        abort(404)
+    selected_scope = _require_payroll_feature_scope_from_request()
+    class_id = selected_scope['class_id']
+    if not verify_teacher_owns_class(class_id, g.canonical_context.user_id):
+        abort(403)
+
+    if request.method == 'POST':
+        try:
+            seat_ids = {
+                int(value) for value in request.form.getlist('seat_ids') if str(value).isdigit()
+            }
+            if not seat_ids:
+                flash('Select at least one student to approve.', 'warning')
+                return redirect(url_for('admin.payroll_correction'))
+            paid = approve_class_corrections(ctx=g.canonical_context, seat_ids=seat_ids)
+            if paid:
+                flash(f'Payroll correction posted for {len(paid)} student(s).', 'success')
+            else:
+                flash('No correction was posted. The selected students may already be paid.', 'warning')
+        except HTTPException:
+            raise
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Payroll correction failed for class {class_id}: {e}")
+            flash('Error posting the payroll correction. Please reload and check who was paid before trying again.', 'error')
+        return redirect(url_for('admin.payroll_correction'))
+
+    class_row = get_class_economy(class_id)
+    class_label = (
+        (class_row.display_name or class_row.section or class_row.class_id) if class_row else class_id
+    )
+    view = _build_payroll_correction_view(build_class_correction_proposal(class_id), class_label)
+    return render_template(
+        'admin_payroll_correction.html',
+        view=view,
+        current_page="payroll",
+    )
+
+
 @admin_bp.route('/payroll')
 @admin_required
 def payroll():
@@ -7642,6 +7735,7 @@ def payroll():
         payroll_history=payroll_history,
         # CWI Configuration
         cwi_setting=cwi_setting,
+        payroll_correction_pending=class_has_pending_correction(selected_class_id),
         current_page="payroll",
         format_utc_iso=format_utc_iso,
         feature_options=feature_options,
