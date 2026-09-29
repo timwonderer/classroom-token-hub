@@ -3,7 +3,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| FEAT-IDEN-002 | 1.4 | 2026-09-15 | 1.3 | Normative | ACTIVE |
+| FEAT-IDEN-002 | 1.5 | 2026-09-29 | 1.4 | Normative | ACTIVE |
 
 ---
 
@@ -30,6 +30,8 @@ to initial claim, not recovery (DOM-IDEN-002 §IX; INV-ARC-019 §VI).
 ## II. Execution Context
 
 ### 1. Required Inputs
+
+* `setup_token` and `setup_generation`: opaque capability and generation of the consumed server-side retention proof. The FEAT MUST recheck its live completion record, scope, generation, and canonical username under the identity locks before mutation.
 
 * `user_id`: For recovery, the existing student User authorized by FEAT-IDEN-004; for initial claim, the claim flow supplies the identity context.
 * `seat_id`: Initial claim only. MUST be absent in recovery.
@@ -72,6 +74,30 @@ For initial claim, the FEAT MUST resolve:
 ## III. Orchestration Logic
 
 ### A. Verification Phase (Read-Only)
+
+#### Username retention prerequisite
+
+Before credential activation on either initial claim or recovery, the server MUST
+verify that the student reproduced the generated username after it was removed
+from the verification surface. An acknowledgment cannot satisfy this gate.
+`SPEC-IDEN-001_USERNAME_RETENTION_VERIFICATION` is incorporated for the interaction,
+canonical matching, session and page binding, privacy, accessibility accommodation,
+and required verification. A proof from another setup generation or page MUST NOT
+activate credentials. Normal authentication fields continue to permit paste.
+
+The server compares canonical username lookup digests using `SPEC-SEC-001` §V.2;
+case is significant. Security events and idempotency keys MUST contain neither
+raw usernames nor lookup digests (`INV-ARC-018` §V / `SPEC-SEC-001` §V.5).
+
+The temporary attempt is owned by Identity and memory-only under INV-ARC-018 §IX.
+A compare-and-set consumes the page proof and erases its username before activation.
+The volatile completion record retains only a lookup digest to bind the in-flight
+value; the FEAT rechecks it after acquiring the identity locks. Expired or replaced
+attempts cannot activate credentials, including after a lock wait;
+refused mutations may restore only the same, still-live attempt without extending
+its deadline. Successful activation erases all attempts for its Seat (claim) or
+User (recovery). Storage loss, expiry, unsafe configuration or scope mismatch
+fails closed. No migration, recoverable database field or cookie fallback is allowed.
 
 #### Step 1: Validate User State
 
@@ -125,8 +151,9 @@ All mutations in this section **MUST** occur within a single database transactio
 #### Step 1: Hash Credentials
 
 Perform credential hashing outside the transaction (one-time cost):
-- `username_hash = HASH_STRONG(username)` (one-way hash for uniqueness checking and lookup)
-- `username_lookup_hash = HASH_HMAC(username.lower(), secret)` (normalized for case-insensitive lookup)
+- `username_hash` and `username_lookup_hash` use the canonical salted verifier and
+  case-sensitive HMAC lookup encoding in incorporated `SPEC-SEC-001` §V.2.
+  Normalize with NFKC and trim; do not lowercase usernames.
 - `pin_hash = HASH_PASSWORD(pin)` (bcrypt with salt + pepper)
 - `passphrase_hash = HASH_PASSWORD(passphrase)` (bcrypt with salt + pepper)
 
@@ -153,7 +180,7 @@ The route handler SHALL clear session state used during onboarding:
 - Clear `onboarding_seat_ref`
 - Clear `onboarding_user_ref`
 - Clear `recovery_setup_authorization`
-- Clear `generated_username` (if used)
+- Erase the volatile setup attempt and clear `student_setup_token`; no readable username or proof is stored in the cookie
 - Clear `theme_prompt` and `theme_slug` (if used)
 
 **Note:** This is application-level housekeeping, not a database mutation.

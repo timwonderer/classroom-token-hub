@@ -23,14 +23,14 @@ application-wide value.
 
 SCOPE -- read before shortening anything here. This bounds *authenticated*
 sessions only. A session with no recognized role deliberately falls through to
-``PERMANENT_SESSION_LIFETIME``, because a pre-login session holds a CSRF token
-and flash messages and nothing else: the two session keys that carry personal
+``PERMANENT_SESSION_LIFETIME``. The two authenticated keys that carry personal
 data, ``display_metadata`` and ``teacher_display_name_cache``, are both written
-only after a canonical authenticated context exists. The generic
-permanent-session default is consequently *not* a PII-retention control, and the
-31-day value must not be "hardened" on the theory that it is one. Doing so would
-shorten the pre-login window that keeps a login form's CSRF token valid, in
-exchange for protecting data that window never holds.
+only after a canonical authenticated context exists.
+
+Student credential setup keeps only an opaque capability in this cookie. Its
+username and verification state live in the fixed-expiry, memory-only store
+owned by FEAT-IDEN-002 (SPEC-IDEN-001); cookie lifetime is not that store's TTL.
+
 """
 
 from __future__ import annotations

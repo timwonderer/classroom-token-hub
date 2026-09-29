@@ -18,7 +18,9 @@ def _unclaim(client, seat, **changes):
 
 
 def _complete(seat_id, generation, username='unclaim-new-account'):
-    return activate_student_credentials(seat_id=seat_id, user_id=None,
+    from tests.dom.identity.helpers import prepared_credential_attempt
+    return activate_student_credentials(**prepared_credential_attempt(seat_id=seat_id, username=username),
+        seat_id=seat_id, user_id=None,
         claim_generation=generation, username=username, pin='4826', passphrase='new-passphrase7',
         correlation_id='corr_unclaim_setup', idempotency_key=f'unclaim:setup:{username}')
 

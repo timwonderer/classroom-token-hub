@@ -79,6 +79,30 @@
             color: var(--accent-text-on-light);
             display: block;
         }
+
+        .username-badge-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .username-badge-content .username-value {
+            font-size: var(--text-lg);
+            overflow-wrap: anywhere;
+        }
+
+        /* The check covers the username entirely; the script also blanks it
+           while the dialog is open, so this is presentation, not the guarantee. */
+        #retention-check-dialog {
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: var(--space-6);
+            width: min(32rem, calc(100vw - var(--space-8)));
+            background-color: var(--surface);
+        }
+
+        #retention-check-dialog::backdrop {
+            background-color: var(--surface);
+        }
     </style>
 </head>
 
@@ -92,11 +116,28 @@
                 <h1 id="student-pin-heading" class="h3 fw-bold text-primary">Set Your PIN & Passphrase</h1>
             </div>
 
-            <div class="username-badge">
-                <span class="material-symbols-outlined" aria-hidden="true">person_check</span>
+            {% if not username_verified %}
+            <section class="mb-4" aria-labelledby="save-username-heading" data-username-save>
+                <h2 id="save-username-heading" class="h5 fw-bold">Save your username</h2>
+                <div class="username-badge mb-3">
+                    <span class="material-symbols-outlined" aria-hidden="true">person_check</span>
+                    <div class="username-badge-content">
+                        <strong class="username-value" data-generated-username>{{ username }}</strong>
+                        <small>You will need this username when you sign in.</small>
+                        <button type="button" class="btn btn-outline-primary btn-sm mt-2" data-copy-username>Copy username</button>
+                    </div>
+                </div>
+                <div id="copy-status" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
+                <p>Save it somewhere you can access later. Classroom Token Hub does not keep a readable copy of your username, so your teacher cannot look it up for you if you forget it.</p>
+                <a href="{{ url_for('student.verify_saved_username') }}" class="btn btn-primary w-100 btn-lg" role="button" data-open-retention-check>I've saved my username</a>
+            </section>
+            {% endif %}
+
+            <div class="username-badge" data-username-verified-note{% if not username_verified %} hidden{% endif %}>
+                <span class="material-symbols-outlined" aria-hidden="true">task_alt</span>
                 <div class="username-badge-content">
-                    <strong>{{ username }}</strong>
-                    <small>This is your unique username. Write it down before continuing.</small>
+                    <strong>Username saved and checked</strong>
+                    <small>Sign in with the username you saved. Now set your PIN and passphrase.</small>
                 </div>
             </div>
 
@@ -110,20 +151,14 @@
             {% endif %}
             {% endwith %}
 
-            <div class="form-check mb-4">
-                <input class="form-check-input" type="checkbox" value="" id="username-ack">
-                <label class="form-check-label" for="username-ack">
-                    I have written down my username and I know it won't be shown to me again.
-                </label>
-            </div>
-
-            <form method="POST" onsubmit="return validateForm()">
+            <form method="POST" action="{{ url_for('student.setup_pin_passphrase') }}" onsubmit="return validateForm()">
                 {% call cards.alert_card('danger', 'Check your PIN', icon='pin', id='pin-validation-feedback', role='alert', body_class='mb-3 d-none', attrs='aria-live="assertive" aria-atomic="true" tabindex="-1"') %}
                     <p class="mb-0" id="pin-validation-feedback-message"></p>
                 {% endcall %}
                 {{ form.hidden_tag() }}
+                <input type="hidden" name="retention_page_token" value="{{ retention_page_token }}">
 
-                <fieldset id="setup-fields" class="disabled-fields" disabled>
+                <fieldset id="setup-fields"{% if not username_verified %} class="disabled-fields" disabled{% endif %}>
                     <div class="form-group">
                         <label class="form-label text-secondary" for="pin">PIN</label>
                         {{ form.pin(class="form-control form-control-lg", id="pin", autocomplete="off", placeholder="4-6 digits", inputmode="numeric") }}
@@ -152,6 +187,19 @@
                 </fieldset>
             </form>
 
+            {% if not username_verified %}
+            <dialog id="retention-check-dialog" aria-labelledby="retention-check-heading" aria-describedby="retention-check-intro">
+                <h2 id="retention-check-heading" class="h4 fw-bold">Enter your saved username</h2>
+                <p id="retention-check-intro">Type the username you just saved. This makes sure you'll be able to find it the next time you sign in.</p>
+                {% call cards.alert_card('danger', 'Check your saved copy', icon='error', id='retention-check-result', role='alert', body_class='mb-3 d-none', attrs='tabindex="-1"') %}
+                    <p class="mb-0" id="retention-check-result-message"></p>
+                {% endcall %}
+                {% set error_message = None %}
+                {% include 'components/username_retention_check_form.html' %}
+                <button type="button" class="btn btn-link w-100 mt-2" data-show-username-again>Show my username again</button>
+            </dialog>
+            {% endif %}
+
             <div class="footer-links">
                 <a href="https://classroomtokenhub.com/privacy" class="me-3">Privacy</a>
                 <span class="text-secondary">•</span>
@@ -163,12 +211,12 @@
     </div>
 
     <script src="{{ url_for('static', filename='vendor/bootstrap/bootstrap.bundle.min.js') }}"></script>
+    <script src="{{ static_url('js/username_retention_check.js') }}"></script>
     <script>
         const passInput = document.getElementById('passphrase');
         const strengthBar = document.getElementById('strength-bar');
         const feedback = document.getElementById('strength-feedback');
         const submitBtn = document.getElementById('submit-button');
-        const ackCheckbox = document.getElementById('username-ack');
         const setupFields = document.getElementById('setup-fields');
 
         passInput.addEventListener('input', () => {
@@ -196,20 +244,11 @@
             submitBtn.disabled = score < 3;
         });
 
-        function updateAcknowledgementState() {
-            const acknowledged = ackCheckbox.checked;
-            setupFields.disabled = !acknowledged;
-            setupFields.classList.toggle('disabled-fields', !acknowledged);
-
-            if (!acknowledged) {
-                submitBtn.disabled = true;
-            } else {
-                passInput.dispatchEvent(new Event('input'));
-            }
+        // Until the username check passes the fields stay disabled; the
+        // retention script enables them and re-runs the strength check.
+        if (!setupFields.disabled) {
+            passInput.dispatchEvent(new Event('input'));
         }
-
-        ackCheckbox.addEventListener('change', updateAcknowledgementState);
-        updateAcknowledgementState();
 
         function validateForm() {
             const pin = document.getElementById('pin').value;

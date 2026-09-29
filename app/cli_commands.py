@@ -9,6 +9,7 @@ than only when a specific entrypoint module (e.g. ``wsgi.py``) is imported.
 import os
 import sys
 import time
+import uuid
 
 import click
 from flask.cli import with_appcontext
@@ -136,7 +137,8 @@ def create_sysadmin_command(username):
     # computes, so the created account authenticates immediately.
     _salt, username_hash, username_lookup_hash = build_hashed_username_fields(username)
     encrypted_totp_secret = encrypt_totp(totp_secret)
-    with FEATContext("FEAT-IDEN-001", idempotency_key=f"create-sysadmin:{username}"):
+    # Security events may contain neither raw lookup inputs nor lookup digests.
+    with FEATContext("FEAT-IDEN-001", idempotency_key=f"create-sysadmin:{uuid.uuid4().hex}"):
         user = User(
             user_role=UserRole.SYSADMIN,
             username_hash=username_hash,

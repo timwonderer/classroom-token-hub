@@ -66,7 +66,7 @@ def _destroy_class_scope_rows(*, class_id, canonical_context, **_ignored):
     # destruction is the authorized lifecycle exception for immutable history rows.
     db.session.execute(text("SET LOCAL cth.class_universe_destroying = 'on'"))
 
-    class_row = get_class_economy(class_id)
+    class_row = ClassEconomy.query.filter_by(class_id=class_id).with_for_update().one_or_none()
     if not class_row:
         return
 
@@ -96,6 +96,10 @@ def _destroy_class_scope_rows(*, class_id, canonical_context, **_ignored):
         )
         current_app.logger.critical("P0 INVARIANT VIOLATION: %s", message)
         raise InvariantViolation(message)
+
+    from app.services.student_setup import forget_owner
+    for (setup_seat_id,) in db.session.query(Seat.id).filter(Seat.class_id == class_id).all():
+        forget_owner(f'seat:{setup_seat_id}')
 
     scoped_student_ids = [
         sid for (sid,) in db.session.query(Seat.user_id)
