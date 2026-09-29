@@ -21,6 +21,7 @@ from app.models import AttendanceSession, PayrollEvent, PolicyVersion, Transacti
 from app.payroll import get_pay_rate_for_class
 from app.routes import admin as admin_routes
 from app.services.context_resolver import CanonicalContext
+from app.services.payroll import corrections as corrections_module
 from app.services.payroll.corrections import (
     CORRECTED,
     NEEDS_REVIEW,
@@ -262,3 +263,47 @@ def test_PROD_PAY_001__closed_incident_hides_the_review(client, monkeypatch):
     monkeypatch.setattr(admin_routes, "incident_is_open", lambda incident: False)
 
     assert client.get("/admin/payroll/correction").status_code == 404
+
+
+def test_PROD_PAY_001__overlapping_approvals_skip_the_student_already_paid(app, monkeypatch):
+    """Two approvals at once plan the same students; the later one skips, not fails."""
+    classroom = initialize("chemistry_p1", app)
+    cid = classroom.class_id
+    working, _finished = _incident(classroom)
+    second = classroom.students[2].seat.id
+    policy_id = PolicyVersion.query.filter_by(class_id=cid, is_active=True).one().id
+    _attendance(classroom, second, ("active", _at(0)), ("inactive", _at(50)))
+    _legacy_run(classroom, policy_id, second, _at(30), _pay_for(cid, 30))
+    _legacy_run(classroom, policy_id, second, _at(60), Decimal("0.00"))
+
+    # The other request planned both students before this one posted either.
+    stale_plan = corrections_module.plan_class_corrections(
+        ctx=_teacher_ctx(classroom), seat_ids={working, second}
+    )
+    assert _approve(classroom, {working}) == [working]
+    monkeypatch.setattr(admin_routes, "plan_class_corrections", lambda **_kwargs: stale_plan)
+
+    assert _approve(classroom, {working, second}) == [second]
+    assert sorted(e.target_seat_id for e in _corrections(cid)) == sorted([working, second])
+
+
+def test_PROD_PAY_001__banner_check_is_cached_until_an_approval(app, monkeypatch):
+    classroom = initialize("chemistry_p1", app)
+    cid = classroom.class_id
+    working, _finished = _incident(classroom)
+    builds = []
+    real_build = corrections_module.build_class_correction_proposal
+
+    def counting_build(class_id, **kwargs):
+        builds.append(class_id)
+        return real_build(class_id, **kwargs)
+
+    monkeypatch.setattr(corrections_module, "build_class_correction_proposal", counting_build)
+
+    assert corrections_module.class_has_pending_correction(cid) is True
+    assert corrections_module.class_has_pending_correction(cid) is True
+    assert len(builds) == 1
+
+    _approve(classroom, {working})
+
+    assert corrections_module.class_has_pending_correction(cid) is False

@@ -18,6 +18,7 @@ supplies one.
 
 from __future__ import annotations
 
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -285,19 +286,41 @@ def build_class_correction_proposal(
     return ClassCorrectionProposal(incident=incident, class_id=class_id, rows=tuple(rows))
 
 
+# The banner check replays the whole proposal, which is too costly to repeat on
+# every dashboard and payroll view. Its inputs are frozen (earlier-rule events,
+# their ledger rows, append-only attendance) except the corrections themselves, so
+# the result is cached under the class's correction count: an approval changes the
+# count and every worker recomputes. The TTL bounds anything else, such as a
+# changed pay rate.
+_PENDING_TTL_SECONDS = 300
+_pending_cache: dict[tuple[str, str, int], tuple[float, bool]] = {}
+
+
 def class_has_pending_correction(class_id: str, *, incident: PayrollIncident = PROD_PAY_001) -> bool:
     """Whether the class still has a correction awaiting its teacher. Pure read."""
     if not class_id or not incident_is_open(incident):
         return False
     legacy_exists = any(
         _is_legacy(event)
-        for event in PayrollEvent.query.filter_by(
+        for event in PayrollEvent.query.with_entities(PayrollEvent.summary_json).filter_by(
             class_id=class_id, payroll_event_type="payroll"
         ).all()
     )
     if not legacy_exists:
         return False
-    return bool(build_class_correction_proposal(class_id, incident=incident).proposed)
+    corrections = PayrollEvent.query.filter(
+        PayrollEvent.class_id == class_id,
+        PayrollEvent.payroll_event_type == "manual_credit",
+        PayrollEvent.idempotency_key.like(f"payroll-correction:{incident.incident_id}:{class_id}:%"),
+    ).count()
+    key = (incident.incident_id, class_id, corrections)
+    now = time.monotonic()
+    cached = _pending_cache.get(key)
+    if cached is not None and now - cached[0] < _PENDING_TTL_SECONDS:
+        return cached[1]
+    pending = bool(build_class_correction_proposal(class_id, incident=incident).proposed)
+    _pending_cache[key] = (now, pending)
+    return pending
 
 
 @dataclass(frozen=True)

@@ -7364,20 +7364,31 @@ def _post_payroll_corrections(ctx, seat_ids: set[int]) -> list[int]:
     a manual credit whose actor is the approving teacher's seat and whose mechanism
     is SYSTEM. Each commits on its own, so a retry after a partial failure pays
     only who is still owed. Returns the seats paid.
+
+    Two approvals running at once plan the same students. The second one to post a
+    student hits the replay guard: that student is already corrected, so it is
+    skipped and the rest of this approval continues. Any other error propagates.
     """
     paid = []
     for posting in plan_class_corrections(ctx=ctx, seat_ids=seat_ids):
-        record_payroll_event(
-            ctx=ctx,
-            target_seat_id=posting.seat_id,
-            payroll_event_type="manual_credit",
-            correlation_id=posting.correlation_id,
-            idempotency_key=posting.idempotency_key,
-            policy_version_id=posting.policy_version_id,
-            mechanism="SYSTEM",
-            summary_json=posting.summary_json,
-            amount=posting.amount,
-        )
+        try:
+            record_payroll_event(
+                ctx=ctx,
+                target_seat_id=posting.seat_id,
+                payroll_event_type="manual_credit",
+                correlation_id=posting.correlation_id,
+                idempotency_key=posting.idempotency_key,
+                policy_version_id=posting.policy_version_id,
+                mechanism="SYSTEM",
+                summary_json=posting.summary_json,
+                amount=posting.amount,
+            )
+        except IntegrityError as exc:
+            constraint = getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
+            if constraint != "uq_payroll_event_replay_guard":
+                raise
+            db.session.rollback()
+            continue
         paid.append(posting.seat_id)
     return paid
 
