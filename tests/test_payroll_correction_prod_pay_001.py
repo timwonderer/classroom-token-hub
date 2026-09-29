@@ -26,7 +26,6 @@ from app.services.payroll.corrections import (
     NEEDS_REVIEW,
     PROD_PAY_001,
     PROPOSED,
-    approve_class_corrections,
     build_class_correction_proposal,
     correction_key,
 )
@@ -121,6 +120,11 @@ def _incident(classroom, *, underpaid_first_run: Decimal | None = None):
     return working, finished
 
 
+def _approve(classroom, seat_ids: set[int]) -> list[int]:
+    """The route's approval step: plan in the service, post through FEAT-PROD-003."""
+    return admin_routes._post_payroll_corrections(_teacher_ctx(classroom), seat_ids)
+
+
 def _corrections(cid: str):
     return PayrollEvent.query.filter_by(class_id=cid, payroll_event_type="manual_credit").all()
 
@@ -144,7 +148,7 @@ def test_PROD_PAY_001__approval_posts_a_system_calculated_credit_under_the_teach
     cid = classroom.class_id
     working, finished = _incident(classroom)
 
-    paid = approve_class_corrections(ctx=_teacher_ctx(classroom), seat_ids={working, finished})
+    paid = _approve(classroom, {working, finished})
 
     assert paid == [working]
     (event,) = _corrections(cid)
@@ -163,7 +167,7 @@ def test_PROD_PAY_001__approval_posts_a_system_calculated_credit_under_the_teach
     # The student now shows as corrected, and a second approval pays nobody.
     (row,) = build_class_correction_proposal(cid).rows
     assert row.status == CORRECTED
-    assert approve_class_corrections(ctx=_teacher_ctx(classroom), seat_ids={working}) == []
+    assert _approve(classroom, {working}) == []
     assert len(_corrections(cid)) == 1
 
 
@@ -171,7 +175,7 @@ def test_PROD_PAY_001__an_excluded_student_is_not_paid(app):
     classroom = initialize("chemistry_p1", app)
     working, _finished = _incident(classroom)
 
-    assert approve_class_corrections(ctx=_teacher_ctx(classroom), seat_ids=set()) == []
+    assert _approve(classroom, set()) == []
     assert _corrections(classroom.class_id) == []
     (row,) = build_class_correction_proposal(classroom.class_id).rows
     assert row.seat_id == working and row.status == PROPOSED
@@ -186,7 +190,7 @@ def test_PROD_PAY_001__a_replay_that_disagrees_with_the_ledger_needs_review(app)
     (row,) = build_class_correction_proposal(cid).rows
     assert row.seat_id == working
     assert row.status == NEEDS_REVIEW
-    assert approve_class_corrections(ctx=_teacher_ctx(classroom), seat_ids={working}) == []
+    assert _approve(classroom, {working}) == []
     assert _corrections(cid) == []
 
 

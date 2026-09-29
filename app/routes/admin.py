@@ -211,8 +211,8 @@ from app.services.payroll.corrections import (
     NEEDS_REVIEW,
     PROD_PAY_001,
     PROPOSED,
-    approve_class_corrections,
     build_class_correction_proposal,
+    plan_class_corrections,
     class_has_pending_correction,
     incident_is_open,
 )
@@ -7357,6 +7357,31 @@ def _build_payroll_correction_view(proposal, class_label: str) -> dict:
     }
 
 
+def _post_payroll_corrections(ctx, seat_ids: set[int]) -> list[int]:
+    """Post the teacher-approved PROD-PAY-001 corrections through FEAT-PROD-003.
+
+    The service plans (recomputed amounts, deterministic keys); this posts each as
+    a manual credit whose actor is the approving teacher's seat and whose mechanism
+    is SYSTEM. Each commits on its own, so a retry after a partial failure pays
+    only who is still owed. Returns the seats paid.
+    """
+    paid = []
+    for posting in plan_class_corrections(ctx=ctx, seat_ids=seat_ids):
+        record_payroll_event(
+            ctx=ctx,
+            target_seat_id=posting.seat_id,
+            payroll_event_type="manual_credit",
+            correlation_id=posting.correlation_id,
+            idempotency_key=posting.idempotency_key,
+            policy_version_id=posting.policy_version_id,
+            mechanism="SYSTEM",
+            summary_json=posting.summary_json,
+            amount=posting.amount,
+        )
+        paid.append(posting.seat_id)
+    return paid
+
+
 @admin_bp.route('/payroll/correction', methods=['GET', 'POST'])
 @admin_required
 def payroll_correction():
@@ -7380,7 +7405,7 @@ def payroll_correction():
             if not seat_ids:
                 flash('Select at least one student to approve.', 'warning')
                 return redirect(url_for('admin.payroll_correction'))
-            paid = approve_class_corrections(ctx=g.canonical_context, seat_ids=seat_ids)
+            paid = _post_payroll_corrections(g.canonical_context, seat_ids)
             if paid:
                 flash(f'Payroll correction posted for {len(paid)} student(s).', 'success')
             else:

@@ -24,7 +24,6 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from types import SimpleNamespace
 
-from app.feats.prod import record_payroll_event
 from app.models import AttendanceSession, PayrollEvent, Seat, Transaction
 from app.payroll import get_pay_rate_for_class
 from app.services.attendance_service import (
@@ -301,36 +300,46 @@ def class_has_pending_correction(class_id: str, *, incident: PayrollIncident = P
     return bool(build_class_correction_proposal(class_id, incident=incident).proposed)
 
 
-def approve_class_corrections(
+@dataclass(frozen=True)
+class CorrectionPosting:
+    """One approved correction, ready for FEAT-PROD-003 to post as a manual credit."""
+
+    seat_id: int
+    amount: Decimal
+    idempotency_key: str
+    correlation_id: str
+    policy_version_id: int
+    summary_json: dict
+
+
+def plan_class_corrections(
     *,
     ctx: CanonicalContext,
     seat_ids: set[int],
     incident: PayrollIncident = PROD_PAY_001,
-) -> list[int]:
-    """Post the approved corrections for the teacher's class. Returns seats paid.
+) -> list[CorrectionPosting]:
+    """The corrections to post for the teacher's approval. Pure read.
 
-    Recomputes the proposal; only seats it still proposes are paid, at the amount
-    it computes now. Each seat's credit commits on its own under a deterministic
-    key, so a retry after a partial failure pays only who is still owed.
+    Recomputes the proposal; only seats it still proposes are included, at the
+    amount it computes now. The caller posts each through FEAT-PROD-003; this
+    service never writes (INV-ARC-021: services do not invoke FEATs).
     """
     if not incident_is_open(incident):
         raise ValueError(f"Incident {incident.incident_id} is closed.")
     class_id = ctx.class_id
     proposal = build_class_correction_proposal(class_id, incident=incident)
     policy_version_id = _active_payroll_policy_version_id(class_id)
-    paid: list[int] = []
+    postings: list[CorrectionPosting] = []
     for row in proposal.proposed:
         if row.seat_id not in seat_ids:
             continue
         key = correction_key(incident, class_id, row.seat_id)
-        record_payroll_event(
-            ctx=ctx,
-            target_seat_id=row.seat_id,
-            payroll_event_type="manual_credit",
-            correlation_id=correction_correlation_id(key),
+        postings.append(CorrectionPosting(
+            seat_id=row.seat_id,
+            amount=row.amount,
             idempotency_key=key,
+            correlation_id=correction_correlation_id(key),
             policy_version_id=policy_version_id,
-            mechanism="SYSTEM",
             summary_json={
                 "source": "payroll_correction",
                 "incident": incident.incident_id,
@@ -340,7 +349,5 @@ def approve_class_corrections(
                 "corrected_payroll_event_ids": list(row.corrected_event_ids),
                 "approved_by_seat_id": ctx.seat_id,
             },
-            amount=row.amount,
-        )
-        paid.append(row.seat_id)
-    return paid
+        ))
+    return postings
