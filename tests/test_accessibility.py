@@ -260,3 +260,20 @@ def test_the_default_corpus_is_not_empty():
     produced zero cases, and the file reported green having audited nothing.
     """
     assert len(_default_corpus()) >= 15
+
+
+@pytest.mark.parametrize('verified', [False, True])
+def test_setup_form_ids_remain_unique_with_csrf_enabled(monkeypatch, verified):
+    """CSRF-protected setup and retention forms must not share a DOM ID."""
+    monkeypatch.setitem(flask_app.config, 'WTF_CSRF_ENABLED', True)
+    html = _render_direct(
+        'student_pin_setup.html', username=None if verified else 'example-student',
+        username_verified=verified, retention_page_token='accessibility-test-page-token',
+        context_builder=lambda: {'form': StudentPinPassphraseForm(),
+                                 'verify_form': StudentVerifySavedUsernameForm()},
+    )
+    _audit_html_accessibility(html)
+    tokens = BeautifulSoup(html, 'html.parser').select('input[name="csrf_token"]')
+    assert len(tokens) == (1 if verified else 2)
+    assert all(token.get('value') for token in tokens)
+    assert len({token['id'] for token in tokens}) == len(tokens)

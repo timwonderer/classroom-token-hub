@@ -7,7 +7,9 @@
     Expects: verify_form (StudentVerifySavedUsernameForm), error_message (or None).
 -#}
 <form method="POST" action="{{ url_for('student.verify_saved_username') }}" data-retention-check-form>
-    {{ verify_form.hidden_tag() }}
+    {% if verify_form.csrf_token is defined %}
+    {{ verify_form.csrf_token(id="retention-csrf-token") }}
+    {% endif %}
     <input type="hidden" name="retention_page_token" value="{{ retention_page_token }}">
     <input type="hidden" name="paste_accommodation" value="0" data-paste-accommodation>
     <fieldset disabled data-retention-controls>

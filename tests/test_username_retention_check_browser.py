@@ -26,6 +26,7 @@ try:
 except ImportError:  # pragma: no cover - environment-dependent dependency
     sync_playwright = None
 
+from bs4 import BeautifulSoup
 from flask import render_template
 
 from app import app as flask_app
@@ -56,7 +57,10 @@ def _setup_page_html():
         flask_app.config["WTF_CSRF_ENABLED"] = previous
     assert 'name="csrf_token"' in html
     # Drop external scripts; inline the one under test and stub the strength meter.
-    html = re.sub(r'<script[^>]*\bsrc="[^"]*"[^>]*></script>', "", html)
+    document = BeautifulSoup(html, 'html.parser')
+    for script in document.select('script[src]'):
+        script.decompose()
+    html = str(document)
     return html.replace(
         "<script>",
         "<script>window.zxcvbn = () => ({score: 4});</script>"
@@ -262,7 +266,10 @@ def test_missing_script_keeps_standalone_verification_disabled(page):
         html = render_template('student_verify_username.html',
             verify_form=StudentVerifySavedUsernameForm(),
             retention_page_token='browser-test-page-token', error_message=None)
-    html = re.sub(r'<script[^>]*>[\s\S]*?</script>', '', html)
+    document = BeautifulSoup(html, 'html.parser')
+    for script in document.find_all('script'):
+        script.decompose()
+    html = str(document)
     page.route(f'{ORIGIN}/student/verify-username',
         lambda route: route.fulfill(content_type='text/html', body=html))
     page.goto(f'{ORIGIN}/student/verify-username')
