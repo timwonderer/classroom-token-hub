@@ -205,6 +205,7 @@ from app.utils.seat_scope import seat_scoped_filter, transaction_scope_filter
 from app.feats.identity_feat import remove_pending_student_seat
 from app.feats.prod import record_attendance_session, record_payroll_event, record_payroll_reversal
 from app.feats.complete_payroll_cycle import complete_payroll_cycle
+from app.services.payroll.settlement import NoPayableAttendanceError
 from app.services.payroll.cycle_completion import get_completed_cycle_window
 from app.feats.direct_entitlement_grant_feat import execute_direct_grant, execute_hall_pass_adjustment
 # execute_insurance_claim_resolution removed — insurance_claim_feat.py deleted; insurance feature broken pending DOM-OBL-001 migration
@@ -215,14 +216,12 @@ from app.feats.transaction_void_feat import (
     execute_void_transactions,
 )
 from app.hash_utils import hash_username_lookup
-from app.attendance import (
-    get_last_payroll_time,
-    calculate_unpaid_attendance_seconds,
-    get_batch_attendance_events,
-    calculate_seconds_in_memory,
-)
 from app.services.ledger_balance_query_service import get_batch_balances_by_class_seat
-from app.services.attendance_service import calculate_unpaid_attendance_seconds as calculate_prod_attendance_seconds
+from app.payroll import get_pay_rate_for_class
+from app.services.attendance_service import (
+    calculate_payable_attendance_seconds,
+    calculate_unpaid_attendance_seconds,
+)
 from app.services.hall_pass_request_queue import list_pending_hall_pass_requests_for_class
 from app.services import access_policy_service, obligations_service
 from app.services.entitlement_service import get_hall_pass_balance, grant_hall_passes, remove_hall_passes
@@ -915,20 +914,9 @@ def _build_payroll_preview_state(students):
         if not economy:
             continue
 
-        setting = (
-            PayrollSettings.query
-            .filter(
-                PayrollSettings.class_id == class_id,
-                PayrollSettings.availability_state == 'IN_USE',
-            )
-            .order_by(PayrollSettings.updated_at.desc(), PayrollSettings.id.desc())
-            .first()
-        )
-        rate_per_second = (
-            Decimal(str(setting.pay_rate)) / Decimal("60")
-            if setting and setting.pay_rate is not None
-            else Decimal("0.25") / Decimal("60")
-        )
+        # The run prices through the same reader (FEAT-PROD-003), so the estimate
+        # and the payout cannot price the same work differently.
+        rate_per_second = get_pay_rate_for_class(class_id=class_id)
 
         seat_ids = [seat.id for seat in class_students]
         latest_payroll_events = (
@@ -957,12 +945,9 @@ def _build_payroll_preview_state(students):
 
         summary = {}
         for seat in class_students:
-            last_payroll = latest_payroll_by_seat_id.get(seat.id)
-            attendance_seconds = calculate_prod_attendance_seconds(
-                seat.id,
-                class_id,
-                last_payroll.recorded_at if last_payroll else None,
-                ctx=g.canonical_context,
+            # What a run now would pay: closed, unpaid sessions only.
+            attendance_seconds = calculate_payable_attendance_seconds(
+                seat.id, class_id, ctx=g.canonical_context
             )
             summary[seat.id] = (Decimal(attendance_seconds) * rate_per_second).quantize(Decimal("0.01"))
 
@@ -7302,6 +7287,16 @@ def _run_payroll():
 
         flash(success_message, "admin_success")
         return redirect(url_for('admin.payroll'))
+    except NoPayableAttendanceError:
+        db.session.rollback()
+        message = (
+            "Nothing to pay yet. Payroll pays finished work sessions only; "
+            "students still working are paid by the first run after they clock out."
+        )
+        if is_json:
+            return jsonify(status="error", message=message), 409
+        flash(message, "warning")
+        return redirect(url_for('admin.payroll'))
     except (SQLAlchemyError, Exception) as e:
         db.session.rollback()
         is_db_error = isinstance(e, SQLAlchemyError)
@@ -7391,7 +7386,6 @@ def payroll():
     payroll_preview = _build_payroll_preview_state(students)
     payroll_summary = payroll_preview["total_summary"]
     payroll_updated_at = payroll_preview["latest_updated_at"]
-    payroll_anchor_by_class_id = payroll_preview["anchor_by_class_id"]
     payroll_summary_by_class_id = payroll_preview["summary_by_class_id"]
 
     recent_payroll_events = (
@@ -7467,43 +7461,24 @@ def payroll():
                 last_payroll_map[seat.id] = row["timestamp"]
         earnings_map[seat.id] += Decimal(row["amount"] or 0)
 
-    events_map_by_class_id = {}
-    seat_ids_by_class_id = defaultdict(set)
     seat_id_by_user_class = {}
     for seat_row in seats:
         if seat_row.class_id not in my_class_ids:
             continue
-        seat_ids_by_class_id[seat_row.class_id].add(seat_row.id)
         seat_id_by_user_class.setdefault(
             (seat_row.user_id, seat_row.class_id),
             seat_row.id,
         )
 
-    for class_id in my_class_ids:
-        anchor = payroll_anchor_by_class_id.get(class_id)
-        if not class_id:
-            events_map_by_class_id[class_id] = {}
-            continue
-        scoped_seat_ids = sorted(seat_ids_by_class_id.get(class_id, set()))
-        events_map_by_class_id[class_id] = get_batch_attendance_events(
-            scoped_seat_ids,
-            anchor,
-            allowed_class_ids=[class_id],
-        )
-
     for student in students:
-        # Calculate unpaid minutes in the canonical class scope.
+        # Everything not yet paid, including a session still in progress.
         unpaid_seconds = 0
         class_id = student.class_id
         seat_id = seat_id_by_user_class.get((student.user_id, class_id))
         if seat_id:
-            key = (seat_id, class_id)
-            events = events_map_by_class_id.get(class_id, {}).get(key, [])
-            if events:
-                unpaid_seconds = calculate_seconds_in_memory(
-                    events,
-                    payroll_anchor_by_class_id.get(class_id),
-                )
+            unpaid_seconds = calculate_unpaid_attendance_seconds(
+                seat_id, class_id, ctx=g.canonical_context
+            )
 
         unpaid_minutes = unpaid_seconds / 60.0
         estimated_payout = payroll_summary.get(student.id, 0)

@@ -28,7 +28,7 @@ from app.models import (
     # StoreItemBlock removed — store_item_blocks unauthorized; use store_item_visibility (DOM-STORE-001)
     StoreItemVisibility, User,
     _quantize_currency,
-    ClassEconomy, Seat, IdentityProfile, PayrollEvent,
+    ClassEconomy, Seat, IdentityProfile,
     PendingAction,
 )
 from app.auth import (
@@ -1695,21 +1695,7 @@ def handle_tap():
         .first()
     )
     is_active = bool(refreshed_event and refreshed_event.status == "active")
-    last_payroll = (
-        PayrollEvent.query.filter_by(
-            target_seat_id=seat_id,
-            class_id=class_id,
-            payroll_event_type="payroll",
-        )
-        .order_by(PayrollEvent.recorded_at.desc(), PayrollEvent.id.desc())
-        .first()
-    )
-    duration = calculate_unpaid_attendance_seconds(
-        seat_id,
-        class_id,
-        last_payroll.recorded_at if last_payroll else None,
-        ctx=context,
-    )
+    duration = calculate_unpaid_attendance_seconds(seat_id, class_id, ctx=context)
 
     rate_per_second = get_pay_rate_for_class(class_id=class_id)
     projected_pay = duration * rate_per_second

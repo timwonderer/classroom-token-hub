@@ -34,6 +34,7 @@ from app.models import (
     PolicyVersion,
     Seat,
 )
+from app.services.attendance_service import calculate_payable_attendance_seconds
 from app.services.context_resolver import CanonicalContext
 from app.services.identity_service import resolve_teacher_seat_for_class
 
@@ -41,6 +42,16 @@ from app.services.identity_service import resolve_teacher_seat_for_class
 class ClassSettlementError(Exception):
     """Raised when class-wide settlement cannot proceed lawfully (e.g. no active
     payroll policy, or no resolvable teacher actor for the class)."""
+
+
+class NoPayableAttendanceError(ClassSettlementError):
+    """Raised when no seat in the class has a closed, unpaid session.
+
+    A payroll run settles closed work only (DOM-PROD-001 §VI.3), so a run with
+    nothing closed and unpaid has nothing to settle and is refused rather than
+    recorded as an empty cycle. Students still working are paid by the first run
+    after they clock out.
+    """
 
 
 class ClassSettlementResult(NamedTuple):
@@ -84,9 +95,8 @@ def _build_teacher_context(class_id: str) -> CanonicalContext:
 def _eligible_seat_ids(class_id: str) -> list[int]:
     """Claimed student seats with attendance activity (current PROD doctrine).
 
-    Payroll pays for attended time over each seat's ``[last payroll, boundary]``
-    window. Attendance rows alone do NOT establish eligibility: unclaim preserves
-    the seat's productivity facts (DOM-IDEN-005 §Explicit Unclaim, INV-ARC-019),
+    Payroll pays each seat's sessions that closed after its last payroll event.
+    Attendance rows alone do NOT establish eligibility: unclaim preserves the seat's productivity facts (DOM-IDEN-005 §Explicit Unclaim, INV-ARC-019),
     so a seat that attended and was later unclaimed keeps that history while
     holding no principal — and only a bound seat participates lawfully
     (DOM-IDEN-005 §VII-VIII). Claim state is therefore filtered explicitly here,
@@ -163,6 +173,12 @@ def settle_class_payroll_cycle(
         if _already_settled(class_id, seat_id, payroll_cycle_id):
             skipped.append(seat_id)
             continue
+        # A seat with no closed, unpaid session has nothing to settle and gets no
+        # payroll event: an open session is paid once it closes.
+        if calculate_payable_attendance_seconds(
+            seat_id, class_id, ctx=ctx, as_of_utc=boundary_utc
+        ) <= 0:
+            continue
         result = record_payroll_event_command(
             ctx=ctx,
             target_seat_id=seat_id,
@@ -180,6 +196,11 @@ def settle_class_payroll_cycle(
         )
         settled.append(seat_id)
         events.append(result.payroll_event)
+
+    if not settled and not skipped:
+        raise NoPayableAttendanceError(
+            f"No seat in class {class_id} has closed, unpaid attendance to settle."
+        )
 
     return ClassSettlementResult(
         payroll_cycle_id=payroll_cycle_id,

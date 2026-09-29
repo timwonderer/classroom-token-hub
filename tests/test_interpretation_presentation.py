@@ -194,6 +194,11 @@ def test_presents_a_real_materialized_cycle_record(app):
             target_seat_id=student.seat.id, class_id=cid,
             actor_seat_id=classroom.teacher_seat_id, reason_code="start_work",
             timestamp=now - timedelta(minutes=30)))
+        # Closed: payroll settles finished sessions only (DOM-PROD-001 §VI.3).
+        db.session.add(AttendanceSession(
+            target_seat_id=student.seat.id, class_id=cid,
+            actor_seat_id=classroom.teacher_seat_id, status="inactive",
+            reason_code="done_for_day", timestamp=now - timedelta(minutes=10)))
         db.session.flush()
 
     ctx = CanonicalContext(user_id=classroom.teacher_user_id, class_id=cid,

@@ -18,7 +18,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from app.feats.prod import _calculate_attendance_seconds_since, record_attendance_session
+from app.feats.prod import record_attendance_session
+from app.services.attendance_service import calculate_seat_payroll_attendance
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
     canonical_temporal_resolver,
@@ -57,13 +58,9 @@ def test_DOM_PROD_001__open_active_session_caps_at_end_of_day(client):
     # Payroll evaluates the NEXT day.
     current_time = datetime(2026, 8, 27, 18, 0, tzinfo=timezone.utc)
 
-    seconds = _calculate_attendance_seconds_since(
-        ctx=ctx,
-        seat_id=student.seat.id,
-        class_id=classroom.class_id,
-        since_utc=None,
-        current_time_utc=current_time,
-    )
+    seconds = calculate_seat_payroll_attendance(
+        student.seat.id, classroom.class_id, ctx=ctx, as_of_utc=current_time
+    ).payable_seconds
 
     # Expected: capped at end-of-day of the active entry's canonical class day,
     # derived through the same canonical resolver production uses.
@@ -139,14 +136,14 @@ def test_DOM_PROD_001__later_day_tap_in_closes_prior_session_at_its_own_day_end(
     assert close_ts < day2_active
 
     # Payroll evaluated on day 2 pays only day-1's bounded span, never overnight.
-    seconds = _calculate_attendance_seconds_since(
+    attendance = calculate_seat_payroll_attendance(
+        student.seat.id,
+        classroom.class_id,
         ctx=ctx,
-        seat_id=student.seat.id,
-        class_id=classroom.class_id,
-        since_utc=None,
-        current_time_utc=datetime(2026, 8, 27, 19, 0, tzinfo=timezone.utc),
+        as_of_utc=datetime(2026, 8, 27, 19, 0, tzinfo=timezone.utc),
     )
-    # Day 1 bounded span (18:00 UTC -> day1 end) + day 2 span (18:00 -> 19:00 UTC).
+    # Day 1 bounded span (18:00 UTC -> day1 end) is closed and payable; day 2's
+    # session (18:00 -> 19:00 UTC) is still open, so it is in progress, not payable.
     day1_expected = int((day1_bounds.boundary_end_utc - day1_active).total_seconds())
-    day2_expected = 3600
-    assert seconds == day1_expected + day2_expected
+    assert attendance.payable_seconds == day1_expected
+    assert attendance.in_progress_seconds == 3600
