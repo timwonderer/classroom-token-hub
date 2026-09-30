@@ -30,6 +30,7 @@ from app.feats.base import requires_feat_context
 from app.models import ClassEconomy, EconomicEngine, ClassFeature, Seat
 from app.services.context_resolver import CanonicalContext
 from app.services.class_configuration_query_service import (
+    economic_engine_effective_at,
     get_class_economy,
     get_economic_engine_by_version,
     get_economic_engine_history,
@@ -414,9 +415,13 @@ def _execute_evolve_economic_engine_impl(
             effective_at=effective_at_ts.isoformat() if hasattr(effective_at_ts, 'isoformat') else effective_at_ts,
         )
 
-    # Get current engine version (most recent first)
-    engine_history = get_economic_engine_history(class_id)
-    current_engine = engine_history[0] if engine_history else None
+    # The version the new one follows: the one that will be in force at its
+    # effective date, so a future-dated evolution carries forward the terms it
+    # will actually replace (DOM-CLASS-003 §VII).
+    current_engine = (
+        economic_engine_effective_at(class_id, effective_at_ts)
+        or (get_economic_engine_history(class_id) or [None])[0]
+    )
     if not current_engine:
         return EconomicEngineEvolutionResult(
             success=False,
@@ -447,6 +452,7 @@ def _execute_evolve_economic_engine_impl(
         class_id=class_id,
         previous_version_id=current_engine.economic_version_id,  # Link to previous version
         created_at=timestamp_utc,
+        effective_at=effective_at_ts,
         **carried_fields,
     )
     db.session.add(new_engine)

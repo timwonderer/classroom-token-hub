@@ -294,17 +294,15 @@ def get_class_feature_settings(
 def replace_enabled_class_features(class_id: str, enabled_features: set[str]) -> None:
     from app.extensions import db
     from app.models import ClassFeature, EconomicEngine
-    from sqlalchemy import desc
 
     valid_features = set(ClassFeature.feature_names())
     requested_features = {name for name in enabled_features if name in valid_features}
     # Payroll is mandatory in v2 class feature gating.
     requested_features.add("payroll")
 
-    # Get the current economic version for this class
-    latest_engine = EconomicEngine.query.filter_by(
-        class_id=class_id
-    ).order_by(desc(EconomicEngine.created_at)).first()
+    # Get the economic version in force for this class
+    from app.services.class_configuration_query_service import get_current_economic_engine
+    latest_engine = get_current_economic_engine(class_id)
 
     if not latest_engine:
         # Create default engine if missing
@@ -411,13 +409,10 @@ def get_active_policy_mode_for_class(class_id: Optional[str]) -> str:
     if not has_app_context() or not class_id:
         return POLICY_MODE_DEFAULT
 
-    from app.models import EconomicEngine
-    from sqlalchemy import desc
+    from app.services.class_configuration_query_service import get_current_economic_engine
 
-    # Get the most recent EconomicEngine version for this class
-    economic_engine = EconomicEngine.query.filter_by(
-        class_id=class_id
-    ).order_by(desc(EconomicEngine.created_at)).first()
+    # The EconomicEngine version in force for this class
+    economic_engine = get_current_economic_engine(class_id)
 
     if not economic_engine:
         return POLICY_MODE_DEFAULT

@@ -149,14 +149,62 @@ def get_effective_economic_engine(
     return db.session.get(EconomicEngine, class_feature.economic_version_id)
 
 
-def get_current_economic_engine(class_id: str) -> Optional[EconomicEngine]:
-    """Return the newest class Economic Engine snapshot."""
-    return (
-        EconomicEngine.query
-        .filter_by(class_id=class_id)
-        .order_by(EconomicEngine.created_at.desc(), EconomicEngine.economic_version_id.desc())
-        .first()
+def _engine_newest_first(query):
+    return query.order_by(
+        EconomicEngine.effective_at.desc(),
+        EconomicEngine.created_at.desc(),
+        EconomicEngine.economic_version_id.desc(),
     )
+
+
+def economic_engine_effective_at(class_id: str, instant: Optional[datetime]) -> Optional[EconomicEngine]:
+    """The Economic Engine version in force for ``class_id`` at ``instant``.
+
+    ``economic_engine`` is append-only with an effective date (DOM-CLASS-003
+    §VII): the version in force is the one with the greatest ``effective_at`` at
+    or before ``instant``, the latest ``created_at`` breaking a tie. A version
+    whose ``effective_at`` is still ahead is pending and governs nothing yet.
+    This is the one class-level engine resolver; readers ask it rather than
+    ordering the table themselves.
+    """
+    if not class_id:
+        return None
+    query_time = _resolve_query_time(instant)
+    return _engine_newest_first(
+        EconomicEngine.query.filter(
+            EconomicEngine.class_id == class_id,
+            EconomicEngine.effective_at <= query_time,
+        )
+    ).first()
+
+
+def get_current_economic_engine(class_id: str) -> Optional[EconomicEngine]:
+    """The Economic Engine version in force now."""
+    return economic_engine_effective_at(class_id, None)
+
+
+def pending_economic_engines(class_id: str, *, as_of: Optional[datetime] = None) -> list[EconomicEngine]:
+    """Engine versions recorded but not yet in force, soonest first.
+
+    For each future effective date only the version that will be in force at
+    that date is returned; a pending version superseded before its date stays
+    in history but is not a pending change.
+    """
+    if not class_id:
+        return []
+    query_time = _resolve_query_time(as_of)
+    rows = (
+        EconomicEngine.query.filter(
+            EconomicEngine.class_id == class_id,
+            EconomicEngine.effective_at > query_time,
+        )
+        .order_by(EconomicEngine.effective_at.asc(), EconomicEngine.created_at.desc())
+        .all()
+    )
+    winners: dict = {}
+    for row in rows:
+        winners.setdefault(row.effective_at, row)
+    return list(winners.values())
 
 
 def get_initial_economic_engine(class_id: str) -> Optional[EconomicEngine]:
@@ -211,18 +259,17 @@ def get_economic_engine_by_version(class_id: str, economic_version_id: str) -> O
 
 
 def get_economic_engine_history(class_id: str) -> list[EconomicEngine]:
-    """Get all EconomicEngine versions for a class in chronological order.
-
-    Ordered by created_at DESC (most recent first).
+    """Get all EconomicEngine versions for a class, newest effective first.
 
     Args:
         class_id: The class to retrieve history for (UUID)
 
     Returns:
-        List of EconomicEngine instances, ordered by creation time (may be empty)
+        List of EconomicEngine instances, newest effective first (may be empty)
 
     Note:
-        Use created_at (not effective_at, which does not exist on EconomicEngine).
+        Ordered by effective_at, then created_at — the same order the resolver
+        uses, so a pending version sorts ahead of the one in force.
         Traverse previous_version_id for audit lineage (INV-ARC-016).
 
     Example:
@@ -230,11 +277,7 @@ def get_economic_engine_history(class_id: str) -> list[EconomicEngine]:
         for engine in history:
             print(f"Version created at {engine.created_at}: mode={engine.economy_policy_mode}")
     """
-    return EconomicEngine.query.filter_by(
-        class_id=class_id
-    ).order_by(
-        EconomicEngine.created_at.desc()
-    ).all()
+    return _engine_newest_first(EconomicEngine.query.filter_by(class_id=class_id)).all()
 
 
 # ============================================================================
