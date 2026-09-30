@@ -10,7 +10,7 @@ from app.services.ledger_command_service import create_idempotent_transaction
 from app.services.ledger_posting_service import create_pending_transaction
 from app.services.ledger_transfer_service import create_transfer_pair
 from app.services.ledger_correction_service import reverse_transaction
-from app.services.ledger_interest_service import apply_monthly_savings_interest
+from app.services.ledger_interest_service import apply_savings_interest
 from app.services.ledger_fee_service import apply_overdraft_fee_if_needed
 from tests.helpers.classroom_initializer import (
     initialize as _initialize_classroom,
@@ -129,8 +129,8 @@ def compensate_ledger_posted_transaction(
     )
 
 
-def apply_ledger_monthly_savings_interest(seat, *, annual_rate: Decimal = Decimal("0.045")):
-    return apply_monthly_savings_interest(seat, annual_rate=annual_rate)
+def apply_ledger_savings_interest(seat, *, annual_rate: Decimal = Decimal("0.045")):
+    return apply_savings_interest(seat, annual_rate=annual_rate)
 
 
 def apply_ledger_overdraft_fee_if_needed(seat, *, force: bool = False, idempotency_key: str | None = None):
