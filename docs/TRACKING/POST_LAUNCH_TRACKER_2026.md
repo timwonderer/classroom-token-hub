@@ -116,7 +116,7 @@ Each item was verified on 2026-09-28 unless it says otherwise.
 
 ---
 
-## IV-B. Production walkthrough findings (2026-09-30)
+## IV-B. Production walkthrough findings (2026-09-29)
 
 Observed on production (`00166e56`) after two school days of real use. The database was queried in read-only
 transactions. The nginx and app logs and Loki were only read. Nothing on the host was changed. Each item was checked
@@ -132,7 +132,7 @@ against this tracker, the archived launch trackers and the live-test RESUME reco
   of each other.
   - Loki records seven `psycopg2.errors.DeadlockDetected` failures ("Settlement sweep failed for seat …", `:74`)
     on 2026-09-28 at 16:42, 17:42 and 22:42 UTC.
-  - Checked on 2026-09-30: every `ledger_balance_snapshot` reconciles with its posted transactions, and there are
+  - Checked on 2026-09-29: every `ledger_balance_snapshot` reconciles with its posted transactions, and there are
     no duplicate idempotency keys and no duplicate same-day interest postings.
   - **Harm has not been established either way.** Still open: whether interest can be computed on a posted base
     that the losing sweep failed to settle, and whether any historical posting was affected. Fix through a single
