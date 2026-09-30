@@ -76,42 +76,54 @@ wrap `werkzeug.security` so call sites don't bind to a specific KDF.
 ```python
 import pyotp
 
-# Generate secret for new user
-secret = pyotp.random_base32()
-user.totp_secret = secret
+from app.utils.encryption import encrypt_totp, decrypt_totp
 
-# Verify TOTP code
-totp = pyotp.TOTP(user.totp_secret)
+# Generate secret for new user; only the encrypted form is stored
+secret = pyotp.random_base32()
+user.totp_secret_encrypted = encrypt_totp(secret)
+
+# Verify TOTP code (as the admin and sysadmin login routes do)
+totp = pyotp.TOTP(decrypt_totp(user.totp_secret_encrypted))
 is_valid = totp.verify(user_provided_code, valid_window=1)
 ```
 
 **Security Requirements:**
-- TOTP secrets stored in database (encrypted at rest)
-- Valid window of 30 seconds
+- TOTP secrets stored in `users.totp_secret_encrypted` (Fernet, `ENCRYPTION_KEY`)
+- `valid_window=1`: one 30-second step either side of now
 - Backup recovery mechanism (student-verified codes)
 
 #### Session Management
 
+Do not write session keys by hand. `app/auth.py` owns them:
+
 ```python
-from flask import session
+from app.auth import (
+    establish_student_session, establish_teacher_session, establish_sysadmin_session,
+)
 
-# Set session variables
-session['user_id'] = user.id
-session['user_type'] = 'student'  # or 'admin' or 'sysadmin'
-
-# Always set session lifetime
-session.permanent = True
-app.permanent_session_lifetime = timedelta(hours=2)
+establish_student_session(user, class_id=class_id)  # user_id, class_id, role='student'
+establish_teacher_session(user)                     # user_id, role='admin'
+establish_sysadmin_session(user)                    # user_id, role='sysadmin'
 
 # Clear session on logout
 session.clear()
 ```
 
-**Security Requirements:**
-- Use `SESSION_TYPE = 'filesystem'` or Redis for production
-- Set `SESSION_COOKIE_SECURE = True` for HTTPS
-- Set `SESSION_COOKIE_HTTPONLY = True`
-- Set `SESSION_COOKIE_SAMESITE = 'Lax'`
+The canonical keys are `user_id`, `role` (`'student'` | `'admin'` | `'sysadmin'`) and, for
+students, `class_id`. Handlers read identity through `resolve_canonical_context()` /
+`g.canonical_context`, never from these keys directly.
+
+**Session lifetimes** are per role, not `permanent_session_lifetime`:
+`SESSION_TIMEOUT_MINUTES = 10` (students and teachers) and
+`SYSTEM_ADMIN_SESSION_TIMEOUT_MINUTES = 60` in `app/auth.py`, applied to the cookie by
+`RoleScopedSessionInterface` in `app/session_lifetime.py`. `PERMANENT_SESSION_LIFETIME`
+is deliberately left at Flask's default and does not bound authenticated cookies.
+
+**Security Requirements** (set in `create_app()` in `app/__init__.py`):
+- Signed-cookie sessions (`RoleScopedSessionInterface` subclasses Flask's `SecureCookieSessionInterface`); there is no server-side session store
+- `SESSION_COOKIE_SECURE` is true in production
+- `SESSION_COOKIE_HTTPONLY = True`
+- `SESSION_COOKIE_SAMESITE = 'Lax'`
 
 ---
 
@@ -164,44 +176,61 @@ display_name = profile.first_name
 
 #### Username Hashing
 
-**This is the only place `PEPPER_KEY` is used.** It is NOT involved in credential hashing.
+**`PEPPER_KEY` keys HMAC digests only.** It is NOT involved in credential hashing. Its
+users are the lookup digests below (`_lookup_digest()` in `app/hash_utils.py`), the salted
+`hash_hmac()` (claim credentials, name parts), and the teacher-recovery digests in
+`app/feats/teacher_recovery_feat.py`.
 
 Usernames are never stored in plaintext. There is no `users.username` column — the
-username exists only as an HMAC-SHA256 digest keyed by `PEPPER_KEY`. That digest is a
-**query key**: it must be reproducible from the typed username, so it is deliberately
-unsalted.
+username exists only as HMAC-SHA256 digests keyed by `PEPPER_KEY`:
+
+- `users.username_lookup_hash` — `hash_username_lookup()`. A **query key**: it must be
+  reproducible from the typed username, so it is deliberately unsalted.
+- `users.username_hash` — `hash_username(username, salt)`, a salted digest.
+
+Both are produced together by `build_hashed_username_fields()` in
+`app/utils/auth_username.py`:
 
 ```python
 from app.hash_utils import hash_username_lookup
+from app.utils.auth_username import build_hashed_username_fields
 
-# Write (app/feats/identity_feat.py:312-313)
-user.username_lookup_hash = hash_username_lookup(username)
-user.username_hash = hash_username_lookup(username)
+# Write (activate_student_credentials() in app/feats/identity_feat.py)
+_, user.username_hash, user.username_lookup_hash = build_hashed_username_fields(username)
 
-# Read (app/auth.py:291)
+# Read (find_canonical_user_by_auth_username() in app/auth.py)
 user = User.query.filter_by(
     username_lookup_hash=hash_username_lookup(normalized)
 ).first()
 ```
 
-Seat claim matching uses the same primitive over **names** rather than usernames, and
-the resulting hashes are stored on the seat, per INV-ARC-019 §VII ("Name-lookup hashes
-used during roster claim belong on the seat"):
+Seat claim matching uses class-scoped digests over **names**, stored on the seat per
+INV-ARC-019 §VII ("Name-lookup hashes used during roster claim belong on the seat").
+The class_id is part of the digest, so the same name hashes differently in every class:
 
 ```python
-# app/feats/identity_feat.py:222-223 → Seat.claim_first_name_hash / claim_last_name_hash
-claim_first_hash = hash_username_lookup(first_name.lower())
-claim_last_hash = hash_username_lookup(last_name.lower())
+from app.hash_utils import hash_claim_name, hash_roster_fingerprint
+
+# resolve_seat_claim() in app/feats/identity_feat.py
+# → Seat.claim_first_name_hash / Seat.claim_last_name_hash
+claim_first_hash = hash_claim_name(first_name, class_id=class_row.class_id, field="first")
+claim_last_hash = hash_claim_name(last_name, class_id=class_row.class_id, field="last")
 ```
+
+`hash_roster_fingerprint(class_id=..., first_name=..., last_name=...)` fills
+`Seat.roster_fingerprint` the same way. Normalization (NFKC, trim, names lowercased) is
+`normalize_lookup_text()`, per SPEC-SEC-001 §V.2 — do not pre-lowercase.
 
 **Use Cases:**
 - Username uniqueness and login lookup
-- Roster claim matching (seat-owned, `models.py:240-241`)
+- Roster claim matching (seat-owned: `Seat.claim_first_name_hash`, `Seat.claim_last_name_hash`, `Seat.roster_fingerprint`)
 
 **Consequence to understand before touching `PEPPER_KEY`:** because the digest is the
 only representation of the username, a new pepper cannot reproduce any existing
-lookup hash. Rotation is an identity-reset event, not a transparent re-key. See
-`docs/SECURITY/KEY_ROTATION.md`.
+lookup hash. Rotation is not a transparent re-key; it needs an approved per-field
+re-establishment strategy. See
+`docs/STANDARD_OPERATING_PROCEDURES/SECURITY/SOP-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_OPERATIONS.md`
+§V.2–§V.2a.
 
 ---
 
@@ -261,9 +290,12 @@ fetch('/api/endpoint', {
 **Configuration:**
 
 ```python
-# In app/__init__.py or config
-app.config['WTF_CSRF_ENABLED'] = True
-app.config['WTF_CSRF_SECRET_KEY'] = os.getenv('CSRF_SECRET_KEY')
+# In create_app() (app/__init__.py). Set only when present: a present-but-None
+# WTF_CSRF_SECRET_KEY shadows the SECRET_KEY fallback and raises
+# "CSRF is not configured."
+csrf_secret_key = os.getenv("CSRF_SECRET_KEY", "").strip() or None
+if csrf_secret_key:
+    app.config["WTF_CSRF_SECRET_KEY"] = csrf_secret_key
 ```
 
 **NEVER:**
@@ -279,6 +311,8 @@ app.config['WTF_CSRF_SECRET_KEY'] = os.getenv('CSRF_SECRET_KEY')
 
 ```python
 from wtforms.validators import DataRequired, Length, Email, ValidationError
+from app.hash_utils import hash_username_lookup
+from app.models import User
 
 class StudentForm(FlaskForm):
     username = StringField('Username', validators=[
@@ -292,7 +326,8 @@ class StudentForm(FlaskForm):
 
     # Custom validator
     def validate_username(self, field):
-        if Student.query.filter_by(username=field.data).first():
+        lookup = hash_username_lookup(field.data)
+        if User.query.filter_by(username_lookup_hash=lookup).first():
             raise ValidationError('Username already exists')
 ```
 
@@ -319,16 +354,16 @@ def sanitize_html(unsafe_html):
 
 ```python
 # ✅ CORRECT - Parameterized query via ORM
-student = Student.query.filter_by(username=user_input).first()
+seat = Seat.query.filter_by(public_id=user_input, class_id=class_id).one_or_none()
 
 # ✅ CORRECT - Parameterized query if raw SQL needed
 db.session.execute(
-    text("SELECT * FROM student WHERE username = :username"),
-    {"username": user_input}
+    text("SELECT id FROM seats WHERE public_id = :public_id AND class_id = :class_id"),
+    {"public_id": user_input, "class_id": class_id}
 )
 
 # ❌ NEVER DO THIS - Direct string interpolation
-db.session.execute(f"SELECT * FROM student WHERE username = '{user_input}'")
+db.session.execute(f"SELECT id FROM seats WHERE public_id = '{user_input}'")
 ```
 
 ---
@@ -337,62 +372,49 @@ db.session.execute(f"SELECT * FROM student WHERE username = '{user_input}'")
 
 #### Role-Based Access Control
 
+Use the decorators in `app/auth.py`; do not write new ones. Each resolves identity with
+`resolve_canonical_context()`, checks `actor_role`, stores the result in
+`g.canonical_context`, and enforces the role's idle timeout:
+
+| Decorator | Role | Context | On failure |
+|-----------|------|---------|------------|
+| `login_required` | `student` | `CanonicalContext` (class required) | redirect to `student.login` (JSON 401 under `/api/`) |
+| `admin_required` | `teacher` | `CanonicalContext`, or `BoundaryContext` on class-less endpoints only | redirect to `admin.login` (JSON 401 for background requests) |
+| `system_admin_required` | `sysadmin` | `BoundaryContext` (never class context) | redirect to `sysadmin.login` |
+
+The extinct session keys `admin_id`, `student_id` and `sysadmin_id` are read by nothing.
+
 ```python
-from flask import session, redirect, url_for
-from functools import wraps
+from flask import g
+from app.auth import admin_required
 
-def admin_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'admin_id' not in session:
-            return redirect(url_for('auth.admin_login'))
-        return f(*args, **kwargs)
-    return decorated_function
-
-def student_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'student_id' not in session:
-            return redirect(url_for('auth.student_login'))
-        return f(*args, **kwargs)
-    return decorated_function
-
-def sysadmin_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'sysadmin_id' not in session:
-            return redirect(url_for('system_admin.login'))
-        return f(*args, **kwargs)
-    return decorated_function
-
-# Usage
 @admin_bp.route('/dashboard')
 @admin_required
 def dashboard():
-    # Only accessible to logged-in admins
-    pass
+    class_id = g.canonical_context.class_id  # teacher's active class
+    ...
 ```
 
 #### Data Access Control
 
 ```python
-# ✅ CORRECT - Ensure user can only access their own data
+# ✅ CORRECT - Identity comes from canonical context, never from the request
 @student_bp.route('/balance')
-@student_required
+@login_required
 def view_balance():
-    student_id = session.get('student_id')
-    student = Student.query.get(student_id)
+    ctx = resolve_canonical_context()
+    checking = get_available_balance(ctx.seat_id, ctx.class_id, "checking")
 
     # Student can only see their own balance
-    return render_template('balance.html', student=student)
+    return render_template('balance.html', checking=checking)
 
 # ❌ WRONG - User could access other users' data
-@student_bp.route('/balance/<student_id>')
-@student_required
-def view_balance(student_id):
-    # No verification that logged-in student matches student_id
-    student = Student.query.get(student_id)
-    return render_template('balance.html', student=student)
+@student_bp.route('/balance/<int:seat_id>')
+@login_required
+def view_balance(seat_id):
+    # No verification that the logged-in student owns seat_id, and no class scope
+    seat = db.session.get(Seat, seat_id)
+    return render_template('balance.html', seat=seat)
 ```
 
 ---
@@ -407,7 +429,7 @@ def view_balance(student_id):
 # Encryption Keys
 SECRET_KEY=<64-character-random-string>
 ENCRYPTION_KEY=<32-byte-base64-key>
-PEPPER_KEY=<random-string-for-password-hashing>
+PEPPER_KEY=<random-string-for-keyed-lookup-HMACs>   # NOT used for passwords
 CSRF_SECRET_KEY=<random-string-for-csrf>
 
 # Database
@@ -461,28 +483,18 @@ DEBUG = os.getenv('FLASK_ENV') == 'development'
 
 **Purpose:** Prevent brute force attacks and DoS
 
+The limiter is created once in `app/extensions.py` (keyed by `get_real_ip_for_limiter`,
+Redis storage from `REDIS_URL`, default `500 per day` / `200 per hour`) and disabled in
+development unless `DEV_ENABLE_RATELIMIT` is set. Import it; do not construct another.
+
 ```python
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
+from app.extensions import limiter
 
-limiter = Limiter(
-    app,
-    key_func=get_remote_address,
-    storage_uri="redis://localhost:6379"
-)
-
-# Apply to login routes
-@auth_bp.route('/student/login', methods=['POST'])
-@limiter.limit("5 per minute")  # Max 5 attempts per minute
-def student_login():
-    # Login logic
-    pass
-
-@auth_bp.route('/admin/login', methods=['POST'])
-@limiter.limit("5 per minute")
-def admin_login():
-    # Login logic
-    pass
+# e.g. app/routes/system_admin.py
+@sysadmin_bp.route('/login', methods=['GET', 'POST'])
+@limiter.limit("10 per minute", methods=["POST"])
+def login():
+    ...
 ```
 
 **Best Practices:**
@@ -517,40 +529,20 @@ def admin_login():
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 ```
 
-**Server-Side Verification:**
+**Server-Side Verification:** use `verify_turnstile_token()` from
+`app/utils/turnstile.py`. It bypasses verification when `TURNSTILE_SECRET_KEY` is unset or
+in testing, and otherwise calls the Siteverify API.
 
 ```python
-import requests
+from app.utils.turnstile import verify_turnstile_token
+from app.utils.ip_handler import get_real_ip
 
-def verify_turnstile(token):
-    """Verify Cloudflare Turnstile token."""
-    secret_key = os.getenv('TURNSTILE_SECRET_KEY')
+turnstile_token = request.form.get('cf-turnstile-response')
+if not verify_turnstile_token(turnstile_token, get_real_ip()):
+    flash('Bot verification failed', 'error')
+    return redirect(request.url)
 
-    # Skip verification if no key configured (testing)
-    if not secret_key:
-        return True
-
-    response = requests.post(
-        'https://challenges.cloudflare.com/turnstile/v0/siteverify',
-        data={
-            'secret': secret_key,
-            'response': token
-        }
-    )
-
-    result = response.json()
-    return result.get('success', False)
-
-# In route
-@auth_bp.route('/login', methods=['POST'])
-def login():
-    turnstile_token = request.form.get('cf-turnstile-response')
-
-    if not verify_turnstile(turnstile_token):
-        flash('Bot verification failed', 'error')
-        return redirect(url_for('auth.login'))
-
-    # Proceed with login
+# Proceed with login
 ```
 
 ---
@@ -583,16 +575,16 @@ def login():
 
 ```python
 # ✅ ALWAYS use ORM
-students = Student.query.filter_by(username=user_input).all()
+seats = Seat.query.filter_by(class_id=class_id, role=user_input).all()
 
 # ✅ If raw SQL needed, use parameterized queries
 db.session.execute(
-    text("SELECT * FROM student WHERE username = :username"),
-    {"username": user_input}
+    text("SELECT id FROM seats WHERE class_id = :class_id AND role = :role"),
+    {"class_id": class_id, "role": user_input}
 )
 
 # ❌ NEVER use string formatting
-db.session.execute(f"SELECT * FROM student WHERE username = '{user_input}'")
+db.session.execute(f"SELECT id FROM seats WHERE role = '{user_input}'")
 ```
 
 ### 3. Insecure Direct Object References
@@ -601,18 +593,18 @@ db.session.execute(f"SELECT * FROM student WHERE username = '{user_input}'")
 
 ```python
 # ❌ VULNERABLE
-@student_bp.route('/profile/<student_id>')
-def profile(student_id):
-    student = Student.query.get(student_id)
-    return render_template('profile.html', student=student)
+@student_bp.route('/profile/<int:seat_id>')
+def profile(seat_id):
+    seat = db.session.get(Seat, seat_id)
+    return render_template('profile.html', seat=seat)
 
-# ✅ SECURE - Verify ownership
+# ✅ SECURE - Seat comes from canonical context
 @student_bp.route('/profile')
-@student_required
+@login_required
 def profile():
-    student_id = session.get('student_id')
-    student = Student.query.get(student_id)
-    return render_template('profile.html', student=student)
+    ctx = resolve_canonical_context()
+    seat = Seat.query.filter_by(id=ctx.seat_id, class_id=ctx.class_id).one()
+    return render_template('profile.html', seat=seat)
 ```
 
 ### 4. Sensitive Data Exposure
@@ -620,14 +612,14 @@ def profile():
 **Prevention:**
 
 ```python
-# ❌ WRONG - Logging PII
-logger.info(f"Student {student.first_name} logged in")
+# ❌ WRONG - Logging PII (IdentityProfile names are PII)
+logger.info(f"Student {profile.first_name} logged in")
 
 # ✅ CORRECT - Log without PII
-logger.info(f"Student ID {student.id} logged in")
+logger.info(f"Seat {seat.id} in class {class_id} logged in")
 
 # ❌ WRONG - Including PII in error messages
-flash(f"Error: User {student.first_name} not found", 'error')
+flash(f"Error: User {profile.first_name} not found", 'error')
 
 # ✅ CORRECT - Generic error message
 flash("Student not found", 'error')
@@ -641,14 +633,14 @@ flash("Student not found", 'error')
 # ✅ CORRECT - Secure password storage
 password_hash = hash_password(password)
 
-# ✅ CORRECT - Session timeout
-app.permanent_session_lifetime = timedelta(hours=2)
+# ✅ CORRECT - Session timeout: per-role, enforced by the auth decorators and
+# RoleScopedSessionInterface (see Session Management above); do not add another
 
 # ✅ CORRECT - Clear session on logout
-@auth_bp.route('/logout')
+@student_bp.route('/logout')
 def logout():
     session.clear()
-    return redirect(url_for('auth.login'))
+    return redirect(url_for('student.login'))
 ```
 
 ---
@@ -668,7 +660,7 @@ def logout():
 
 ### For Authentication Features
 
-- [ ] Passwords hashed with salt and pepper
+- [ ] Credentials hashed with `hash_password()` (scrypt, salted, NOT peppered)
 - [ ] TOTP 2FA implemented
 - [ ] Session timeout configured
 - [ ] Logout clears session
@@ -695,18 +687,11 @@ def logout():
 
 ## Security Headers
 
-**Configure in production:**
-
-```python
-@app.after_request
-def set_security_headers(response):
-    response.headers['X-Content-Type-Options'] = 'nosniff'
-    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
-    response.headers['X-XSS-Protection'] = '1; mode=block'
-    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
-    response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:;"
-    return response
-```
+**Already configured.** The `set_security_headers` `after_request` hook in
+`app/__init__.py` sets HSTS, `X-Frame-Options: SAMEORIGIN`,
+`X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`,
+cache headers, and a `Content-Security-Policy` assembled from its `csp_directives` list.
+Change headers there; do not add a second hook.
 
 ---
 
@@ -715,7 +700,7 @@ def set_security_headers(response):
 ### If a Security Issue is Discovered
 
 1. **Assess severity** (P0 = data breach, P1 = potential exploit, P2 = hardening)
-2. **Document the issue** in `docs/security/`
+2. **Document the issue** following `SOP-SEC-001` §V.4 (incident response); external reports arrive through the private reporting route in `SECURITY.md`
 3. **Create a private fix** (don't disclose publicly yet)
 4. **Test the fix thoroughly**
 5. **Deploy to production immediately** (if P0/P1)
@@ -756,22 +741,22 @@ first_name = db.Column(PIIEncryptedType(key_env_var='ENCRYPTION_KEY'), nullable=
 |-----|----------|---------------------|
 | `SECRET_KEY` | Session cookies, CSRF tokens | Yes, via `SECRET_KEY_FALLBACKS` |
 | `ENCRYPTION_KEY` | PII columns **and** TOTP secrets | Only with re-encryption; no multi-key support today |
-| `PEPPER_KEY` | Username + claim-name lookup digests (NOT credentials) | **No.** Rotation is an identity-reset ceremony |
+| `PEPPER_KEY` | Keyed HMAC digests: username, claim-name, roster-fingerprint, `hash_hmac`, teacher-recovery (NOT credentials) | **No.** Needs an approved per-field re-establishment strategy (SOP-SEC-001 §V.2a) |
 
 Passwords depend on **none** of these three — scrypt salts are self-contained.
 
 ### Decorators
 
 ```python
-@admin_required  # Requires admin login
-@student_required  # Requires student login
-@sysadmin_required  # Requires sysadmin login
-@limiter.limit("5 per minute")  # Rate limiting
+@admin_required         # teacher login (app/auth.py)
+@login_required         # student login (app/auth.py)
+@system_admin_required  # sysadmin login (app/auth.py)
+@limiter.limit("10 per minute")  # rate limiting (app/extensions.py limiter)
 ```
 
 ---
 
-**Last Updated:** 2025-12-13
+**Last Updated:** 2026-09-28
 **Security Framework:** Flask-WTF, werkzeug scrypt, Fernet, pyotp
 **Bot Protection:** Cloudflare Turnstile
 **Rate Limiting:** Flask-Limiter with Redis

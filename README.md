@@ -6,7 +6,7 @@ A classroom behavior management and reward platform with built-in simulated fina
 
 Students earn tokens for the time they work, and spend them on rent, insurance and a class store. Teachers run the class economy without handing over student email addresses, phone numbers or school SSO. Built with Flask, SQLAlchemy and PostgreSQL. Each class period is its own isolated economy.
 
-**Current release:** [v2.0.0](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.0.0), in production since 2026-09-26 · **Branch:** `main` · **License:** [PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/)
+**In production:** `00166e56` from `main`, released 2026-09-29 (untagged). **Latest tagged release:** [v2.0.1](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.0.1), a security release of 2026-09-28 (v2 launched 2026-09-26) · **Branch:** `main` · **License:** [PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0)
 
 | | |
 | --- | --- |
@@ -39,7 +39,7 @@ Students earn tokens for the time they work, and spend them on rent, insurance a
 
 - **Sign up without PII**: three steps. Name the class, pick a username and scan a TOTP code, then confirm the code. No email or phone number is asked for
 - **Roster management**: upload a roster or add students one at a time, then export it. Each unclaimed seat has a claim code. An unclaimed seat keeps its balance but takes no part in the economy until a student claims it
-- **Payroll**: set per-minute pay rates, pay frequency, daily time caps, and overtime thresholds and multipliers. Payroll runs on a schedule by local calendar day. Manual payments, reversals and history are also available
+- **Payroll**: set per-minute pay rates, pay frequency, daily time caps, and overtime thresholds and multipliers. Payroll runs on a schedule by local calendar day. Each run pays the work sessions that ended since the last run, in full; a session still open is paid by the next run. Manual payments, reversals and history are also available
 - **Classroom store**: sell immediate-use, delayed-use and collective-goal items. Each item declares its economic role. Bundles, bulk discounts, holding limits, start and delist dates, and redemption approval are supported
 - **Rent**: recurring bill cycles with grace periods, one-time or recurring late penalties, and waivers. The teacher can allow partial payment and choose store perks that come with rent
 - **Insurance**: tiered policies, a waiting period, and claims that students file and teachers review and pay out. Students see their own claims, and cancelling a policy stops it from renewing at the next cycle boundary
@@ -55,8 +55,8 @@ Students earn tokens for the time they work, and spend them on rent, insurance a
 
 - **Portal**: balances, transactions, attendance (start and stop work), store, rent, payroll and insurance
 - **Account transfers**: move money between checking and savings, confirmed with a PIN
-- **Seat claim**: claim the seat your teacher set up by matching your name against the roster, then create a username, PIN and passphrase. Join more classes with a join code
-- **Account recovery**: a teacher issues a short-lived reset code, and the student redeems it to set new credentials
+- **Seat claim**: claim the seat your teacher set up by matching your name against the roster, then create a username, PIN and passphrase. Before the account is created, you type your new username back from where you saved it, because CTH keeps no readable copy. Join more classes with a join code
+- **Account recovery**: a teacher issues a short-lived reset code, and the student redeems it to set a new username, PIN and passphrase, with the same username check as a first claim
 - **Hall pass requests**: ask for a pass and follow its status on the dashboard
 - **Report an issue**: about a specific transaction, an attendance session, or a general problem
 
@@ -130,6 +130,7 @@ The application doesn't serve the marketing site, and the marketing site doesn't
 
 - Python 3.10 or later (`runtime.txt` pins 3.10; CI runs 3.10, 3.11 and 3.13)
 - PostgreSQL 15 or 16 (the versions CI runs against)
+- Redis 7 or later (`redis-server`) for student account setup. Tests that need it start their own private instance; in production it is a dedicated, non-persistent service ([infra/student-setup/README.md](infra/student-setup/README.md))
 - A virtual environment
 
 ### Setup
@@ -157,7 +158,7 @@ flask create-sysadmin   # follow the prompts and scan the QR code with an authen
 flask run               # http://localhost:5000
 ```
 
-The app won't start without the six keys above. Everything else is optional:
+The app won't start without the six keys above. Everything else is optional, except that student account setup also needs `STUDENT_SETUP_REDIS_URL`:
 
 | Variable | Purpose |
 | -------- | ------- |
@@ -167,6 +168,7 @@ The app won't start without the six keys above. Everything else is optional:
 | `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | Cloudflare Turnstile; verification is skipped when these are unset |
 | `PASSWORDLESS_API_KEY`, `PASSWORDLESS_API_PUBLIC`, `PASSWORDLESS_API_URL` | Passkey sign-in |
 | `REDIS_URL`, `RATELIMIT_STORAGE_URI`, `DEV_ENABLE_RATELIMIT` | Rate-limit storage; rate limits are off in development unless `DEV_ENABLE_RATELIMIT=1` |
+| `STUDENT_SETUP_REDIS_URL` | Dedicated, non-persistent Redis for student account setup ([infra/student-setup/README.md](infra/student-setup/README.md)). Required: student claim and recovery setup refuse to run without it. Never point it at the rate-limit store |
 | `EXTERNAL_DOCS_BASE_URL`, `MARKETING_SITE_URL`, `STATUS_PAGE_URL`, `GRAFANA_URL`, `SUPPORT_EMAIL` | External links |
 | `LOG_LEVEL`, `LOG_FILE` | Logging |
 
@@ -180,7 +182,7 @@ Tests run against a real PostgreSQL database named by `TEST_DATABASE_URL`; there
 pytest tests/dom/obligations/ -v          # one domain
 pytest tests/test_status_contracts.py -v  # one file
 pytest -k recovery                        # by pattern
-pytest                                    # full suite: 3,800+ tests, over an hour
+pytest                                    # full suite: 3,900+ tests, over an hour
 pytest --cov=app tests/                   # with coverage
 ```
 
@@ -226,13 +228,25 @@ curl http://localhost:5000/health/status   # bounded status signals; no tenant d
 gunicorn wsgi:app --workers 4 --bind 0.0.0.0:8000
 ```
 
-Tags mark the exact commit production is running. `v2.0.0` points at `26d1792b5`, the commit released on 2026-09-26. The full procedure is [SOP-DEP-002](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md), and each release is recorded under [docs/ops/audits/](docs/ops/audits/) (v2.0.0: [TRANSITION_2026-09-26_26d1792b5.md](docs/ops/audits/TRANSITION_2026-09-26_26d1792b5.md)).
+Tags mark the exact commit of each tagged release: `v2.0.0` is `26d1792b5` (released 2026-09-26) and `v2.0.1` is `ad64a473f` (released 2026-09-28). The full procedure is [SOP-DEP-002](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md), and each release is recorded under [docs/ops/audits/](docs/ops/audits/):
 
-### Known limits of the v2.0.0 evidence
+- v2.0.0: [TRANSITION_2026-09-26_26d1792b5.md](docs/ops/audits/TRANSITION_2026-09-26_26d1792b5.md)
+- v2.0.1: [DEPLOY_2026-09-28_ad64a473f.md](docs/ops/audits/DEPLOY_2026-09-28_ad64a473f.md), which also covers the unrecorded `efdf09eda` release of 2026-09-27
 
-Evidence that was actually run isn't the same as coverage that was inferred (INV-ARC-017). These surfaces haven't been exercised yet:
+Four untagged releases from `main` followed v2.0.1 on 2026-09-29, each through the release workflow: `bc5c07a2` (#1439, the payroll fix for the 2026-09-28 incident), `eaca2a7e` (#1440, a one-time payroll correction for teachers to review), `29b99b14` (#1442, the username retention check) and `00166e56` (#1443), which production runs now. They are listed under **Unreleased** in [CHANGELOG.md](CHANGELOG.md) until they are tagged, and none has a release record in `docs/ops/audits/` yet.
 
-- **Signed-in flows on the production host**: covered by the automated suite and by live test rounds on the same host before launch, but not repeated after the launch wipe. They'll first run in production when teachers start using it
+### Known limits of the release evidence
+
+Evidence that was actually run isn't the same as coverage that was inferred (INV-ARC-017). As of v2.0.1, production has verified:
+
+- the migrations to `f4b8d2a6c1e9` (`users.id` as UUID) and the integrity of every reference to `users`
+- a single scheduler owner (the gunicorn process), with none started by migrations
+- teacher passkey registration and sign-in end to end, run by the operator after release
+
+These surfaces haven't been exercised yet:
+
+- **Other signed-in flows on the production host**: covered by the automated suite and by live test rounds on the same host before launch, but not repeated since the launch wipe. They'll first run in production when teachers start using it
+- **Public routes after v2.0.1**: not checked at release, because the Cloudflare Access maintenance window was still in place
 - **Daylight-saving and midnight transitions**: class-timezone handling is tested, but no live daylight-saving change has happened since launch
 - **Load**: concurrent settlement, payroll batch runs and scheduled jobs haven't been tested under load
 - **Browser accessibility**: axe covers every rendered template, but keyboard, focus and contrast behavior across the whole app still needs a person using a real browser. The signed-in insurance page's buy and cancel dialogs haven't had an axe audit yet
@@ -255,22 +269,24 @@ INV-CORE → INV-ARC → DOM-* → FEAT-*
 | [docs/DOMAIN/](docs/DOMAIN/) | Per-domain authority specs |
 | [docs/FEATURE-EXECUTION/](docs/FEATURE-EXECUTION/) | FEAT mutation contracts |
 | [docs/SPEC/](docs/SPEC/) | Technical contracts |
+| [REF-TERM-001](docs/REFERENCE/REF-TERM-001_DEVELOPER_VOCABULARY.md) | Developer vocabulary |
 | [docs/STANDARD_OPERATING_PROCEDURES/](docs/STANDARD_OPERATING_PROCEDURES/) | Operational procedures |
 
 **Descriptive (these summarize and can drift):**
 
 | Document | Purpose |
 | ---------- | --------- |
-| [docs/TRACKING/](docs/TRACKING/) | Readiness and audit status |
+| [docs/TRACKING/](docs/TRACKING/) | Working state: the post-launch tracker and open decisions |
+| [docs/ops/](docs/ops/) | Production host notes and dated release and audit records |
 | [docs/PRINCIPLES/](docs/PRINCIPLES/) | Why a design was chosen |
-| [docs/REFERENCE/](docs/REFERENCE/) | Interface references, including [REF-API-001](docs/REFERENCE/REF-API-001_HTTP_INTERFACE_REFERENCE.md) for HTTP endpoints |
+| [docs/REFERENCE/](docs/REFERENCE/) | Interface references, including [REF-API-001](docs/REFERENCE/REF-API-001_HTTP_INTERFACE_REFERENCE.md) for HTTP endpoints, and the user-facing vocabulary [REF-TERM-002](docs/REFERENCE/REF-TERM-002_USER_VOCABULARY.md) (recommended, subject to accessibility) |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Roadmap and current priorities |
 | [CHANGELOG.md](CHANGELOG.md) | Version history |
 | [.claude/CLAUDE.md](.claude/CLAUDE.md) and [.claude/rules/](.claude/rules/) | Working guidance for AI coding agents |
 
 Nothing under `.claude/` is authoritative. It helps agents find their way around the codebase, and it should never be cited to justify a design decision. Cite the INV, DOM, FEAT, SPEC or SOP document instead.
 
-The user guides in `docs/user-guides/` are served inside the app at `/docs`. The whole documentation tree is published separately as the developer docs site, built from `docs-site/`.
+The user guides in `docs/user-guides/` are served inside the app at `/docs`. The developer docs site at [classroomtokenhub.com/docs](https://classroomtokenhub.com/docs/), built from `docs-site/`, publishes the normative tree plus principles, references, maps and the self-hosting guide. It leaves out the user guides, dated release and audit records (`docs/ops/`), working-state tracking files, and [docs/archive/](docs/archive/), which holds superseded material kept for history.
 
 ---
 
@@ -278,10 +294,10 @@ The user guides in `docs/user-guides/` are served inside the app at `/docs`. The
 
 | Line | Status | Where it lives |
 | --- | --- | --- |
-| **v2** | Current. v2.0.0 released 2026-09-26 | `main` |
+| **v2** | Current. v2.0.0 released 2026-09-26; v2.0.1 (security) released 2026-09-28; untagged releases from `main` since, most recently `00166e56` on 2026-09-29 | `main` |
 | **v1** | Retired. v1.10.0 (2026-06-14) was the final v1 release | Branch `main_legacy_v1.10.0` and the `v1.*` tags |
 
-v2 is a ground-up rebuild. It's a clean break: no v1 accounts or data carry over. See the [v2.0.0 release notes](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.0.0).
+v2 is a ground-up rebuild. It's a clean break: no v1 accounts or data carry over. See the [v2.0.0](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.0.0) and [v2.0.1](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.0.1) release notes. Upgrading every 2.0.0 deployment to 2.0.1 is recommended: it ties each passkey to the account it was registered to.
 
 ---
 
@@ -293,7 +309,7 @@ Read the invariants first, then the domain spec for the area you're changing, th
 
 ## License
 
-[PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/)
+[PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0)
 
 **Allowed:** classrooms, clubs, nonprofits, research and personal learning.
 **Not allowed:** commercial products, SaaS, paid services and other for-profit use.

@@ -15,7 +15,7 @@ related:
 
 ## Overview
 
-You have two credentials, and the app asks for different ones in different places. That is deliberate, not a bug: your **PIN** is short and typed constantly, your **passphrase** is long and typed rarely.
+You have two credentials, and the app asks for different ones in different places. That is deliberate, not a bug: your **PIN** is short and typed constantly during class, and your **passphrase** is long and typed when you sign in or spend money.
 
 The rule behind the split is roughly *how much damage could someone do*. Clocking in is annoying to undo. Emptying your checking account is not.
 
@@ -26,7 +26,7 @@ The rule behind the split is roughly *how much damage could someone do*. Clockin
 | | PIN | Passphrase |
 | --- | --- | --- |
 | **Looks like** | 4–6 digits | At least four words, with numbers and symbols |
-| **Typed** | Many times a day | A few times a term |
+| **Typed** | Many times a day | Every time you sign in, and for purchases and payments |
 | **Job** | Proving it's still you at this device | Proving it's really you |
 
 You set both when you first claim your account. See [Log In and First-Time Setup](login-setup.md).
@@ -52,7 +52,7 @@ The pattern worth remembering: **non-monetary or reversible actions use the PIN;
 ### If one of them stops working
 
 - **Passphrase rejected at sign-in.** Ask your teacher to reset it. They can do this from your student page without knowing your old one.
-- **Passphrase rejected at a purchase or transfer.** Check capitalisation and spacing first — it is case-sensitive and the spaces between words count. If it is genuinely lost, see [Reset or Recover Your Account](reset-recovery.md).
+- **Passphrase rejected at a purchase or payment.** Check capitalisation and spacing first — it is case-sensitive and the spaces between words count. If it is genuinely lost, see [Reset or Recover Your Account](reset-recovery.md).
 - **You know both but the page keeps sending you back to sign in.** That is a session timeout, not a credential problem. Sign in again.
 
 ## Important notes

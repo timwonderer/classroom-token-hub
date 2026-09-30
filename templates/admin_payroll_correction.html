@@ -2,6 +2,31 @@
 {% set page_title = "Payroll Correction" %}
 {% block title %}Payroll Correction{% endblock %}
 
+{% block contextual_help_body %}
+{{ help.panel_lead("Review and approve the one-time correction for work the Sep. 28 payroll issue left unpaid in this class.") }}
+
+{% call help.topic('paycorr-status', 'fact_check', 'What each status means') %}
+<ul class="ps-3 mb-0">
+    <li class="mb-2"><strong>Proposed:</strong> the student worked time that no payroll run paid. The row is ticked for approval.</li>
+    <li class="mb-2"><strong>Needs review:</strong> the attendance records do not match what was actually paid, so no amount can be proposed. If you find pay is owed, use Manual Payment.</li>
+    <li class="mb-0"><strong>Paid:</strong> the correction has already been posted, with the date it was paid.</li>
+</ul>
+{% endcall %}
+
+{% call help.topic('paycorr-approve', 'task_alt', 'Approving corrections') %}
+<ul class="ps-3 mb-0">
+    <li class="mb-2">Amounts are calculated from the attendance and payroll records and cannot be edited.</li>
+    <li class="mb-2">Untick a student to leave them out for now. They stay proposed, and you can approve them later.</li>
+    <li class="mb-2">Each student can be corrected only once. Approving again, or from a second tab, does not pay anyone twice.</li>
+    <li class="mb-0">Each correction is recorded as a payment you approved, marked as a system-calculated payroll correction.</li>
+</ul>
+{% endcall %}
+
+{% call help.topic('paycorr-deadline', 'event', 'When this page closes') %}
+<p class="mb-0">The review stays open until the date shown at the bottom of the page. After that, use Manual Payment for any remaining adjustment.</p>
+{% endcall %}
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid py-3">
   <div class="card shadow-sm border-0 mb-4">

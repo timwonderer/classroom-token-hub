@@ -11,11 +11,12 @@ there is never a second, drifting version of a normative document.
 | Published                                   | Not published                          |
 |---------------------------------------------|----------------------------------------|
 | `docs/INVARIANT/` (INV-CORE, INV-ARC)        | `docs/user-guides/` — the Flask app owns it |
-| `docs/DOMAIN/` (DOM-*)                       | `docs/archive/` — superseded v1 material |
+| `docs/DOMAIN/` (DOM-*)                       | `docs/archive/` — superseded v1 material and retired v2 tracking |
 | `docs/FEATURE-EXECUTION/` (FEAT-*)           | `docs/assets/`                          |
+| `docs/TRACKING/DOCS_PLATFORM_ROADMAP.md`, `DOMAIN_IMPLEMENTATION_PLAN_TEMPLATE.md` | `docs/ops/` — dated release and audit records |
 | `docs/SPEC/`, `docs/STANDARD_OPERATING_PROCEDURES/` |                                 |
 | `docs/MAP/`, `docs/REFERENCE/`, `docs/PRINCIPLES/`  |                                 |
-| `docs/TRACKING/`, `docs/ops/`, `docs/self-hosting/` |                                 |
+| `docs/self-hosting/`                          | The rest of `docs/TRACKING/` — live trackers and dated working state |
 
 ### The serving boundary
 

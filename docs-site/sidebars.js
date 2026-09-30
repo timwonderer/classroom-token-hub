@@ -65,7 +65,7 @@ module.exports = {
     category(
       "Tracking",
       "TRACKING",
-      "Roadmap, domain-tracking conventions, and the implementation plan template. Descriptive, never authoritative; dated working snapshots are not published.",
+      "The documentation roadmap and the domain implementation plan template. Descriptive, never authoritative; trackers and dated working snapshots are not published.",
     ),
   ],
 };

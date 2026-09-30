@@ -4,7 +4,7 @@ These notes orient future agents working on this repository—especially ongoing
 
 ## Quickstart
 
-- **Branch:** work (current).
+- **Branch:** `main` — all work merges here (see `.claude/CLAUDE.md` for the retired branch names).
 - **Tests:** run `pytest -q` before committing; add focused tests for tenancy helpers when changing scoping logic.
 - **App entry:** `wsgi.py`; Flask app factory in `app/__init__.py`.
 - **Access gate:** Cloudflare Access manages restricted work windows. The app has no maintenance flag, page, or bypass (DOM-OPS-001).
@@ -42,7 +42,7 @@ These notes orient future agents working on this repository—especially ongoing
 
 ### Creating a Migration
 
-1. **Make your model changes in `app/models/`**
+1. **Make your model changes in `app/models.py`**
 
 2. **Create the migration:**
 
@@ -58,10 +58,13 @@ These notes orient future agents working on this repository—especially ongoing
 4. **Test the migration:**
 
    ```bash
-   flask db upgrade    # Apply it
-   flask db downgrade  # Roll it back
-   flask db upgrade    # Apply it again
+   flask db upgrade                # Apply it
+   flask db downgrade <revision>   # Roll it back to the revision noted above
+   flask db upgrade                # Apply it again
    ```
+
+   Always pass an explicit revision to `flask db downgrade`: the bare form aborts with
+   "Ambiguous walk" whenever the head is a merge point.
 
 5. **Verify single head after creation:**
 
@@ -96,18 +99,18 @@ The repository has experienced recurring "multiple heads" errors during deployme
 - **`class_id` (UUID) is the canonical source of truth for class isolation.** `join_code` is its public-facing alias — acceptable in user-facing flows but `class_id` is the authority for all domain-level queries and scoping.
 - **`seat_id` anchors per-user activity within a class.** All financial, attendance, and obligation records are scoped by `seat_id` + `class_id`.
 - **Identity is resolved once at the decorator boundary** via `resolve_canonical_context()`, producing an immutable `CanonicalContext(user_id, class_id, seat_id, actor_role)` or `BoundaryContext(user_id, actor_role)` stored in `g.canonical_context`. No handler reads extinct session keys (`admin_id`, `student_id`, `sysadmin_id`).
-- **Teacher-to-class linkage** is through `ClassEconomy` (the `classes` table), not `ClassMembership` (deprecated).
+- **Teacher-to-class linkage** is `ClassEconomy.teacher_user_id` (the `classes` table). `ClassMembership` and the rest of the v1 identity layer no longer exist as models or tables.
 - Scoped query helpers and bridge functions were removed from `app/auth.py`; all routes use canonical context.
 - Cloudflare Access provides the external gate; app authentication and class capability checks still apply.
 
 ## High-Priority Follow-Ups
 
 1. **Database hardening**
-   - Consider enforcing non-null `join_code` for new ledger/attendance records after backfill verification.
+   - Consider enforcing NOT NULL `class_id` on `ledger_transaction` after backfill verification (the model and baseline still declare it nullable; `attendance_sessions.class_id` is already NOT NULL). `join_code` is an ingress alias and must not become a required scoping column.
    - Continue reducing legacy teacher-global assumptions in comments, fixtures, and helper signatures.
-   - Define safe ON DELETE behavior for admins where ownership and class membership rows both exist.
+   - Review ON DELETE behavior for teacher `User` rows: `classes.teacher_user_id` is `ON DELETE CASCADE` while `seats.user_id` is `ON DELETE RESTRICT`, so teacher deletion must go through `app/services/teacher_destruction.py` (as the account-delete route and `teacher_lifecycle.destroy_stale_teacher` do), never a raw delete.
 2. **Code audit**
-   - Replace any residual direct `Student.query.get` usage outside helpers.
+   - Replace any residual seat lookup that is not class-scoped (e.g. `db.session.get(Seat, seat_id)` without checking `seat.class_id == class_id`) with `Seat.query.filter_by(id=seat_id, class_id=class_id)`.
    - Remove reliance on teacher-global scoping assumptions in any remaining legacy paths.
 3. **Testing gaps**
    - Add shared-student coverage for payroll and attendance flows.
@@ -117,7 +120,7 @@ The repository has experienced recurring "multiple heads" errors during deployme
 
 ## PII/Privacy
 
-- Keep PII minimal (current design uses non-PII identifiers and encrypted first names). Avoid adding new PII fields; prefer hashes or initials.
+- Keep PII minimal (current design uses non-PII identifiers; `IdentityProfile.first_name`, `last_name` and `notes` are `PIIEncryptedType` columns). Avoid adding new PII fields; prefer hashes or initials.
 
 ## Coding Conventions
 
@@ -134,67 +137,5 @@ The repository has experienced recurring "multiple heads" errors during deployme
 
 ## PR Template
 
-Please use the following template when creating a PR
-
-<!-- Start of Document -->
-## Description
-
-<!-- Provide a brief description of the changes in this PR -->
-
-## Type of Change
-
-- [ ] Bug fix (non-breaking change which fixes an issue)
-- [ ] New feature (non-breaking change which adds functionality)
-- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
-- [ ] Documentation update
-- [ ] Refactoring (no functional changes)
-- [ ] Performance improvement
-- [ ] Other (please describe):
-
-## Testing
-
-<!-- Describe the tests you ran and how to reproduce them -->
-
-- [ ] Tested locally
-- [ ] All existing tests pass
-- [ ] Added new tests for new functionality
-
-## Database Migration Checklist
-
-<!-- If this PR includes a database migration, complete the following checklist -->
-
-**Does this PR include a database migration?** [ ] Yes / [ ] No
-
-If **Yes**, confirm:
-
-- [ ] Synced with `main` branch immediately before running `flask db migrate`
-- [ ] Migration file reviewed and verified correct `down_revision`
-- [ ] Tested `flask db upgrade` successfully
-- [ ] Tested `flask db downgrade` successfully
-- [ ] Confirmed only ONE migration head exists (pre-push hook should verify this)
-- [ ] Migration has a descriptive message/filename
-- [ ] Breaking changes or data migrations documented in PR description
-
-**Migration file location:**
-<!-- e.g., migrations/versions/abc123_add_user_email.py -->
-
-## Checklist
-
-- [ ] My code follows the project's style guidelines
-- [ ] I have performed a self-review of my own code
-- [ ] I have commented my code where necessary, particularly in hard-to-understand areas
-- [ ] I have updated the documentation accordingly
-- [ ] My changes generate no new warnings or errors
-- [ ] I have read and followed the [contributing guidelines](../.github/CONTRIBUTING.md)
-
-## Related Issues
-
-<!-- Link any related issues here -->
-
-Closes #
-
-## Additional Notes
-
-<!-- Any additional information that reviewers should know -->
-
-<!-- End of Document -->
+Use the repository's PR template, [`.github/PULL_REQUEST_TEMPLATE.md`](../.github/PULL_REQUEST_TEMPLATE.md).
+GitHub pre-fills it; do not keep a second copy here, because a copy drifts from the original.

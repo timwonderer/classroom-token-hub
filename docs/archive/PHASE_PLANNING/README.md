@@ -10,7 +10,7 @@ This directory contains historical planning documents, implementation roadmaps, 
 - `PHASE_3_FEAT_STOR_001_STATUS.md` — Status tracking for FEAT-STOR-001 (store purchase) during Phase 3
 - `PHASE-3-EXTENSION-*.md` — Extension phase documents covering hall-pass coordination, delayed-use redemption, and authority clarifications
 - `PHASE-3-COMPLETION-STATUS.md` — Final completion status for Phase 3
-- `PHASE-4-EXECUTION-PLAN.md` — Phase 4 execution plan (legal mutation boundary)
+- `PHASE_4_EXECUTION_PLAN.md` — Phase 4 execution plan (legal mutation boundary)
 - `PHASE-5-READ-MODELS-PLAN.md` — Phase 5 planning for read model implementations
 
 ### Store Domain Demolition & Migration

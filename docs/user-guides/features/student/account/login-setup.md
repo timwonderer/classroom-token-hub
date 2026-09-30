@@ -43,7 +43,7 @@ Your finished username appears at the top of this page. **Classroom Token Hub do
    - **Show my username again** closes the box without checking, if you want another look first.
    - If you use assistive technology that can only enter text by pasting, open **Can't type in this box?** and turn pasting back on.
 3. Once your username matches, set a **PIN** — 4 to 6 digits. This is what you type for clock actions, transfers between your own accounts, and hall passes.
-4. Set a **Passphrase** — at least four words, with symbols and numbers. Aim for easy to remember, hard to guess. This is your recovery credential, and it is also how you verify your teacher's identity if they ever lose their own account.
+4. Set a **Passphrase** — at least four words, with symbols and numbers. Aim for easy to remember, hard to guess. You type it every time you sign in, and again for purchases and payments. It is also how you verify your teacher's identity if they ever lose their own account.
 5. Submit.
 
 A confirmation screen greets you by name. Select **Thanks, Let's Go!** to reach your dashboard.

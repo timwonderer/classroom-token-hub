@@ -60,7 +60,7 @@ Neither do `Student.get_checking_balance()` / `get_savings_balance()`. If you fi
 anywhere instructing you to use them, that text is stale; do not resurrect them.
 
 Remaining `join_code` columns in the schema: `classes.join_code` (the alias itself) plus
-two nullable legacy columns that no domain query filters on. Treat any new `join_code`
+two nullable legacy columns (`ledger_transaction.join_code`, `ledger_balance_snapshot.join_code`) that no domain query filters on. Treat any new `join_code`
 filter as a bug.
 
 ---
@@ -174,7 +174,7 @@ written through a FEAT — never `db.session.add` in a route.
 
 ## Tables That Must Be Class-Scoped
 
-All 31 tables carrying a `class_id` column, notably:
+All 32 tables carrying a `class_id` column besides `classes` itself (33 ORM tables have the column; on `classes` it is the primary key), notably:
 
 `seats`, `identity_profiles`, `ledger_transaction`, `ledger_balance_snapshot`,
 `attendance_sessions`, `hall_pass_logs`, `hall_pass_settings`, `payroll_settings`,
@@ -231,5 +231,5 @@ in `app/routes/admin.py` exists for exactly this) and pass `verify_teacher_owns_
 
 ---
 
-**Last Updated:** 2026-09-09
+**Last Updated:** 2026-09-28
 **Critical Incident:** P0 same-teacher multi-period data leak

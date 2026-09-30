@@ -14,11 +14,11 @@ If something doesn't look right with your Login and Setup, check this guide firs
 
 ## If you cannot log in, check these first:
 - Are you using the exact username assigned during setup? (No nicknames).
-- Are you entering your PIN, not your passphrase?
+- Are you entering your passphrase, not your PIN? Sign-in uses your passphrase.
 - Did you complete setup in this order? Claim account -> create username -> set PIN/passphrase.
 - Did the CAPTCHA (Turnstile) load and verify before login?
 - Are you trying to use a join code to log in? Join codes are only for claiming or adding classes, not logging in.
-- Are you trying to use your passphrase at login? Daily sign-in uses your PIN. The passphrase is for account recovery, and for verifying your teacher's identity if they need to recover their own account.
+- Are you typing your passphrase exactly? It is case-sensitive, and the spaces between words count.
 
 ## This is normal and expected when:
 - You are asked to finish setup if your claimed seat does not have active login credentials yet.

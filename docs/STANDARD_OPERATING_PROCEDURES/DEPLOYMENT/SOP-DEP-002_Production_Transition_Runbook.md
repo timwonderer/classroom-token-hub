@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-002 | 1.5 | 2026-09-21 | 1.4 | Normative |
+| SOP-DEP-002 | 1.7 | 2026-09-30 | 1.6 | Normative |
 
 ## I. Purpose
 
@@ -39,6 +39,12 @@ Normative (SOP Tier). Subordinate to `INV-CORE-000`.
 3. Confirm migration head state and target revision.
 4. Confirm operator sign-off from engineering and operations.
 5. Reconfirm smoke checklist and escalation path.
+6. Confirm the student-setup memory store is running on the production host. The username-retention check
+   (FEAT-IDEN-002, SPEC-IDEN-001; memory-only under INV-ARC-018 §IX) has needed it since release `29b99b14`
+   (2026-09-29). On a new or rebuilt host, provision and verify it per `infra/student-setup/README.md`, set
+   `STUDENT_SETUP_REDIS_URL` in the application environment, and restart the workers. There is no fallback: without the store, student claim and
+   recovery setup fail closed with a 503. After the release, exercise claim and recovery setup as that
+   README's step 6 describes.
 
 Current branch verification references:
 
@@ -177,9 +183,13 @@ Record:
 ## XII. Deferral Boundary
 
 - This runbook is limited to launch-critical transition steps and operator records.
-- Broader operational taxonomy changes, route-family cleanup, and post-port architecture alignment are deferred until after `../../SPECS/V2_ADMIN_ROUTE_REFACTOR.md` and `../../MAP/MAP-CLASS-002_CLASS_SCOPE_NORMALIZATION_TARGET.md`.
+- Broader operational taxonomy changes and route-family cleanup are outside this runbook and are tracked in `docs/TRACKING/POST_LAUNCH_TRACKER_2026.md`.
+- Version 1.5 deferred them until after two documents. One, `SPECS/V2_ADMIN_ROUTE_REFACTOR.md`, was never written. The other, `MAP-CLASS-002` (archived 2026-09-28), described the `class_id`-first model that INV-ARC-019 and DOM-IDEN-001 now govern. Version 1.6 changes no procedure in this runbook.
 
 
 
 ## XIII. Amendment
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.
+
+**Version 1.7 (2026-09-30):** §VI adds item 6, the student-setup memory store that the username-retention
+check (#1442, released 2026-09-29) requires on every production host.

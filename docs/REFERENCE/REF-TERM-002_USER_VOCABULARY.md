@@ -2,11 +2,11 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| REF-TERM-002     | 1.0     | 2026-06-15     | N/A        | Normative       |
+| REF-TERM-002     | 1.1     | 2026-09-28     | 1.0        | Informative     |
 
 ## I. Purpose
 
-Define the authoritative user-facing vocabulary for the Classroom Token Hub. These are the terms that appear in teacher and student interfaces, user guides, help text, and support communications.
+Define the recommended user-facing vocabulary for the Classroom Token Hub (Informative; see §III). These are the terms that appear in teacher and student interfaces, user guides, help text, and support communications.
 
 ## II. Scope
 
@@ -16,11 +16,24 @@ Terms that also appear in REF-TERM-001 carry their user-facing definition here a
 
 ## III. Authority Level
 
-Normative. User-interface text, help copy, and user documentation must use these terms as defined here.
+Informative, and **highly recommended** for standardization. User-interface text, help copy,
+user guides and support communications should use these terms as defined here, so that teachers and
+students meet one word for one concept everywhere.
+
+Accessibility takes precedence. Where following a term here would create an unnecessary barrier,
+use the wording that is perceivable and understandable to the intended users, and propose a revision
+to this glossary. Examples of barriers are wording that is harder to understand, a label that does
+not name its control, and a term a screen reader announces ambiguously. The governing documents are
+INV-CORE-000 §III.7 (*No Unnecessary Barriers to Supported Use*, which covers wording) and INV-ARC-020
+(*Accessibility Requirements and Template Contract*).
+
+Developer-facing vocabulary is governed separately and normatively by `REF-TERM-001`.
 
 ## III-A. Dependencies
 
-- `REF-TERM-001_DEVELOPER_VOCABULARY.md` (developer-facing counterpart)
+- `REF-TERM-001_DEVELOPER_VOCABULARY.md` (developer-facing counterpart; normative)
+- `docs/INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS.md` §III.7
+- `docs/INVARIANT/ARCHITECTURE/INV-ARC-020_ACCESSIBILITY_REQUIREMENTS_AND_TEMPLATE_CONTRACT.md`
 
 ---
 
@@ -178,3 +191,4 @@ If user-facing text needs to refer to the concept behind one of these terms, use
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | 2026-06-15 | Terminology Audit | Initial creation from TERMINOLOGY_AUDIT_V1.md governance classification. Covers all user-facing terms from the 82-term KEEP set plus plain-language definitions for merged concepts. |
+| 1.1 | 2026-09-28 | Operator ruling | Authority changed from Normative to Informative, highly recommended for standardization. Accessibility (INV-CORE-000 §III.7, INV-ARC-020) takes precedence over any term here. |

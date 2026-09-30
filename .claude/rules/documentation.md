@@ -23,9 +23,12 @@
 ├── CHANGELOG.md              # All changes (required for every PR)
 ├── DEVELOPMENT.md            # Roadmap and planned features
 ├── README.md                 # Project overview and quick start
-├── CLAUDE.md                 # Guide for AI assistants (this guide's parent)
 ├── CONTRIBUTING.md           # Contribution guidelines
-├── .claude/                  # Claude-specific rules and settings
+├── SECURITY.md               # Vulnerability reporting policy
+├── .github/
+│   └── PULL_REQUEST_TEMPLATE.md  # The PR template
+├── .claude/                  # Agent guidance (non-authoritative)
+│   ├── CLAUDE.md             # Guide for AI assistants (this guide's parent)
 │   ├── AGENTS.md             # AI agent workflow guidelines
 │   └── rules/                # Detailed rule files
 ├── docs/
@@ -40,10 +43,15 @@
 │   ├── REFERENCE/            # REF-* interface references
 │   ├── TRACKING/             # Launch readiness and status
 │   ├── user-guides/          # User-facing help served by the in-app /docs site
+│   ├── self-hosting/         # Self-hosting guide
 │   ├── ops/                  # Operational notes
+│   │   └── audits/           # Dated deploy/release records (DEPLOY_*.md) and audits
 │   ├── assets/               # Documentation images and assets
-│   └── archive/              # Superseded v1 material — history only, never authority
-│       ├── v1-development/   # Archived v1 dev docs
+│   └── archive/              # Superseded material — history only, never authority
+│       ├── v1-architecture/, v1-development/, v1-docs/  # Archived v1 material
+│       ├── v2-tracking-2026/ # Archived v2 migration/launch tracking (2026-07 → 2026-09)
+│       ├── PHASE_PLANNING/   # Archived v2 phase plans and audits
+│       ├── STANDARD_OPERATING_PROCEDURES/  # Retired SOPs (e.g. SOP-DB-009, SOP-DB-010)
 │       └── github-pages/     # Archived GitHub Pages assets
 ```
 
@@ -63,7 +71,7 @@
 **CHANGELOG.md** - Update for ALL changes, no exceptions
 
 ```markdown
-## [Unreleased] - Version 1.x
+## [Unreleased]
 
 ### Added
 - Teacher account recovery via student-verified codes (#609)
@@ -78,7 +86,7 @@
 - Hall pass timestamp updates (#606)
 
 ### Security
-- Hardened recovery code handling with bcrypt hashing
+- Hardened recovery code handling with scrypt hashing via `hash_password()`
 ```
 
 **Format:** Follow [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
@@ -119,13 +127,10 @@ Students can request hall passes from their dashboard...
 2. Select duration...
 ```
 
-**DEVELOPMENT.md** (mark as completed or update roadmap)
+**DEVELOPMENT.md** (update "Current State" when it ships or priorities change)
 ```markdown
-## Completed Features
-
-### Hall Pass System ✅
-**Status:** Completed in v1.0
-**Documentation:** `docs/user-guides/student_guide.md`
+### In production
+- **v2.x.y** (`<sha>`, YYYY-MM-DD) adds the hall pass system (`docs/user-guides/student_guide.md`).
 ```
 
 #### 2. Internal/Technical Features
@@ -138,23 +143,21 @@ Update **ALL** of these:
 - RecoveryRequest and StudentRecoveryCode models for account recovery (#609)
 ```
 
-**docs/technical-reference/architecture.md** (if changes architecture)
+**The governing normative document** (if it changes architecture or domain behavior) —
+the `INV-*`, `DOM-*`, `FEAT-*` or `SPEC-*` document that owns the area, amended per
+`SOP-DOC-000`. Code that departs from its governing document is a defect in one or the other.
+
+**`docs/DOMAIN/DOM-CORE-002_CANONICAL_SCHEMA_DEFINITION.md`** (for new tables or models) —
+it defines the only valid set of runtime tables:
 ```markdown
-## Account Recovery
+### recovery_requests
 
-The system implements a student-verified account recovery mechanism...
-```
-
-**docs/technical-reference/database_schema.md** (for new models)
-```markdown
-### RecoveryRequest
-
-Stores teacher account recovery requests.
+Teacher account recovery requests.
 
 | Column | Type | Description |
 |--------|------|-------------|
 | id | Integer | Primary key |
-| teacher_id | Integer | FK to Admin |
+| user_id | UUID | FK to users.id |
 ...
 ```
 
@@ -168,9 +171,7 @@ Update **ALL** of these:
 - `/admin/recovery-status` endpoint for live recovery tracking (#609)
 ```
 
-**API documentation** (if separate API docs exist, or in technical reference)
-
-**Postman collection** (if maintained)
+**API reference:** `docs/REFERENCE/REF-API-001_HTTP_INTERFACE_REFERENCE.md`
 
 ---
 
@@ -187,13 +188,13 @@ Update **ALL** of these:
 - Resolved join_code scoping issue in transaction queries
 ```
 
-**Security documentation** (`docs/security/`)
-- Create incident report if critical
-- Update existing audit documents
+**Security documentation**
+- Incident record per `SOP-SEC-001` §V.4 (minimal, access-controlled, no PII or secret values)
+- `SECURITY.md` if the reporting policy changes
 
 **README.md** (if affects installation/setup)
 
-**RELEASE_NOTES** (if affects current version)
+**Release record** (if it ships): a dated `docs/ops/audits/DEPLOY_<date>_<sha>.md`
 
 #### 2. Regular Bug Fixes
 
@@ -219,14 +220,14 @@ Update **ALL** of these:
 **CHANGELOG.md**
 ```markdown
 ### Changed (BREAKING)
-- Renamed `student_id` to `user_id` in Transaction model (#XXX)
+- Renamed `motto` to `tagline` on `classes` (#XXX)
   **Migration Required:** Run `flask db upgrade`
   **Code Impact:** Update any direct SQL queries using old column name
 ```
 
 **DEVELOPMENT.md** (if affects future work)
 
-**docs/operations/DEPLOYMENT.md** (upgrade instructions)
+**Deployment SOP** (upgrade instructions): `docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md`
 
 **Migration guide** (create if major version change)
 
@@ -262,19 +263,15 @@ Always include:
 
 ```python
 # ✅ GOOD EXAMPLE
-# In app/routes/student.py
+# In app/routes/admin.py
 
-from app.models import ClassMembership, Student
+from app.models import Seat
 
-# Get students for current class period
-students = (
-    Student.query
-    .join(ClassMembership, ClassMembership.student_id == Student.id)
-    .filter(ClassMembership.join_code == current_join_code)
-    .all()
-)
+# Get student seats for the teacher's active class
+class_id = g.canonical_context.class_id
+seats = Seat.query.filter_by(class_id=class_id, role="student").all()
 
-# Returns: List of Student objects scoped to join_code
+# Returns: List of Seat objects scoped to class_id
 ```
 
 ```python
@@ -303,7 +300,7 @@ Use proper markdown:
 
 > Blockquotes for important notes
 
-[Links](url) to related docs
+[Links](../../README.md) to related docs
 ```
 
 ---
@@ -316,7 +313,7 @@ Use proper markdown:
 ```markdown
 # Changelog
 
-## [Unreleased] - Version X.Y
+## [Unreleased]
 
 ### Added
 ### Changed
@@ -325,7 +322,7 @@ Use proper markdown:
 ### Fixed
 ### Security
 
-## [1.0.0] - 2025-12-XX
+## [2.0.1] - 2026-09-28 — Security release
 
 (Release notes)
 ```
@@ -348,28 +345,25 @@ Use proper markdown:
 
 **Structure:**
 ```markdown
-# Development Priorities
+# Classroom Token Hub - Development Priorities
 
-## Current Work (v1.1)
-- Features being actively developed
+## Quick Links
+## Branch and Database Truth
+## Git Hooks
 
-## Planned Features
-### v1.1 - Analytics
-- Specific features planned
+## Current State (YYYY-MM-DD)
+### In production
+- Released versions, with commit and date
+### Next
+- Priority-ordered work (the post-launch tracker is the working list)
 
-### v1.2 - Mobile
-- Mobile-focused features
-
-## Deferred Features
-- Features considered but not prioritized
-
-## Completed Features
-- Features done, with links to docs
+## v2 Technical Direction
+## Working Agreements
 ```
 
 **When to Update:**
-- When planning new features
-- When completing features (move to "Completed")
+- When a release ships (update "In production")
+- When priorities change (update "Next")
 - When deferring features
 
 ---
@@ -415,12 +409,13 @@ Use proper markdown:
 
 ### Technical Reference
 
-**Location:** `docs/technical-reference/`
+There is no separate technical-reference tree; the normative documents are the reference.
 
-**Files:**
-- `architecture.md` - System architecture
-- `database_schema.md` - Database structure
-- `economy-specification.md` - Financial system spec
+**Locations:**
+- `docs/INVARIANT/ARCHITECTURE/` - System architecture (`INV-ARC-*`)
+- `docs/DOMAIN/DOM-CORE-002_CANONICAL_SCHEMA_DEFINITION.md` - Database structure
+- `docs/SPEC/` - Financial and other technical contracts (e.g. `SPEC-ECON-*`, `SPEC-LED-*`)
+- `docs/REFERENCE/` - Interface and vocabulary references (`REF-*`, descriptive)
 
 **Update When:**
 - New models added
@@ -432,12 +427,11 @@ Use proper markdown:
 
 ### Security Documentation
 
-**Location:** `docs/security/`
-
-**Files:**
-- Audit reports
-- Incident reports
-- Security guidelines
+**Locations:**
+- `SECURITY.md` - Vulnerability reporting policy
+- `docs/STANDARD_OPERATING_PROCEDURES/SECURITY/` - Security operations (`SOP-SEC-001`, incl. incident response §V.4)
+- `docs/SPEC/SPEC-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_CODE_CONTRACT.md` - Credential/lookup code contract
+- `docs/ops/audits/` - Dated audit and release records
 
 **Update When:**
 - Security vulnerabilities found
@@ -477,7 +471,7 @@ Use proper markdown:
 ### For Releases
 
 - [ ] CHANGELOG.md finalized
-- [ ] RELEASE_NOTES_vX.Y.md created/updated
+- [ ] `docs/ops/audits/DEPLOY_<date>_<sha>.md` release record created
 - [ ] All docs reviewed for accuracy
 - [ ] Deprecated features marked
 - [ ] Upgrade instructions provided
@@ -543,7 +537,7 @@ Before committing:
 ```bash
 # Check for broken internal links
 grep -r "](/" docs/
-grep -r "\[.*\](.*\.md)" .
+grep -rn "](.*\.md)" .
 ```
 
 ### Markdown Linter
@@ -590,6 +584,6 @@ Before marking docs as complete:
 
 ---
 
-**Last Updated:** 2025-12-13
-**Total Documentation Files:** 30+
-**Documentation Coverage:** Comprehensive (user guides, technical ref, operations, security)
+**Last Updated:** 2026-09-28
+**Total Documentation Files:** 441 Markdown files under `docs/` (271 outside `docs/archive/`)
+**Documentation Coverage:** Comprehensive (user guides, normative INV/DOM/FEAT/SPEC/SOP, operations, security)
