@@ -362,7 +362,10 @@ def test_DOM_IDEN_002__recovery_username_uses_random_segment(client, recovery_da
     assert resp.status_code == 302
 
     with client.session_transaction() as sess:
-        generated_username = sess.get("generated_username")
+        from app.services import student_setup
+        import json
+        staged = json.loads(student_setup.client().get(student_setup._key(sess['student_setup_token'])))
+        generated_username = student_setup.username(staged)
 
     assert generated_username is not None
     assert "galaxy" in generated_username
@@ -490,6 +493,7 @@ def test_DOM_IDEN_002__recovery_setup_rejects_already_credentialed_user(client, 
     from app.feats.identity_feat import activate_student_credentials
 
     result = activate_student_credentials(
+        setup_token="missing-setup-token-0000000000000000", setup_generation="",
         seat_id=None, user_id=recovery_data["user"].id,
         username="replacement", pin="4826", passphrase="replacement-passphrase7",
         correlation_id="recovery-replay-test", idempotency_key="recovery:replay-test",
@@ -515,7 +519,9 @@ def _authorize_recovery(user):
 
 def _complete_recovery(user_id, authorization, username="recovered-student"):
     from app.feats.identity_feat import activate_student_credentials
+    from tests.dom.identity.helpers import prepared_credential_attempt
     return activate_student_credentials(
+        **prepared_credential_attempt(user_id=user_id, authorization=authorization, username=username),
         seat_id=None, user_id=user_id, recovery_authorization=authorization,
         username=username, pin="4826", passphrase="new-passphrase7",
         correlation_id="corr_recovery_complete", idempotency_key=f"recovery:complete:{username}",

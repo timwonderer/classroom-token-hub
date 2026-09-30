@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| INV-ARC-018      | 1.4     | 2026-09-28     | 1.3        | Constitutional |
+| INV-ARC-018      | 1.5     | 2026-09-29     | 1.4        | Constitutional |
 
 ---
 
@@ -132,6 +132,24 @@ PII retention is governed by the lifecycle of its owning identity record:
 
 ## IX. Domain Responsibilities
 
+### Temporary student credential setup
+
+Student setup MAY retain its generated username only in a bounded, server-side,
+volatile memory store shared by application workers. No student username staging
+column or recoverable persistent copy is permitted. The value is encrypted with
+the approved Fernet facility inside this volatile store; this does not authorize
+encrypted disk persistence. RDB/AOF, replication, backups, swap, core dumps, slow
+logs and command capture must not persist this state. An unavailable or unsafe
+store MUST fail closed, with no cookie/database/worker-local fallback.
+
+The browser holds only a random capability. The server binds the record to the
+current claim generation or recovery authorization; the fixed lifetime is at most
+30 minutes and never exceeds the recovery deadline. Completion consumes the proof
+and removes the recoverable username before credentials are activated. Restart,
+owner deletion and recovery reissuance erase the state. Username collisions may
+restore the same attempt only within its original deadline. GET cannot create,
+refresh or verify an attempt. FEAT-IDEN-002 incorporates SPEC-IDEN-001 for this flow.
+
 ### Temporary teacher signup
 
 Before a User, Class or Seat exists, Identity may stage only the submitted class
@@ -155,7 +173,7 @@ No staging value is copied to logs or authority context.
 - FEAT-IDEN-001 (claim verification) hashes the names a student enters only to compare them with those columns. It persists neither the names nor their digests.
 - FEAT-IDEN-002 clears the claim verification columns in the binding transaction (INV-ARC-019 §X).
 
-*Amended in 1.4 (2026-09-28): version 1.3 attributed column creation to FEAT-IDEN-001. FEAT-IDEN-001 v3.0 is read-only verification, and FEAT-IDEN-006 has always written these columns. The storage rule itself is unchanged.*
+*Amended in 1.5 (2026-09-29): versions 1.4 and earlier attributed column creation to FEAT-IDEN-001. FEAT-IDEN-001 v3.0 is read-only verification, and FEAT-IDEN-006 has always written these columns. The storage rule itself is unchanged.*
 
 ### Operations Domain (DOM-OPS)
 

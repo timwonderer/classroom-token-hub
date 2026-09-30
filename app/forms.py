@@ -224,6 +224,12 @@ class StudentCreateUsernameForm(FlaskForm):
     write_in_word = StringField('Your Word', validators=[DataRequired()])
     submit = SubmitField('Generate Username')
 
+class StudentVerifySavedUsernameForm(FlaskForm):
+    # Proves the student can reproduce the username from their own saved copy.
+    # The route compares it with the canonical lookup digest; never echo it back.
+    saved_username = StringField('Your username', validators=[DataRequired()])
+    submit = SubmitField('Check my username')
+
 class StudentPinPassphraseForm(FlaskForm):
     pin = PasswordField('PIN', validators=[DataRequired()])
     passphrase = PasswordField('Passphrase', validators=[DataRequired()])

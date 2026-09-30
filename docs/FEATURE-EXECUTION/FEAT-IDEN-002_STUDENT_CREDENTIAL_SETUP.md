@@ -3,7 +3,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| FEAT-IDEN-002 | 2.2 | 2026-09-28 | 2.1 | Normative | ACTIVE |
+| FEAT-IDEN-002 | 2.2 | 2026-09-29 | 2.1 | Normative | ACTIVE |
 
 ---
 
@@ -24,6 +24,7 @@ to initial claim, not recovery (DOM-IDEN-002 §IX; INV-ARC-019 §VI).
 - DOM-IDEN-005 §V, §VII and §VIII (Membership by Existence, Student Identity Lifecycle, Identity Binding)
 - INV-ARC-019 §X and §XII (claim artifacts; Roster Provisioning and Seat Claim)
 - SPEC-SEC-001 §V (credential hashing and lookup digests)
+- SPEC-IDEN-001 (username retention verification; incorporated) and INV-ARC-018 §IX (memory-only setup staging)
 - FEAT-CORE-000 (Feature Execution Constitutional Directive)
 
 ---
@@ -32,6 +33,7 @@ to initial claim, not recovery (DOM-IDEN-002 §IX; INV-ARC-019 §VI).
 
 ### 1. Required Inputs
 
+* `setup_token` and `setup_generation`: opaque capability and generation of the consumed server-side retention proof (SPEC-IDEN-001). The FEAT MUST recheck its live completion record, scope, generation, and canonical username under the identity locks before mutation.
 * `user_id`: Recovery only: the existing student User authorized by FEAT-IDEN-004. MUST be absent for initial claim, because no User exists yet.
 * `seat_id` and `claim_generation`: Initial claim only, taken from the signed onboarding session that FEAT-IDEN-001 wrote. MUST be absent in recovery.
 * `class_id`: Initial claim only. MUST NOT be resolved for recovery.
@@ -76,6 +78,30 @@ For initial claim, the FEAT MUST:
 ## III. Orchestration Logic
 
 ### A. Verification Phase (Read-Only)
+
+#### Username retention prerequisite
+
+Before credential activation on either initial claim or recovery, the server MUST
+verify that the student reproduced the generated username after it was removed
+from the verification surface. An acknowledgment cannot satisfy this gate.
+`SPEC-IDEN-001_USERNAME_RETENTION_VERIFICATION` is incorporated for the interaction,
+canonical matching, session and page binding, privacy, accessibility accommodation,
+and required verification. A proof from another setup generation or page MUST NOT
+activate credentials. Normal authentication fields continue to permit paste.
+
+The server compares canonical username lookup digests using `SPEC-SEC-001` §V.2;
+case is significant. Security events and idempotency keys MUST contain neither
+raw usernames nor lookup digests (`INV-ARC-018` §V / `SPEC-SEC-001` §V.5).
+
+The temporary attempt is owned by Identity and memory-only under INV-ARC-018 §IX.
+A compare-and-set consumes the page proof and erases its username before activation.
+The volatile completion record retains only a lookup digest to bind the in-flight
+value; the FEAT rechecks it after acquiring the identity locks. Expired or replaced
+attempts cannot activate credentials, including after a lock wait;
+refused mutations may restore only the same, still-live attempt without extending
+its deadline. Successful activation erases all attempts for its Seat (claim) or
+User (recovery). Storage loss, expiry, unsafe configuration or scope mismatch
+fails closed. No migration, recoverable database field or cookie fallback is allowed.
 
 #### Step 1: Validate User State
 
@@ -128,7 +154,7 @@ All mutations in this section **MUST** occur within a single database transactio
 #### Step 1: Hash Credentials
 
 Per SPEC-SEC-001 §V:
-- `username_hash` and `username_lookup_hash` both come from `build_hashed_username_fields(username)`. The first is a salted HMAC digest; the second is the unsalted HMAC-SHA-256 lookup digest under `PEPPER_KEY`, after the canonical normalization in §V.2.
+- `username_hash` and `username_lookup_hash` both come from `build_hashed_username_fields(username)`. The first is a salted HMAC digest; the second is the unsalted, case-sensitive HMAC-SHA-256 lookup digest under `PEPPER_KEY`, after the canonical normalization in §V.2 (NFKC and trim; usernames are not lowercased).
 - `pin_hash = hash_password(pin)` and `passphrase_hash = hash_password(passphrase)` use scrypt (`scrypt:32768:8:1`) with a per-hash random salt. Password hashing **MUST NOT** use `PEPPER_KEY` or any other application secret (SPEC-SEC-001 §V, item 3).
 
 Recovery may hash before taking the User row lock, to keep the lock short.
@@ -158,7 +184,7 @@ The route handler SHALL clear session state used during onboarding:
 - Clear `onboarding_seat_ref`
 - Clear `onboarding_user_ref`
 - Clear `recovery_setup_authorization`
-- Clear `generated_username` (if used)
+- Erase the volatile setup attempt and clear `student_setup_token`; no readable username or proof is stored in the cookie
 - Clear `theme_prompt` and `theme_slug` (if used)
 
 **Note:** This is application-level housekeeping, not a database mutation.
@@ -282,7 +308,8 @@ Step 1: FEAT-IDEN-001 (Unauthenticated Seat Claim, read-only verification)
 └─ User state: none exists; nothing is written
 
 Step 2: FEAT-IDEN-002 (Credential Setup, one transaction)
-├─ Input: seat_id + claim_generation (from session), username, pin, passphrase
+├─ Input: seat_id + claim_generation (from session), consumed retention proof
+│         (setup_token, SPEC-IDEN-001), username, pin, passphrase
 ├─ Effects: User created with credentials, Seat bound, claim artifacts cleared,
 │           last_active pointers set
 └─ User state: authenticated participant, ready to log in
@@ -317,7 +344,9 @@ reuse the consumed code; it needs a new teacher-issued code.
 - `docs/DOMAIN/DOM-IDEN-002_STUDENT_IDENTITY_ARCHITECTURE.md`
 - `docs/DOMAIN/DOM-IDEN-005_IDENTITY_BINDING_AND_LIFECYCLE.md`
 - `docs/DOMAIN/DOM-IDEN-006_CANONICAL_CONTEXT_RESOLUTION.md`
+- `docs/INVARIANT/ARCHITECTURE/INV-ARC-018_PII_STORAGE_AND_RETENTION_ENFORCEMENT.md`
 - `docs/SPEC/SPEC-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_CODE_CONTRACT.md`
+- `docs/SPEC/SPEC-IDEN-001_USERNAME_RETENTION_VERIFICATION.md`
 
 ---
 
@@ -327,6 +356,7 @@ Before code review, verify:
 
 - [ ] Initial claim creates the User only after the locked Seat is confirmed unclaimed at the recorded `claim_generation`
 - [ ] Seat validation applies only to initial claim; recovery performs no participation lookup
+- [ ] Credentials activate only after a consumed, live SPEC-IDEN-001 retention proof, rechecked under the identity locks
 - [ ] Username uniqueness is enforced
 - [ ] Credential validation rules are applied
 - [ ] PIN and passphrase are hashed with `hash_password()` (scrypt, salted, never peppered; SPEC-SEC-001 §V)
@@ -352,11 +382,12 @@ Revisions to this document SHALL:
 4. Maintain consistency with FEAT-CORE-000.
 5. Maintain consistency with FEAT-IDEN-001.
 
-**Version 2.2 (2026-09-28):** §II.2 states the lock sequence: an unlocked read of the Seat's database `class_id`, then the class lock, then the Seat lock. §VII lists `FAILED` beside the only successful outcome.
+**Version 2.2 (2026-09-29):** §II.2 states the lock sequence: an unlocked read of the Seat's database `class_id`, then the class lock, then the Seat lock. §VII lists `FAILED` beside the only successful outcome.
 
-**Version 2.1 (2026-09-28):** §II and §IV.1: sign-in uses the username and passphrase, following DOM-IDEN-002 2.8 and the credential matrix. It had said username and PIN.
+**Version 2.1 (2026-09-29):** §II and §IV.1: sign-in uses the username and passphrase, following DOM-IDEN-002 2.9 and the credential matrix. It had said username and PIN.
 
-**Version 2.0 (2026-09-28):**
+**Version 2.0 (2026-09-29):**
+- Supersedes 1.5 and keeps its username retention gate, `setup_token` inputs and session housekeeping unchanged. Lists SPEC-IDEN-001 and INV-ARC-018 as governing documents and dependencies.
 - For initial claim, this FEAT creates the `User` with its credentials and binds the Seat in one transaction.
   Version 1.x (§I–§IV and §VIII) described activating credentials on a User that FEAT-IDEN-001 had already
   created and bound. That contradicted this document's own v1.4 *Claim verification lifetime* section,
@@ -368,6 +399,10 @@ Revisions to this document SHALL:
   generation and recovery nonce.
 - Replaced the `INVALID_USER_STATE` failure with `INVALID_RECOVERY_STATE`. The audit `user_id` is now a UUID. Added
   INV-ARC-013, INV-ARC-019 and SPEC-SEC-001 as dependencies.
+
+**Version 1.5 (2026-09-29):** added the *Username retention prerequisite* (SPEC-IDEN-001, incorporated): credentials
+activate only after the student reproduces the generated username, with memory-only staging under INV-ARC-018 §IX.
+Added the `setup_token` / `setup_generation` inputs; the username lookup digest is case-sensitive (SPEC-SEC-001 §V.2).
 
 **Version 1.3 (2026-09-15): server-validated recovery nonce consumed atomically with credential replacement.**
 

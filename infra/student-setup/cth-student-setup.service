@@ -1,0 +1,25 @@
+[Unit]
+Description=CTH memory-only student setup state
+After=local-fs.target
+
+[Service]
+Type=simple
+User=redis
+Group=cth-student-setup
+RuntimeDirectory=cth-student-setup
+RuntimeDirectoryMode=0750
+ExecStart=/usr/bin/redis-server /etc/cth-student-setup/redis.conf
+Restart=on-failure
+LimitCORE=0
+MemoryMax=96M
+MemorySwapMax=0
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+RestrictAddressFamilies=AF_UNIX
+ReadWritePaths=/run/cth-student-setup
+
+[Install]
+WantedBy=multi-user.target

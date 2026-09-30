@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001      | 3.9     | 2026-09-28     | 3.8        | Normative |
+| SOP-DOC-001      | 3.10    | 2026-09-29     | 3.9        | Normative |
 
 ---
 
@@ -137,6 +137,7 @@ Archived material is deliberately absent; see §VI.
 ### Specifications (SPEC)
 - [SPEC-DES-001 — Design System and Visual Identity](../SPEC/SPEC-DES-001_DESIGN_SYSTEM_AND_VISUAL_IDENTITY.md)
 - [SPEC-DISPLAY-001 — Display Metadata Resolver](../SPEC/SPEC-DISPLAY-001_DISPLAY_IDENTITY_METADATA_RESOLVER.md)
+- [SPEC-IDEN-001 — Username Retention Verification](../SPEC/SPEC-IDEN-001_USERNAME_RETENTION_VERIFICATION.md) — incorporated by FEAT-IDEN-002; memory-only setup staging, retrieval verification and page-bound proof.
 - [SPEC-ECON-001 — Savings Interest Accrual and Disbursement Specification](../SPEC/SPEC-ECON-001_SAVINGS_INTEREST_ACCRUAL_AND_DISBURSEMENT_SPECIFICATION.md)
 - [SPEC-ECON-002 — Economic Policy Visibility and Disclosure](../SPEC/SPEC-ECON-002_ECONOMIC_POLICY_VISIBILITY_AND_DISCLOSURE.md)
 - [SPEC-ECON-003 — Economic Engine Calculation and Reference Specification](../SPEC/SPEC-ECON-003_ECONOMIC_ENGINE_CALCULATION_AND_REFERENCE_SPECIFICATION.md)
@@ -268,7 +269,7 @@ Their surviving content lives at:
 
 ## VIII. Change Notes
 
-**Version 3.9 (2026-09-28):**
+**Version 3.10 (2026-09-29):**
 - Removed `MAP-CLASS-002` from the Maps listing and recorded it under §VI as archived. The
   `class_id`-first scoping it described as a future target is the current model (INV-ARC-019,
   DOM-IDEN-001). Its text still called `join_code` the main operational class boundary.
@@ -278,6 +279,9 @@ Their surviving content lives at:
   location.
 - Versions 3.7 and 3.8 were published without change notes; their content is in the repository
   history.
+
+**Version 3.9 (2026-09-28):**
+- Registered `SPEC-IDEN-001`, the first specification in the `IDEN` area.
 
 **Version 3.6 (2026-09-20):**
 - Registered `REF-DES-001`, an informative, commit-cited history of visual identity,

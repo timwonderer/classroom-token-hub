@@ -35,6 +35,11 @@ authority stays with `INV-*`, `DOM-*`, `FEAT-*`, `SPEC-*` and `SOP-*`.
   CWE-459), then link it from the `[2.0.1]` section of `CHANGELOG.md`.
 - [ ] **Check public routes** once the window lifts. They were not verified at release because the
   gate was in place.
+- [ ] **Provision the student-setup memory store before deploying #1442.** The username-retention check
+  (FEAT-IDEN-002 1.5, SPEC-IDEN-001, INV-ARC-018 §IX) keeps setup state only in a dedicated, non-persistent Redis.
+  Provision and verify it per `infra/student-setup/README.md`: disk persistence, replication, swap, core dumps and
+  command capture all disabled. Setup fails closed without it. Repository tests do not certify production for
+  these settings. Carried from the NC-IDEN-001-1 note #1442 added to the pre-launch ship tracker, now archived.
 - [ ] **FEAT-IDEN-003 `ACT-IDEN-003` audit event** is not implemented. It needs an identity
   audit-event design first; see #1427.
 - [x] **`production-docs-smoke` and `markdown-web-links`** are fixed on branch
@@ -91,7 +96,7 @@ Each item was verified on 2026-09-28 unless it says otherwise.
   audit record for every FEAT execution. FEAT-IDEN-001 v3.0 §VI and FEAT-IDEN-002 §VII specify them;
   `app/feats/identity_feat.py` emits neither. This is the same gap as `ACT-IDEN-003` (#1427); design them
   together.
-- [x] **Decision: student login credential — passphrase (operator ruling, 2026-09-28).** DOM-IDEN-002 2.8
+- [x] **Decision: student login credential — passphrase (operator ruling, 2026-09-28).** DOM-IDEN-002 2.9
   (§VII login flow, §X summary) and FEAT-IDEN-002 2.1 now say username and passphrase, matching the
   code and the credential matrix. The student guides are corrected too. `diagnostics/student/login.md`
   had told students to sign in with their PIN.

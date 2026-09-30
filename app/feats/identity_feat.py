@@ -269,6 +269,8 @@ def recovery_setup_is_valid(user: Optional[User], authorization: Optional[str]) 
 @requires_feat_context("FEAT-IDEN-002")
 def activate_student_credentials(
     *,
+    setup_token: str,
+    setup_generation: str,
     seat_id: Optional[int],
     user_id: Optional[int],
     username: str,
@@ -290,6 +292,7 @@ def activate_student_credentials(
     without consuming recovery-session authority.
     """
     from app.hash_utils import hash_password
+    from app.services import student_setup
     from app.services.classroom_setup import create_student_user_for_seat
 
     if user_id is not None:
@@ -303,6 +306,10 @@ def activate_student_credentials(
                 success=False, error_code="INVALID_RECOVERY_STATE",
                 error_message="Invalid or expired recovery code.",
             )
+        _, binding = student_setup.scope(None, user, recovery_authorization=recovery_authorization)
+        if not student_setup.completion_is_valid(setup_token, binding, setup_generation, username):
+            return CredentialSetupResult(success=False, error_code="INVALID_SETUP_STATE",
+                                         error_message="Your setup session expired. Please start again.")
         # The row lock serializes completion and code reissuance. Consumption,
         # credential replacement, and revoking old sessions commit together.
         savepoint = db.session.begin_nested()
@@ -337,6 +344,10 @@ def activate_student_credentials(
                 success=False, error_code="INVALID_SEAT_STATE",
                 error_message="Invalid setup state. Please start over.",
             )
+        _, binding = student_setup.scope(seat, None)
+        if not student_setup.completion_is_valid(setup_token, binding, setup_generation, username):
+            return CredentialSetupResult(success=False, error_code="INVALID_SETUP_STATE",
+                                         error_message="Your setup session expired. Please start again.")
         # New claim path: create User and bind seat atomically.
         # Use savepoint so IntegrityError doesn't poison the FEATContext transaction.
         savepoint = db.session.begin_nested()
@@ -354,6 +365,8 @@ def activate_student_credentials(
             )
 
     db.session.flush()
+    from app.services.student_setup import forget_owner
+    forget_owner(f'user:{user.id}' if user_id is not None else f'seat:{seat_id}')
     return CredentialSetupResult(success=True, user_id=user.id)
 
 
@@ -719,6 +732,8 @@ def unclaim_student_seat(*, canonical_context, seat_id, expected_generation,
     if (seat.user_id != old_user_id or type(expected_generation) is not int
             or seat.claim_generation != expected_generation):
         raise ValueError("The seat's claim has changed. Refresh the roster before unclaiming it.")
+    from app.services.student_setup import forget_owner
+    forget_owner(f'seat:{seat.id}')
     first_hash, last_hash = hash_claim_name(first, class_id=ctx.class_id, field="first"), hash_claim_name(last, class_id=ctx.class_id, field="last")
     seat.user_id = None
     seat.claimed_at = None

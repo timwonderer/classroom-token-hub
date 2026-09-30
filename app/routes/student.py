@@ -25,6 +25,7 @@ import pytz
 from dateutil.relativedelta import relativedelta
 
 from app.extensions import db, limiter
+from app.services import student_setup
 from app.models import (
     Transaction, TransactionStatus, AttendanceSession, StoreItemVisibility,
     # StoreItemBlock removed — store_item_blocks unauthorized; use store_item_visibility (DOM-STORE-001)
@@ -47,7 +48,7 @@ from app.auth import (
 from app.services.context_resolver import ContextResolutionError, resolve_canonical_context
 from app.forms import (
     StudentClaimAccountForm, StudentCreateUsernameForm, StudentPinPassphraseForm,
-    StudentLoginForm, StudentCompleteProfileForm, InsuranceClaimForm
+    StudentVerifySavedUsernameForm, StudentLoginForm, StudentCompleteProfileForm, InsuranceClaimForm
 )
 
 # Import utility functions
@@ -456,6 +457,83 @@ def _get_credential_setup_state():
     return seat, None
 
 
+@student_bp.app_errorhandler(student_setup.SetupUnavailable)
+def _setup_storage_unavailable(error):
+    if request.accept_mimetypes.best == 'application/json':
+        return jsonify(verified=False, message="Setup is temporarily unavailable. Please try again."), 503
+    return render_template('error_503.html'), 503
+
+
+@student_bp.app_errorhandler(student_setup.SetupExpired)
+def _setup_state_expired(error):
+    destination = 'recovery.account_lookup' if session.get('onboarding_user_ref') else 'student.claim_account'
+    if request.accept_mimetypes.best == 'application/json':
+        return jsonify(verified=False, redirect=url_for(destination)), 409
+    flash("Your setup session expired. Please start again.", "setup")
+    return redirect(url_for(destination))
+
+
+@student_bp.after_request
+def _private_setup_response(response):
+    if request.endpoint in {'student.create_username', 'student.verify_saved_username', 'student.setup_pin_passphrase'}:
+        response.headers['Cache-Control'] = 'no-store'
+        # HTTPS CSRF checks require a same-origin Referer; disclose nothing cross-origin.
+        response.headers['Referrer-Policy'] = 'same-origin'
+    return response
+
+
+USERNAME_RETENTION_MISMATCH_MESSAGE = (
+    "That doesn't match your username. Check the copy you saved and try again."
+)
+
+
+def _clear_username_retention_state():
+    student_setup.discard(session.pop('student_setup_token', None))
+    # Old staging state is discarded, never used as a compatibility path.
+    for key in ('generated_username', 'username_generation_id', 'username_retention_proof',
+                'username_retention_attempts', 'username_collision'):
+        session.pop(key, None)
+
+
+def _setup_record(seat, user):
+    _, binding = student_setup.scope(seat, user, recovery_authorization=session.get('recovery_setup_authorization'))
+    token = session.get('student_setup_token')
+    return token, binding, student_setup.read(token, binding)
+
+
+def _begin_username_setup(seat, user):
+    # Serialize staging creation with identity destruction/revocation. A deleted
+    # parent must not acquire a new volatile record after its cleanup ran.
+    if user is not None:
+        user = User.query.filter_by(id=user.id).populate_existing().with_for_update().one_or_none()
+        from app.feats.identity_feat import recovery_setup_is_valid
+        if not recovery_setup_is_valid(user, session.get('recovery_setup_authorization')):
+            raise student_setup.SetupExpired('Setup expired.')
+    else:
+        ClassEconomy.query.filter_by(class_id=seat.class_id).with_for_update().one()
+        seat = Seat.query.filter_by(id=seat.id).populate_existing().with_for_update().one_or_none()
+        if not seat or seat.user_id is not None or seat.claim_generation != session.get('onboarding_claim_generation'):
+            raise student_setup.SetupExpired('Setup expired.')
+    owner, binding = student_setup.scope(seat, user, recovery_authorization=session.get('recovery_setup_authorization'))
+    ttl = student_setup.TTL_SECONDS
+    if user is not None:
+        ttl = min(ttl, int((ensure_utc(user.recovery_setup_expires_at) - utc_now()).total_seconds()))
+    if ttl <= 0:
+        raise student_setup.SetupExpired('Setup expired.')
+    session['student_setup_token'] = student_setup.begin(owner, binding, ttl)
+
+
+def _credential_setup_expired_redirect(user):
+    """Send a student whose setup state is missing or stale back to its start."""
+    if session.get('onboarding_user_ref') is not None and not user:
+        session.pop('onboarding_user_ref', None)
+        session.pop('recovery_setup_authorization', None)
+        flash("Recovery session expired or invalid. Ask your teacher for a new code.", "setup")
+        return redirect(url_for('recovery.account_lookup'))
+    flash("Please complete previous steps.", "setup")
+    return redirect(url_for('student.claim_account'))
+
+
 def _prime_seat_teacher_display_name_cache(student_user_id: int) -> None:
     """Cache teacher display names in session for this seat-scoped session."""
     from app.models import Seat, ClassEconomy
@@ -674,11 +752,15 @@ def claim_account():
         # Store seat reference in session — no DB writes until setup_pin_passphrase completes.
         # User creation and seat binding happen atomically at the end of the setup flow
         # (DOM-IDEN-002 §VIII, seat.user_id stays NULL until claim is fully complete).
+        _clear_username_retention_state()
         session['onboarding_seat_ref'] = result.seat_id
         session['onboarding_claim_generation'] = result.claim_generation
         session.pop('onboarding_user_ref', None)
         session.pop('recovery_setup_authorization', None)
-        session.pop('generated_username', None)
+        seat = db.session.get(Seat, result.seat_id)
+        if seat.claim_generation != result.claim_generation or seat.user_id is not None:
+            raise student_setup.SetupExpired('Setup expired.')
+        _begin_username_setup(seat, None)
         session.pop('theme_prompt', None)
         session.pop('theme_slug', None)
 
@@ -704,6 +786,11 @@ def create_username():
             return redirect(url_for('recovery.account_lookup'))
         flash("Please claim your account first.", "setup")
         return redirect(url_for('student.claim_account'))
+    # A refresh, Back, or resubmitted word is not a new setup session. Only
+    # the existing collision path permits replacing a generated username here.
+    token, binding, record = _setup_record(seat, user)
+    if record['username'] and not record['collision']:
+        return redirect(url_for('student.setup_pin_passphrase'))
     # Assign a random theme prompt if not yet in session
     if 'theme_prompt' not in session:
         selected_theme = random.choice(THEME_PROMPTS)
@@ -716,13 +803,73 @@ def create_username():
         if not validate_chosen_word(chosen_word):
             flash("Please enter a valid word (3-12 letters, no numbers or spaces).", "setup")
             return redirect(url_for('student.create_username'))
-        username = build_username(chosen_word, (seat.roster_fingerprint or "") if seat else "")
-        # Store username in session only — no DB writes until setup_pin_passphrase.
-        session['generated_username'] = username
+        student_setup.generate(token, binding, lambda: build_username(
+            chosen_word, (seat.roster_fingerprint or '') if seat else ''))
         session.pop('theme_prompt', None)
         session.pop('theme_slug', None)
         return redirect(url_for('student.setup_pin_passphrase'))
     return render_template('student_create_username.html', theme_prompt=session['theme_prompt'], form=form)
+
+
+@student_bp.route('/verify-username', methods=['GET', 'POST'])
+def verify_saved_username():
+    """Username retention check: the student types back the username they saved.
+
+    The setup page runs this in a modal over the username; the GET page is the
+    same check for browsers that cannot run the modal. Either way the server
+    decides, and setup cannot finish until it has.
+    """
+    seat, user = _get_credential_setup_state()
+    wants_json = request.accept_mimetypes.best == 'application/json'
+    if not seat and not user:
+        if wants_json:
+            return jsonify(verified=False, redirect=url_for('student.claim_account')), 409
+        return _credential_setup_expired_redirect(user)
+
+    token, binding, record = _setup_record(seat, user)
+    if not record['username'] or record['completing']:
+        raise student_setup.SetupExpired('Setup expired.')
+    page_token = request.form.get('retention_page_token') if request.method == 'POST' else secrets.token_urlsafe(32)
+
+    form = StudentVerifySavedUsernameForm()
+    if request.method == 'GET':
+        return render_template('student_verify_username.html', verify_form=form, error_message=None, retention_page_token=page_token)
+
+    if not form.validate_on_submit():
+        if 'csrf_token' in form.errors:
+            message = "This page expired. Reload it and try again."
+            status = 400
+        else:
+            # An invalid/empty answer also revokes any earlier proof for this page.
+            student_setup.verify(token, binding, page_token, '')
+            message = "Type the username you saved."
+            status = 200
+        if wants_json:
+            return jsonify(verified=False, message=message), status
+        return render_template('student_verify_username.html', verify_form=form, error_message=message, retention_page_token=page_token), status
+
+    matched, attempts = student_setup.verify(token, binding, page_token, form.saved_username.data)
+    # Counts only. Neither the generated nor the typed username is logged.
+    current_app.logger.info(
+        "username_retention_check outcome=%s attempt=%d flow=%s paste_accommodation=%s",
+        "verified" if matched else "mismatch", attempts,
+        "recovery" if user else "claim", request.form.get('paste_accommodation') == '1',
+    )
+    if not matched:
+        form.saved_username.data = ""
+        if wants_json:
+            return jsonify(verified=False, message=USERNAME_RETENTION_MISMATCH_MESSAGE)
+        return render_template(
+            'student_verify_username.html', verify_form=form,
+            error_message=USERNAME_RETENTION_MISMATCH_MESSAGE, retention_page_token=page_token,
+        )
+
+    if wants_json:
+        return jsonify(verified=True)
+    return render_template(
+        'student_pin_setup.html', username=None, username_verified=True,
+        form=StudentPinPassphraseForm(), verify_form=form, retention_page_token=page_token,
+    )
 
 
 @student_bp.route('/setup-pin-passphrase', methods=['GET', 'POST'])
@@ -730,16 +877,20 @@ def setup_pin_passphrase():
     """PAGE 3: Setup PIN & Passphrase - Secure the account."""
     # Require setup authorization and a generated username
     seat, user = _get_credential_setup_state()
-    username = session.get('generated_username')
-    if (not seat and not user) or not username:
-        if session.get('onboarding_user_ref') is not None and not user:
-            session.pop('onboarding_user_ref', None)
-            session.pop('recovery_setup_authorization', None)
-            flash("Recovery session expired or invalid. Ask your teacher for a new code.", "setup")
-            return redirect(url_for('recovery.account_lookup'))
-        flash("Please complete previous steps.", "setup")
-        return redirect(url_for('student.claim_account'))
+    if not seat and not user:
+        return _credential_setup_expired_redirect(user)
     from app.feats.identity_feat import activate_student_credentials
+
+    token, binding, record = _setup_record(seat, user)
+    username = student_setup.username(record)
+    if not username:
+        raise student_setup.SetupExpired('Setup expired.')
+    page_token = request.form.get('retention_page_token') if request.method == 'POST' else secrets.token_urlsafe(32)
+    username_verified = request.method == 'POST' and record['verified_page'] == page_token and bool(page_token)
+    if request.method == 'POST' and not username_verified:
+        # Fail closed: a request that skipped the retention check sets nothing.
+        flash("Confirm your saved username before setting your PIN and passphrase.", "setup")
+        return redirect(url_for('student.setup_pin_passphrase'))
 
     form = StudentPinPassphraseForm()
     if form.validate_on_submit():
@@ -750,19 +901,31 @@ def setup_pin_passphrase():
             return redirect(url_for('student.setup_pin_passphrase'))
 
         # FEAT-IDEN-002: Activate credentials (handles both new claim and recovery paths).
-        result = activate_student_credentials(
-            seat_id=seat.id if seat else None,
-            claim_generation=session.get("onboarding_claim_generation") if seat else None,
-            recovery_authorization=session.get("recovery_setup_authorization") if user else None,
-            user_id=user.id if user else None,
-            username=username,
-            pin=pin,
-            passphrase=passphrase,
-            correlation_id=f"corr_iden_credentials_{uuid.uuid4().hex}",
-            idempotency_key=f"feat:iden:credentials:{'user' if user else 'seat'}:{user.id if user else seat.id}:{username}",
-        )
+        # FEATContext logs this key. SPEC-SEC-001 V.5 forbids both usernames
+        # and lookup digests there; the random generation identifies the request.
+        taken = student_setup.take_verified(token, binding, page_token)
+        try:
+            result = activate_student_credentials(
+                setup_token=token, setup_generation=taken['generation'],
+                seat_id=seat.id if seat else None,
+                claim_generation=session.get("onboarding_claim_generation") if seat else None,
+                recovery_authorization=session.get("recovery_setup_authorization") if user else None,
+                user_id=user.id if user else None,
+                username=student_setup.username(taken),
+                pin=pin,
+                passphrase=passphrase,
+                correlation_id=f"corr_iden_credentials_{uuid.uuid4().hex}",
+                idempotency_key=(
+                    f"feat:iden:credentials:{'user' if user else 'seat'}:{user.id if user else seat.id}:"
+                    f"{taken['generation']}"
+                ),
+            )
+        except Exception:
+            student_setup.restore(token, binding, taken)
+            raise
 
         if not result.success:
+            student_setup.restore(token, binding, taken, collision=result.error_code == 'USERNAME_TAKEN')
             flash(result.error_message, "setup")
             if result.error_code == "INVALID_RECOVERY_STATE":
                 session.pop("onboarding_user_ref", None)
@@ -778,11 +941,20 @@ def setup_pin_passphrase():
         session.pop('onboarding_user_ref', None)
         session.pop('recovery_setup_authorization', None)
         session.pop('generated_username', None)
+        _clear_username_retention_state()
         # Sign-in takes the passphrase (FEAT-IDEN-002 §Credential boundary);
         # the PIN is for transfers, attendance, and hall passes.
         flash("You're all set! Log in with your new username and passphrase to get started.", "success")
         return redirect(url_for('student.setup_complete'))
-    return render_template('student_pin_setup.html', username=username, form=form)
+    return render_template(
+        'student_pin_setup.html',
+        # Once verified the page no longer needs to show the username.
+        username=None if username_verified else username,
+        username_verified=username_verified,
+        form=form,
+        verify_form=StudentVerifySavedUsernameForm(),
+        retention_page_token=page_token,
+    )
 
 
 # -------------------- ADD NEW CLASS --------------------

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-IDEN-002 | 2.8 | 2026-09-28 | 2.7 | Constitutional |
+| DOM-IDEN-002 | 2.9 | 2026-09-29 | 2.8 | Constitutional |
 
 ---
 
@@ -206,7 +206,7 @@ When two or more students in the same class roster share the same name during a 
 5. If exactly one seat matches, claim proceeds.
 6. If duplicate-name seats exist, dedupe code is required to disambiguate.
 7. On successful claim, the seat is bound to `user_id` and marked with `claimed_at`; clear claim first/last-name hashes, `roster_fingerprint`, and `dedupe_code` in the same transaction. The same cleanup applies to authenticated class binding. Recovery and display-name edits SHALL NOT regenerate claim artifacts.
-8. Credential setup activates login on `users`.
+8. Credential setup activates login on `users` only after server-authoritative username retention verification (FEAT-IDEN-002 / SPEC-IDEN-001). Temporary username staging is memory-only under INV-ARC-018 §IX; neither the browser cookie nor a database row may retain a readable student username.
 9. Initialize `last_active_class_id` and `last_active_seat_id` to the newly bound class and seat context (per DOM-IDEN-006 §XIII, identity lifecycle documents define how these pointers are initialized).
 
 The identity inference prohibition defined in DOM-IDEN-005 §VII applies: unauthenticated claim SHALL NOT search for or infer existing User identities outside the current claim transaction.
@@ -406,7 +406,11 @@ Revisions to this document SHALL:
 3. Maintain consistency with DOM-IDEN-001 and DOM-IDEN-005.
 4. Maintain consistency with INV-CORE-000.
 
-**Version 2.8 (2026-09-28):** students sign in with username and **passphrase** (operator ruling).
-Version 2.7 said username and PIN at §VII and §X, contradicting FEAT-IDEN-002's credential matrix and
+**Version 2.9 (2026-09-29):** students sign in with username and **passphrase** (operator ruling, 2026-09-28).
+Version 2.8 and earlier said username and PIN at §VII and §X, contradicting FEAT-IDEN-002's credential matrix and
 the implementation. §VII's financial-action gate now defers to that matrix; it had listed transfers,
 which use the PIN.
+
+**Version 2.8 (2026-09-29):** §VIII *Claim Flow* step 8: credential setup activates login only after
+server-authoritative username retention verification (FEAT-IDEN-002 / SPEC-IDEN-001). Temporary username
+staging is memory-only under INV-ARC-018 §IX.

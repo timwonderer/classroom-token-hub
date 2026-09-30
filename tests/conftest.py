@@ -727,3 +727,52 @@ def create_class_scope(app):
         }
 
     return _factory
+
+
+@pytest.fixture(scope='session', autouse=True)
+def volatile_student_setup_store():
+    """Use the real memory-only backend on an isolated socket, started on demand."""
+    import shutil
+    import tempfile
+    import time
+    from unittest.mock import patch
+    from app.services import student_setup
+
+    with tempfile.TemporaryDirectory(prefix='cth-setup-', dir='/tmp') as directory:
+        socket = str(Path(directory) / 'redis.sock')
+        url = 'unix://' + socket
+        original = student_setup._connection
+        processes = []
+        previous = flask_app.config.get('STUDENT_SETUP_REDIS_URL')
+        flask_app.config['STUDENT_SETUP_REDIS_URL'] = url
+
+        def connection(requested_url):
+            if requested_url == url and not processes:
+                binary = shutil.which('redis-server')
+                if not binary:
+                    pytest.fail('Student setup tests require redis-server (memory-only, isolated test instance).')
+                process = subprocess.Popen([
+                    binary, '--port', '0', '--unixsocket', socket,
+                    '--save', '', '--appendonly', 'no', '--slowlog-log-slower-than', '-1',
+                    '--dir', directory, '--maxmemory', '32mb', '--maxmemory-policy', 'noeviction',
+                ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                processes.append(process)
+                for _ in range(500):
+                    if Path(socket).exists():
+                        break
+                    if process.poll() is not None:
+                        pytest.fail('Isolated student setup Redis failed to start.')
+                    time.sleep(0.01)
+                else:
+                    pytest.fail('Isolated student setup Redis did not create its socket.')
+            return original(requested_url)
+
+        try:
+            with patch.object(student_setup, '_connection', connection):
+                yield
+        finally:
+            flask_app.config['STUDENT_SETUP_REDIS_URL'] = previous
+            for process in processes:
+                process.terminate()
+                process.wait(timeout=5)
+            original.cache_clear()
