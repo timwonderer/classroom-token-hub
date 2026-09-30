@@ -151,6 +151,7 @@ against this tracker, the archived launch trackers and the live-test RESUME reco
     pipeline, and skip interest for a seat whose settlement failed. Do not offset the timers.
   - **Documentation gap.** There is no FEAT-LED-003 contract document.
   - **Minor.** The sweep selects POSTED rows that have a NULL `posted_at` but never repairs them.
+  - **Status (2026-09-30).** Open, and it stays tracked. There is no PR yet; the fix waits on a FEAT-LED-003 contract.
 - [ ] **Savings interest is configured weekly but paid once per calendar month.**
   - **Configuration.** Every class with interest configured (6 `economic_engine` rows) is weekly payout with daily
     compounding.
@@ -162,8 +163,14 @@ against this tracker, the archived launch trackers and the live-test RESUME reco
     student savings projection shows four or five payouts a month.
   - **Timing.** Interest is also paid at the first hourly tick of the period with a positive posted balance, not
     after the window closes (SPEC-ECON-001 §14.1, §8.2, §12).
-  - **Owner decisions.** Whether to remediate the missed weekly interest, and whether payout waits for a closed
-    window. SPEC-ECON-001 §9.2 does not define "posted as of" a boundary.
+  - **Status (2026-09-30).** Fixed by #1449, which is merged to `main` as `96ea2901f` and awaits release before
+    2026-10-01 07:00 UTC. Payout now follows the configured window and pays only closed windows, using the daily
+    balance method (SPEC-ECON-001 1.1 §9.2).
+  - **Owner decisions.**
+    - The daily balance method is ratified.
+    - Option A: the September payments count as the week of 2026-09-28, with no top-up.
+    - A 365-day year is kept and must be documented (follow-up PR).
+    - The "Estimated interest next payout" label is to be fixed (follow-up PR).
 - [ ] **Canonical context is resolved three times per authenticated request.** For example, `GET /api/student-status`
   resolves it in `capture_correlation_context` (`app/__init__.py`), again in `login_required`
   (`app/auth.py:119`), and a third time in the route itself (`app/routes/api.py`). DOM-IDEN-006 §IX requires
@@ -182,6 +189,8 @@ against this tracker, the archived launch trackers and the live-test RESUME reco
   - **Target design.** One resolution in a `before_request` that runs after nonce validation. Auth decorators only
     check its result, and a structural guard with a mutation proof flags any other call. Do not normalise the
     pattern while touching individual routes.
+  - **Status (2026-09-30).** Open, and it stays tracked as separate work. #1447 does not normalise it. Its key
+    function reads the context `login_required` validated, and the route's own re-resolution is marked as tracked debt.
 - [ ] **Every authenticated request writes a TLCP trace row.** `persist_request_trace` in `after_request`
   (`app/__init__.py`) inserts one row and prunes on every request, including the 10-second
   `/api/student-status` poll: about 16,000 rows in 3.5 days. Decide whether high-frequency polls should be traced.
@@ -190,21 +199,41 @@ against this tracker, the archived launch trackers and the live-test RESUME reco
     limit in about 33 minutes. Shared school IPs make it sooner.
   - Production recorded 699 `429`s; support ticket #1 matches.
   - The client parses the HTML 429 page as JSON, so the timer stops updating. Production traffic comes from a pool of about 134 school addresses, not one; most 429s are a single long-lived poller exhausting 200/hour on its own.
-  - Fix in progress on its own branch, together with an endpoint blast-radius review of the other IP-keyed limits.
+  - **Status (2026-09-30).** #1447 fixes `/api/student-status` only: the limit is keyed per `(class_id, seat_id)`,
+    429s on `/api/` return JSON, and the client backs off.
+- [ ] **Rate-limit blast radius beyond `/api/student-status`, still open.** The endpoint review behind #1447 found:
+  - **Wrongly keyed by IP.** Other signed-in, class-scoped student routes use the per-IP defaults of 200/hour and
+    500/day per endpoint. `/student/dashboard`, transfer, payroll and the hall-pass endpoints would break first at a
+    school behind a single address.
+  - **Right key, wrong size for shared school networks.** `/student/login` (60/min per IP, with GET and POST sharing
+    the budget), claim and setup, and `/recovery/lookup` (10/min; FEAT-IDEN-004 §6 also calls for a per-code lockout).
+  - **Docs.** `/docs/*` has one endpoint-wide budget. The production 429s there all came from the project's own
+    docs-smoke crawler.
+  - **Next step.** Decide endpoint by endpoint. Do not replace IP limiting wholesale, because unauthenticated
+    credential endpoints need network limits.
 - [ ] **Student tickets are visible to sysadmin before teacher escalation.** This is a regression from `384176834`,
   and it is contrary to DOM-SUP-001 §VIII and FEAT-SUP-001.
   - Before escalation, sysadmin can see the IP, user agent, page URL, category and actor public id.
   - `update_issue` lets sysadmin close an un-escalated student ticket.
   - SPEC-OPS-004 §6.2 and §6.3 describe the regressed behaviour.
-  - Fix in progress on its own branch.
+  - **Status (2026-09-30).** Fixed in #1448 and awaiting merge. One server-side visibility rule applies to every
+    sysadmin list, count, detail page and action, and SPEC-OPS-004 is corrected to v1.3.
+  - **Before merging:** check whether `tests/simulated/test_group_d_pages.py`, which uses a fixed `ISSUE_ID = 1`,
+    still passes.
 - [ ] **Advanced-mode payroll rounding is not applied by payroll runs.** The rounding added on 2026-09-08
   (`2d2ace33f`) lives in `app/payroll.py` `calculate_payroll_breakdown`, which has had no production caller since
   `db7079c7d` (2026-07-21). FEAT-PROD-003 (`app/feats/prod.py`) prices exact seconds × rate.
   - No test has ever referenced `_round_billable_seconds`.
   - The archived coverage claim (#35, "✅ Calculation fixed 2026-09-08") is unsupported.
   - `templates/admin_payroll.html` tells teachers that worked time rounds.
-  - No normative document defines rounding, increments or overtime. This needs a decision before implementation.
-    Remediation is not decided.
+  - No normative document defines rounding, increments or overtime.
+  - **Operator ruling (2026-09-30).** Remove rounding as a supported payroll setting.
+    - The user-facing configuration and every claim about rounding are removed in #1450. The column stays, retired,
+      so the schema change is no more destructive than needed.
+    - **No remediation.** Rounding was never normatively defined and never applied, so the hypothetical rounded
+      amount is not an amount students were owed. The gap computed during the walkthrough was ~$138.50 across 164
+      payroll payments, ~$65.73 on the PROD-PAY-001 corrections, and at most $4.08 per student. It is recorded here,
+      and no correction was made for the reason above.
 - [ ] **A saved pay rate governs the open payroll cycle immediately, contrary to DOM-CLASS-003 §VII.**
   - **The rule.** DOM-CLASS-003 §VII requires a pending `next_boundary` transition, activated at payroll cycle
     completion (FEAT-PROD-004). DOM-PROD-001 §XV.3 and INV-ARC-015 §VI.7 say the same.
@@ -214,6 +243,10 @@ against this tracker, the archived launch trackers and the live-test RESUME reco
     and jobs paid 15 minutes worked at $1/min as $150.00 after a save of $10/min.
   - **Production.** Not yet exercised: each class has exactly one payroll settings row and one payroll version, and
     `policy_transitions` is empty. It is reachable by any teacher's next rate save.
+  - **Status (2026-09-30).** Fixed in #1450, which is not yet deployed. `payroll_settings` becomes append-only and
+    effective-dated. The owner's rulings are implemented: a monthly schedule is the anchored calendar month
+    (SPEC-TIME-001 §IX.12), pay frequency is derived rather than stored, and the only schedules are weekly, biweekly
+    and monthly. `first_pay_date` is required.
 - [ ] **Payroll amounts are priced from a source other than the policy version the event records.**
   - **Two sources.** FEAT-PROD-003 prices from the live `PayrollSettings` row (`app/feats/prod.py:535` →
     `app/payroll.py:56-70`). The event records `PolicyVersion.is_active`, read once in `settlement.py:164`. They
@@ -227,8 +260,11 @@ against this tracker, the archived launch trackers and the live-test RESUME reco
   - **Contracts affected.** DOM-PROD-001 §XI, FEAT-PROD-003 §II.1 and INV-CORE-000 §III.3 (reproducibility).
   - **No immutability triggers.** Production has none on `payroll_event`, `policy_versions` or `payroll_settings`.
     Only `attendance_sessions` and `ledger_transaction` have them.
-  - **Open decision.** Settle the policy-version semantics (DOM-POL-001 §VI.0 against DOM-PROD-001 §XI) before
-    consolidating pricing into one PROD function.
+  - **Operator ruling (2026-09-30).** `policy_versions` and `policy_transitions` were never authorized as canonical.
+    The owner removed them in `184910af8` (2026-08-03); `abb49d75e` (2026-08-08) reintroduced them and `e6f10734e`
+    carved out an exception for them.
+    - Payroll reads only `payroll_settings` (#1450).
+    - #1452 retires both tables everywhere.
 - [ ] **Unratified citation.** The closed-session payroll rule (#1439) is cited in code as "DOM-PROD-001 §VI.3" /
   "§VI.1" (`app/services/attendance_service.py`, `app/services/payroll/settlement.py`, `app/feats/prod.py`).
   DOM-PROD-001 §VI is the Schema Authority Declaration and has no subsections, so the rule needs ratification.
@@ -244,18 +280,35 @@ against this tracker, the archived launch trackers and the live-test RESUME reco
   - **Tempo.** Tempo is still crash-looping (live-test finding 18, `RESUME_2026-09-22.md`): about 117,000 restarts,
     roughly 390,000 journal lines a day into Loki, and the app's OTLP trace export (`OTEL_TRACES_ENABLED=true`)
     targets it.
-- [ ] **No scheduled database backup exists.** WAL archiving is off, and no pre-release dump was taken for the
-  four 2026-09-29 releases. Older dumps sit on the production host, including v1 dumps from 2025-07 and 2025-11
-  that hold student rows whose live records no longer exist. A backup and retention model is being designed
-  against INV-ARC-018 §VII.4 and INV-CORE-000 §III.5 before any automation.
+- [ ] **Leftover v1 data on the host.**
+  - The owner deleted the 2025-07 and 2025-11 v1 database dumps on 2026-09-30.
+  - Still on disk: 333 MB of orphaned v1-era Loki log chunks under `/var/lib/loki/chunks`, dated 2025-12-22 to
+    2026-04-12. Loki has read from `/tmp/loki/chunks` since April, so nothing reaches these chunks.
+  - Still on disk: the live-test database dumps and env-file copies. They are waiting on the owner confirming the
+    keys are stored off the droplet.
 - [ ] **PROD-PAY-001 incident record not yet merged.** It is open as #1441
   (`docs/ops/audits/INCIDENT_2026-09-28_PROD-PAY-001.md`), created at 04:27 UTC on 2026-09-29. The production
   database shows the corrections approved between 04:21 and 04:26 UTC that day (79 students, $1,947.40). Check that
   the record matches. Release records for the 2026-09-29 releases are tracked in §II.
 - [ ] **No database backup of any kind exists.** The owner confirmed on 2026-09-30 that DigitalOcean droplet backups
-  are off. There is also no scheduled dump and no WAL archiving. The pre-release dumps on the host are being deleted
-  as part of the v1 and live-test data cleanup. A backup, retention and restore model must be settled against
-  INV-ARC-018 §VII.4, INV-CORE-000 §III.5 and SOP-SEC-001 §V.3 before automation.
+  are off. There is also no scheduled dump and no WAL archiving.
+  - **Direction (owner, 2026-09-30).** Scheduled encrypted off-host backups, with a replacement baseline after each
+    protected destruction:
+    - seat, class or teacher-account deletion is a protected destruction;
+    - once one completes, recovery points that predate it become unacceptable;
+    - they are superseded only after a new verified baseline exists;
+    - baseline health is reported as CURRENT, or STALE/DEGRADED.
+  - **Before any normative text or implementation:** a failure-mode review of this model is under way.
+  - The pre-release dump for #1449 is an interim measure. It is not the settled architecture.
+- [ ] **Security and ops decisions taken 2026-09-30.**
+  - Disable Grafana anonymous Admin, then validate authenticated access.
+  - Disable Tempo and set `OTEL_TRACES_ENABLED=false`.
+  - Move Loki's storage out of `/tmp`. The retention period waits on the owner's review of what Loki retains.
+  - `GET /sysadmin/login` must not destroy another browser context. The fix is added to #1446.
+  - **Follow-up:** `admin.login` has the same GET-time session pop (`app/routes/admin.py:2573`).
+- [ ] **Simple interest does not conform to SPEC-ECON-001 §4.1.** Credited interest joins the earning balance for
+  every calculation type. Tracked and deferred by the owner; no production class uses simple interest. Until it is
+  resolved, simple interest must not be described as fully supported or correct.
 
 ---
 
