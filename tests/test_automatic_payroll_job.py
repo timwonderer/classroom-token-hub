@@ -6,11 +6,15 @@ then calls ``complete_payroll_cycle``. These tests prove:
 
 * a due class runs the full lifecycle through FEAT-PROD-004 (events + ITR record +
   policy activation + completion anchor keyed by the scheduled occurrence);
-* ``next_payroll_date`` advances so the class is no longer due, and a second job
-  tick is inert;
+* the derived next payroll date advances so the class is no longer due, and a
+  second job tick is inert (DOM-PROD-001 §XV.5: the date is derived from the
+  run's SYSTEM payroll events, never stored);
 * the scheduled occurrence is the deterministic command identity: replaying the
-  same occurrence (date not advanced) resolves the completed run and reproduces
-  nothing.
+  same occurrence resolves the completed run and reproduces nothing.
+
+The pending ``policy_transitions`` row seeded here exercises FEAT-PROD-004's
+generic next-boundary activation step (legacy, pending retirement); payroll
+settings themselves take no part in it (DOM-CLASS-003 §VII).
 """
 
 from __future__ import annotations
@@ -23,12 +27,14 @@ from app.models import (
     AttendanceSession,
     InterpretationCycleRecord,
     PayrollEvent,
-    PayrollSettings,
     PolicyTransition,
     PolicyVersion,
 )
 from app.scheduled_tasks import run_automatic_payroll_job
+from app.services.payroll import schedule as schedule_module
 from app.services.payroll.cycle_completion import resolve_completed_run
+from app.services.payroll.schedule import next_payroll_date
+from app.services.payroll.settings import save_payroll_setting
 from app.utils.canonical_temporal_resolver import utc_now
 from tests.helpers.classroom_initializer import initialize
 
@@ -53,15 +59,14 @@ def _seed_due_class(classroom, *, due=True):
             target_policy_version_id=v2.id, activation_mode="next_payroll",
             status="pending", created_at=now,
         ))
-        settings = PayrollSettings.query.filter_by(class_id=cid).first()
-        if settings is None:
-            settings = PayrollSettings(class_id=cid, pay_rate=0.25)
-            db.session.add(settings)
-        settings.availability_state = 'IN_USE'
-        settings.next_payroll_date = occurrence
-        settings.payroll_frequency_days = 14
-        db.session.flush()
         v1_id, v2_id = v1.id, v2.id
+    # The schedule: the first pay date is the occurrence (due, or a week out).
+    # The provisioned default defines no boundary, so this is in force at once.
+    with FEATContext("FEAT-ADMN-001", idempotency_key=f"schedule:{cid}"):
+        save_payroll_setting(
+            class_id=cid,
+            settings_data={"first_pay_date": occurrence, "payroll_frequency_days": 14},
+        )
 
     with FEATContext("FEAT-PROD-001", correlation_id=f"att:{cid}", idempotency_key=f"att:{cid}"):
         db.session.add(AttendanceSession(
@@ -98,9 +103,11 @@ def test_due_class_runs_full_lifecycle_and_advances_next_date(app):
     assert db.session.get(PolicyVersion, v2_id).is_active is True
     assert db.session.get(PolicyVersion, v1_id).is_active is False
 
-    # next_payroll_date advanced by one frequency → class no longer due.
-    settings = PayrollSettings.query.filter_by(class_id=cid).one()
-    assert settings.next_payroll_date == occurrence + timedelta(days=14)
+    # The run is SYSTEM and names its occurrence, so the derived next date is one
+    # frequency on from the occurrence → the class is no longer due.
+    assert {event.mechanism for event in PayrollEvent.query.filter_by(
+        class_id=cid, payroll_cycle_id=cycle_id)} == {"SYSTEM"}
+    assert next_payroll_date(cid) == occurrence + timedelta(days=14)
 
     # A second tick is inert — the class is not due.
     events_before = PayrollEvent.query.filter_by(class_id=cid).count()
@@ -119,7 +126,7 @@ def test_not_due_class_is_skipped(app):
     assert InterpretationCycleRecord.query.filter_by(class_id=cid).count() == 0
 
 
-def test_replaying_same_occurrence_is_idempotent(app):
+def test_replaying_same_occurrence_is_idempotent(app, monkeypatch):
     classroom = initialize("chemistry_p1", app)
     cid, v1_id, v2_id, occurrence = _seed_due_class(classroom, due=True)
 
@@ -127,12 +134,12 @@ def test_replaying_same_occurrence_is_idempotent(app):
     events_after_first = PayrollEvent.query.filter_by(class_id=cid).count()
     assert events_after_first >= 1
 
-    # Simulate the scheduled occurrence being retried (as if the advance had not
-    # stuck): re-arm the SAME next_payroll_date, so the derived key is identical.
-    with FEATContext("FEAT-BYPASS-LEGACY", correlation_id=f"rearm:{cid}"):
-        settings = PayrollSettings.query.filter_by(class_id=cid).one()
-        settings.next_payroll_date = occurrence
-        db.session.flush()
+    # Simulate the scheduled occurrence being retried (as a job racing the first
+    # would see it): the SAME occurrence is due again, so the derived key is
+    # identical.
+    monkeypatch.setattr(
+        schedule_module, "due_payroll_occurrences", lambda now=None: [(cid, occurrence)]
+    )
 
     run_automatic_payroll_job()
 

@@ -169,12 +169,13 @@ def test_reference_configuration_persisted_exactly_as_frozen_projection(app):
     payload = compute_partial_payload(cid, start, end)
     cycle_id = str(uuid4())
 
-    expected = capture_reference_configuration(cid)
+    expected = capture_reference_configuration(cid, cycle_completed_at=end)
     result = _materialize(cid, cycle_id, payload, start, end)
 
     assert result.reference_configuration == expected
     assert result.record.reference_configuration == expected
-    assert result.record.reference_configuration["schema_version"] == 1
+    # 2: the policy block names the payroll_settings row (operator ruling 2026-09-30).
+    assert result.record.reference_configuration["schema_version"] == 2
     assert set(result.record.reference_configuration) == {
         "schema_version", "economic_engine", "policy"
     }

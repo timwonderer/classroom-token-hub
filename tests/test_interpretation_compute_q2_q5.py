@@ -24,7 +24,8 @@ from decimal import Decimal
 
 from app.extensions import db
 from app.feats.base import FEATContext
-from app.models import PayrollEvent, PolicyVersion, Transaction, TransactionStatus
+from app.models import PayrollEvent, Transaction, TransactionStatus
+from app.services.payroll.settings import first_payroll_setting
 from app.services.interpretation.compute import compute_partial_payload
 from app.services.interpretation.economic_activity import compute_q2
 from app.services.interpretation.income_composition import compute_q5
@@ -269,19 +270,6 @@ def test_q2_frequency_and_volume_reflect_student_originated_rows(app):
 # --------------------------------------------------------------------------- #
 
 
-def _seed_payroll_policy(cid):
-    with FEATContext("FEAT-BYPASS-LEGACY", correlation_id=f"q5:policy:{cid}"):
-        policy = PolicyVersion(
-            class_id=cid, domain="payroll", version_number=1,
-            policy_payload_json='{"source":"test"}',
-            activated_at=datetime(2026, 8, 26, 12, 0, tzinfo=timezone.utc),
-            is_active=True,
-        )
-        db.session.add(policy)
-        db.session.flush()
-    return policy
-
-
 def _seed_q5_window(classroom):
     """Seed a six-category inbound mix (cents): labor 2000, teacher/admin 500,
     reversal 300, system-non-labor 200, other 500 (interest 100 + peer 400),
@@ -292,7 +280,7 @@ def _seed_q5_window(classroom):
     now = utc_now()
     window_start = now - timedelta(hours=1)
     window_end = now + timedelta(hours=1)
-    policy = _seed_payroll_policy(cid)
+    policy = first_payroll_setting(cid)
 
     def _tx(feat, corr, seat, amount, mechanism="self", account_type="checking",
             original_transaction_id=None):
@@ -315,7 +303,7 @@ def _seed_q5_window(classroom):
         db.session.add(PayrollEvent(
             class_id=cid, target_seat_id=sA.seat_id,
             actor_seat_id=teacher_seat_id, correlation_id="corr_q5:labor",
-            idempotency_key="q5:labor:evt", policy_version_id=policy.id,
+            idempotency_key="q5:labor:evt",
             policy_uuid=policy.policy_uuid, mechanism="TEACHER",
             payroll_event_type="payroll", recorded_at=now,
         ))
@@ -331,7 +319,7 @@ def _seed_q5_window(classroom):
         db.session.add(PayrollEvent(
             class_id=cid, target_seat_id=sB.seat_id,
             actor_seat_id=teacher_seat_id, correlation_id="corr_q5:manual",
-            idempotency_key="q5:manual:evt", policy_version_id=policy.id,
+            idempotency_key="q5:manual:evt",
             policy_uuid=policy.policy_uuid, mechanism="TEACHER",
             payroll_event_type="manual_credit", recorded_at=now,
         ))

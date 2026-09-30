@@ -14,7 +14,7 @@ from app.attendance import (
 )
 from app.feats.base import FEATContext
 from app.feats.prod import record_attendance_session, record_payroll_event
-from app.models import AttendanceReasonCode, PolicyVersion
+from app.models import AttendanceReasonCode
 from app.services.context_resolver import CanonicalContext
 from tests.helpers.classroom_initializer import initialize
 
@@ -48,21 +48,6 @@ def _teacher_ctx(classroom) -> CanonicalContext:
     )
 
 
-def _active_payroll_policy_version(classroom) -> PolicyVersion:
-    with FEATContext("FEAT-BYPASS-LEGACY", correlation_id=f"test_payroll_policy:{classroom.class_id}"):
-        policy = PolicyVersion(
-            class_id=classroom.class_id,
-            domain="payroll",
-            version_number=1,
-            policy_payload_json='{"source":"test"}',
-            activated_at=datetime(2026, 7, 19, 15, 0, tzinfo=timezone.utc),
-            is_active=True,
-        )
-        db.session.add(policy)
-        db.session.flush()
-    return policy
-
-
 def _record_active_interval(ctx: CanonicalContext, *, start, end) -> None:
     record_attendance_session(
         ctx=ctx,
@@ -84,9 +69,14 @@ def test_DOM_PROD_001__get_last_payroll_time_reads_payroll_events(client):
         get_last_payroll_time(seat_id=None, class_id=None)
 
     classroom, student = _create_class_and_student("payroll-A", client.application)
-    policy = _active_payroll_policy_version(classroom)
     payroll_time = datetime(2026, 7, 19, 15, 0, tzinfo=timezone.utc)
     manual_credit_time = payroll_time + timedelta(hours=1)
+    # A payroll event prices closed work (DOM-PROD-001 §XV.3); give it some.
+    _record_active_interval(
+        _student_ctx(classroom, student),
+        start=payroll_time - timedelta(minutes=30),
+        end=payroll_time - timedelta(minutes=15),
+    )
 
     record_payroll_event(
         ctx=_teacher_ctx(classroom),
@@ -94,9 +84,7 @@ def test_DOM_PROD_001__get_last_payroll_time_reads_payroll_events(client):
         payroll_event_type="payroll",
         correlation_id="corr:test:payroll-anchor",
         idempotency_key="test:payroll-anchor",
-        policy_version_id=policy.id,
         mechanism="TEACHER",
-        amount=Decimal("0.00"),
         reference_time_utc=payroll_time,
     )
     record_payroll_event(
@@ -105,7 +93,6 @@ def test_DOM_PROD_001__get_last_payroll_time_reads_payroll_events(client):
         payroll_event_type="manual_credit",
         correlation_id="corr:test:manual-credit-anchor",
         idempotency_key="test:manual-credit-anchor",
-        policy_version_id=policy.id,
         mechanism="TEACHER",
         amount=Decimal("1.00"),
         reference_time_utc=manual_credit_time,

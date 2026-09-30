@@ -4,6 +4,7 @@ import pytest
 
 from app.extensions import db
 from app.feats.base import FEATContext
+from app.services.payroll.settings import current_payroll_setting
 from app.models import (
     ClassEconomy,
     IdentityProfile,
@@ -227,8 +228,11 @@ def test_DOM_IDEN_001__payroll_settings_uses_feature_scope_blocks_not_student_bl
 
     assert response.status_code == 302
     assert response.headers["Location"].endswith("/admin/payroll")
-    saved = PayrollSettings.query.filter_by(class_id=class_row.class_id, block="B").first()
-    assert saved is None
+    # `block` is not a payroll_settings column at all any more (DOM-POL-001A
+    # §V.F), so a submitted label cannot scope the saved row: it is the class's.
+    saved = current_payroll_setting(class_row.class_id)
+    assert saved is not None and saved.class_id == class_row.class_id
+    assert not hasattr(saved, "block")
 
 
 def test_DOM_IDEN_006__edit_student_requires_active_canonical_class_scope(client):

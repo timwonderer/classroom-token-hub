@@ -12,6 +12,7 @@ from app import db
 from app.feats.base import FEATContext
 from app.models import AttendanceSession, PayrollEvent, PolicyVersion, Seat, Transaction, User
 from app.services.ledger_posting_service import create_pending_transaction
+from app.services.payroll.settings import current_payroll_setting
 from app.utils.student_deletion import delete_user_if_orphaned
 from tests.helpers.classroom_initializer import initialize
 
@@ -43,13 +44,12 @@ def test_detaching_last_principal_preserves_seat_and_financial_productivity_fact
             account_type='checking', type='Deposit', description='Seat history')
         attendance = AttendanceSession(target_seat_id=seat_id, actor_seat_id=seat_id,
             class_id=classroom.class_id, status='active', reason_code='start_work')
-        policy = PolicyVersion(class_id=classroom.class_id, domain='seat-lifetime-test',
-            version_number=1, policy_payload_json='{}')
-        db.session.add_all([attendance, policy]); db.session.flush()
+        db.session.add(attendance); db.session.flush()
+        setting = current_payroll_setting(classroom.class_id)
         payroll = PayrollEvent(class_id=classroom.class_id, target_seat_id=seat_id,
             actor_seat_id=classroom.teacher_seat.id, correlation_id='seat-history',
-            idempotency_key='seat-history', policy_version_id=policy.id,
-            policy_uuid=policy.policy_uuid, payroll_event_type='manual_credit')
+            idempotency_key='seat-history', policy_uuid=setting.policy_uuid,
+            payroll_event_type='manual_credit')
         db.session.add(payroll); db.session.flush()
         record_ids = transaction.id, attendance.id, payroll.id
     with FEATContext('FEAT-TEST-SETUP', idempotency_key='seat-history:detach'):

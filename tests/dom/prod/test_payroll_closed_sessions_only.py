@@ -23,16 +23,12 @@ import pytest
 
 from app.extensions import db
 from app.feats.base import FEATContext
-from app.feats.prod import _record_payroll_event_impl
 from app.models import (
     AttendanceSession,
     PayrollCycleCompletion,
     PayrollEvent,
-    PayrollSettings,
-    PolicyVersion,
     Transaction,
 )
-from app.payroll import get_pay_rate_for_class
 from app.scheduled_tasks import run_automatic_payroll_job
 from app.services.attendance_service import (
     CLOSED_SESSION_SETTLEMENT_RULE,
@@ -40,6 +36,13 @@ from app.services.attendance_service import (
     calculate_seat_payroll_attendance,
 )
 from app.services.context_resolver import CanonicalContext
+from app.services.ledger_posting_service import create_pending_transaction
+from app.services.payroll.schedule import next_payroll_date
+from app.services.payroll.settings import (
+    first_payroll_setting,
+    pay_rate_per_second,
+    save_payroll_setting,
+)
 from app.services.payroll.settlement import (
     NoPayableAttendanceError,
     settle_class_payroll_cycle,
@@ -53,17 +56,6 @@ T0 = datetime(2026, 8, 26, 17, 0, tzinfo=timezone.utc)
 
 def _at(minutes: int) -> datetime:
     return T0 + timedelta(minutes=minutes)
-
-
-def _activate_policy(cid: str) -> int:
-    with FEATContext("FEAT-BYPASS-LEGACY", correlation_id=f"pol:{cid}"):
-        policy = PolicyVersion(
-            class_id=cid, domain="payroll", version_number=1,
-            policy_payload_json="{}", activated_at=T0 - timedelta(days=1), is_active=True,
-        )
-        db.session.add(policy)
-        db.session.flush()
-        return policy.id
 
 
 def _attendance(classroom, seat_id: int, *rows) -> None:
@@ -91,6 +83,7 @@ def _run(cid: str, boundary: datetime):
     with FEATContext("FEAT-PROD-004", idempotency_key=f"run:{cycle_id}"):
         return settle_class_payroll_cycle(
             class_id=cid, payroll_cycle_id=cycle_id, boundary_utc=boundary,
+            run_mechanism="TEACHER",
         )
 
 
@@ -100,7 +93,9 @@ def _paid(cid: str, seat_id: int) -> Decimal:
 
 
 def _pay_for(cid: str, minutes: int) -> Decimal:
-    rate = get_pay_rate_for_class(class_id=cid)
+    # The sessions here close before the provisioned setting was recorded, so
+    # they are priced by the class's first setting (DOM-PROD-001 §XV.3).
+    rate = pay_rate_per_second(first_payroll_setting(cid))
     return (Decimal(minutes * 60) * rate).quantize(Decimal("0.01"))
 
 
@@ -115,7 +110,6 @@ def test_DOM_PROD_001__session_open_at_a_run_is_paid_in_full_by_the_run_after_it
     classroom = initialize("chemistry_p1", app)
     cid = classroom.class_id
     working, returned = classroom.students[0].seat.id, classroom.students[1].seat.id
-    _activate_policy(cid)
 
     _attendance(classroom, working, ("active", _at(0)))
     # `returned` finishes one session, then starts another before the first run
@@ -151,7 +145,6 @@ def test_DOM_PROD_001__run_with_nothing_closed_and_unpaid_is_refused(app):
     classroom = initialize("chemistry_p1", app)
     cid = classroom.class_id
     seat_id = classroom.students[0].seat.id
-    _activate_policy(cid)
     _attendance(classroom, seat_id, ("active", _at(0)))
 
     with pytest.raises(NoPayableAttendanceError):
@@ -189,7 +182,6 @@ def test_DOM_PROD_001__run_stamps_the_closed_session_rule(app):
     classroom = initialize("chemistry_p1", app)
     cid = classroom.class_id
     seat_id = classroom.students[0].seat.id
-    _activate_policy(cid)
     _attendance(classroom, seat_id, ("active", _at(0)), ("inactive", _at(10)))
 
     _run(cid, _at(20))
@@ -206,24 +198,29 @@ def test_DOM_PROD_001__legacy_run_during_a_session_is_not_paid_twice(app):
     classroom = initialize("chemistry_p1", app)
     cid = classroom.class_id
     seat_id = classroom.students[0].seat.id
-    policy_id = _activate_policy(cid)
     _attendance(classroom, seat_id, ("active", _at(0)))
 
     # A payroll event written by the earlier rule carries no settlement_rule.
-    with FEATContext("FEAT-PROD-003", idempotency_key=f"legacy:{uuid4()}"):
-        legacy = _record_payroll_event_impl(
-            ctx=classroom_ctx(classroom),
-            target_seat_id=seat_id,
-            payroll_event_type="payroll",
-            correlation_id=f"legacy:{uuid4()}",
-            idempotency_key=f"legacy:{uuid4()}",
-            policy_version_id=policy_id,
-            mechanism="TEACHER",
+    # FEAT-PROD-003 no longer writes one (it derives every payroll amount), so
+    # the historical row and its ledger credit are written as a fixture.
+    key = f"legacy:{uuid4()}"
+    with FEATContext("FEAT-PROD-003", idempotency_key=key):
+        legacy = PayrollEvent(
+            class_id=cid, target_seat_id=seat_id, actor_seat_id=classroom.teacher_seat_id,
+            correlation_id=key, idempotency_key=key,
+            policy_uuid=first_payroll_setting(cid).policy_uuid, mechanism="TEACHER",
+            payroll_event_type="payroll", recorded_at=_at(30),
             summary_json={"source": "class_payroll_settlement"},
-            reference_time_utc=_at(30),
-            amount=_pay_for(cid, 30),
         )
-    assert "settlement_rule" not in legacy.payroll_event.summary_json
+        db.session.add(legacy)
+        create_pending_transaction(
+            seat_id=seat_id, class_id=cid, target_seat_id=seat_id,
+            actor_seat_id=classroom.teacher_seat_id, mechanism="teacher",
+            amount=_pay_for(cid, 30), account_type="checking", type="payroll",
+            description="Legacy payroll", idempotency_key=key,
+        )
+        db.session.flush()
+    assert "settlement_rule" not in legacy.summary_json
 
     _attendance(classroom, seat_id, ("inactive", _at(60)))
     _run(cid, _at(70))
@@ -236,7 +233,6 @@ def test_DOM_PROD_001__run_payroll_route_explains_a_refused_run(client):
     app = client.application
     classroom = initialize_as_teacher("chemistry_p1", client, app)
     cid = classroom.class_id
-    _activate_policy(cid)
     now = utc_now()
     _attendance(classroom, classroom.students[0].seat.id, ("active", now - timedelta(minutes=5)))
 
@@ -256,36 +252,30 @@ def test_DOM_PROD_001__automatic_payroll_waits_for_a_closed_session(app):
     classroom = initialize("chemistry_p1", app)
     cid = classroom.class_id
     seat_id = classroom.students[0].seat.id
-    _activate_policy(cid)
     now = utc_now()
     occurrence = now - timedelta(minutes=1)
-    with FEATContext("FEAT-BYPASS-LEGACY", correlation_id=f"sched:{cid}"):
-        settings = PayrollSettings.query.filter_by(class_id=cid).first()
-        if settings is None:
-            settings = PayrollSettings(class_id=cid, pay_rate=0.25)
-            db.session.add(settings)
-        settings.availability_state = "IN_USE"
-        settings.next_payroll_date = occurrence
-        settings.payroll_frequency_days = 14
-        db.session.flush()
+    # The first pay date has arrived; the provisioned default defines no
+    # boundary, so this schedule is in force at once.
+    with FEATContext("FEAT-ADMN-001", idempotency_key=f"sched:{cid}"):
+        save_payroll_setting(
+            class_id=cid,
+            settings_data={"first_pay_date": occurrence, "payroll_frequency_days": 14},
+        )
+    db.session.commit()
     _attendance(classroom, seat_id, ("active", now - timedelta(minutes=20)))
 
     run_automatic_payroll_job()
 
     # Deferred, not failed: nothing written, and the occurrence is still due.
     assert PayrollCycleCompletion.query.filter_by(class_id=cid).count() == 0
-    db.session.expire_all()
-    settings = PayrollSettings.query.filter_by(class_id=cid, availability_state="IN_USE").first()
-    assert settings.next_payroll_date == occurrence
+    assert next_payroll_date(cid) == occurrence
 
     _attendance(classroom, seat_id, ("inactive", now - timedelta(minutes=2)))
     run_automatic_payroll_job()
 
     assert PayrollCycleCompletion.query.filter_by(class_id=cid).count() == 1
     assert len(_payroll_events(cid, seat_id)) == 1
-    db.session.expire_all()
-    settings = PayrollSettings.query.filter_by(class_id=cid, availability_state="IN_USE").first()
-    assert settings.next_payroll_date > occurrence
+    assert next_payroll_date(cid) > occurrence
 
 
 def classroom_ctx(classroom) -> CanonicalContext:

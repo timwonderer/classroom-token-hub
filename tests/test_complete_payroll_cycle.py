@@ -110,6 +110,7 @@ def _run(classroom, key, start, end):
         return complete_payroll_cycle(
             ctx=_ctx(classroom), idempotency_key=key,
             cycle_started_at=start, cycle_completed_at=end,
+            run_mechanism="TEACHER",
         )
 
 
@@ -280,6 +281,7 @@ def test_commit_failure_leaves_no_resolvable_completed_run(app):
             complete_payroll_cycle(
                 ctx=_ctx(classroom), idempotency_key=key,
                 cycle_started_at=start, cycle_completed_at=end,
+                run_mechanism="TEACHER",
             )
             raise RuntimeError("commit fails")
 

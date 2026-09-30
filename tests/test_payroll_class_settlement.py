@@ -22,30 +22,25 @@ import pytest
 
 from app.extensions import db
 from app.feats.base import FEATContext
-from app.models import AttendanceSession, PayrollEvent, PolicyVersion
+from app.models import AttendanceSession, PayrollEvent
 from app.services.payroll import settlement as settlement_module
 from app.services.payroll.settlement import (
     ClassSettlementError,
     settle_class_payroll_cycle,
 )
 from app.utils.canonical_temporal_resolver import utc_now
+from app.services.payroll.settings import first_payroll_setting
+from tests.helpers.canonical_classroom import provision_classroom
 from tests.helpers.classroom_initializer import initialize
 
 
 def _seed(classroom, *, attend=("A", "B")):
-    """Seed an active payroll policy + attendance for the named seats."""
+    """Seed attendance for the named seats (the classroom has its payroll setting)."""
     cid = classroom.class_id
     teacher_seat_id = classroom.teacher_seat_id
     sA, sB, sC, sD = classroom.students
     seat_map = {"A": sA, "B": sB, "C": sC, "D": sD}
     now = utc_now()
-
-    with FEATContext("FEAT-BYPASS-LEGACY", correlation_id=f"pol:{cid}"):
-        db.session.add(PolicyVersion(
-            class_id=cid, domain="payroll", version_number=1,
-            policy_payload_json="{}", activated_at=now, is_active=True,
-        ))
-        db.session.flush()
 
     with FEATContext("FEAT-PROD-001", correlation_id=f"att:{cid}", idempotency_key=f"att:{cid}"):
         for key in attend:
@@ -78,7 +73,7 @@ def test_all_eligible_seats_get_the_same_cycle_id(app):
 
     with FEATContext("FEAT-PROD-004", idempotency_key=f"run:{cycle_id}"):
         result = settle_class_payroll_cycle(
-            class_id=cid, payroll_cycle_id=cycle_id, boundary_utc=now,
+            class_id=cid, payroll_cycle_id=cycle_id, boundary_utc=now, run_mechanism="TEACHER",
         )
 
     assert set(result.settled_seat_ids) == {sA.seat_id, sB.seat_id}
@@ -97,7 +92,7 @@ def test_seat_without_attendance_is_ineligible(app):
 
     with FEATContext("FEAT-PROD-004", idempotency_key=f"run:{cycle_id}"):
         result = settle_class_payroll_cycle(
-            class_id=cid, payroll_cycle_id=cycle_id, boundary_utc=now,
+            class_id=cid, payroll_cycle_id=cycle_id, boundary_utc=now, run_mechanism="TEACHER",
         )
 
     assert result.settled_seat_ids == [sA.seat_id]
@@ -115,11 +110,11 @@ def test_manual_credits_and_reversals_are_not_cycle_events(app):
 
     # Pre-existing manual credit (not a cycle event) for seat C.
     with FEATContext("FEAT-PROD-003", correlation_id=f"mc:{cid}", idempotency_key=f"mc:{cid}"):
-        policy = PolicyVersion.query.filter_by(class_id=cid, domain="payroll", is_active=True).first()
+        policy = first_payroll_setting(cid)
         db.session.add(PayrollEvent(
             class_id=cid, target_seat_id=sC.seat_id,
             actor_seat_id=classroom.teacher_seat_id, correlation_id=f"corr_mc:{cid}",
-            idempotency_key=f"mc:{cid}:evt", policy_version_id=policy.id,
+            idempotency_key=f"mc:{cid}:evt",
             policy_uuid=policy.policy_uuid, mechanism="TEACHER",
             payroll_event_type="manual_credit", recorded_at=now, payroll_cycle_id=None,
         ))
@@ -127,7 +122,7 @@ def test_manual_credits_and_reversals_are_not_cycle_events(app):
 
     cycle_id = str(uuid4())
     with FEATContext("FEAT-PROD-004", idempotency_key=f"run:{cycle_id}"):
-        settle_class_payroll_cycle(class_id=cid, payroll_cycle_id=cycle_id, boundary_utc=now)
+        settle_class_payroll_cycle(class_id=cid, payroll_cycle_id=cycle_id, boundary_utc=now, run_mechanism="TEACHER")
 
     # The manual credit is untouched — never stamped with the cycle id.
     manual = PayrollEvent.query.filter_by(
@@ -147,8 +142,8 @@ def test_retry_in_same_transaction_makes_no_duplicates(app):
     cycle_id = str(uuid4())
 
     with FEATContext("FEAT-PROD-004", idempotency_key=f"run:{cycle_id}"):
-        first = settle_class_payroll_cycle(class_id=cid, payroll_cycle_id=cycle_id, boundary_utc=now)
-        second = settle_class_payroll_cycle(class_id=cid, payroll_cycle_id=cycle_id, boundary_utc=now)
+        first = settle_class_payroll_cycle(class_id=cid, payroll_cycle_id=cycle_id, boundary_utc=now, run_mechanism="TEACHER")
+        second = settle_class_payroll_cycle(class_id=cid, payroll_cycle_id=cycle_id, boundary_utc=now, run_mechanism="TEACHER")
 
     assert len(first.settled_seat_ids) == 2
     assert second.settled_seat_ids == []                 # all already settled
@@ -174,18 +169,18 @@ def test_one_seat_failure_rolls_back_the_whole_transaction(app, monkeypatch):
 
     with pytest.raises(RuntimeError):
         with FEATContext("FEAT-PROD-004", idempotency_key=f"run:{cycle_id}"):
-            settle_class_payroll_cycle(class_id=cid, payroll_cycle_id=cycle_id, boundary_utc=now)
+            settle_class_payroll_cycle(class_id=cid, payroll_cycle_id=cycle_id, boundary_utc=now, run_mechanism="TEACHER")
 
     # The whole transaction rolled back — even the first seat's flushed event is gone.
     assert _cycle_events(cid, cycle_id) == []
 
 
 def test_no_active_payroll_policy_fails_closed(app):
-    classroom = initialize("chemistry_p1", app)
-    cid = classroom.class_id  # no policy seeded
+    classroom = provision_classroom("chemistry_p1", with_payroll_settings=False)
+    cid = classroom.class_id  # no payroll setting at all
 
     with pytest.raises(ClassSettlementError):
         with FEATContext("FEAT-PROD-004", idempotency_key="run:nopolicy"):
             settle_class_payroll_cycle(
-                class_id=cid, payroll_cycle_id=str(uuid4()), boundary_utc=utc_now(),
+                class_id=cid, payroll_cycle_id=str(uuid4()), boundary_utc=utc_now(), run_mechanism="TEACHER",
             )

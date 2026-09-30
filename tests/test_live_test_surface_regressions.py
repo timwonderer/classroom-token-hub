@@ -79,33 +79,45 @@ class TestEmptyRosterIsNotAllClaimed:
 
 
 class TestPayrollRateUnitIsSingular:
-    def _settings(self, *, mode="advanced", time_unit="minutes", rate="1.50"):
-        from decimal import Decimal
-        from types import SimpleNamespace
-        return SimpleNamespace(
-            settings_mode=mode,
-            time_unit=time_unit,
-            pay_rate=Decimal(rate),
-        )
+    """The rate is shown per one unit ("$1.50/minute", never "/minutes").
+
+    The unit a teacher typed the rate in is no longer stored (operator ruling
+    2026-09-30, DOM-POL-001A §V.F); the display picks the first unit in which the
+    stored per-minute rate is exact to the cent.
+    """
 
     @pytest.mark.parametrize(
-        "stored,expected",
-        [("minutes", "minute"), ("hours", "hour"), ("seconds", "second"), ("days", "day")],
+        "per_minute,expected_unit,expected_amount",
+        [("1.50", "minute", "1.50"), ("0.025", "hour", "1.50"),
+         ("0.08333333", "hour", "5.00"), ("0.5", "minute", "0.50")],
     )
-    def test_stored_plural_renders_singular(self, stored, expected):
-        display = build_payroll_settings_display(self._settings(time_unit=stored))
-        assert display["display_rate_unit"] == expected
+    def test_the_rate_renders_in_a_singular_exact_unit(self, per_minute, expected_unit, expected_amount):
+        from decimal import Decimal
+        from types import SimpleNamespace
+
+        display = build_payroll_settings_display(SimpleNamespace(pay_rate=Decimal(per_minute)))
+        assert display["display_rate_unit"] == expected_unit
+        assert display["display_per_unit_rate_value"] == expected_amount
         # The defect rendered "$1.50/minutes".
-        assert display["display_rate_with_unit"].endswith(f"/{expected}")
+        assert not display["display_rate_with_unit"].split(" (")[0].endswith("s")
 
-    def test_simple_mode_is_quoted_per_hour(self):
-        display = build_payroll_settings_display(self._settings(mode="simple"))
-        assert display["display_rate_with_unit"].endswith("/hour")
+    @pytest.mark.parametrize("per_minute", ["1.50", "0.025", "0.08333333", "0.6", "2", "0.00833333"])
+    def test_the_form_prefill_saves_back_to_the_same_rate(self, per_minute):
+        """What the advanced form pre-fills must store the same rate on re-save."""
+        from decimal import Decimal
+        from types import SimpleNamespace
+        from app.services.payroll.builders import build_payroll_settings_form, rate_unit_to_per_minute
 
-    def test_an_unknown_unit_is_passed_through_rather_than_mangled(self):
-        """Truncating an unrecognised unit would be worse than leaving it."""
-        display = build_payroll_settings_display(self._settings(time_unit="fortnights"))
-        assert display["display_rate_unit"] == "fortnights"
+        setting = SimpleNamespace(
+            pay_rate=Decimal(per_minute), max_time_per_day=None, max_time_per_day_unit=None,
+            payroll_frequency_days=14, pay_schedule_type="biweekly", overtime_threshold=None,
+            overtime_threshold_unit=None, rounding_mode="up",
+        )
+        form = build_payroll_settings_form(setting)
+        # The route quantizes the entered amount to cents before converting.
+        entered = Decimal(form["per_unit_rate_value"]).quantize(Decimal("0.01"))
+        saved = rate_unit_to_per_minute(entered, form["time_unit"]).quantize(Decimal("0.00000001"))
+        assert saved == Decimal(per_minute).quantize(Decimal("0.00000001"))
 
 
 class TestPayrollRateSurvivesADisplaySaveRoundTrip:
@@ -142,9 +154,7 @@ class TestPayrollRateSurvivesADisplaySaveRoundTrip:
         from types import SimpleNamespace
 
         # $1.50/hour is stored as $0.025/minute.
-        settings = SimpleNamespace(
-            settings_mode="advanced", time_unit="hours", pay_rate=Decimal("0.025")
-        )
+        settings = SimpleNamespace(pay_rate=Decimal("0.025"))
         display = build_payroll_settings_display(settings)
         assert display["display_per_unit_rate_value"] == "1.50"
         assert display["display_rate_with_unit"] == "$1.50/hour"

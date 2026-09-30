@@ -197,7 +197,6 @@ def test_an_entry_with_no_linked_transaction_is_refused_not_500(app, client):
             payroll_event_type="manual_credit",
             correlation_id=generate_correlation_id(),
             idempotency_key=f"zero-credit:{student.seat.id}",
-            policy_version_id=None,
             mechanism="TEACHER",
             summary_json={"description": "Zero-amount credit", "source": "test"},
             amount=Decimal("0.00"),
