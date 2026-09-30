@@ -24,6 +24,7 @@ def test_DOM_CLASS_001__apply_savings_interest_with_naive_datetimes(client, app)
         timestamp=past_date,
         date_funds_available=past_date,
         status=TransactionStatus.POSTED,
+        posted_at=past_date.replace(tzinfo=None),
         posting_sequence=1,
     )
     with FEATContext("FEAT-LED-001", idempotency_key="interest:test_apply_savings_interest"):
@@ -39,14 +40,20 @@ def test_DOM_CLASS_001__apply_savings_interest_with_naive_datetimes(client, app)
         db.session.flush()
 
     with patch("app.routes.student.resolve_canonical_context", return_value=type("Ctx", (), {"class_id": test_student.class_id})()), patch("app.routes.student.get_current_seat", return_value=test_student):
-        from app.services.ledger_interest_service import apply_monthly_savings_interest
+        from app.services.ledger_interest_service import apply_savings_interest
         with FEATContext("FEAT-LED-001", idempotency_key="interest:test_apply_savings_interest_run"):
             # The rate is a Class-Config policy input and this classroom configures
             # none. SPEC-ECON-001 §11 forbids a hidden default APY, so an
             # unconfigured class pays nothing. Supply the rate explicitly — the
             # documented deterministic-replay override — because what this test
-            # pins is naive-datetime handling, not rate resolution.
-            apply_monthly_savings_interest(test_student, annual_rate=Decimal("0.045"))
+            # pins is naive-datetime handling, not rate resolution. The payout
+            # window (monthly, the unconfigured default) must have closed, so the
+            # evaluation instant is taken past the end of the current month.
+            apply_savings_interest(
+                test_student,
+                annual_rate=Decimal("0.045"),
+                reference_time_utc=datetime.now(timezone.utc) + timedelta(days=32),
+            )
 
     interest_tx = (
         Transaction.query.filter_by(

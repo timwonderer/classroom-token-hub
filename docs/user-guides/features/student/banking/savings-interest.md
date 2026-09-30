@@ -60,9 +60,16 @@ Over one term the difference is usually small. Over the whole chart it is visibl
 
 ### When interest arrives
 
-A credited payout appears in your history like anything else: **Accounts → Transactions → Savings**, with the type **Interest** and the description *Monthly Savings Interest*.
+Interest is paid on the schedule your teacher chose, once each payout period has ended:
 
-If you have never seen that line and your class does show a rate, ask your teacher — crediting interest is something they run, not something you can trigger.
+- **Weekly** — a week runs Monday to Sunday in your class's time zone. The payout arrives shortly after midnight going into Monday.
+- **Monthly** — a month is the calendar month in your class's time zone. The payout arrives shortly after midnight on the 1st.
+
+Each payout is worked out on your savings balance at the moment the period ended. Money that reaches savings after that moment counts towards the next period, not the one that just finished.
+
+A credited payout appears in your history like anything else: **Accounts → Transactions → Savings**, with the type **Interest** and the description *Weekly Savings Interest* or *Monthly Savings Interest*.
+
+Payouts happen automatically — nobody has to press a button, and you cannot trigger one early. If a period has ended, your class shows a rate, and you had savings at the time, but no payout has appeared, tell your teacher.
 
 ## Important notes
 

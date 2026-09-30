@@ -40,6 +40,8 @@ These two settings are routinely confused, and they answer different questions.
 
 You can compound daily and pay out monthly. The student sees one deposit a month, but it was calculated on a balance that grew every day.
 
+Payouts run automatically once each payout period ends in your class's time zone: a **Weekly** period is Monday to Sunday and pays just after midnight going into Monday; a **Monthly** period is the calendar month and pays just after midnight on the 1st. Each payout is calculated on the student's savings balance at the moment the period ended.
+
 If **Interest Type** is **Simple**, the compound setting does nothing at all. Interest is always calculated on the original balance, never on interest already earned.
 
 ### Choosing simple or compound
