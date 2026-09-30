@@ -368,7 +368,15 @@ def prevent_class_timezone_mutation(_mapper, _connection, target):
 
 
 class EconomicEngine(db.Model):
-    """Immutable, versioned class-level economic configuration snapshots."""
+    """Immutable, versioned class-level economic configuration snapshots.
+
+    Append-only with an effective date, like ``payroll_settings``
+    (DOM-CLASS-003 §VII): the version in force at an instant is the row with the
+    greatest ``effective_at`` at or before it, the latest ``created_at`` breaking
+    a tie. A row whose ``effective_at`` is still ahead is pending: visible,
+    immutable, and in force once its date arrives. Resolve it through
+    ``class_configuration_query_service.economic_engine_effective_at``.
+    """
 
     __tablename__ = 'economic_engine'
 
@@ -411,8 +419,17 @@ class EconomicEngine(db.Model):
 
     # Audit
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+    # When this version governs from. Never earlier than ``created_at``; an
+    # unspecified one is in force from the moment it is recorded.
+    effective_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda context: context.get_current_parameters().get('created_at') or utc_now(),
+        nullable=False,
+    )
 
     __table_args__ = (
+        db.Index('ix_economic_engine_class_effective', 'class_id', 'effective_at'),
+        db.CheckConstraint('effective_at >= created_at', name='ck_economic_engine_not_retroactive'),
         # Composite key enforcement: versions are scoped to their owning class
         db.UniqueConstraint('class_id', 'economic_version_id', name='uq_economic_engine_class_version'),
         # Composite foreign key: previous version must be in the same class
@@ -1660,7 +1677,6 @@ class ObligationAssessment(db.Model):
 
     obligation_type = db.Column(db.String(30), nullable=False, index=True)  # RENT, INSURANCE_PREMIUM
     policy_uuid = db.Column(db.String(36), nullable=True, index=True)
-    policy_version_id = db.Column(db.Integer, db.ForeignKey('policy_versions.id'), nullable=True, index=True)
 
     # Canonical timestamp — DOM-OBL-001 §VII.1
     # Single timestamp represents when the obligation event occurred (replaces created_at/assessed_at/viewable_at)
@@ -1680,7 +1696,6 @@ class ObligationAssessment(db.Model):
     notes = db.Column(db.Text, nullable=True)
 
     seat = db.relationship('Seat', backref=db.backref('obligation_assessments', passive_deletes=True), foreign_keys=[seat_id])
-    policy_version = db.relationship('PolicyVersion', backref=db.backref('assessments', lazy='dynamic'))
     bill_cycle = db.relationship('BillCycle', backref=db.backref('assessments', passive_deletes=True))
 
     __table_args__ = (
@@ -2530,65 +2545,10 @@ class FeatureSettings(db.Model):
         return ClassFeature.defaults_dict()
 
 
-class PolicyVersion(db.Model):
-    """Immutable class-scoped economic policy version lineage."""
-
-    __tablename__ = 'policy_versions'
-
-    id = db.Column(db.Integer, primary_key=True)
-    policy_uuid = db.Column(db.String(36), unique=True, nullable=False, index=True, default=lambda: str(uuid.uuid4()))
-    class_id = db.Column(
-        db.String(36),
-        db.ForeignKey('classes.class_id', ondelete='CASCADE'),
-        nullable=False,
-        index=True,
-    )
-    domain = db.Column(db.String(32), nullable=False)
-    version_number = db.Column(db.Integer, nullable=False)
-    policy_payload_json = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
-    activated_at = db.Column(db.DateTime(timezone=True), nullable=True)
-    created_by_transition_id = db.Column(db.Integer, db.ForeignKey('policy_transitions.id'), nullable=True)
-    is_active = db.Column(db.Boolean, default=False, nullable=False)
-
-    __table_args__ = (
-        db.UniqueConstraint(
-            'class_id',
-            'domain',
-            'version_number',
-            name='uq_policy_versions_class_domain_version',
-        ),
-        db.Index('ix_policy_versions_class_domain_active', 'class_id', 'domain', 'is_active'),
-    )
-
-
-class PolicyTransition(db.Model):
-    """Append-only class-scoped economic policy transition lineage."""
-
-    __tablename__ = 'policy_transitions'
-
-    id = db.Column(db.Integer, primary_key=True)
-    class_id = db.Column(
-        db.String(36),
-        db.ForeignKey('classes.class_id', ondelete='CASCADE'),
-        nullable=False,
-        index=True,
-    )
-    domain = db.Column(db.String(32), nullable=False)
-    source_policy_version_id = db.Column(db.Integer, db.ForeignKey('policy_versions.id'), nullable=True)
-    target_policy_version_id = db.Column(db.Integer, db.ForeignKey('policy_versions.id'), nullable=False)
-    activation_mode = db.Column(db.String(32), nullable=False)
-    status = db.Column(db.String(32), nullable=False, default='pending')
-    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
-    created_by_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=True)
-    applied_at = db.Column(db.DateTime(timezone=True), nullable=True)
-    correlation_id = db.Column(db.String(64), nullable=True, index=True)
-    superseded_by_transition_id = db.Column(db.Integer, db.ForeignKey('policy_transitions.id'), nullable=True)
-    cancelled_at = db.Column(db.DateTime(timezone=True), nullable=True)
-
-    __table_args__ = (
-        db.Index('ix_policy_transitions_class_domain_status', 'class_id', 'domain', 'status'),
-    )
+# The class-wide economic policy-lineage tables were retired by operator ruling
+# 2026-09-30: they were never an authorized authority. Each domain's own
+# append-only, effective-dated table is its policy history (DOM-POL-001 §VI.0,
+# DOM-CLASS-003 §V).
 
 
 # -------------------- POLICIES DOMAIN: STORE PRODUCTS --------------------
@@ -2794,6 +2754,7 @@ def _seed_default_class_features(mapper, connection, target):
             'interest_payout_frequency': None,
             'economy_policy_mode': 'default',
             'created_at': now,
+            'effective_at': now,
         },
     )
     connection.execute(
