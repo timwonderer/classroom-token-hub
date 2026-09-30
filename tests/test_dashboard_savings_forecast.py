@@ -54,18 +54,9 @@ def test_dashboard_forecast_matches_the_payout_engine(client, app):
     _fund_savings(classroom, student, app)
 
     with app.app_context():
-        from app.services.economic_engine import savings_interest_for_payout_period
-        from app.services.ledger_balance_query_service import get_posted_balance
-        from app.services.ledger_interest_service import resolve_savings_policy
+        from app.services.ledger_interest_service import forecast_savings
 
-        policy = resolve_savings_policy(classroom.class_id)
-        expected = savings_interest_for_payout_period(
-            posted_balance=get_posted_balance(student.seat.id, classroom.class_id, "savings"),
-            annual_rate=policy.annual_rate,
-            calculation_type=policy.calculation_type,
-            compound_frequency=policy.compound_frequency,
-            payout_frequency=policy.payout_frequency,
-        )
+        expected = forecast_savings(student.seat.id, classroom.class_id, months=0).next_credit
 
     body = client.get("/student/dashboard").get_data(as_text=True)
 
