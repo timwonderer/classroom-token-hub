@@ -372,14 +372,14 @@ def run_rent_reconciliation_job():
 def _advance_local_calendar_days(occurrence_utc, days: int, ctx):
     """Advance an occurrence by `days` *local calendar* days, keeping the local clock.
 
-    The arithmetic lives with the payroll schedule it serves
-    (``app.services.payroll.schedule.advance_local_calendar_days``); this asks
+    The arithmetic lives with the resolver
+    (``app.utils.canonical_temporal_resolver.advance_local_calendar_days``); this asks
     the canonical temporal resolver which timezone governs ``ctx``'s class and
     delegates, so the resolver keeps owning the class-to-timezone mapping.
     """
-    from app.services.payroll.schedule import advance_local_calendar_days
     from app.utils.canonical_temporal_resolver import (
         CLASS_LEVEL_EVALUATION,
+        advance_local_calendar_days,
         canonical_temporal_resolver,
     )
 

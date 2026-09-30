@@ -26,10 +26,8 @@ its label; ``monthly`` is 30 days, not a calendar month.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from types import SimpleNamespace
-
-import pytz
 
 from app.models import PayrollEvent
 from app.services.payroll.settings import (
@@ -39,6 +37,7 @@ from app.services.payroll.settings import (
 )
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
+    advance_local_calendar_days,
     canonical_temporal_resolver,
     ensure_utc,
     utc_now,
@@ -49,54 +48,6 @@ SCHEDULED_OCCURRENCE_KEY = "scheduled_occurrence"
 # Bounds the walk past an overdue boundary; a class would need to have missed
 # thousands of paydays to reach it.
 _MAX_BOUNDARY_STEPS = 10_000
-
-
-def advance_local_calendar_days(occurrence_utc, days: int, timezone_name: str) -> datetime:
-    """Move ``occurrence_utc`` forward ``days`` calendar days in ``timezone_name``.
-
-    The local wall-clock time is preserved, so an occurrence at 07:00 local stays
-    at 07:00 local across a DST change. Adding the elapsed UTC duration instead
-    lands on the wrong local date on a 23- or 25-hour day.
-
-    Ambiguous and nonexistent local times are decided explicitly:
-
-    * **Ambiguous** (fall back — the clock reads 01:30 twice): take the
-      chronologically earlier instant, so the interval never silently lengthens.
-    * **Nonexistent** (spring forward — 02:30 never happens): take the smallest
-      forward shift onto a time that does exist, so 02:30 becomes 03:30.
-
-    Both are chosen by comparing candidate instants rather than by an ``is_dst``
-    flag: in Europe/Dublin the tz database models winter as *negative* DST, so
-    ``is_dst=True`` on an ambiguous Dublin time returns the **later** instant.
-    """
-    tz = pytz.timezone(timezone_name)
-    local_occurrence = ensure_utc(occurrence_utc).astimezone(tz)
-    target_naive = datetime.combine(
-        local_occurrence.date() + timedelta(days=days),
-        local_occurrence.time(),
-    )
-
-    try:
-        target_local = tz.localize(target_naive, is_dst=None)
-    except pytz.exceptions.AmbiguousTimeError:
-        target_local = min(
-            (tz.localize(target_naive, is_dst=flag) for flag in (True, False)),
-            key=lambda candidate: candidate.astimezone(timezone.utc),
-        )
-    except pytz.exceptions.NonExistentTimeError:
-        candidates = [
-            tz.normalize(tz.localize(target_naive, is_dst=flag))
-            for flag in (False, True)
-        ]
-        target_local = min(
-            candidates,
-            key=lambda candidate: (
-                candidate.replace(tzinfo=None) <= target_naive,
-                abs(candidate.replace(tzinfo=None) - target_naive),
-            ),
-        )
-
-    return target_local.astimezone(timezone.utc)
 
 
 def derive_next_payroll_date(
