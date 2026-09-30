@@ -20,7 +20,7 @@ Design (per architectural direction, 2026-08-25):
 
 - **INV-ARC-009 (Domain Authority for State).** CWI, economic mode, and the effective
   engine version are *domain-owned inputs* the engine READS via canonical domain
-  queries (``get_effective_economic_engine``, ``get_payroll_settings``). This module
+  queries (``get_current_economic_engine``, ``get_payroll_settings``). This module
   computes *derived economic reference values* (insurance presets/selection) from those
   authoritative inputs. It does not recompute or persist domain state, and it never
   persists derived recommendations — the same authoritative inputs deterministically
@@ -39,7 +39,7 @@ from enum import Enum
 from typing import Optional
 
 from app.services.class_configuration_query_service import (
-    get_effective_economic_engine,
+    get_current_economic_engine,
     get_payroll_settings,
 )
 from app.utils.economy_policy import POLICY_MODES
@@ -293,7 +293,7 @@ def resolve_base(class_id: str) -> EconomicBase:
 
         CWI = pay_rate_per_minute × 60 × expected_weekly_hours
     """
-    engine = get_effective_economic_engine(class_id, "payroll") if class_id else None
+    engine = get_current_economic_engine(class_id) if class_id else None
     payroll = get_payroll_settings(class_id) if class_id else None
 
     economic_version_id = getattr(engine, "economic_version_id", None) if engine else None

@@ -15,7 +15,6 @@ from types import MappingProxyType
 from typing import Any
 
 from app.services.class_configuration_query_service import (
-    get_effective_economic_engine,
     get_payroll_settings,
     get_policy_mode,
     resolve_expected_weekly_hours,

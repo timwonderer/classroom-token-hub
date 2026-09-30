@@ -2445,7 +2445,10 @@ class ClassFeature(db.Model):
         ),
     )
 
-    economic_version = db.relationship('EconomicEngine', foreign_keys=[economic_version_id])
+    # No relationship to EconomicEngine: a feature row records whether the feature
+    # is on and which version it was enabled under, never which version is in
+    # force. That is answered only by economic_engine_effective_at (owner ruling
+    # 2026-09-30; DOM-CLASS-003 §VII).
 
     @classmethod
     def feature_names(cls):

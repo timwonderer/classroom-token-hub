@@ -33,7 +33,6 @@ from app.services.class_configuration_query_service import (
     economic_engine_effective_at,
     get_class_economy,
     get_economic_engine_by_version,
-    get_economic_engine_history,
     is_feature_enabled,
 )
 from app.utils.canonical_temporal_resolver import canonical_temporal_resolver, CLASS_LEVEL_EVALUATION
@@ -418,10 +417,7 @@ def _execute_evolve_economic_engine_impl(
     # The version the new one follows: the one that will be in force at its
     # effective date, so a future-dated evolution carries forward the terms it
     # will actually replace (DOM-CLASS-003 §VII).
-    current_engine = (
-        economic_engine_effective_at(class_id, effective_at_ts)
-        or (get_economic_engine_history(class_id) or [None])[0]
-    )
+    current_engine = economic_engine_effective_at(class_id, effective_at_ts)
     if not current_engine:
         return EconomicEngineEvolutionResult(
             success=False,

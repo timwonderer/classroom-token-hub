@@ -34,7 +34,7 @@ from app.services.context_resolver import CanonicalContext
 from app.services import insurance_claim_service
 from app.services.class_configuration_query_service import (
     get_economic_engine_by_version,
-    get_effective_economic_engine,
+    get_current_economic_engine,
 )
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
@@ -826,7 +826,7 @@ def _make_economic_engine_ready(class_id: str, *, expected_weekly_hours: str = "
     later-effective ClassFeature row (INSERT-only; matches the canonical evolution shape).
     Caller must already be inside a FEAT context.
     """
-    current = get_effective_economic_engine(class_id, "payroll")
+    current = get_current_economic_engine(class_id)
     if current is not None and current.expected_weekly_hours is not None:
         return
 
@@ -1346,7 +1346,7 @@ class TestProductivityReadinessAndCapacity:
         with app.app_context():
             class_id = classroom.class_id
             # Default classroom: insurance disabled, expected_weekly_hours NULL.
-            current_engine = get_effective_economic_engine(class_id, "payroll")
+            current_engine = get_current_economic_engine(class_id)
             assert current_engine.expected_weekly_hours is None
 
             blocked = execute_enable_feature(
@@ -1368,7 +1368,7 @@ class TestProductivityReadinessAndCapacity:
             with FEATContext("FEAT-TEST-SETUP", idempotency_key="enable-ready:make"):
                 _make_economic_engine_ready(class_id)
 
-            ready_engine = get_effective_economic_engine(class_id, "payroll")
+            ready_engine = get_current_economic_engine(class_id)
             assert ready_engine.expected_weekly_hours is not None
 
             enabled = execute_enable_feature(
@@ -1425,7 +1425,7 @@ class TestProductivityReadinessAndCapacity:
         with app.app_context():
             class_id = classroom.class_id
             # Prevention: enablement refuses while unready.
-            engine = get_effective_economic_engine(class_id, "payroll")
+            engine = get_current_economic_engine(class_id)
             prevented = execute_enable_feature(
                 canonical_context=self._teacher_context(classroom),
                 class_id=class_id,

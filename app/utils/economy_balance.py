@@ -284,11 +284,11 @@ class EconomyBalanceChecker:
         if expected_weekly_hours is None:
             try:
                 from app.services.class_configuration_query_service import (
-                    get_effective_economic_engine,
+                    get_current_economic_engine,
                 )
                 class_id = getattr(payroll_settings, 'class_id', None)
                 if class_id:
-                    engine = get_effective_economic_engine(class_id, 'payroll')
+                    engine = get_current_economic_engine(class_id)
                     if engine and engine.expected_weekly_hours is not None:
                         expected_weekly_hours = _quantize_currency(engine.expected_weekly_hours)
                         notes.append(f"Using expected weekly hours from EconomicEngine: {expected_weekly_hours} hours")
