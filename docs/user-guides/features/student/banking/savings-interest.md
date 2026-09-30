@@ -28,7 +28,7 @@ The **Statistics** card, to the right of your balances, carries four numbers. Tw
 | --- | --- |
 | **Total Earnings** | Everything you have earned in this class |
 | **Monthly Interest Rate** | Your class's annual rate divided by twelve, shown as a percentage |
-| **Estimated Monthly Interest** | What one payout is worth on your savings balance right now |
+| **Estimated Monthly Interest** | What your next payout will be if your savings stay as they are until the payout period ends. Despite the label, this is one payout: a week's worth if your class pays weekly |
 | **Total Transactions** | How many entries are in your history |
 
 **Monthly Interest Rate** is a *monthly* slice of an *annual* rate. If your class is set to 6% a year, this reads 0.50%. It is not a separate rate — it is the same rate expressed per month.
@@ -65,7 +65,9 @@ Interest is paid on the schedule your teacher chose, once each payout period has
 - **Weekly** — a week runs Monday to Sunday in your class's time zone. The payout arrives shortly after midnight going into Monday.
 - **Monthly** — a month is the calendar month in your class's time zone. The payout arrives shortly after midnight on the 1st.
 
-Each payout is worked out on your savings balance at the moment the period ended. Money that reaches savings after that moment counts towards the next period, not the one that just finished.
+Interest is earned day by day. At the end of each day (midnight in your class's time zone) the app notes your savings balance, and that day earns a small slice of the yearly rate on it. When the period ends, the days' interest is added up and paid as one amount.
+
+So money earns only for the days it was actually in savings. Money moved in on Sunday night earns one day, not a whole week, and money moved out on Sunday still keeps what it earned Monday to Saturday.
 
 A credited payout appears in your history like anything else: **Accounts → Transactions → Savings**, with the type **Interest** and the description *Weekly Savings Interest* or *Monthly Savings Interest*.
 
@@ -74,7 +76,7 @@ Payouts happen automatically — nobody has to press a button, and you cannot tr
 ## Important notes
 
 > [!IMPORTANT]
-> **The projection assumes you never touch the money.** It takes today's savings balance and grows it forward with nothing added and nothing removed. It is a picture of the rate, not a prediction of your behaviour. Every transfer out resets the line lower.
+> **The projection assumes you never touch the money.** It takes today's savings balance and grows it forward, day by day and payout by payout, with nothing added and nothing removed. It is a picture of the rate, not a prediction of your behaviour. Every transfer out resets the line lower.
 
 > [!NOTE]
 > **Only savings earns.** Checking does not. That is the trade — savings grows but cannot be spent, checking can be spent but sits still. See [Accounts and Transfers](accounts-transfers.md).
