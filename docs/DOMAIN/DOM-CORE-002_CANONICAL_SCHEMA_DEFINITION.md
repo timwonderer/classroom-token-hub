@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-CORE-002     | 1.10    | 2026-09-24     | 1.9        | Constitutional |
+| DOM-CORE-002     | 1.11    | 2026-09-30     | 1.10       | Constitutional |
 
 ---
 
@@ -305,6 +305,8 @@ The former `interpretation_snapshots` (cache) and `interpretation_annotations` t
 
 **Purpose:** Record policy versioning and transition lifecycle.
 
+> **Legacy, pending retirement (operator ruling 2026-09-30; 1.11).** These two tables were never authorized by the owner as canonical and are not an authority for any domain. They remain in the runtime schema only until their remaining non-payroll uses are removed; no new reference may be added. Payroll does not read or write them.
+
 **Tables:**
 
 - `policy_versions`
@@ -319,7 +321,7 @@ The former `interpretation_snapshots` (cache) and `interpretation_annotations` t
 **Tables (per `DOM-POL-001` §X boundary attribution):**
 
 - `rent_settings` — rent policy definitions (rate, cycle length, effective boundaries) as append-only version rows; consumed by `DOM-OBL-001`
-- `payroll_settings`, `payroll_rewards`, `payroll_fines` — payroll policy definitions (wage rate, frequency, reward/fine catalog); `payroll_settings.pay_rate` stores the normalized per-minute rate as `NUMERIC(18,8)` so conversions from teacher-entered hourly or daily rates retain sub-cent precision; consumed by `DOM-PROD-001`
+- `payroll_settings`, `payroll_rewards`, `payroll_fines` — payroll policy definitions (wage rate, frequency, reward/fine catalog); `payroll_settings.pay_rate` stores the normalized per-minute rate as `NUMERIC(18,8)` so conversions from teacher-entered hourly or daily rates retain sub-cent precision; consumed by `DOM-PROD-001`. `payroll_settings` is append-only and effective-dated, keyed by `policy_uuid`, with exactly the columns in `DOM-POL-001A` §V.F (operator ruling 2026-09-30; 1.11)
 - `hall_pass_settings` — hall-pass policy definitions (allowed destinations, limits); consumed by `DOM-PROD-001` at grant time
 - `store_products`, `store_item_visibility` — purchasable / rent-linked entitlement offering definitions and per-class visibility; consumed by `DOM-STORE-001`. `store_products` is the single versioned product table that replaced `store_items` and the earlier `store_products` (migration `b7c41e9a2f30`); renamed here in 1.10
 - `insurance_policies` — immutable insurance definition rows (`DOM-POL-001` §X "insurance definitions -> Policies"; `DOM-POL-001A` §D); consumed by the insurance entitlement lifecycle (`DOM-STORE-001`); named here in 1.10
@@ -334,7 +336,7 @@ The former `interpretation_snapshots` (cache) and `interpretation_annotations` t
 - Rows are immutable after insert. Replacement is a new row, never an in-place edit. Mutable-singleton settings blobs are prohibited under `DOM-CLASS-003` §V.
 - Downstream domains reference `policy_uuid` as a non-FK provenance locator and freeze any terms they need for standalone executability (see `DOM-POL-001` §V.A, §IX).
 - Rent example: Class Configuration owns the `rent` feature flag (`class_features`); Policies stores the immutable `rent_settings` version rows; Obligations (`DOM-OBL-001`) owns `bill_cycles` and `assessment_events` (the recurring act of charging rent) and references the current rent `policy_uuid` for provenance.
-- Payroll example: Class Configuration owns the `payroll` feature flag; Policies stores `payroll_settings` / `payroll_rewards` / `payroll_fines` version rows; `DOM-PROD-001` owns `payroll_event` and references the current payroll `policy_uuid` at run time.
+- Payroll example: Class Configuration owns the `payroll` feature flag; Policies stores effective-dated `payroll_settings` rows; `DOM-PROD-001` owns `payroll_event` and records the `policy_uuid` of the setting in force when each settled session closed (`DOM-PROD-001` §XV.3).
 - Hall-pass example: Class Configuration owns the `hall_pass` feature flag; Policies stores `hall_pass_settings` version rows; `DOM-PROD-001` owns `hall_pass_logs` and reads the current hall-pass `policy_uuid` at grant time to constrain what may be written.
 
 ---

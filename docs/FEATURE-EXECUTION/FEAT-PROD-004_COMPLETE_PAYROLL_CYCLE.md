@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-PROD-004 | 1.0 | 2026-08-30 | N/A | Normative |
+| FEAT-PROD-004 | 1.1 | 2026-09-30 | 1.0 | Normative |
 
 ---
 
@@ -26,7 +26,8 @@ This FEAT does not itself write `payroll_event` rows; it owns the run identity a
 ### 1. Required Inputs
 
 - `ctx`: `CanonicalContext` — carries the class boundary and lawful actor seat
-- `run_mechanism`: `TEACHER` | `SYSTEM` — records which path initiated the run
+- `run_mechanism`: `TEACHER` | `SYSTEM` — records which path initiated the run. It is stamped as `mechanism` on every `payroll` event of the run and is never inferred: the automatic schedule passes `SYSTEM`, the teacher's run passes `TEACHER`. Only `SYSTEM` runs anchor the next payroll date (`DOM-PROD-001` §XV.5)
+- `scheduled_occurrence`: required when `run_mechanism = SYSTEM` — the scheduled payroll date the run settles, recorded on each `payroll` event so the schedule does not drift with the run's wall-clock time
 - `idempotency_key`: replay guard for the class-level completion command
 - `reference_time_utc`: optional explicit timestamp for deterministic evaluation
 
@@ -54,9 +55,9 @@ This FEAT coordinates three domains in a fixed, lawful order. Each cross-domain 
 
 0. **Resolve replay (FIRST).** Consult the persistent completion anchor for `(class_id, idempotency_key)`. If a completed run resolves, return its original `payroll_cycle_id` immediately — before any configuration read, cycle-id allocation, timestamp resolution, eligible-seat query, `reference_configuration` capture, or ITR/CLASS invocation. This step is the sole protection of the historical-configuration seam and MUST precede every other operation.
 1. **Open the cycle (new run only).** Confirm the actor is lawful for the class. Allocate a fresh `payroll_cycle_id` (UUID). Consume the caller-supplied lawful closed-cycle window / evaluation time (this FEAT does not derive boundary legality).
-2. **Settle the closing cycle (PROD).** For each eligible seat, invoke `FEAT-PROD-003` `record_payroll_event(...)` with `payroll_event_type = payroll`, supplying the run's `payroll_cycle_id`. PROD settles each seat against authoritative productivity facts under the configuration currently governing the closing cycle. The governing configuration is NOT re-read or re-interpreted after this step.
+2. **Settle the closing cycle (PROD).** For each eligible seat, invoke `FEAT-PROD-003` `record_payroll_event(...)` with `payroll_event_type = payroll`, supplying the run's `payroll_cycle_id` and `run_mechanism`. PROD prices each settled session by the payroll setting in force when that session closed (`DOM-PROD-001` §XV.3). The governing configuration is NOT re-read or re-interpreted after this step.
 3. **Materialize interpretation (ITR).** Invoke the Interpretation compute + materialize path (`FEAT-ITR-001` and its materialization contract) for the just-closed cycle, passing `class_id` and `payroll_cycle_id`. Interpretation produces one durable, immutable `interpretation_cycle_record` bound permanently to this `payroll_cycle_id` and the economic reference values in effect for the closed cycle (`DOM-ITR-001` §VIII–§IX). Interpretation is read-only over economic truth and MUST NOT mutate PROD, Ledger, or Policy state.
-4. **Activate pending next-cycle policy (CLASS).** If the teacher staged an economic-configuration change during the open cycle, invoke the lawful Class-domain transition command (`DOM-CLASS-003`) to activate the pending next-cycle policy transition. Activation is a lawful append-only policy transition (`INV-ARC-016`); it is NEVER performed by a scheduler noticing `effective_at <= now`. If no change is pending, this step is a no-op.
+4. **Activate pending next-cycle policy (CLASS).** If a pending next-boundary transition exists for the class, invoke the lawful Class-domain transition command to activate it. If none is pending, this step is a no-op. *(Operator ruling 2026-09-30: payroll settings take no part in this step. A payroll change is an effective-dated `payroll_settings` row that is in force from its `effective_date` (`DOM-CLASS-003` §VII); nothing activates it. The transition mechanism this step invokes belongs to the legacy `policy_versions` / `policy_transitions` tables, which are pending retirement.)*
 5. **Record completion (LAST before commit).** Write the persistent completion anchor for `(class_id, idempotency_key)` binding it to this run's `payroll_cycle_id`. This is the final step before commit: the anchor means "this entire economic-cycle transition completed", so it MUST NOT be written early as an in-progress marker. Because it is last and shares the one transaction, a completed-run identity survives **iff** settlement, interpretation, and activation all committed.
 6. **Commit.** The owning FEAT transaction commits exactly once. On any step failure, the whole run fails closed and no partial cross-domain state — including the completion anchor — is committed, so a retry is a genuinely fresh attempt under the still-current closing-cycle configuration.
 

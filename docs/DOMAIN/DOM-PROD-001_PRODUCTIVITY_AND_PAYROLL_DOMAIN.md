@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-PROD-001 | 1.3 | 2026-09-17 | 1.2 | Constitutional |
+| DOM-PROD-001 | 1.4 | 2026-09-30 | 1.3 | Constitutional |
 
 ---
 
@@ -228,11 +228,12 @@ Rules:
 - MUST be append-only
 - MUST require `class_id`, `actor_seat_id`, `target_seat_id`, `correlation_id`, `idempotency_key`, `mechanism`, `payroll_event_type`, `recorded_at`, and `summary_json`
 - MUST record policy provenance according to the authority that determined the amount, not the storage event type alone:
-  - `payroll` (amount priced by the payroll policy from attendance/hours): `policy_version_id` and `policy_uuid` are REQUIRED
+  - `payroll` (amount priced by the payroll settings from attendance/hours): `policy_uuid` is REQUIRED and MUST be a `payroll_settings.policy_uuid` of the same class (§XI.3)
   - `manual_credit` initiated by a teacher who enters the amount directly: no payroll policy is required, and a class with no payroll configuration can still record it
   - `manual_credit` used as the posting mechanism for another domain's lawful calculation (for example a productivity insurance reimbursement): MUST retain the policy provenance that calculation used
   - `reversal`: carries the provenance of the event it compensates
-- This is a minimum requirement for `payroll` events only. It MUST NOT be inverted into a rule that `manual_credit` events carry no policy version
+- This is a minimum requirement for `payroll` events only. It MUST NOT be inverted into a rule that `manual_credit` events carry no policy provenance
+- MUST set `mechanism` to the path that initiated the event: `SYSTEM` for a payroll run started by the automatic schedule, `TEACHER` for a run the teacher started. The mechanism is supplied by the initiating caller and never inferred (§XV.5 depends on it)
 - MUST set `payroll_event_type` to `payroll`, `manual_credit`, or `reversal`
 - MUST derive payroll amount from authoritative productivity facts or manual credit intent, but MUST not store the amount on the table
 - MUST use the same `correlation_id` as the original event when writing a reversal
@@ -355,23 +356,23 @@ Key fields:
 - `target_seat_id` — FK to `seats`; the seat whose productivity settlement or reversal is affected
 - `correlation_id` — workflow correlation identifier linking payroll business and ledger facts; reversals reuse the original event's correlation_id
 - `idempotency_key` — unique payroll-run replay guard
-- `policy_version_id` — frozen policy version reference for the policy that priced the amount; required for `payroll` events, absent for teacher-entered manual credits (see §VIII)
-- `mechanism` — `TEACHER` | `SYSTEM`
+- `policy_uuid` — the `payroll_settings.policy_uuid` that priced the amount; required for `payroll` events, absent for teacher-entered manual credits (see §VIII). A non-FK locator (`INV-ARC-021` §V.7)
+- `mechanism` — `TEACHER` | `SYSTEM`; for a `payroll` event, `SYSTEM` means the run was started by the automatic schedule and `TEACHER` that the teacher started it (§VIII.3)
 - `payroll_event_type` — `payroll` | `manual_credit` | `reversal`
 - `recorded_at` — UTC; display in class canonical time
-- `summary_json` — structured payroll summary and settlement metadata
+- `summary_json` — structured payroll summary and settlement metadata, including the pricing inputs of a `payroll` event (§XV.3) and, for a `SYSTEM` `payroll` event, the scheduled occurrence it settled (§XV.5)
 
 Rules:
 
-- `payroll_event` is append-only.
+- `payroll_event` is append-only. The database refuses every UPDATE, and refuses DELETE except while a class universe is being destroyed (`FEAT-CLASS-006`, `FEAT-IDEN-007`), the same exemption `ledger_transaction` carries.
 - Each row records one payroll business event for one class.
 - Each row records one payroll business event for one affected seat.
 - `payroll` events are the only boundary-bearing event type.
 - The payroll window for a `payroll` event is derived from the previous `payroll` event timestamp through the current event timestamp.
 - `manual_credit` and `reversal` events do not participate in payroll-window boundary derivation.
 - `reversal` events must carry the same `correlation_id` as the original event they reverse.
-- `policy_version_id` is immutable and, where present, must identify the policy version used to evaluate the event. A database check constraint requires it, with `policy_uuid`, on every `payroll` event.
-- `policy_uuid` is immutable and must record the exact domain-policy identifier used to evaluate the event; `policy_version_id` remains the internal lineage pointer where present.
+- `policy_uuid` is immutable and must record the exact `payroll_settings.policy_uuid` used to evaluate the event. A database check constraint requires it on every `payroll` event. *(Operator ruling 2026-09-30: the former `policy_version_id` column, a foreign key into the legacy `policy_versions` table, is removed. `policy_versions` was never an authority for payroll.)*
+- Where one `payroll` event settles sessions governed by more than one setting, `policy_uuid` records the setting that governed the latest-closing session, and `summary_json` records every setting's share (§XV.3).
 - The row must identify the productivity window and settlement intent that authorized any downstream ledger write.
 - The row must not duplicate ledger monetary truth beyond what is necessary for business provenance.
 - `payroll_event_type` carries the event semantics, so no separate lifecycle `status` column is permitted on the canonical table.
@@ -385,7 +386,7 @@ Rules:
 
 - **Payroll FEAT ownership**: The payroll FEAT is a coordinator, not the authority over payroll meaning. It consumes productivity facts from this domain and posts monetary facts through Ledger.
 - **Ledger coordination**: All payroll monetary effects must go through `FEAT-LED-000` and `FEAT-LED-001`.
-- **Policies coordination (payroll)**: Wage rate, frequency, reward/fine catalog, and other payroll policy inputs are stored in the Policies repository (`DOM-POL-001`) as immutable `payroll_settings` / `payroll_rewards` / `payroll_fines` version rows. Class Configuration decides whether the `payroll` capability is enabled in the class (`class_features`); Policies stores the class-customized definition; `DOM-PROD-001` reads the current payroll `policy_uuid` at run time to write `payroll_event` rows.
+- **Policies coordination (payroll)**: Wage rate, frequency, and other payroll policy inputs are stored in the Policies repository (`DOM-POL-001`) as immutable, effective-dated `payroll_settings` rows (`DOM-POL-001` §VI.2). Class Configuration decides whether the `payroll` capability is enabled in the class (`class_features`); Policies stores the class-customized definition; `DOM-PROD-001` reads `payroll_settings` — and nothing else — through one resolver, which answers "which setting was in force at instant *t*", and records the `policy_uuid` that priced each `payroll_event`.
 - **Policies coordination (hall pass)**: `hall_pass_settings` is stored in the Policies repository (`DOM-POL-001`) as immutable version rows. Class Configuration decides whether the `hall_pass` capability is enabled; Policies stores the definition (allowed destinations, limits); `FEAT-PROD-002` reads the current hall-pass `policy_uuid` before granting a pass because those settings constrain whether a PROD hall-pass event may be written.
 - **Obligations coordination**: Hall-pass entitlement quotas remain owned by Obligations, and fine/debit manual deductions belong there rather than in `DOM-PROD`.
 - **Store coordination**: Store-owned entitlements and redemption state remain separate from productivity and payroll history.
@@ -427,7 +428,7 @@ Records one append-only payroll business event.
 
 Rules:
 
-- MUST require `class_id`, `actor_seat_id`, `target_seat_id`, `correlation_id`, and `idempotency_key`, plus `policy_version_id` for `payroll` events and for any event whose amount a policy calculation determined (§VIII)
+- MUST require `class_id`, `actor_seat_id`, `target_seat_id`, `correlation_id`, and `idempotency_key`, plus `policy_uuid` for `payroll` events and for any event whose amount a policy calculation determined (§VIII)
 - MUST record `payroll_event_type`
 - MUST treat `payroll` as the only boundary-bearing event type
 - MUST preserve `manual_credit` and `reversal` as non-boundary event types
@@ -496,13 +497,31 @@ A payroll run carries three identities that MUST remain separate:
 
 ### 3. Prospective configuration during an open cycle
 
-Per `INV-ARC-015` §VI.7, an economic-configuration change never reinterprets an already-open cycle. When the teacher changes payroll-governing configuration (e.g., hourly pay rate, expected weekly hours) during open cycle N, the change MUST NOT mutate the configuration governing cycle N.
+*Restated by operator ruling 2026-09-30.* Per `INV-ARC-015` §VI.7, a configuration change never reinterprets an already-open cycle. When the teacher changes payroll settings during open cycle N, the change MUST NOT govern cycle N: work done under the old setting is paid under the old setting, and the change governs from the next payroll cycle boundary.
 
-Because payroll may be run manually, the timestamp of the next cycle boundary is unknown at the moment the teacher makes the change. The change is therefore modeled as a **lawful pending next-cycle policy transition** owned by Class Configuration / Economic Policy (`DOM-CLASS-003`), not as a future-dated `effective_at` guessed by this domain. At payroll completion, `FEAT-PROD-004` first settles cycle N under its existing governing configuration, then invokes the lawful Class-domain transition command to activate the pending configuration for cycle N+1. Activation is a lawful append-only policy transition per `INV-ARC-016`, never a scheduler silently noticing `effective_at <= now`.
+The change is an effective-dated append to `payroll_settings` whose `effective_date` is the next payroll date (§XV.5) at the moment of the save (`DOM-CLASS-003` §VII, `DOM-POL-001` §VI.2). Because the next payroll date is derived rather than stored, and a manual run does not move it, the boundary is known when the change is made. No policy transition is recorded and none is activated at completion.
+
+**Pricing.** Each session a payroll run settles is priced by the `payroll_settings` row in force at the instant the session closed (the greatest `effective_date` at or before that instant; ties broken by the latest `created_at`). Work that closed before the class's first setting existed is priced by that first setting, since no earlier setting was ever in force. A run whose sessions fall under more than one setting prices each setting's share separately and records, in the event's `summary_json`, one entry per setting — its `policy_uuid`, the seconds it priced, and its per-minute `pay_rate` — so the amount is reproducible from recorded inputs (`INV-CORE-000` §III.3). The amount itself is not stored (§VIII.3). The event's `policy_uuid` names the setting that governed the latest-closing session.
+
+`rounding_mode` and the overtime threshold columns are recorded settings, but no rounding or overtime is applied to payroll pricing until the owner rules on their semantics.
 
 ### 4. Interaction with `record_payroll_event`
 
 `record_payroll_event` (§VIII.3, owned by `FEAT-PROD-003`) remains the sole writer of `payroll_event` rows. When invoked as part of a class-level run orchestrated by `FEAT-PROD-004`, the caller supplies the run's `payroll_cycle_id`; `record_payroll_event` stamps it unchanged onto each `payroll` row. `record_payroll_event` does not generate `payroll_cycle_id` and does not itself orchestrate any cross-domain side effect. Cross-domain orchestration is exclusively `FEAT-PROD-004`'s responsibility.
+
+### 5. The next payroll date is derived, never stored
+
+*Operator ruling 2026-09-30.* A class's next payroll date is computed from `payroll_settings` and `payroll_event` alone. It is never persisted, and no schedule cursor exists on any table.
+
+It takes one of three forms:
+
+1. **`first_pay_date`** — while the class has no `SYSTEM` `payroll` event (whether `first_pay_date` is still ahead or has already arrived and is due);
+2. **`first_pay_date` + pay frequency** — the case of form 3 in which the last scheduled run was the one on `first_pay_date`;
+3. **last `SYSTEM` `payroll` event + pay frequency** — once the automatic schedule has run.
+
+The anchor for forms 2 and 3 is the *scheduled occurrence* the last `SYSTEM` `payroll` event settled, recorded in its `summary_json`, not the wall-clock instant the run happened to execute, so a late run never moves later paydays. An event that predates that record anchors on its `recorded_at`. Only `payroll` events with `mechanism = SYSTEM` anchor the schedule: a teacher-started (`TEACHER`) payroll run, a `manual_credit` (including a platform-computed correction recorded as `SYSTEM`), and a `reversal` never move it.
+
+`first_pay_date` and the pay frequency are read from the setting in force at the moment of evaluation. Pay frequency is `payroll_frequency_days`, advanced in class-local calendar days (`INV-ARC-015` §VI.4); `pay_schedule_type` is its label. A class with no `first_pay_date` and no `SYSTEM` run has no scheduled payroll date.
 
 ## XVI. Amendment
 

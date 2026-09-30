@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| DOM-CLASS-003 | 2.2 | 2026-08-30 | 2.1 | Constitutional |
+| DOM-CLASS-003 | 2.3 | 2026-09-30 | 2.2 | Constitutional |
 
 # I. Purpose
 
@@ -75,8 +75,8 @@ This specification does NOT define:
 - `docs/SPEC/SPEC-ECON-001_SAVINGS_INTEREST_ACCRUAL_AND_DISBURSEMENT_SPECIFICATION.md` — savings interest accrual and disbursement behavior
 - `docs/SPEC/SPEC-ECON-002_ECONOMIC_POLICY_VISIBILITY_AND_DISCLOSURE.md` — pending policy visibility requirements
 - `docs/FEATURE-EXECUTION/FEAT-ECON-001_ECONOMIC_POLICY_TRANSITION_EXECUTION_AND_ACTIVATION_ORCHESTRATION.md` — FEAT-layer execution
-- `docs/DOMAIN/DOM-PROD-001_PRODUCTIVITY_AND_PAYROLL_DOMAIN.md` — payroll-cycle boundary that satisfies `next_boundary` activation for payroll-governing policy
-- `docs/FEATURE-EXECUTION/FEAT-PROD-004_COMPLETE_PAYROLL_CYCLE.md` — orchestrates lawful activation of pending next-cycle transitions at payroll completion
+- `docs/DOMAIN/DOM-PROD-001_PRODUCTIVITY_AND_PAYROLL_DOMAIN.md` — the derived next payroll date that bounds a payroll cycle (§XV.5) and pricing by the setting in force (§XV.3)
+- `docs/DOMAIN/DOM-POL-001_POLICIES_DOMAIN.md` §VI.2 — effective-dated `payroll_settings`, the sole payroll authority
 
 ---
 
@@ -170,6 +170,8 @@ Policy activation behavior MUST NOT depend on:
 ---
 
 # V. Canonical Objects
+
+> **Legacy, pending retirement (operator ruling 2026-09-30).** `policy_versions` and `policy_transitions` were never authorized by the owner as canonical tables. They are legacy for every domain and are scheduled for retirement. No new reference to either table may be added. Payroll no longer reads or writes them (§VII); the remaining non-payroll uses are tracked for removal. The descriptions below record what the tables are, not a mandate to use them.
 
 ## 1. policy_versions
 
@@ -274,11 +276,20 @@ Economics governance MUST NOT encode:
 
 ## Pending Next-Cycle Payroll-Governing Changes
 
-When a teacher changes a payroll-governing economic value (e.g., hourly pay rate, expected weekly hours) during an open economic cycle, the change SHALL be recorded as a `pending` policy transition with `activation_mode = next_boundary`. It MUST NOT mutate the policy governing the open cycle (`INV-ARC-015` §VI.7), and it MUST NOT be encoded as a guessed future `effective_at` timestamp.
+*Restated by operator ruling 2026-09-30 (v2.3). The previous text recorded a payroll change as a `pending` `policy_transitions` row with `activation_mode = next_boundary`. That mechanism was never authorized for payroll and is withdrawn: `policy_versions` / `policy_transitions` are legacy tables pending retirement (§V) and are not an authority for payroll.*
 
-Under manual payroll, the timestamp of the next cycle boundary is unknown at the moment the teacher makes the change. The pending transition therefore carries activation *intent* (`next_boundary`), not an activation *time*. The lawful operational boundary that satisfies this intent is **payroll cycle completion**, owned by the Productivity and Payroll domain (`DOM-PROD-001` §XV; consistent with ECON-CONST-004). Activation is requested by that operational domain through the FEAT layer (`FEAT-PROD-004`) as a lawful append-only transition (`applied`), never by a scheduler observing that some `effective_at <= now`. Recording a pending change and later activating it at the boundary is the only lawful path; hidden deferred mutation (§XI.1) and mutable pending payloads (§XI.4) remain prohibited.
+When a teacher changes a payroll setting (pay rate, pay frequency, first pay date, daily limit, or any other `payroll_settings` column) while a payroll cycle is open, the change MUST NOT govern the open cycle (`INV-ARC-015` §VI.7). Work done under the old setting is paid under the old setting. The change governs from the next payroll cycle boundary.
 
-Exactly one pending transition remains authoritative per `class_id` scope (§VIII); a subsequent change during the same open cycle supersedes the prior pending transition with append-only lineage.
+The change is recorded as an **effective-dated append** to `payroll_settings`, the sole payroll authority (`DOM-POL-001` §VI.2, `DOM-POL-001A` §V.F):
+
+1. Saving settings inserts a new row; no row is ever updated.
+2. The new row's `effective_date` is the class's **next payroll date** at the moment of the save — the boundary that closes the open cycle. The next payroll date is derived, never stored (`DOM-PROD-001` §XV.5), so the boundary is known at save time; it is not a guess. A save made while the next payroll date has already passed, but before the scheduled run has happened, takes the following boundary: the overdue boundary already closed the cycle the teacher is working in.
+3. The first payroll setting a class ever records governs from the moment it is saved (`effective_date = created_at`): there is no earlier setting to protect.
+4. The setting in force at an instant is the row with the greatest `effective_date` at or before it; among rows sharing that `effective_date`, the latest `created_at` wins. A second save before the same boundary therefore supersedes the first at that boundary, while both remain as history. No row is deleted, hidden, or rewritten to express supersession.
+
+Activation needs no transition, command, or scheduler flag: a pending row simply becomes the row in force when its `effective_date` is reached. That is not hidden deferred mutation (§XI.1) — the future setting is a visible, immutable row carrying its own effective date, and nothing is mutated when it takes effect. A manual payroll run does not move the boundary (`DOM-PROD-001` §XV.5), so running payroll early never activates a pending change early.
+
+Pending settings MUST be visible (§X): the teacher's payroll surface shows the setting currently in force and every pending setting with the date it takes effect.
 
 ---
 
