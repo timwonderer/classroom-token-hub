@@ -34,11 +34,11 @@ reviewed copy of the Grafana part of it, like `infra/status/nginx-telemetry.conf
    returns `401` with no `Location`, and the same with `-H 'Sec-Fetch-Mode: navigate' -H 'Accept: text/html'`
    returns `302` to `/sysadmin/login?next=...`.
 
-Known interaction: today `GET /sysadmin/login` removes `user_id` from the
-session. The one redirected reload of a stale Grafana tab therefore signs out a
-teacher session held in the same browser (before this change the flood of
-redirects hit the 200/hour limit, so those requests were mostly 429s instead).
-Changing the login route is a separate application change.
+Deploy order: the application release that stops `GET /sysadmin/login` from
+removing `user_id` (same change as these files) must be live before, or with,
+this nginx change. Before it, the one redirected reload of a stale Grafana tab
+reaches the login page as a 200 rather than a 429 and signs out a teacher
+session held in the same browser.
 
 Rollback: restore the previous `location @grafana_login_redirect` (a single
 `return 302 /sysadmin/login?next=$request_uri;`) and reload. The map file is

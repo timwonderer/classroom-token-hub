@@ -136,11 +136,13 @@ def _tail_log_lines(file_path: str, max_lines: int = 200, chunk_size: int = 8192
 @limiter.limit("10 per minute", methods=["POST"])
 @requires_feat_context("FEAT-OPS-001")
 def login():
-    """System admin login with TOTP authentication."""
-    session.pop("user_id", None)
-    session.pop("current_session_nonce", None)
-    session.pop("last_activity", None)
-    session.pop("force_sysadmin_username_migration", None)  # noqa: safety — no-op if key absent
+    """System admin login with TOTP authentication.
+
+    Rendering the form changes nothing. A page load, a prefetch, or a
+    background request that followed a redirect here must not sign out
+    whoever this browser holds; only a successful sign-in replaces the
+    session's principal, and then it replaces all of it.
+    """
     form = SystemAdminLoginForm()
     if form.validate_on_submit():
         username = normalize_auth_username(form.username.data)
@@ -167,7 +169,9 @@ def login():
                     )
                     totp_valid = False
                 if totp_valid:
-                    # Canonical session — no extinct keys
+                    # A new principal: nothing of the previous one (a teacher's
+                    # class, nonce, or username) carries over.
+                    session.clear()
                     establish_sysadmin_session(user)
                     nonce = secrets.token_urlsafe(32)
                     session["current_session_nonce"] = nonce
