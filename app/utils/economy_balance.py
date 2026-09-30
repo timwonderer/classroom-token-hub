@@ -199,23 +199,21 @@ class EconomyBalanceChecker:
             for role, bounds in self.STORE_ROLE_BANDS.items()
         }
 
-    def _weekly_insurance_premium(self, policy_version) -> Optional[float]:
-        """Weekly premium of one offered insurance policy version, or None.
+    def _weekly_insurance_premium(self, policy) -> Optional[float]:
+        """Weekly premium of one offered insurance definition, or None.
 
-        A policy version carries its terms in its payload, not in columns. An
-        inactive version is not offered, and a version with no usable premium is
+        ``policy`` is an ``insurance_policies`` row; its premium and cadence are
+        typed columns (DOM-POL-001 §VI.0). A definition with no usable premium is
         skipped rather than priced by guesswork.
         """
-        import json
-
-        if not getattr(policy_version, "is_active", False):
+        premium = getattr(policy, "premium", None)
+        if premium is None:
             return None
         try:
-            payload = json.loads(getattr(policy_version, "policy_payload_json", None) or "{}")
-            premium = Decimal(str(payload["premium"]))
-        except (KeyError, TypeError, ValueError, ArithmeticError):
+            premium = Decimal(str(premium))
+        except (TypeError, ValueError, ArithmeticError):
             return None
-        frequency = str(payload.get("charge_frequency") or "weekly").lower()
+        frequency = str(getattr(policy, "charge_frequency", None) or "weekly").lower()
         return float(self._normalize_to_weekly(premium, frequency))
 
     def _normalize_to_weekly(

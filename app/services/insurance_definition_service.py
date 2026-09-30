@@ -2,13 +2,10 @@
 
 This is the generic Policies (POL) mechanism for the ``insurance_policies``
 definition family (the STOR-owned, POL-managed definition-of-record introduced
-in Step 1). It is the successor to the ``PolicyVersion(domain="insurance")``
-residue in ``insurance_policy_service`` — the old path drove the DOM-CLASS-003
-*economic* version-control tables (``policy_versions`` / ``policy_transitions``:
-integer id, ``version_number``, JSON payload, ``is_active``, lineage
-transitions), whose shape is architecturally incompatible with the typed,
-UUID-keyed, availability-projected ``insurance_policies`` table. This module
-does NOT reuse that abstraction and provides no fallback to it.
+in Step 1). It is the sole store of insurance definitions: each definition
+is a typed, UUID-keyed, availability-projected row, and its ``policy_uuid`` is
+its version (DOM-POL-001 §VI.0). There is no other insurance version table and
+no fallback to one.
 
 Scope discipline (DOM-POL-001):
 

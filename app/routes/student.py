@@ -80,7 +80,6 @@ from app.services.entitlement_read_service import (
     get_entitlement_status,
     derive_display_status,
 )
-from app.services.insurance_policy_service import list_insurance_policy_versions
 from app.services import insurance_definition_service as insurance_defs
 from app.services import insurance_coverage_service as insurance_coverage
 from app.services.entitlement_read_service import (
