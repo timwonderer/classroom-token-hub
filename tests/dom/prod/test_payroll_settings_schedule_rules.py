@@ -88,7 +88,7 @@ def test_saving_a_named_schedule_stores_only_the_schedule_and_its_anchor(client,
 
 def test_the_service_refuses_a_missing_anchor_or_an_unsupported_schedule(app):
     classroom = initialize("chemistry_p1", app, with_payroll_settings=False)
-    base = {"pay_rate": Decimal("1"), "pay_schedule_type": "monthly", "rounding_mode": "down"}
+    base = {"pay_rate": Decimal("1"), "pay_schedule_type": "monthly"}
     for data, message in (
         (base, "first pay date"),
         ({**base, "first_pay_date": DEC_20, "pay_schedule_type": "daily"}, "weekly, biweekly or monthly"),
@@ -110,7 +110,7 @@ def test_the_database_refuses_a_row_without_an_anchor_or_with_an_unsupported_sch
     classroom = initialize("chemistry_p1", app, with_payroll_settings=False)
     row = dict(
         class_id=classroom.class_id, pay_rate=Decimal("1"), pay_schedule_type="monthly",
-        rounding_mode="down", first_pay_date=DEC_20, effective_date=DEC_20, created_at=DEC_20,
+        first_pay_date=DEC_20, effective_date=DEC_20, created_at=DEC_20,
     )
     row[field] = value
     with pytest.raises(IntegrityError, match=constraint):
@@ -144,3 +144,81 @@ def test_economy_page_shows_the_cadence_and_the_real_period_length(client, app, 
     assert "Payroll schedule: monthly; the current pay period is 28 days (Feb 01 to Mar 01)" in pages["feb"]
     assert "Payroll schedule: monthly; the current pay period is 31 days (Mar 01 to Apr 01)" in pages["mar"]
     assert "30 days" not in pages["feb"] + pages["mar"]
+
+
+# --------------------------------------------------------------------------- #
+# Rounding is retired (operator ruling 2026-09-30)                             #
+# --------------------------------------------------------------------------- #
+
+def test_the_settings_page_offers_no_rounding_control_or_claim(client, app, monkeypatch):
+    classroom = initialize_as_teacher("chemistry_p1", client, app)
+    enable_class_feature(class_id=classroom.class_id, feature="payroll")
+    page = client.get("/admin/payroll").get_data(as_text=True)
+
+    assert 'name="adv_rounding"' not in page
+    assert "Round Down" not in page and "Round Up" not in page and "Round to Nearest" not in page
+    assert "rounding preference" not in page.lower()
+
+
+def test_a_posted_rounding_field_is_ignored_and_nothing_stores_it(client, app, monkeypatch):
+    classroom = initialize_as_teacher("chemistry_p1", client, app, with_payroll_settings=False)
+    with _clock(monkeypatch, DEC_20):
+        _login(client, classroom, DEC_20)
+        update_payroll_settings(
+            client, settings_mode="advanced", adv_pay_amount="1.00", adv_time_unit="minutes",
+            adv_pay_schedule="monthly", adv_first_pay_date="2027-01-01", adv_rounding="up",
+        )
+
+    (row,) = payroll_setting_history(classroom.class_id)
+    assert row.rounding_mode is None  # retired column: historical data only
+
+
+def test_the_service_refuses_a_rounding_field(app):
+    classroom = initialize("chemistry_p1", app, with_payroll_settings=False)
+    with pytest.raises(ValueError, match="Unknown payroll settings field"):
+        with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"rounding:{uuid4()}"):
+            append_payroll_setting(
+                class_id=classroom.class_id,
+                settings_data={
+                    "pay_rate": Decimal("1"), "pay_schedule_type": "monthly",
+                    "first_pay_date": DEC_20, "rounding_mode": "up",
+                },
+                effective_date=DEC_20, created_at=DEC_20,
+            )
+    db.session.rollback()
+
+
+def test_pricing_is_exact_seconds_times_rate_whatever_rounding_a_row_once_stored(app):
+    """A historical row with rounding_mode='up' (as production's 7 rows have)
+    prices 13m 6s at $1.50/hour as $0.33 — the exact 786 seconds, not 14 minutes."""
+    from app.models import AttendanceSession
+    from app.services.payroll.pricing import price_payable_attendance
+    from app.services.context_resolver import CanonicalContext
+
+    classroom = initialize("chemistry_p1", app, with_payroll_settings=False)
+    cid = classroom.class_id
+    with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"hist:{uuid4()}"):
+        db.session.add(PayrollSettings(
+            class_id=cid, pay_rate=Decimal("0.025"), pay_schedule_type="biweekly",
+            rounding_mode="up", first_pay_date=DEC_20,
+            effective_date=DEC_20 - timedelta(days=1), created_at=DEC_20 - timedelta(days=1),
+        ))
+        start = DEC_20
+        seat_id = classroom.students[0].seat.id
+        for status, instant in (("active", start), ("inactive", start + timedelta(seconds=786))):
+            db.session.add(AttendanceSession(
+                target_seat_id=seat_id, class_id=cid, actor_seat_id=classroom.teacher_seat_id,
+                status=status, reason_code="start_work" if status == "active" else "done_for_day",
+                timestamp=instant,
+            ))
+        db.session.flush()
+    db.session.commit()
+    ctx = CanonicalContext(
+        user_id=classroom.teacher_user.id, class_id=cid,
+        seat_id=classroom.teacher_seat_id, actor_role="teacher",
+    )
+
+    priced = price_payable_attendance(seat_id, cid, ctx=ctx, as_of_utc=DEC_20 + timedelta(hours=1))
+
+    assert priced.seconds == 786
+    assert priced.amount == Decimal("0.33")

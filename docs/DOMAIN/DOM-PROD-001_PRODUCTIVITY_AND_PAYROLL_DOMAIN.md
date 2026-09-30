@@ -503,7 +503,7 @@ The change is an effective-dated append to `payroll_settings` whose `effective_d
 
 **Pricing.** Each session a payroll run settles is priced by the `payroll_settings` row in force at the instant the session closed (the greatest `effective_date` at or before that instant; ties broken by the latest `created_at`). Work that closed before the class's first setting existed is priced by that first setting, since no earlier setting was ever in force. A run whose sessions fall under more than one setting prices each setting's share separately and records, in the event's `summary_json`, one entry per setting — its `policy_uuid`, the seconds it priced, and its per-minute `pay_rate` — so the amount is reproducible from recorded inputs (`INV-CORE-000` §III.3). The amount itself is not stored (§VIII.3). The event's `policy_uuid` names the setting that governed the latest-closing session.
 
-`rounding_mode` and the overtime threshold columns are recorded settings, but no rounding or overtime is applied to payroll pricing until the owner rules on their semantics.
+**No rounding.** A setting's share is exactly its elapsed seconds × its per-minute rate ÷ 60, quantized once to the cent. No time rounding is defined or applied; rounding is not a payroll setting (operator ruling 2026-09-30; the retired `rounding_mode` column is historical data only, `DOM-POL-001A` §V.F). The overtime threshold is recorded but no overtime is applied to payroll pricing until the owner rules on its semantics.
 
 ### 4. Interaction with `record_payroll_event`
 

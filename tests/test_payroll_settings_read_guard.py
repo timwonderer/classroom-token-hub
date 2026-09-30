@@ -103,3 +103,20 @@ def test_mutation_proof__non_payroll_day_arithmetic_and_labels_are_not_reported(
     assert find_frequency_violations(
         "app/services/payroll/schedule.py", "LABELS = {'monthly': 'month'}\n"
     ) == []
+
+
+@pytest.mark.parametrize("path,snippet", [
+    # Retired rounding coming back as a read, a write, a form key or a query.
+    ("app/services/payroll/pricing.py", "mode = setting.rounding_mode\n"),
+    ("app/routes/admin.py", "settings_data = {'rounding_mode': rounding}\n"),
+    ("app/services/payroll/settings.py", "PayrollSettings(rounding_mode='up')\n"),
+    ("app/services/payroll/builders.py", "rounding_mode = settings.rounding_mode or 'down'\n"),
+    ("app/models.py", "if row.rounding_mode == 'up':\n    pass\n"),
+])
+def test_mutation_proof__a_rounding_mode_use_is_reported(path, snippet):
+    assert find_frequency_violations(path, snippet), snippet
+
+
+def test_mutation_proof__the_retired_column_declaration_is_allowed():
+    declaration = "class PayrollSettings:\n    rounding_mode = db.Column(db.String(20), nullable=True)\n"
+    assert find_frequency_violations("app/models.py", declaration) == []

@@ -23,6 +23,9 @@ DOM-POL-001A §V.F, DOM-PROD-001 §XI.3/§XV):
   ``pay_schedule_type`` through the anchored recurrence, never stored (operator
   ruling 2026-09-30; production's 7 rows are all ``biweekly`` / 14, so nothing
   is lost there).
+* ``rounding_mode`` is RETIRED (operator ruling 2026-09-30): it was never defined
+  or applied to pay. It is kept, as nullable historical data, rather than
+  dropped; production's values (``up`` on 7 rows) stay. Nothing writes it.
 * UPDATE is refused on both tables, and DELETE is refused except while a class
   universe is being destroyed (``cth.class_universe_destroying``, the flag
   ``ledger_transaction`` already honours).
@@ -358,6 +361,9 @@ def _reshape_payroll_settings(conn):
     op.alter_column('payroll_settings', 'effective_date', existing_type=sa.DateTime(timezone=True), nullable=False)
     op.alter_column('payroll_settings', 'created_at', existing_type=sa.DateTime(timezone=True), nullable=False)
     op.alter_column('payroll_settings', 'first_pay_date', existing_type=sa.DateTime(timezone=True), nullable=False)
+    # rounding_mode is RETIRED (operator ruling 2026-09-30): kept as historical
+    # data rather than dropped, but no longer required or written.
+    op.alter_column('payroll_settings', 'rounding_mode', existing_type=sa.String(20), nullable=True)
 
     # Indexes and constraints over columns that are going away.
     for index_name in (
@@ -548,6 +554,10 @@ def _restore_payroll_settings(conn):
     """))
     op.alter_column('payroll_settings', 'payroll_frequency_days', existing_type=sa.Integer(), nullable=False)
     op.alter_column('payroll_settings', 'first_pay_date', existing_type=sa.DateTime(timezone=True), nullable=True)
+    # The previous schema requires rounding_mode; rows written after the upgrade
+    # have none, and 'down' was the old default (it was never applied either way).
+    conn.execute(text("UPDATE payroll_settings SET rounding_mode = 'down' WHERE rounding_mode IS NULL"))
+    op.alter_column('payroll_settings', 'rounding_mode', existing_type=sa.String(20), nullable=False)
 
     conn.execute(text("""
         UPDATE payroll_settings SET

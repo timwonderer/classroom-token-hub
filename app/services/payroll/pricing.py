@@ -12,7 +12,8 @@ The payroll run (FEAT-PROD-003) and every estimate shown before it — the
 teacher's payroll page, the student's tap response — price through this module,
 so a preview and the payout cannot disagree. Pure reads (INV-ARC-007).
 
-``rounding_mode`` is not applied: the owner has not ruled on its granularity.
+Pricing is exact: elapsed seconds × rate, quantized to the cent. There is no
+time rounding (operator ruling 2026-09-30; DOM-PROD-001 §XV.3).
 """
 
 from __future__ import annotations

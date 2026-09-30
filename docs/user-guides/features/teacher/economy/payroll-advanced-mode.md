@@ -3,8 +3,8 @@ title: Payroll Advanced Mode
 category: features
 subcategory: teacher-economy
 roles: [teacher]
-description: What the Advanced Mode toggle adds to payroll settings — time increments, overtime, rounding and the pay simulator — and which of those actually change what students are paid.
-keywords: [payroll, advanced mode, overtime, rounding, time increment, pay simulator, pay schedule, daily limit, auto run, automatic payroll]
+description: What the Advanced Mode toggle adds to payroll settings — time increments, overtime and the pay simulator — and which of those actually change what students are paid.
+keywords: [payroll, advanced mode, overtime, time increment, pay simulator, pay schedule, daily limit, auto run, automatic payroll]
 related:
   - user-guides/features/teacher/economy/payroll-settings
   - user-guides/features/teacher/economy/payroll-run
@@ -25,7 +25,7 @@ Underneath, payroll is one calculation: seconds worked since the last run, multi
 
 Flip **Advanced Mode** in the card header. The form swaps between two sets of fields, and the mode you were in when you pressed **Save Settings** is the one that is stored.
 
-Saving clears the other mode's fields. Save in simple mode and overtime, the advanced daily limit, and rounding are reset; save in advanced mode and the simple daily limit is cleared. Nothing carries across, so treat a mode switch as a rewrite of the policy rather than an edit.
+Saving clears the other mode's fields. Save in simple mode and overtime and the advanced daily limit are reset; save in advanced mode and the simple daily limit is cleared. Nothing carries across, so treat a mode switch as a rewrite of the policy rather than an edit.
 
 ### Pay Amount and Time Increment
 
@@ -53,19 +53,13 @@ Payroll runs **Weekly**, **Bi-weekly**, or **Monthly** — the same three choice
 
 The **Next Payroll** figure at the top of the page comes from that calendar, so a manual run does not shift it.
 
-### Rounding
-
-**Round Down**, **Round Up**, or **Round to Nearest**, described on the form as applying *if time doesn't reach next increment*.
-
-The choice is stored and does nothing. Pay is calculated from the exact elapsed time and rounded to the nearest cent regardless of which option you pick. See *Important notes*.
-
 ### Pay Simulator
 
 The panel to the right of the form estimates earnings from your unsaved form values. Enter **Minutes per Class** and **Classes per Week**, then choose **Calculate** for a **Per Week**, **Per Month (4 weeks)**, and **Per Semester (18 weeks)** figure.
 
-It reads the rate straight off the form, so it is accurate for the rate and honest about the parts of advanced mode that do not work — it ignores overtime and rounding, exactly as payroll does. It also ignores your **Daily Time Limit**, which payroll does *not*. If you have set a limit that your simulated day exceeds, the estimate will be too high.
+It reads the rate straight off the form, so it is accurate for the rate and honest about the parts of advanced mode that do not work — it ignores overtime, exactly as payroll does. It also ignores your **Daily Time Limit**, which payroll does *not*. If you have set a limit that your simulated day exceeds, the estimate will be too high.
 
-Below the simulator, **Current Settings** narrates your form in plain English. Two of its sentences are unreliable — see *Important notes*.
+Below the simulator, **Current Settings** narrates your form in plain English.
 
 ### Validation
 
@@ -82,14 +76,11 @@ Saving without a **First Pay Date** is refused with *Choose the first payday. Pa
 > [!CAUTION]
 > **Overtime does not pay overtime.** The threshold saves and redisplays, and it does not enter the pay calculation. A student who works twelve hours is paid twelve hours at the base rate. Do not promise students an overtime rate — set a base rate you are happy to pay for every hour worked.
 
-> [!CAUTION]
-> **Rounding is not applied.** All three options behave identically. Time is measured to the second and money is rounded to the cent, whatever the dropdown says. This matters most if you chose **Per Hour** or **Per Day** as your increment expecting partial periods to be dropped — they are not, and a student who works nine minutes of an hour is paid for nine minutes.
+> [!NOTE]
+> **Pay is exact.** Time is measured to the second and money is rounded once, to the cent. Choosing **Per Hour** or **Per Day** as your increment only changes how you type the rate: a student who works nine minutes of an hour is paid for nine minutes.
 
 > [!NOTE]
 > **Due payroll cycles run through the scheduler.** The scheduled job checks each class's **Next Payroll** date and invokes the same completion workflow as **Run Payroll**. The page does not provide a separate auto-run toggle; saving the schedule is what makes a class eligible for automatic execution.
-
-> [!NOTE]
-> **The Current Settings summary misreports two things.** Its rounding sentence always reads *rounds down* no matter which option you selected, and its overtime sentence never appears even when overtime is enabled. The form fields themselves show what was saved — trust those over the summary.
 
 > [!IMPORTANT]
 > **Settings are per class.** One policy is stored for the class you currently have selected. If you teach several periods and want different rates, switch class context and save again for each one. Rate and schedule changes apply only to future runs; money already paid is never recalculated.

@@ -169,7 +169,7 @@ These terms are frozen with the purchased policy version: a later submission cha
 | `overtime_threshold` / `overtime_threshold_unit` | Recorded threshold; no overtime is computed until the owner rules on its semantics |
 | `max_time_per_day` / `max_time_per_day_unit` | The daily working limit enforced on attendance |
 | `pay_schedule_type` | The pay frequency: `weekly`, `biweekly` or `monthly` (DB check). Paydays are derived from it and `first_pay_date` through the anchored recurrence (`SPEC-TIME-001` §IX.12; monthly is a calendar month rolled forward); no day count is stored |
-| `rounding_mode` | Recorded preference; no rounding is applied to pay until the owner rules on its granularity |
+| `rounding_mode` | **RETIRED** (operator ruling 2026-09-30). Not a supported setting: rounding was never defined or applied to pay (pricing is exact seconds × rate, `DOM-PROD-001` §XV.3). Kept, nullable, only as historical data on rows recorded before the ruling; nothing reads or writes it |
 | `first_pay_date` | Required: the anchor of the payroll schedule (`DOM-PROD-001` §XV.5) |
 
 "Pay frequency" in the owner's list is `pay_schedule_type` with the anchored derivation, not a stored number of days: the former `payroll_frequency_days` column is dropped (operator ruling 2026-09-30). No other column is legal. In particular there is no availability state, section/`block` label, stored next payroll date, update timestamp, surrogate integer id, or form-presentation state (the rate's entry unit, a simple/advanced mode); the teacher form converts entered values into these columns and stores nothing else. `(class_id, effective_date, created_at)` is unique, so the row in force at any instant is determined.

@@ -7790,7 +7790,7 @@ def payroll_settings():
 
             # Only the legal payroll_settings columns are stored (DOM-POL-001A
             # §V.F). The simple form's daily limit is entered as hours + minutes
-            # and stored as minutes; simple mode applies no rounding preference.
+            # and stored as minutes.
             settings_data = {
                 'pay_rate': pay_rate_per_minute,
                 'first_pay_date': first_pay_date,
@@ -7799,7 +7799,6 @@ def payroll_settings():
                 'overtime_threshold_unit': None,
                 'max_time_per_day': round(daily_limit_hours * 60, 4) if daily_limit_hours else None,
                 'max_time_per_day_unit': 'minutes' if daily_limit_hours else None,
-                'rounding_mode': 'down',
             }
 
         else:  # Advanced mode
@@ -7831,8 +7830,6 @@ def payroll_settings():
             first_pay_date_str = request.form.get('adv_first_pay_date')
             first_pay_date = _class_local_date_start_utc(first_pay_date_str)
 
-            rounding = request.form.get('adv_rounding', 'down')
-
             # Only the legal payroll_settings columns are stored (DOM-POL-001A
             # §V.F): the entry unit is folded into pay_rate (per minute).
             settings_data = {
@@ -7843,7 +7840,6 @@ def payroll_settings():
                 'max_time_per_day_unit': max_time_unit if max_time_value else None,
                 'pay_schedule_type': pay_schedule,
                 'first_pay_date': first_pay_date,
-                'rounding_mode': rounding,
             }
 
         # Every setting anchors the payroll schedule (DOM-PROD-001 §XV.5), and

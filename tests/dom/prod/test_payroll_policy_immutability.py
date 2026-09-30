@@ -66,7 +66,6 @@ def _submit(class_id, **settings_data) -> PayrollSettings:
         # forward what they omit.
         settings_data.setdefault("first_pay_date", FIRST_PAY)
         settings_data.setdefault("pay_schedule_type", "biweekly")
-        settings_data.setdefault("rounding_mode", "down")
     with FEATContext(
         "FEAT-TEST-SETUP",
         idempotency_key=f"payroll:submit:{class_id}:{sorted(settings_data.items())}",
@@ -119,7 +118,7 @@ class TestPayrollPolicyIsAppendOnly:
         """A partial submission must not silently reset the rest of the contract.
 
         The simple-mode form posts only a handful of fields. If the successor were
-        built from column defaults, the overtime and rounding terms would quietly
+        built from column defaults, the overtime and daily-limit terms would quietly
         change for every future run.
         """
         classroom = initialize("chemistry_p1", app, with_payroll_settings=False)
@@ -129,7 +128,6 @@ class TestPayrollPolicyIsAppendOnly:
                 pay_rate=Decimal("0.25"),
                 overtime_threshold=6.0,
                 overtime_threshold_unit="hours",
-                rounding_mode="up",
                 max_time_per_day=4.0,
                 max_time_per_day_unit="hours",
                 pay_schedule_type="weekly",
@@ -140,7 +138,6 @@ class TestPayrollPolicyIsAppendOnly:
             assert Decimal(successor.pay_rate) == Decimal("2.00")
             assert successor.overtime_threshold == 6.0
             assert successor.overtime_threshold_unit == "hours"
-            assert successor.rounding_mode == "up"
             assert successor.max_time_per_day == 4.0
             assert successor.max_time_per_day_unit == "hours"
             assert successor.pay_schedule_type == "weekly"
@@ -188,7 +185,7 @@ class TestRecordedPayrollKeepsItsTerms:
                 class_id=classroom.class_id,
                 settings_data={
                     "pay_rate": Decimal("0.25"), "first_pay_date": FIRST_PAY,
-                    "pay_schedule_type": "biweekly", "rounding_mode": "down",
+                    "pay_schedule_type": "biweekly",
                 },
                 recorded_at=now - timedelta(hours=1),
             )
