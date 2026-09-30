@@ -6,6 +6,8 @@
 
 > [!IMPORTANT]
 > **3.0 (2026-09-30), operator ruling.** Versions 1.x–2.x executed economic changes by creating rows in the class-wide `policy_versions` / `policy_transitions` tables and activating them at operational boundaries. Those tables were never authorized as canonical and are retired (`DOM-CLASS-003` §V, v2.4). This version replaces transition creation, activation, supersession and cancellation with one rule: each change is a new row in its owning domain's table, carrying the instant from which it governs. The file keeps its former name so existing references resolve.
+>
+> **Owner decisions 2026-09-30 (incorporated in 3.0 before release).** (a) The teacher no longer chooses an activation mode. "Apply Immediately" for rent is removed: a rent period already billed keeps its frozen terms either way, so it did exactly what the next-cycle option did, and offering both was misleading. Each change now takes effect the one way its owner defines (§VI–§VIII). (b) A policy-mode change never revokes a scheduled rebalance (§X).
 
 ## I. Purpose
 
@@ -113,9 +115,7 @@ System displays:
 - projected impacts,
 - selectable changes.
 
-Teacher selects:
-- desired changes,
-- one activation mode for the submission (immediate or next cycle).
+Teacher selects the desired changes. There is no activation choice: the review states when each change takes effect (§VI–§VIII), and a submitted activation mode is ignored.
 
 ### Step 2 — FEAT Routes Each Change to Its Owner
 
@@ -133,17 +133,20 @@ Grouped teacher rebalance actions MUST NOT collapse several domains into shared 
 
 ---
 
-## VI. Immediate Execution
+## VI. When Each Change Takes Effect
 
-If the activation mode is `immediate`, each owning command records its row now. The row governs from the moment it is recorded, subject to the owning domain's rule for work already issued (a rent period already issued keeps the `policy_uuid` it froze, `DOM-OBL-001` §V.7).
+| Change | Takes effect |
+|---|---|
+| Rent amount, rent late penalty | from the first rent period not yet billed (§VII) |
+| Store price, overdraft fee | at once (§VIII) |
 
-Immediate execution MUST remain append-only and preserve historical replayability. Direct mutation of active policy state is prohibited.
+Rent has no "immediate" option: a rent period already billed keeps the `policy_uuid` it froze (`DOM-OBL-001` §V.7), so a rent change can only ever govern the first period not yet billed. Execution MUST remain append-only and preserve historical replayability. Direct mutation of active policy state is prohibited.
 
 ---
 
 ## VII. Next-Boundary Execution
 
-If the activation mode is next cycle, each change is recorded now as a row of its owning table dated to that domain's next boundary (`DOM-CLASS-003` §VII):
+A change whose owner has a later boundary is recorded now as a row of its owning table dated to that boundary (`DOM-CLASS-003` §VII):
 
 - **Rent** — the start of the first rent period not yet issued. The open period is billed under the terms it froze; the next period issued takes the new row.
 
@@ -153,7 +156,7 @@ The row is pending until its date and visible as pending (`DOM-CLASS-003` §X). 
 
 ## VIII. Change Types Without a Later Boundary
 
-Store prices change by product-version supersession, which retires the live version at once, and the overdraft fee by Economic Engine evolution with no operational boundary. Neither owning domain defines a later boundary, so both can only be applied immediately. A next-cycle submission that includes either is refused as a whole; nothing in it is recorded.
+Store prices change by product-version supersession, which retires the live version at once, and the overdraft fee by Economic Engine evolution with no operational boundary. Neither owning domain defines a later boundary, so both take effect at once, in the same submission as any rent change.
 
 ---
 
@@ -165,7 +168,9 @@ A later row of the same owning table supersedes an earlier one for the same effe
 
 ## X. Withdrawing a Scheduled Change
 
-A scheduled change is a real row of its owning table. It is withdrawn the way any policy is changed: by recording another row for the same boundary through the owning domain's own surface. Saving a new economy mode does not withdraw it. No row is deleted or marked cancelled.
+A scheduled change is a real row of its owning table. It is withdrawn the way any policy is changed: by recording another row for the same boundary through the owning domain's own surface. No row is deleted or marked cancelled.
+
+A policy-mode change MUST NOT withdraw, supersede or otherwise revoke a scheduled rebalance, and no other action may do so implicitly. Owner ruling 2026-09-30: "Scheduling the rebalance was an explicit teacher action. Changing mode should not implicitly revoke a separately requested future action. If we want cancellation, that should itself be explicit." If a cancel action is ever offered it MUST be its own explicit teacher action.
 
 ---
 
@@ -201,8 +206,7 @@ The FEAT layer SHALL NOT:
 ## XIII. Observability Requirements
 
 Rebalance execution MUST record, through the owning commands' own evidence and the application log:
-- which changes were applied or scheduled,
-- the activation mode,
+- which changes were applied and which were scheduled, with the date a scheduled one takes effect,
 - refusals.
 
 All execution evidence MUST preserve correlation and idempotency lineage and remain auditable through DOM-OPS observability systems.

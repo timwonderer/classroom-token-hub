@@ -108,7 +108,7 @@ def test_a_rebalance_saved_mid_cycle_takes_effect_at_the_boundary(client, app):
 
     response = client.post(
         "/admin/economy-policy/rebalance",
-        data={"activation_mode": "next_renewal", "selected_changes": ["rent"]},
+        data={"selected_changes": ["rent"]},
     )
     assert response.status_code == 302, response.get_data(as_text=True)[:2000]
 
@@ -136,6 +136,64 @@ def test_a_rebalance_saved_mid_cycle_takes_effect_at_the_boundary(client, app):
 
     page = client.get("/admin/economic-engine").get_data(as_text=True)
     assert "Economy Update Scheduled" in page
+
+
+def _schedule_rent_rebalance(client, app, *, extra_form=None):
+    """A class with an open rent period and a rent rebalance saved in it.
+
+    Returns (class_id, old policy_uuid, boundary)."""
+    classroom = initialize_as_teacher("chemistry_p1", client, app)
+    cid = classroom.class_id
+    update_expected_weekly_hours(client, "40")
+    with app.app_context():
+        old_uuid = _rent_class(cid, rent_amount=Decimal("1.00")).policy_uuid
+        execute_reconcile_rent(cid, reference_time_utc=_FIRST_DUE)
+        (open_cycle,) = _cycles(cid)
+        boundary = open_cycle.next_assessment_at
+        db.session.commit()
+    response = client.post(
+        "/admin/economy-policy/rebalance",
+        data={"selected_changes": ["rent"], **(extra_form or {})},
+    )
+    assert response.status_code == 302, response.get_data(as_text=True)[:2000]
+    return cid, old_uuid, boundary
+
+
+def test_a_stale_apply_immediately_post_still_dates_rent_to_the_next_unbilled_period(client, app):
+    """Owner ruling 2026-09-30: rent has one choice. A form that still posts
+    ``activation_mode=immediate`` gets the same dated row, not an immediate one."""
+    cid, old_uuid, boundary = _schedule_rent_rebalance(
+        client, app, extra_form={"activation_mode": "immediate", "confirm_immediate": "yes"},
+    )
+    with app.app_context():
+        new = get_rent_settings(cid)
+        assert new.policy_uuid != old_uuid
+        assert new.rent_effective_at == boundary
+
+
+def test_a_policy_mode_change_leaves_a_scheduled_rebalance_in_force(client, app):
+    """Owner ruling 2026-09-30: scheduling the rebalance was an explicit teacher
+    action; changing mode must not implicitly revoke it (DOM-CLASS-003 §IX,
+    FEAT-ECON-001 §X)."""
+    cid, old_uuid, boundary = _schedule_rent_rebalance(client, app)
+    with app.app_context():
+        scheduled = get_rent_settings(cid)
+        scheduled_uuid, rows_before = scheduled.policy_uuid, RentSettings.query.filter_by(class_id=cid).count()
+        assert get_pending_rebalance_effective_at(cid) == boundary
+
+    response = client.post("/admin/economy-policy", data={"policy_mode": "tight"})
+    assert response.status_code == 302, response.get_data(as_text=True)[:2000]
+
+    with app.app_context():
+        assert get_current_economic_engine(cid).economy_policy_mode == "tight"
+        # The scheduled row is untouched and still the next period's terms.
+        assert RentSettings.query.filter_by(class_id=cid).count() == rows_before
+        assert get_rent_settings(cid).policy_uuid == scheduled_uuid
+        assert get_pending_rebalance_effective_at(cid) == boundary
+        execute_reconcile_rent(cid, reference_time_utc=boundary + timedelta(hours=1))
+        first, second = _cycles(cid)
+        assert first.policy_uuid == old_uuid
+        assert second.policy_uuid == scheduled_uuid
 
 
 def test_a_seat_claimed_mid_period_is_billed_on_that_periods_terms(app):

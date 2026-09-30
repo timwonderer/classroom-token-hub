@@ -222,7 +222,7 @@ Economics governance MUST NOT encode:
 Each owning domain states its boundary:
 - **Payroll** — the class's next payroll date (below).
 - **Rent** — the first rent period not yet issued. A rent policy binds when a period is issued (`DOM-OBL-001` §V.7), so every period already issued keeps the `policy_uuid` it froze and a change saved mid-period governs the next period. `rent_settings.rent_effective_at` records the start of that period.
-- **Economic Engine** — no operational boundary is defined; a change governs from the `effective_at` it is saved with, immediate unless a later instant is given.
+- **Economic Engine** — no operational boundary is defined; a change governs from the `effective_at` it is saved with, immediate unless a later instant is given. Which version is in force is answered by one resolver only, the version with the greatest `effective_at` at or before the instant (owner ruling 2026-09-30). A `class_features` row records whether a feature is on; it is not a second answer to which engine version governs.
 - **Store prices** and **insurance definitions** — no later boundary; a new row governs new purchases at once, and every bill cycle or entitlement already created keeps the `policy_uuid` it froze.
 
 ## Pending Next-Cycle Payroll-Governing Changes
@@ -265,7 +265,9 @@ Examples:
 - store price correction → a superseding `store_products` version
 - overdraft fee → a new `economic_engine` version
 
-Changing the class's economy mode does not cancel a scheduled rebalance: the scheduled change is already a row of its owning table, and it is changed, like any other row, by recording another.
+Changing the class's economy mode MUST NOT cancel, supersede or otherwise revoke a scheduled rebalance, and nothing may revoke one implicitly: the scheduled change is already a row of its owning table, and it is changed, like any other row, by recording another. Owner ruling 2026-09-30: "Scheduling the rebalance was an explicit teacher action. Changing mode should not implicitly revoke a separately requested future action. If we want cancellation, that should itself be explicit."
+
+The teacher does not choose when a rebalanced change takes effect; its owning domain does (§VII). A rent change takes effect from the first rent period not yet billed, and there is no "apply immediately" for rent (owner ruling 2026-09-30: a billed period keeps its frozen terms either way, so offering both options was misleading).
 
 ---
 

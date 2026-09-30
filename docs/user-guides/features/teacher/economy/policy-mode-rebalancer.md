@@ -58,16 +58,12 @@ Uncheck anything you want to keep as-is. If your settings already match the poli
 
 In practice the table holds one row at most. **Rent is the only setting the rebalance can change.** Insurance premiums, fines, and store prices all have recommended ranges on this page, but none of them appear here and none of them are rebalanced — you adjust those on their own settings pages.
 
-### Choosing when it takes effect
+### When it takes effect
 
-Under **Effective Date**, pick one:
+You don't pick a date. Each change takes effect the one way it can:
 
-- **Next Cycle (Recommended)** — the new rent is saved now and starts with the first rent bill that has not been sent yet. Bills students already have keep their amounts.
-- **Apply Immediately** — the new rent amount is written to your settings there and then.
-
-Store prices and the overdraft fee have no cycle to wait for, so they can only be applied immediately. If you pick **Next Cycle** with one of them selected, the form comes back and asks you to apply them separately.
-
-Choosing **Apply Immediately** requires you to tick **I understand the immediate-change warning.** If you do not, the form comes back with a prompt to confirm it.
+- **Rent and the rent late penalty** are saved now and start with the first rent bill that has not been sent yet. Bills students already have keep their amounts.
+- **Store prices and the overdraft fee** have no cycle to wait for, so they change as soon as you apply.
 
 Select **Apply Selected Rebalance** to commit, or **Cancel** to leave everything alone.
 
@@ -77,10 +73,7 @@ Select **Apply Selected Rebalance** to commit, or **Cancel** to leave everything
 > **Nothing is retroactive.** A policy change updates the recommendation profile and, if you rebalance, your forward-looking settings. It never rewrites past payroll, rent charges, or ledger entries.
 
 > [!NOTE]
-> **A scheduled rebalance is already saved.** Choosing **Next Cycle** saves the new rent right away with the date it starts, and the Economic Engine shows an **Economy Update Scheduled** badge with that date. Nothing else has to happen for it to start: the next rent bill is simply sent with the new amount.
-
-> [!WARNING]
-> **Applying immediately can split a cycle.** Rent is billed on a cycle. Changing the amount partway through one means students may be charged differently than the cycle started with. If the timing matters, choose **Next Cycle** and check the scheduled date.
+> **A scheduled rebalance is already saved.** A rent change is saved right away with the date it starts, and the Economic Engine shows an **Economy Update Scheduled** badge with that date. Nothing else has to happen for it to start: the next rent bill is simply sent with the new amount.
 
 > [!NOTE]
 > **Changing the policy mode does not undo a scheduled rebalance.** The new rent is already saved in your rent settings. To change it before it starts, save the amount you want on the **Rent** settings page.

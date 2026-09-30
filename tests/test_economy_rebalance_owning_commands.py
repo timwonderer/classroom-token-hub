@@ -7,8 +7,9 @@ skipped when transitions were queued, and an overdraft fee was skipped on both
 paths, while the page still flashed success.
 
 Neither Store prices nor the overdraft fee has a later activation boundary
-(FEAT-ECON-001 §VIII), so both are immediate-only and a scheduled submission
-that includes them is refused.
+(FEAT-ECON-001 §VIII), so both take effect at once; rent terms always take
+effect from the next unbilled period. There is no activation choice (owner
+ruling 2026-09-30), and a submitted ``activation_mode`` changes nothing.
 
 The owning table's new row is the whole record of a change: the rebalance keeps
 no lineage of its own (operator ruling 2026-09-30, DOM-CLASS-003 §IX).
@@ -61,7 +62,7 @@ def _overpriced_store_item(classroom):
     return product
 
 
-def test_scheduled_store_price_is_refused_rather_than_silently_dropped(client, app):
+def test_a_store_price_takes_effect_at_once_whatever_mode_a_stale_form_posts(client, app):
     classroom = _teacher_class(client, app)
     product = _overpriced_store_item(classroom)
     key = f"store:{product.product_lineage_uuid}"
@@ -74,10 +75,7 @@ def test_scheduled_store_price_is_refused_rather_than_silently_dropped(client, a
 
     assert response.status_code == 302
     with app.app_context():
-        assert get_current_version(classroom.class_id, product.product_lineage_uuid).price == Decimal("9999.00")
-        assert StoreProduct.query.filter_by(
-            class_id=classroom.class_id, product_lineage_uuid=product.product_lineage_uuid,
-        ).count() == 1
+        assert get_current_version(classroom.class_id, product.product_lineage_uuid).price < Decimal("9999.00")
 
 
 def test_immediate_store_price_supersedes_the_product(client, app):
@@ -88,7 +86,7 @@ def test_immediate_store_price_supersedes_the_product(client, app):
 
     response = client.post(
         "/admin/economy-policy/rebalance",
-        data={"activation_mode": "immediate", "confirm_immediate": "yes", "selected_changes": [key]},
+        data={"selected_changes": [key]},
     )
 
     assert response.status_code == 302
@@ -128,7 +126,7 @@ def test_immediate_overdraft_fee_evolves_the_economic_engine(client, app):
 
     response = client.post(
         "/admin/economy-policy/rebalance",
-        data={"activation_mode": "immediate", "confirm_immediate": "yes", "selected_changes": ["overdraft_fee"]},
+        data={"selected_changes": ["overdraft_fee"]},
     )
 
     assert response.status_code == 302
@@ -156,7 +154,7 @@ def test_scheduled_rent_and_late_penalty_become_one_dated_rent_row(client, app):
 
     response = client.post(
         "/admin/economy-policy/rebalance",
-        data={"activation_mode": "next_renewal", "selected_changes": sorted(rent_keys)},
+        data={"selected_changes": sorted(rent_keys)},
     )
 
     assert response.status_code == 302
@@ -207,7 +205,7 @@ def test_a_selection_past_an_advisory_insurance_row_is_applied(client, app):
 
     response = client.post(
         "/admin/economy-policy/rebalance",
-        data={"activation_mode": "immediate", "confirm_immediate": "yes", "selected_changes": [key]},
+        data={"selected_changes": [key]},
     )
 
     assert response.status_code == 302, response.get_data(as_text=True)[:2000]

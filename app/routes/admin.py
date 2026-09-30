@@ -51,7 +51,7 @@ from app.feats.base import requires_feat_context, FEATContext, InvariantViolatio
 from app.access.scope import Scope
 from app.access import AccessScopeDenied, resolve_scope
 from app.models import (
-    ClassEconomy, EconomicEngine, Transaction, TransactionStatus, AttendanceSession, StoreProduct, StoreItemVisibility,
+    ClassEconomy, Transaction, TransactionStatus, AttendanceSession, StoreProduct, StoreItemVisibility,
     # Legacy tap table removed; use attendance_sessions (DOM-PROD-001).
     # StudentItem removed — student_items unauthorized; use store_purchases + redemption_events (DOM-STORE-001)
     # StoreItemBlock removed — store_item_blocks unauthorized; use store_item_visibility (DOM-STORE-001)
@@ -98,12 +98,9 @@ from app.utils.economy_policy import (
     resolve_feature_class_for_class,
 )
 from app.utils.economy_rebalance import (
-    REBALANCE_ACTIVATION_IMMEDIATE,
-    REBALANCE_ACTIVATION_NEXT_RENEWAL,
-    apply_rebalance_changes,
+    RENT_CHANGE_TYPES,
+    execute_rebalance,
     get_pending_rebalance_effective_at,
-    prepare_scheduled_rebalance_changes,
-    schedule_rebalance_changes,
 )
 
 from app.services.announcement_service import (
@@ -2097,23 +2094,6 @@ def _load_economy_rebalance_context(canonical_context, class_id):
     )
 
     return payroll_settings, rent_settings, insurance_policies
-
-
-def _apply_rebalance_plan(canonical_context, class_id, change_plan, activation_mode):
-    """Apply rebalance plan for a class (wrapper for economy_rebalance function)."""
-    user_id = canonical_context.user_id
-    applied_labels = apply_rebalance_changes(
-        canonical_context.seat_id, class_id, change_plan, activation_mode,
-        canonical_context=canonical_context,
-    )
-    current_app.logger.info(
-        "Applied economy rebalance for teacher=%s class_id=%s activation=%s changes=%s",
-        user_id,
-        class_id,
-        activation_mode,
-        applied_labels,
-    )
-    return applied_labels
 
 
 def _check_onboarding_redirect():
@@ -6560,8 +6540,9 @@ def update_economy_policy():
     # there is no ambient FEAT context here. These trailing mutations (lazy
     # FeatureSettings create, economy_policy_updated_at write) must run inside
     # their own inline FEAT or they are blocked at flush by the integrity hook.
-    # A rebalance already scheduled is an owning-domain row, not a queued
-    # change, so a mode change leaves it in place (DOM-CLASS-003 §IX).
+    # A mode change never revokes a scheduled rebalance: scheduling it was an
+    # explicit teacher action, and any cancellation must itself be explicit
+    # (owner ruling 2026-09-30; DOM-CLASS-003 §IX, FEAT-ECON-001 §X).
     with FEATContext(
         "FEAT-CLASS-005",
         idempotency_key=f"feat:class-005:policy-meta:{class_id}:{policy_mode}",
@@ -6587,21 +6568,14 @@ def apply_economy_rebalance():
     selected_scope = next((option for option in feature_options if option.get('class_id') == current_class_id), None)
     if not selected_scope:
         abort(404)
-    activation_mode = (request.form.get('activation_mode') or REBALANCE_ACTIVATION_NEXT_RENEWAL).strip().lower()
+    # No activation choice (owner ruling 2026-09-30): rent terms take effect from
+    # the first unbilled rent period, store prices and the overdraft fee at once
+    # (FEAT-ECON-001 §VI-§VIII). A submitted activation_mode is ignored.
     selected_keys = set(request.form.getlist('selected_changes'))
     # No FeatureSettings row is read here. Fetching one with create=True flushed a
     # new row outside a FEAT context, so this route raised for any class that did
     # not already have one — and both branches below only ever needed the class_id
     # that `selected_scope` has already been authority-checked for.
-    allowed_activation_modes = {
-        REBALANCE_ACTIVATION_IMMEDIATE,
-        REBALANCE_ACTIVATION_NEXT_RENEWAL,
-    }
-
-    if activation_mode not in allowed_activation_modes:
-        flash("Invalid rebalance activation mode.", "warning")
-        return redirect(url_for('admin.economic_engine', review_rebalance=1))
-
     payroll_settings, rent_settings, insurance_policies = _load_economy_rebalance_context(
         g.canonical_context,
         selected_scope['class_id'],
@@ -6676,21 +6650,6 @@ def apply_economy_rebalance():
         flash("No rebalance changes were selected.", "warning")
         return redirect(url_for('admin.economic_engine', review_rebalance=1))
 
-    from app.utils.economy_rebalance import IMMEDIATE_ONLY_CHANGE_TYPES
-    if activation_mode != REBALANCE_ACTIVATION_IMMEDIATE and any(
-        change.get('type') in IMMEDIATE_ONLY_CHANGE_TYPES for change in change_plan
-    ):
-        flash(
-            "Store prices and the overdraft fee have no later cycle to wait for. "
-            "Apply them immediately, or schedule them separately from rent.",
-            "warning",
-        )
-        return redirect(url_for('admin.economic_engine', review_rebalance=1))
-
-    if activation_mode == REBALANCE_ACTIVATION_IMMEDIATE and request.form.get('confirm_immediate') != 'yes':
-        flash("Confirm the immediate change warning before applying now.", "warning")
-        return redirect(url_for('admin.economic_engine', review_rebalance=1))
-
     # FEAT-CLASS-005 is HIGH blast radius and requires an idempotency_key, so it cannot
     # be supplied via the bare @requires_feat_context route decorator (which passes no key
     # and would fail fatally on entry). Open the FEAT inline with a deterministic key that
@@ -6706,44 +6665,38 @@ def apply_economy_rebalance():
         mode = request.form.get(f"rebalance_mode_{safe_key}", "midpoint")
         choice_fingerprint.append(f"{key}:{mode}:{change.get('new_value')}")
     rebalance_fingerprint = hashlib.sha256(
-        f"{activation_mode}:{'|'.join(sorted(choice_fingerprint))}".encode("utf-8")
+        '|'.join(sorted(choice_fingerprint)).encode("utf-8")
     ).hexdigest()[:16]
     rebalance_idempotency_key = (
         f"feat:class-005:rebalance:{selected_scope['class_id']}:{rebalance_fingerprint}"
     )
     with FEATContext("FEAT-CLASS-005", idempotency_key=rebalance_idempotency_key):
-        if activation_mode == REBALANCE_ACTIVATION_IMMEDIATE:
-            applied_labels = _apply_rebalance_plan(
-                g.canonical_context,
-                selected_scope['class_id'],
-                change_plan,
-                activation_mode=REBALANCE_ACTIVATION_IMMEDIATE,
-            )
-            flash(f"Applied economy rebalance now for {len(applied_labels)} setting(s).", "success")
-        else:
-            # A scheduled change is an appended rent_settings row effective at
-            # the next rent period; the open period keeps the terms it froze
-            # (DOM-CLASS-003 §VII). Nothing is queued for later activation.
-            scheduled_changes = prepare_scheduled_rebalance_changes(
-                change_plan,
-                rent_settings=rent_settings,
-            )
-            schedule_rebalance_changes(
-                g.canonical_context.seat_id,
-                selected_scope['class_id'],
-                scheduled_changes,
-            )
-            current_app.logger.info(
-                "Scheduled economy rebalance teacher=%s class_id=%s changes=%s",
-                g.canonical_context.user_id,
-                selected_scope['class_id'],
-                [change.get('type') for change in change_plan],
-            )
-            flash(
-                f"Scheduled economy rebalance for {len(change_plan)} setting(s). "
-                "It takes effect from the next rent period; the current bill keeps its terms.",
-                "success",
-            )
+        applied_labels, scheduled_rows = execute_rebalance(
+            g.canonical_context.seat_id,
+            selected_scope['class_id'],
+            change_plan,
+            rent_settings=rent_settings,
+            canonical_context=g.canonical_context,
+        )
+    current_app.logger.info(
+        "Economy rebalance teacher=%s class_id=%s applied=%s scheduled_rent_rows=%s",
+        g.canonical_context.user_id,
+        selected_scope['class_id'],
+        applied_labels,
+        len(scheduled_rows),
+    )
+    messages = []
+    if applied_labels:
+        messages.append(f"Applied {len(applied_labels)} setting(s) now.")
+    if scheduled_rows:
+        rent_count = sum(
+            1 for change in change_plan if change.get('type') in RENT_CHANGE_TYPES
+        )
+        messages.append(
+            f"Saved {rent_count} rent setting(s); they take effect from the next rent bill "
+            "not yet sent, and bills already sent keep their amounts."
+        )
+    flash(" ".join(messages) or "No rebalance changes were applied.", "success")
 
     return redirect(url_for('admin.economic_engine'))
 
@@ -9277,7 +9230,7 @@ def feature_settings():
 def update_class_feature_setting():
     """Toggle a single feature for the current class via FEAT-CLASS-004."""
     from app.feats.class_configuration import execute_enable_feature, execute_disable_feature
-    from app.services.class_configuration_query_service import get_economic_engine_history
+    from app.services.class_configuration_query_service import get_current_economic_engine
 
     class_id = g.canonical_context.class_id
     if not class_id:
@@ -9305,12 +9258,14 @@ def update_class_feature_setting():
         ctx = g.canonical_context
 
         if enabled:
-            engines = get_economic_engine_history(class_id)
-            if not engines:
+            # The version in force now; a version dated for later is not what a
+            # feature enabled today runs on (DOM-CLASS-003 §VII).
+            engine = get_current_economic_engine(class_id)
+            if not engine:
                 return jsonify({'status': 'error', 'message': 'No economic engine found for class.'}), 400
             # Capture the version id as a plain value up front so it survives the
             # session expiry when the inner FEAT opens its transaction boundary.
-            economic_version_id = engines[0].economic_version_id
+            economic_version_id = engine.economic_version_id
 
             idempotency_key = f"feat:class-004:enable:{class_id}:{feature}"
             # execute_enable_feature owns its own @requires_feat_context boundary;
@@ -9647,9 +9602,7 @@ def onboarding_status():
             store_done = StoreProduct.query.filter(
                 StoreProduct.class_id == active_class_id
             ).count() > 0
-            banking_done = EconomicEngine.query.filter(
-                EconomicEngine.class_id == active_class_id
-            ).first() is not None
+            banking_done = get_current_economic_engine(active_class_id) is not None
             rent_done = RentSettings.query.with_entities(RentSettings.id).filter(
                 RentSettings.class_id == active_class_id
             ).first() is not None

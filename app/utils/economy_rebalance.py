@@ -8,10 +8,17 @@ change (DOM-CLASS-003 §IX, FEAT-ECON-001):
 * a store price → a superseding ``store_products`` version
 * the overdraft fee → a new ``economic_engine`` version (FEAT-CLASS-005)
 
-A change scheduled for the next cycle is an appended row whose effective date is
-the owning domain's next boundary. Nothing is queued and nothing activates it
-later: the row is in force for the first work its domain issues after that
-boundary, and it is visible as pending until then (DOM-CLASS-003 §VII, §X).
+There is no activation choice. Each change takes effect the one way its owner
+defines (owner ruling 2026-09-30, FEAT-ECON-001 §VI-§VIII):
+
+* rent terms take effect from the first rent period not yet billed: an
+  appended ``rent_settings`` row dated to that boundary. Nothing is queued and
+  nothing activates it later; it is visible as pending until then
+  (DOM-CLASS-003 §VII, §X). "Apply immediately" was removed: a rent period
+  already billed keeps its frozen terms either way, so the two options did the
+  same thing;
+* a store price and the overdraft fee have no later boundary and take effect
+  at once.
 """
 
 from __future__ import annotations
@@ -30,9 +37,6 @@ from app.services.class_configuration_query_service import (
 )
 from app.utils.canonical_temporal_resolver import ensure_utc, utc_now
 
-
-REBALANCE_ACTIVATION_IMMEDIATE = "immediate"
-REBALANCE_ACTIVATION_NEXT_RENEWAL = "next_renewal"
 
 # FEAT-CLASS-005 §XI delegates each rebalance row to its owning command. Every
 # selectable change type must name that owner; an unmapped type is refused
@@ -53,8 +57,10 @@ _RENT_FIELDS = {
 # Store prices change by product-version supersession, which retires the live
 # version at once, and overdraft fees by Economic Engine evolution. Neither
 # owning domain defines a later activation boundary (FEAT-ECON-001 §VIII), so
-# these rows can only be applied immediately; they are never scheduled.
-IMMEDIATE_ONLY_CHANGE_TYPES = frozenset({"store_item", "overdraft_fee"})
+# these rows take effect at once; rent rows always wait for the next unbilled
+# period.
+IMMEDIATE_CHANGE_TYPES = frozenset({"store_item", "overdraft_fee"})
+RENT_CHANGE_TYPES = frozenset(_RENT_FIELDS)
 
 
 class UnsupportedRebalanceChange(ValueError):
@@ -122,20 +128,14 @@ def _get_effective_rent_settings(class_id: str | None):
     return get_rent_settings(class_id)
 
 
-def _apply_change_list(class_id, changes, activation_mode, *, reference_time=None, canonical_context=None, actor_seat_id=None):
-    """Apply policy changes to a class's economic configuration.
+def _apply_change_list(class_id, changes, *, reference_time=None, canonical_context=None, actor_seat_id=None):
+    """Apply the changes that take effect at once (store prices, overdraft fee).
 
-    Args:
-        class_id: Class to apply changes to (canonical identifier)
-        changes: List of change dictionaries from policy payload
-        activation_mode: When to activate (REBALANCE_ACTIVATION_*)
-        reference_time: Time of rebalance (for audit trail)
+    Rent terms never pass through here; ``schedule_rebalance_changes`` dates
+    them to the next unbilled period.
 
     Returns:
         Tuple of (applied_labels, applied_changes)
-
-    Note: FeatureSettings.economy_last_rebalanced_* audit fields removed in Phase 2
-    (table dropped; audit trail moves to EconomicEngine version history)
     """
     reference_time = ensure_utc(reference_time) if reference_time else utc_now()
     applied_labels = []
@@ -143,30 +143,7 @@ def _apply_change_list(class_id, changes, activation_mode, *, reference_time=Non
 
     for change in changes:
         change_type = change.get("type")
-        if change_type == "rent":
-            rent_settings = _get_effective_rent_settings(class_id)
-            if rent_settings:
-                # A rebalance is a policy submission like any other: it mints a new
-                # immutable row rather than rewriting the live one, so rent already
-                # assessed under the previous terms keeps its assessed amount
-                # (DOM-POL-001 §VI.1). Only `rent_amount` changes; the rest of the
-                # contract is carried forward by the Policies command.
-                supersede_rent_settings(
-                    class_id=class_id,
-                    updates={"rent_amount": Decimal(str(change.get("new_value")))},
-                )
-                applied_labels.append("Rent")
-                applied_changes.append(dict(change))
-        elif change_type == "rent_late_penalty":
-            rent_settings = _get_effective_rent_settings(class_id)
-            if rent_settings:
-                supersede_rent_settings(
-                    class_id=class_id,
-                    updates={"late_penalty_amount": Decimal(str(change.get("new_value")))},
-                )
-                applied_labels.append("Rent late penalty")
-                applied_changes.append(dict(change))
-        elif change_type == "store_item":
+        if change_type == "store_item":
             product = StoreProduct.query.filter_by(
                 class_id=class_id,
                 product_lineage_uuid=change.get("product_lineage_uuid"),
@@ -237,23 +214,65 @@ def _owner_for_change(change: dict[str, Any]) -> str:
         ) from None
 
 
-def apply_rebalance_changes(actor_seat_id, class_id, change_plan, activation_mode, *, reference_time=None, canonical_context=None):
-    """Apply rebalance changes now, each through its owning command.
+def apply_rebalance_changes(actor_seat_id, class_id, change_plan, *, reference_time=None, canonical_context=None):
+    """Apply the changes that take effect at once, each through its owning command.
 
+    Refuses rent terms: they take effect only from the first unbilled period.
     Returns the applied change labels. The owning domains' rows are the whole
     record of the change; the rebalance keeps no lineage of its own.
     """
     for change in change_plan:
         _owner_for_change(change)
+        if (change.get("type") or "").strip().lower() in RENT_CHANGE_TYPES:
+            raise UnsupportedRebalanceChange(
+                "Rent terms take effect from the next unbilled rent period; "
+                "they are scheduled, not applied at once."
+            )
     applied_labels, _applied = _apply_change_list(
         class_id,
         change_plan,
-        activation_mode,
         reference_time=ensure_utc(reference_time) if reference_time else utc_now(),
         canonical_context=canonical_context,
         actor_seat_id=actor_seat_id,
     )
     return applied_labels
+
+
+def execute_rebalance(actor_seat_id, class_id, change_plan, *, rent_settings=None, canonical_context=None, reference_time=None):
+    """Carry out a teacher's rebalance: each change the one way its owner allows.
+
+    Rent terms become one ``rent_settings`` row dated to the first unbilled rent
+    period; store prices and the overdraft fee take effect at once. Runs inside
+    the caller's FEAT; never commits. Returns ``(applied_labels, scheduled_rows)``.
+    """
+    reference_time = ensure_utc(reference_time) if reference_time else utc_now()
+    for change in change_plan:
+        _owner_for_change(change)
+    rent_changes = [
+        change for change in change_plan
+        if (change.get("type") or "").strip().lower() in RENT_CHANGE_TYPES
+    ]
+    immediate_changes = [change for change in change_plan if change not in rent_changes]
+    scheduled_rows = []
+    if rent_changes:
+        scheduled_rows = schedule_rebalance_changes(
+            actor_seat_id,
+            class_id,
+            prepare_scheduled_rebalance_changes(
+                rent_changes, rent_settings=rent_settings, reference_time=reference_time
+            ),
+            reference_time=reference_time,
+        )
+    applied_labels = []
+    if immediate_changes:
+        applied_labels = apply_rebalance_changes(
+            actor_seat_id,
+            class_id,
+            immediate_changes,
+            reference_time=reference_time,
+            canonical_context=canonical_context,
+        )
+    return applied_labels, scheduled_rows
 
 
 def schedule_rebalance_changes(
@@ -283,9 +302,9 @@ def schedule_rebalance_changes(
     for change in scheduled_changes:
         _owner_for_change(change)
         change_type = (change.get("type") or "").strip().lower()
-        if change_type in IMMEDIATE_ONLY_CHANGE_TYPES:
+        if change_type in IMMEDIATE_CHANGE_TYPES:
             raise UnsupportedRebalanceChange(
-                f"Rebalance change type {change_type!r} can only be applied immediately."
+                f"Rebalance change type {change_type!r} takes effect at once; it is never scheduled."
             )
         updates[_RENT_FIELDS[change_type]] = Decimal(str(change.get("new_value")))
         change_effective_at = _parse_dt(change.get("effective_at"))
