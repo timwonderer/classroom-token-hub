@@ -116,6 +116,83 @@ Each item was verified on 2026-09-28 unless it says otherwise.
 
 ---
 
+## IV-B. Production walkthrough findings (2026-09-30)
+
+Observed on production (`00166e56`) after two school days of real use. The database was queried in read-only
+transactions. The nginx and app logs and Loki were only read. Nothing on the host was changed. Each item was checked
+against this tracker, the archived launch trackers and the live-test RESUME records before it was listed as new.
+
+### Observed defects and debt
+
+- [ ] **Two settlement sweeps run concurrently every hour and deadlock.** `savings_interest_payout`
+  (`app/scheduled_tasks.py:1138`) calls `run_ledger_settlement_job()` itself (`:958`) before computing interest.
+  The standalone `ledger_settlement` job (`:1131`) has the same one-hour interval and starts in the same process
+  at the same moment. Both sweeps take `FEAT-LED-003` with the same idempotency key
+  (`settlement-sweep:<class_id>:<seat_id>`, `app/services/ledger_settlement_service.py:67`) within milliseconds
+  of each other.
+  - Loki records seven `psycopg2.errors.DeadlockDetected` failures ("Settlement sweep failed for seat …", `:74`)
+    on 2026-09-28 at 16:42, 17:42 and 22:42 UTC.
+  - Checked on 2026-09-30: every `ledger_balance_snapshot` reconciles with its posted transactions, and there are
+    no duplicate idempotency keys and no duplicate same-day interest postings.
+  - **Harm has not been established either way.** Still open: whether interest can be computed on a posted base
+    that the losing sweep failed to settle, and whether any historical posting was affected. Fix through a single
+    ownership model for settlement, not by offsetting the timers.
+- [ ] **Canonical context is resolved three times per authenticated request.** For example, `GET /api/student-status`
+  resolves it in `capture_correlation_context` (`app/__init__.py`), again in `login_required`
+  (`app/auth.py:119`), and a third time in the route itself (`app/routes/api.py`). DOM-IDEN-006 §IX requires
+  `canonicalContext` to be constructed exactly once per authenticated request, and §X requires helpers to consume it
+  rather than call the resolver. `validate_canonical_session_nonce` can clear the session without resetting
+  `g.canonical_context`. Still to determine: how many routes re-resolve, and whether the resolutions can disagree
+  within one request. Track this separately; do not normalise it while touching individual routes.
+- [ ] **`/api/student-status` is rate-limited per endpoint per IP** (default 200/hour and 500/day, `app/extensions.py`).
+  - The dashboard polls every 10 s (`static/js/attendance.js:118`), so a single student's tab exhausts the hourly
+    limit in about 33 minutes. Shared school IPs make it sooner.
+  - Production recorded 699 `429`s; support ticket #1 matches.
+  - The client parses the HTML 429 page as JSON, so the timer stops updating.
+  - Fix in progress on its own branch, together with an endpoint blast-radius review of the other IP-keyed limits.
+- [ ] **Student tickets are visible to sysadmin before teacher escalation.** This is a regression from `384176834`,
+  and it is contrary to DOM-SUP-001 §VIII and FEAT-SUP-001.
+  - Before escalation, sysadmin can see the IP, user agent, page URL, category and actor public id.
+  - `update_issue` lets sysadmin close an un-escalated student ticket.
+  - SPEC-OPS-004 §6.2 and §6.3 describe the regressed behaviour.
+  - Fix in progress on its own branch.
+- [ ] **Advanced-mode payroll rounding is not applied by payroll runs.** The rounding added on 2026-09-08
+  (`2d2ace33f`) lives in `app/payroll.py` `calculate_payroll_breakdown`, which has had no production caller since
+  `db7079c7d` (2026-07-21). FEAT-PROD-003 (`app/feats/prod.py`) prices exact seconds × rate.
+  - No test has ever referenced `_round_billable_seconds`.
+  - The archived coverage claim (#35, "✅ Calculation fixed 2026-09-08") is unsupported.
+  - `templates/admin_payroll.html` tells teachers that worked time rounds.
+  - No normative document defines rounding, increments or overtime. This needs a decision before implementation.
+    Remediation is not decided.
+- [ ] **Payroll policy authority is under investigation.** FEAT-PROD-003 is reported to price from the live
+  `PayrollSettings` row (`app/payroll.py` `get_pay_rate_for_class`) while the payroll event records a
+  `PolicyVersion` id. A new rate becomes `IN_USE` immediately (`upsert_payroll_settings`), which may conflict with
+  DOM-CLASS-003's pending-next-cycle rule.
+- [ ] **Unratified citation.** The closed-session payroll rule (#1439) is cited in code as "DOM-PROD-001 §VI.3" /
+  "§VI.1" (`app/services/attendance_service.py`, `app/services/payroll/settlement.py`, `app/feats/prod.py`).
+  DOM-PROD-001 §VI is the Schema Authority Declaration and has no subsections, so the rule needs ratification.
+- [ ] **The student's projected pay is always empty.** `get_class_attendance_status` returns `projected_pay: None`
+  (`app/services/attendance_service.py:452`), so the student view and `/api/student-status` show no projection.
+- [ ] **Operational.** A few items outside the repo.
+  - **Grafana.** An expired Grafana tab (refreshing every 5 s) follows nginx's `@grafana_login_redirect` into
+    `GET /sysadmin/login` on every background request, about 60% of app log volume.
+  - **Sysadmin login GET.** `GET /sysadmin/login` clears `user_id` from the session (`app/routes/system_admin.py`),
+    which is a GET-time authentication-state mutation that needs review.
+  - **Loki.** Loki stores chunks under `/tmp/loki/chunks`, which is emptied at boot, and has no retention period
+    set. Local app logs rotate at 1 MB × 6.
+  - **Tempo.** Tempo is still crash-looping (live-test finding 18, `RESUME_2026-09-22.md`): about 117,000 restarts,
+    roughly 390,000 journal lines a day into Loki, and the app's OTLP trace export (`OTEL_TRACES_ENABLED=true`)
+    targets it.
+- [ ] **No scheduled database backup exists.** WAL archiving is off, and no pre-release dump was taken for the
+  four 2026-09-29 releases. Older dumps sit on the production host, including v1 dumps from 2025-07 and 2025-11
+  that hold student rows whose live records no longer exist. A backup and retention model is being designed
+  against INV-ARC-018 §VII.4 and INV-CORE-000 §III.5 before any automation.
+- [ ] **No incident record for PROD-PAY-001.** The only account is in `CHANGELOG.md`. The corrections were approved
+  in production on 2026-09-29 between 04:21 and 04:26 UTC (79 students, $1,947.40). Release records for the
+  2026-09-29 releases are tracked in §II.
+
+---
+
 ## V. Tests to confirm
 
 The rent-disablement list ratified on 2026-09-24 is mostly covered by
