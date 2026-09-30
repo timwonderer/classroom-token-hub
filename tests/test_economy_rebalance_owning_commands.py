@@ -9,6 +9,9 @@ paths, while the page still flashed success.
 Neither Store prices nor the overdraft fee has a later activation boundary
 (FEAT-ECON-001 §VIII), so both are immediate-only and a scheduled submission
 that includes them is refused.
+
+The owning table's new row is the whole record of a change: the rebalance keeps
+no lineage of its own (operator ruling 2026-09-30, DOM-CLASS-003 §IX).
 """
 
 from __future__ import annotations
@@ -21,9 +24,10 @@ from app.feats.base import FEATContext
 from app.feats.class_configuration.feat_class_005_economic_engine_evolution import (
     execute_evolve_economic_engine,
 )
-from app.models import ClassFeature, PolicyTransition, PolicyVersion
+from app.models import ClassFeature, EconomicEngine, RentSettings, StoreProduct
 from app.services.class_configuration_query_service import (
     get_current_economic_engine,
+    get_rent_settings,
     is_feature_enabled,
 )
 from app.services.context_resolver import CanonicalContext
@@ -71,10 +75,12 @@ def test_scheduled_store_price_is_refused_rather_than_silently_dropped(client, a
     assert response.status_code == 302
     with app.app_context():
         assert get_current_version(classroom.class_id, product.product_lineage_uuid).price == Decimal("9999.00")
-        assert PolicyTransition.query.filter_by(class_id=classroom.class_id).count() == 0
+        assert StoreProduct.query.filter_by(
+            class_id=classroom.class_id, product_lineage_uuid=product.product_lineage_uuid,
+        ).count() == 1
 
 
-def test_immediate_store_price_supersedes_the_product_and_records_a_transition(client, app):
+def test_immediate_store_price_supersedes_the_product(client, app):
     classroom = _teacher_class(client, app)
     product = _overpriced_store_item(classroom)
     key = f"store:{product.product_lineage_uuid}"
@@ -90,10 +96,10 @@ def test_immediate_store_price_supersedes_the_product_and_records_a_transition(c
         current = get_current_version(classroom.class_id, product.product_lineage_uuid)
         assert current.policy_uuid != product.policy_uuid
         assert current.price < Decimal("9999.00")
-        applied = PolicyTransition.query.filter_by(
-            class_id=classroom.class_id, domain="store", status="applied",
-        ).all()
-        assert len(applied) == 1
+        # The superseded version stays as history; the new one is the record.
+        assert StoreProduct.query.filter_by(
+            class_id=classroom.class_id, product_lineage_uuid=product.product_lineage_uuid,
+        ).count() == 2
 
 
 def test_immediate_overdraft_fee_evolves_the_economic_engine(client, app):
@@ -117,6 +123,8 @@ def test_immediate_overdraft_fee_evolves_the_economic_engine(client, app):
         )
         assert result.success, result.error_message
     assert "overdraft_fee" in _offered(client)
+    with app.app_context():
+        versions_before = EconomicEngine.query.filter_by(class_id=classroom.class_id).count()
 
     response = client.post(
         "/admin/economy-policy/rebalance",
@@ -127,12 +135,11 @@ def test_immediate_overdraft_fee_evolves_the_economic_engine(client, app):
     with app.app_context():
         engine = get_current_economic_engine(classroom.class_id)
         assert Decimal(str(engine.flat_overdraft_fee)) < Decimal("999.00")
-        assert PolicyTransition.query.filter_by(
-            class_id=classroom.class_id, domain="banking", status="applied",
-        ).count() == 1
+        assert EconomicEngine.query.filter_by(class_id=classroom.class_id).count() == versions_before + 1
 
 
-def test_scheduled_rent_and_late_penalty_queue_independent_dated_transitions(client, app):
+def test_scheduled_rent_and_late_penalty_become_one_dated_rent_row(client, app):
+    """Both terms belong to one rent contract, so they land in one new row."""
     classroom = _teacher_class(client, app)
     with app.app_context():
         customize_rent_settings(
@@ -144,6 +151,8 @@ def test_scheduled_rent_and_late_penalty_queue_independent_dated_transitions(cli
     offered = _offered(client)
     rent_keys = {key for key in offered if key.startswith("rent")}
     assert "rent-late-penalty" in rent_keys and len(rent_keys) == 2, offered
+    with app.app_context():
+        rows_before = RentSettings.query.filter_by(class_id=classroom.class_id).count()
 
     response = client.post(
         "/admin/economy-policy/rebalance",
@@ -152,13 +161,11 @@ def test_scheduled_rent_and_late_penalty_queue_independent_dated_transitions(cli
 
     assert response.status_code == 302
     with app.app_context():
-        pending = PolicyTransition.query.filter_by(
-            class_id=classroom.class_id, domain="rent", status="pending",
-        ).all()
-        assert len(pending) == 2
-        for transition in pending:
-            version = db.session.get(PolicyVersion, transition.target_policy_version_id)
-            assert '"effective_at": "' in version.policy_payload_json
+        assert RentSettings.query.filter_by(class_id=classroom.class_id).count() == rows_before + 1
+        new = get_rent_settings(classroom.class_id)
+        assert new.rent_amount > Decimal("1.00")
+        assert new.late_penalty_amount > Decimal("0.01")
+        assert new.rent_effective_at is not None
 
 
 def test_a_selection_past_an_advisory_insurance_row_is_applied(client, app):
@@ -167,22 +174,27 @@ def test_a_selection_past_an_advisory_insurance_row_is_applied(client, app):
     The route indexed ``item['change']`` while matching the selection, so any
     selected row listed after an out-of-band insurance policy raised KeyError.
     Rendering the page with an insurance policy also runs the budget survival
-    check, which read ``premium`` off PolicyVersion rows that carry their terms
-    in the payload.
+    check, which reads the premium off the offered ``insurance_policies`` rows.
     """
-    from app.services.insurance_policy_service import create_policy_version
+    from app.services.insurance_definition_service import create_insurance_definition
 
     classroom = _teacher_class(client, app)
     with app.app_context():
         with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"rebalance-owner:insurance:{classroom.class_id}"):
-            create_policy_version(
+            create_insurance_definition(
                 class_id=classroom.class_id,
                 actor_seat_id=classroom.teacher_seat.id,
-                payload={
-                    "name": "Overpriced Cover",
-                    "premium": "9999.00",
-                    "charge_frequency": "weekly",
+                definition={
+                    "title": "Overpriced Cover",
                     "insurance_type": "TRANSACTION",
+                    "premium": Decimal("9999.00"),
+                    "charge_frequency": "WEEKLY",
+                    "reimbursement_percentage": Decimal("80"),
+                    "payout_multiple": Decimal("3"),
+                    "claims_per_week_equivalent": Decimal("1"),
+                    "claim_window_days": 7,
+                    "bill_preview_days": 3,
+                    "nonpayment_mode": "ACCUMULATE",
                 },
             )
         db.session.commit()
@@ -205,7 +217,6 @@ def test_a_selection_past_an_advisory_insurance_row_is_applied(client, app):
 
 def test_insurance_advisory_row_is_judged_in_the_class_policy_mode(app, monkeypatch):
     """The checker exposes ``policy_mode``; reading ``mode`` always fell back to default."""
-    import json
     from types import SimpleNamespace
 
     from app.routes.admin import _build_rebalance_preview
@@ -218,15 +229,15 @@ def test_insurance_advisory_row_is_judged_in_the_class_policy_mode(app, monkeypa
         return SimpleNamespace(cwi=None)
 
     monkeypatch.setattr(economic_engine, "resolve_insurance", fake_resolve_insurance)
-    version = PolicyVersion(
-        policy_payload_json=json.dumps({"premium": "5.00", "insurance_type": "TRANSACTION"}),
-        is_active=True,
+    policy = SimpleNamespace(
+        policy_uuid="policy-uuid", premium=Decimal("5.00"), insurance_type="TRANSACTION",
+        title="Cover", tier_name=None,
     )
     checker = SimpleNamespace(policy_mode="tight", store_role_bands=lambda cwi: {})
 
     with app.app_context():
         _build_rebalance_preview(
-            None, "class-id", checker, Decimal("100.00"), None, [version],
+            None, "class-id", checker, Decimal("100.00"), None, [policy],
             store_items=[], economic_engine=None,
         )
 

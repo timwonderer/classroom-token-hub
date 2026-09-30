@@ -3,12 +3,13 @@
 Individual business behavior is certified underneath (8.2b/8.2c/8.3b/8.3c/substrate),
 so this suite is mostly about transactional atomicity and the replay seam:
 
-* normal run → PROD events + one ITR record + CLASS activation + one completion
-  anchor, all sharing the cycle identity;
+* normal run → PROD events + one ITR record + one completion anchor, all sharing
+  the cycle identity;
+* nothing is activated at the boundary: a change saved for later is an
+  effective-dated row that time puts in force (DOM-CLASS-003 §VII);
 * replay after commit → same payroll_cycle_id AND zero downstream work (spied);
 * failure at every step → nothing persists, the completion anchor never survives;
-* commit failure → no completed-run state subsequently resolves;
-* no pending CLASS transition → success, activation is a lawful no-op.
+* commit failure → no completed-run state subsequently resolves.
 """
 
 from __future__ import annotations
@@ -25,10 +26,13 @@ import app.feats.complete_payroll_cycle as orch
 from app.feats.complete_payroll_cycle import complete_payroll_cycle
 from app.models import (
     AttendanceSession,
+    EconomicEngine,
     InterpretationCycleRecord,
     PayrollEvent,
-    PolicyTransition,
-    PolicyVersion,
+)
+from app.services.class_configuration_query_service import (
+    economic_engine_effective_at,
+    get_current_economic_engine,
 )
 from app.services.context_resolver import CanonicalContext
 from app.services.payroll.cycle_completion import resolve_completed_run
@@ -40,7 +44,6 @@ _DOWNSTREAM = [
     "settle_class_payroll_cycle",
     "compute_partial_payload",
     "materialize_interpretation_cycle",
-    "apply_next_boundary_transition",
     "record_run_completion",
 ]
 
@@ -58,34 +61,13 @@ def _ctx(classroom):
     )
 
 
-def _seed_run(classroom, *, pending=True):
-    """Seed an active payroll policy (v1), attendance, and optionally a pending
-    next_payroll transition (target v2). Returns (cid, start, end, v1_id, v2_id)."""
+def _seed_run(classroom):
+    """Seed attendance for two seats. Returns (cid, start, end)."""
     cid = classroom.class_id
     teacher_seat_id = classroom.teacher_seat_id
     sA, sB, sC, sD = classroom.students
     now = utc_now()
     start, end = now - timedelta(hours=1), now + timedelta(hours=1)
-    v2_id = None
-
-    with FEATContext("FEAT-BYPASS-LEGACY", correlation_id=f"seed:{cid}"):
-        v1 = PolicyVersion(class_id=cid, domain="payroll", version_number=1,
-                           policy_payload_json="{}", activated_at=now, is_active=True)
-        db.session.add(v1)
-        db.session.flush()
-        v1_id = v1.id
-        if pending:
-            v2 = PolicyVersion(class_id=cid, domain="payroll", version_number=2,
-                               policy_payload_json="{}", activated_at=None, is_active=False)
-            db.session.add(v2)
-            db.session.flush()
-            v2_id = v2.id
-            db.session.add(PolicyTransition(
-                class_id=cid, domain="payroll", source_policy_version_id=v1.id,
-                target_policy_version_id=v2.id, activation_mode="next_payroll",
-                status="pending", created_at=now,
-            ))
-            db.session.flush()
 
     with FEATContext("FEAT-PROD-001", correlation_id=f"att:{cid}", idempotency_key=f"att:{cid}"):
         for seat in (sA, sB):
@@ -102,7 +84,21 @@ def _seed_run(classroom, *, pending=True):
             ))
         db.session.flush()
 
-    return cid, start, end, v1_id, v2_id
+    return cid, start, end
+
+
+def _seed_pending_engine(cid, effective_at):
+    """Append an engine version dated for later: pending until ``effective_at``."""
+    current = get_current_economic_engine(cid)
+    now = utc_now()
+    with FEATContext("FEAT-BYPASS-LEGACY", correlation_id=f"engine:{cid}"):
+        pending = EconomicEngine(
+            class_id=cid, previous_version_id=current.economic_version_id,
+            economy_policy_mode="tight", created_at=now, effective_at=effective_at,
+        )
+        db.session.add(pending)
+        db.session.flush()
+    return current.economic_version_id, pending.economic_version_id
 
 
 def _run(classroom, key, start, end):
@@ -132,7 +128,7 @@ def _assert_nothing_persisted(cid, key):
 
 def test_normal_run_completes_the_economic_cycle(app):
     classroom = initialize("chemistry_p1", app)
-    cid, start, end, v1_id, v2_id = _seed_run(classroom)
+    cid, start, end = _seed_run(classroom)
     key = f"run:{uuid4()}"
 
     result = _run(classroom, key, start, end)
@@ -150,29 +146,27 @@ def test_normal_run_completes_the_economic_cycle(app):
     assert record.id == result.interpretation_record_id
     assert record.observations_json["coverage"]["complete"] is True
 
-    # CLASS: the pending next-cycle policy activated (P17 -> P18).
-    assert result.activation_applied is True
-    assert db.session.get(PolicyVersion, v2_id).is_active is True
-    assert db.session.get(PolicyVersion, v1_id).is_active is False
-
     # Completion anchor written last — the run is now resolvable.
     assert result.completion_created is True
     assert resolve_completed_run(cid, key) == cycle
 
 
-def test_no_pending_transition_still_completes_activation_is_noop(app):
+def test_the_boundary_activates_nothing_a_pending_row_waits_for_its_date(app):
+    """A version dated past the boundary stays pending through the run: the run
+    neither activates it nor writes any engine row (DOM-CLASS-003 §VII)."""
     classroom = initialize("chemistry_p1", app)
-    cid, start, end, v1_id, _ = _seed_run(classroom, pending=False)
+    cid, start, end = _seed_run(classroom)
+    later = end + timedelta(days=1)
+    in_force_id, pending_id = _seed_pending_engine(cid, later)
+    engine_rows = EconomicEngine.query.filter_by(class_id=cid).count()
     key = f"run:{uuid4()}"
 
     result = _run(classroom, key, start, end)
 
     assert result.created is True
-    assert result.activation_applied is False           # lawful no-op
-    assert db.session.get(PolicyVersion, v1_id).is_active is True
-    assert InterpretationCycleRecord.query.filter_by(
-        class_id=cid, payroll_cycle_id=result.payroll_cycle_id
-    ).count() == 1
+    assert EconomicEngine.query.filter_by(class_id=cid).count() == engine_rows
+    assert economic_engine_effective_at(cid, end).economic_version_id == in_force_id
+    assert economic_engine_effective_at(cid, later).economic_version_id == pending_id
     assert resolve_completed_run(cid, key) == result.payroll_cycle_id
 
 
@@ -183,7 +177,7 @@ def test_no_pending_transition_still_completes_activation_is_noop(app):
 
 def test_replay_returns_same_id_and_does_zero_downstream_work(app, monkeypatch):
     classroom = initialize("chemistry_p1", app)
-    cid, start, end, v1_id, v2_id = _seed_run(classroom)
+    cid, start, end = _seed_run(classroom)
     key = f"run:{uuid4()}"
 
     first = _run(classroom, key, start, end)
@@ -243,30 +237,14 @@ def test_itr_materialization_failure_rolls_back(app, monkeypatch):
     _assert_nothing_persisted(cid, key)
 
 
-def test_class_activation_failure_rolls_back_everything(app, monkeypatch):
-    classroom = initialize("chemistry_p1", app)
-    cid, start, end, v1_id, v2_id = _seed_run(classroom)
-    key = f"run:{uuid4()}"
-    monkeypatch.setattr(orch, "apply_next_boundary_transition", _raiser("CLASS fail"))
-
-    _expect_rollback(classroom, key, start, end)
-    _assert_nothing_persisted(cid, key)
-    # Policy lineage untouched: v1 still active, v2 still pending.
-    assert db.session.get(PolicyVersion, v1_id).is_active is True
-    assert db.session.get(PolicyVersion, v2_id).is_active is False
-
-
 def test_completion_anchor_failure_rolls_back_everything(app, monkeypatch):
     classroom = initialize("chemistry_p1", app)
-    cid, start, end, v1_id, v2_id = _seed_run(classroom)
+    cid, start, end = _seed_run(classroom)
     key = f"run:{uuid4()}"
     monkeypatch.setattr(orch, "record_run_completion", _raiser("completion fail"))
 
     _expect_rollback(classroom, key, start, end)
     _assert_nothing_persisted(cid, key)
-    # CLASS activation that ran before the completion step is also rolled back.
-    assert db.session.get(PolicyVersion, v1_id).is_active is True
-    assert db.session.get(PolicyVersion, v2_id).is_active is False
 
 
 def test_commit_failure_leaves_no_resolvable_completed_run(app):

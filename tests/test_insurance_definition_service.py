@@ -11,8 +11,7 @@ Proven:
 * "update" == a new immutable row with a new policy_uuid (no in-place mutation);
 * class-scoped retrieval + listing with explicit availability filtering;
 * availability-only mutation (retire/hide) never alters economic fields;
-* cross-class lookup fails closed (returns None / raises NotFound);
-* the mechanism creates NO PolicyVersion(domain="insurance") rows.
+* cross-class lookup fails closed (returns None / raises NotFound).
 
 Uses the canonical test initializer per SPEC-TEST-001.
 """
@@ -24,7 +23,7 @@ import pytest
 
 from app.extensions import db
 from app.feats.base import FEATContext
-from app.models import InsurancePolicy, PolicyVersion
+from app.models import InsurancePolicy
 from app.services import insurance_definition_service as defs
 from tests.helpers.classroom_initializer import initialize
 
@@ -70,19 +69,6 @@ class TestCreate:
                         class_id=classroom.class_id,
                         definition=_transaction_definition(policy_uuid="hax"),
                     )
-
-    def test_create_makes_no_policy_version_row(self, app):
-        """The new mechanism must not touch PolicyVersion(domain='insurance')."""
-        classroom = initialize("chemistry_p1", app)
-        with app.app_context():
-            before = PolicyVersion.query.filter_by(
-                class_id=classroom.class_id, domain="insurance"
-            ).count()
-            _create(classroom.class_id)
-            after = PolicyVersion.query.filter_by(
-                class_id=classroom.class_id, domain="insurance"
-            ).count()
-            assert before == after == 0
 
 
 class TestImmutabilityAndReplacement:
@@ -195,10 +181,6 @@ class TestInsuranceDefinitionCommands:
                 )
             assert isinstance(row, InsurancePolicy)
             assert row.availability_state == defs.IN_USE
-            # No economic version-control residue.
-            assert PolicyVersion.query.filter_by(
-                class_id=classroom.class_id, domain="insurance"
-            ).count() == 0
 
     def test_set_availability_wraps_mechanism(self, app):
         classroom = initialize("chemistry_p1", app)
