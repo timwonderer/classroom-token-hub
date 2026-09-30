@@ -316,6 +316,12 @@ under an idempotency key that names the window (its class-local start date for a
 year and month for a month). A window already credited under any earlier key SHALL NOT be
 credited again.
 
+No day SHALL accrue for a seat twice. When the payout frequency changes, the first window under
+the new frequency may overlap days already credited under the old one; that window keeps its own
+key and accrues only on its days that end after the last credited window closed. Its earlier days
+keep their place for compounding but accrue nothing. Days before the seat was claimed accrue
+nothing in the same way.
+
 ---
 
 ## 9. Eligibility Rules
@@ -344,6 +350,10 @@ interest is credited at the close of each payout window.
   (`SPEC-TIME-001`; `INV-ARC-015`). Its end-of-day posted balance is the sum of the seat's
   non-void savings effects whose posting time precedes the end of that day. An effect posted
   after a day ends first participates on the day it posts.
+- A savings-interest credit participates from the close of the window it pays, whether or not it
+  has settled, and not from its posting time. The balances of later windows, and so the amounts
+  credited for them, do not depend on when the payout job ran or when settlement posted an
+  earlier credit.
 - Each day accrues `earning base × annual rate / 365` (`SPEC-ECON-003` §5.5), where the earning
   base is determined by compound frequency (§6.2). A non-positive earning base accrues nothing.
 - The annual rate for a day is the rate in force at the end of that day.
@@ -472,6 +482,7 @@ Revisions to this document SHALL:
   1030.7). §9.2 states it: interest accrues daily on each class-local day's end-of-day posted
   savings balance and is credited at the close of each payout window. §5.1 fixes accrual as daily.
   §5.3 rounds once, at crediting. §6.2 defines how compound frequency applies within a window.
-  §8.2 defines the payout window and its key. §14.1 credits only closed windows, replayed from
-  the ledger.
+  §8.2 defines the payout window and its key, and says that no day accrues twice when the
+  payout frequency changes. §9.2 says a credit participates from its window's close.
+  §14.1 credits only closed windows, replayed from the ledger.
 - **1.0 (2026-07-25)** — Initial specification.

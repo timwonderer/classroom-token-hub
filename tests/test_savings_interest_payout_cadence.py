@@ -552,3 +552,140 @@ def test_two_classes_pay_on_their_own_cadences(client, app, monkeypatch):
     assert monthly_rows[0].idempotency_key == (
         f"savings-interest:{monthly_class.class_id}:{monthly_seat.id}:monthly:{month_start:%Y-%m}"
     )
+
+
+# --------------------------------------------------------------------------- #
+# Run-time independence and cadence changes                                    #
+# --------------------------------------------------------------------------- #
+
+def _compound_with_credits(principal, credits, days):
+    """Hand replay: each earlier credit joins the base from its window's close."""
+    return _daily_compound(Decimal(principal) + sum(credits, Decimal("0")), days)
+
+
+def test_catch_up_after_a_scheduler_gap_pays_what_timely_ticks_pay(client, app, monkeypatch):
+    """Windows 2..N of a catch-up include the credits for windows 1..N-1 (§14.1)."""
+    timely = initialize_as_teacher("chemistry_p1", client, app)
+    _configure_interest(client, timely, payout="weekly")
+    gapped = initialize_as_teacher("ap_csp_p3", client, app)
+    _configure_interest(client, gapped, payout="weekly")
+
+    tz_name = timely.economy.class_timezone
+    monday = _next_monday(tz_name)
+    for classroom in (timely, gapped):
+        _fund_savings(monkeypatch, app, classroom, classroom.students[0].seat, "100000.00",
+                      _local(tz_name, monday, 0, 30))
+    _tick(monkeypatch, app, _local(tz_name, monday, 1))  # settles both deposits
+    forecast = _forecast(monkeypatch, app, timely, timely.students[0].seat,
+                         _local(tz_name, monday, 1, 30), months=1)
+
+    # The timely class is ticked every Monday; the other only after three weeks.
+    for week in (1, 2):
+        with app.app_context(), _pinned_clock(monkeypatch, _local(tz_name, monday + timedelta(days=7 * week), 1)):
+            from app.services.ledger_interest_service import apply_savings_interest
+            from app.models import Seat
+            with FEATContext("FEAT-LED-001", idempotency_key=f"timely:{uuid4().hex}"):
+                apply_savings_interest(db.session.get(Seat, timely.students[0].seat.id))
+        _tick_settlement_only(monkeypatch, app, _local(tz_name, monday + timedelta(days=7 * week), 2))
+    _tick(monkeypatch, app, _local(tz_name, monday + timedelta(days=21), 1))
+    _tick(monkeypatch, app, _local(tz_name, monday + timedelta(days=21), 2))
+
+    timely_amounts = [row.amount for row in _interest_rows(app, timely, timely.students[0].seat)]
+    gapped_amounts = [row.amount for row in _interest_rows(app, gapped, gapped.students[0].seat)]
+    assert len(gapped_amounts) == 3
+    assert gapped_amounts == timely_amounts
+    expected = []
+    for _ in range(3):
+        expected.append(_compound_with_credits("100000.00", expected, 7))
+    assert gapped_amounts == expected
+    assert gapped_amounts[0] == forecast.next_credit
+
+
+def _tick_settlement_only(monkeypatch, app, at):
+    from app.scheduled_tasks import run_ledger_settlement_job
+
+    with app.app_context(), _pinned_clock(monkeypatch, at):
+        run_ledger_settlement_job()
+
+
+def test_a_credit_compounds_from_the_next_window_whatever_settlement_does(client, app, monkeypatch):
+    """A credit left pending for two days still earns from the next window's first day."""
+    classroom = initialize_as_teacher("chemistry_p1", client, app)
+    tz_name = classroom.economy.class_timezone
+    seat = classroom.students[0].seat
+    _configure_interest(client, classroom, payout="weekly")
+
+    monday = _next_monday(tz_name)
+    _fund_savings(monkeypatch, app, classroom, seat, "100000.00", _local(tz_name, monday, 0, 30))
+    _tick(monkeypatch, app, _local(tz_name, monday, 1))
+    _tick(monkeypatch, app, _local(tz_name, monday + timedelta(days=7), 1))  # credits week 1
+    # No run on Monday or Tuesday: the week-1 credit settles only on Wednesday.
+    _tick(monkeypatch, app, _local(tz_name, monday + timedelta(days=9), 10))
+    _tick(monkeypatch, app, _local(tz_name, monday + timedelta(days=14), 1))
+
+    first, second = [row.amount for row in _interest_rows(app, classroom, seat)]
+    assert first == _daily_compound("100000.00", 7)
+    assert second == _compound_with_credits("100000.00", [first], 7)
+
+
+def _first_month_not_starting_monday(tz_name):
+    month = _first_of_next_month(tz_name)
+    while _one_month_after(month).weekday() == 0 or month.weekday() == 0:
+        month = _one_month_after(month)
+    return month
+
+
+def test_weekly_to_monthly_pays_the_straddling_month_from_the_last_paid_week(client, app, monkeypatch):
+    classroom = initialize_as_teacher("chemistry_p1", client, app)
+    tz_name = classroom.economy.class_timezone
+    seat = classroom.students[0].seat
+    _configure_interest(client, classroom, payout="weekly")
+
+    month_start = _first_month_not_starting_monday(tz_name)
+    next_month = _one_month_after(month_start)
+    first_monday = month_start + timedelta(days=(7 - month_start.weekday()) % 7)
+    second_monday = first_monday + timedelta(days=7)
+    _fund_savings(monkeypatch, app, classroom, seat, "100000.00", _local(tz_name, month_start, 0, 30))
+    _run_ticks(monkeypatch, app, tz_name, month_start, second_monday)
+
+    _configure_interest(client, classroom, payout="monthly")
+    _run_ticks(monkeypatch, app, tz_name, second_monday + timedelta(days=1), next_month)
+
+    rows = _interest_rows(app, classroom, seat)
+    weekly = [row.amount for row in rows if ":weekly:" in row.idempotency_key]
+    monthly = [row for row in rows if ":monthly:" in row.idempotency_key]
+    assert weekly == [
+        _daily_compound("100000.00", (first_monday - month_start).days),
+        _compound_with_credits("100000.00", weekly[:1], 7),
+    ]
+    assert [row.idempotency_key.rsplit(":", 2)[-2:] for row in monthly] == [["monthly", f"{month_start:%Y-%m}"]]
+    assert monthly[0].amount == _compound_with_credits(
+        "100000.00", weekly, (next_month - second_monday).days
+    )
+
+
+def test_monthly_to_weekly_pays_the_straddling_week_from_the_month_end(client, app, monkeypatch):
+    classroom = initialize_as_teacher("chemistry_p1", client, app)
+    tz_name = classroom.economy.class_timezone
+    seat = classroom.students[0].seat
+    _configure_interest(client, classroom, payout="monthly")
+
+    month_start = _first_month_not_starting_monday(tz_name)
+    next_month = _one_month_after(month_start)
+    _fund_savings(monkeypatch, app, classroom, seat, "100000.00", _local(tz_name, month_start, 0, 30))
+    _tick(monkeypatch, app, _local(tz_name, month_start, 1))
+    _tick(monkeypatch, app, _local(tz_name, next_month, 1))  # credits the month
+    _tick(monkeypatch, app, _local(tz_name, next_month, 2))
+
+    _configure_interest(client, classroom, payout="weekly")
+    following_monday = next_month + timedelta(days=(7 - next_month.weekday()) % 7)
+    _run_ticks(monkeypatch, app, tz_name, next_month + timedelta(days=1), following_monday)
+
+    rows = _interest_rows(app, classroom, seat)
+    month_credit = rows[0].amount
+    assert rows[0].idempotency_key.endswith(f":monthly:{month_start:%Y-%m}")
+    week_start = following_monday - timedelta(days=7)
+    assert [row.idempotency_key.rsplit(":", 1)[-1] for row in rows[1:]] == [week_start.isoformat()]
+    assert rows[1].amount == _compound_with_credits(
+        "100000.00", [month_credit], (following_monday - next_month).days
+    )

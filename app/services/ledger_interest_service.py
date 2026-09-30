@@ -1,7 +1,7 @@
 """Ledger-owned savings-interest command."""
 
 import re
-from bisect import bisect_right
+from bisect import bisect_right, insort
 from datetime import date
 from decimal import Decimal
 from functools import lru_cache
@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from typing import NamedTuple
 
 from app.extensions import db
-from app.models import Transaction, TransactionStatus
+from app.models import Seat, Transaction, TransactionStatus
 from app.services.class_configuration_query_service import (
     get_current_economic_engine,
     get_economic_engine_history,
@@ -216,56 +216,59 @@ def _paid_window(class_id, payout_frequency, transaction, prefix):
     return None
 
 
-def _paid_state(seat_id, class_id, cadence):
-    """Keys already paid for a seat, and the end of the latest window they cover.
+class _SavingsLedger(NamedTuple):
+    """A seat's savings ledger as the daily balance method reads it."""
 
-    A window is payable only after the latest one already paid, under any
-    cadence or key format, so a cadence change never pays the same days twice.
+    history: list        # ``(effective_utc, amount_cents)``, ascending
+    paid_keys: set       # interest keys already credited
+    paid_through: object  # end of the latest window already credited, or None
+
+
+def _savings_ledger(seat_id, class_id, cadence):
+    """Reconstruct a seat's savings balances and credited windows from the ledger.
+
+    An ordinary savings effect participates from its posting time: only posted
+    balances earn (SPEC-ECON-001 §9.2), and voided effects never do (§9.3). A
+    savings-interest credit participates from the close of the window it pays,
+    whether or not it has settled yet. Compounding across windows therefore
+    does not depend on when the job ran or when settlement posted a credit, and
+    a replay reconstructs the same balances (§9.2, §12, §14.1).
+
+    A window is credited once. ``paid_through`` is the end of the latest window
+    already credited, under any cadence or key format; no day ending at or
+    before it accrues again, so a cadence change never pays a day twice (§8.2).
     """
     prefix = f"savings-interest:{class_id}:{seat_id}:"
-    paid_rows = (
+    rows = (
         Transaction.query
         .filter(
             Transaction.seat_id == seat_id,
             Transaction.class_id == class_id,
-            Transaction.type == "Interest",
-            Transaction.status != TransactionStatus.VOID,
-            Transaction.idempotency_key.like(f"{prefix}%"),
-        )
-        .all()
-    )
-    paid_through = None
-    for row in paid_rows:
-        window = _paid_window(class_id, cadence, row, prefix)
-        if window is not None and (paid_through is None or window.end_utc > paid_through):
-            paid_through = window.end_utc
-    return {row.idempotency_key for row in paid_rows}, paid_through
-
-
-def _posted_savings_history(seat_id, class_id):
-    """``(posted_at, amount_cents)`` for every posted savings effect, oldest first.
-
-    Posted status and ``posted_at`` are fixed at settlement, so a day's balance
-    reconstructed from them is the same on every replay (SPEC-ECON-001 §9.2, §12).
-    Voided effects never reach POSTED and so never contribute (§9.3).
-    """
-    rows = (
-        db.session.query(Transaction.posted_at, Transaction.amount_cents)
-        .filter(
-            Transaction.seat_id == seat_id,
-            Transaction.class_id == class_id,
             Transaction.account_type == "savings",
-            Transaction.status == TransactionStatus.POSTED,
-            Transaction.posted_at.isnot(None),
+            Transaction.status != TransactionStatus.VOID,
         )
-        .order_by(Transaction.posted_at.asc(), Transaction.id.asc())
         .all()
     )
-    return [(ensure_utc(posted_at), cents) for posted_at, cents in rows]
+    history = []
+    paid_keys = set()
+    paid_through = None
+    for row in rows:
+        window = None
+        if row.type == "Interest" and (row.idempotency_key or "").startswith(prefix):
+            window = _paid_window(class_id, cadence, row, prefix)
+        if window is not None:
+            paid_keys.add(row.idempotency_key)
+            if paid_through is None or window.end_utc > paid_through:
+                paid_through = window.end_utc
+            history.append((window.end_utc, row.amount_cents))
+        elif row.status == TransactionStatus.POSTED and row.posted_at is not None:
+            history.append((ensure_utc(row.posted_at), row.amount_cents))
+    history.sort(key=lambda entry: entry[0])
+    return _SavingsLedger(history, paid_keys, paid_through)
 
 
 def _end_of_day_balances(history, day_ends):
-    """Posted balance at each (ascending) day end: effects posted before it."""
+    """Balance at each (ascending) day end: effects in effect before it."""
     balances = []
     cents = 0
     index = 0
@@ -277,19 +280,45 @@ def _end_of_day_balances(history, day_ends):
     return balances
 
 
-def _window_interest(class_id, policy, window, history, rate_at):
-    """Interest credited for one closed window by the daily balance method."""
+def _accrual_floor(class_id, ledger, claimed_at):
+    """The instant before which no day accrues for this seat.
+
+    Nothing accrues before the window-keyed start, before the seat's first
+    savings effect, before the seat was claimed, or on a day already credited.
+    """
+    floors = [_class_local_midnight_utc(class_id, WINDOW_KEYED_PAYOUT_START)]
+    if ledger.history:
+        floors.append(ledger.history[0][0])
+    if claimed_at is not None:
+        floors.append(ensure_utc(claimed_at))
+    if ledger.paid_through is not None:
+        floors.append(ledger.paid_through)
+    return max(floors)
+
+
+def _window_days(class_id, policy, window, history, rate_at, accrue_after):
+    """One window's days: balance, rate, and compounding marker per day.
+
+    A day ending at or before ``accrue_after`` keeps its place, so compounding
+    boundaries stay where they are, but accrues nothing.
+    """
     plan = _window_day_plan(
         class_id, _compounding_period(policy), window.start_utc, window.end_utc
     )
     balances = _end_of_day_balances(history, [day_end for day_end, _ in plan])
+    return plan, balances, [
+        rate_at(day_end) if day_end > accrue_after else None for day_end, _ in plan
+    ]
+
+
+def _window_interest(class_id, policy, window, history, rate_at, accrue_after):
+    """Interest credited for one closed window by the daily balance method."""
+    plan, balances, rates = _window_days(
+        class_id, policy, window, history, rate_at, accrue_after
+    )
     days = [
-        SavingsAccrualDay(
-            end_of_day_balance=balance,
-            annual_rate=rate_at(day_end),
-            capitalizes=capitalizes,
-        )
-        for (day_end, capitalizes), balance in zip(plan, balances)
+        SavingsAccrualDay(end_of_day_balance=balance, annual_rate=rate, capitalizes=capitalizes)
+        for (_day_end, capitalizes), balance, rate in zip(plan, balances, rates)
     ]
     return credit_savings_interest(accrue_daily_interest(
         days=days,
@@ -305,9 +334,9 @@ def apply_savings_interest(seat, *, annual_rate=None, reference_time_utc=None):
     windows have closed since the last settled one, and credit each exactly once.
     The window is the teacher-configured ``interest_payout_frequency`` — a
     Monday-start class-local week or a class-local calendar month. Interest
-    accrues daily on each class-local day's end-of-day posted savings balance and
-    is rounded once, when the window is credited (§9.2, §5.3). Returns the
-    transactions created by this call.
+    accrues daily on each class-local day's end-of-day balance and is rounded
+    once, when the window is credited (§9.2, §5.3). Returns the transactions
+    created by this call.
     """
     if not seat:
         return []
@@ -326,27 +355,18 @@ def apply_savings_interest(seat, *, annual_rate=None, reference_time_utc=None):
         class_id, "current_time", reference_time_utc=reference_time_utc
     ).canonical_now_utc
 
-    history = _posted_savings_history(seat.id, class_id)
-    if not history:
+    ledger = _savings_ledger(seat.id, class_id, cadence)
+    if not ledger.history:
         return []
-
-    paid_keys, paid_through = _paid_state(seat.id, class_id, cadence)
-
-    # Nothing before the window-keyed start, before the seat's first posted
-    # savings effect, or before the seat was claimed can earn a payout.
-    floors = [_class_local_midnight_utc(class_id, WINDOW_KEYED_PAYOUT_START), history[0][0]]
-    if seat.claimed_at is not None:
-        floors.append(ensure_utc(seat.claimed_at))
-    if paid_through is not None:
-        floors.append(paid_through)
-    floor_utc = max(floors)
+    history = list(ledger.history)
+    accrue_after = _accrual_floor(class_id, ledger, seat.claimed_at)
 
     created = []
-    window = payout_window_containing(class_id, cadence, floor_utc)
+    window = payout_window_containing(class_id, cadence, accrue_after)
     while window.end_utc <= now_utc:
         key = savings_interest_idempotency_key(class_id, seat.id, window)
-        if key not in paid_keys and (paid_through is None or window.start_utc >= paid_through):
-            interest = _window_interest(class_id, policy, window, history, rate_at)
+        if key not in ledger.paid_keys:
+            interest = _window_interest(class_id, policy, window, history, rate_at, accrue_after)
             if interest > Decimal("0.00"):
                 transaction, was_created = create_pending_transaction_idempotent(
                     idempotency_key=key,
@@ -362,6 +382,9 @@ def apply_savings_interest(seat, *, annual_rate=None, reference_time_utc=None):
                 )
                 if was_created:
                     created.append(transaction)
+                # The credit joins the balance from its window's close, as the
+                # ledger will reconstruct it on the next run (§9.2).
+                insort(history, (window.end_utc, transaction.amount_cents))
         window = payout_window_containing(class_id, cadence, window.end_utc)
     return created
 
@@ -370,26 +393,31 @@ def forecast_savings(seat_id, class_id, *, months=12, reference_time_utc=None):
     """Read-only savings forecast on the payout job's own terms (SPEC-ECON-001 §10).
 
     Walks the class-local payout calendar forward from the open window. Days of
-    the open window that have already ended use their real end-of-day posted
+    the open window that have already ended use their reconstructed end-of-day
     balance; every later day assumes the balance is left alone. Each window is
     credited exactly as ``apply_savings_interest`` will credit it, so with no
     further activity the forecast is what posts.
 
     Returns ``policy``, ``next_credit`` (what the open window will credit) and
-    ``series`` (``months + 1`` posted balances: now, then one per class-local
-    month from today).
+    ``series`` (``months + 1`` balances: now, then one per class-local month
+    from today).
     """
     policy = resolve_savings_policy(class_id)
-    posted_now = get_posted_balance(seat_id, class_id, "savings")
     if policy.annual_rate is None or policy.annual_rate <= 0:
+        posted_now = get_posted_balance(seat_id, class_id, "savings")
         return SimpleNamespace(
             policy=policy, next_credit=Decimal("0.00"), series=[posted_now] * (months + 1)
         )
-    history = _posted_savings_history(seat_id, class_id)
 
     cadence = (policy.payout_frequency or "monthly").strip().lower()
-    now = _resolve(class_id, "current_time", reference_time_utc=reference_time_utc)
-    now_utc = now.canonical_now_utc
+    now_utc = _resolve(
+        class_id, "current_time", reference_time_utc=reference_time_utc
+    ).canonical_now_utc
+    ledger = _savings_ledger(seat_id, class_id, cadence)
+    posted_now = _end_of_day_balances(ledger.history, [now_utc])[0]
+    seat = Seat.query.filter_by(id=seat_id, class_id=class_id).one_or_none()
+    accrue_after = _accrual_floor(class_id, ledger, seat.claimed_at if seat else None)
+
     today = _resolve(class_id, "evaluation_day_boundaries", reference_time_utc=now_utc)
     today_start = today.boundary_start_utc
     checkpoints_utc = [
@@ -403,10 +431,7 @@ def forecast_savings(seat_id, class_id, *, months=12, reference_time_utc=None):
         ).boundary_start_utc
         for month in range(1, months + 1)
     ]
-
-    _paid_keys, paid_through = _paid_state(seat_id, class_id, cadence)
     rate_at, _ever_positive = _rate_timeline(class_id)
-    compounding_period = _compounding_period(policy)
 
     # The open window always; then every window closing by the last forecast point.
     horizon = checkpoints_utc[-1] if checkpoints_utc else None
@@ -414,16 +439,17 @@ def forecast_savings(seat_id, class_id, *, months=12, reference_time_utc=None):
     closes = []
     window = payout_window_containing(class_id, cadence, now_utc)
     while not windows or (horizon is not None and window.end_utc <= horizon):
-        plan = _window_day_plan(class_id, compounding_period, window.start_utc, window.end_utc)
-        known = _end_of_day_balances(history, [day_end for day_end, _ in plan])
-        already_paid = paid_through is not None and window.start_utc < paid_through
+        paid = savings_interest_idempotency_key(class_id, seat_id, window) in ledger.paid_keys
+        plan, known, rates = _window_days(
+            class_id, policy, window, ledger.history, rate_at, accrue_after
+        )
         windows.append([
             ProjectedSavingsDay(
                 end_of_day_balance=balance if day_end <= today_start else None,
-                annual_rate=None if already_paid else rate_at(day_end),
+                annual_rate=None if paid else rate,
                 capitalizes=capitalizes,
             )
-            for (day_end, capitalizes), balance in zip(plan, known)
+            for (day_end, capitalizes), balance, rate in zip(plan, known, rates)
         ])
         closes.append(window.end_utc)
         window = payout_window_containing(class_id, cadence, window.end_utc)

@@ -73,8 +73,20 @@ def test_DOM_CLASS_001__apply_savings_interest_with_naive_datetimes(client, app)
     )
 
     assert interest_tx is not None
-    # Daily balance method (SPEC-ECON-001 §9.2): 100 held every day of the
-    # class-local month, simple interest, 0.045 / 365 a day, rounded once.
-    days = round((window.end_utc - window.start_utc).total_seconds() / 86400)
+    # Daily balance method (SPEC-ECON-001 §9.2): 100 held all month, simple
+    # interest, 0.045 / 365 a day, rounded once. The seat was claimed today, and
+    # days before the claim accrue nothing (§8.2), so the days run from today
+    # through the month's end.
+    from app.utils.canonical_temporal_resolver import (
+        CLASS_LEVEL_EVALUATION,
+        canonical_temporal_resolver,
+    )
+    claim_day = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=type("Ctx", (), {"class_id": test_student.class_id})(),
+        primitive="evaluation_day_boundaries",
+        reference_time_utc=test_student.claimed_at,
+    )
+    days = round((window.end_utc - claim_day.boundary_start_utc).total_seconds() / 86400)
     expected = (Decimal("100") * Decimal("0.045") / 365 * days).quantize(Decimal("0.01"))
     assert interest_tx.amount == expected
