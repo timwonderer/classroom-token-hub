@@ -10,15 +10,14 @@ substantive operation underneath it is a separately-certified substrate command.
         3. settle_class_payroll_cycle           (PROD)
         4. compute_partial_payload              (ITR compute — complete 17/17)
         5. materialize_interpretation_cycle     (ITR — one immutable record)
-        6. apply_next_boundary_transition       (CLASS — activate next-cycle policy)
-        7. record_run_completion                (replay anchor)
+        6. record_run_completion                (replay anchor)
         —— caller's FEATContext commits once ——
 
 Two orderings are held as hard invariants:
 
 * **The replay guard is literally first.** A completed replay resolves the
   completion anchor and returns; it does NOT allocate a cycle id, settle, compute a
-  timestamp, capture reference_configuration, or invoke ITR/CLASS. This protects the
+  timestamp, capture reference_configuration, or invoke ITR. This protects the
   seam 8.2c exposed: a replay never recaptures an advanced configuration.
 * **record_run_completion is literally last before commit.** The completion row
   means "this entire economic-cycle transition completed", so if anything before it
@@ -37,7 +36,6 @@ from __future__ import annotations
 
 from typing import NamedTuple
 
-from app.services.class_boundary_activation import apply_next_boundary_transition
 from app.services.context_resolver import CanonicalContext
 from app.services.interpretation.compute import compute_partial_payload
 from app.services.interpretation.materialization import materialize_interpretation_cycle
@@ -62,7 +60,6 @@ class CompletePayrollCycleResult(NamedTuple):
     created: bool
     settled_seat_ids: list[int] | None = None
     interpretation_record_id: str | None = None
-    activation_applied: bool | None = None
     completion_created: bool | None = None
 
 
@@ -80,9 +77,9 @@ def complete_payroll_cycle(
     Must run inside the caller's ``FEATContext("FEAT-PROD-004", idempotency_key=...)``.
     ``cycle_started_at`` / ``cycle_completed_at`` are the lawful closed-cycle window
     supplied by the caller; ``cycle_completed_at`` is the boundary used for
-    settlement and next-boundary activation. ``run_mechanism`` is ``SYSTEM`` for
-    the automatic schedule — which also names the ``scheduled_occurrence`` it
-    settles — and ``TEACHER`` for the teacher's run (FEAT-PROD-004 §II.1).
+    settlement. ``run_mechanism`` is ``SYSTEM`` for the automatic schedule —
+    which also names the ``scheduled_occurrence`` it settles — and ``TEACHER``
+    for the teacher's run (FEAT-PROD-004 §II.1).
     """
     if ctx is None or not getattr(ctx, "class_id", None):
         raise ValueError("complete_payroll_cycle requires a lawful class-bound context")
@@ -121,15 +118,11 @@ def complete_payroll_cycle(
         observations_json=observations_json,
     )
 
-    # 6. CLASS — activate a pending next-boundary transition (no-op if nothing is
-    #    pending). Payroll settings take no part: a payroll change is an
-    #    effective-dated payroll_settings row, in force from its effective_date
-    #    with nothing to activate (DOM-CLASS-003 §VII).
-    activation = apply_next_boundary_transition(
-        class_id=class_id, boundary_at=cycle_completed_at
-    )
+    # Nothing is activated at the boundary. A change saved for the next cycle is
+    # an effective-dated row in its owning domain's table, in force from its
+    # effective date with nothing to activate (DOM-CLASS-003 §VII).
 
-    # 7. Replay anchor — literally last. It exists iff everything above committed.
+    # 6. Replay anchor — literally last. It exists iff everything above committed.
     completion = record_run_completion(class_id, idempotency_key, payroll_cycle_id)
 
     return CompletePayrollCycleResult(
@@ -137,6 +130,5 @@ def complete_payroll_cycle(
         created=True,
         settled_seat_ids=list(settlement.settled_seat_ids),
         interpretation_record_id=materialization.record.id,
-        activation_applied=activation.applied,
         completion_created=completion.created,
     )
