@@ -478,7 +478,7 @@ Revisions to this document SHALL:
 
 ### Revision history
 
-- **1.2 (2026-09-30)** — Operator ruling 2026-09-30 retires `policy_versions` / `policy_transitions`. §14.1 item 4 reads banking terms from the `economic_engine` version in force; §14.2's transition-activation protocol is withdrawn; §9.2's rate for a day is the version in force by `effective_at`, so a rate dated for later never accrues early.
+- **1.2 (2026-09-30)** — Operator ruling 2026-09-30: `policy_versions` / `policy_transitions` are retired. §14.1 item 4 reads banking terms from the `economic_engine` version in force; §14.2's transition-activation protocol is withdrawn; §9.2's rate for a day is the version in force by `effective_at`, so a rate dated for later never accrues early.
 - **1.1 (2026-09-30)** — Operator ruling 2026-09-30 adopts the daily balance method (12 CFR
   1030.7). §9.2 states it: interest accrues daily on each class-local day's end-of-day posted
   savings balance and is credited at the close of each payout window. §5.1 fixes accrual as daily.
