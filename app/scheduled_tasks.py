@@ -943,11 +943,16 @@ def run_ledger_settlement_job():
 
 
 def run_savings_interest_job():
-    """Post the current savings-interest payout for eligible class seats."""
+    """Pay each closed savings-interest window for eligible class seats.
+
+    Payout windows are the teacher-configured cadence in class-local time
+    (SPEC-ECON-001 §14.1). An hourly tick pays nothing until a window closes,
+    then pays that window once; later ticks find it already keyed.
+    """
     from app.extensions import db
     from app.feats.base import FEATContext
     from app.models import Seat
-    from app.services.ledger_interest_service import apply_monthly_savings_interest
+    from app.services.ledger_interest_service import apply_savings_interest
     from app.utils.canonical_temporal_resolver import utc_now
 
     # Interest accrues on posted balances only (SPEC-ECON-001 §9.2), so an
@@ -961,13 +966,13 @@ def run_savings_interest_job():
     class_ids = [row[0] for row in db.session.query(Seat.class_id).distinct().all()]
     posted = 0
     failed = 0
-    period_key = utc_now().strftime("%Y-%m")
+    run_key = utc_now().strftime("%Y-%m-%dT%H")
     for class_id in class_ids:
         # Claimed student seats only (DOM-IDEN-005 §VII-VIII: participation is
         # lawful only once a Seat is bound to a User). This read carried neither
         # filter, so it paid savings interest to teacher seats and to unclaimed
         # seats holding a savings balance preserved through unclaim — the latter
-        # every month, forever.
+        # every payout window, forever.
         seats = (
             Seat.query
             .filter(
@@ -981,11 +986,10 @@ def run_savings_interest_job():
         try:
             with FEATContext(
                 "FEAT-LED-001",
-                idempotency_key=f"savings-interest-job:{class_id}:{period_key}",
+                idempotency_key=f"savings-interest-job:{class_id}:{run_key}",
             ):
                 for seat in seats:
-                    if apply_monthly_savings_interest(seat) is not None:
-                        posted += 1
+                    posted += len(apply_savings_interest(seat))
         except Exception:
             failed += 1
             db.session.rollback()

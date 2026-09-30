@@ -25,8 +25,8 @@ If something doesn't look right with your Balances, Transfers, and Interest, che
 - Did you choose different accounts for the sender and receiver?
 
 ## This is normal and expected when:
-- Savings interest posts monthly, not instantly.
-- Interest does not post on days when you moved money into savings.
+- Savings interest posts once per payout period your teacher chose (weekly or monthly), after the period ends — not instantly.
+- Interest is earned only for the days money was in savings: a deposit late in the period earns only the days left in it.
 - Overdraft protection or fees allow a negative checking balance if enabled by your teacher.
 
 ## If the savings projection starts below the visible balance
