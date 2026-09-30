@@ -421,7 +421,14 @@ def reconcile_rent(
         for cycle in (current, upcoming):
             if cycle is None:
                 continue
-            backfilled = _assess_cycle(settings, class_id, cycle)
+            # A seat claimed mid-period is billed on the period's own terms. The
+            # policy saved since then governs the first period not yet issued,
+            # never one already issued (DOM-CLASS-003 §VII, DOM-POL-001 §VII).
+            cycle_settings = (
+                RentSettings.query.filter_by(policy_uuid=cycle.policy_uuid, class_id=class_id).first()
+                if cycle.policy_uuid else None
+            ) or settings
+            backfilled = _assess_cycle(cycle_settings, class_id, cycle)
             result.assessments_created += backfilled
             if backfilled and result.reason == "NOOP":
                 result.reason = "ROSTER_BACKFILLED"

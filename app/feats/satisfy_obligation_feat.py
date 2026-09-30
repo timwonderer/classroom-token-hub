@@ -134,7 +134,6 @@ def satisfy_obligation(
         correlation_id=request.correlation_id,  # Link to assessment
         event_type=request.method,  # PAYMENT or WAIVED
         obligation_type=assessment.obligation_type,
-        policy_version_id=assessment.policy_version_id,
         bill_cycle_id=assessment.bill_cycle_id,
         # timestamp is set automatically by default=utc_now
         # For PAYMENT, reference the Ledger transaction
