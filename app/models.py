@@ -931,9 +931,10 @@ class PayrollEvent(db.Model):
     actor_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=False, index=True)
     correlation_id = db.Column(db.String(100), nullable=False, index=True)
     idempotency_key = db.Column(db.String(255), nullable=False, index=True)
-    # Required for attendance-derived payroll; a manual credit needs no payroll
-    # policy (DOM-PROD-001 §VIII). Enforced by ck_payroll_event_payroll_policy.
-    policy_version_id = db.Column(db.Integer, db.ForeignKey('policy_versions.id', ondelete='RESTRICT'), nullable=True, index=True)
+    # The payroll_settings.policy_uuid that priced the amount. Required for
+    # attendance-derived payroll; a teacher's manual credit needs no payroll
+    # setting (DOM-PROD-001 §VIII). Enforced by ck_payroll_event_payroll_policy.
+    # A non-FK locator (INV-ARC-021 §V.7): payroll_settings is POL-owned.
     policy_uuid = db.Column(db.String(36), nullable=True, index=True)
     mechanism = db.Column(db.String(20), nullable=False, default="TEACHER")
     payroll_event_type = db.Column(db.String(20), nullable=False)
@@ -949,7 +950,7 @@ class PayrollEvent(db.Model):
     __table_args__ = (
         db.UniqueConstraint('class_id', 'target_seat_id', 'correlation_id', 'idempotency_key', 'payroll_event_type', name='uq_payroll_event_replay_guard'),
         db.CheckConstraint(
-            "payroll_event_type <> 'payroll' OR (policy_version_id IS NOT NULL AND policy_uuid IS NOT NULL)",
+            "payroll_event_type <> 'payroll' OR policy_uuid IS NOT NULL",
             name='ck_payroll_event_payroll_policy',
         ),
     )
@@ -2315,157 +2316,77 @@ class StudentRecoveryCode(db.Model):
 
 # ---- Payroll Settings Model ----
 class PayrollSettings(db.Model):
-    """Immutable payroll policy definition — POL-governed, consumed by Productivity.
+    """Effective-dated payroll setting — the sole payroll authority.
 
-    Append-only (DOM-POL-001 §VI.0/§VI.1): ``policy_uuid`` *is* the version. Every
-    teacher submission inserts a NEW row with a NEW ``policy_uuid``; the payload
-    columns are never rewritten in place. ``availability_state`` is a mutable
-    projection *over* the immutable row, not a version pointer.
+    Operator ruling 2026-09-30 (DOM-POL-001 §VI.2, DOM-POL-001A §V.F): payroll
+    reads ``payroll_settings`` and nothing else, and the table is append-only
+    with an effective date. Saving settings inserts a row; no row is updated or
+    deleted (a database trigger refuses both, except that class-universe
+    destruction may delete). ``policy_uuid`` is the primary key and the version.
 
-    This table was previously a mutable singleton that ``upsert_payroll_settings``
-    edited via ``setattr`` — the "singleton mutable settings blob" DOM-CLASS-003
-    §XI.4 names as prohibited. Because ``_resolve_pay_rate_per_second`` reads the
-    live row while a payroll run pays out *all* attendance accrued since the last
-    payroll event, raising the rate mid-cycle repriced time a student had already
-    worked. DOM-CLASS-003 ("Pending Next-Cycle Payroll-Governing Changes") is
-    explicit that a payroll-governing change MUST NOT mutate the policy governing
-    the open cycle (INV-ARC-015 §VI.7).
+    The row in force at an instant is the one with the greatest
+    ``effective_date`` at or before it, the latest ``created_at`` breaking a tie.
+    A change saved while a payroll cycle is open takes effect at the next payroll
+    date, so it never reprices work already done (DOM-CLASS-003 §VII). Read it
+    only through ``app.services.payroll.settings`` — the one resolver.
 
-    The "current" policy for a class is the newest ``IN_USE`` row — resolve it
-    through ``class_configuration_query_service.get_payroll_settings()``, never
-    with a bare ``filter_by(class_id=...).first()``, which is nondeterministic
-    once a class holds more than one version.
-
-    ``policy_versions`` rows with ``domain='payroll'`` are NOT this table's
-    version lineage; they are DOM-CLASS-003 economic-policy evolution, which is a
-    separate concern with its own boundary-activation rules. Per DOM-POL-001
-    §VI.0 they must not be treated as a "current version" pointer for this row.
+    The columns below are exactly the legal set. There is no stored next payroll
+    date (it is derived, DOM-PROD-001 §XV.5), no availability state, no section
+    label, and no form-presentation state. ``rounding_mode`` and the overtime
+    threshold are recorded but not yet applied to pay.
     """
     __tablename__ = 'payroll_settings'
-    id = db.Column(db.Integer, primary_key=True)
-    policy_uuid = db.Column(db.String(36), unique=True, nullable=False, index=True, default=lambda: str(uuid.uuid4()))
+
+    policy_uuid = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
-
-    # Availability projection over the immutable row (DOM-POL-001 §IX).
-    # IN_USE  - selectable for new work (the current policy)
-    # HIDDEN  - not selectable, may return to IN_USE
-    # RETIRED - permanently unselectable; stays readable while dependencies drain
-    availability_state = db.Column(db.String(16), nullable=False, server_default='IN_USE', default='IN_USE')
-
-    block = db.Column(db.String(10), nullable=True)  # NULL = global/default settings
-    pay_rate = db.Column(db.Numeric(precision=18, scale=8), nullable=False, default=0.25)  # $ per minute
-    payroll_frequency_days = db.Column(db.Integer, nullable=False, default=14)
-    next_payroll_date = db.Column(db.DateTime(timezone=True), nullable=True)
-    created_at = db.Column(db.DateTime(timezone=True), default=utc_now)
-    updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now)
-
-    # Optional: different rates for different scenarios
-    overtime_multiplier = db.Column(db.Float, default=1.0)
-
-    # Enhanced settings for simple/advanced modes
-    settings_mode = db.Column(db.String(20), nullable=False, default='simple')  # 'simple' or 'advanced'
-
-    # Simple mode fields
-    daily_limit_hours = db.Column(db.Float, nullable=True)  # Max hours per day (auto tap-out)
-
-    # Advanced mode fields
-    time_unit = db.Column(db.String(20), nullable=False, default='minutes')  # seconds/minutes/hours/days
-    overtime_enabled = db.Column(db.Boolean, nullable=False, default=False)
-    overtime_threshold = db.Column(db.Float, nullable=True)  # Threshold value
+    pay_rate = db.Column(db.Numeric(precision=18, scale=8), nullable=False)  # $ per minute
+    payroll_frequency_days = db.Column(db.Integer, nullable=False)
+    effective_date = db.Column(db.DateTime(timezone=True), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
+    overtime_threshold = db.Column(db.Float, nullable=True)
     overtime_threshold_unit = db.Column(db.String(20), nullable=True)  # seconds/minutes/hours
-    overtime_threshold_period = db.Column(db.String(20), nullable=True)  # day/week/month
-    max_time_per_day = db.Column(db.Float, nullable=True)  # Max time value (overrides overtime)
+    max_time_per_day = db.Column(db.Float, nullable=True)
     max_time_per_day_unit = db.Column(db.String(20), nullable=True)  # seconds/minutes/hours
-    pay_schedule_type = db.Column(db.String(20), nullable=False, default='biweekly')  # daily/weekly/biweekly/monthly/custom
-    pay_schedule_custom_value = db.Column(db.Integer, nullable=True)  # For custom schedule
-    pay_schedule_custom_unit = db.Column(db.String(20), nullable=True)  # day/week for custom
-    first_pay_date = db.Column(db.DateTime(timezone=True), nullable=True)  # First payday
-    rounding_mode = db.Column(db.String(20), nullable=False, default='down')  # 'up' or 'down'
+    pay_schedule_type = db.Column(db.String(20), nullable=False)  # daily/weekly/biweekly/monthly/custom
+    rounding_mode = db.Column(db.String(20), nullable=False)  # recorded; not applied (owner ruling pending)
+    first_pay_date = db.Column(db.DateTime(timezone=True), nullable=True)
 
-    # NOTE: `expected_weekly_hours` was moved to `EconomicEngine.expected_weekly_hours`
-    # (canonical per DOM-CLASS-002). It is a CWI parameter, not a payroll parameter,
-    # and is mutated via FEAT-CLASS-005 (immutable versioned engine snapshots).
-
-    # The immutable definition payload. These columns are frozen at insert: a
-    # change to any of them is a NEW row with a NEW policy_uuid, never an update
-    # (DOM-POL-001 §VI.1). Enforced by the before_update guard below.
-    #
-    # `next_payroll_date` is deliberately NOT frozen. It is the recurring
-    # schedule's cursor, advanced by `run_automatic_payroll_job` after each
-    # completed run — operational state carried on the policy row, not part of
-    # the definition a teacher submits.
-    _FROZEN_POLICY_FIELDS = (
-        'block', 'pay_rate', 'payroll_frequency_days', 'overtime_multiplier',
-        'settings_mode', 'daily_limit_hours', 'time_unit',
-        'overtime_enabled', 'overtime_threshold', 'overtime_threshold_unit',
-        'overtime_threshold_period', 'max_time_per_day', 'max_time_per_day_unit',
-        'pay_schedule_type', 'pay_schedule_custom_value', 'pay_schedule_custom_unit',
-        'first_pay_date', 'rounding_mode',
+    # Everything but the key a submission supplies. Kept here so the writer and
+    # the migration agree on what a complete row is.
+    SETTING_FIELDS = (
+        'pay_rate', 'payroll_frequency_days', 'overtime_threshold',
+        'overtime_threshold_unit', 'max_time_per_day', 'max_time_per_day_unit',
+        'pay_schedule_type', 'rounding_mode', 'first_pay_date',
     )
 
     __table_args__ = (
-        db.CheckConstraint(
-            "availability_state IN ('IN_USE','HIDDEN','RETIRED')",
-            name='ck_payroll_settings_availability',
+        # A total order within a class, so "the row in force at t" is always
+        # one row: greatest effective_date, then latest created_at.
+        db.UniqueConstraint(
+            'class_id', 'effective_date', 'created_at',
+            name='uq_payroll_settings_class_effective_created',
         ),
-        # Exactly one IN_USE payroll policy per class. The table is append-only
-        # (many versions per class is now the normal case), so this constrains the
-        # *availability projection*, not the row count: supersession must retire
-        # the predecessor in the same transaction that inserts its replacement.
-        # It also closes the TOCTOU race where two concurrent submissions both
-        # observe no current policy and both insert.
-        #
-        # `class_id` alone is the scope. `block` is display metadata and is never
-        # a scoping key (INV-ARC-019 / DOM-CLASS-001); including it here would
-        # permit two concurrently-current policies for one class, which the
-        # class_id-scoped reader could not disambiguate.
-        db.Index(
-            'uq_payroll_settings_active_scope',
-            'class_id',
-            unique=True,
-            postgresql_where=sa.text("availability_state = 'IN_USE'"),
-        ),
-        db.Index('ix_payroll_settings_class_availability', 'class_id', 'availability_state'),
+        db.CheckConstraint('payroll_frequency_days > 0', name='ck_payroll_settings_frequency_positive'),
+        db.CheckConstraint('effective_date >= created_at', name='ck_payroll_settings_not_retroactive'),
     )
 
     def __repr__(self):
-        return f'<PayrollSettings class_id={self.class_id} block={self.block or "Global"}>'
-
-
-@event.listens_for(PayrollSettings, "before_insert")
-@event.listens_for(PayrollSettings, "before_update")
-def _sync_payroll_settings_scope(mapper, connection, target):
-    """Canonical payroll settings scope must already be class_id anchored."""
-    if getattr(target, "class_id", None) is None:
-        raise ValueError("payroll_settings require canonical class_id")
+        return f'<PayrollSettings class_id={self.class_id} effective={self.effective_date}>'
 
 
 @event.listens_for(PayrollSettings, "before_update")
-def _reject_payroll_policy_payload_mutation(mapper, connection, target):
-    """Refuse any in-place edit of the immutable payroll definition payload.
+def _reject_payroll_settings_update(mapper, connection, target):
+    """Refuse any in-place edit before it reaches the database trigger.
 
-    DOM-POL-001 §VI.1: definition payload columns are immutable after insert.
-    A pay-rate change is a new row with a new ``policy_uuid``, not an update.
-
-    The failure this prevents is silent: a payroll run pays out all attendance
-    accrued since the seat's last payroll event at whatever rate the live row
-    carries, so editing the rate mid-cycle repriced time already worked. Only
-    ``availability_state``, ``next_payroll_date`` (the schedule cursor), and
-    bookkeeping columns may change on an existing row.
+    A pay-rate change is a new row effective at the next payroll date
+    (DOM-CLASS-003 §VII). An edit in place would reprice work already done:
+    that was the failure this table's shape exists to prevent.
     """
-    state = sa.inspect(target)
-    mutated = [
-        field
-        for field in PayrollSettings._FROZEN_POLICY_FIELDS
-        if state.attrs[field].history.has_changes()
-    ]
-    if mutated:
-        raise ValueError(
-            "payroll_settings definition payload is immutable "
-            f"(DOM-POL-001 §VI.1); attempted in-place change to {sorted(mutated)} on "
-            f"policy_uuid={getattr(target, 'policy_uuid', None)}. "
-            "Insert a new PayrollSettings row instead."
-        )
+    raise ValueError(
+        "payroll_settings is append-only (DOM-POL-001 §VI.2); "
+        f"attempted update of policy_uuid={getattr(target, 'policy_uuid', None)}. "
+        "Record a new setting through app.services.payroll.settings instead."
+    )
 
 
 # Adjustment state overlaps payroll rewards and fines
