@@ -20,7 +20,8 @@ from app.extensions import db
 from app.feats.base import FEATContext
 from app.models import PayrollEvent
 from app.services.payroll.schedule import SCHEDULED_OCCURRENCE_KEY
-from app.services.payroll.settings import current_payroll_setting
+from app.services.payroll.settings import append_payroll_setting
+from app.utils.canonical_temporal_resolver import utc_now
 from app.scheduled_tasks import _advance_local_calendar_days
 from tests.helpers.class_domain import enable_class_feature
 from tests.helpers.classroom_initializer import initialize_as_teacher
@@ -101,8 +102,19 @@ def test_INV_ARC_015__payroll_page_shows_the_schedulers_next_run(client, app):
             FIRST_PAY, 14, SimpleNamespace(class_id=classroom.class_id)
         )
         assert next_run == _utc(2026, 3, 16, 7, 0)  # 00:00 PDT, Mar 16
-        # The first payday's SYSTEM run, as the job records it.
-        setting = current_payroll_setting(classroom.class_id)
+        # A biweekly schedule anchored on Mar 2, and the first payday's SYSTEM
+        # run as the job records it.
+        with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"sched:{classroom.class_id}"):
+            recorded = utc_now()
+            setting = append_payroll_setting(
+                class_id=classroom.class_id,
+                settings_data={
+                    "pay_rate": Decimal("0.25"), "payroll_frequency_days": 14,
+                    "pay_schedule_type": "biweekly", "rounding_mode": "down",
+                    "first_pay_date": FIRST_PAY,
+                },
+                effective_date=recorded, created_at=recorded,
+            )
         seat = classroom.students[0].seat
         with FEATContext("FEAT-PROD-003", idempotency_key=f"seed:{classroom.class_id}"):
             db.session.add(PayrollEvent(

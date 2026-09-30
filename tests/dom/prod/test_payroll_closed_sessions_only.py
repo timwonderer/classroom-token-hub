@@ -58,6 +58,18 @@ def _at(minutes: int) -> datetime:
     return T0 + timedelta(minutes=minutes)
 
 
+def _local_midnight(cid, instant):
+    """Class-local midnight of ``instant``'s day: a pay date as the settings form
+    stores it, and the grid the anchored schedule runs on (SPEC-TIME-001 §IX.12)."""
+    from types import SimpleNamespace
+    from app.utils.canonical_temporal_resolver import CLASS_LEVEL_EVALUATION, canonical_temporal_resolver
+
+    return canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION, canonical_execution_context=SimpleNamespace(class_id=cid),
+        primitive="evaluation_day_boundaries", reference_time_utc=instant,
+    ).boundary_start_utc
+
+
 def _attendance(classroom, seat_id: int, *rows) -> None:
     """Append raw timeline rows: ``("active"|"inactive", instant)``.
 
@@ -253,13 +265,14 @@ def test_DOM_PROD_001__automatic_payroll_waits_for_a_closed_session(app):
     cid = classroom.class_id
     seat_id = classroom.students[0].seat.id
     now = utc_now()
-    occurrence = now - timedelta(minutes=1)
+    occurrence = _local_midnight(cid, now)
     # The first pay date has arrived; the provisioned default defines no
     # boundary, so this schedule is in force at once.
     with FEATContext("FEAT-ADMN-001", idempotency_key=f"sched:{cid}"):
         save_payroll_setting(
             class_id=cid,
-            settings_data={"first_pay_date": occurrence, "payroll_frequency_days": 14},
+            settings_data={"first_pay_date": occurrence, "payroll_frequency_days": 14,
+                           "pay_schedule_type": "biweekly"},
         )
     db.session.commit()
     _attendance(classroom, seat_id, ("active", now - timedelta(minutes=20)))

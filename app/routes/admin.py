@@ -223,7 +223,11 @@ from app.hash_utils import hash_username_lookup
 from app.services.ledger_balance_query_service import get_batch_balances_by_class_seat
 from app.services.attendance_service import calculate_unpaid_attendance_seconds
 from app.services.payroll.pricing import estimate_payable_amount
-from app.services.payroll.schedule import next_payroll_boundary_after, next_payroll_date as derive_class_next_payroll_date
+from app.services.payroll.schedule import (
+    NOMINAL_FREQUENCY_DAYS,
+    next_payroll_boundary_after,
+    next_payroll_date as derive_class_next_payroll_date,
+)
 from app.services.payroll.settings import (
     class_has_payroll_settings,
     current_payroll_setting,
@@ -7745,8 +7749,9 @@ def payroll_settings():
             pay_rate_per_minute = pay_rate_per_hour / Decimal('60')  # Convert to per-minute for storage
 
             frequency = request.form.get('simple_frequency', 'biweekly')
-            frequency_days_map = {'weekly': 7, 'biweekly': 14, 'monthly': 30}
-            payroll_frequency_days = frequency_days_map.get(frequency, 14)
+            # Informational only: the payday cadence comes from the schedule
+            # type (a calendar month for 'monthly', SPEC-TIME-001 §IX.12).
+            payroll_frequency_days = NOMINAL_FREQUENCY_DAYS.get(frequency, 14)
 
             first_pay_date_str = request.form.get('simple_first_pay_date')
             first_pay_date = _class_local_date_start_utc(first_pay_date_str)
@@ -7823,8 +7828,8 @@ def payroll_settings():
                 else:  # days
                     payroll_frequency_days = custom_value
             else:
-                schedule_map = {'daily': 1, 'weekly': 7, 'biweekly': 14, 'monthly': 30}
-                payroll_frequency_days = schedule_map.get(pay_schedule, 14)
+                # Informational only for a named schedule; read for 'custom'.
+                payroll_frequency_days = NOMINAL_FREQUENCY_DAYS.get(pay_schedule, 14)
 
             first_pay_date_str = request.form.get('adv_first_pay_date')
             first_pay_date = _class_local_date_start_utc(first_pay_date_str)
