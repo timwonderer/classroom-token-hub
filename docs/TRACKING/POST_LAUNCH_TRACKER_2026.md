@@ -5,7 +5,7 @@
 | Status | **ACTIVE — canonical tracker** |
 | Opened | 2026-09-28, after the v2.0.1 release |
 | Baseline commit | `c42f882` (`main`) |
-| Production | `v2.0.1` = `ad64a473f`, released 2026-09-28 |
+| Production | `00166e56`, released 2026-09-29 (untagged). Latest tag `v2.0.1` = `ad64a473f`, 2026-09-28 |
 | Supersedes | `PRODUCTION_READINESS_2026-09.md`, the pre-launch ship tracker, archived at `docs/archive/v2-tracking-2026/` once launch closed its purpose |
 
 This file carries the open work that survived launch. Every item was checked against the code on
@@ -23,6 +23,10 @@ authority stays with `INV-*`, `DOM-*`, `FEAT-*`, `SPEC-*` and `SOP-*`.
 | (untagged) | `4f9854fca` | 2026-09-27 | [DEPLOY_2026-09-27_4f9854fca.md](../ops/audits/DEPLOY_2026-09-27_4f9854fca.md) |
 | (untagged) | `efdf09eda` | 2026-09-27 | Covered by the v2.0.1 record |
 | v2.0.1 (security) | `ad64a473f` | 2026-09-28 | [DEPLOY_2026-09-28_ad64a473f.md](../ops/audits/DEPLOY_2026-09-28_ad64a473f.md) |
+| (untagged) | `bc5c07a2` (#1439) | 2026-09-29 | None yet |
+| (untagged) | `eaca2a7e` (#1440) | 2026-09-29 | None yet |
+| (untagged) | `29b99b14` (#1442) | 2026-09-29 | None yet |
+| (untagged) | `00166e56` (#1443) | 2026-09-29 | None yet; production runs this commit |
 
 ---
 
@@ -35,12 +39,16 @@ authority stays with `INV-*`, `DOM-*`, `FEAT-*`, `SPEC-*` and `SOP-*`.
   CWE-459), then link it from the `[2.0.1]` section of `CHANGELOG.md`.
 - [ ] **Check public routes** once the window lifts. They were not verified at release because the
   gate was in place.
-- [ ] **Provision the student-setup memory store before deploying #1442.** The username-retention check
-  (FEAT-IDEN-002 1.5, SPEC-IDEN-001, INV-ARC-018 §IX) keeps setup state only in a dedicated, non-persistent Redis.
-  Provision and verify it per `infra/student-setup/README.md`: disk persistence, replication, swap, core dumps and
-  command capture all disabled. Setup fails closed without it. Repository tests do not certify production for
-  these settings. SOP-DEP-002 §VI item 6 makes this a release precondition. Carried from the NC-IDEN-001-1 note
-  #1442 added to the pre-launch ship tracker, now archived.
+- [ ] **Finish verifying the student-setup memory store.** Production has run the username-retention check
+  (#1442; FEAT-IDEN-002 1.5, SPEC-IDEN-001, INV-ARC-018 §IX) since release `29b99b14` on 2026-09-29, so the
+  dedicated Redis is in place: the app refuses student setup unless `STUDENT_SETUP_REDIS_URL` answers with no
+  RDB/AOF, no slow log, and a primary with no replicas. The app does not check the rest of
+  `infra/student-setup/README.md` step 5: swap and core dumps disabled, the store excluded from backups, and the
+  ACL denying `CONFIG SET`, `SAVE`, `BGSAVE`, `REPLICAOF` and `MONITOR`. Confirm those on the host and record the
+  result. SOP-DEP-002 §VI item 6 keeps the store a release precondition.
+- [ ] **Record and tag the 2026-09-29 releases.** `bc5c07a2` (#1439), `eaca2a7e` (#1440), `29b99b14` (#1442) and
+  `00166e56` (#1443) went to production through `release-v2.yml` with no `DEPLOY_*` record in `docs/ops/audits/`
+  and no tag; `CHANGELOG.md` still lists them as Unreleased.
 - [ ] **FEAT-IDEN-003 `ACT-IDEN-003` audit event** is not implemented. It needs an identity
   audit-event design first; see #1427.
 - [x] **`production-docs-smoke` and `markdown-web-links`** are fixed on branch

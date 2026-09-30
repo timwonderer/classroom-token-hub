@@ -50,7 +50,7 @@ Run once after clone:
 `hooks/post-checkout` rewrites `DATABASE_URL` in `.env` on every checkout. Check it before relying
 on a custom database URL.
 
-## Current State (2026-09-28)
+## Current State (2026-09-30)
 
 ### In production
 
@@ -59,6 +59,11 @@ on a custom database URL.
 - **v2.0.1** (`ad64a473f`, 2026-09-28) is a security release. Each passkey now signs in only the
   account it was registered to, and `users.id` is a random UUID. It also fixes teacher support
   tickets, runs the scheduler in exactly one process, and removes 19 unused routes.
+- **Untagged releases, 2026-09-29.** `bc5c07a2` fixes the payroll incident of 2026-09-28: each run pays
+  finished work sessions only, each exactly once (#1439). `eaca2a7e` adds a one-time payroll correction
+  that teachers review, open until 2026-10-31 (#1440). `29b99b14` and `00166e56` add the username
+  retention check, with setup state held only in a dedicated, non-persistent Redis (#1442, #1443).
+  Production runs `00166e56`. None of these is tagged or has a release record yet.
 - All ten domains (Identity, Class Configuration, Ledger, Productivity & Payroll, Obligations,
   Store & Entitlements, Operations, Interpretation, Policies, Support) run on the v2 model:
   `User` → `Seat` → `IdentityProfile`, with `ClassEconomy.class_id` as the tenant boundary and
@@ -68,8 +73,9 @@ on a custom database URL.
 
 The post-launch tracker is the working list. In priority order:
 
-1. **Operator follow-ups from v2.0.1.** Lift the Cloudflare Access window with a status update,
-   publish the security advisory and link it from the CHANGELOG, then check public routes.
+1. **Operator follow-ups.** Lift the Cloudflare Access window with a status update, publish the v2.0.1
+   security advisory and link it from the CHANGELOG, then check public routes. Tag and record the
+   2026-09-29 releases, and confirm the student-setup Redis host settings the app cannot check.
 2. **First real use.** Signed-in flows other than teacher passkeys, rent payment (its preview
    window opens 2026-09-29), daylight-saving transitions and load have not yet run in production.
 3. **Dependencies.** Twelve open Dependabot PRs have been reviewed, with a suggested merge order. CI
