@@ -54,7 +54,7 @@ def _class(app, *, first_pay_date, schedule, recorded_at):
             class_id=classroom.class_id,
             settings_data={
                 "pay_rate": Decimal("1"),
-                "pay_schedule_type": schedule, "rounding_mode": "down",
+                "pay_schedule_type": schedule,
                 "first_pay_date": first_pay_date,
             },
             effective_date=recorded_at, created_at=recorded_at,

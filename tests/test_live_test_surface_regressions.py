@@ -111,7 +111,7 @@ class TestPayrollRateUnitIsSingular:
         setting = SimpleNamespace(
             pay_rate=Decimal(per_minute), max_time_per_day=None, max_time_per_day_unit=None,
             pay_schedule_type="biweekly", overtime_threshold=None,
-            overtime_threshold_unit=None, rounding_mode="up",
+            overtime_threshold_unit=None,
         )
         form = build_payroll_settings_form(setting)
         # The route quantizes the entered amount to cents before converting.

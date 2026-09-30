@@ -573,20 +573,6 @@
                   <small class="text-muted" id="advFirstPayDateHelp">Required. Every later payday is counted from this date.</small>
                 </div>
 
-                <!-- Rounding Mode -->
-                <div class="mb-3">
-                  <label for="advRounding" class="form-label fw-bold">Rounding:</label>
-                  <select class="form-select" id="advRounding" name="adv_rounding">
-                    <option value="down" {% if payroll_form.rounding_mode=='down' %}selected{%
-                      endif %}>Round Down</option>
-                    <option value="up" {% if payroll_form.rounding_mode=='up' %}selected{% endif
-                      %}>Round Up</option>
-                    <option value="nearest" {% if payroll_form.rounding_mode=='nearest'
-                      %}selected{% endif %}>Round to Nearest</option>
-                  </select>
-                  <small class="text-muted">Saved with your settings. Pay is currently calculated to the second; rounding is not applied yet.</small>
-                </div>
-
                 <!-- Expected Weekly Hours moved to Economy Health page (CWI parameter on EconomicEngine). -->
 
               </div>
@@ -1004,7 +990,6 @@
       const firstPayDate = document.getElementById('advFirstPayDate')?.value;
       const overtimeEnabled = document.getElementById('advOvertimeEnabled')?.checked;
       const maxTimeValue = document.getElementById('advMaxTimeValue')?.value;
-      const roundingMode = document.getElementById('advRounding')?.value || 'down';
 
       summaryHTML = `<p class="mb-2">Students get paid <strong>$${payAmount.toFixed(2)}</strong> per <strong>${timeUnit}</strong>.</p>`;
 
@@ -1037,9 +1022,8 @@
         summaryHTML += `<p class="mb-2">Students will tap out after <strong>${maxTimeValue} ${maxTimeUnit}</strong> per day (resets at midnight in your class's timezone).</p>`;
       }
 
-      // Rounding: the preference is recorded, but payroll does not round yet
-      // (owner ruling pending on its granularity), so pay is to the second.
-      summaryHTML += `<p class="mb-1">Worked time is paid to the second — partial minutes still count. Your rounding preference is saved but not applied yet.</p>`;
+      // Pay is exact elapsed time × rate, to the cent (DOM-PROD-001 §XV.3).
+      summaryHTML += `<p class="mb-1">Worked time is paid to the second — partial minutes still count.</p>`;
 
     } else {
       // Simple Mode Summary
@@ -1071,7 +1055,7 @@
         summaryHTML += `<p class="mb-1">Students will tap out after <strong>${parts.join(' ')}</strong> per day (resets at midnight in your class's timezone).</p>`;
       }
 
-      // Payroll applies no time rounding, so partial minutes are paid. This
+      // Pay is exact elapsed time × rate, so partial minutes are paid. This
       // field is dollars per hour, so 13m 6s at $1.50/hour pays $0.33 — the
       // full 786 seconds pro-rata.
       summaryHTML += `<p class="mb-1">Worked time is paid to the second — partial minutes still count.</p>`;

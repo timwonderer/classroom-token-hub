@@ -69,7 +69,6 @@ class PayrollConfigurationView:
     display_next_payroll_date: str | None  # Pre-formatted date or "Not scheduled"
     overtime_enabled: bool
     display_overtime_multiplier: str | None  # Pre-formatted as "X.Xx" multiplier if enabled
-    rounding_mode: str  # 'up' or 'down'
 
     # Student summary
     total_students: int
@@ -199,7 +198,6 @@ def build_payroll_configuration_view(
     settings_mode = 'simple'
     pay_schedule_type = 'biweekly'
     overtime_enabled = False
-    rounding_mode = 'down'
     time_unit = 'minute'
 
     if settings:
@@ -207,7 +205,6 @@ def build_payroll_configuration_view(
         settings_mode = infer_settings_form_mode(settings)
         pay_schedule_type = settings.pay_schedule_type or 'biweekly'
         overtime_enabled = settings.overtime_threshold is not None
-        rounding_mode = settings.rounding_mode or 'down'
 
     # Pre-format display strings
     display_pay_rate = f"${pay_rate:.2f} per {time_unit}"
@@ -240,7 +237,6 @@ def build_payroll_configuration_view(
         display_next_payroll_date=display_next_payroll,
         overtime_enabled=overtime_enabled,
         display_overtime_multiplier=display_overtime_multiplier,
-        rounding_mode=rounding_mode,
         total_students=total_students,
         students_with_current_earnings=students_with_earnings,
         students_pending_payment=students_pending,
@@ -325,7 +321,6 @@ def infer_settings_form_mode(settings: PayrollSettings | None) -> str:
         return 'simple'
     if (
         settings.overtime_threshold is not None
-        or (settings.rounding_mode or 'down') != 'down'
         or (settings.max_time_per_day and settings.max_time_per_day_unit not in ('hours', 'minutes'))
     ):
         return 'advanced'
@@ -354,7 +349,6 @@ def build_payroll_settings_form(settings: PayrollSettings | None) -> dict:
             'overtime_threshold_unit': 'hours',
             'max_time_per_day': None,
             'max_time_per_day_unit': 'hours',
-            'rounding_mode': 'down',
         }
     rate = Decimal(str(settings.pay_rate))
     rate_unit, per_unit_amount = exact_rate_unit(rate)
@@ -375,7 +369,6 @@ def build_payroll_settings_form(settings: PayrollSettings | None) -> dict:
         'overtime_threshold_unit': settings.overtime_threshold_unit or 'hours',
         'max_time_per_day': settings.max_time_per_day,
         'max_time_per_day_unit': settings.max_time_per_day_unit or 'hours',
-        'rounding_mode': settings.rounding_mode or 'down',
     }
 
 

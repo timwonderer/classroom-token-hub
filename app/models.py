@@ -2347,8 +2347,9 @@ class PayrollSettings(db.Model):
 
     The columns below are exactly the legal set. There is no stored next payroll
     date (it is derived, DOM-PROD-001 §XV.5), no availability state, no section
-    label, and no form-presentation state. ``rounding_mode`` and the overtime
-    threshold are recorded but not yet applied to pay.
+    label, and no form-presentation state. The overtime threshold is recorded but
+    not applied to pay. ``rounding_mode`` is RETIRED (operator ruling 2026-09-30):
+    never defined or applied, kept only as historical data, never read or written.
     """
     __tablename__ = 'payroll_settings'
 
@@ -2364,7 +2365,9 @@ class PayrollSettings(db.Model):
     # The payday cadence: weekly, biweekly or monthly, anchored on first_pay_date
     # (SPEC-TIME-001 §IX.12; DOM-PROD-001 §XV.5). No day count is involved.
     pay_schedule_type = db.Column(db.String(20), nullable=False)
-    rounding_mode = db.Column(db.String(20), nullable=False)  # recorded; not applied (owner ruling pending)
+    # RETIRED (operator ruling 2026-09-30): rounding was never defined or applied.
+    # Historical values stay; nothing reads or writes it (structural guard).
+    rounding_mode = db.Column(db.String(20), nullable=True)
     first_pay_date = db.Column(db.DateTime(timezone=True), nullable=False)  # the schedule's anchor
 
     # Everything but the key a submission supplies. Kept here so the writer and
@@ -2374,7 +2377,7 @@ class PayrollSettings(db.Model):
     SETTING_FIELDS = (
         'pay_rate', 'overtime_threshold',
         'overtime_threshold_unit', 'max_time_per_day', 'max_time_per_day_unit',
-        'pay_schedule_type', 'rounding_mode', 'first_pay_date',
+        'pay_schedule_type', 'first_pay_date',
     )
 
     __table_args__ = (

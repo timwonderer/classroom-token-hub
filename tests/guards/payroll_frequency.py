@@ -14,6 +14,10 @@ report them (SOP-TEST-003 §IX.A). It parses Python source and reports:
 * in payroll modules: a ``days=`` argument of 28–31 (a month approximated as
   days), and a dict mapping a schedule name (``weekly``, ``biweekly``,
   ``monthly``, ``daily``) to a number (a schedule approximated as days).
+* anywhere in ``app/``: any use of ``rounding_mode``. Rounding is RETIRED
+  (operator ruling 2026-09-30): it was never defined or applied, and the column
+  survives only as historical data. The one allowed occurrence is the column's
+  own declaration in ``app/models.py``.
 """
 
 from __future__ import annotations
@@ -22,6 +26,8 @@ import ast
 from dataclasses import dataclass
 
 FORBIDDEN_NAME = "payroll_frequency_days"
+RETIRED_ROUNDING = "rounding_mode"
+MODELS_MODULE = "app/models.py"
 MONTH_AS_DAYS = frozenset({28, 29, 30, 31})
 SCHEDULE_NAMES = frozenset({"weekly", "biweekly", "monthly", "daily"})
 PAYROLL_MODULES = (
@@ -62,7 +68,19 @@ def find_violations(path: str, source: str) -> list[Violation]:
         line = getattr(node, "lineno", 0)
         found.setdefault((line, reason), Violation(path, line, reason))
 
+    models = path.replace("\\", "/").endswith(MODELS_MODULE)
+    rounding = "retired rounding setting (rounding_mode) used"
     for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and node.id == RETIRED_ROUNDING:
+            # The column's declaration in the model is the only lawful mention.
+            if not (models and isinstance(node.ctx, ast.Store)):
+                report(node, rounding)
+        elif isinstance(node, ast.Attribute) and node.attr == RETIRED_ROUNDING:
+            report(node, rounding)
+        elif isinstance(node, ast.keyword) and node.arg == RETIRED_ROUNDING:
+            report(node.value, rounding)
+        elif isinstance(node, ast.Constant) and node.value == RETIRED_ROUNDING:
+            report(node, rounding)
         if isinstance(node, ast.Name) and node.id == FORBIDDEN_NAME:
             report(node, "stored pay frequency (payroll_frequency_days)")
         elif isinstance(node, ast.Attribute) and node.attr == FORBIDDEN_NAME:

@@ -210,7 +210,6 @@ def provision_classroom(classroom_key: str, *, with_payroll_settings: bool = Tru
                 class_id=economy.class_id,
                 pay_rate=Decimal('0.50'),  # $0.50 per minute
                 pay_schedule_type='biweekly',
-                rounding_mode='down',
                 first_pay_date=first_payday,
                 created_at=settings_recorded_at,
                 effective_date=settings_recorded_at,
