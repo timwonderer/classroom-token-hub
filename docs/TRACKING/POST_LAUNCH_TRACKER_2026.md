@@ -168,14 +168,28 @@ against this tracker, the archived launch trackers and the live-test RESUME reco
   resolves it in `capture_correlation_context` (`app/__init__.py`), again in `login_required`
   (`app/auth.py:119`), and a third time in the route itself (`app/routes/api.py`). DOM-IDEN-006 §IX requires
   `canonicalContext` to be constructed exactly once per authenticated request, and §X requires helpers to consume it
-  rather than call the resolver. `validate_canonical_session_nonce` can clear the session without resetting
-  `g.canonical_context`. Still to determine: how many routes re-resolve, and whether the resolutions can disagree
-  within one request. Track this separately; do not normalise it while touching individual routes.
+  rather than call the resolver.
+  - **Scope.** 22 of 136 decorated routes call the resolver after their auth decorator, 18 of them in `student.py`.
+    Nine more re-resolve through helpers or context processors.
+  - **Stale context after a revoked session.** `validate_canonical_session_nonce` runs after
+    `capture_correlation_context` and can `session.clear()` without resetting `g.canonical_context` or
+    `g.correlation_context`. The stale context is then still trusted in three places:
+    - `admin_bp.before_request` (`app/routes/admin.py`, before `@admin_required`), which can answer a superseded
+      teacher cookie with class feature state instead of a sign-in redirect;
+    - TLCP request traces and error events, which attribute the request to the revoked actor;
+    - `login_required`, which sets `g.canonical_context` before its expiry check.
+  - **Impact.** No cross-class leak was found.
+  - **Target design.** One resolution in a `before_request` that runs after nonce validation. Auth decorators only
+    check its result, and a structural guard with a mutation proof flags any other call. Do not normalise the
+    pattern while touching individual routes.
+- [ ] **Every authenticated request writes a TLCP trace row.** `persist_request_trace` in `after_request`
+  (`app/__init__.py`) inserts one row and prunes on every request, including the 10-second
+  `/api/student-status` poll: about 16,000 rows in 3.5 days. Decide whether high-frequency polls should be traced.
 - [ ] **`/api/student-status` is rate-limited per endpoint per IP** (default 200/hour and 500/day, `app/extensions.py`).
   - The dashboard polls every 10 s (`static/js/attendance.js:118`), so a single student's tab exhausts the hourly
     limit in about 33 minutes. Shared school IPs make it sooner.
   - Production recorded 699 `429`s; support ticket #1 matches.
-  - The client parses the HTML 429 page as JSON, so the timer stops updating.
+  - The client parses the HTML 429 page as JSON, so the timer stops updating. Production traffic comes from a pool of about 134 school addresses, not one; most 429s are a single long-lived poller exhausting 200/hour on its own.
   - Fix in progress on its own branch, together with an endpoint blast-radius review of the other IP-keyed limits.
 - [ ] **Student tickets are visible to sysadmin before teacher escalation.** This is a regression from `384176834`,
   and it is contrary to DOM-SUP-001 §VIII and FEAT-SUP-001.
