@@ -166,6 +166,16 @@ these two cases:
 
 ## VIII. Deferred features
 
+- [ ] **Simple interest: credited interest still earns (SPEC-ECON-001 Appendix A, KD-1).** §4.1 says
+  paid interest SHALL NOT participate in simple-interest accrual. The runtime keeps accrued interest
+  out of the base within a payout window, but once credited it is posted savings balance and earns
+  in every later window, for simple as for compound (`accrue_daily_interest` in
+  `app/services/economic_engine.py`, fed by `apply_savings_interest` / `forecast_savings` in
+  `app/services/ledger_interest_service.py`). Deferred by operator ruling 2026-09-30; the simple
+  option stays. Until fixed, the teacher banking settings and the teacher and student interest guides
+  carry a known-issue note, and nothing describes simple interest as fully supported. A fix needs a
+  per-seat record of credited interest to subtract from the earning base, for runtime and forecast
+  alike.
 - **Bug-hunter badge system.** Design only (`DOM-OPS-003`, two badge SPECs, nine SVGs), preserved at
   tag `archive/bug-hunter-badges-20260914`. Before it can land, the badge SPECs must be renumbered,
   because `SPEC-OPS-001` is already `SPEC-OPS-001_REVERSAL_AND_VOID.md`.
