@@ -14,6 +14,11 @@ the amount; ``SYSTEM`` confers no authority to post.
 
 Reads are pure (INV-ARC-007). Amounts are recomputed at approval; a client never
 supplies one.
+
+Each earlier-rule run is priced at the payroll setting that was in force when it
+ran — the rate that run actually paid at — resolved through the one
+payroll-settings resolver (DOM-PROD-001 §XV.3). The correction's provenance is
+the setting that priced its latest corrected run.
 """
 
 from __future__ import annotations
@@ -26,14 +31,13 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 from app.models import AttendanceSession, PayrollEvent, Seat, Transaction
-from app.payroll import get_pay_rate_for_class
 from app.services.attendance_service import (
     CLOSED_SESSION_SETTLEMENT_RULE,
     _day_end_utc,
     _split_sessions,
 )
 from app.services.context_resolver import CanonicalContext
-from app.services.payroll.settlement import _active_payroll_policy_version_id
+from app.services.payroll.settings import pay_rate_per_second, payroll_setting_governing_work
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
     canonical_temporal_resolver,
@@ -179,7 +183,6 @@ def build_class_correction_proposal(
         raise ValueError("build_class_correction_proposal requires class_id.")
     # Class-scoped temporal context only; this read acts for no one.
     ctx = SimpleNamespace(class_id=class_id)
-    rate = get_pay_rate_for_class(class_id=class_id)
 
     seats = (
         Seat.query.filter(
@@ -236,6 +239,9 @@ def build_class_correction_proposal(
         for event in events:
             run_at = ensure_utc(event.recorded_at)
             if _is_legacy(event):
+                # The earlier rule priced a run at the setting in force when it
+                # ran, so that setting reproduces what it paid.
+                rate = pay_rate_per_second(payroll_setting_governing_work(class_id, run_at))
                 paid_seconds = _replayed_paid_seconds(
                     ctx, attendance, since_utc=previous_at, run_at_utc=run_at
                 )
@@ -331,7 +337,7 @@ class CorrectionPosting:
     amount: Decimal
     idempotency_key: str
     correlation_id: str
-    policy_version_id: int
+    policy_uuid: str | None
     summary_json: dict
 
 
@@ -351,18 +357,26 @@ def plan_class_corrections(
         raise ValueError(f"Incident {incident.incident_id} is closed.")
     class_id = ctx.class_id
     proposal = build_class_correction_proposal(class_id, incident=incident)
-    policy_version_id = _active_payroll_policy_version_id(class_id)
+    corrected_run_times = {
+        event.id: ensure_utc(event.recorded_at)
+        for event in PayrollEvent.query.filter_by(class_id=class_id, payroll_event_type="payroll").all()
+    }
     postings: list[CorrectionPosting] = []
     for row in proposal.proposed:
         if row.seat_id not in seat_ids:
             continue
         key = correction_key(incident, class_id, row.seat_id)
+        latest_run = max(
+            (corrected_run_times[event_id] for event_id in row.corrected_event_ids if event_id in corrected_run_times),
+            default=None,
+        )
+        setting = payroll_setting_governing_work(class_id, latest_run) if latest_run else None
         postings.append(CorrectionPosting(
             seat_id=row.seat_id,
             amount=row.amount,
             idempotency_key=key,
             correlation_id=correction_correlation_id(key),
-            policy_version_id=policy_version_id,
+            policy_uuid=setting.policy_uuid if setting else None,
             summary_json={
                 "source": "payroll_correction",
                 "incident": incident.incident_id,

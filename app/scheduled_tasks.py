@@ -27,7 +27,7 @@ def enforce_daily_limits_job():
     from app.feats.prod import _record_attendance_session_impl
     from app.extensions import db
     from app.models import AttendanceReasonCode, AttendanceSession, ClassEconomy, Seat
-    from app.payroll import get_daily_limit_seconds
+    from app.services.payroll.settings import current_daily_limit_seconds
     from app.services.context_resolver import CanonicalContext
     from app.services.identity_service import resolve_teacher_seat_for_class
     from app.utils.canonical_temporal_resolver import (
@@ -100,7 +100,7 @@ def enforce_daily_limits_job():
             # end-of-day termination in DOM-PROD-001 §312 is unconditional — it
             # is not contingent on a daily limit being configured — so only the
             # §314 limit arithmetic below is skipped when `daily_limit` is None.
-            daily_limit = get_daily_limit_seconds(class_id=class_id)
+            daily_limit = current_daily_limit_seconds(class_id)
 
             actor_seat_id = resolve_teacher_seat_for_class(class_id).id
             ctx = CanonicalContext(
@@ -372,89 +372,23 @@ def run_rent_reconciliation_job():
 def _advance_local_calendar_days(occurrence_utc, days: int, ctx):
     """Advance an occurrence by `days` *local calendar* days, keeping the local clock.
 
-    `occurrence_utc + timedelta(days=N)` preserves the clock time in UTC rather
-    than in the class's timezone, so a DST transition inside the interval moves
-    the run to the wrong local date — twice a year, permanently, because each
-    run seeds the next.
-
-    Preserving the wall-clock components is what makes this exact. An earlier
-    attempt added the *elapsed* UTC duration since local midnight to the target
-    midnight, which is not the same thing: on a 25-hour fall-back day an
-    occurrence at 23:30 local is 24h30m after midnight, so the target landed on
-    the following local date — reintroducing the defect in a narrower case.
-
-    Ambiguous and nonexistent local times are the two cases a naive
-    implementation silently gets wrong, so both are decided explicitly:
-
-    * **Ambiguous** (fall back — the clock reads 01:30 twice): take the
-      chronologically earlier instant, so the interval never silently lengthens.
-    * **Nonexistent** (spring forward — 02:30 never happens): take the smallest
-      forward shift onto a time that does exist, so 02:30 becomes 03:30.
-
-    Both are chosen by comparing the candidate instants directly rather than by
-    passing an ``is_dst`` flag. The flag does not mean "the earlier one": in
-    Europe/Dublin the tz database models winter as *negative* DST, so
-    ``is_dst=True`` on an ambiguous Dublin timestamp returns the **later**
-    instant — the opposite of Los Angeles. Selecting on the property actually
-    wanted is the only formulation that holds in every zone.
-
-    The local time of day is preserved rather than normalised to midnight
-    because `next_payroll_date` falls back to `created_at` for classes that
-    never set a first pay date (`payroll_settings_service`); forcing midnight
-    would move an established run time for those classes.
+    The arithmetic lives with the payroll schedule it serves
+    (``app.services.payroll.schedule.advance_local_calendar_days``); this asks
+    the canonical temporal resolver which timezone governs ``ctx``'s class and
+    delegates, so the resolver keeps owning the class-to-timezone mapping.
     """
-    from datetime import datetime, timedelta, timezone as _timezone
-
-    import pytz
-
+    from app.services.payroll.schedule import advance_local_calendar_days
     from app.utils.canonical_temporal_resolver import (
         CLASS_LEVEL_EVALUATION,
         canonical_temporal_resolver,
     )
 
-    # Ask CLE which timezone governs this class rather than reading
-    # ClassEconomy here: the class-to-timezone mapping is the resolver's to own.
     authority = canonical_temporal_resolver(
         CLASS_LEVEL_EVALUATION,
         canonical_execution_context=ctx,
         primitive="current_time",
     ).temporal_authority
-    tz = pytz.timezone(authority)
-
-    local_occurrence = occurrence_utc.astimezone(tz)
-    target_naive = datetime.combine(
-        local_occurrence.date() + timedelta(days=days),
-        local_occurrence.time(),
-    )
-
-    try:
-        target_local = tz.localize(target_naive, is_dst=None)
-    except pytz.exceptions.AmbiguousTimeError:
-        # Two instants carry this wall clock; take the earlier. Compared as UTC
-        # rather than selected by flag — see the note on Europe/Dublin above.
-        target_local = min(
-            (tz.localize(target_naive, is_dst=flag) for flag in (True, False)),
-            key=lambda candidate: candidate.astimezone(_timezone.utc),
-        )
-    except pytz.exceptions.NonExistentTimeError:
-        # No instant carries this wall clock, so the local time must move. Take
-        # the smallest *forward* move onto a time that exists: 02:30 becomes
-        # 03:30, not 01:30 (backwards, which would run early) and not 03:00
-        # (the first existing instant, which would pull the run earlier within
-        # the day than configured).
-        candidates = [
-            tz.normalize(tz.localize(target_naive, is_dst=flag))
-            for flag in (False, True)
-        ]
-        target_local = min(
-            candidates,
-            key=lambda candidate: (
-                candidate.replace(tzinfo=None) <= target_naive,
-                abs(candidate.replace(tzinfo=None) - target_naive),
-            ),
-        )
-
-    return target_local.astimezone(_timezone.utc)
+    return advance_local_calendar_days(occurrence_utc, days, authority)
 
 
 def run_automatic_payroll_job():
@@ -463,35 +397,34 @@ def run_automatic_payroll_job():
     Automatic payroll is merely a second *initiation mechanism* for the same
     economic-cycle completion as manual payroll (DOM-PROD-001 §XV). This job owns
     exactly one question — "is this class due for automatic payroll now?" — and
-    then becomes just another caller of ``complete_payroll_cycle``. It contains no
-    payroll, interpretation, or activation logic of its own.
+    then becomes just another caller of ``complete_payroll_cycle``, as ``SYSTEM``
+    (FEAT-PROD-004 §II.1). It contains no payroll, interpretation, or activation
+    logic of its own.
 
-    A class is due when its active ``PayrollSettings`` carries a
-    ``next_payroll_date`` at or before now. The **scheduled occurrence** (that
-    ``next_payroll_date``) is the deterministic command identity: every retry of
-    the same occurrence derives the same idempotency key, while the next intended
-    occurrence — after ``next_payroll_date`` advances — derives a different one. So
-    the ``payroll_cycle_completion`` anchor makes scheduler retries idempotent
-    without any bespoke job-run substrate. Each class runs under its OWN top-level
-    FEAT transaction (a plain loop, no shared FEAT context), so one class's failure
-    cannot roll back or block another; the ``next_payroll_date`` advance commits
-    atomically with the cycle so a failed run stays due under the same key.
+    A class is due when its derived next payroll date is at or before now
+    (DOM-PROD-001 §XV.5; ``app.services.payroll.schedule``). Nothing is stored to
+    advance: the run's SYSTEM payroll events record the **scheduled occurrence**
+    they settled, and that record is what moves the next date on, so a failed
+    run simply stays due. The occurrence is also the deterministic command
+    identity: every retry of it derives the same idempotency key, while the next
+    occurrence derives a different one, so the ``payroll_cycle_completion``
+    anchor makes scheduler retries idempotent. Each class runs under its OWN
+    top-level FEAT transaction (a plain loop, no shared FEAT context), so one
+    class's failure cannot roll back or block another.
     """
-    from datetime import timedelta
-
     from app.extensions import db
     from app.feats.base import FEATContext
     from app.feats.complete_payroll_cycle import complete_payroll_cycle
     from app.services.payroll.settlement import NoPayableAttendanceError
-    from app.models import ClassEconomy, PayrollSettings
+    from app.models import ClassEconomy
     from app.services.class_configuration_query_service import is_feature_enabled
     from app.services.context_resolver import CanonicalContext
     from app.services.identity_service import resolve_teacher_seat_for_class
     from app.services.payroll.cycle_completion import get_completed_cycle_window
+    from app.services.payroll.schedule import due_payroll_occurrences
     from app.utils.canonical_temporal_resolver import (
         CLASS_LEVEL_EVALUATION,
         canonical_temporal_resolver,
-        ensure_utc,
         utc_now,
     )
 
@@ -500,16 +433,7 @@ def run_automatic_payroll_job():
 
     now = utc_now()
     try:
-        due_settings = (
-            PayrollSettings.query
-            .filter(
-                PayrollSettings.availability_state == 'IN_USE',
-                PayrollSettings.next_payroll_date.isnot(None),
-                PayrollSettings.next_payroll_date <= now,
-            )
-            .order_by(PayrollSettings.class_id.asc())
-            .all()
-        )
+        due = due_payroll_occurrences(now=now)
     except Exception:
         db.session.rollback()
         logger.exception("Automatic-payroll job could not enumerate due classes")
@@ -518,9 +442,7 @@ def run_automatic_payroll_job():
     ran = 0
     skipped = 0
     failed = 0
-    for settings in due_settings:
-        class_id = settings.class_id
-        scheduled_occurrence = ensure_utc(settings.next_payroll_date)
+    for class_id, scheduled_occurrence in due:
         try:
             if not is_feature_enabled(class_id, "payroll"):
                 skipped += 1
@@ -546,26 +468,21 @@ def run_automatic_payroll_job():
             )
 
             idempotency_key = f"auto-payroll:{class_id}:{scheduled_occurrence.isoformat()}"
-            frequency_days = settings.payroll_frequency_days or 14
             with FEATContext("FEAT-PROD-004", idempotency_key=idempotency_key):
                 complete_payroll_cycle(
                     ctx=ctx,
                     idempotency_key=idempotency_key,
                     cycle_started_at=cycle_started_at,
                     cycle_completed_at=cycle_completed_at,
-                )
-                # Scheduling bookkeeping (the scheduler's own concern), committed
-                # atomically with the cycle so a failure leaves the class due.
-                #
-                # Advanced by local calendar days, not by 24-hour UTC spans.
-                settings.next_payroll_date = _advance_local_calendar_days(
-                    scheduled_occurrence, frequency_days, ctx
+                    run_mechanism="SYSTEM",
+                    scheduled_occurrence=scheduled_occurrence,
                 )
             ran += 1
         except NoPayableAttendanceError:
-            # Nothing closed and unpaid yet. The occurrence stays due, so the next
-            # hourly tick pays it once a student has clocked out; the schedule
-            # still advances from the occurrence, so paydays do not drift.
+            # Nothing closed and unpaid yet. No SYSTEM event is recorded, so the
+            # occurrence stays due and the next hourly tick pays it once a
+            # student has clocked out; the following payday is still counted
+            # from the occurrence, so paydays do not drift.
             skipped += 1
             db.session.rollback()
             logger.info("Automatic payroll for class %s deferred: no payable attendance", class_id)
@@ -1080,8 +997,8 @@ SCHEDULED_JOB_SPECS: tuple[ScheduledJobSpec, ...] = (
         trigger='interval',
         trigger_kwargs={'hours': 1},
     ),
-    # Fires the canonical completion FEAT only for classes whose
-    # next_payroll_date is due; idempotent per scheduled occurrence, so an
+    # Fires the canonical completion FEAT only for classes whose derived
+    # next payroll date is due; idempotent per scheduled occurrence, so an
     # hourly cadence never double-runs a cycle.
     ScheduledJobSpec(
         id='automatic_payroll',
