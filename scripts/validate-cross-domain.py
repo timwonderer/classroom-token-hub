@@ -45,12 +45,10 @@ TABLE_DOMAIN = {
     "recovery_class_challenges": "DOM-IDEN",
     "passkey_credentials": "DOM-IDEN",
     "teacher_signup_attempts": "DOM-IDEN",
-    # DOM-CLASS-001 / -003 — class directives and their version lifecycle
+    # DOM-CLASS-001 / -002 — class directives and their effective-dated versions
     "class_features": "DOM-CLASS",
     "economic_engine": "DOM-CLASS",
     "feature_settings": "DOM-CLASS",
-    "policy_versions": "DOM-CLASS",
-    "policy_transitions": "DOM-CLASS",
     # DOM-PROD-001 — productivity and payroll facts
     "attendance_sessions": "DOM-PROD",
     "hall_pass_logs": "DOM-PROD",
@@ -121,7 +119,6 @@ BASELINE_COORDINATION = {
 }
 BASELINE_FOREIGN_KEYS = {
     "assessment_events.ledger_transaction_id -> ledger_transaction.id (DOM-OBL -> DOM-LED)",
-    "assessment_events.policy_version_id -> policy_versions.id (DOM-OBL -> DOM-CLASS)",
     "issues.related_transaction_id -> ledger_transaction.id (DOM-SUP -> DOM-LED)",
     "issue_resolution_actions.related_transaction_id -> ledger_transaction.id (DOM-SUP -> DOM-LED)",
     "ledger_transaction.lineage_event_id -> audit_events.id (DOM-LED -> DOM-OPS)",
