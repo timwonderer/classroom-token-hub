@@ -55,13 +55,13 @@ from tests.helpers.canonical_classroom import (
 # Public API
 # ---------------------------------------------------------------------------
 
-def initialize(classroom_key: str, app: Flask) -> ProvisionedClassroom:
+def initialize(classroom_key: str, app: Flask, *, with_payroll_settings: bool = True) -> ProvisionedClassroom:
     """Provision a classroom and run the DB self-test.
 
     Use when a test needs DB state but no active session
     (e.g. unit tests on services or models).
     """
-    classroom = provision_classroom(classroom_key)
+    classroom = provision_classroom(classroom_key, with_payroll_settings=with_payroll_settings)
     _assert_db_invariants(classroom)
     return classroom
 
@@ -70,9 +70,11 @@ def initialize_as_teacher(
     classroom_key: str,
     client,
     app: Flask,
+    *,
+    with_payroll_settings: bool = True,
 ) -> ProvisionedClassroom:
     """Provision, DB self-test, establish teacher session, context self-test."""
-    classroom = provision_classroom(classroom_key)
+    classroom = provision_classroom(classroom_key, with_payroll_settings=with_payroll_settings)
     _assert_db_invariants(classroom)
     login_teacher(client, classroom)
     _assert_nonce_integrity(client, classroom.teacher_user)

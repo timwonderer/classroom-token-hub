@@ -110,7 +110,7 @@ class TestPayrollRateUnitIsSingular:
 
         setting = SimpleNamespace(
             pay_rate=Decimal(per_minute), max_time_per_day=None, max_time_per_day_unit=None,
-            payroll_frequency_days=14, pay_schedule_type="biweekly", overtime_threshold=None,
+            pay_schedule_type="biweekly", overtime_threshold=None,
             overtime_threshold_unit=None, rounding_mode="up",
         )
         form = build_payroll_settings_form(setting)

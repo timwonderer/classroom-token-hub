@@ -63,3 +63,43 @@ def test_mutation_proof__prose_and_the_resolver_are_not_reported():
     assert find_violations("app/routes/example.py", prose) == []
     read = "from app.models import PayrollSettings\nPayrollSettings.query.first()\n"
     assert find_violations(RESOLVER_MODULE, read) == []
+
+
+# --------------------------------------------------------------------------- #
+# No stored or hard-coded pay frequency (operator ruling 2026-09-30)          #
+# --------------------------------------------------------------------------- #
+
+from tests.guards.payroll_frequency import find_violations as find_frequency_violations  # noqa: E402
+
+
+def test_no_stored_or_day_count_pay_frequency_in_app():
+    violations = [
+        violation
+        for path, source in _app_sources()
+        for violation in find_frequency_violations(path, source)
+    ]
+    assert not violations, "\n".join(str(v) for v in violations)
+
+
+@pytest.mark.parametrize("path,snippet", [
+    # The dropped column coming back, in each spelling.
+    ("app/routes/admin.py", "settings_data = {'payroll_frequency_days': 14}\n"),
+    ("app/routes/admin.py", "days = setting.payroll_frequency_days\n"),
+    ("app/services/payroll/settings.py", "PayrollSettings(payroll_frequency_days=14)\n"),
+    ("app/models.py", "payroll_frequency_days = db.Column(db.Integer)\n"),
+    # A month or schedule approximated as days in payroll code.
+    ("app/services/payroll/schedule.py", "nxt = last + timedelta(days=30)\n"),
+    ("app/services/payroll/schedule.py", "NOMINAL = {'weekly': 7, 'biweekly': 14, 'monthly': 30}\n"),
+    ("app/utils/economy_balance.py", "period = advance(start, days=31)\n"),
+])
+def test_mutation_proof__each_frequency_violation_is_reported(path, snippet):
+    assert find_frequency_violations(path, snippet), snippet
+
+
+def test_mutation_proof__non_payroll_day_arithmetic_and_labels_are_not_reported():
+    # Rent and banking keep their own cadences; only payroll modules are held.
+    assert find_frequency_violations("app/routes/api.py", "grace = timedelta(days=30)\n") == []
+    # Schedule names mapped to labels, not numbers, are fine in payroll code.
+    assert find_frequency_violations(
+        "app/services/payroll/schedule.py", "LABELS = {'monthly': 'month'}\n"
+    ) == []

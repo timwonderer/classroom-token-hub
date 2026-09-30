@@ -41,8 +41,8 @@ from app.services.payroll.schedule import next_payroll_date
 from app.services.payroll.settings import (
     first_payroll_setting,
     pay_rate_per_second,
-    save_payroll_setting,
 )
+from tests.helpers.class_domain import put_payroll_setting_in_force
 from app.services.payroll.settlement import (
     NoPayableAttendanceError,
     settle_class_payroll_cycle,
@@ -266,15 +266,8 @@ def test_DOM_PROD_001__automatic_payroll_waits_for_a_closed_session(app):
     seat_id = classroom.students[0].seat.id
     now = utc_now()
     occurrence = _local_midnight(cid, now)
-    # The first pay date has arrived; the provisioned default defines no
-    # boundary, so this schedule is in force at once.
-    with FEATContext("FEAT-ADMN-001", idempotency_key=f"sched:{cid}"):
-        save_payroll_setting(
-            class_id=cid,
-            settings_data={"first_pay_date": occurrence, "payroll_frequency_days": 14,
-                           "pay_schedule_type": "biweekly"},
-        )
-    db.session.commit()
+    # The first pay date has arrived.
+    put_payroll_setting_in_force(cid, first_pay_date=occurrence, pay_schedule_type="biweekly")
     _attendance(classroom, seat_id, ("active", now - timedelta(minutes=20)))
 
     run_automatic_payroll_job()

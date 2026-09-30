@@ -26,10 +26,10 @@ unchanged.*
 
 Operator ruling 2026-09-30 made the table effective-dated (DOM-POL-001 §VI.2):
 there is no availability projection any more, so "the current policy" is the row
-in force now, and when a later save takes effect is covered by
-``test_payroll_settings_effective_dated.py``. The provisioned default setting has
-no first pay date, so it defines no payroll boundary and each save here is in
-force at once.
+in force at an instant; a later save takes effect on the next payroll date
+(``test_payroll_settings_effective_dated.py``). These classes start without the
+provisioned default, so each first save is in force at once and a later one is
+read at its own effective date.
 """
 
 from __future__ import annotations
@@ -46,7 +46,9 @@ from app.models import AttendanceReasonCode, PayrollEvent, PayrollSettings, Tran
 from app.services.class_configuration_query_service import get_payroll_settings
 from app.services.context_resolver import CanonicalContext
 from app.services.payroll.settings import (
+    class_has_payroll_settings,
     payroll_setting_by_uuid,
+    payroll_setting_effective_at,
     payroll_setting_history,
     save_payroll_setting,
 )
@@ -54,8 +56,17 @@ from tests.helpers.class_domain import enable_class_feature
 from tests.helpers.classroom_initializer import initialize, initialize_as_teacher
 
 
+FIRST_PAY = datetime(2027, 1, 4, 8, 0, tzinfo=timezone.utc)  # a class-local midnight
+
+
 def _submit(class_id, **settings_data) -> PayrollSettings:
     """Submit a payroll policy the way the admin handler does."""
+    if not class_has_payroll_settings(class_id):
+        # A class's first setting needs a complete schedule; later ones carry
+        # forward what they omit.
+        settings_data.setdefault("first_pay_date", FIRST_PAY)
+        settings_data.setdefault("pay_schedule_type", "biweekly")
+        settings_data.setdefault("rounding_mode", "down")
     with FEATContext(
         "FEAT-TEST-SETUP",
         idempotency_key=f"payroll:submit:{class_id}:{sorted(settings_data.items())}",
@@ -69,7 +80,7 @@ class TestPayrollPolicyIsAppendOnly:
     """The repository accumulates versions; it does not overwrite them."""
 
     def test_submission_mints_a_new_row_and_leaves_the_predecessor_unchanged(self, app):
-        classroom = initialize("chemistry_p1", app)
+        classroom = initialize("chemistry_p1", app, with_payroll_settings=False)
         with app.app_context():
             original = _submit(classroom.class_id, pay_rate=Decimal("0.25"))
             original_uuid = original.policy_uuid
@@ -85,13 +96,15 @@ class TestPayrollPolicyIsAppendOnly:
             db.session.refresh(original)
             assert Decimal(original.pay_rate) == Decimal("0.25")
 
-            # The row in force now is the newest one; every row is kept.
-            assert get_payroll_settings(classroom.class_id).policy_uuid == successor.policy_uuid
+            # The newest row governs from its effective date; every row is kept.
+            assert payroll_setting_effective_at(
+                classroom.class_id, successor.effective_date
+            ).policy_uuid == successor.policy_uuid
             assert original_uuid in {row.policy_uuid for row in payroll_setting_history(classroom.class_id)}
 
     def test_a_superseded_policy_stays_readable_by_its_uuid(self, app):
         """DOM-POL-001 §VII: supersession removes nothing; the record resolves."""
-        classroom = initialize("chemistry_p1", app)
+        classroom = initialize("chemistry_p1", app, with_payroll_settings=False)
         with app.app_context():
             original = _submit(classroom.class_id, pay_rate=Decimal("0.25"))
             original_uuid = original.policy_uuid
@@ -109,7 +122,7 @@ class TestPayrollPolicyIsAppendOnly:
         built from column defaults, the overtime and rounding terms would quietly
         change for every future run.
         """
-        classroom = initialize("chemistry_p1", app)
+        classroom = initialize("chemistry_p1", app, with_payroll_settings=False)
         with app.app_context():
             _submit(
                 classroom.class_id,
@@ -120,7 +133,6 @@ class TestPayrollPolicyIsAppendOnly:
                 max_time_per_day=4.0,
                 max_time_per_day_unit="hours",
                 pay_schedule_type="weekly",
-                payroll_frequency_days=7,
             )
 
             successor = _submit(classroom.class_id, pay_rate=Decimal("2.00"))
@@ -131,11 +143,11 @@ class TestPayrollPolicyIsAppendOnly:
             assert successor.rounding_mode == "up"
             assert successor.max_time_per_day == 4.0
             assert successor.max_time_per_day_unit == "hours"
-            assert (successor.pay_schedule_type, successor.payroll_frequency_days) == ("weekly", 7)
+            assert successor.pay_schedule_type == "weekly"
 
     def test_unknown_submission_field_is_rejected(self, app):
         """Silently dropping an unrecognized field would lose part of a contract."""
-        classroom = initialize("chemistry_p1", app)
+        classroom = initialize("chemistry_p1", app, with_payroll_settings=False)
         with app.app_context():
             with pytest.raises(ValueError, match="Unknown payroll settings field"):
                 _submit(classroom.class_id, pay_rate=Decimal("1.00"), is_active=True)
@@ -147,7 +159,7 @@ class TestPayrollPolicyIsAppendOnly:
         This failure mode is silent and retroactive, so a missed call site has to
         raise rather than quietly rewrite the terms of recorded work.
         """
-        classroom = initialize("chemistry_p1", app)
+        classroom = initialize("chemistry_p1", app, with_payroll_settings=False)
         with app.app_context():
             settings = _submit(classroom.class_id, pay_rate=Decimal("0.25"))
 
@@ -164,20 +176,18 @@ class TestRecordedPayrollKeepsItsTerms:
 
     def test_rate_change_leaves_the_policy_that_priced_a_run_intact(self, client):
         app = client.application
-        classroom = initialize_as_teacher("chemistry_p1", client, app)
+        classroom = initialize_as_teacher("chemistry_p1", client, app, with_payroll_settings=False)
         student = classroom.students[0]
 
         enable_class_feature(class_id=classroom.class_id, feature="payroll")
         now = datetime.now(timezone.utc)
         # Work is priced by the setting in force when it closed (DOM-PROD-001
-        # §XV.3), so the governing setting is recorded before the work below. The
-        # provisioned default was recorded after it but after the work closed
-        # too, so it governs none of it.
+        # §XV.3), so the governing setting is recorded before the work below.
         with FEATContext("FEAT-TEST-SETUP", idempotency_key="payroll:governing"):
             governing = save_payroll_setting(
                 class_id=classroom.class_id,
                 settings_data={
-                    "pay_rate": Decimal("0.25"), "payroll_frequency_days": 14,
+                    "pay_rate": Decimal("0.25"), "first_pay_date": FIRST_PAY,
                     "pay_schedule_type": "biweekly", "rounding_mode": "down",
                 },
                 recorded_at=now - timedelta(hours=1),
@@ -224,8 +234,10 @@ class TestRecordedPayrollKeepsItsTerms:
         # The teacher grants an eightfold raise AFTER that work was paid.
         successor = _submit(classroom.class_id, pay_rate=Decimal("2.00"))
 
-        # New work is priced at the new rate ...
-        assert Decimal(get_payroll_settings(classroom.class_id).pay_rate) == Decimal("2.00")
+        # New work, from the raise's effective date, is priced at the new rate ...
+        assert Decimal(
+            payroll_setting_effective_at(classroom.class_id, successor.effective_date).pay_rate
+        ) == Decimal("2.00")
         assert successor.policy_uuid != governing_uuid
 
         # ... and the policy that priced the completed run is still on file,

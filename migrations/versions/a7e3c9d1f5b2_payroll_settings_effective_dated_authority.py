@@ -4,8 +4,7 @@ Operator ruling 2026-09-30 (DOM-CLASS-003 §VII, DOM-POL-001 §VI.2,
 DOM-POL-001A §V.F, DOM-PROD-001 §XI.3/§XV):
 
 * ``payroll_settings`` is append-only with an ``effective_date``. Its legal
-  columns are exactly policy_uuid, class_id, pay_rate, payroll_frequency_days,
-  effective_date, created_at, overtime_threshold, overtime_threshold_unit,
+  columns are exactly policy_uuid, class_id, pay_rate, effective_date, created_at, overtime_threshold, overtime_threshold_unit,
   max_time_per_day, max_time_per_day_unit, pay_schedule_type, rounding_mode and
   first_pay_date. Every other column is dropped and ``policy_uuid`` becomes the
   primary key. Nothing references ``payroll_settings.id``: no foreign key
@@ -15,6 +14,15 @@ DOM-POL-001A §V.F, DOM-PROD-001 §XI.3/§XV):
   ``policy_versions`` table, never an authority for payroll) is dropped, and
   ``payroll_event.policy_uuid`` is remapped from the PolicyVersion uuid it held
   to the ``payroll_settings.policy_uuid`` of the event's class.
+* ``pay_schedule_type`` is limited to ``weekly``, ``biweekly`` and ``monthly``
+  (owner ruling 2026-09-30: no daily or custom schedules; the cadence is the
+  anchored recurrence of SPEC-TIME-001 §IX.12, so no day count is involved), and
+  ``first_pay_date`` becomes NOT NULL (every setting anchors a schedule). The
+  migration refuses a row with any other schedule type or no first pay date.
+  ``payroll_frequency_days`` is dropped: pay frequency is always derived from
+  ``pay_schedule_type`` through the anchored recurrence, never stored (operator
+  ruling 2026-09-30; production's 7 rows are all ``biweekly`` / 14, so nothing
+  is lost there).
 * UPDATE is refused on both tables, and DELETE is refused except while a class
   universe is being destroyed (``cth.class_universe_destroying``, the flag
   ``ledger_transaction`` already honours).
@@ -53,7 +61,7 @@ and every other row, including any pending (future-effective) row, becomes
 ``minutes``, ``overtime_multiplier`` 1.0, ``overtime_threshold_period`` ``day``
 where a threshold exists, ``block``/``daily_limit_hours`` NULL, ``updated_at``
 = ``created_at``, and a ``custom`` schedule's value/unit become the frequency in
-days. ``payroll_event.policy_version_id``/``policy_uuid`` are restored to the
+days; ``payroll_frequency_days`` is recreated and backfilled with the old form's count for the schedule type (weekly 7, biweekly 14, monthly 30 — lossy for monthly). ``payroll_event.policy_version_id``/``policy_uuid`` are restored to the
 class's payroll PolicyVersion active at the event's ``recorded_at`` (else the
 class's earliest one); downgrade refuses if an event that needs one has none,
 which is the case for any class first configured after this upgrade.
@@ -171,7 +179,7 @@ def trigger_exists(trigger_name):
 # ============================================================================
 
 LEGAL_SETTINGS_COLUMNS = (
-    'policy_uuid', 'class_id', 'pay_rate', 'payroll_frequency_days',
+    'policy_uuid', 'class_id', 'pay_rate',
     'effective_date', 'created_at', 'overtime_threshold',
     'overtime_threshold_unit', 'max_time_per_day', 'max_time_per_day_unit',
     'pay_schedule_type', 'rounding_mode', 'first_pay_date',
@@ -198,6 +206,8 @@ APPEND_ONLY_TABLES = {
 
 PAYROLL_EVENT_CHECK = "ck_payroll_event_payroll_policy"
 SETTINGS_ORDER_UNIQUE = "uq_payroll_settings_class_effective_created"
+PAY_SCHEDULE_TYPES = ("weekly", "biweekly", "monthly")
+SCHEDULE_TYPE_CHECK = "pay_schedule_type IN ('weekly','biweekly','monthly')"
 
 
 class PayrollSettingsMigrationRefused(RuntimeError):
@@ -224,6 +234,22 @@ def _preflight(conn):
         )).scalar()
         if dupes:
             problems.append(f"{dupes} class/created_at pair(s) are shared by several payroll_settings rows")
+    if column_exists('payroll_settings', 'pay_schedule_type'):
+        unsupported = conn.execute(text(
+            "SELECT count(*) FROM payroll_settings "
+            "WHERE pay_schedule_type IS NULL OR pay_schedule_type NOT IN ('weekly','biweekly','monthly')"
+        )).scalar()
+        if unsupported:
+            problems.append(
+                f"{unsupported} payroll_settings row(s) have a pay schedule other than "
+                "weekly, biweekly or monthly"
+            )
+    if column_exists('payroll_settings', 'first_pay_date'):
+        unanchored = conn.execute(text(
+            "SELECT count(*) FROM payroll_settings WHERE first_pay_date IS NULL"
+        )).scalar()
+        if unanchored:
+            problems.append(f"{unanchored} payroll_settings row(s) have no first_pay_date")
 
     if column_exists('payroll_event', 'policy_version_id'):
         foreign = conn.execute(text("""
@@ -331,6 +357,7 @@ def _reshape_payroll_settings(conn):
 
     op.alter_column('payroll_settings', 'effective_date', existing_type=sa.DateTime(timezone=True), nullable=False)
     op.alter_column('payroll_settings', 'created_at', existing_type=sa.DateTime(timezone=True), nullable=False)
+    op.alter_column('payroll_settings', 'first_pay_date', existing_type=sa.DateTime(timezone=True), nullable=False)
 
     # Indexes and constraints over columns that are going away.
     for index_name in (
@@ -366,10 +393,9 @@ def _reshape_payroll_settings(conn):
         )
         print(f"✅ Created {SETTINGS_ORDER_UNIQUE}")
     checks = check_constraints_on('payroll_settings')
-    if not any('payroll_frequency_days > 0' in d for d in checks.values()):
-        op.create_check_constraint(
-            'ck_payroll_settings_frequency_positive', 'payroll_settings', 'payroll_frequency_days > 0'
-        )
+    if not any("'biweekly'" in d for d in checks.values()):
+        op.create_check_constraint('ck_payroll_settings_schedule_type', 'payroll_settings', SCHEDULE_TYPE_CHECK)
+        print("✅ Created ck_payroll_settings_schedule_type")
     if not any('effective_date >= created_at' in d for d in checks.values()):
         op.create_check_constraint(
             'ck_payroll_settings_not_retroactive', 'payroll_settings', 'effective_date >= created_at'
@@ -509,6 +535,20 @@ def _restore_payroll_settings(conn):
         if not column_exists('payroll_settings', column.name):
             op.add_column('payroll_settings', column)
 
+    # The previous schema stores a day count per row and requires one. The
+    # downgrade backfills the count the old settings form wrote for each schedule
+    # type (lossy for monthly: the old code treated it as 30 days); nothing else
+    # ever writes it.
+    if not column_exists('payroll_settings', 'payroll_frequency_days'):
+        op.add_column('payroll_settings', sa.Column('payroll_frequency_days', sa.Integer(), nullable=True))
+    conn.execute(text("""
+        UPDATE payroll_settings SET payroll_frequency_days = CASE pay_schedule_type
+            WHEN 'weekly' THEN 7 WHEN 'biweekly' THEN 14 WHEN 'monthly' THEN 30 END
+        WHERE payroll_frequency_days IS NULL
+    """))
+    op.alter_column('payroll_settings', 'payroll_frequency_days', existing_type=sa.Integer(), nullable=False)
+    op.alter_column('payroll_settings', 'first_pay_date', existing_type=sa.DateTime(timezone=True), nullable=True)
+
     conn.execute(text("""
         UPDATE payroll_settings SET
             updated_at = created_at,
@@ -549,7 +589,7 @@ def _restore_payroll_settings(conn):
         if name:
             op.drop_constraint(name, 'payroll_settings', type_='unique')
     for name, definition in check_constraints_on('payroll_settings').items():
-        if 'effective_date' in definition or 'payroll_frequency_days > 0' in definition:
+        if 'effective_date' in definition or "'biweekly'" in definition:
             op.drop_constraint(name, 'payroll_settings', type_='check')
     op.drop_column('payroll_settings', 'effective_date')
     op.alter_column('payroll_settings', 'created_at', existing_type=sa.DateTime(timezone=True), nullable=True)

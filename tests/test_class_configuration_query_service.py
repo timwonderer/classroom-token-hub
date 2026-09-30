@@ -322,7 +322,7 @@ class TestSettingsQueries:
         assert payroll is not None
         assert payroll.class_id == classroom.class_id
         assert payroll.pay_rate is not None
-        assert payroll.payroll_frequency_days is not None
+        assert payroll.pay_schedule_type in ("weekly", "biweekly", "monthly")
 
     def test_get_payroll_settings_returns_none_for_missing_class(self, app):
         """Empty state: non-existent class returns None."""

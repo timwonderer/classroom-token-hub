@@ -28,11 +28,10 @@ class-local midnight across DST. The next payroll date is the first boundary
 strictly after the last SYSTEM occurrence — or boundary 0 when the schedule has
 never run — which is where the three forms above come from.
 
-``pay_schedule_type`` sets the cadence: ``weekly`` (every week), ``biweekly``
-(every second week), ``monthly`` (calendar month, rolled forward), ``daily`` and
-``custom`` (every ``payroll_frequency_days`` class-local days).
-``payroll_frequency_days`` is read only for ``custom``; for the other types it is
-informational and does not change the cadence.
+``pay_schedule_type`` is the whole cadence: ``weekly`` (every week),
+``biweekly`` (every second week) or ``monthly`` (calendar month, rolled
+forward). Pay frequency is derived from it, never stored as a number of days
+(operator ruling 2026-09-30), so there is nothing that can drift from it.
 """
 
 from __future__ import annotations
@@ -49,7 +48,6 @@ from app.services.payroll.settings import (
 )
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
-    advance_local_calendar_days,
     canonical_temporal_resolver,
     ensure_utc,
     utc_now,
@@ -68,39 +66,31 @@ _MAX_BOUNDARY_STEPS = 10_000
 
 @dataclass(frozen=True)
 class PayCadence:
-    """How boundary ``n`` of a payroll schedule is computed from its anchor.
-
-    ``unit`` is ``month`` or ``week`` (resolver ``anchored_recurrence_boundary``
-    cadences, stepped ``step`` indexes per payday) or ``day`` (``step`` class-local
-    calendar days per payday, for daily and custom N-day schedules).
-    """
+    """How boundary ``n`` of a payroll schedule is computed from its anchor:
+    ``unit`` is an ``anchored_recurrence_boundary`` cadence (``week`` or
+    ``month``), stepped ``step`` indexes per payday."""
 
     unit: str
     step: int
 
 
-# What the settings form stores in ``payroll_frequency_days`` for a named
-# schedule: its usual length, for display (the economy page shows it). It is
-# never used to compute a payday — the cadence comes from ``pay_schedule_type``
-# (``pay_cadence``), and ``monthly`` is a calendar month, not a number of days.
-NOMINAL_FREQUENCY_DAYS = {'daily': 1, 'weekly': 7, 'biweekly': 14, 'monthly': 30}
+_CADENCES = {
+    'weekly': PayCadence('week', 1),
+    'biweekly': PayCadence('week', 2),
+    'monthly': PayCadence('month', 1),
+}
+PAY_SCHEDULE_TYPES = tuple(_CADENCES)
 
 
-def pay_cadence(pay_schedule_type: str | None, frequency_days: int | None) -> PayCadence | None:
-    """The cadence a setting's ``pay_schedule_type`` names; None if it names none."""
-    schedule = (pay_schedule_type or "").strip().lower()
-    if schedule == "monthly":
-        return PayCadence("month", 1)
-    if schedule == "weekly":
-        return PayCadence("week", 1)
-    if schedule == "biweekly":
-        return PayCadence("week", 2)
-    if schedule == "daily":
-        return PayCadence("day", 1)
-    if schedule == "custom" and frequency_days and int(frequency_days) > 0:
-        days = int(frequency_days)
-        return PayCadence("week", days // 7) if days % 7 == 0 else PayCadence("day", days)
-    return None
+def pay_cadence(pay_schedule_type: str) -> PayCadence:
+    """The cadence ``pay_schedule_type`` names (weekly, biweekly or monthly)."""
+    try:
+        return _CADENCES[(pay_schedule_type or "").strip().lower()]
+    except KeyError:
+        raise ValueError(
+            f"Unsupported pay schedule {pay_schedule_type!r}; "
+            "payroll runs weekly, biweekly or monthly."
+        ) from None
 
 
 def _class_ctx(class_id: str):
@@ -123,17 +113,6 @@ def schedule_boundary(class_id: str, anchor: date, cadence: PayCadence, n: int) 
     Computed from the anchor and ``n`` only (SPEC-TIME-001 §IX.12), never from
     payday ``n - 1``.
     """
-    if cadence.unit == "day":
-        # No day cadence in §IX.12; the same rule — anchor plus n × step
-        # calendar days at local midnight — through the resolver's calendar
-        # arithmetic.
-        start = canonical_temporal_resolver(
-            CLASS_LEVEL_EVALUATION,
-            canonical_execution_context=_class_ctx(class_id),
-            primitive="anchored_recurrence_boundary",
-            anchor_date=anchor, cadence="week", index=0,
-        ).boundary_start_utc
-        return advance_local_calendar_days(start, cadence.step * n, class_timezone_name(class_id))
     extra = {"overflow": PAYROLL_MONTHLY_OVERFLOW} if cadence.unit == "month" else {}
     return canonical_temporal_resolver(
         CLASS_LEVEL_EVALUATION,
@@ -151,12 +130,12 @@ def _index_estimate(anchor: date, cadence: PayCadence, local_day: date) -> int:
     if cadence.unit == "month":
         months = (local_day.year - anchor.year) * 12 + (local_day.month - anchor.month)
         return max(0, months // cadence.step - 1)
-    days_per_step = cadence.step * (7 if cadence.unit == "week" else 1)
-    return max(0, (local_day - anchor).days // days_per_step - 1)
+    weeks = (local_day - anchor).days // 7
+    return max(0, weeks // cadence.step - 1)
 
 
-def first_boundary_after(class_id: str, anchor: date, cadence: PayCadence, instant) -> datetime:
-    """The first payday strictly after ``instant``."""
+def _first_index_after(class_id: str, anchor: date, cadence: PayCadence, instant) -> int:
+    """The index of the first payday strictly after ``instant``."""
     instant = ensure_utc(instant)
     local_day = canonical_temporal_resolver(
         CLASS_LEVEL_EVALUATION,
@@ -166,40 +145,55 @@ def first_boundary_after(class_id: str, anchor: date, cadence: PayCadence, insta
     ).evaluation_date
     n = _index_estimate(anchor, cadence, local_day)
     for _ in range(_MAX_BOUNDARY_STEPS):
-        boundary = schedule_boundary(class_id, anchor, cadence, n)
-        if boundary > instant:
-            return boundary
+        if schedule_boundary(class_id, anchor, cadence, n) > instant:
+            return n
         n += 1
     raise ValueError(f"No payroll boundary found after {instant} for class {class_id}.")
+
+
+def first_boundary_after(class_id: str, anchor: date, cadence: PayCadence, instant) -> datetime:
+    """The first payday strictly after ``instant``."""
+    return schedule_boundary(class_id, anchor, cadence, _first_index_after(class_id, anchor, cadence, instant))
 
 
 def derive_next_payroll_date(
     *,
     class_id: str,
     first_pay_date,
-    pay_schedule_type: str | None,
-    frequency_days: int | None,
+    pay_schedule_type: str,
     last_system_occurrence,
-) -> datetime | None:
+) -> datetime:
     """The next payroll date (DOM-PROD-001 §XV.5). Reads nothing but the class's
     timezone (through the resolver).
 
     Boundary 0 (``first_pay_date``) until the schedule has run — whether still
     ahead or already arrived, in which case it is due — then the first anchored
     boundary strictly after the last SYSTEM occurrence. A manual run is not an
-    input, so it cannot move the date. None when there is no anchor or no
-    cadence: no schedule.
+    input, so it cannot move the date.
     """
-    if first_pay_date is None:
-        return None
-    cadence = pay_cadence(pay_schedule_type, frequency_days)
+    cadence = pay_cadence(pay_schedule_type)
     anchor = _anchor_date(class_id, first_pay_date)
-    first = schedule_boundary(class_id, anchor, cadence or PayCadence("week", 1), 0)
     if last_system_occurrence is None:
-        return first
-    if cadence is None:
-        return None
+        return schedule_boundary(class_id, anchor, cadence, 0)
     return first_boundary_after(class_id, anchor, cadence, last_system_occurrence)
+
+
+def pay_period_containing(class_id: str, instant) -> tuple[datetime, datetime] | None:
+    """The pay period ``[start, end)`` that ``instant`` falls in, between two
+    anchored paydays of the setting in force then (None with no setting). Before
+    the first payday it is the first period. Its length is the calendar's, so a
+    February period is shorter than a March one."""
+    instant = ensure_utc(instant)
+    setting = current_payroll_setting(class_id, as_of=instant)
+    if setting is None:
+        return None
+    cadence = pay_cadence(setting.pay_schedule_type)
+    anchor = _anchor_date(class_id, setting.first_pay_date)
+    n = max(1, _first_index_after(class_id, anchor, cadence, instant))
+    return (
+        schedule_boundary(class_id, anchor, cadence, n - 1),
+        schedule_boundary(class_id, anchor, cadence, n),
+    )
 
 
 def class_timezone_name(class_id: str) -> str:
@@ -242,7 +236,6 @@ def next_payroll_date(class_id: str, *, as_of=None) -> datetime | None:
         class_id=class_id,
         first_pay_date=setting.first_pay_date,
         pay_schedule_type=setting.pay_schedule_type,
-        frequency_days=setting.payroll_frequency_days,
         last_system_occurrence=last_system_payroll_occurrence(class_id, as_of=as_of),
     )
 
@@ -259,9 +252,7 @@ def next_payroll_boundary_after(class_id: str, instant) -> datetime | None:
     if boundary is None or boundary > instant:
         return boundary
     setting = current_payroll_setting(class_id, as_of=instant)
-    cadence = pay_cadence(setting.pay_schedule_type, setting.payroll_frequency_days)
-    if cadence is None:
-        return None
+    cadence = pay_cadence(setting.pay_schedule_type)
     anchor = _anchor_date(class_id, setting.first_pay_date)
     return first_boundary_after(class_id, anchor, cadence, instant)
 
@@ -270,15 +261,12 @@ def effective_date_for_new_setting(class_id: str, recorded_at) -> datetime:
     """When a setting saved at ``recorded_at`` takes effect (DOM-CLASS-003 §VII).
 
     The class's first setting is in force at once. A later one waits for the next
-    payroll boundary so it never reprices the open cycle. A class whose settings
-    define no schedule (no first pay date and no SYSTEM run) has no boundary to
-    wait for, so its change is in force at once as well.
+    payroll boundary so it never reprices the open cycle.
     """
     recorded_at = ensure_utc(recorded_at)
     if payroll_setting_effective_at(class_id, recorded_at) is None:
         return recorded_at
-    boundary = next_payroll_boundary_after(class_id, recorded_at)
-    return boundary if boundary is not None else recorded_at
+    return next_payroll_boundary_after(class_id, recorded_at)
 
 
 def due_payroll_occurrences(*, now=None) -> list[tuple[str, datetime]]:

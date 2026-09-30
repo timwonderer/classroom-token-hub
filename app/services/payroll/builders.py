@@ -325,7 +325,6 @@ def infer_settings_form_mode(settings: PayrollSettings | None) -> str:
         return 'simple'
     if (
         settings.overtime_threshold is not None
-        or (settings.pay_schedule_type or 'biweekly') not in ('weekly', 'biweekly', 'monthly')
         or (settings.rounding_mode or 'down') != 'down'
         or (settings.max_time_per_day and settings.max_time_per_day_unit not in ('hours', 'minutes'))
     ):
@@ -349,8 +348,6 @@ def build_payroll_settings_form(settings: PayrollSettings | None) -> dict:
             'per_unit_rate_value': '',
             'hourly_rate_value': '',
             'pay_schedule_type': 'biweekly',
-            'custom_schedule_value': '',
-            'custom_schedule_unit': 'days',
             'daily_limit_hours': None,
             'overtime_enabled': False,
             'overtime_threshold': None,
@@ -365,17 +362,13 @@ def build_payroll_settings_form(settings: PayrollSettings | None) -> dict:
     if settings.max_time_per_day:
         seconds = Decimal(str(settings.max_time_per_day)) * _unit_seconds(settings.max_time_per_day_unit or 'hours')
         daily_limit_hours = float(seconds / Decimal(3600))
-    frequency = int(settings.payroll_frequency_days or 0)
-    custom_in_weeks = frequency and frequency % 7 == 0
     return {
         'configured': True,
         'settings_mode': infer_settings_form_mode(settings),
         'time_unit': rate_unit,
         'per_unit_rate_value': f"{per_unit_amount}",
         'hourly_rate_value': f"{rate * 60:.2f}",
-        'pay_schedule_type': settings.pay_schedule_type or 'biweekly',
-        'custom_schedule_value': (frequency // 7 if custom_in_weeks else frequency) or '',
-        'custom_schedule_unit': 'weeks' if custom_in_weeks else 'days',
+        'pay_schedule_type': settings.pay_schedule_type,
         'daily_limit_hours': daily_limit_hours,
         'overtime_enabled': settings.overtime_threshold is not None,
         'overtime_threshold': settings.overtime_threshold,

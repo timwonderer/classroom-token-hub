@@ -179,6 +179,10 @@ def append_payroll_setting(
             f"Unknown payroll settings field(s): {sorted(unknown)}. "
             "Legal columns are PayrollSettings.SETTING_FIELDS (DOM-POL-001A §V.F)."
         )
+    if settings_data.get('first_pay_date') is None:
+        raise ValueError("A payroll setting needs a first pay date: it anchors the schedule.")
+    if settings_data.get('pay_schedule_type') not in PayrollSettings.PAY_SCHEDULE_TYPES:
+        raise ValueError("A payroll schedule is weekly, biweekly or monthly.")
     created_at = ensure_utc(created_at)
     effective_date = ensure_utc(effective_date)
     if effective_date < created_at:

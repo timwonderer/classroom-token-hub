@@ -322,7 +322,7 @@ def test_PROD_PAY_001__results_are_unchanged_when_the_setting_predates_the_runs(
         append_payroll_setting(
             class_id=cid,
             settings_data={
-                "pay_rate": Decimal("1.5"), "payroll_frequency_days": 14,
+                "pay_rate": Decimal("1.5"), "first_pay_date": T0 - timedelta(hours=1),
                 "pay_schedule_type": "biweekly", "rounding_mode": "up",
             },
             effective_date=T0 - timedelta(hours=1), created_at=T0 - timedelta(hours=1),

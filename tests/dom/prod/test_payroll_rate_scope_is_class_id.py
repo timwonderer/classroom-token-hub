@@ -50,8 +50,8 @@ from app.services.payroll.settings import (
     DEFAULT_PAY_RATE_PER_SECOND,
     current_daily_limit_seconds,
     current_pay_rate_per_second,
-    save_payroll_setting,
 )
+from tests.helpers.class_domain import put_payroll_setting_in_force
 from tests.helpers.canonical_classroom import provision_classroom
 from tests.helpers.classroom_initializer import initialize
 
@@ -60,13 +60,7 @@ CONFIGURED_RATE_PER_SECOND = CONFIGURED_RATE_PER_MINUTE / Decimal("60")
 
 
 def _submit(class_id, **settings_data) -> PayrollSettings:
-    with FEATContext(
-        "FEAT-TEST-SETUP",
-        idempotency_key=f"payroll:scope:{class_id}:{sorted(settings_data.items())}",
-    ):
-        setting = save_payroll_setting(class_id=class_id, settings_data=settings_data)
-        db.session.flush()
-    return setting
+    return put_payroll_setting_in_force(class_id, **settings_data)
 
 
 def _set_section(class_id, section):
