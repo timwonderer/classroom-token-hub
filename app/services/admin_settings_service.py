@@ -12,7 +12,7 @@ from __future__ import annotations
 from app.extensions import db
 from app.models import RentSettings
 from app.services.class_configuration_query_service import get_rent_settings
-from app.utils.canonical_temporal_resolver import utc_now
+from app.utils.canonical_temporal_resolver import ensure_utc, utc_now
 
 
 def create_rent_settings(*, class_id: str) -> RentSettings:
@@ -23,7 +23,7 @@ def create_rent_settings(*, class_id: str) -> RentSettings:
     return settings
 
 
-def supersede_rent_settings(*, class_id: str, updates: dict) -> RentSettings:
+def supersede_rent_settings(*, class_id: str, updates: dict, effective_at=None) -> RentSettings:
     """Record a new immutable rent policy version for ``class_id``.
 
     This is the ONLY lawful way to change a class's rent terms. Per DOM-POL-001
@@ -37,6 +37,12 @@ def supersede_rent_settings(*, class_id: str, updates: dict) -> RentSettings:
     reverting it to column defaults. The prior row is marked ``RETIRED`` so exactly
     one ``IN_USE`` row remains selectable for new work; it stays readable forever so
     the assessments that froze its ``policy_uuid`` can still resolve their amounts.
+
+    ``effective_at`` records the start of the first rent period the row governs.
+    A rent policy binds when a period is issued (DOM-OBL-001 §V.7), so every
+    period already issued keeps the ``policy_uuid`` it froze; a change saved
+    mid-period therefore governs from the next period boundary. Omitted, the row
+    is stamped as effective when recorded.
 
     Returns the newly inserted row.
     """
@@ -57,12 +63,13 @@ def supersede_rent_settings(*, class_id: str, updates: dict) -> RentSettings:
 
     successor = RentSettings(class_id=class_id, **carried)
     successor.rent_configured_at = utc_now()
-    # The successor is in force for new work the moment it is recorded, because
-    # its predecessor is retired in the same flush. A later activation is not
-    # expressed by dating this row forward; deferred economic changes are
-    # PolicyTransitions activated at an operational boundary (FEAT-ECON-001
-    # §VII-VIII), and a cycle already underway keeps the policy_uuid it froze.
-    successor.rent_effective_at = successor.rent_configured_at
+    # The successor is selected for new work the moment it is recorded, because
+    # its predecessor is retired in the same flush; the first new work is the
+    # next period to be issued. A period already issued keeps the policy_uuid it
+    # froze, so nothing already billed changes (DOM-CLASS-003 §VII).
+    successor.rent_effective_at = (
+        ensure_utc(effective_at) if effective_at is not None else successor.rent_configured_at
+    )
     successor.availability_state = 'IN_USE'
     db.session.add(successor)
 

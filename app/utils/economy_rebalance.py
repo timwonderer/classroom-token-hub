@@ -1,52 +1,59 @@
+"""Economy rebalance: route each selected change to the command that owns it.
+
+A rebalance writes nothing of its own. Every change is delegated to the owning
+domain's command, and that domain's own append-only table is the record of the
+change (DOM-CLASS-003 §IX, FEAT-ECON-001):
+
+* rent and the rent late penalty → a new ``rent_settings`` row (DOM-POL-001 §VI.1)
+* a store price → a superseding ``store_products`` version
+* the overdraft fee → a new ``economic_engine`` version (FEAT-CLASS-005)
+
+A change scheduled for the next cycle is an appended row whose effective date is
+the owning domain's next boundary. Nothing is queued and nothing activates it
+later: the row is in force for the first work its domain issues after that
+boundary, and it is visible as pending until then (DOM-CLASS-003 §VII, §X).
+"""
+
 from __future__ import annotations
 
-import json
 from datetime import datetime
 from decimal import Decimal
-import sqlalchemy as sa
 from typing import Any
 
-from app.extensions import db
-from app.models import (
-    ClassEconomy,
-    PolicyTransition,
-    PolicyVersion,
-    Seat,
-    RentSettings,
-)
+from app.models import RentSettings
 from app.services.admin_settings_service import supersede_rent_settings
 from app.services import store_service
 from app.models import StoreProduct
-from app.services.class_configuration_query_service import get_rent_settings
+from app.services.class_configuration_query_service import (
+    get_rent_settings,
+    pending_economic_engines,
+)
 from app.utils.canonical_temporal_resolver import ensure_utc, utc_now
 
 
 REBALANCE_ACTIVATION_IMMEDIATE = "immediate"
 REBALANCE_ACTIVATION_NEXT_RENEWAL = "next_renewal"
-REBALANCE_ACTIVATION_NEXT_PAYROLL = "next_payroll"
-POLICY_TRANSITION_STATUS_PENDING = "pending"
-POLICY_TRANSITION_STATUS_APPLIED = "applied"
-POLICY_TRANSITION_STATUS_CANCELLED = "cancelled"
-POLICY_TRANSITION_STATUS_SUPERSEDED = "superseded"
-
-REBALANCE_DOMAIN_RENT = "rent"
-REBALANCE_DOMAIN_STORE = "store"
-REBALANCE_DOMAIN_BANKING = "banking"
 
 # FEAT-CLASS-005 §XI delegates each rebalance row to its owning command. Every
 # selectable change type must name that owner; an unmapped type is refused
 # rather than skipped, because a skipped row still reported success.
-_CHANGE_TYPE_DOMAINS = {
-    "rent": REBALANCE_DOMAIN_RENT,
-    "rent_late_penalty": REBALANCE_DOMAIN_RENT,
-    "store_item": REBALANCE_DOMAIN_STORE,
-    "overdraft_fee": REBALANCE_DOMAIN_BANKING,
+_CHANGE_TYPE_OWNERS = {
+    "rent": "rent",
+    "rent_late_penalty": "rent",
+    "store_item": "store",
+    "overdraft_fee": "banking",
+}
+
+# The rent fields a scheduled change may set, by change type.
+_RENT_FIELDS = {
+    "rent": "rent_amount",
+    "rent_late_penalty": "late_penalty_amount",
 }
 
 # Store prices change by product-version supersession, which retires the live
 # version at once, and overdraft fees by Economic Engine evolution. Neither
 # owning domain defines a later activation boundary (FEAT-ECON-001 §VIII), so
-# these rows can only be applied immediately; they are never queued.
+# these rows can only be applied immediately; they are never scheduled.
 IMMEDIATE_ONLY_CHANGE_TYPES = frozenset({"store_item", "overdraft_fee"})
 
 
@@ -84,7 +91,7 @@ def _get_rent_effective_at(settings, reference_time: datetime) -> datetime:
     return ensure_utc(latest.next_assessment_at)
 
 
-def prepare_scheduled_rebalance_changes(change_plan, *, rent_settings=None, insurance_policies=None, reference_time=None):
+def prepare_scheduled_rebalance_changes(change_plan, *, rent_settings=None, reference_time=None):
     reference_time = ensure_utc(reference_time) if reference_time else utc_now()
     scheduled_changes = []
 
@@ -101,274 +108,6 @@ def prepare_scheduled_rebalance_changes(change_plan, *, rent_settings=None, insu
         scheduled_changes.append(enriched_change)
 
     return scheduled_changes
-
-
-def _domain_for_change(change: dict[str, Any]) -> str:
-    change_type = (change.get("type") or "").strip().lower()
-    try:
-        return _CHANGE_TYPE_DOMAINS[change_type]
-    except KeyError:
-        raise UnsupportedRebalanceChange(
-            f"Rebalance change type {change_type!r} has no owning command."
-        ) from None
-
-
-def _canonical_change_payload(change: dict[str, Any]) -> str:
-    allowed_keys = (
-        "type",
-        "block",
-        "join_code",
-        "policy_id",
-        "product_lineage_uuid",
-        "title",
-        "current_value",
-        "new_value",
-        "effective_at",
-    )
-    payload = {key: change.get(key) for key in allowed_keys if change.get(key) is not None}
-    return json.dumps(payload, sort_keys=True)
-
-
-def _transition_conflict_key(domain: str, change: dict[str, Any]) -> str:
-    # The change type is part of the key: a rent amount and a rent late penalty
-    # are independent terms, and sharing a key let queuing one supersede the other.
-    change_type = (change.get("type") or "").strip().lower()
-    if domain == REBALANCE_DOMAIN_RENT:
-        return f"rent:{change_type}:{(change.get('block') or '').strip().upper()}"
-    if domain == REBALANCE_DOMAIN_STORE:
-        return f"store:{change.get('product_lineage_uuid') or ''}"
-    return f"{domain}:{change_type}"
-
-
-def _next_policy_version_number(class_id: str, domain: str) -> int:
-    current_max = (
-        db.session.query(sa.func.max(PolicyVersion.version_number))
-        .filter(PolicyVersion.class_id == class_id, PolicyVersion.domain == domain)
-        .scalar()
-    )
-    return int(current_max or 0) + 1
-
-
-def _get_active_policy_version(class_id: str, domain: str) -> PolicyVersion | None:
-    return (
-        PolicyVersion.query.filter_by(
-            class_id=class_id,
-            domain=domain,
-            is_active=True,
-        )
-        .order_by(PolicyVersion.version_number.desc(), PolicyVersion.id.desc())
-        .first()
-    )
-
-
-def _supersede_pending_transitions(
-    class_id: str,
-    domain: str,
-    superseding_transition_id: int,
-    *,
-    reference_time: datetime,
-    conflict_key: str | None = None,
-) -> None:
-    pending = (
-        PolicyTransition.query.filter(
-            PolicyTransition.class_id == class_id,
-            PolicyTransition.domain == domain,
-            PolicyTransition.status == POLICY_TRANSITION_STATUS_PENDING,
-            PolicyTransition.id != superseding_transition_id,
-        )
-        .all()
-    )
-    for transition in pending:
-        if conflict_key:
-            target = db.session.get(PolicyVersion, transition.target_policy_version_id)
-            if not target:
-                continue
-            try:
-                payload = json.loads(target.policy_payload_json or "{}")
-            except (TypeError, ValueError, json.JSONDecodeError):
-                continue
-            pending_key = _transition_conflict_key(domain, payload)
-            if pending_key != conflict_key:
-                continue
-        transition.status = POLICY_TRANSITION_STATUS_SUPERSEDED
-        transition.superseded_by_transition_id = superseding_transition_id
-        transition.applied_at = reference_time
-
-
-def _create_policy_transition(
-    *,
-    class_id: str,
-    domain: str,
-    change_payload: dict[str, Any],
-    activation_mode: str,
-    created_by_seat_id: int,
-    status: str,
-    reference_time: datetime,
-    applied_at: datetime | None = None,
-    correlation_id: str | None = None,
-) -> PolicyTransition:
-    if not Seat.query.filter_by(id=created_by_seat_id, class_id=class_id, role="teacher").first():
-        raise ValueError("Policy author must be a teacher seat in this class.")
-    source_version = _get_active_policy_version(class_id, domain)
-    conflict_key = _transition_conflict_key(domain, change_payload)
-    target_version = PolicyVersion(
-        class_id=class_id,
-        domain=domain,
-        version_number=_next_policy_version_number(class_id, domain),
-        policy_payload_json=_canonical_change_payload(change_payload),
-        created_at=reference_time,
-        activated_at=applied_at if status == POLICY_TRANSITION_STATUS_APPLIED else None,
-        is_active=status == POLICY_TRANSITION_STATUS_APPLIED,
-    )
-    db.session.add(target_version)
-    db.session.flush()
-
-    transition = PolicyTransition(
-        class_id=class_id,
-        domain=domain,
-        source_policy_version_id=source_version.id if source_version else None,
-        target_policy_version_id=target_version.id,
-        activation_mode=activation_mode,
-        status=status,
-        created_at=reference_time,
-        created_by_seat_id=created_by_seat_id,
-        applied_at=applied_at if status == POLICY_TRANSITION_STATUS_APPLIED else None,
-        correlation_id=correlation_id,
-    )
-    db.session.add(transition)
-    db.session.flush()
-    target_version.created_by_transition_id = transition.id
-
-    if status == POLICY_TRANSITION_STATUS_APPLIED:
-        _supersede_pending_transitions(
-            class_id,
-            domain,
-            transition.id,
-            reference_time=applied_at or reference_time,
-            conflict_key=conflict_key,
-        )
-    elif status == POLICY_TRANSITION_STATUS_PENDING:
-        _supersede_pending_transitions(
-            class_id,
-            domain,
-            transition.id,
-            reference_time=reference_time,
-            conflict_key=conflict_key,
-        )
-
-    return transition
-
-
-def _create_policy_transitions_for_changes(
-    class_id: str,
-    changes: list[dict[str, Any]],
-    *,
-    activation_mode: str,
-    created_by_seat_id: int,
-    status: str,
-    reference_time: datetime,
-    applied_at: datetime | None = None,
-) -> list[PolicyTransition]:
-    """Create policy transitions for a set of changes.
-
-    Refactored in Phase 2 to remove FeatureSettings dependency (table dropped).
-    Now takes class_id directly instead of settings_row object.
-    """
-    if not class_id:
-        return []
-
-    created: list[PolicyTransition] = []
-    for idx, change in enumerate(changes):
-        domain = _domain_for_change(change)
-        if status == POLICY_TRANSITION_STATUS_PENDING and change.get("type") in IMMEDIATE_ONLY_CHANGE_TYPES:
-            raise UnsupportedRebalanceChange(
-                f"Rebalance change type {change.get('type')!r} can only be applied immediately."
-            )
-        # policy_transitions.correlation_id is VARCHAR(64). The domain has its own
-        # column; spelling it here pushed store and banking ids past the limit.
-        correlation_id = f"rebalance:{class_id}:{int(reference_time.timestamp())}:{idx}"
-        created.append(
-            _create_policy_transition(
-                class_id=class_id,
-                domain=domain,
-                change_payload=change,
-                activation_mode=activation_mode,
-                created_by_seat_id=created_by_seat_id,
-                status=status,
-                reference_time=reference_time,
-                applied_at=applied_at,
-                correlation_id=correlation_id,
-            )
-        )
-    return created
-
-
-def cancel_pending_policy_transitions(class_id: str | None, *, actor_seat_id: int, reference_time: datetime | None = None) -> int:
-    if not class_id:
-        return 0
-    reference_time = ensure_utc(reference_time) if reference_time else utc_now()
-    if not Seat.query.filter_by(id=actor_seat_id, class_id=class_id, role="teacher").first():
-        raise ValueError("Policy cancellation actor must be a teacher seat in this class.")
-    pending = PolicyTransition.query.filter_by(
-        class_id=class_id,
-        status=POLICY_TRANSITION_STATUS_PENDING,
-    ).all()
-    for transition in pending:
-        transition.status = POLICY_TRANSITION_STATUS_CANCELLED
-        transition.cancelled_at = reference_time
-        transition.applied_at = reference_time
-        transition.created_by_seat_id = actor_seat_id
-    return len(pending)
-
-
-def _get_pending_policy_transitions_for_class(class_id: str | None):
-    if not class_id:
-        return []
-    return (
-        PolicyTransition.query.filter_by(
-            class_id=class_id,
-            status=POLICY_TRANSITION_STATUS_PENDING,
-        )
-        .order_by(PolicyTransition.created_at.asc(), PolicyTransition.id.asc())
-        .all()
-    )
-
-
-def get_pending_policy_transition_count(class_id: str | None) -> int:
-    if not class_id:
-        return 0
-    return (
-        db.session.query(sa.func.count(PolicyTransition.id))
-        .filter(
-            PolicyTransition.class_id == class_id,
-            PolicyTransition.status == POLICY_TRANSITION_STATUS_PENDING,
-        )
-        .scalar()
-        or 0
-    )
-
-
-def get_pending_policy_transition_effective_at(class_id: str | None) -> datetime | None:
-    pending = _get_pending_policy_transitions_for_class(class_id)
-    effective_candidates: list[datetime] = []
-    for transition in pending:
-        target = db.session.get(PolicyVersion, transition.target_policy_version_id)
-        if not target:
-            continue
-        try:
-            payload = json.loads(target.policy_payload_json or "{}")
-        except (TypeError, ValueError, json.JSONDecodeError):
-            continue
-        effective_at_raw = payload.get("effective_at")
-        if not effective_at_raw:
-            continue
-        try:
-            effective_candidates.append(ensure_utc(datetime.fromisoformat(effective_at_raw)))
-        except (TypeError, ValueError):
-            continue
-    if effective_candidates:
-        return min(effective_candidates)
-    return None
 
 
 def _get_effective_rent_settings(class_id: str | None):
@@ -488,168 +227,107 @@ def _apply_change_list(class_id, changes, activation_mode, *, reference_time=Non
     return applied_labels, applied_changes
 
 
-def _activate_pending_policy_version(transition: PolicyTransition, *, reference_time: datetime) -> PolicyVersion | None:
-    pending_version = db.session.get(PolicyVersion, transition.target_policy_version_id)
-    if not pending_version:
-        return None
-
-    activated_version = PolicyVersion(
-        class_id=pending_version.class_id,
-        domain=pending_version.domain,
-        version_number=_next_policy_version_number(pending_version.class_id, pending_version.domain),
-        policy_payload_json=pending_version.policy_payload_json,
-        created_at=reference_time,
-        activated_at=reference_time,
-        created_by_transition_id=transition.id,
-        is_active=True,
-    )
-    db.session.add(activated_version)
-    db.session.flush()
-    return activated_version
+def _owner_for_change(change: dict[str, Any]) -> str:
+    change_type = (change.get("type") or "").strip().lower()
+    try:
+        return _CHANGE_TYPE_OWNERS[change_type]
+    except KeyError:
+        raise UnsupportedRebalanceChange(
+            f"Rebalance change type {change_type!r} has no owning command."
+        ) from None
 
 
 def apply_rebalance_changes(actor_seat_id, class_id, change_plan, activation_mode, *, reference_time=None, canonical_context=None):
-    """Apply rebalance changes for a class.
+    """Apply rebalance changes now, each through its owning command.
 
-    Refactored in Phase 2 to remove FeatureSettings dependency (table dropped).
-    Now takes class_id directly instead of settings_row object.
-
-    Args:
-        actor_seat_id: Teacher seat ID
-        class_id: Class to apply changes to
-        change_plan: List of change payloads from policy
-        activation_mode: When to activate (REBALANCE_ACTIVATION_*)
-        reference_time: Time of rebalance
-
-    Returns:
-        List of applied change labels
+    Returns the applied change labels. The owning domains' rows are the whole
+    record of the change; the rebalance keeps no lineage of its own.
     """
-    reference_time = ensure_utc(reference_time) if reference_time else utc_now()
-    applied_labels, applied_changes = _apply_change_list(
+    for change in change_plan:
+        _owner_for_change(change)
+    applied_labels, _applied = _apply_change_list(
         class_id,
         change_plan,
         activation_mode,
-        reference_time=reference_time,
+        reference_time=ensure_utc(reference_time) if reference_time else utc_now(),
         canonical_context=canonical_context,
         actor_seat_id=actor_seat_id,
     )
-    if applied_changes:
-        _create_policy_transitions_for_changes(
-            class_id,
-            applied_changes,
-            activation_mode=activation_mode,
-            created_by_seat_id=actor_seat_id,
-            status=POLICY_TRANSITION_STATUS_APPLIED,
-            reference_time=reference_time,
-            applied_at=reference_time,
-        )
     return applied_labels
 
 
-def activate_due_rebalances(user_id, *, class_id=None, reference_time=None):
-    """Activate due rebalances for a teacher's classes.
-
-    Replaces FeatureSettings query (dropped in Phase 2) with direct ClassEconomy query.
-    """
-    reference_time = ensure_utc(reference_time) if reference_time else utc_now()
-
-    # Get class_ids for this teacher (direct from ClassEconomy, not via FeatureSettings)
-    class_ids_query = db.session.query(ClassEconomy.class_id).filter(
-        ClassEconomy.teacher_user_id == user_id
-    )
-
-    # Filter to specific class if provided
-    if class_id:
-        class_ids_query = class_ids_query.filter(ClassEconomy.class_id == class_id)
-
-    class_ids_to_process = [row[0] for row in class_ids_query.all()]
-
-    activated = 0
-    applied_labels = []
-
-    for current_class_id in class_ids_to_process:
-        pending_transitions = _get_pending_policy_transitions_for_class(current_class_id)
-        if pending_transitions:
-            for transition in pending_transitions:
-                target_version = db.session.get(PolicyVersion, transition.target_policy_version_id)
-                if not target_version:
-                    transition.status = POLICY_TRANSITION_STATUS_CANCELLED
-                    transition.cancelled_at = reference_time
-                    continue
-                try:
-                    change = json.loads(target_version.policy_payload_json or "{}")
-                except (TypeError, ValueError, json.JSONDecodeError):
-                    transition.status = POLICY_TRANSITION_STATUS_CANCELLED
-                    transition.cancelled_at = reference_time
-                    continue
-                activation_mode = transition.activation_mode or REBALANCE_ACTIVATION_NEXT_PAYROLL
-                effective_at = _parse_dt(change.get("effective_at"))
-                is_due = False
-                # A deferred transition whose effective date could not be
-                # computed has no later moment to wait for, so it activates on
-                # the next sweep rather than sitting pending forever.
-                if activation_mode != REBALANCE_ACTIVATION_IMMEDIATE and effective_at is None:
-                    is_due = True
-                elif effective_at is not None and effective_at <= reference_time:
-                    is_due = True
-
-                if not is_due:
-                    continue
-
-                applied_now, applied_changes = _apply_change_list(
-                    current_class_id,
-                    [change],
-                    activation_mode,
-                    reference_time=reference_time,
-                    # A product superseded by this sweep is authored by the seat
-                    # that scheduled the transition, not by the sweep. Without
-                    # this the activation path recreated the null-author row the
-                    # immediate path was just fixed to stop writing.
-                    actor_seat_id=transition.created_by_seat_id,
-                )
-                if applied_changes:
-                    activated_version = _activate_pending_policy_version(transition, reference_time=reference_time)
-                    if activated_version is not None:
-                        transition.target_policy_version_id = activated_version.id
-                    transition.status = POLICY_TRANSITION_STATUS_APPLIED
-                    transition.applied_at = reference_time
-                    _supersede_pending_transitions(
-                        current_class_id,
-                        transition.domain,
-                        transition.id,
-                        reference_time=reference_time,
-                        conflict_key=_transition_conflict_key(transition.domain, change),
-                    )
-                    applied_labels.extend(applied_now)
-                    activated += 1
-                else:
-                    transition.status = POLICY_TRANSITION_STATUS_CANCELLED
-                    transition.cancelled_at = reference_time
-                    transition.applied_at = reference_time
-
-            continue
-
-        # No pending policy transitions for this class; the JSON fallback has been retired.
-        continue
-
-    return activated, applied_labels
-
-
-def queue_scheduled_policy_transitions(
+def schedule_rebalance_changes(
     actor_seat_id: int,
     class_id: str,
     scheduled_changes: list[dict[str, Any]],
     *,
-    activation_mode: str = REBALANCE_ACTIVATION_NEXT_RENEWAL,
     reference_time: datetime | None = None,
-) -> int:
+) -> list[RentSettings]:
+    """Record changes that take effect at the owning domain's next boundary.
+
+    Only rent terms can wait for a boundary (store prices and the overdraft fee
+    have none, FEAT-ECON-001 §VIII). The selected rent terms become one new
+    ``rent_settings`` row — one contract, not one row per term — whose
+    ``rent_effective_at`` is the start of the first rent period not yet issued.
+    Every period already issued keeps the policy it froze, so the open period is
+    billed under the old terms and the next period under the new ones
+    (DOM-CLASS-003 §VII, DOM-OBL-001 §V.7). Runs inside the caller's FEAT;
+    never commits. Returns the rows appended.
+    """
+    if not class_id:
+        return []
     reference_time = ensure_utc(reference_time) if reference_time else utc_now()
-    created = _create_policy_transitions_for_changes(
-        class_id,
-        scheduled_changes,
-        activation_mode=activation_mode,
-        created_by_seat_id=actor_seat_id,
-        status=POLICY_TRANSITION_STATUS_PENDING,
-        reference_time=reference_time,
+
+    updates: dict[str, Decimal] = {}
+    effective_at: datetime | None = None
+    for change in scheduled_changes:
+        _owner_for_change(change)
+        change_type = (change.get("type") or "").strip().lower()
+        if change_type in IMMEDIATE_ONLY_CHANGE_TYPES:
+            raise UnsupportedRebalanceChange(
+                f"Rebalance change type {change_type!r} can only be applied immediately."
+            )
+        updates[_RENT_FIELDS[change_type]] = Decimal(str(change.get("new_value")))
+        change_effective_at = _parse_dt(change.get("effective_at"))
+        if change_effective_at is not None:
+            effective_at = change_effective_at if effective_at is None else min(effective_at, change_effective_at)
+
+    if not updates:
+        return []
+    if _get_effective_rent_settings(class_id) is None:
+        raise ValueError("Rent is not configured for this class.")
+    return [
+        supersede_rent_settings(
+            class_id=class_id,
+            updates=updates,
+            effective_at=max(effective_at or reference_time, reference_time),
+        )
+    ]
+
+
+def get_pending_rebalance_effective_at(class_id: str | None, *, reference_time: datetime | None = None) -> datetime | None:
+    """The soonest date a recorded economy change takes effect, or None.
+
+    Pending changes live in their owning tables: a ``rent_settings`` row still
+    selectable for new work whose ``rent_effective_at`` is ahead, and any
+    ``economic_engine`` version whose ``effective_at`` is ahead (DOM-CLASS-003
+    §X). Pure read (INV-ARC-007).
+    """
+    if not class_id:
+        return None
+    reference_time = ensure_utc(reference_time) if reference_time else utc_now()
+    candidates: list[datetime] = []
+    rent = get_rent_settings(class_id)
+    if rent is not None and rent.rent_effective_at is not None:
+        rent_effective_at = ensure_utc(rent.rent_effective_at)
+        if rent_effective_at > reference_time:
+            candidates.append(rent_effective_at)
+    candidates.extend(
+        ensure_utc(engine.effective_at)
+        for engine in pending_economic_engines(class_id, as_of=reference_time)
     )
-    return len(created)
+    return min(candidates) if candidates else None
+
+
+def has_pending_economy_change(class_id: str | None, *, reference_time: datetime | None = None) -> bool:
+    return get_pending_rebalance_effective_at(class_id, reference_time=reference_time) is not None

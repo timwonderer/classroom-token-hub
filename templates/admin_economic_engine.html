@@ -116,7 +116,7 @@
           {% if payroll_settings %}
           <a class="btn btn-outline-secondary" href="{{ url_for('admin.economic_engine', review_rebalance=1) }}">Review Recommended Rebalance</a>
           {% endif %}
-          {% if policy_summary.has_pending_policy_transition %}
+          {% if policy_summary.has_pending_economy_change %}
           <span class="badge bg-info text-dark">Economy Update Scheduled</span>
           {% if pending_rebalance_effective_at %}
           <div class="small text-muted mt-1">
@@ -213,7 +213,7 @@
               <input class="form-check-input" type="radio" name="activation_mode" id="activationImmediate" value="immediate">
               <label class="form-check-label" for="activationImmediate">Apply Immediately</label>
             </div>
-            <div class="form-text">Rent is billed per cycle, so a new amount takes effect on the cycle after the upcoming bill. Store prices and the overdraft fee have no cycle to wait for, so they can only be applied immediately.</div>
+            <div class="form-text">Rent is billed per cycle, so a new amount takes effect with the first bill that has not been issued yet. Bills already issued keep their amounts. Store prices and the overdraft fee have no cycle to wait for, so they can only be applied immediately.</div>
           </fieldset>
           <div class="col-lg-6" id="immediateChangeWarning" hidden>
             {% call cards.alert_card('warning', 'Immediate changes re-price the current cycle', icon='warning', body_class='mb-2') %}

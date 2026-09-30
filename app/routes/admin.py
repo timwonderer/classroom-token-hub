@@ -100,14 +100,10 @@ from app.utils.economy_policy import (
 from app.utils.economy_rebalance import (
     REBALANCE_ACTIVATION_IMMEDIATE,
     REBALANCE_ACTIVATION_NEXT_RENEWAL,
-    REBALANCE_ACTIVATION_NEXT_PAYROLL,
-    activate_due_rebalances,
     apply_rebalance_changes,
-    cancel_pending_policy_transitions,
-    get_pending_policy_transition_count,
-    get_pending_policy_transition_effective_at,
+    get_pending_rebalance_effective_at,
     prepare_scheduled_rebalance_changes,
-    queue_scheduled_policy_transitions,
+    schedule_rebalance_changes,
 )
 
 from app.services.announcement_service import (
@@ -1756,9 +1752,7 @@ def _resolve_rent_settings_for_class_id(class_id, policy_uuid=None):
 def _resolve_economic_engine_for_class_id(class_id):
     if not class_id:
         return None
-    return EconomicEngine.query.filter_by(class_id=class_id).order_by(
-        EconomicEngine.created_at.desc(), EconomicEngine.economic_version_id.desc()
-    ).first()
+    return get_current_economic_engine(class_id)
 
 
 def _format_money(value):
@@ -1909,15 +1903,13 @@ def _build_policy_summary(class_scope, analysis, rent_settings, insurance_polici
         'overall_status': overall_status,
         'is_aligned': overall_status == 'aligned',
         'updated_at': getattr(settings_row, 'economy_policy_updated_at', None),
-        'has_pending_policy_transition': bool(get_pending_policy_transition_count(getattr(settings_row, 'class_id', None))),
+        'has_pending_economy_change': get_pending_rebalance_effective_at(class_scope.get('class_id')) is not None,
     }
 
 
-def _extract_pending_rebalance_effective_at(policy_summary: dict) -> datetime | None:
-    """Return the next known effective timestamp for a pending policy transition."""
-    settings_row = policy_summary.get('settings_row')
-    class_id = getattr(settings_row, 'class_id', None) if settings_row else None
-    return get_pending_policy_transition_effective_at(class_id)
+def _extract_pending_rebalance_effective_at(class_id) -> datetime | None:
+    """The soonest date a recorded economy change takes effect (DOM-CLASS-003 §X)."""
+    return get_pending_rebalance_effective_at(class_id)
 
 
 def _safe_rebalance_owner_url(endpoint):
@@ -1938,23 +1930,12 @@ def _build_rebalance_preview(canonical_context, class_id, checker, cwi, rent_set
     if insurance_policies:
         from app.services.economic_engine import resolve_insurance
         from app.services.insurance_policy_service import normalize_insurance_type
-        import json
 
-        for policy_version in insurance_policies:
-            if not getattr(policy_version, 'is_active', False):
+        for policy in insurance_policies:
+            if policy.premium is None:
                 continue
-            try:
-                payload = json.loads(policy_version.policy_payload_json or '{}')
-            except (TypeError, ValueError, json.JSONDecodeError):
-                continue
-            raw_premium = payload.get('premium')
-            if raw_premium in (None, ''):
-                continue
-            try:
-                current = Decimal(str(raw_premium))
-            except (InvalidOperation, ValueError):
-                continue
-            product = normalize_insurance_type(payload.get('insurance_type') or payload.get('claim_type'))
+            current = Decimal(str(policy.premium))
+            product = normalize_insurance_type(policy.insurance_type)
             recommendation = resolve_insurance(
                 product=product,
                 cwi=cwi,
@@ -1968,8 +1949,8 @@ def _build_rebalance_preview(canonical_context, class_id, checker, cwi, rent_set
             if minimum <= current <= maximum:
                 continue
             preview_items.append({
-                'key': f"insurance:{policy_version.id}",
-                'label': f"Insurance: {payload.get('name') or payload.get('title') or 'Policy'}",
+                'key': f"insurance:{policy.policy_uuid}",
+                'label': f"Insurance: {policy.title or policy.tier_name or 'Policy'}",
                 'owner_label': 'Insurance',
                 'owner_url': _safe_rebalance_owner_url('admin.insurance_management'),
                 'current': _format_money(current),
@@ -2104,8 +2085,12 @@ def _load_economy_rebalance_context(canonical_context, class_id):
 
     payroll_settings = _resolve_payroll_settings_for_class_id(canonical_context, selected_class_id)
     rent_settings = _resolve_rent_settings_for_class_id(selected_class_id)
-    from app.services.insurance_policy_service import list_insurance_policy_versions
-    insurance_policies = list_insurance_policy_versions(selected_class_id)
+    # The insurance definitions offered today: the class's IN_USE rows of its own
+    # definition table (DOM-POL-001 §VI.0), not a mirror of them.
+    from app.services.insurance_definition_service import IN_USE, list_insurance_definitions
+    insurance_policies = list_insurance_definitions(
+        class_id=selected_class_id, availability_states=[IN_USE]
+    )
 
     return payroll_settings, rent_settings, insurance_policies
 
@@ -5755,9 +5740,9 @@ def _next_tenant_scoped_tier_id(seed, existing_ids):
 # Insurance policy management (Step 3): typed InsurancePolicy definitions.
 #
 # These routes drive the STOR-owned, POL-managed ``insurance_policies``
-# definition-of-record through the FEAT-CLASS-003 orchestration boundary. They
-# write NOTHING to PolicyVersion / PolicyTransition. Identifiers are the
-# canonical ``policy_uuid``; a "change" is a new immutable row (DOM-POL-001).
+# definition-of-record through the FEAT-CLASS-003 orchestration boundary.
+# Identifiers are the canonical ``policy_uuid``; a "change" is a new immutable
+# row (DOM-POL-001).
 #
 # Layer separation:
 # - The route resolves canonical teacher/class context and marshals form input.
@@ -6566,12 +6551,13 @@ def update_economy_policy():
         flash(f"Error updating economy policy: {result.error_message}", "error")
         return redirect(url_for('admin.economic_engine'))
 
-    # Update display metadata on FeatureSettings + cancel superseded pending
-    # transitions. execute_evolve_economic_engine() above opened its OWN
-    # FEAT-CLASS-005 context, committed, and CLOSED it — so there is no ambient
-    # FEAT context here. These trailing mutations (lazy FeatureSettings create,
-    # economy_policy_updated_at write, transition cancellation) must run inside
+    # Update display metadata on FeatureSettings. execute_evolve_economic_engine()
+    # above opened its OWN FEAT-CLASS-005 context, committed, and CLOSED it — so
+    # there is no ambient FEAT context here. These trailing mutations (lazy
+    # FeatureSettings create, economy_policy_updated_at write) must run inside
     # their own inline FEAT or they are blocked at flush by the integrity hook.
+    # A rebalance already scheduled is an owning-domain row, not a queued
+    # change, so a mode change leaves it in place (DOM-CLASS-003 §IX).
     with FEATContext(
         "FEAT-CLASS-005",
         idempotency_key=f"feat:class-005:policy-meta:{class_id}:{policy_mode}",
@@ -6579,7 +6565,6 @@ def update_economy_policy():
         settings_row = get_feature_settings_row_for_class(class_id, create=True)
         if settings_row:
             settings_row.economy_policy_updated_at = utc_now()
-        cancel_pending_policy_transitions(class_id, actor_seat_id=resolve_teacher_seat_for_class(class_id).id)
 
     current_app.logger.info(
         "Economy policy mode changed teacher=%s class_id=%s mode=%s",
@@ -6607,7 +6592,6 @@ def apply_economy_rebalance():
     allowed_activation_modes = {
         REBALANCE_ACTIVATION_IMMEDIATE,
         REBALANCE_ACTIVATION_NEXT_RENEWAL,
-        REBALANCE_ACTIVATION_NEXT_PAYROLL,
     }
 
     if activation_mode not in allowed_activation_modes:
@@ -6733,16 +6717,17 @@ def apply_economy_rebalance():
             )
             flash(f"Applied economy rebalance now for {len(applied_labels)} setting(s).", "success")
         else:
+            # A scheduled change is an appended rent_settings row effective at
+            # the next rent period; the open period keeps the terms it froze
+            # (DOM-CLASS-003 §VII). Nothing is queued for later activation.
             scheduled_changes = prepare_scheduled_rebalance_changes(
                 change_plan,
                 rent_settings=rent_settings,
-                insurance_policies=insurance_policies,
             )
-            queued_transition_count = queue_scheduled_policy_transitions(
-                resolve_teacher_seat_for_class(selected_scope["class_id"]).id,
+            schedule_rebalance_changes(
+                g.canonical_context.seat_id,
                 selected_scope['class_id'],
                 scheduled_changes,
-                activation_mode=activation_mode,
             )
             current_app.logger.info(
                 "Scheduled economy rebalance teacher=%s class_id=%s changes=%s",
@@ -6751,7 +6736,8 @@ def apply_economy_rebalance():
                 [change.get('type') for change in change_plan],
             )
             flash(
-                f"Scheduled economy rebalance for the renewal after the upcoming bill ({len(change_plan)} setting(s), {queued_transition_count} policy transition(s)).",
+                f"Scheduled economy rebalance for {len(change_plan)} setting(s). "
+                "It takes effect from the next rent period; the current bill keeps its terms.",
                 "success",
             )
 
@@ -6862,7 +6848,7 @@ def economic_engine():
         fines,
         warnings=actionable_warnings,
     )
-    pending_rebalance_effective_at = _extract_pending_rebalance_effective_at(policy_summary)
+    pending_rebalance_effective_at = _extract_pending_rebalance_effective_at(selected_class_id)
     rebalance_preview = []
     show_rebalance_review = request.args.get('review_rebalance') == '1'
     if payroll_settings and show_rebalance_review and cwi_calc:
