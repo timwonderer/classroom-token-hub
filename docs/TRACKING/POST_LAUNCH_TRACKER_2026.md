@@ -248,9 +248,14 @@ against this tracker, the archived launch trackers and the live-test RESUME reco
   four 2026-09-29 releases. Older dumps sit on the production host, including v1 dumps from 2025-07 and 2025-11
   that hold student rows whose live records no longer exist. A backup and retention model is being designed
   against INV-ARC-018 §VII.4 and INV-CORE-000 §III.5 before any automation.
-- [ ] **No incident record for PROD-PAY-001.** The only account is in `CHANGELOG.md`. The corrections were approved
-  in production on 2026-09-29 between 04:21 and 04:26 UTC (79 students, $1,947.40). Release records for the
-  2026-09-29 releases are tracked in §II.
+- [ ] **PROD-PAY-001 incident record not yet merged.** It is open as #1441
+  (`docs/ops/audits/INCIDENT_2026-09-28_PROD-PAY-001.md`), created at 04:27 UTC on 2026-09-29. The production
+  database shows the corrections approved between 04:21 and 04:26 UTC that day (79 students, $1,947.40). Check that
+  the record matches. Release records for the 2026-09-29 releases are tracked in §II.
+- [ ] **No database backup of any kind exists.** The owner confirmed on 2026-09-30 that DigitalOcean droplet backups
+  are off. There is also no scheduled dump and no WAL archiving. The pre-release dumps on the host are being deleted
+  as part of the v1 and live-test data cleanup. A backup, retention and restore model must be settled against
+  INV-ARC-018 §VII.4, INV-CORE-000 §III.5 and SOP-SEC-001 §V.3 before automation.
 
 ---
 
