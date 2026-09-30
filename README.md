@@ -39,7 +39,7 @@ Students earn tokens for the time they work, and spend them on rent, insurance a
 
 - **Sign up without PII**: three steps. Name the class, pick a username and scan a TOTP code, then confirm the code. No email or phone number is asked for
 - **Roster management**: upload a roster or add students one at a time, then export it. Each unclaimed seat has a claim code. An unclaimed seat keeps its balance but takes no part in the economy until a student claims it
-- **Payroll**: set per-minute pay rates, pay frequency, daily time caps, and overtime thresholds and multipliers. Payroll runs on a schedule by local calendar day. Manual payments, reversals and history are also available
+- **Payroll**: set per-minute pay rates, pay frequency, daily time caps, and overtime thresholds and multipliers. Payroll runs on a schedule by local calendar day. Each run pays the work sessions that ended since the last run, in full; a session still open is paid by the next run. Manual payments, reversals and history are also available
 - **Classroom store**: sell immediate-use, delayed-use and collective-goal items. Each item declares its economic role. Bundles, bulk discounts, holding limits, start and delist dates, and redemption approval are supported
 - **Rent**: recurring bill cycles with grace periods, one-time or recurring late penalties, and waivers. The teacher can allow partial payment and choose store perks that come with rent
 - **Insurance**: tiered policies, a waiting period, and claims that students file and teachers review and pay out. Students see their own claims, and cancelling a policy stops it from renewing at the next cycle boundary
@@ -55,8 +55,8 @@ Students earn tokens for the time they work, and spend them on rent, insurance a
 
 - **Portal**: balances, transactions, attendance (start and stop work), store, rent, payroll and insurance
 - **Account transfers**: move money between checking and savings, confirmed with a PIN
-- **Seat claim**: claim the seat your teacher set up by matching your name against the roster, then create a username, PIN and passphrase. Join more classes with a join code
-- **Account recovery**: a teacher issues a short-lived reset code, and the student redeems it to set new credentials
+- **Seat claim**: claim the seat your teacher set up by matching your name against the roster, then create a username, PIN and passphrase. Before the account is created, you type your new username back from where you saved it, because CTH keeps no readable copy. Join more classes with a join code
+- **Account recovery**: a teacher issues a short-lived reset code, and the student redeems it to set a new username, PIN and passphrase, with the same username check as a first claim
 - **Hall pass requests**: ask for a pass and follow its status on the dashboard
 - **Report an issue**: about a specific transaction, an attendance session, or a general problem
 
@@ -130,6 +130,7 @@ The application doesn't serve the marketing site, and the marketing site doesn't
 
 - Python 3.10 or later (`runtime.txt` pins 3.10; CI runs 3.10, 3.11 and 3.13)
 - PostgreSQL 15 or 16 (the versions CI runs against)
+- Redis 7 or later (`redis-server`) for student account setup. Tests that need it start their own private instance; in production it is a dedicated, non-persistent service ([infra/student-setup/README.md](infra/student-setup/README.md))
 - A virtual environment
 
 ### Setup
@@ -157,7 +158,7 @@ flask create-sysadmin   # follow the prompts and scan the QR code with an authen
 flask run               # http://localhost:5000
 ```
 
-The app won't start without the six keys above. Everything else is optional:
+The app won't start without the six keys above. Everything else is optional, except that student account setup also needs `STUDENT_SETUP_REDIS_URL`:
 
 | Variable | Purpose |
 | -------- | ------- |
@@ -167,6 +168,7 @@ The app won't start without the six keys above. Everything else is optional:
 | `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | Cloudflare Turnstile; verification is skipped when these are unset |
 | `PASSWORDLESS_API_KEY`, `PASSWORDLESS_API_PUBLIC`, `PASSWORDLESS_API_URL` | Passkey sign-in |
 | `REDIS_URL`, `RATELIMIT_STORAGE_URI`, `DEV_ENABLE_RATELIMIT` | Rate-limit storage; rate limits are off in development unless `DEV_ENABLE_RATELIMIT=1` |
+| `STUDENT_SETUP_REDIS_URL` | Dedicated, non-persistent Redis for student account setup ([infra/student-setup/README.md](infra/student-setup/README.md)). Required: student claim and recovery setup refuse to run without it. Never point it at the rate-limit store |
 | `EXTERNAL_DOCS_BASE_URL`, `MARKETING_SITE_URL`, `STATUS_PAGE_URL`, `GRAFANA_URL`, `SUPPORT_EMAIL` | External links |
 | `LOG_LEVEL`, `LOG_FILE` | Logging |
 
@@ -230,6 +232,8 @@ Tags mark the exact commit production is running: `v2.0.0` is `26d1792b5` (relea
 
 - v2.0.0: [TRANSITION_2026-09-26_26d1792b5.md](docs/ops/audits/TRANSITION_2026-09-26_26d1792b5.md)
 - v2.0.1: [DEPLOY_2026-09-28_ad64a473f.md](docs/ops/audits/DEPLOY_2026-09-28_ad64a473f.md), which also covers the unrecorded `efdf09eda` release of 2026-09-27
+
+`main` is ahead of v2.0.1 with unreleased changes, listed under **Unreleased** in [CHANGELOG.md](CHANGELOG.md): the payroll fix for the 2026-09-28 incident (#1439), a one-time payroll correction for teachers to review (#1440), and the username retention check (#1442, #1443). The retention check needs the student-setup Redis service on the production host before it is released ([SOP-DEP-002](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md) §VI, item 6).
 
 ### Known limits of the release evidence
 

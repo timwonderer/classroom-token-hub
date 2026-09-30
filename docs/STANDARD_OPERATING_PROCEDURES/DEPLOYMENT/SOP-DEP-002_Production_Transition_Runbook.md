@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-002 | 1.6 | 2026-09-28 | 1.5 | Normative |
+| SOP-DEP-002 | 1.7 | 2026-09-30 | 1.6 | Normative |
 
 ## I. Purpose
 
@@ -39,6 +39,12 @@ Normative (SOP Tier). Subordinate to `INV-CORE-000`.
 3. Confirm migration head state and target revision.
 4. Confirm operator sign-off from engineering and operations.
 5. Reconfirm smoke checklist and escalation path.
+6. Confirm the student-setup memory store on the production host, if the release includes the
+   username-retention check (FEAT-IDEN-002, SPEC-IDEN-001; memory-only under INV-ARC-018 §IX). Provision
+   and verify it per `infra/student-setup/README.md`, set `STUDENT_SETUP_REDIS_URL` in the application
+   environment, and restart the workers. There is no fallback: without the store, student claim and
+   recovery setup fail closed with a 503. After the release, exercise claim and recovery setup as that
+   README's step 6 describes.
 
 Current branch verification references:
 
@@ -184,3 +190,6 @@ Record:
 
 ## XIII. Amendment
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.
+
+**Version 1.7 (2026-09-30):** §VI adds item 6, the student-setup memory store that the username-retention
+check (#1442) requires before it can be released.

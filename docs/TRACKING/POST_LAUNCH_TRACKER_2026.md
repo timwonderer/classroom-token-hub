@@ -39,7 +39,8 @@ authority stays with `INV-*`, `DOM-*`, `FEAT-*`, `SPEC-*` and `SOP-*`.
   (FEAT-IDEN-002 1.5, SPEC-IDEN-001, INV-ARC-018 §IX) keeps setup state only in a dedicated, non-persistent Redis.
   Provision and verify it per `infra/student-setup/README.md`: disk persistence, replication, swap, core dumps and
   command capture all disabled. Setup fails closed without it. Repository tests do not certify production for
-  these settings. Carried from the NC-IDEN-001-1 note #1442 added to the pre-launch ship tracker, now archived.
+  these settings. SOP-DEP-002 §VI item 6 makes this a release precondition. Carried from the NC-IDEN-001-1 note
+  #1442 added to the pre-launch ship tracker, now archived.
 - [ ] **FEAT-IDEN-003 `ACT-IDEN-003` audit event** is not implemented. It needs an identity
   audit-event design first; see #1427.
 - [x] **`production-docs-smoke` and `markdown-web-links`** are fixed on branch
