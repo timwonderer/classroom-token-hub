@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-PROD-001 | 1.4 | 2026-09-30 | 1.3 | Constitutional |
+| DOM-PROD-001 | 1.5 | 2026-09-30 | 1.4 | Constitutional |
 
 ---
 
@@ -371,7 +371,7 @@ Rules:
 - The payroll window for a `payroll` event is derived from the previous `payroll` event timestamp through the current event timestamp.
 - `manual_credit` and `reversal` events do not participate in payroll-window boundary derivation.
 - `reversal` events must carry the same `correlation_id` as the original event they reverse.
-- `policy_uuid` is immutable and must record the exact `payroll_settings.policy_uuid` used to evaluate the event. A database check constraint requires it on every `payroll` event. *(Operator ruling 2026-09-30: the former `policy_version_id` column, a foreign key into the legacy `policy_versions` table, is removed. `policy_versions` was never an authority for payroll.)*
+- `policy_uuid` is immutable and must record the exact `payroll_settings.policy_uuid` used to evaluate the event. A database check constraint requires it on every `payroll` event. *(Operator ruling 2026-09-30: the former `policy_version_id` column is removed, and the `policy_versions` table it pointed into is retired (1.5); it was never an authority for payroll.)*
 - Where one `payroll` event settles sessions governed by more than one setting, `policy_uuid` records the setting that governed the latest-closing session, and `summary_json` records every setting's share (§XV.3).
 - The row must identify the productivity window and settlement intent that authorized any downstream ledger write.
 - The row must not duplicate ledger monetary truth beyond what is necessary for business provenance.
@@ -477,11 +477,12 @@ A single `payroll` event is a per-seat boundary fact (§XI.3). A **payroll cycle
 
 Successful completion of a class-level payroll run — whether initiated manually by the teacher or automatically by a scheduled run — is the canonical **economic-cycle boundary event** for the class. It is the single point at which:
 
-1. the closing economic cycle is settled against productivity facts under the configuration that governed it,
-2. downstream domains may lawfully materialize a permanent, cycle-bound view of that closed cycle, and
-3. any economic-configuration change that the teacher staged during the open cycle becomes lawfully activated for the next cycle.
+1. the closing economic cycle is settled against productivity facts under the configuration that governed it, and
+2. downstream domains may lawfully materialize a permanent, cycle-bound view of that closed cycle.
 
-This domain owns fact (1). It does NOT own facts (2) or (3), and it MUST NOT invoke Interpretation or Class Configuration directly. Interpretation's materialization and Class Configuration's pending-policy activation are downstream side effects orchestrated by the canonical completion FEAT (`FEAT-PROD-004`), never by direct domain-to-domain calls, per `INV-ARC-021` §V.1–§V.2.
+A payroll-governing change the teacher saved during the open cycle is not activated here: it is a `payroll_settings` row already dated to this boundary, in force from it with nothing to activate (§XV.3, `DOM-CLASS-003` §VII). *(1.5: the former third fact, activation of a staged change, belonged to the retired `policy_transitions` table.)*
+
+This domain owns fact (1). It does NOT own fact (2), and it MUST NOT invoke Interpretation directly. Interpretation's materialization is a downstream side effect orchestrated by the canonical completion FEAT (`FEAT-PROD-004`), never by a direct domain-to-domain call, per `INV-ARC-021` §V.1–§V.2.
 
 ### 2. Three distinct identities
 

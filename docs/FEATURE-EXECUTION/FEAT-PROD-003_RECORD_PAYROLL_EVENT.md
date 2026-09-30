@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-PROD-003 | 1.2 | 2026-09-30 | 1.1 | Normative |
+| FEAT-PROD-003 | 1.3 | 2026-09-30 | 1.2 | Normative |
 
 ---
 
@@ -29,7 +29,7 @@ This FEAT uses `CanonicalContext` for live request authority and the canonical t
 - `ctx`: `CanonicalContext`
 - `target_seat_id`: seat receiving the credit or reversal effect
 - `idempotency_key`: replay guard
-- `policy_uuid`: for a `manual_credit` posting another domain's calculation, the `payroll_settings.policy_uuid` that calculation used; omitted for a teacher-entered manual credit. For a `payroll` event it is not an input: the FEAT resolves it while pricing (see Rules). *(Operator ruling 2026-09-30: the former `policy_version_id` input named a row of the legacy `policy_versions` table, which was never an authority for payroll.)*
+- `policy_uuid`: for a `manual_credit` posting another domain's calculation, the `payroll_settings.policy_uuid` that calculation used; omitted for a teacher-entered manual credit. For a `payroll` event it is not an input: the FEAT resolves it while pricing (see Rules). *(Operator ruling 2026-09-30: the former `policy_version_id` input named a row of the `policy_versions` table, which was never an authority for payroll and is retired (1.3).)*
 - `mechanism`: `TEACHER` or `SYSTEM`, supplied by the initiating caller; for `payroll`, `SYSTEM` means the automatic schedule started the run
 - `payroll_run_type`: `payroll`, `manual_credit`, or `reversal`
 - `correlation_id`: business-to-ledger linkage
@@ -67,7 +67,7 @@ Rules:
   - `manual_credit` used as the posting mechanism for another domain's lawful calculation (for example a productivity insurance reimbursement): MUST retain the policy provenance that calculation used
   - `reversal`: carries the provenance of the event it compensates
 - This is a minimum requirement for `payroll` events only. It MUST NOT be inverted into a rule that `manual_credit` events carry no policy provenance
-- MUST read payroll settings only through the single payroll-settings resolver (`payroll_settings` only; never `policy_versions`)
+- MUST read payroll settings only through the single payroll-settings resolver (`payroll_settings` only)
 - MUST be append-only
 - MUST set `payroll_run_type` to `payroll`, `manual_credit`, or `reversal`
 - MUST use the original event's `correlation_id` when writing a reversal

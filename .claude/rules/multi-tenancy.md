@@ -174,13 +174,13 @@ written through a FEAT — never `db.session.add` in a route.
 
 ## Tables That Must Be Class-Scoped
 
-All 32 tables carrying a `class_id` column besides `classes` itself (33 ORM tables have the column; on `classes` it is the primary key), notably:
+All 30 tables carrying a `class_id` column besides `classes` itself (31 ORM tables have the column; on `classes` it is the primary key), notably:
 
 `seats`, `identity_profiles`, `ledger_transaction`, `ledger_balance_snapshot`,
 `attendance_sessions`, `hall_pass_logs`, `hall_pass_settings`, `payroll_settings`,
 `payroll_cycle_completion`, `rent_settings`, `bill_cycles`, `insurance_policies`,
-`insurance_claims`, `insurance_claim_productivity_dates`, `policy_versions`,
-`policy_transitions`, `store_products`, `entitlement_events`, `pending_actions`,
+`insurance_claims`, `insurance_claim_productivity_dates`,
+`store_products`, `entitlement_events`, `pending_actions`,
 `assessment_events`, `feature_settings`, `class_features`, `economic_engine`,
 `announcements`, `student_recovery_codes`, `actor_request_trace`.
 

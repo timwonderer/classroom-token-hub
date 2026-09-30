@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-CORE-002     | 1.11    | 2026-09-30     | 1.10       | Constitutional |
+| DOM-CORE-002     | 1.12    | 2026-09-30     | 1.11       | Constitutional |
 
 ---
 
@@ -178,12 +178,12 @@ authority in v2 and must not be treated as canonical schema surfaces.
 **Tables:**
 
 - `class_features`
-- `economic_engine` — class-level economic configuration and projection state
+- `economic_engine` — class-level economic configuration and projection state; append-only versions, each with the `effective_at` from which it governs (`DOM-CLASS-003` §VII; 1.12)
 - `feature_settings` — per-class economy policy configuration that applies when a feature is enabled; enablement itself stays in `class_features` (DOM-CLASS-001 §VI; DOM-POL-001A §IV; registered in 1.10)
 
 Policy definition tables — `rent_settings`, `payroll_settings`, `payroll_rewards`, `payroll_fines`, `hall_pass_settings`, `store_products`, `store_item_visibility`, and `insurance_policies` — are **not** Class Configuration authority. They are stored in the Policies repository (`DOM-POL-001`) as immutable, append-only version rows. Policies does not originate mutations; the domain that initiates a change (Class Config UI submissions, insurance authoring, store curation, etc.) submits a new definition and Policies records it under a new `policy_uuid`. The consuming operational domain — `DOM-OBL-001` for rent, `DOM-PROD-001` for payroll and hall-pass, `DOM-STORE-001` for store/entitlements, the Insurance operational flow for insurance — reads the current `policy_uuid` and owns only the operational facts that result (bill cycles, payroll events, hall-pass logs, entitlement events, etc.). See `DOM-POL-001` §V and §X.
 
-`banking_settings` (savings APY, overdraft fees, interest calculation, disbursement schedule) is **not** a policy repository concern. Its content is inherently Class Configuration → `economic_engine` business, governed by `DOM-CLASS-001` (schema ownership) and `DOM-CLASS-002` (economy governance: interest formulas, overdraft behavior). Class-level economic evolution is versioned under `DOM-CLASS-003` (policy_versions / policy_transitions), not through the Policies repository.
+`banking_settings` (savings APY, overdraft fees, interest calculation, disbursement schedule) is **not** a policy repository concern. Its content is inherently Class Configuration → `economic_engine` business, governed by `DOM-CLASS-001` (schema ownership) and `DOM-CLASS-002` (economy governance: interest formulas, overdraft behavior). Class-level economic evolution is versioned by the `economic_engine` rows themselves (`DOM-CLASS-003` §V), not through the Policies repository.
 
 **Prohibited:** No persisted compute-result caches (e.g., `payroll_cache`). Computed values are derived on read from authoritative event tables or recomputed by services.
 
@@ -303,14 +303,11 @@ The former `interpretation_snapshots` (cache) and `interpretation_annotations` t
 
 ### 10. Economic Policy (DOM-CLASS-003)
 
-**Purpose:** Record policy versioning and transition lifecycle.
+**Purpose:** Govern how economic policy evolves in its owning tables (`DOM-CLASS-003` §V).
 
-> **Legacy, pending retirement (operator ruling 2026-09-30; 1.11).** These two tables were never authorized by the owner as canonical and are not an authority for any domain. They remain in the runtime schema only until their remaining non-payroll uses are removed; no new reference may be added. Payroll does not read or write them.
+**Tables:** none. Economic policy history is held by the owning domains' own tables listed in §2 (`economic_engine`) and §11.
 
-**Tables:**
-
-- `policy_versions`
-- `policy_transitions`
+> **Retired (operator ruling 2026-09-30; 1.12).** `policy_versions` and `policy_transitions` were never authorized by the owner as canonical. 1.11 marked them legacy; 1.12 removes their registration, and migration `dd52b19d48d8` drops them together with `assessment_events.policy_version_id`. They MUST NOT be reintroduced (`DOM-CLASS-003` §V).
 
 ---
 

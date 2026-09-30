@@ -62,8 +62,10 @@ In practice the table holds one row at most. **Rent is the only setting the reba
 
 Under **Effective Date**, pick one:
 
-- **Next Payroll Run (Recommended)** — the change is queued rather than written. See the caution below before choosing this.
+- **Next Cycle (Recommended)** — the new rent is saved now and starts with the first rent bill that has not been sent yet. Bills students already have keep their amounts.
 - **Apply Immediately** — the new rent amount is written to your settings there and then.
+
+Store prices and the overdraft fee have no cycle to wait for, so they can only be applied immediately. If you pick **Next Cycle** with one of them selected, the form comes back and asks you to apply them separately.
 
 Choosing **Apply Immediately** requires you to tick **I understand the immediate-change warning.** If you do not, the form comes back with a prompt to confirm it.
 
@@ -74,14 +76,14 @@ Select **Apply Selected Rebalance** to commit, or **Cancel** to leave everything
 > [!IMPORTANT]
 > **Nothing is retroactive.** A policy change updates the recommendation profile and, if you rebalance, your forward-looking settings. It never rewrites past payroll, rent charges, or ledger entries.
 
-> [!CAUTION]
-> **A queued rebalance takes effect at the scheduled boundary.** Choosing **Next Payroll Run** records the change and shows an **Economy Update Scheduled** badge with an effective date. The hourly operations job applies it once that boundary is due. If you need the new rent immediately, choose **Apply Immediately**.
+> [!NOTE]
+> **A scheduled rebalance is already saved.** Choosing **Next Cycle** saves the new rent right away with the date it starts, and the Economic Engine shows an **Economy Update Scheduled** badge with that date. Nothing else has to happen for it to start: the next rent bill is simply sent with the new amount.
 
 > [!WARNING]
-> **Applying immediately can split a cycle.** Rent is billed on a cycle. Changing the amount partway through one means students may be charged differently than the cycle started with. If the timing matters, choose **Next Payroll Run** and verify the scheduled effective date.
+> **Applying immediately can split a cycle.** Rent is billed on a cycle. Changing the amount partway through one means students may be charged differently than the cycle started with. If the timing matters, choose **Next Cycle** and check the scheduled date.
 
 > [!NOTE]
-> **Saving a new policy mode clears anything you had scheduled.** Pending rebalance changes from an earlier policy are cancelled, since they were calculated against a policy you no longer use. This is also the only way to clear the **Economy Update Scheduled** badge.
+> **Changing the policy mode does not undo a scheduled rebalance.** The new rent is already saved in your rent settings. To change it before it starts, save the amount you want on the **Rent** settings page.
 
 > [!TIP]
 > Not sure which mode to pick? Stay on **Default**, watch the Economic Balance alerts and the savings figure for a week or two, then move tighter or more comfortable based on what you actually see students able to afford.

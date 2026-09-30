@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-ECON-001    | 1.0     | 2026-07-25     | None       | Normative       |
+| SPEC-ECON-001    | 1.1     | 2026-09-30     | 1.0        | Normative       |
 
 ---
 
@@ -389,20 +389,20 @@ When the scheduled accrual settlement job fires, the accrual service SHALL:
 1. Resolve the canonical class-time boundary using `class_id` and class timezone (per INV-ARC-015).
 2. Determine whether the accrual window has closed since the last settled period.
 3. Execute interest payout through `FEAT-CORE-000`-compliant FEAT orchestration.
-4. If a lawful banking policy change exists and the accrual boundary is lawful, signal `FEAT-ECON-001` to apply it.
+4. Read the banking terms from the `economic_engine` version in force (`DOM-CLASS-003` §VII). A banking change is a version with its own `effective_at`; the accrual service never applies or activates one.
 
-### 14.2 Policy Transition Activation Protocol
+### 14.2 Banking Policy Changes
 
-The accrual service MAY request policy activation at a lawful accrual boundary.
+*(1.1, operator ruling 2026-09-30: the transition-activation protocol that stood here is withdrawn with the retired `policy_versions` / `policy_transitions` tables.)*
 
 The accrual service MUST NOT:
 
-- Directly mutate `policy_versions` or `policy_transitions`
-- Activate policy changes outside `FEAT-ECON-001` orchestration
+- Write or rewrite an `economic_engine` version
+- Treat a version whose `effective_at` is still ahead as in force
 - Determine supersession legality
-- Perform activation inside a GET handler or read path
+- Change policy inside a GET handler or read path
 
-Policy lineage remains owned by `DOM-CLASS-003`. Class-level policy inputs remain owned by `DOM-CLASS-001` through `DOM-CLASS-002`. Activation is orchestrated by `FEAT-ECON-001`.
+Policy lineage is the `economic_engine` table itself (`DOM-CLASS-003` §V). Class-level policy inputs remain owned by `DOM-CLASS-001` through `DOM-CLASS-002`.
 
 ---
 

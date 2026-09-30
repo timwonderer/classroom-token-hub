@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |:---|:---|:---|:---|:---|
-| DOM-OPS-002 | 1.1 | 2026-09-15 | 1.0 | Constitutional |
+| DOM-OPS-002 | 1.2 | 2026-09-30 | 1.1 | Constitutional |
 
 ---
 
@@ -119,7 +119,7 @@ Only the following code paths may write to tables owned by this domain:
 | `chain_heads` | `app/services/audit_service.py` → `emit_audit_event()` |
 | `integrity_status` | `app/utils/audit_verifier.py` → `update_integrity_status()` under `SystemAuditAuthority` |
 
-Protected constitutional economic policy objects (`policy_versions`, `policy_transitions`) SHALL emit lineage exclusively through lawful FEAT-orchestrated execution paths.
+Economic policy is recorded in each owning domain's own append-only table (`DOM-CLASS-003` §V); where §5.4 registers such a table as protected, its rows SHALL emit lineage exclusively through lawful FEAT-orchestrated execution paths. *(1.2: the class-wide `policy_versions` / `policy_transitions` tables formerly named here were retired by operator ruling 2026-09-30 and dropped; no audit event was ever emitted for them.)*
 
 ---
 
@@ -177,10 +177,8 @@ Events for class-scoped protected tables shall use chain scope `"class:{class_id
 
 Class-scoped protected tables include, and are not limited to:
 - `transactions` — scoped by `class_id`
-- `policy_versions` — scoped by `class_id`; chain scope MUST be `"class:{class_id}"` for all policy version events
-- `policy_transitions` — scoped by `class_id`; chain scope MUST be `"class:{class_id}"` for all transition events
 
-Any audit event for `policy_versions` or `policy_transitions` that does not carry a valid `class_id` is a chain integrity violation.
+Any audit event for a class-scoped protected table that does not carry a valid `class_id` is a chain integrity violation.
 
 ### INV-OPS-018: UTC Normalization Requirement
 
@@ -243,8 +241,6 @@ The event hash is `HMAC-SHA256(AUDIT_HMAC_KEY, message)` where `message` is pipe
 | Table | Protected Fields |
 |---|---|
 | `transactions` | `amount`, `account_type`, `type`, `status`, `class_id`, `seat_id`, `description`, `correlation_id` |
-| `policy_versions` | `class_id`, `domain`, `version_number`, `policy_payload_json`, `activated_at`, `is_active` |
-| `policy_transitions` | `class_id`, `domain`, `source_policy_version_id`, `target_policy_version_id`, `activation_mode`, `status`, `correlation_id` |
 
 Additional tables shall be added to this registry in coordination with each Phase 3b migration.
 
@@ -257,7 +253,7 @@ class_id absent   →  "system"
 
 Per-class `ChainHead` rows are bootstrapped lazily on first emit for that class.
 
-**Constitutional economic policy objects** (`policy_versions`, `policy_transitions`) are class-scoped. Their audit chain scope is always `"class:{class_id}"`. There is no system-scoped chain for policy lineage objects. If a `policy_versions` or `policy_transitions` row is emitted without a `class_id`, it is an `INVALID` chain condition and MUST be surfaced in `IntegrityStatus`.
+**Economic policy tables** are class-scoped. When one is registered in §5.4, its audit chain scope is always `"class:{class_id}"`; there is no system-scoped chain for economic policy. A row of one emitted without a `class_id` is an `INVALID` chain condition and MUST be surfaced in `IntegrityStatus`.
 
 ---
 
@@ -330,7 +326,7 @@ This taxonomy is defined as canonical in `INV-ARC-016`. The operational semantic
 
 7. **Payload digest mismatch is a tampered row.** If a protected row's current field values do not hash to the `payload_digest` on its linked `AuditEvent`, the row was mutated outside the canonical write path.
 
-8. Constitutional economic policy lineage is protected state. `policy_versions` and `policy_transitions` are protected constitutional objects and are subject to the same lawful-lineage verification requirements as monetary truth.
+8. Constitutional economic policy lineage is the owning domains' own append-only tables (`DOM-CLASS-003` §V). A table among them that §5.4 registers is subject to the same lawful-lineage verification requirements as monetary truth. (The retired class-wide lineage tables are no longer part of this list.)
 
 9. **UTC normalization is mandatory for HMAC recomputation.** `emit_audit_event()` computes the event hash using `datetime.now(timezone.utc).isoformat()` which yields `+00:00`. PostgreSQL/SQLAlchemy may return stored `TIMESTAMPTZ` values in the local session timezone. The verifier shall normalize all retrieved datetimes to UTC before recomputation.
 

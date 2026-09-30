@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Authority Level |
 |------------------|---------|----------------|-----------------|
-| SPEC-STORE-001 | 1.3 | 2026-09-14 | Normative |
+| SPEC-STORE-001 | 1.4 | 2026-09-30 | Normative |
 
 ## I. Purpose
 
@@ -14,7 +14,7 @@ This specification is the authoritative contract for parsing and validating prod
 
 This specification applies to:
 
-- All product policies stored in `policy_versions` with `policy_family="STORE_PRODUCT"`
+- All product policies stored as `store_products` versions, one immutable row per `policy_uuid` (`DOM-POL-001` §VI.0). *(1.4: product policies were once described as `policy_versions` rows; that table is retired, operator ruling 2026-09-30.)*
 - All FEAT operations that read and consume product policies (FEAT-STOR-001, FEAT-STOR-004, etc.)
 - All parsers, validators, and configuration objects that process product policies
 
@@ -63,7 +63,7 @@ This approach provides JSON storage flexibility (fields can change) without surr
 
 | Field | Type | Description | Constraints |
 |-------|------|-------------|-------------|
-| `product_id` | integer | Stable product identifier | Must match policy_id in policy_versions |
+| `product_id` | integer | Stable product identifier | Must match the product's lineage identity in `store_products` |
 | `is_purchasable` | boolean | Can students purchase this product? | Required for FEAT-STOR-001 validation |
 | `supports_direct_grants` | boolean | Can teachers grant directly? | Required for FEAT-STOR-004 validation |
 | `price` | decimal (string) \| null | Cost per unit of direct Store purchase | Must be ≥ 0; decimal with 2 scale. Required when `direct_purchase_allowed` is true; MUST be null when it is false (a grant-only product, Section V.A) |
@@ -399,7 +399,7 @@ reapply every gate and reject an otherwise hidden illegal field combination.
 
 ### Input
 
-A JSON object (dict) from `policy_version.payload`
+A JSON object (dict) holding one product version's definition
 
 ### Parsing Rules (Mandatory)
 

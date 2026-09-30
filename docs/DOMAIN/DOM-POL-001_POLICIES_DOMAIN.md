@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-POL-001 | 2.3 | 2026-09-30 | 2.2 | Constitutional |
+| DOM-POL-001 | 2.4 | 2026-09-30 | 2.3 | Constitutional |
 
 ## I. Purpose
 
@@ -122,7 +122,9 @@ The following SHALL be derived and SHALL NOT be treated as canonical Policies tr
 - Consumers pin provenance by recording the exact `policy_uuid` in force at the moment they created their operational fact (see `DOM-POL-001` §V.A and §VII).
 - Availability state (`IN_USE` / `HIDDEN` / `RETIRED`) is a mutable projection *over* the immutable row, not a version pointer.
 
-Any schema element that attempts to create an alternative "current version" or "next version" pointer alongside `policy_uuid` — whether a self-referential FK on a Policies table or an external version-tracking table — is redundant and prohibited. `policy_versions` / `policy_transitions` are not a domain-policy versioning mechanism for any family; they are legacy tables pending retirement (operator ruling 2026-09-30, `DOM-CLASS-003` §V), and no new reference to them may be added. Domain-specific versioning belongs here.
+Any schema element that attempts to create an alternative "current version" or "next version" pointer alongside `policy_uuid` — whether a self-referential FK on a Policies table or an external version-tracking table — is redundant and prohibited, without exception. Domain-specific versioning belongs here, in each family's own table.
+
+*(2.4, operator ruling 2026-09-30.)* The exception carved out of this prohibition on 2026-08-15 for the class-wide `policy_versions` / `policy_transitions` tables (`e6f10734e`) is withdrawn. Those tables were removed from this domain on 2026-08-03 (`184910af8`), were never authorized as canonical, and are retired and dropped. Economic policy is versioned the same way as every other family: by its own rows (`DOM-CLASS-003` §V).
 
 ### 1. Repository behavior
 
@@ -148,7 +150,7 @@ When a teacher resubmits Rent Settings, Store Items, Insurance settings, or any 
 
 ### 2. Effective-dated families: `payroll_settings`
 
-*Operator ruling 2026-09-30.* `payroll_settings` is the sole authority for payroll. Payroll reads nothing else — in particular never `policy_versions`. Its selection is by time, not by availability, so the availability projection and actions 2–4 of §VI.1 do not apply to it:
+*Operator ruling 2026-09-30.* `payroll_settings` is the sole authority for payroll. Payroll reads nothing else. Its selection is by time, not by availability, so the availability projection and actions 2–4 of §VI.1 do not apply to it:
 
 - **Append-only, with an effective date.** Every submission inserts a new row carrying an `effective_date`. No row is updated, hidden, retired, or deleted; the database refuses UPDATE and refuses DELETE except while a class universe is being destroyed. The legal columns are exactly those in `DOM-POL-001A` §V.F; `policy_uuid` is the primary key.
 - **In force at an instant.** The row in force at instant *t* is the one with the greatest `effective_date` ≤ *t*; among rows sharing that `effective_date`, the latest `created_at` wins. A row whose `effective_date` is still ahead is *pending*: visible, immutable, and not yet in force. There is no activation step.
