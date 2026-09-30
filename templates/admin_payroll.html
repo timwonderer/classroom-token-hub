@@ -335,11 +335,13 @@
           </button>
         {% endcall %}
       </div>
-      {% elif block_settings %}
+      {% elif current_setting %}
       <div class="col-12 mb-3">
-        {% call cards.alert_card('info', 'Saving overrides existing payroll settings', icon='info', role='alert', dismissible=True) %}
-          <p class="mb-0">Payroll settings have been set on <strong>{{ display_settings_created_at_list[0] if display_settings_created_at_list and display_settings_created_at_list[0] else 'unknown date' }}</strong>. Any changes here will override the previous
-          settings.</p>
+        {% call cards.alert_card('info', 'Changes take effect on the next payroll date', icon='info', role='alert', dismissible=True) %}
+          {# DOM-CLASS-003 §VII: a change never reprices the open cycle. #}
+          <p class="mb-0">Settings you save now take effect on
+          <strong>{% if next_change_effective %}{{ next_change_effective|fmt_timestamp }}{% else %}the next payroll date{% endif %}</strong>.
+          Work done before then is paid at the current settings.</p>
         {% endcall %}
       </div>
       {% endif %}
@@ -352,39 +354,40 @@
             <!-- Mode Toggle -->
             <div class="form-check form-switch">
               <input class="form-check-input" type="checkbox" id="settingsModeToggle" role="switch" {% if
-                default_setting and default_setting.settings_mode=='advanced' %}checked{% endif %}>
+                payroll_form.settings_mode=='advanced' %}checked{% endif %}>
               <label class="form-check-label text-white" for="settingsModeToggle">Advanced Mode</label>
             </div>
           </div>
           <div class="card-body">
             <!-- Current Settings Display -->
-            {% if block_settings %}
+            {% if current_setting %}
             {% call cards.alert_card('info', 'Current payroll settings', icon='info', body_class='mb-3') %}
-              {% if default_setting %}
-              {# "Global Default" was v1 vocabulary, from when payroll settings
-                 spanned a teacher's blocks. v2 settings are class-scoped, so a
-                 teacher running several classes would read it as applying to all
-                 of them — the opposite of the truth. The rate unit is
-                 singularised by the display builder ("$1.50/minute", not
-                 "/minutes"), and the whitespace-control tags below close the gap
-                 that rendered "biweekly , starting". #}
+              {# Class-scoped: v2 settings belong to this class only. The
+                 whitespace-control tags close the gap that rendered
+                 "biweekly , starting". #}
               <div class="mb-2">
-                <strong>This class:</strong>
-                {{ default_setting_display.display_rate_with_unit }},
-                {{- ' ' }}{{ default_setting.pay_schedule_type }}
+                <strong>In effect now:</strong>
+                {{ current_setting_display.display_rate_with_unit }},
+                {{- ' ' }}{{ current_setting.pay_schedule_type }}
                 {%- if display_first_pay_date %}, starting {{ display_first_pay_date }}{% endif %}
               </div>
-              {% endif %}
+              {% for pending in pending_settings %}
+              <div class="mb-2" data-testid="pending-payroll-setting">
+                <strong>Takes effect {{ pending.effective_date|fmt_timestamp }}:</strong>
+                {{ pending.display_rate_with_unit }},
+                {{- ' ' }}{{ pending.pay_schedule_type }}
+              </div>
+              {% endfor %}
             {% endcall %}
             {% endif %}
 
             <form method="POST" action="{{ url_for('admin.payroll_settings') }}" id="payrollSettingsForm">
               {{ settings_form.hidden_tag() }}
               <input type="hidden" name="settings_mode" id="settingsModeInput"
-                value="{% if default_setting and default_setting.settings_mode == 'advanced' %}advanced{% else %}simple{% endif %}">
+                value="{{ payroll_form.settings_mode }}">
 
               <!-- SIMPLE MODE -->
-              <div id="simpleModeFields" {% if default_setting and default_setting.settings_mode=='advanced'
+              <div id="simpleModeFields" {% if payroll_form.settings_mode=='advanced'
                 %}style="display:none;" {% endif %}>
                 {% call cards.alert_card('info', 'Simple mode', icon='info', body_class='mb-3') %}
                   <p class="mb-0">Easy-to-use settings for basic payroll configuration.</p>
@@ -397,7 +400,7 @@
                     <span class="input-group-text">$</span>
                     <input type="number" class="form-control" id="simplePayRate" name="simple_pay_rate" step="0.01"
                       placeholder="15.00"
-                      value="{% if default_setting and default_setting.settings_mode == 'simple' %}{{ default_setting_display.display_hourly_rate_value }}{% endif %}">
+                      value="{% if payroll_form.settings_mode == 'simple' %}{{ payroll_form.hourly_rate_value }}{% endif %}">
                     <span class="input-group-text">/hour</span>
                   </div>
                   <small class="text-muted">Amount paid per hour of attendance</small>
@@ -407,11 +410,11 @@
                 <div class="mb-3">
                   <label for="simpleFrequency" class="form-label fw-bold">Payroll Frequency:</label>
                   <select class="form-select" id="simpleFrequency" name="simple_frequency">
-                    <option value="weekly" {% if default_setting and default_setting.pay_schedule_type=='weekly'
+                    <option value="weekly" {% if payroll_form.pay_schedule_type=='weekly'
                       %}selected{% endif %}>Weekly</option>
-                    <option value="biweekly" {% if not default_setting or default_setting.pay_schedule_type=='biweekly'
+                    <option value="biweekly" {% if payroll_form.pay_schedule_type=='biweekly'
                       %}selected{% endif %}>Bi-weekly</option>
-                    <option value="monthly" {% if default_setting and default_setting.pay_schedule_type=='monthly'
+                    <option value="monthly" {% if payroll_form.pay_schedule_type=='monthly'
                       %}selected{% endif %}>Monthly</option>
                   </select>
                 </div>
@@ -427,11 +430,9 @@
                 <!-- Daily Limit -->
                 <div class="mb-3">
                   <label class="form-label fw-bold">Daily Time Limit:</label>
-                  {# Stored as decimal hours (Float column). Split into whole hours + whole
-                     minutes for entry: a minute is the realistic minimum unit, so both fields
-                     are integers and no fractional-hour "step" gate is needed. The server
-                     recombines them into decimal hours. #}
-                  {% set dl_total = default_setting.daily_limit_hours if (default_setting and default_setting.daily_limit_hours) else None %}
+                  {# Entered as whole hours + whole minutes (a minute is the realistic
+                     minimum unit) and stored as max_time_per_day in minutes. #}
+                  {% set dl_total = payroll_form.daily_limit_hours %}
                   {% set dl_hours = (dl_total | int) if dl_total else '' %}
                   {% set dl_minutes = (((dl_total - (dl_total | int)) * 60) | round | int) if dl_total else '' %}
                   <div class="row g-2">
@@ -462,7 +463,7 @@
               </div>
 
               <!-- ADVANCED MODE (hidden by default) -->
-              <div id="advancedModeFields" {% if default_setting and default_setting.settings_mode=='advanced'
+              <div id="advancedModeFields" {% if payroll_form.settings_mode=='advanced'
                 %}style="display:block;" {% else %}style="display:none;" {% endif %}>
                 {% call cards.alert_card('warning', 'Advanced mode', icon='tune', body_class='mb-3') %}
                   <p class="mb-0">Full control over payroll calculations with detailed options.</p>
@@ -476,19 +477,19 @@
                       <span class="input-group-text">$</span>
                       <input type="number" class="form-control" id="advPayAmount" name="adv_pay_amount" step="0.01"
                         placeholder="0.25"
-                        value="{% if default_setting and default_setting.settings_mode == 'advanced' %}{{ default_setting_display.display_per_unit_rate_value }}{% endif %}">
+                        value="{% if payroll_form.settings_mode == 'advanced' %}{{ payroll_form.per_unit_rate_value }}{% endif %}">
                     </div>
                   </div>
                   <div class="col-md-6">
                     <label for="advTimeUnit" class="form-label fw-bold">Time Increment:</label>
                     <select class="form-select" id="advTimeUnit" name="adv_time_unit">
-                      <option value="seconds" {% if default_setting and default_setting.time_unit=='seconds'
+                      <option value="seconds" {% if payroll_form.time_unit=='seconds'
                         %}selected{% endif %}>Per Second</option>
-                      <option value="minutes" {% if not default_setting or default_setting.time_unit=='minutes'
+                      <option value="minutes" {% if payroll_form.time_unit=='minutes'
                         %}selected{% endif %}>Per Minute</option>
-                      <option value="hours" {% if default_setting and default_setting.time_unit=='hours' %}selected{%
+                      <option value="hours" {% if payroll_form.time_unit=='hours' %}selected{%
                         endif %}>Per Hour</option>
-                      <option value="days" {% if default_setting and default_setting.time_unit=='days' %}selected{%
+                      <option value="days" {% if payroll_form.time_unit=='days' %}selected{%
                         endif %}>Per Day</option>
                     </select>
                   </div>
@@ -499,53 +500,30 @@
                   <div class="card-header bg-info-subtle">
                     <div class="form-check form-switch">
                       <input class="form-check-input" type="checkbox" id="advOvertimeEnabled"
-                        name="adv_overtime_enabled" {% if default_setting and default_setting.overtime_enabled
+                        name="adv_overtime_enabled" {% if payroll_form.overtime_enabled
                         %}checked{% endif %}>
                       <label class="form-check-label fw-bold text-dark" for="advOvertimeEnabled">Enable Overtime</label>
                     </div>
                   </div>
-                  <div class="card-body" id="overtimeFields" {% if default_setting and default_setting.overtime_enabled
+                  <div class="card-body" id="overtimeFields" {% if payroll_form.overtime_enabled
                     %}style="display:block;" {% else %}style="display:none;" {% endif %}>
                     <div class="row mb-3">
                       <div class="col-md-4">
                         <label for="advOvertimeThreshold" class="form-label">Threshold:</label>
                         <input type="number" class="form-control" id="advOvertimeThreshold"
                           name="adv_overtime_threshold" step="0.1" placeholder="8"
-                          value="{% if default_setting and default_setting.overtime_threshold %}{{ default_setting.overtime_threshold }}{% endif %}">
+                          value="{% if payroll_form.overtime_threshold %}{{ payroll_form.overtime_threshold }}{% endif %}">
                       </div>
                       <div class="col-md-4">
                         <label for="advOvertimeUnit" class="form-label">Unit:</label>
                         <select class="form-select" id="advOvertimeUnit" name="adv_overtime_unit">
-                          <option value="seconds" {% if default_setting and
-                            default_setting.overtime_threshold_unit=='seconds' %}selected{% endif %}>Seconds</option>
-                          <option value="minutes" {% if default_setting and
-                            default_setting.overtime_threshold_unit=='minutes' %}selected{% endif %}>Minutes</option>
-                          <option value="hours" {% if not default_setting or
-                            default_setting.overtime_threshold_unit=='hours' %}selected{% endif %}>Hours</option>
-                        </select>
-                      </div>
-                      <div class="col-md-4">
-                        <label for="advOvertimePeriod" class="form-label">Per:</label>
-                        <select class="form-select" id="advOvertimePeriod" name="adv_overtime_period">
-                          <option value="day" {% if not default_setting or
-                            default_setting.overtime_threshold_period=='day' %}selected{% endif %}>Day</option>
-                          <option value="week" {% if default_setting and
-                            default_setting.overtime_threshold_period=='week' %}selected{% endif %}>Week</option>
-                          <option value="month" {% if default_setting and
-                            default_setting.overtime_threshold_period=='month' %}selected{% endif %}>Month</option>
+                          <option value="seconds" {% if payroll_form.overtime_threshold_unit=='seconds' %}selected{% endif %}>Seconds</option>
+                          <option value="minutes" {% if payroll_form.overtime_threshold_unit=='minutes' %}selected{% endif %}>Minutes</option>
+                          <option value="hours" {% if payroll_form.overtime_threshold_unit=='hours' %}selected{% endif %}>Hours</option>
                         </select>
                       </div>
                     </div>
-                    <div class="mb-0">
-                      <label for="advOvertimeMultiplier" class="form-label">Overtime Multiplier:</label>
-                      <div class="input-group">
-                        <input type="number" class="form-control" id="advOvertimeMultiplier"
-                          name="adv_overtime_multiplier" step="0.1" min="1.0" placeholder="1.5"
-                          value="{% if default_setting and default_setting.overtime_multiplier %}{{ default_setting.overtime_multiplier }}{% endif %}">
-                        <span class="input-group-text">x</span>
-                      </div>
-                      <small class="text-muted">Must be ≥ 1.0 (e.g., 1.5 = 1.5x base rate for overtime)</small>
-                    </div>
+                    <small class="text-muted">The threshold is saved with your settings. Overtime pay is not applied yet.</small>
                   </div>
                 </div>
 
@@ -556,18 +534,15 @@
                     <div class="col-md-6">
                       <input type="number" class="form-control" id="advMaxTimeValue" aria-label="Maximum time value" name="adv_max_time_value"
                         step="0.1" placeholder="Leave blank for unlimited"
-                        value="{% if default_setting and default_setting.max_time_per_day %}{{ default_setting.max_time_per_day }}{% endif %}">
+                        value="{% if payroll_form.max_time_per_day %}{{ payroll_form.max_time_per_day }}{% endif %}">
                       <small class="text-muted">Students will be auto-tapped-out when limit is reached and prevented
                         from tapping in until next day (resets at midnight in your class's timezone)</small>
                     </div>
                     <div class="col-md-6">
                       <select class="form-select" id="advMaxTimeUnit" aria-label="Maximum time unit" name="adv_max_time_unit">
-                        <option value="seconds" {% if default_setting and
-                          default_setting.max_time_per_day_unit=='seconds' %}selected{% endif %}>Seconds</option>
-                        <option value="minutes" {% if default_setting and
-                          default_setting.max_time_per_day_unit=='minutes' %}selected{% endif %}>Minutes</option>
-                        <option value="hours" {% if not default_setting or
-                          default_setting.max_time_per_day_unit=='hours' %}selected{% endif %}>Hours</option>
+                        <option value="seconds" {% if payroll_form.max_time_per_day_unit=='seconds' %}selected{% endif %}>Seconds</option>
+                        <option value="minutes" {% if payroll_form.max_time_per_day_unit=='minutes' %}selected{% endif %}>Minutes</option>
+                        <option value="hours" {% if payroll_form.max_time_per_day_unit=='hours' %}selected{% endif %}>Hours</option>
                       </select>
                     </div>
                   </div>
@@ -579,27 +554,27 @@
                 <div class="mb-3">
                   <label for="advPaySchedule" class="form-label fw-bold">Pay Schedule:</label>
                   <select class="form-select mb-2" id="advPaySchedule" name="adv_pay_schedule">
-                    <option value="daily" {% if default_setting and default_setting.pay_schedule_type=='daily'
+                    <option value="daily" {% if payroll_form.pay_schedule_type=='daily'
                       %}selected{% endif %}>Daily</option>
-                    <option value="weekly" {% if default_setting and default_setting.pay_schedule_type=='weekly'
+                    <option value="weekly" {% if payroll_form.pay_schedule_type=='weekly'
                       %}selected{% endif %}>Weekly</option>
-                    <option value="biweekly" {% if not default_setting or default_setting.pay_schedule_type=='biweekly'
+                    <option value="biweekly" {% if payroll_form.pay_schedule_type=='biweekly'
                       %}selected{% endif %}>Bi-weekly</option>
-                    <option value="monthly" {% if default_setting and default_setting.pay_schedule_type=='monthly'
+                    <option value="monthly" {% if payroll_form.pay_schedule_type=='monthly'
                       %}selected{% endif %}>Monthly</option>
-                    <option value="custom" {% if default_setting and default_setting.pay_schedule_type=='custom'
+                    <option value="custom" {% if payroll_form.pay_schedule_type=='custom'
                       %}selected{% endif %}>Custom</option>
                   </select>
-                  <div id="customScheduleFields" hidden>
+                  <div id="customScheduleFields" {% if payroll_form.pay_schedule_type != 'custom' %}hidden{% endif %}>
                     <div class="row">
                       <div class="col-md-6">
                         <input type="number" class="form-control" id="advCustomScheduleValue" aria-label="Custom schedule value"
-                          name="adv_custom_schedule_value" placeholder="Enter number">
+                          name="adv_custom_schedule_value" placeholder="Enter number" value="{{ payroll_form.custom_schedule_value }}">
                       </div>
                       <div class="col-md-6">
                         <select class="form-select" id="advCustomScheduleUnit" aria-label="Custom schedule unit" name="adv_custom_schedule_unit">
-                          <option value="days" selected>Day(s)</option>
-                          <option value="weeks">Week(s)</option>
+                          <option value="days" {% if payroll_form.custom_schedule_unit == 'days' %}selected{% endif %}>Day(s)</option>
+                          <option value="weeks" {% if payroll_form.custom_schedule_unit == 'weeks' %}selected{% endif %}>Week(s)</option>
                         </select>
                       </div>
                     </div>
@@ -617,14 +592,14 @@
                 <div class="mb-3">
                   <label for="advRounding" class="form-label fw-bold">Rounding:</label>
                   <select class="form-select" id="advRounding" name="adv_rounding">
-                    <option value="down" {% if not default_setting or default_setting.rounding_mode=='down' %}selected{%
+                    <option value="down" {% if payroll_form.rounding_mode=='down' %}selected{%
                       endif %}>Round Down</option>
-                    <option value="up" {% if default_setting and default_setting.rounding_mode=='up' %}selected{% endif
+                    <option value="up" {% if payroll_form.rounding_mode=='up' %}selected{% endif
                       %}>Round Up</option>
-                    <option value="nearest" {% if default_setting and default_setting.rounding_mode=='nearest'
+                    <option value="nearest" {% if payroll_form.rounding_mode=='nearest'
                       %}selected{% endif %}>Round to Nearest</option>
                   </select>
-                  <small class="text-muted">If time doesn't reach next increment</small>
+                  <small class="text-muted">Saved with your settings. Pay is currently calculated to the second; rounding is not applied yet.</small>
                 </div>
 
                 <!-- Expected Weekly Hours moved to Economy Health page (CWI parameter on EconomicEngine). -->
@@ -1069,15 +1044,13 @@
       }
       summaryHTML += '.</p>';
 
-      // Overtime
+      // Overtime: the threshold is recorded; no overtime pay is applied yet.
       if (overtimeEnabled) {
         const threshold = document.getElementById('advOvertimeThreshold')?.value;
         const thresholdUnit = document.getElementById('advOvertimeUnit')?.value;
-        const thresholdPeriod = document.getElementById('advOvertimePeriod')?.value;
-        const multiplier = document.getElementById('advOvertimeMultiplier')?.value;
 
-        if (threshold && thresholdUnit && thresholdPeriod && multiplier) {
-          summaryHTML += `<p class="mb-2">Overtime is enabled at <strong>${multiplier}x</strong> pay after <strong>${threshold} ${thresholdUnit}</strong> per <strong>${thresholdPeriod}</strong>.</p>`;
+        if (threshold && thresholdUnit) {
+          summaryHTML += `<p class="mb-2">An overtime threshold of <strong>${threshold} ${thresholdUnit}</strong> is saved. Overtime pay is not applied yet.</p>`;
         }
       }
 
@@ -1087,16 +1060,9 @@
         summaryHTML += `<p class="mb-2">Students will tap out after <strong>${maxTimeValue} ${maxTimeUnit}</strong> per day (resets at midnight in your class's timezone).</p>`;
       }
 
-      // Rounding
-      // Rounding is an advanced-mode behaviour only: _round_billable_seconds()
-      // in app/payroll.py returns early unless settings_mode == 'advanced'.
-      // Saying so matters because a teacher who reads this while previewing
-      // Advanced, then saves Simple, otherwise carries the belief that partial
-      // time is not paid — and in Simple mode it is, to the second.
-      const roundingNames = { 'up': 'rounds up', 'down': 'rounds down', 'nearest': 'rounds to nearest' };
-      const roundingUnit = document.getElementById('advTimeUnit')?.value || 'minute';
-      const roundingUnitSingular = roundingUnit.replace(/s$/, '');
-      summaryHTML += `<p class="mb-1">Worked time <strong>${roundingNames[roundingMode] || 'rounds down'}</strong> to the nearest whole <strong>${roundingUnitSingular}</strong> before pay is calculated.</p>`;
+      // Rounding: the preference is recorded, but payroll does not round yet
+      // (owner ruling pending on its granularity), so pay is to the second.
+      summaryHTML += `<p class="mb-1">Worked time is paid to the second — partial minutes still count. Your rounding preference is saved but not applied yet.</p>`;
 
     } else {
       // Simple Mode Summary
@@ -1128,12 +1094,9 @@
         summaryHTML += `<p class="mb-1">Students will tap out after <strong>${parts.join(' ')}</strong> per day (resets at midnight in your class's timezone).</p>`;
       }
 
-      // Simple mode applies no time rounding, so partial minutes are paid:
-      // _round_billable_seconds() returns early unless settings_mode is
-      // 'advanced'. Stating it avoids the reader carrying the Advanced rounding
-      // rule across. This field is dollars per hour, so 13m 6s at $1.50/hour
-      // pays $0.33 — the full 786 seconds pro-rata, not the 13 whole minutes
-      // that rounding down would give.
+      // Payroll applies no time rounding, so partial minutes are paid. This
+      // field is dollars per hour, so 13m 6s at $1.50/hour pays $0.33 — the
+      // full 786 seconds pro-rata.
       summaryHTML += `<p class="mb-1">Worked time is paid to the second — partial minutes still count.</p>`;
     }
 
@@ -1171,12 +1134,6 @@
         // Advanced mode validations
         const overtimeEnabled = document.getElementById('advOvertimeEnabled').checked;
         const maxTimeValue = parseFloat(document.getElementById('advMaxTimeValue').value);
-        const overtimeMultiplier = parseFloat(document.getElementById('advOvertimeMultiplier').value);
-
-        // Check if overtime multiplier is >= 1.0
-        if (overtimeEnabled && overtimeMultiplier && overtimeMultiplier < 1.0) {
-          validationErrors.push('Overtime multiplier must be ≥ 1.0');
-        }
 
         // Check if max time per day and overtime are both enabled
         if (overtimeEnabled && maxTimeValue) {

@@ -173,6 +173,7 @@ def build_payroll_configuration_view(
     class_id: str,
     settings: PayrollSettings | None = None,
     student_statuses: list[StudentPayrollStatusView] | None = None,
+    next_payroll_date=None,
 ) -> PayrollConfigurationView:
     """
     Build pre-computed payroll configuration for admin dashboard.
@@ -184,6 +185,8 @@ def build_payroll_configuration_view(
         class_id: Class scope
         settings: PayrollSettings model (if None, uses defaults)
         student_statuses: Pre-built list of StudentPayrollStatusView
+        next_payroll_date: the derived next payroll date (DOM-PROD-001 §XV.5);
+            it is not stored on the setting
 
     Returns:
         Frozen PayrollConfigurationView with pre-formatted configuration display
@@ -196,20 +199,15 @@ def build_payroll_configuration_view(
     settings_mode = 'simple'
     pay_schedule_type = 'biweekly'
     overtime_enabled = False
-    overtime_multiplier = 1.0
     rounding_mode = 'down'
-    next_payroll_date = None
     time_unit = 'minute'
 
     if settings:
         pay_rate = Decimal(str(settings.pay_rate))
-        settings_mode = settings.settings_mode or 'simple'
+        settings_mode = infer_settings_form_mode(settings)
         pay_schedule_type = settings.pay_schedule_type or 'biweekly'
-        overtime_enabled = settings.overtime_enabled or False
-        overtime_multiplier = float(settings.overtime_multiplier or 1.0)
+        overtime_enabled = settings.overtime_threshold is not None
         rounding_mode = settings.rounding_mode or 'down'
-        next_payroll_date = settings.next_payroll_date
-        time_unit = (settings.time_unit or 'minutes').rstrip('s')  # Remove plural
 
     # Pre-format display strings
     display_pay_rate = f"${pay_rate:.2f} per {time_unit}"
@@ -218,9 +216,8 @@ def build_payroll_configuration_view(
     if next_payroll_date:
         display_next_payroll = next_payroll_date.strftime("%b %d, %Y")
 
+    # No overtime multiplier is a legal payroll setting (DOM-POL-001A §V.F).
     display_overtime_multiplier = None
-    if overtime_enabled:
-        display_overtime_multiplier = f"{overtime_multiplier:.1f}x"
 
     # Compute student summary statistics
     total_students = len(student_statuses)
@@ -252,16 +249,7 @@ def build_payroll_configuration_view(
     )
 
 
-_SINGULAR_TIME_UNIT = {
-    'seconds': 'second',
-    'minutes': 'minute',
-    'hours': 'hour',
-    'days': 'day',
-}
-
-#: Seconds in one of each selectable time unit — the same integer map
-#: ``app/payroll.py:_round_billable_seconds`` uses, so the two cannot disagree
-#: about what an "hour" is.
+#: Seconds in one of each selectable time unit.
 #:
 #: ``PayrollSettings.pay_rate`` is canonically dollars **per minute**, while the
 #: Advanced form asks the teacher for dollars per *their* chosen unit. The two
@@ -297,25 +285,125 @@ def rate_unit_to_per_minute(rate_in_unit, time_unit: str) -> Decimal:
     return Decimal(str(rate_in_unit)) * _SECONDS_PER_MINUTE / _unit_seconds(time_unit)
 
 
+#: The order units are tried in when a rate is shown or pre-filled.
+_DISPLAY_UNIT_PREFERENCE = ('minutes', 'hours', 'days', 'seconds')
+_SINGULAR = {'seconds': 'second', 'minutes': 'minute', 'hours': 'hour', 'days': 'day'}
+_CENT = Decimal('0.01')
+# pay_rate is NUMERIC(18,8) (DOM-CORE-002 §11).
+_STORED = Decimal('0.00000001')
+
+
+def exact_rate_unit(rate_per_minute) -> tuple[str, Decimal]:
+    """A unit in which the stored rate is a whole number of cents, and that amount.
+
+    The unit a teacher typed the rate in is not stored (DOM-POL-001A §V.F), but
+    the form must still pre-fill a value that saves back to the same rate: a
+    $1.50/hour rate is $0.025/minute, and showing it per minute to the cent
+    ("0.03") would store $1.80/hour on the next save. So the first unit — minute,
+    hour, day, second — whose amount is exact to the cent is used. A rate exact
+    in none keeps full precision per minute rather than being rounded.
+    """
+    rate = Decimal(str(rate_per_minute)).quantize(_STORED)
+    for unit in _DISPLAY_UNIT_PREFERENCE:
+        amount = rate_per_minute_to_unit(rate, unit).quantize(_CENT)
+        # Exact means the cent amount saves back to the stored rate: $5/hour is
+        # stored as 0.08333333/minute, which is 4.9999998/hour, yet 5.00/hour
+        # saves back to the same 0.08333333.
+        if rate_unit_to_per_minute(amount, unit).quantize(_STORED) == rate:
+            return unit, amount
+    return 'minutes', rate.normalize()
+
+
+def infer_settings_form_mode(settings: PayrollSettings | None) -> str:
+    """Which form a stored setting reads best in: ``simple`` or ``advanced``.
+
+    The simple/advanced switch is data-entry presentation, not a payroll
+    setting, so it is not stored (DOM-POL-001A §V.F). A row opens in the advanced
+    form when it uses anything the simple form cannot express.
+    """
+    if settings is None:
+        return 'simple'
+    if (
+        settings.overtime_threshold is not None
+        or (settings.pay_schedule_type or 'biweekly') not in ('weekly', 'biweekly', 'monthly')
+        or (settings.rounding_mode or 'down') != 'down'
+        or (settings.max_time_per_day and settings.max_time_per_day_unit not in ('hours', 'minutes'))
+    ):
+        return 'advanced'
+    return 'simple'
+
+
+def build_payroll_settings_form(settings: PayrollSettings | None) -> dict:
+    """Pre-population for the payroll settings form, from a stored setting.
+
+    The form converts entries into the legal columns and stores nothing else, so
+    the entry unit of the rate is not remembered: the advanced form shows the
+    rate in a unit that saves back exactly (:func:`exact_rate_unit`), the simple
+    form the hourly one.
+    """
+    if settings is None:
+        return {
+            'configured': False,
+            'settings_mode': 'simple',
+            'time_unit': 'minutes',
+            'per_unit_rate_value': '',
+            'hourly_rate_value': '',
+            'pay_schedule_type': 'biweekly',
+            'custom_schedule_value': '',
+            'custom_schedule_unit': 'days',
+            'daily_limit_hours': None,
+            'overtime_enabled': False,
+            'overtime_threshold': None,
+            'overtime_threshold_unit': 'hours',
+            'max_time_per_day': None,
+            'max_time_per_day_unit': 'hours',
+            'rounding_mode': 'down',
+        }
+    rate = Decimal(str(settings.pay_rate))
+    rate_unit, per_unit_amount = exact_rate_unit(rate)
+    daily_limit_hours = None
+    if settings.max_time_per_day:
+        seconds = Decimal(str(settings.max_time_per_day)) * _unit_seconds(settings.max_time_per_day_unit or 'hours')
+        daily_limit_hours = float(seconds / Decimal(3600))
+    frequency = int(settings.payroll_frequency_days or 0)
+    custom_in_weeks = frequency and frequency % 7 == 0
+    return {
+        'configured': True,
+        'settings_mode': infer_settings_form_mode(settings),
+        'time_unit': rate_unit,
+        'per_unit_rate_value': f"{per_unit_amount}",
+        'hourly_rate_value': f"{rate * 60:.2f}",
+        'pay_schedule_type': settings.pay_schedule_type or 'biweekly',
+        'custom_schedule_value': (frequency // 7 if custom_in_weeks else frequency) or '',
+        'custom_schedule_unit': 'weeks' if custom_in_weeks else 'days',
+        'daily_limit_hours': daily_limit_hours,
+        'overtime_enabled': settings.overtime_threshold is not None,
+        'overtime_threshold': settings.overtime_threshold,
+        'overtime_threshold_unit': settings.overtime_threshold_unit or 'hours',
+        'max_time_per_day': settings.max_time_per_day,
+        'max_time_per_day_unit': settings.max_time_per_day_unit or 'hours',
+        'rounding_mode': settings.rounding_mode or 'down',
+    }
+
+
 def build_payroll_settings_display(settings: PayrollSettings | None) -> dict[str, str]:
     """
     Build pre-formatted pay rate display strings for a single PayrollSettings row.
 
     Eliminates template-level "%.2f"|format() currency formatting used for the
-    Settings tab "Current Settings" summary and the simple/advanced pay rate
-    input pre-population (audit violation: admin_payroll.html pay_rate formatting).
+    Settings tab summaries and pay rate input pre-population.
 
-    Args:
-        settings: PayrollSettings model instance, or None
+    ``pay_rate`` is stored per minute (DOM-CORE-002 §11). The rate is shown in the
+    first unit in which it is exact to the cent (:func:`exact_rate_unit`), with
+    its hourly equivalent when that unit is not the hour.
 
     Returns:
         Dict with:
-            display_pay_rate: "$X.XX" selected by settings_mode (hourly rate for
-                'simple' mode, per-time-unit rate for 'advanced' mode)
-            display_hourly_rate_value: plain "X.XX" hourly rate (no "$"), for the
-                simple-mode pay rate input value attribute
-            display_per_unit_rate_value: plain "X.XX" per-time-unit rate (no "$"),
-                for the advanced-mode pay rate input value attribute
+            display_pay_rate: "$X.XX" in the display unit
+            display_hourly_rate_value: plain "X.XX" hourly rate (no "$")
+            display_per_unit_rate_value: plain "X.XX" in the display unit (no "$")
+            display_rate_unit: the display unit, singular ("minute")
+            display_rate_with_unit: "$X.XX/minute ($Y.YY/hour)" or "$Y.YY/hour"
     """
     if not settings:
         return {
@@ -327,35 +415,16 @@ def build_payroll_settings_display(settings: PayrollSettings | None) -> dict[str
         }
 
     rate = Decimal(str(settings.pay_rate))
+    unit, amount = exact_rate_unit(rate)
     display_hourly_value = f"{rate * 60:.2f}"
-    # Expressed in the unit the teacher configured, not the storage unit. This
-    # value also pre-populates the Advanced pay-rate input, so a mismatch here
-    # is not cosmetic: it round-trips through the next save.
-    display_per_unit_value = f"{rate_per_minute_to_unit(rate, settings.time_unit):.2f}"
-
-    if settings.settings_mode == 'simple':
-        display_pay_rate = f"${display_hourly_value}"
-    else:
-        display_pay_rate = f"${display_per_unit_value}"
-
-    # `time_unit` is stored plural ('minutes', 'hours') because it names a
-    # duration. A *rate* is per one of them, so rendering the stored value
-    # directly produced "$1.50/minutes" on the settings summary. Singularised
-    # here rather than in the template: the template renders what it is handed.
-    unit = (settings.time_unit or '').strip()
-    display_rate_unit = _SINGULAR_TIME_UNIT.get(unit, unit)
-
-    if settings.settings_mode == 'simple':
-        display_rate_with_unit = f"{display_pay_rate}/hour"
-    elif display_rate_unit:
-        display_rate_with_unit = f"{display_pay_rate}/{display_rate_unit}"
-    else:
-        display_rate_with_unit = display_pay_rate
-
+    singular = _SINGULAR[unit]
+    with_unit = f"${amount}/{singular}"
+    if unit != 'hours':
+        with_unit += f" (${display_hourly_value}/hour)"
     return {
-        'display_pay_rate': display_pay_rate,
+        'display_pay_rate': f"${amount}",
         'display_hourly_rate_value': display_hourly_value,
-        'display_per_unit_rate_value': display_per_unit_value,
-        'display_rate_unit': display_rate_unit,
-        'display_rate_with_unit': display_rate_with_unit,
+        'display_per_unit_rate_value': f"{amount}",
+        'display_rate_unit': singular,
+        'display_rate_with_unit': with_unit,
     }

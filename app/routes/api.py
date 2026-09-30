@@ -104,7 +104,7 @@ from app.services.attendance_service import (
 )
 from app.services.ledger_posting_service import create_pending_transaction, create_pending_transaction_idempotent
 from app.services.ledger_balance_query_service import get_available_balances
-from app.payroll import get_pay_rate_for_class
+from app.services.payroll.pricing import estimate_unpaid_amount
 
 # Create blueprint
 api_bp = Blueprint('api', __name__, url_prefix='/api')
@@ -1697,8 +1697,9 @@ def handle_tap():
     is_active = bool(refreshed_event and refreshed_event.status == "active")
     duration = calculate_unpaid_attendance_seconds(seat_id, class_id, ctx=context)
 
-    rate_per_second = get_pay_rate_for_class(class_id=class_id)
-    projected_pay = duration * rate_per_second
+    # Closed sessions at the setting in force when each closed, the open one as
+    # if it closed now (DOM-PROD-001 §XV.3).
+    projected_pay = estimate_unpaid_amount(seat_id, class_id, ctx=context)
     duration_today = calculate_worked_attendance_seconds_today(
         seat_id, class_id, ctx=context
     )

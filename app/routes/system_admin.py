@@ -30,7 +30,7 @@ from app.models import (
     # Legacy tap models are unauthorized; use attendance_sessions (DOM-PROD-001).
     FeatureSettings, RentSettings,
     HallPassSettings, ClassEconomy, User, UserRole,
-    PayrollSettings, Announcement, Issue, IssueStatusHistory, IssueResolutionAction
+    Announcement, Issue, IssueStatusHistory, IssueResolutionAction
 )
 from app.auth import (
     establish_sysadmin_session,

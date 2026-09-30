@@ -321,7 +321,7 @@ class EconomyBalanceChecker:
         return CWICalculation(
             cwi=float(cwi),  # Convert to float for JSON serialization
             pay_rate=float(payroll_settings.pay_rate),  # Convert to float for JSON serialization
-            time_unit=payroll_settings.time_unit or "minutes",
+            time_unit="minutes",  # pay_rate is stored per minute (DOM-CORE-002 §11)
             pay_rate_per_minute=float(pay_rate_per_minute),
             expected_weekly_minutes=float(expected_weekly_minutes),
             payroll_frequency_days=payroll_settings.payroll_frequency_days or 7,
