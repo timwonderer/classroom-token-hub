@@ -39,11 +39,23 @@ from app.utils.canonical_temporal_resolver import utc_now
 from tests.helpers.classroom_initializer import initialize
 
 
+def _local_midnight(cid, instant):
+    """Class-local midnight of ``instant``'s day: a pay date as the settings form
+    stores it, and the grid the anchored schedule runs on (SPEC-TIME-001 §IX.12)."""
+    from types import SimpleNamespace
+    from app.utils.canonical_temporal_resolver import CLASS_LEVEL_EVALUATION, canonical_temporal_resolver
+
+    return canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION, canonical_execution_context=SimpleNamespace(class_id=cid),
+        primitive="evaluation_day_boundaries", reference_time_utc=instant,
+    ).boundary_start_utc
+
+
 def _seed_due_class(classroom, *, due=True):
     cid = classroom.class_id
     student = classroom.students[0]
     now = utc_now()
-    occurrence = (now - timedelta(minutes=1)) if due else (now + timedelta(days=7))
+    occurrence = _local_midnight(cid, now if due else now + timedelta(days=7))
 
     with FEATContext("FEAT-BYPASS-LEGACY", correlation_id=f"seed:{cid}"):
         v1 = PolicyVersion(class_id=cid, domain="payroll", version_number=1,
@@ -65,7 +77,8 @@ def _seed_due_class(classroom, *, due=True):
     with FEATContext("FEAT-ADMN-001", idempotency_key=f"schedule:{cid}"):
         save_payroll_setting(
             class_id=cid,
-            settings_data={"first_pay_date": occurrence, "payroll_frequency_days": 14},
+            settings_data={"first_pay_date": occurrence, "payroll_frequency_days": 14,
+                           "pay_schedule_type": "biweekly"},
         )
 
     with FEATContext("FEAT-PROD-001", correlation_id=f"att:{cid}", idempotency_key=f"att:{cid}"):

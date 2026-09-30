@@ -164,12 +164,12 @@ These terms are frozen with the purchased policy version: a later submission cha
 | `policy_uuid` | Primary key; the version identity (`DOM-POL-001` §VI.0) |
 | `class_id` | Class boundary (FK to `classes`) |
 | `pay_rate` | Dollars per minute, `NUMERIC(18,8)` (`DOM-CORE-002` §11) |
-| `payroll_frequency_days` | Pay frequency, in class-local calendar days |
+| `payroll_frequency_days` | The day count of a `custom` schedule (class-local calendar days); informational for the named schedules |
 | `effective_date` | The instant from which the row is in force |
 | `created_at` | When the row was recorded; breaks ties between rows sharing an `effective_date` |
 | `overtime_threshold` / `overtime_threshold_unit` | Recorded threshold; no overtime is computed until the owner rules on its semantics |
 | `max_time_per_day` / `max_time_per_day_unit` | The daily working limit enforced on attendance |
-| `pay_schedule_type` | Label for the frequency: `daily`, `weekly`, `biweekly`, `monthly` or `custom`. `payroll_frequency_days` is authoritative; `monthly` is 30 days, not a calendar month |
+| `pay_schedule_type` | The payroll cadence: `daily`, `weekly`, `biweekly`, `monthly` (calendar month, anchored on `first_pay_date`, rolled forward — `SPEC-TIME-001` §IX.12) or `custom` (every `payroll_frequency_days` days). It governs when it and `payroll_frequency_days` disagree (DOM-PROD-001 §XV.5) |
 | `rounding_mode` | Recorded preference; no rounding is applied to pay until the owner rules on its granularity |
 | `first_pay_date` | The first scheduled payroll date (`DOM-PROD-001` §XV.5) |
 

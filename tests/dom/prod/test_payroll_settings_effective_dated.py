@@ -153,25 +153,30 @@ def test_payroll_page_discloses_the_setting_in_force_and_the_pending_one(client,
 # The derived next payroll date                                                #
 # --------------------------------------------------------------------------- #
 
-def test_derive_next_payroll_date_forms():
-    tz = "America/Los_Angeles"
+def test_derive_next_payroll_date_forms(app):
+    """The three forms fall out of the anchored sequence (SPEC-TIME-001 §IX.12).
+    FIRST_PAY is Fri Oct 9 2026 00:00 PDT; the class is in Los Angeles."""
+    cid = provision_classroom("chemistry_p1", with_payroll_settings=False).class_id
+
+    def derive(last, schedule="biweekly", first=FIRST_PAY):
+        return derive_next_payroll_date(
+            class_id=cid, first_pay_date=first, pay_schedule_type=schedule,
+            frequency_days=14, last_system_occurrence=last,
+        )
+
     # 1. No SYSTEM run: first_pay_date, whether ahead or already due.
-    assert derive_next_payroll_date(
-        first_pay_date=FIRST_PAY, frequency_days=14, last_system_occurrence=None, timezone_name=tz,
-    ) == FIRST_PAY
+    assert derive(None) == FIRST_PAY
     # 2. The last SYSTEM run was the one on first_pay_date.
-    assert derive_next_payroll_date(
-        first_pay_date=FIRST_PAY, frequency_days=14, last_system_occurrence=FIRST_PAY, timezone_name=tz,
-    ) == FIRST_PAY + timedelta(days=14)
+    assert derive(FIRST_PAY) == FIRST_PAY + timedelta(days=14)
     # 3. Any later SYSTEM run, across a DST change: local midnight is kept.
-    before_dst_end = _utc(2026, 10, 23, 7, 0)  # 00:00 PDT
-    assert derive_next_payroll_date(
-        first_pay_date=FIRST_PAY, frequency_days=14, last_system_occurrence=before_dst_end, timezone_name=tz,
-    ) == _utc(2026, 11, 6, 8, 0)  # 00:00 PST: DST ended Nov 1, so 08:00 UTC
-    # No first pay date and no SYSTEM run: no schedule.
-    assert derive_next_payroll_date(
-        first_pay_date=None, frequency_days=14, last_system_occurrence=None, timezone_name=tz,
-    ) is None
+    assert derive(_utc(2026, 10, 23, 7, 0)) == _utc(2026, 11, 6, 8, 0)  # 00:00 PST after Nov 1
+    # A late run's recorded instant (no occurrence recorded) still lands on the
+    # anchored grid: the first boundary strictly after it.
+    assert derive(_utc(2026, 10, 23, 9, 30)) == _utc(2026, 11, 6, 8, 0)
+    # Monthly is a calendar month from the anchor, not 30 days.
+    assert derive(FIRST_PAY, schedule="monthly") == _utc(2026, 11, 9, 8, 0)
+    # No first pay date: no schedule.
+    assert derive(None, first=None) is None
 
 
 def test_a_scheduled_run_advances_the_date_from_its_occurrence_without_drift(client, app, monkeypatch):
