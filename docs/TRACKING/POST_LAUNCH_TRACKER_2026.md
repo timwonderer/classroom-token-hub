@@ -124,19 +124,46 @@ against this tracker, the archived launch trackers and the live-test RESUME reco
 
 ### Observed defects and debt
 
-- [ ] **Two settlement sweeps run concurrently every hour and deadlock.** `savings_interest_payout`
-  (`app/scheduled_tasks.py:1138`) calls `run_ledger_settlement_job()` itself (`:958`) before computing interest.
-  The standalone `ledger_settlement` job (`:1131`) has the same one-hour interval and starts in the same process
-  at the same moment. Both sweeps take `FEAT-LED-003` with the same idempotency key
-  (`settlement-sweep:<class_id>:<seat_id>`, `app/services/ledger_settlement_service.py:67`) within milliseconds
-  of each other.
-  - Loki records seven `psycopg2.errors.DeadlockDetected` failures ("Settlement sweep failed for seat …", `:74`)
-    on 2026-09-28 at 16:42, 17:42 and 22:42 UTC.
-  - Checked on 2026-09-30: every `ledger_balance_snapshot` reconciles with its posted transactions, and there are
-    no duplicate idempotency keys and no duplicate same-day interest postings.
-  - **Harm has not been established either way.** Still open: whether interest can be computed on a posted base
-    that the losing sweep failed to settle, and whether any historical posting was affected. Fix through a single
-    ownership model for settlement, not by offsetting the timers.
+- [ ] **Settlement sweeps deadlock against class-wide FEAT transactions.**
+  - **Lock order.** `settle_balances` (`app/services/ledger_settlement_service.py:126`) locks the seat row, then
+    the `classes` row `FOR UPDATE` (`:142`). That order is the one INV-LED-015 requires, and the lock is taken even
+    when the seat has nothing pending.
+  - **The conflict.** Rent reconciliation (FEAT-OBL-002, one transaction per class) inserts rows with foreign keys
+    to both `classes` and `seats`. Each FK check takes `FOR KEY SHARE` on the class row first, then on each seat.
+    `FOR KEY SHARE` conflicts with `FOR UPDATE`, so the two transactions lock in opposite orders and deadlock.
+  - **Evidence.** Loki records seven `DeadlockDetected` sweep failures on 2026-09-28, at 16:42, 17:42 and 22:42 UTC
+    (`while locking tuple … in relation "classes"`). In each case the blocker was a FEAT-OBL-002 transaction.
+  - **Other contenders.** Automatic payroll, interest, collective-goal refunds and insurance renewal take the same
+    inverted order. The claim flow locks the class row before the seat (`app/feats/identity_feat.py:339-340`),
+    the opposite of INV-LED-015.
+  - **Two sweeps per hour.** `savings_interest_payout` (`app/scheduled_tasks.py:1138`) calls
+    `run_ledger_settlement_job()` itself (`:958`). The standalone `ledger_settlement` job (`:1131`) fires in the same
+    second, so two sweeps run concurrently. A probe showed that two sweeps alone serialize without deadlocking.
+  - **Harm.**
+    - No historical posting was affected. All 23 production `Interest` rows recompute exactly from the ledger. In
+      every case the other sweep committed the failed seat before the interest read.
+    - Underpayment is reachable, though. A probe using the real job functions and a real Postgres deadlock paid
+      interest on the stale posted base ($0.33 where $0.67 was due), and the monthly idempotency key makes the result
+      final for the period.
+    - The interest job ignores the sweep's `failed_contexts`.
+  - **Proposed direction, not yet decided.** Serialize settlement per class, and take the class row
+    `FOR NO KEY UPDATE`, which no longer conflicts with FK `KEY SHARE`. Run settlement then interest as one hourly
+    pipeline, and skip interest for a seat whose settlement failed. Do not offset the timers.
+  - **Documentation gap.** There is no FEAT-LED-003 contract document.
+  - **Minor.** The sweep selects POSTED rows that have a NULL `posted_at` but never repairs them.
+- [ ] **Savings interest is configured weekly but paid once per calendar month.**
+  - **Configuration.** Every class with interest configured (6 `economic_engine` rows) is weekly payout with daily
+    compounding.
+  - **Code.** The payout idempotency key is monthly: `savings-interest:<class>:<seat>:<YYYY-MM>`
+    (`app/services/ledger_interest_service.py:84-86`). The amount is one payout window
+    (`app/services/economic_engine.py:744-773`).
+  - **Effect in production.** Each seat has received exactly one week's interest for September (23 rows, $1.82). The
+    next payment will fall on the first class-local day of October, and nothing more until November. Meanwhile the
+    student savings projection shows four or five payouts a month.
+  - **Timing.** Interest is also paid at the first hourly tick of the period with a positive posted balance, not
+    after the window closes (SPEC-ECON-001 §14.1, §8.2, §12).
+  - **Owner decisions.** Whether to remediate the missed weekly interest, and whether payout waits for a closed
+    window. SPEC-ECON-001 §9.2 does not define "posted as of" a boundary.
 - [ ] **Canonical context is resolved three times per authenticated request.** For example, `GET /api/student-status`
   resolves it in `capture_correlation_context` (`app/__init__.py`), again in `login_required`
   (`app/auth.py:119`), and a third time in the route itself (`app/routes/api.py`). DOM-IDEN-006 §IX requires
@@ -164,10 +191,30 @@ against this tracker, the archived launch trackers and the live-test RESUME reco
   - `templates/admin_payroll.html` tells teachers that worked time rounds.
   - No normative document defines rounding, increments or overtime. This needs a decision before implementation.
     Remediation is not decided.
-- [ ] **Payroll policy authority is under investigation.** FEAT-PROD-003 is reported to price from the live
-  `PayrollSettings` row (`app/payroll.py` `get_pay_rate_for_class`) while the payroll event records a
-  `PolicyVersion` id. A new rate becomes `IN_USE` immediately (`upsert_payroll_settings`), which may conflict with
-  DOM-CLASS-003's pending-next-cycle rule.
+- [ ] **A saved pay rate governs the open payroll cycle immediately, contrary to DOM-CLASS-003 §VII.**
+  - **The rule.** DOM-CLASS-003 §VII requires a pending `next_boundary` transition, activated at payroll cycle
+    completion (FEAT-PROD-004). DOM-PROD-001 §XV.3 and INV-ARC-015 §VI.7 say the same.
+  - **The code.** `upsert_payroll_settings` (`app/services/payroll_settings_service.py:99-158`) makes the new
+    `PayrollSettings` row `IN_USE` immediately. It also activates a new `PolicyVersion` with no `PolicyTransition`.
+  - **Effect.** Work already finished under the old rate is paid at the new one. A probe through the real routes
+    and jobs paid 15 minutes worked at $1/min as $150.00 after a save of $10/min.
+  - **Production.** Not yet exercised: each class has exactly one payroll settings row and one payroll version, and
+    `policy_transitions` is empty. It is reachable by any teacher's next rate save.
+- [ ] **Payroll amounts are priced from a source other than the policy version the event records.**
+  - **Two sources.** FEAT-PROD-003 prices from the live `PayrollSettings` row (`app/feats/prod.py:535` →
+    `app/payroll.py:56-70`). The event records `PolicyVersion.is_active`, read once in `settlement.py:164`. They
+    agree today only because `upsert_payroll_settings` writes both in one transaction.
+  - **Three ways they diverge, all shown by probes.**
+    - A pending payroll transition, which becomes reachable once DOM-CLASS-003 is implemented without moving the
+      pricing source.
+    - A hidden settings row, where pricing falls back to the default rate. Latent.
+    - A teacher save that commits while a run is in progress. Settlement takes no lock shared with the upsert, so
+      this is reachable today as a race.
+  - **Contracts affected.** DOM-PROD-001 §XI, FEAT-PROD-003 §II.1 and INV-CORE-000 §III.3 (reproducibility).
+  - **No immutability triggers.** Production has none on `payroll_event`, `policy_versions` or `payroll_settings`.
+    Only `attendance_sessions` and `ledger_transaction` have them.
+  - **Open decision.** Settle the policy-version semantics (DOM-POL-001 §VI.0 against DOM-PROD-001 §XI) before
+    consolidating pricing into one PROD function.
 - [ ] **Unratified citation.** The closed-session payroll rule (#1439) is cited in code as "DOM-PROD-001 §VI.3" /
   "§VI.1" (`app/services/attendance_service.py`, `app/services/payroll/settlement.py`, `app/feats/prod.py`).
   DOM-PROD-001 §VI is the Schema Authority Declaration and has no subsections, so the rule needs ratification.
