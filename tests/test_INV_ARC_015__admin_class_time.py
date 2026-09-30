@@ -109,7 +109,7 @@ def test_INV_ARC_015__payroll_page_shows_the_schedulers_next_run(client, app):
             setting = append_payroll_setting(
                 class_id=classroom.class_id,
                 settings_data={
-                    "pay_rate": Decimal("0.25"), "payroll_frequency_days": 14,
+                    "pay_rate": Decimal("0.25"),
                     "pay_schedule_type": "biweekly", "rounding_mode": "down",
                     "first_pay_date": FIRST_PAY,
                 },

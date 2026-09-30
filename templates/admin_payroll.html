@@ -423,8 +423,9 @@
                 <div class="mb-3">
                   <label for="simpleFirstPayDate" class="form-label fw-bold">Starting Date (First Payday):</label>
                   <input type="date" class="form-control" id="simpleFirstPayDate" name="simple_first_pay_date"
-                    value="{{ display_first_pay_date_iso }}">
-                  <small class="text-muted">Date of the first payroll run</small>
+                    value="{{ display_first_pay_date_iso }}" aria-describedby="simpleFirstPayDateHelp"
+                    {% if payroll_form.settings_mode != 'advanced' %}required{% endif %}>
+                  <small class="text-muted" id="simpleFirstPayDateHelp">Required. Date of the first payroll run; every later payday is counted from it.</small>
                 </div>
 
                 <!-- Daily Limit -->
@@ -554,38 +555,22 @@
                 <div class="mb-3">
                   <label for="advPaySchedule" class="form-label fw-bold">Pay Schedule:</label>
                   <select class="form-select mb-2" id="advPaySchedule" name="adv_pay_schedule">
-                    <option value="daily" {% if payroll_form.pay_schedule_type=='daily'
-                      %}selected{% endif %}>Daily</option>
                     <option value="weekly" {% if payroll_form.pay_schedule_type=='weekly'
                       %}selected{% endif %}>Weekly</option>
                     <option value="biweekly" {% if payroll_form.pay_schedule_type=='biweekly'
                       %}selected{% endif %}>Bi-weekly</option>
                     <option value="monthly" {% if payroll_form.pay_schedule_type=='monthly'
                       %}selected{% endif %}>Monthly</option>
-                    <option value="custom" {% if payroll_form.pay_schedule_type=='custom'
-                      %}selected{% endif %}>Custom</option>
                   </select>
-                  <div id="customScheduleFields" {% if payroll_form.pay_schedule_type != 'custom' %}hidden{% endif %}>
-                    <div class="row">
-                      <div class="col-md-6">
-                        <input type="number" class="form-control" id="advCustomScheduleValue" aria-label="Custom schedule value"
-                          name="adv_custom_schedule_value" placeholder="Enter number" value="{{ payroll_form.custom_schedule_value }}">
-                      </div>
-                      <div class="col-md-6">
-                        <select class="form-select" id="advCustomScheduleUnit" aria-label="Custom schedule unit" name="adv_custom_schedule_unit">
-                          <option value="days" {% if payroll_form.custom_schedule_unit == 'days' %}selected{% endif %}>Day(s)</option>
-                          <option value="weeks" {% if payroll_form.custom_schedule_unit == 'weeks' %}selected{% endif %}>Week(s)</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
                 </div>
 
                 <!-- First Pay Date -->
                 <div class="mb-3">
                   <label for="advFirstPayDate" class="form-label fw-bold">First Pay Date:</label>
                   <input type="date" class="form-control" id="advFirstPayDate" name="adv_first_pay_date"
-                    value="{{ display_first_pay_date_iso }}">
+                    value="{{ display_first_pay_date_iso }}" aria-describedby="advFirstPayDateHelp"
+                    {% if payroll_form.settings_mode == 'advanced' %}required{% endif %}>
+                  <small class="text-muted" id="advFirstPayDateHelp">Required. Every later payday is counted from this date.</small>
                 </div>
 
                 <!-- Rounding Mode -->
@@ -887,6 +872,10 @@
 
   if (settingsModeToggle) {
     settingsModeToggle.addEventListener('change', function () {
+      // Only the visible first-pay-date input is required; a required input
+      // in the hidden section would block the submit with no visible message.
+      document.getElementById('simpleFirstPayDate').required = !this.checked;
+      document.getElementById('advFirstPayDate').required = this.checked;
       if (this.checked) {
         // Advanced mode
         simpleModeFields.style.display = 'none';
@@ -917,16 +906,6 @@
   if (advOvertimeEnabled) {
     advOvertimeEnabled.addEventListener('change', function () {
       overtimeFields.style.display = this.checked ? 'block' : 'none';
-    });
-  }
-
-  // Advanced Mode: Custom schedule toggle
-  const advPaySchedule = document.getElementById('advPaySchedule');
-  const customScheduleFields = document.getElementById('customScheduleFields');
-
-  if (advPaySchedule) {
-    advPaySchedule.addEventListener('change', function () {
-      customScheduleFields.hidden = this.value !== 'custom';
     });
   }
 
@@ -1031,11 +1010,9 @@
 
       // Pay schedule
       const scheduleNames = {
-        'daily': 'daily',
         'weekly': 'weekly',
         'biweekly': 'bi-weekly',
-        'monthly': 'monthly',
-        'custom': 'custom schedule'
+        'monthly': 'monthly (same date each month)'
       };
       summaryHTML += `<p class="mb-2">Their pay schedule is <strong>${scheduleNames[scheduleType]}</strong>`;
       if (firstPayDate) {
@@ -1140,12 +1117,6 @@
           validationErrors.push('Maximum time per day overrides overtime. Consider disabling one of them.');
         }
 
-        // Check if custom schedule has values
-        const scheduleType = document.getElementById('advPaySchedule').value;
-        const customValue = document.getElementById('advCustomScheduleValue').value;
-        if (scheduleType === 'custom' && !customValue) {
-          validationErrors.push('Custom schedule requires a value');
-        }
       }
 
       // Display errors if any

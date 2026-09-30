@@ -105,7 +105,7 @@ def _payroll_credits(classroom, seat_id: int) -> list[Decimal]:
 def _setup(client, app, monkeypatch):
     """R1 = $60/hour ($1/min) in force; 15 minutes worked under it; then R2 =
     $600/hour ($10/min) saved while the cycle is still open."""
-    classroom = initialize_as_teacher("chemistry_p1", client, app)
+    classroom = initialize_as_teacher("chemistry_p1", client, app, with_payroll_settings=False)
     enable_class_feature(class_id=classroom.class_id, feature="payroll")
     seat_id = classroom.students[0].seat.id
 

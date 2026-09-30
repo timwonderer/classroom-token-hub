@@ -32,7 +32,7 @@ from app.feats.prod import record_attendance_session
 from app.models import AttendanceReasonCode, AttendanceSession
 from app.scheduled_tasks import enforce_daily_limits_job
 from app.services.context_resolver import CanonicalContext
-from app.services.payroll.settings import save_payroll_setting
+from tests.helpers.class_domain import put_payroll_setting_in_force
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
     canonical_temporal_resolver,
@@ -103,17 +103,9 @@ def _tap_in(classroom, seat, *, at):
 
 def _configure_daily_limit(class_id, *, daily_limit_hours, idempotency_key):
     """Set the class daily limit, enabling the DOM-PROD-001 §314 path."""
-    with FEATContext("FEAT-ADMN-001", idempotency_key=idempotency_key):
-        save_payroll_setting(
-            class_id=class_id,
-            settings_data={
-                "max_time_per_day": daily_limit_hours,
-                "max_time_per_day_unit": "hours",
-                "pay_rate": 0.25,
-                "payroll_frequency_days": 14,
-            },
-        )
-    db.session.commit()
+    put_payroll_setting_in_force(
+        class_id, max_time_per_day=daily_limit_hours, max_time_per_day_unit="hours", pay_rate=0.25,
+    )
 
 
 def _aware(ts):

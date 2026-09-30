@@ -113,7 +113,7 @@ def test_upgrade_remaps_every_event_to_its_classs_payroll_setting(app):
 
         assert "policy_version_id" not in _columns("payroll_event")
         assert _columns("payroll_settings") == {
-            "policy_uuid", "class_id", "pay_rate", "payroll_frequency_days", "effective_date",
+            "policy_uuid", "class_id", "pay_rate", "effective_date",
             "created_at", "overtime_threshold", "overtime_threshold_unit", "max_time_per_day",
             "max_time_per_day_unit", "pay_schedule_type", "rounding_mode", "first_pay_date",
         }
@@ -146,8 +146,8 @@ def test_upgrade_refuses_a_class_with_more_than_one_candidate_setting(app):
             conn.execute(text(
                 "INSERT INTO payroll_settings (policy_uuid, class_id, availability_state, pay_rate,"
                 " payroll_frequency_days, created_at, updated_at, settings_mode, time_unit,"
-                " overtime_enabled, pay_schedule_type, rounding_mode)"
-                " VALUES (:u, :c, 'RETIRED', 0.1, 14, :t, :t, 'simple', 'minutes', false, 'biweekly', 'down')"
+                " overtime_enabled, pay_schedule_type, rounding_mode, first_pay_date)"
+                " VALUES (:u, :c, 'RETIRED', 0.1, 14, :t, :t, 'simple', 'minutes', false, 'biweekly', 'down', :t)"
             ), {"u": str(uuid.uuid4()), "c": classrooms[0].class_id, "t": T0 - timedelta(days=1)})
         config = current_app.extensions["migrate"].migrate.get_config()
         # Alembic directly: flask_migrate turns the exception into SystemExit.
@@ -232,8 +232,8 @@ def test_retired_history_keeps_the_rate_that_was_in_force_at_each_instant(app):
                 conn.execute(text(
                     "INSERT INTO payroll_settings (policy_uuid, class_id, availability_state, pay_rate,"
                     " payroll_frequency_days, created_at, updated_at, settings_mode, time_unit,"
-                    " overtime_enabled, pay_schedule_type, rounding_mode)"
-                    " VALUES (:u, :c, :s, :r, 14, :t, :t, 'advanced', 'minutes', false, 'biweekly', 'down')"
+                    " overtime_enabled, pay_schedule_type, rounding_mode, first_pay_date)"
+                    " VALUES (:u, :c, :s, :r, 14, :t, :t, 'advanced', 'minutes', false, 'biweekly', 'down', :t)"
                 ), {"u": policy_uuid, "c": cid, "s": state, "r": rate, "t": created})
 
         alembic_upgrade()
@@ -241,3 +241,53 @@ def test_retired_history_keeps_the_rate_that_was_in_force_at_each_instant(app):
         assert payroll_setting_effective_at(cid, T0 + timedelta(days=1)).policy_uuid == older
         assert payroll_setting_effective_at(cid, T0 + timedelta(days=2)).policy_uuid == newer
         assert payroll_setting_effective_at(cid, T0 - timedelta(seconds=1)) is None
+
+
+@pytest.mark.parametrize("column,value,reason", [
+    ("first_pay_date", None, "no first_pay_date"),
+    ("pay_schedule_type", "custom", "other than weekly, biweekly or monthly"),
+    ("pay_schedule_type", "daily", "other than weekly, biweekly or monthly"),
+])
+def test_upgrade_refuses_a_setting_without_an_anchor_or_with_an_unsupported_schedule(app, column, value, reason):
+    """Every setting must anchor a weekly, biweekly or monthly schedule
+    (operator ruling 2026-09-30); the migration will not guess one."""
+    with app.app_context():
+        (classroom,) = _provision_and_downgrade(("chemistry_p1",))
+        with db.engine.begin() as conn:
+            conn.execute(
+                text(f"UPDATE payroll_settings SET {column} = :v WHERE class_id = :c"),
+                {"v": value, "c": classroom.class_id},
+            )
+        config = current_app.extensions["migrate"].migrate.get_config()
+        with pytest.raises(RuntimeError, match=reason):
+            command.upgrade(config, "head")
+        db.session.remove()
+        assert "effective_date" not in _columns("payroll_settings")
+        with db.engine.begin() as conn:
+            conn.execute(text(
+                "UPDATE payroll_settings SET first_pay_date = created_at, pay_schedule_type = 'biweekly'"
+            ))
+        alembic_upgrade()
+
+
+def test_upgrade_drops_the_stored_day_count_and_constrains_the_schedule(app):
+    """Pay frequency is derived from pay_schedule_type, never stored."""
+    with app.app_context():
+        _provision_and_downgrade(("chemistry_p1",))
+        assert "payroll_frequency_days" in _columns("payroll_settings")
+        alembic_upgrade()
+        assert "payroll_frequency_days" not in _columns("payroll_settings")
+        with pytest.raises(Exception, match="ck_payroll_settings_schedule_type|null value"):
+            with db.engine.begin() as conn:
+                conn.execute(text(
+                    "INSERT INTO payroll_settings (policy_uuid, class_id, pay_rate, effective_date,"
+                    " created_at, pay_schedule_type, rounding_mode, first_pay_date)"
+                    " SELECT :u, class_id, 1, now(), now(), 'custom', 'down', now() FROM classes LIMIT 1"
+                ), {"u": str(uuid.uuid4())})
+        with pytest.raises(Exception, match="first_pay_date"):
+            with db.engine.begin() as conn:
+                conn.execute(text(
+                    "INSERT INTO payroll_settings (policy_uuid, class_id, pay_rate, effective_date,"
+                    " created_at, pay_schedule_type, rounding_mode, first_pay_date)"
+                    " SELECT :u, class_id, 1, now(), now(), 'monthly', 'down', NULL FROM classes LIMIT 1"
+                ), {"u": str(uuid.uuid4())})

@@ -31,7 +31,7 @@ from app.scheduled_tasks import run_automatic_payroll_job
 from app.services.payroll import schedule as schedule_module
 from app.services.payroll.cycle_completion import resolve_completed_run
 from app.services.payroll.schedule import next_payroll_date
-from app.services.payroll.settings import save_payroll_setting
+from tests.helpers.class_domain import put_payroll_setting_in_force
 from app.utils.canonical_temporal_resolver import utc_now
 from tests.helpers.classroom_initializer import initialize
 
@@ -55,13 +55,7 @@ def _seed_due_class(classroom, *, due=True):
     occurrence = _local_midnight(cid, now if due else now + timedelta(days=7))
 
     # The schedule: the first pay date is the occurrence (due, or a week out).
-    # The provisioned default defines no boundary, so this is in force at once.
-    with FEATContext("FEAT-ADMN-001", idempotency_key=f"schedule:{cid}"):
-        save_payroll_setting(
-            class_id=cid,
-            settings_data={"first_pay_date": occurrence, "payroll_frequency_days": 14,
-                           "pay_schedule_type": "biweekly"},
-        )
+    put_payroll_setting_in_force(cid, first_pay_date=occurrence, pay_schedule_type="biweekly")
 
     with FEATContext("FEAT-PROD-001", correlation_id=f"att:{cid}", idempotency_key=f"att:{cid}"):
         db.session.add(AttendanceSession(

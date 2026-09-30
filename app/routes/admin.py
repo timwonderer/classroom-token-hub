@@ -224,7 +224,7 @@ from app.services.ledger_balance_query_service import get_batch_balances_by_clas
 from app.services.attendance_service import calculate_unpaid_attendance_seconds
 from app.services.payroll.pricing import estimate_payable_amount
 from app.services.payroll.schedule import (
-    NOMINAL_FREQUENCY_DAYS,
+    PAY_SCHEDULE_TYPES,
     next_payroll_boundary_after,
     next_payroll_date as derive_class_next_payroll_date,
 )
@@ -7749,9 +7749,6 @@ def payroll_settings():
             pay_rate_per_minute = pay_rate_per_hour / Decimal('60')  # Convert to per-minute for storage
 
             frequency = request.form.get('simple_frequency', 'biweekly')
-            # Informational only: the payday cadence comes from the schedule
-            # type (a calendar month for 'monthly', SPEC-TIME-001 §IX.12).
-            payroll_frequency_days = NOMINAL_FREQUENCY_DAYS.get(frequency, 14)
 
             first_pay_date_str = request.form.get('simple_first_pay_date')
             first_pay_date = _class_local_date_start_utc(first_pay_date_str)
@@ -7782,7 +7779,6 @@ def payroll_settings():
             # and stored as minutes; simple mode applies no rounding preference.
             settings_data = {
                 'pay_rate': pay_rate_per_minute,
-                'payroll_frequency_days': payroll_frequency_days,
                 'first_pay_date': first_pay_date,
                 'pay_schedule_type': frequency,
                 'overtime_threshold': None,
@@ -7815,21 +7811,8 @@ def payroll_settings():
             max_time_value = _quantize_currency(max_time_value_raw) if max_time_value_raw else None
             max_time_unit = request.form.get('adv_max_time_unit')
 
-            # Pay schedule
+            # Pay schedule: weekly, biweekly or monthly (validated below).
             pay_schedule = request.form.get('adv_pay_schedule', 'biweekly')
-            custom_value = request.form.get('adv_custom_schedule_value')
-            custom_unit = request.form.get('adv_custom_schedule_unit')
-
-            # Calculate payroll_frequency_days
-            if pay_schedule == 'custom':
-                custom_value = int(custom_value) if custom_value else 14
-                if custom_unit == 'weeks':
-                    payroll_frequency_days = custom_value * 7
-                else:  # days
-                    payroll_frequency_days = custom_value
-            else:
-                # Informational only for a named schedule; read for 'custom'.
-                payroll_frequency_days = NOMINAL_FREQUENCY_DAYS.get(pay_schedule, 14)
 
             first_pay_date_str = request.form.get('adv_first_pay_date')
             first_pay_date = _class_local_date_start_utc(first_pay_date_str)
@@ -7837,8 +7820,7 @@ def payroll_settings():
             rounding = request.form.get('adv_rounding', 'down')
 
             # Only the legal payroll_settings columns are stored (DOM-POL-001A
-            # §V.F): the entry unit and the custom schedule's value/unit are
-            # folded into pay_rate (per minute) and payroll_frequency_days.
+            # §V.F): the entry unit is folded into pay_rate (per minute).
             settings_data = {
                 'pay_rate': pay_rate_per_minute,
                 'overtime_threshold': float(overtime_threshold) if overtime_enabled and overtime_threshold is not None else None,
@@ -7846,10 +7828,19 @@ def payroll_settings():
                 'max_time_per_day': float(max_time_value) if max_time_value else None,
                 'max_time_per_day_unit': max_time_unit if max_time_value else None,
                 'pay_schedule_type': pay_schedule,
-                'payroll_frequency_days': payroll_frequency_days,
                 'first_pay_date': first_pay_date,
                 'rounding_mode': rounding,
             }
+
+        # Every setting anchors the payroll schedule (DOM-PROD-001 §XV.5), and
+        # the schedule is weekly, biweekly or monthly (operator ruling
+        # 2026-09-30). Refuse anything else before any write.
+        if settings_data['first_pay_date'] is None:
+            flash('Choose the first payday. Payroll settings need a first pay date.', 'error')
+            return redirect(url_for('admin.payroll'))
+        if settings_data['pay_schedule_type'] not in PAY_SCHEDULE_TYPES:
+            flash('Choose a pay schedule: weekly, every two weeks, or monthly.', 'error')
+            return redirect(url_for('admin.payroll'))
 
         payload_hash = hashlib.sha256(
             json.dumps(

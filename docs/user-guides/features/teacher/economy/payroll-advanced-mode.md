@@ -3,8 +3,8 @@ title: Payroll Advanced Mode
 category: features
 subcategory: teacher-economy
 roles: [teacher]
-description: What the Advanced Mode toggle adds to payroll settings — time increments, overtime, rounding, custom schedules, and the pay simulator — and which of those actually change what students are paid.
-keywords: [payroll, advanced mode, overtime, rounding, time increment, pay simulator, custom schedule, daily limit, auto run, automatic payroll]
+description: What the Advanced Mode toggle adds to payroll settings — time increments, overtime, rounding and the pay simulator — and which of those actually change what students are paid.
+keywords: [payroll, advanced mode, overtime, rounding, time increment, pay simulator, pay schedule, daily limit, auto run, automatic payroll]
 related:
   - user-guides/features/teacher/economy/payroll-settings
   - user-guides/features/teacher/economy/payroll-run
@@ -35,9 +35,9 @@ This is a data-entry convenience. Whatever you enter is converted to a single in
 
 ### Overtime
 
-Ticking **Enable Overtime** opens four fields — **Threshold**, its **Unit**, a **Per** period of day, week, or month, and an **Overtime Multiplier** that must be at least 1.0.
+Ticking **Enable Overtime** opens a **Threshold** and its **Unit**.
 
-These values save and reappear when you come back. They do not affect pay. Every second is paid at the base rate no matter how many hours a student accumulates. See *Important notes*.
+The threshold saves and reappears when you come back. It does not affect pay. Every second is paid at the base rate no matter how many hours a student accumulates. See *Important notes*.
 
 ### Daily Time Limit
 
@@ -47,12 +47,11 @@ It works, and it is the one advanced setting that changes student behaviour. Whe
 
 ### Pay Schedule
 
-Advanced mode adds two options simple mode does not offer:
+Payroll runs **Weekly**, **Bi-weekly**, or **Monthly** — the same three choices as simple mode.
 
-- **Daily** — a run every day
-- **Custom** — reveals a number and a unit of **Day(s)** or **Week(s)**, so you can set something like every 10 days or every 3 weeks
+**First Pay Date** is required and anchors the calendar. Every later payday is counted from it: weekly and bi-weekly paydays fall on the same weekday, and monthly paydays fall on the same date each month. When that date does not exist in a month, payday moves to the first day of the next month and then returns to the original date: a schedule starting January 31 pays on January 31, March 1, March 31, May 1, May 31, and so on. A month is never counted as 30 days.
 
-**First Pay Date** anchors the calendar. The **Next Payroll** figure at the top of the page is calculated forward from that date and your frequency, so a manual run does not shift it.
+The **Next Payroll** figure at the top of the page comes from that calendar, so a manual run does not shift it.
 
 ### Rounding
 
@@ -70,18 +69,18 @@ Below the simulator, **Current Settings** narrates your form in plain English. T
 
 ### Validation
 
-The form checks three things when you save and lists any failures in a red box above the button:
+The form checks your entries when you save and lists any failures in a red box above the button:
 
 | Message | What it means |
 | --- | --- |
-| *Overtime multiplier must be ≥ 1.0* | A multiplier below 1.0 would make overtime a pay cut |
 | *Maximum time per day overrides overtime. Consider disabling one of them.* | A student tapped out at the limit can never cross an overtime threshold above it |
-| *Custom schedule requires a value* | You chose **Custom** without entering a number |
+
+Saving without a **First Pay Date** is refused with *Choose the first payday. Payroll settings need a first pay date.*
 
 ## Important notes
 
 > [!CAUTION]
-> **Overtime does not pay overtime.** The threshold, period, and multiplier all save and all redisplay, and none of them enter the pay calculation. A student who works twelve hours is paid twelve hours at the base rate. Do not promise students an overtime rate — set a base rate you are happy to pay for every hour worked.
+> **Overtime does not pay overtime.** The threshold saves and redisplays, and it does not enter the pay calculation. A student who works twelve hours is paid twelve hours at the base rate. Do not promise students an overtime rate — set a base rate you are happy to pay for every hour worked.
 
 > [!CAUTION]
 > **Rounding is not applied.** All three options behave identically. Time is measured to the second and money is rounded to the cent, whatever the dropdown says. This matters most if you chose **Per Hour** or **Per Day** as your increment expecting partial periods to be dropped — they are not, and a student who works nine minutes of an hour is paid for nine minutes.

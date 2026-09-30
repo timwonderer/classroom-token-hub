@@ -2355,21 +2355,24 @@ class PayrollSettings(db.Model):
     policy_uuid = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
     pay_rate = db.Column(db.Numeric(precision=18, scale=8), nullable=False)  # $ per minute
-    payroll_frequency_days = db.Column(db.Integer, nullable=False)
     effective_date = db.Column(db.DateTime(timezone=True), nullable=False)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
     overtime_threshold = db.Column(db.Float, nullable=True)
     overtime_threshold_unit = db.Column(db.String(20), nullable=True)  # seconds/minutes/hours
     max_time_per_day = db.Column(db.Float, nullable=True)
     max_time_per_day_unit = db.Column(db.String(20), nullable=True)  # seconds/minutes/hours
-    pay_schedule_type = db.Column(db.String(20), nullable=False)  # daily/weekly/biweekly/monthly/custom
+    # The payday cadence: weekly, biweekly or monthly, anchored on first_pay_date
+    # (SPEC-TIME-001 §IX.12; DOM-PROD-001 §XV.5). No day count is involved.
+    pay_schedule_type = db.Column(db.String(20), nullable=False)
     rounding_mode = db.Column(db.String(20), nullable=False)  # recorded; not applied (owner ruling pending)
-    first_pay_date = db.Column(db.DateTime(timezone=True), nullable=True)
+    first_pay_date = db.Column(db.DateTime(timezone=True), nullable=False)  # the schedule's anchor
 
     # Everything but the key a submission supplies. Kept here so the writer and
     # the migration agree on what a complete row is.
+    PAY_SCHEDULE_TYPES = ('weekly', 'biweekly', 'monthly')
+
     SETTING_FIELDS = (
-        'pay_rate', 'payroll_frequency_days', 'overtime_threshold',
+        'pay_rate', 'overtime_threshold',
         'overtime_threshold_unit', 'max_time_per_day', 'max_time_per_day_unit',
         'pay_schedule_type', 'rounding_mode', 'first_pay_date',
     )
@@ -2381,7 +2384,10 @@ class PayrollSettings(db.Model):
             'class_id', 'effective_date', 'created_at',
             name='uq_payroll_settings_class_effective_created',
         ),
-        db.CheckConstraint('payroll_frequency_days > 0', name='ck_payroll_settings_frequency_positive'),
+        db.CheckConstraint(
+            "pay_schedule_type IN ('weekly','biweekly','monthly')",
+            name='ck_payroll_settings_schedule_type',
+        ),
         db.CheckConstraint('effective_date >= created_at', name='ck_payroll_settings_not_retroactive'),
     )
 

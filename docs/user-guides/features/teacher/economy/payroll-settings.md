@@ -23,7 +23,7 @@ Payroll settings control how students earn pay from their attendance records. Th
 
 1. Navigate to **Economy > Payroll** and open the **Settings** tab.
 2. Set the **Pay Rate** — an amount per hour of attendance.
-3. Choose a **Payroll Frequency** of **Weekly**, **Bi-weekly**, or **Monthly**, and a **Starting Date (First Payday)**.
+3. Choose a **Payroll Frequency** of **Weekly**, **Bi-weekly**, or **Monthly**, and a **Starting Date (First Payday)**. The first payday is required: every later payday is counted from it, and a monthly payroll falls on the same date each month rather than every 30 days.
 4. Optionally set a **Daily Time Limit** in hours and minutes. A student who reaches it is automatically tapped out and cannot tap back in until the next day; the counter resets at midnight PST. Leave both boxes blank for no limit.
 5. Choose **Save Settings**.
 6. Use the **Pay Simulator** beside the form, or the preview tables on the Overview tab, to confirm the rate produces the earnings you expect.

@@ -14,6 +14,7 @@ Reference: SPEC-ECON-003 (Economic Engine Calculation & Reference Specification)
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass
 from enum import Enum
+from types import SimpleNamespace
 from decimal import Decimal
 import logging
 
@@ -61,7 +62,8 @@ class CWICalculation:
     time_unit: str                      # Unit type (seconds, minutes, hours, days)
     pay_rate_per_minute: float         # Normalized to per-minute
     expected_weekly_minutes: float     # Expected attendance per week
-    payroll_frequency_days: int        # How often payroll runs
+    pay_schedule_type: str             # weekly / biweekly / monthly (anchored, SPEC-TIME-001 §IX.12)
+    pay_period_days: int | None        # Calendar length of the current pay period
     notes: List[str]                   # Calculation notes
 
 
@@ -316,13 +318,46 @@ class EconomyBalanceChecker:
         cwi = _quantize_currency(expected_weekly_minutes * pay_rate_per_minute)
         notes.append(f"CWI = {expected_weekly_minutes} min × ${pay_rate_per_minute:.4f}/min = ${cwi:.2f}")
 
+        # The pay frequency is the schedule type; a period's length comes from
+        # the anchored paydays, so a February period is shorter than a March one
+        # (DOM-PROD-001 §XV.5). It is never a stored number of days.
+        from app.services.payroll.schedule import pay_period_containing
+        from app.utils.canonical_temporal_resolver import (
+            CLASS_LEVEL_EVALUATION,
+            canonical_temporal_resolver,
+            utc_now,
+        )
+        pay_period_days = None
+        class_id = getattr(payroll_settings, 'class_id', None)
+        period = pay_period_containing(class_id, utc_now()) if class_id else None
+        if period is not None:
+            start, end = period
+            local = canonical_temporal_resolver(
+                CLASS_LEVEL_EVALUATION,
+                canonical_execution_context=SimpleNamespace(class_id=class_id),
+                primitive="current_evaluation_day",
+                reference_time_utc=end,
+            ).evaluation_date
+            first = canonical_temporal_resolver(
+                CLASS_LEVEL_EVALUATION,
+                canonical_execution_context=SimpleNamespace(class_id=class_id),
+                primitive="current_evaluation_day",
+                reference_time_utc=start,
+            ).evaluation_date
+            pay_period_days = (local - first).days
+            notes.append(
+                f"Payroll schedule: {payroll_settings.pay_schedule_type}; the current pay period is "
+                f"{pay_period_days} days ({first:%b %d} to {local:%b %d})"
+            )
+
         return CWICalculation(
             cwi=float(cwi),  # Convert to float for JSON serialization
             pay_rate=float(payroll_settings.pay_rate),  # Convert to float for JSON serialization
             time_unit="minutes",  # pay_rate is stored per minute (DOM-CORE-002 §11)
             pay_rate_per_minute=float(pay_rate_per_minute),
             expected_weekly_minutes=float(expected_weekly_minutes),
-            payroll_frequency_days=payroll_settings.payroll_frequency_days or 7,
+            pay_schedule_type=payroll_settings.pay_schedule_type,
+            pay_period_days=pay_period_days,
             notes=notes
         )
 

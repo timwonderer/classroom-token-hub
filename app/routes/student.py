@@ -92,11 +92,7 @@ from app.services.ledger_balance_query_service import (
     get_available_balances,
     get_posted_balance,
 )
-from app.services.ledger_interest_service import resolve_savings_policy
-from app.services.economic_engine import (
-    savings_interest_for_payout_period,
-    project_savings_balances,
-)
+from app.services.ledger_interest_service import forecast_savings, resolve_savings_policy
 from app.services import access_policy_service, store_service
 from app.services.entitlement_service import (
     get_hall_pass_balance,
@@ -1180,18 +1176,14 @@ def dashboard():
     savings_transactions = [tx for tx in transactions if tx.account_type == 'savings']
 
     checking_balance, savings_balance = get_available_balances(scope.seat_id, scope.class_id)
-    # The projection runs the payout engine over the posted balance, on the
-    # class's configured terms. A hardcoded APY here is prohibited outright
-    # (SPEC-ECON-001 §10, §11), and accrual is posted-only (§9.2).
-    savings_policy = resolve_savings_policy(scope.class_id)
+    # The forecast runs the payout job's own daily-balance accrual over the
+    # posted balance, on the class's configured terms. A hardcoded APY here is
+    # prohibited outright (SPEC-ECON-001 §10, §11), and accrual is posted-only
+    # (§9.2).
+    savings_forecast = forecast_savings(scope.seat_id, scope.class_id, months=0)
+    savings_policy = savings_forecast.policy
     posted_savings_balance = get_posted_balance(scope.seat_id, scope.class_id, 'savings')
-    forecast_interest = savings_interest_for_payout_period(
-        posted_balance=posted_savings_balance,
-        annual_rate=savings_policy.annual_rate,
-        calculation_type=savings_policy.calculation_type,
-        compound_frequency=savings_policy.compound_frequency,
-        payout_frequency=savings_policy.payout_frequency,
-    )
+    forecast_interest = savings_forecast.next_credit
 
     attendance_state = get_class_attendance_status(student, class_id=scope.class_id, ctx=scope)
     if 'projected_pay' in attendance_state and attendance_state['projected_pay'] is not None:
@@ -1688,24 +1680,11 @@ def transfer():
     # same math as the runtime payout engine (SPEC-ECON-001 §9.2, §10, §13).
     posted_savings_balance = get_posted_balance(context.seat_id, context.class_id, 'savings')
 
-    # Forecast interest for one payout window, via the shared canonical engine.
-    forecast_interest = savings_interest_for_payout_period(
-        posted_balance=posted_savings_balance,
-        annual_rate=annual_rate,
-        calculation_type=calculation_type,
-        compound_frequency=compound_frequency,
-        payout_frequency=payout_frequency,
-    )
-
-    # 12-month projection, built from the same recurrence the runtime uses.
-    projection_series = project_savings_balances(
-        posted_balance=posted_savings_balance,
-        annual_rate=annual_rate,
-        calculation_type=calculation_type,
-        compound_frequency=compound_frequency,
-        payout_frequency=payout_frequency,
-        months=12,
-    )
+    # The open payout window's credit and a 12-month projection, both from the
+    # payout job's own daily-balance accrual on the class calendar (§9.2, §10).
+    savings_forecast = forecast_savings(context.seat_id, context.class_id, months=12)
+    forecast_interest = savings_forecast.next_credit
+    projection_series = savings_forecast.series
     projection_months = list(range(len(projection_series)))
     projection_balances = [float(b) for b in projection_series]
 

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-ECON-001    | 1.1     | 2026-09-30     | 1.0        | Normative       |
+| SPEC-ECON-001    | 1.2     | 2026-09-30     | 1.1        | Normative       |
 
 ---
 
@@ -182,6 +182,11 @@ The system SHALL support:
 
 accrual frequencies.
 
+Savings interest accrues daily by the daily balance method (§9.2, operator ruling
+2026-09-30). Until an amendment defines what a weekly or monthly accrual frequency
+would change under that method, a persisted `interest_accrual_frequency` SHALL NOT
+alter accrual.
+
 ---
 
 ### 5.2 Daily Accrual Formula
@@ -199,6 +204,10 @@ Internal accrual precision SHALL exceed displayed currency precision.
 Implementations SHALL NOT discard sub-cent precision during accrual computation.
 
 Rounding SHALL occur only at lawful payout boundaries unless explicitly configured otherwise.
+
+Daily accruals within a payout window SHALL be summed at full precision and rounded to the
+currency unit exactly once, when the window is credited (§9.2). Individual days SHALL NOT be
+rounded.
 
 ---
 
@@ -227,6 +236,19 @@ Example:
 | Weekly | Participation updates weekly |
 | Monthly | Participation updates after monthly capitalization |
 | Never | Accrued interest never participates |
+
+Under the daily balance method (§9.2), compound frequency governs when interest accrued but
+not yet credited in the current payout window joins the earning base:
+
+- **Daily:** each day's earning base is that day's end-of-day posted savings balance plus all
+  interest accrued so far in the window.
+- **Weekly / Monthly:** interest accrued so far in the window joins the earning base at each
+  class-local week start (Monday) or month start that falls inside the window, and stays in
+  the base for the rest of the window.
+- **Never (simple):** accrued interest never joins the earning base.
+
+In every case, interest already credited to the ledger is part of the posted balance and
+therefore of every later day's end-of-day balance.
 
 ---
 
@@ -287,6 +309,19 @@ Each accrual and payout period SHALL possess deterministic idempotency boundarie
 
 Duplicate payout within the same settlement window is prohibited.
 
+A payout window is one calendar period of the configured payout frequency in the class
+timezone, as `SPEC-TIME-001` §11 defines it: a Monday-start week for weekly payout, a
+calendar month for monthly payout. Each window SHALL be credited at most once per seat,
+under an idempotency key that names the window (its class-local start date for a week, its
+year and month for a month). A window already credited under any earlier key SHALL NOT be
+credited again.
+
+No day SHALL accrue for a seat twice. When the payout frequency changes, the first window under
+the new frequency may overlap days already credited under the old one; that window keeps its own
+key and accrues only on its days that end after the last credited window closed. Its earlier days
+keep their place for compounding but accrue nothing. Days before the seat was claimed accrue
+nothing in the same way.
+
 ---
 
 ## 9. Eligibility Rules
@@ -306,6 +341,26 @@ Implementations MUST explicitly define whether pending balances participate in a
 The default authoritative rule SHALL be:
 
 - posted balances only.
+
+**Daily balance method** (operator ruling 2026-09-30; as in US Regulation DD, 12 CFR
+1030.7): interest accrues daily on each day's end-of-day posted savings balance; accrued
+interest is credited at the close of each payout window.
+
+- A day is a class-local calendar day, `[00:00, 24:00)` in the class timezone
+  (`SPEC-TIME-001`; `INV-ARC-015`). Its end-of-day posted balance is the sum of the seat's
+  non-void savings effects whose posting time precedes the end of that day. An effect posted
+  after a day ends first participates on the day it posts.
+- A savings-interest credit participates from the close of the window it pays, whether or not it
+  has settled, and not from its posting time. The balances of later windows, and so the amounts
+  credited for them, do not depend on when the payout job ran or when settlement posted an
+  earlier credit.
+- Each day accrues `earning base × annual rate / 365` (`SPEC-ECON-003` §5.5), where the earning
+  base is determined by compound frequency (§6.2). A non-positive earning base accrues nothing.
+- The annual rate for a day is the rate in force at the end of that day: the `economic_engine` version with the greatest `effective_at` at or before that instant (`DOM-CLASS-003` §VII; 1.2). A version saved mid-window and dated for later earns nothing before its `effective_at`.
+- The credited amount is the window's accrued interest, rounded once (§5.3).
+
+Because end-of-day balances derive from posted ledger effects and their posting times,
+every credited amount is reconstructible from the ledger (§12).
 
 ---
 
@@ -391,9 +446,14 @@ When the scheduled accrual settlement job fires, the accrual service SHALL:
 3. Execute interest payout through `FEAT-CORE-000`-compliant FEAT orchestration.
 4. Read the banking terms from the `economic_engine` version in force (`DOM-CLASS-003` §VII). A banking change is a version with its own `effective_at`; the accrual service never applies or activates one.
 
+Only payout windows that have closed SHALL be credited. Each window closed since the last
+credited window SHALL be credited in order, from its end-of-day balances reconstructed from
+the ledger (§9.2, §12), so the amount does not depend on when the job runs or on balances
+after the window closed.
+
 ### 14.2 Banking Policy Changes
 
-*(1.1, operator ruling 2026-09-30: the transition-activation protocol that stood here is withdrawn with the retired `policy_versions` / `policy_transitions` tables.)*
+*(1.2, operator ruling 2026-09-30: the transition-activation protocol that stood here is withdrawn with the retired `policy_versions` / `policy_transitions` tables.)*
 
 The accrual service MUST NOT:
 
@@ -415,3 +475,15 @@ Revisions to this document SHALL:
 3. Maintain consistency with `INV-CORE-000` and `INV-ARC-015`.
 4. Maintain consistency with `DOM-CLASS-001` and `DOM-CLASS-002` for class-level policy inputs, `DOM-CLASS-003` for policy lineage, and the owning operational domain together with `FEAT-ECON-001` for operational boundary activation.
 5. Preserve deterministic, replayable accrual semantics.
+
+### Revision history
+
+- **1.2 (2026-09-30)** — Operator ruling 2026-09-30 retires `policy_versions` / `policy_transitions`. §14.1 item 4 reads banking terms from the `economic_engine` version in force; §14.2's transition-activation protocol is withdrawn; §9.2's rate for a day is the version in force by `effective_at`, so a rate dated for later never accrues early.
+- **1.1 (2026-09-30)** — Operator ruling 2026-09-30 adopts the daily balance method (12 CFR
+  1030.7). §9.2 states it: interest accrues daily on each class-local day's end-of-day posted
+  savings balance and is credited at the close of each payout window. §5.1 fixes accrual as daily.
+  §5.3 rounds once, at crediting. §6.2 defines how compound frequency applies within a window.
+  §8.2 defines the payout window and its key, and says that no day accrues twice when the
+  payout frequency changes. §9.2 says a credit participates from its window's close.
+  §14.1 credits only closed windows, replayed from the ledger.
+- **1.0 (2026-07-25)** — Initial specification.

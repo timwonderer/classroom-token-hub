@@ -32,7 +32,6 @@ from app.models import (
 )
 from app.services.context_resolver import CanonicalContext
 from app.services import insurance_claim_service
-from app.services.payroll.settings import save_payroll_setting
 from app.services.class_configuration_query_service import (
     get_economic_engine_by_version,
     get_effective_economic_engine,
@@ -1273,13 +1272,17 @@ def _set_global_daily_limit_hours(class_id: str, hours: float) -> None:
     Payroll policy is append-only (DOM-POL-001 §VI.1), so this supersedes the
     current row rather than editing it in place — an in-place edit now raises.
     """
-    from app.services.payroll.settings import current_payroll_setting
+    from app.models import PayrollSettings
+    from app.services.payroll.settings import append_payroll_setting, current_payroll_setting
+    from app.utils.canonical_temporal_resolver import utc_now
 
-    assert current_payroll_setting(class_id) is not None, "default classroom must have a payroll setting"
-    save_payroll_setting(
-        class_id=class_id,
-        settings_data={"max_time_per_day": float(hours), "max_time_per_day_unit": "hours"},
-    )
+    current = current_payroll_setting(class_id)
+    assert current is not None, "default classroom must have a payroll setting"
+    # In force from now: the limit under test, not a change awaiting payday.
+    data = {field: getattr(current, field) for field in PayrollSettings.SETTING_FIELDS}
+    data.update(max_time_per_day=float(hours), max_time_per_day_unit="hours")
+    now = utc_now()
+    append_payroll_setting(class_id=class_id, settings_data=data, effective_date=now, created_at=now)
     db.session.flush()
 
 

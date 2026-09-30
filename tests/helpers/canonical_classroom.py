@@ -27,7 +27,10 @@ identity setup.
 """
 
 from dataclasses import dataclass, field
+from datetime import datetime, time, timedelta
 from decimal import Decimal
+
+import pytz
 
 from app.extensions import db
 from app.feats.base import FEATContext
@@ -190,16 +193,25 @@ def provision_classroom(classroom_key: str, *, with_payroll_settings: bool = Tru
         # These are created by default so tests can query them.
         # In production, teachers would configure these via UI.
         # The class's first payroll setting is in force from the moment it is
-        # recorded (DOM-CLASS-003 §VII).
-        # A test of a class's first-ever payroll save opts out.
+        # recorded (DOM-CLASS-003 §VII). Every setting anchors a schedule, so
+        # the default's first payday is a year out (class-local midnight): no
+        # provisioned class is due for automatic payroll unless a test makes it
+        # so. A later save on top of it waits for that payday, so a test that
+        # needs a save in force at once opts out of the default
+        # (``with_payroll_settings=False``) or uses
+        # ``class_domain.put_payroll_setting_in_force``.
         if with_payroll_settings:
             settings_recorded_at = utc_now()
+            class_tz = pytz.timezone(economy.class_timezone)
+            first_payday = class_tz.localize(datetime.combine(
+                (settings_recorded_at.astimezone(class_tz) + timedelta(days=365)).date(), time.min,
+            ))
             db.session.add(PayrollSettings(
                 class_id=economy.class_id,
                 pay_rate=Decimal('0.50'),  # $0.50 per minute
-                payroll_frequency_days=14,
                 pay_schedule_type='biweekly',
                 rounding_mode='down',
+                first_pay_date=first_payday,
                 created_at=settings_recorded_at,
                 effective_date=settings_recorded_at,
             ))

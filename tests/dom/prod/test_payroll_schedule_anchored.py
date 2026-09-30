@@ -47,13 +47,13 @@ def _local_date(instant):
     return instant.astimezone(LA).date()
 
 
-def _class(app, *, first_pay_date, schedule, frequency_days, recorded_at):
+def _class(app, *, first_pay_date, schedule, recorded_at):
     classroom = provision_classroom("tz_pacific_p1", with_payroll_settings=False)
     with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"schedule:{uuid4()}"):
         setting = append_payroll_setting(
             class_id=classroom.class_id,
             settings_data={
-                "pay_rate": Decimal("1"), "payroll_frequency_days": frequency_days,
+                "pay_rate": Decimal("1"),
                 "pay_schedule_type": schedule, "rounding_mode": "down",
                 "first_pay_date": first_pay_date,
             },
@@ -98,7 +98,7 @@ def _walk(classroom, setting, first, steps):
 def test_monthly_anchored_on_the_31st_rolls_forward_from_the_original_anchor(app, year):
     first = _midnight(year, 1, 31)
     classroom, setting = _class(
-        app, first_pay_date=first, schedule="monthly", frequency_days=30,
+        app, first_pay_date=first, schedule="monthly",
         recorded_at=first - timedelta(days=10),
     )
 
@@ -112,7 +112,7 @@ def test_monthly_anchored_on_the_31st_rolls_forward_from_the_original_anchor(app
 def test_monthly_anchored_on_the_28th_stays_on_the_28th(app):
     first = _midnight(2027, 1, 28)
     classroom, setting = _class(
-        app, first_pay_date=first, schedule="monthly", frequency_days=30,
+        app, first_pay_date=first, schedule="monthly",
         recorded_at=first - timedelta(days=10),
     )
 
@@ -124,7 +124,7 @@ def test_after_a_system_run_on_march_1st_the_next_date_is_march_31st(app):
     anchor day), not 4/1 (3/1 + one month)."""
     first = _midnight(2027, 1, 31)
     classroom, setting = _class(
-        app, first_pay_date=first, schedule="monthly", frequency_days=30,
+        app, first_pay_date=first, schedule="monthly",
         recorded_at=first - timedelta(days=10),
     )
     march_1 = _midnight(2027, 3, 1)
@@ -133,16 +133,16 @@ def test_after_a_system_run_on_march_1st_the_next_date_is_march_31st(app):
     assert next_payroll_date(classroom.class_id, as_of=march_1 + timedelta(hours=1)) == _midnight(2027, 3, 31)
 
 
-@pytest.mark.parametrize("schedule,frequency,expected", [
-    ("weekly", 7, [(3, 2), (3, 9), (3, 16), (3, 23)]),
-    ("biweekly", 14, [(3, 2), (3, 16), (3, 30), (4, 13)]),
+@pytest.mark.parametrize("schedule,expected", [
+    ("weekly", [(3, 2), (3, 9), (3, 16), (3, 23)]),
+    ("biweekly", [(3, 2), (3, 16), (3, 30), (4, 13)]),
 ])
-def test_weekly_and_biweekly_paydays_stay_at_local_midnight_across_dst(app, schedule, frequency, expected):
+def test_weekly_and_biweekly_paydays_stay_at_local_midnight_across_dst(app, schedule, expected):
     """US DST starts Sun Mar 8 2026: paydays after it are 00:00 PDT (07:00 UTC),
     before it 00:00 PST (08:00 UTC)."""
     first = _midnight(2026, 3, 2)
     classroom, setting = _class(
-        app, first_pay_date=first, schedule=schedule, frequency_days=frequency,
+        app, first_pay_date=first, schedule=schedule,
         recorded_at=first - timedelta(days=1),
     )
 
@@ -160,7 +160,7 @@ def test_weekly_and_biweekly_paydays_stay_at_local_midnight_across_dst(app, sche
 def test_a_teacher_run_does_not_move_the_anchored_schedule(app):
     first = _midnight(2027, 1, 31)
     classroom, setting = _class(
-        app, first_pay_date=first, schedule="monthly", frequency_days=30,
+        app, first_pay_date=first, schedule="monthly",
         recorded_at=first - timedelta(days=10),
     )
     _run(classroom, setting, mechanism="SYSTEM", at=first + timedelta(minutes=5), occurrence=first)
