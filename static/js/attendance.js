@@ -114,28 +114,133 @@ function performTap(action, pin, reason = null) {
     });
 }
 
-// Poll the server every 10 seconds to refresh class-scoped PROD status.
-setInterval(() => {
-  fetch("/api/student-status")
+// Status polling. One loop, one request in flight at a time.
+//
+// Every 10 seconds while the page is visible, the loop asks the server for the
+// class-scoped PROD status. A 401 means the session ended: go to login. A 429,
+// a 5xx, a network failure or a body that is not JSON backs the loop off
+// exponentially, with jitter, up to a minute -- or for as long as the server's
+// Retry-After asks -- and one success returns it to every 10 seconds. A hidden
+// tab does not poll; showing it again polls straight away, unless the loop is
+// still inside a back-off window, in which case it polls when that ends.
+// Actions that change the status (hall-pass request, cancel, check-out,
+// check-in) refresh through the same loop, so they never put a second request
+// on the wire or cut a back-off short.
+//
+// This replaces a setInterval that fired every 10 seconds whatever the server
+// answered and handed an HTML 429 page to r.json().
+const STATUS_POLL_INTERVAL_MS = 10000;
+const STATUS_POLL_MAX_BACKOFF_MS = 60000;
+
+const statusPoll = {
+  timer: null,
+  inFlight: null,        // the request on the wire, if any
+  refreshQueued: false,  // an action asked for fresh status while one was on the wire
+  failures: 0,
+  notBefore: 0,          // no request before this time (ms); set by a back-off
+  stopped: false,        // session ended; the redirect to login is under way
+};
+
+function statusBackoffDelay(retryAfterSeconds) {
+  const ceiling = Math.min(
+    STATUS_POLL_MAX_BACKOFF_MS,
+    STATUS_POLL_INTERVAL_MS * Math.pow(2, statusPoll.failures)
+  );
+  const jittered = ceiling / 2 + Math.random() * (ceiling / 2);
+  const serverAsked = retryAfterSeconds > 0 ? retryAfterSeconds * 1000 : 0;
+  return Math.max(jittered, serverAsked);
+}
+
+function parseRetryAfter(response) {
+  const value = response.headers.get('Retry-After');
+  if (!value) return 0;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds);
+  const at = Date.parse(value);
+  return Number.isFinite(at) ? Math.max(0, (at - Date.now()) / 1000) : 0;
+}
+
+function scheduleStatusPoll(delayMs) {
+  clearTimeout(statusPoll.timer);
+  statusPoll.timer = null;
+  if (statusPoll.stopped || document.hidden) return; // visibilitychange resumes it
+  statusPoll.timer = setTimeout(pollStatus, Math.max(0, delayMs));
+}
+
+// Poll as soon as the loop allows: now, or when the current back-off ends.
+function pollStatusSoon() {
+  if (statusPoll.inFlight) {
+    statusPoll.refreshQueued = true;
+    return statusPoll.inFlight;
+  }
+  scheduleStatusPoll(statusPoll.notBefore - Date.now());
+  return Promise.resolve();
+}
+
+function pollStatus() {
+  clearTimeout(statusPoll.timer);
+  statusPoll.timer = null;
+  if (statusPoll.stopped) return Promise.resolve();
+  if (statusPoll.inFlight) return statusPoll.inFlight;
+
+  statusPoll.inFlight = fetch("/api/student-status", { headers: { Accept: "application/json" } })
     .then(r => {
       // If session expired, redirect to login
       if (r.status === 401) {
+        statusPoll.stopped = true;
         window.location.href = '/student/login?session_expired=1';
         return null;
+      }
+      if (!r.ok) {
+        const error = new Error(`Status poll answered ${r.status}`);
+        error.retryAfterSeconds = parseRetryAfter(r);
+        throw error;
       }
       return r.json();
     })
     .then(data => {
-      if (!data) return; // Session expired, already redirecting
+      if (!data) return null; // Session expired, already redirecting
       if (data.status === 'ok' && data.attendance_state) {
         const state = data.attendance_state;
         rememberAttendanceState(state);
         updateAttendanceUI(state.active, pickTimeToday(state), state.projected_pay, state.hall_pass, state.done);
       }
+      statusPoll.failures = 0;
+      statusPoll.notBefore = 0;
+      return STATUS_POLL_INTERVAL_MS;
     })
-    .catch(err => console.error("Status polling error:", err));
+    .catch(err => {
+      statusPoll.failures += 1;
+      const delay = statusBackoffDelay(err && err.retryAfterSeconds);
+      statusPoll.notBefore = Date.now() + delay;
+      console.warn(`Status polling error; retrying in ${Math.round(delay / 1000)}s:`, err);
+      return delay;
+    })
+    .then(nextDelay => {
+      statusPoll.inFlight = null;
+      if (statusPoll.stopped) return;
+      if (statusPoll.refreshQueued) {
+        statusPoll.refreshQueued = false;
+        pollStatusSoon();
+        return;
+      }
+      scheduleStatusPoll(nextDelay);
+    });
+  return statusPoll.inFlight;
+}
 
-}, 10000);
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    clearTimeout(statusPoll.timer);
+    statusPoll.timer = null;
+    return;
+  }
+  pollStatusSoon();
+});
+
+// The page is rendered with the current status, so the first poll is one
+// interval away.
+scheduleStatusPoll(STATUS_POLL_INTERVAL_MS);
 
 // "Time Today" is the day-bounded worked figure. Prefer duration_today; fall
 // back to duration only for older server payloads that omit it.
@@ -398,16 +503,10 @@ function updateHallPassOverlay(hallPass) {
   }
 }
 
+// Fresh status after an action, through the polling loop above. The loop's
+// promise never rejects, so callers need no catch of their own.
 function refreshUi() {
-  fetch("/api/student-status")
-    .then(r => r.json())
-    .then(statusData => {
-      if (statusData.status === 'ok' && statusData.attendance_state) {
-        const state = statusData.attendance_state;
-        rememberAttendanceState(state);
-        updateAttendanceUI(state.active, pickTimeToday(state), state.projected_pay, state.hall_pass, state.done);
-      }
-    });
+  return pollStatusSoon();
 }
 
 function cancelHallPass(passId) {

@@ -1,4 +1,4 @@
-// Bumped v10 -> v11 to ship the hanging-hall-pass fix in attendance.js.
+// Bumped v11 -> v12 to ship the status-poll back-off in attendance.js.
 //
 // The activate handler deletes a cache only when this name changes, and the
 // fetch handler's default strategy (cacheFirst, for anything not matched by an
@@ -8,7 +8,7 @@
 // this ships nothing to anyone who has already loaded the app: their service
 // worker keeps answering from the old cache indefinitely. Any change to a
 // static JS/CSS/image file needs this bumped in the same commit.
-const CACHE_NAME = 'classroom-token-hub-v11';
+const CACHE_NAME = 'classroom-token-hub-v12';
 const STATIC_ASSETS = [
   '/static/manifest.json',
   '/static/images/icon-192.png',
