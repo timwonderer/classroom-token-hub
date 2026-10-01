@@ -129,6 +129,11 @@ reference — the seat that initiated the event (§XI.1) — and does not own th
 row, in the same sense that DOM-LED-001 §VII.2 distinguishes ledger provenance
 from economic ownership.
 
+This is membership by existence (INV-ARC-013, derived from INV-CORE-000
+§III.6) applied to the records anchored on an identity: an entry anchored to the
+class boundary (`class_id`) or to an economic actor seat (`seat_id`) exists only
+while that anchor exists, and ceases with it (owner ruling 2026-10-01).
+
 Two lifecycle events destroy attendance rows, and neither is correction in
 place:
 
@@ -321,7 +326,7 @@ Rules:
 - **INV-PROD-004: Payroll Settlement Requires Authority**. A payroll monetary posting may only occur after this domain has established that the underlying productivity record and payroll event authorize it.
 - **INV-PROD-005: No Hidden Payroll State**. Payroll status, payroll eligibility, and reversal permission must be explicit domain state or derived from authoritative domain records. They may not be reconstructed from ledger rows alone.
 - **INV-PROD-006: Class-Time Evaluation**. Productivity windows and payroll eligibility MUST use class-local temporal evaluation.
-- **INV-PROD-007: Hall-Pass History Preservation**. Completed hall-pass history must not be silently erased. Hall-pass history is never erased in place: while its seat exists, a `hall_pass_logs` row is neither deleted nor corrected. It is destroyed only with its seat, by lawful seat removal, or with its class, by lawful class or teacher-account destruction (INV-CORE-000 §III.5–§III.6) — the same lifecycle boundary §VII.1.a states for attendance. That destruction is not an erasure of surviving history.
+- **INV-PROD-007: Hall-Pass History Preservation**. Completed hall-pass history must not be silently erased. Hall-pass history is never erased in place: while its seat exists, a `hall_pass_logs` row is neither deleted nor corrected. It is destroyed only with its seat, by lawful seat removal, or with its class, by lawful class or teacher-account destruction (INV-CORE-000 §III.5–§III.6; membership by existence, INV-ARC-013) — the same lifecycle boundary §VII.1.a states for attendance. That destruction is not an erasure of surviving history.
 - **INV-PROD-008: No Financial Truth**. This domain does not compute balances, spendable funds, or monetary reconciliation.
 
 ---
