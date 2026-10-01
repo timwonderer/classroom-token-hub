@@ -52,8 +52,8 @@ def main():
         print(f"{RED}Error: Firewall ID required{NC}")
         print("\nUsage:")
         print(f"  python3 {sys.argv[0]} <firewall-id>")
-        print("\nExample:")
-        print(f"  python3 {sys.argv[0]} 954d0d9c-a8b2-4981-85ef-42982fc496a6")
+        print("\nGet your firewall ID:")
+        print("  doctl compute firewall list")
         sys.exit(1)
 
     firewall_id = sys.argv[1]

@@ -290,7 +290,18 @@ def test_history_reports_returned_and_ignores_an_unrelated_stray_active_row(app,
     _return(client, student, log)
 
     login_teacher(client, classroom)
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    # The history endpoint reads start/end dates as class-local days, so "today"
+    # must be the class's date, not UTC's: they differ every evening in Pacific
+    # time, and a UTC date then puts the pass outside the requested day.
+    with app.app_context():
+        today = canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=CanonicalContext(
+                user_id=student.user.id, class_id=classroom.class_id,
+                seat_id=student.seat.id, actor_role="student",
+            ),
+            primitive="current_evaluation_day",
+        ).evaluation_date.isoformat()
     response = client.get(
         "/api/hall-pass/history",
         query_string={"start_date": today, "end_date": today},

@@ -21,8 +21,10 @@ from decimal import Decimal
 import pytest
 
 from app.services.economic_engine import (
+    SAVINGS_DAYS_PER_YEAR,
     ProjectedSavingsDay,
     SavingsAccrualDay,
+    _COMPOUND_FREQ_PER_YEAR,
     accrue_daily_interest,
     credit_savings_interest,
     project_savings_balances,
@@ -43,6 +45,26 @@ def _credit(days, calc="compound", freq="daily"):
     return credit_savings_interest(
         accrue_daily_interest(days=days, calculation_type=calc, compound_frequency=freq)
     )
+
+
+# ---------------------------------------------------------------------------
+# §5.2 — 365-day year, leap years included
+# ---------------------------------------------------------------------------
+
+
+def test_day_count_is_365_and_the_ceiling_uses_the_same_constant():
+    """One named day count feeds accrual and the daily-compounding ceiling."""
+    assert SAVINGS_DAYS_PER_YEAR == Decimal("365")
+    assert _COMPOUND_FREQ_PER_YEAR["daily"] == SAVINGS_DAYS_PER_YEAR
+
+
+def test_a_leap_year_of_days_earns_366_365ths_of_the_rate():
+    """Each of a leap year's 366 days earns r/365, so the year earns r × 366/365."""
+    accrued = accrue_daily_interest(
+        days=_days(["1000.00"] * 366), calculation_type="simple", compound_frequency="never"
+    )
+    # 1000 × 0.1733 × 366/365 = 173.77; a 366-day year would give exactly 173.30.
+    assert credit_savings_interest(accrued) == Decimal("173.77")
 
 
 # ---------------------------------------------------------------------------

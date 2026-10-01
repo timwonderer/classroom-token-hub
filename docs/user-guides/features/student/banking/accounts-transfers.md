@@ -32,7 +32,7 @@ Beside it, **Statistics** gives you four numbers:
 | --- | --- |
 | **Total Earnings** | Everything you have earned in this class |
 | **Monthly Interest Rate** | The rate your savings grows at each month |
-| **Estimated Monthly Interest** | What that rate is worth on your current savings |
+| **Estimated interest next payout** | What your next interest payout will be if your savings stay as they are |
 | **Total Transactions** | How many entries are in your history |
 
 Below that, **Savings Balance Projection (12 Months)** charts where your savings would end up if you left it alone. The caption tells you what it assumed — your current balance and the class's annual rate. If your teacher has not set a rate, it says so: *Savings interest is not currently configured for this class, so your balance of $X is projected flat.* [Savings Interest](savings-interest.md) reads the whole card in detail.

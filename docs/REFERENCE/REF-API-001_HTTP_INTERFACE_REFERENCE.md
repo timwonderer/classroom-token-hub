@@ -76,6 +76,8 @@ Auth column: **A** = `@admin_required`, **S** = `@login_required` (student), **O
 
 † `/api/tap` carries no auth decorator but is **not** unauthenticated: it resolves `g.canonical_context` and returns 401 when absent, then requires a PIN check against `User.pin_hash` before doing anything. Rate limited to 100/min. The risk is not present-tense exposure but that the guarantee is imperative — there is no decorator whose removal a reviewer would notice. See §VIII-D.
 
+`/api/student-status` is rate limited to 30/min **per seat**, keyed on `(class_id, seat_id)` from the context `@login_required` validated, not on the client address: `attendance.js` polls it every 10 seconds per visible tab, and students share school addresses. It is exempt from the address-keyed defaults; a request without a session gets 401 before the limit applies. Every `/api/*` 429 is JSON with `Retry-After`.
+
 ### VI-B. Hall passes
 
 The largest cluster, and the only one with a sanctioned cross-class exception.
