@@ -307,8 +307,10 @@ against this tracker, the archived launch trackers and the live-test RESUME reco
   - `GET /sysadmin/login` must not destroy another browser context. The fix is added to #1446.
   - **Follow-up:** `admin.login` has the same GET-time session pop (`app/routes/admin.py:2573`).
 - [ ] **Simple interest does not conform to SPEC-ECON-001 §4.1.** Credited interest joins the earning balance for
-  every calculation type. Tracked and deferred by the owner; no production class uses simple interest. Until it is
-  resolved, simple interest must not be described as fully supported or correct.
+  every calculation type. `simple` prevents compounding within one payout window, but each window's credit then
+  earns interest in later windows, so simple interest compounds across payout windows. Tracked and deferred by the
+  owner; no production class uses simple interest. Until it is resolved, simple interest must not be described as
+  fully supported or correct.
 
 ---
 
