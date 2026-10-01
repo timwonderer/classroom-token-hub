@@ -13,8 +13,11 @@ from itsdangerous import BadSignature, URLSafeSerializer
 from .contracts import ExternalStatusNoticeEvent, NoticeState, RecoveryExpectationState
 from .identity import authenticated_operator_email
 from .log_setup import configure_logging
-from status.measurements import (COMPONENT_KEYS, parse_time, classify_component,
-                                 retained_activity, unavailable_component, validate_snapshot)
+from .presentation import (AREAS, STAGES, area_cards, detections, format_status_time, history_summary,
+                           incident_entry, iso_utc, notice_view, overall_observation, parse_offset,
+                           resolve_next_update, suggest_reference)
+from status.measurements import (COMPONENT_KEYS, classify_component, unavailable_component,
+                                 validate_snapshot)
 from status.platform import platform_rows
 from .store import FirestoreNoticeStore, ResolutionTooLarge
 
@@ -25,6 +28,8 @@ STATE_LABELS = {"NORMAL": "Within expected range", "ELEVATED_ERRORS": "Elevated 
                 "HIGH_LATENCY": "High latency",
                 "NO_TRAFFIC": "No recent requests", "MONITOR_UNAVAILABLE": "Monitoring unavailable",
                 "STALE": "Monitoring out of date"}
+# Notice stages an operator may publish; resolving has its own form.
+PUBLISHABLE_STAGES = ("AWARE", "INVESTIGATING", "IDENTIFIED", "MONITORING")
 
 
 def measurement_cards(attempt, history, *, now):
@@ -54,70 +59,12 @@ def measurement_cards(attempt, history, *, now):
     return cards
 
 
-SERVICE_NAMES = {
-    "login": "Login", "attendance": "Attendance", "payroll": "Payroll",
-    "roster": "Class roster", "classroom_economy": "Classroom economy",
-}
+def parse_notice_time(value, offset=None):
+    """An aware UTC time from an operator form field.
 
-
-def request_outcome(item):
-    """Bounded response observations, never a business-success verdict."""
-    if item["http_5xx_count"]:
-        return "degraded", "Server errors observed"
-    if item["p95_ms"] > 1500:
-        return "degraded", "Slow responses observed"
-    if item["http_2xx_count"] + item["http_3xx_count"]:
-        return "available", "Requests responding"
-    return "unknown", "Requests declined or not found"
-
-
-def teacher_cards(measurements, attempt, *, now):
-    activity = retained_activity(attempt.get("last_activity") if attempt else None, now=now)
-    cards = []
-    for item in measurements:
-        if item["key"] == "service":
-            continue
-        key = item["key"]
-        state, label = "unknown", "Monitoring unavailable"
-        detail = "Recent request evidence could not be collected."
-        if item["state"] == "NO_TRAFFIC":
-            label, detail = "No recent activity", "No matching requests in the last five minutes."
-        elif item["state"] == "STALE":
-            label, detail = "Monitoring out of date", "Recent request evidence is out of date."
-        elif item["collection_state"] == "OK":
-            state, label = request_outcome(item)
-            count = item["request_count"]
-            detail = f"{count} {'request' if count == 1 else 'requests'} in the last five minutes."
-        last = None
-        value = activity.get(key)
-        if value:
-            last = {"label": request_outcome(value["component"])[1], "sampled_at": value["sampled_at"]}
-        cards.append({"key": key, "name": SERVICE_NAMES[key], "state": state,
-                      "label": label, "detail": detail, "last": last})
-    return cards
-
-
-def overall_observation(checks, measurements, notices):
-    """Availability follows active checks; request failures and notices qualify it."""
-    checked = [row["checked_at"] for row in checks
-               if row["state"] in {"PASS", "FAIL"} and row["checked_at"]]
-    result = {"state": "unknown", "label": "AVAILABILITY NOT VERIFIED",
-              "checked_at": min(checked, key=parse_time) if checked else None,
-              "detail": "The latest availability checks could not verify the app."}
-    if any(row["state"] == "FAIL" for row in checks):
-        result.update(state="unavailable", label="AVAILABILITY CHECK FAILED",
-                      detail="An application or database availability check failed.")
-    elif notices or any(item["collection_state"] == "OK" and item["http_5xx_count"]
-                        for item in measurements):
-        result.update(state="degraded", label="ISSUES REPORTED",
-                      detail="An operator notice or recent server errors need attention.")
-    elif len(checks) == 2 and all(row["state"] == "PASS" for row in checks):
-        result.update(state="available", label="APP REACHABLE",
-                      detail="The app is responding and its database connection check passed.")
-    return result
-
-
-def parse_notice_time(value):
+    A value without an offset is the operator's local time when the browser
+    reported its offset, and UTC otherwise; the form says which.
+    """
     if not value:
         return None
     try:
@@ -125,29 +72,15 @@ def parse_notice_time(value):
     except (ValueError, TypeError):
         raise ValueError("Invalid notice timestamp.") from None
     if parsed.utcoffset() is None:
-        # Operator form explicitly labels datetime-local inputs as UTC.
-        parsed = parsed.replace(tzinfo=timezone.utc)
+        parsed = parsed.replace(tzinfo=timezone(offset) if offset is not None else timezone.utc)
     return parsed.astimezone(timezone.utc)
-
-
-def format_status_time(value: datetime | str) -> str:
-    """Present notice times without inferring a missing timezone."""
-    if isinstance(value, str):
-        try:
-            value = datetime.fromisoformat(value)
-        except ValueError:
-            return "Time unavailable"
-    if not isinstance(value, datetime):
-        return "Time unavailable"
-    if value.utcoffset() is None:
-        return value.strftime("%Y-%m-%d %H:%M") + " (timezone not provided)"
-    return value.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
 
 def create_app(store=None) -> Flask:
     configure_logging()
     app = Flask(__name__, static_folder="static", template_folder="templates")
     app.jinja_env.filters["status_time"] = format_status_time
+    app.jinja_env.filters["iso_utc"] = iso_utc
     app.config["STATUS_SERVICE_MODE"] = os.environ.get("STATUS_SERVICE_MODE", "operator").strip().lower()
     if app.config["STATUS_SERVICE_MODE"] not in {"public", "operator"}:
         raise RuntimeError("STATUS_SERVICE_MODE must be public or operator")
@@ -170,6 +103,15 @@ def create_app(store=None) -> Flask:
             abort(401)
         return actor
 
+    def current_attempt():
+        attempt = store.current_snapshot()
+        if attempt and attempt.get("snapshot") is not None:
+            try:
+                validate_snapshot(attempt["snapshot"])
+            except (ValueError, TypeError):
+                attempt = None
+        return attempt
+
     @app.get("/health")
     def health():
         return jsonify({"ok": True})
@@ -180,20 +122,20 @@ def create_app(store=None) -> Flask:
             abort(404)
         active_notices = store.list_active_notices()
         now = datetime.now(timezone.utc)
-        attempt = store.current_snapshot()
-        if attempt and attempt.get("snapshot") is not None:
-            try:
-                validate_snapshot(attempt["snapshot"])
-            except (ValueError, TypeError):
-                attempt = None
+        attempt = current_attempt()
         measurements = measurement_cards(attempt, store.measurement_history(), now=now)
-        services = teacher_cards(measurements, attempt, now=now)
         checks = platform_rows(store.current_platform(), now=now)
-        return render_template("public_status.html", notices=active_notices,
+        recent, _ = store.list_resolved_notices(page=1, page_size=3)
+        service = next((card for card in measurements if card["key"] == "service"), None)
+        overall = overall_observation(checks, measurements, active_notices, now=now)
+        cards = area_cards(measurements, attempt, active_notices, now=now,
+                           maintenance=overall["state"] == "maintenance")
+        return render_template("public_status.html", notices=[notice_view(n) for n in active_notices],
                                attempt=attempt, snapshot=attempt.get("snapshot") if attempt else None,
-                               capability_cards=services, measurements=measurements,
-                               platform_checks=checks,
-                               overall_status=overall_observation(checks, measurements, active_notices))
+                               capability_cards=cards, measurements=measurements, platform_checks=checks,
+                               history=history_summary(service),
+                               recent_incidents=[notice_view(n) for n in recent],
+                               overall_status=overall)
 
     @app.get("/incidents")
     def incident_history():
@@ -208,9 +150,13 @@ def create_app(store=None) -> Flask:
         notices, has_more = store.list_resolved_notices(page=page)
         if page > 1 and not notices:
             abort(404)
-        entries = [{"notice": notice, "events": store.list_notice_events(notice["id"])}
-                   for notice in notices]
-        return render_template("incident_history.html", entries=entries, page=page,
+        months = []  # newest first, in the order the store returned them
+        for notice in notices:
+            entry = incident_entry(notice, store.list_notice_events(notice["id"]))
+            if not months or months[-1]["month"] != entry["month"]:
+                months.append({"month": entry["month"], "entries": []})
+            months[-1]["entries"].append(entry)
+        return render_template("incident_history.html", months=months, page=page,
                                has_more=has_more,
                                operator=app.config["STATUS_SERVICE_MODE"] == "operator")
 
@@ -220,12 +166,37 @@ def create_app(store=None) -> Flask:
             abort(404)
         require_operator()
         session.setdefault("csrf_token", secrets.token_urlsafe(32))
+        now = datetime.now(timezone.utc)
         signer = URLSafeSerializer(app.secret_key, salt="notice-resolution")
-        open_notices = store.list_active_notices()
+        open_notices = [notice_view(n) for n in store.list_active_notices()]
         for notice in open_notices:
             notice["resolution_token"] = signer.dumps([notice["id"], notice["last_event_id"]]) if (
                 notice.get("incident_ref") and notice.get("last_event_id")) else None
-        return render_template("operator_notices.html", notices=store.list_notices(), open_notices=open_notices, capabilities=app.config["STATUS_CAPABILITIES"], csrf_token=session["csrf_token"])
+        attempt = current_attempt()
+        measurements = measurement_cards(attempt, [], now=now)
+        found = detections(measurements, open_notices,
+                           (attempt.get("snapshot") or {}).get("sampled_at") if attempt else None)
+
+        # One issue at a time: an open issue, a draft from a detection, or a new one.
+        wanted, ref = request.args.get("issue", ""), request.args.get("ref", "")
+        selected = next((n for n in open_notices if n["id"] == wanted
+                         or (ref and n.get("incident_ref") == ref)), None)
+        draft = next((item for item in found if wanted == f"auto-{item['key']}"), None)
+        if selected is None and draft is None and wanted != "new" and open_notices:
+            selected = open_notices[0]
+        mode = "resolve" if selected and request.args.get("action") == "resolve" else "update"
+        events = store.list_notice_events(selected["id"]) if selected else []
+        preview = selected or notice_view({
+            "capability": draft["key"] if draft else "service", "state": "AWARE",
+            "impact_statement": "", "recommended_user_action": ""})
+        return render_template("operator_notices.html", open_notices=open_notices, detections=found,
+                               selected=selected, draft=draft, mode=mode, preview=preview,
+                               events=[{**event, "stage": STAGES.get(event.get("state"), STAGES["AWARE"])}
+                                       for event in reversed(events)],
+                               areas=AREAS, stages=STAGES, publishable=PUBLISHABLE_STAGES,
+                               capabilities=app.config["STATUS_CAPABILITIES"],
+                               suggested_ref=suggest_reference(store.list_notices(), now),
+                               csrf_token=session["csrf_token"])
 
     @app.post("/operator/notices/resolve")
     def operator_notices_resolve():
@@ -269,14 +240,20 @@ def create_app(store=None) -> Flask:
         payload = request.form
         if payload.get("state") == NoticeState.RESOLVED.value:
             abort(400, description="Use Resolve issues to select an existing open issue.")
+        now = datetime.now(timezone.utc)
+        offset = parse_offset(payload.get("tz_offset_minutes"))
         next_update_unavailable = payload.get("next_update_unavailable") == "on"
         recovery_state = payload.get("recovery_state", RecoveryExpectationState.UNAVAILABLE.value)
         source_ids = tuple(value.strip() for value in payload.get("source_observation_ids", "").split(",") if value.strip())
         try:
-            recovery_value = parse_notice_time(payload.get("recovery_expectation"))
-            next_update = None if next_update_unavailable else parse_notice_time(payload.get("next_update_at"))
+            recovery_value = parse_notice_time(payload.get("recovery_expectation"), offset)
+            quick = resolve_next_update(payload.get("next_update_choice", ""), now)
+            if quick is not None:
+                next_update_unavailable, next_update = quick
+            else:
+                next_update = None if next_update_unavailable else parse_notice_time(payload.get("next_update_at"), offset)
         except ValueError:
-            abort(400, description="Enter a valid UTC time.")
+            abort(400, description="Enter a valid time.")
         if recovery_state == RecoveryExpectationState.UNAVAILABLE.value and recovery_value is not None:
             abort(400, description="Clear the recovery time or select a known or estimated recovery state.")
         if recovery_state != RecoveryExpectationState.UNAVAILABLE.value and not recovery_value:
@@ -286,14 +263,14 @@ def create_app(store=None) -> Flask:
             abort(400)
         notice = {"external_notice_id": payload.get("external_notice_id") or None, "incident_ref": incident_ref, "state": payload.get("state", NoticeState.INVESTIGATING.value), "capability": payload.get("capability", ""), "impact_statement": payload.get("impact_statement", ""), "recommended_user_action": payload.get("recommended_user_action", ""), "recovery_state": recovery_state, "recovery_expectation": recovery_value, "next_update_at": next_update, "next_update_unavailable": next_update_unavailable, "source_observation_ids": source_ids}
         try:
-            record = ExternalStatusNoticeEvent(external_notice_id=notice["external_notice_id"] or "pending", incident_ref=incident_ref, event_id="pending", event_type="PUBLISHED", published_at=datetime.now(timezone.utc), state=NoticeState(notice["state"]), capability=notice["capability"], impact_statement=notice["impact_statement"], recommended_user_action=notice["recommended_user_action"], recovery_state=RecoveryExpectationState(recovery_state), recovery_expectation=recovery_value, next_update_at=notice["next_update_at"], next_update_unavailable=next_update_unavailable, source_observation_ids=source_ids)
+            record = ExternalStatusNoticeEvent(external_notice_id=notice["external_notice_id"] or "pending", incident_ref=incident_ref, event_id="pending", event_type="PUBLISHED", published_at=now, state=NoticeState(notice["state"]), capability=notice["capability"], impact_statement=notice["impact_statement"], recommended_user_action=notice["recommended_user_action"], recovery_state=RecoveryExpectationState(recovery_state), recovery_expectation=recovery_value, next_update_at=notice["next_update_at"], next_update_unavailable=next_update_unavailable, source_observation_ids=source_ids)
             record.validate()
         except ValueError:
             abort(400, description="Invalid notice fields or missing update time.")
         if notice["capability"] not in COMPONENT_KEYS:
             abort(400, description="Unknown request group.")
         store.append_event(notice, "PUBLISHED", actor)
-        return redirect(url_for("operator_notices_get"))
+        return redirect(url_for("operator_notices_get", ref=incident_ref))
 
     return app
 

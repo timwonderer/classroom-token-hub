@@ -1,44 +1,71 @@
 {% extends "base_public_v2.html" %}
+{% from "_status_macros.html" import hero, chip, icon, when, footer %}
 {% block title %}Past incidents — Classroom Token Hub{% endblock %}
 {% block content %}
-<main class="operator-page">
-  <section class="landing-hero">
-    <div class="landing-shell landing-welcome">
-      <h1>Past incidents</h1>
-      <p>Resolved issues, original updates, and resolution reports from CTH Operations.</p>
+<div class="status-page">
+  {% call hero() %}
+  <h1>Past Incidents</h1>
+  <p>Problems we've posted about, and <em>how each was fixed.</em></p>
+  {% endcall %}
+
+  <main class="status-main">
+    <div class="landing-shell status-layout status-layout--single">
+      <div class="status-column">
+        <p class="crumb"><a href="{{ url_for('operator_notices_get' if operator else 'public_status') }}">{{ '← Back to operator console' if operator else '← Current status' }}</a></p>
+        {% for group in months %}
+        <section>
+          <h2 class="month">{{ group.month }}</h2>
+          <div class="past">
+            {% for entry in group.entries %}
+            <article class="inc">
+              <div class="inc-head">
+                {{ icon(entry.area.icon, cls='area-icon') }}
+                <div>
+                  <h2>{{ entry.area.name }}</h2>
+                  <p class="inc-when">
+                    {% if entry.started %}<b>{{ when(entry.started, 'date') }}</b> · {{ when(entry.started, 'time') }} – {{ when(entry.ended, 'time') }}{% if entry.duration %} · {{ entry.duration }}{% endif %}
+                    {% else %}Resolved <b>{{ when(entry.ended, 'datetime') }}</b>{% endif %}
+                  </p>
+                </div>
+                {{ chip('ok', 'task_alt', 'Resolved') }}
+              </div>
+              <p class="incident-message">{{ entry.resolution }}</p>
+              <details class="disclosure"{% if loop.first and loop.depth0 == 0 and group is sameas months[0] %} open{% endif %}>
+                <summary>{{ icon('chevron_right', 'sm', 'chev') }}How it unfolded · {{ entry.timeline|length }} {{ 'update' if entry.timeline|length == 1 else 'updates' }}</summary>
+                {% if entry.timeline %}
+                <ol class="timeline">
+                  {% for event in entry.timeline %}
+                  <li>
+                    <div class="timeline-head">{{ chip(event.stage.tone, event.stage.icon, event.stage.label) }}{{ when(event.published_at) }}</div>
+                    {% if event.state != 'RESOLVED' %}
+                    <p class="incident-message">{{ event.impact_statement }}</p>
+                    {% if event.recommended_user_action %}<p><b>What to do:</b> {{ event.recommended_user_action }}</p>{% endif %}
+                    {% if event.recovery_expectation %}<p>{{ 'Expected fix' if event.recovery_state == 'KNOWN' else 'Estimated fix' }} around {{ when(event.recovery_expectation) }}</p>{% endif %}
+                    {% if event.next_update_at %}<p>Next update by {{ when(event.next_update_at) }}</p>{% endif %}
+                    {% else %}<p>Marked resolved.</p>{% endif %}
+                  </li>
+                  {% endfor %}
+                </ol>
+                {% else %}<p>No earlier updates are available.</p>{% endif %}
+                {% if entry.incident_ref %}<p class="ref">Reference {{ entry.incident_ref }} · mention this if you contact support</p>{% endif %}
+              </details>
+            </article>
+            {% endfor %}
+          </div>
+        </section>
+        {% else %}
+        <p class="empty-state">No resolved incidents have been published yet.</p>
+        {% endfor %}
+        {% if page > 1 or has_more %}
+        <nav class="pager" aria-label="Incident history pages">
+          {% if page > 1 %}<a href="{{ url_for('incident_history', page=page - 1) }}">← Newer incidents</a>{% else %}<span></span>{% endif %}
+          <span>Page {{ page }}</span>
+          {% if has_more %}<a href="{{ url_for('incident_history', page=page + 1) }}">Older incidents →</a>{% else %}<span></span>{% endif %}
+        </nav>
+        {% endif %}
+      </div>
     </div>
-  </section>
-  <section class="landing-content">
-    <div class="landing-shell operator-content">
-      <p><a href="{{ url_for('operator_notices_get' if operator else 'public_status') }}">{{ 'Back to operator console' if operator else 'Back to current status' }}</a></p>
-      {% for entry in entries %}
-      <article class="operator-history">
-        <h2>{{ entry.notice.capability|replace('_', ' ')|title }} — {{ entry.notice.incident_ref }}</h2>
-        <p><span class="status-pill">Resolved</span> {{ entry.notice.updated_at|status_time }}</p>
-        <h3>Resolution report</h3>
-        <p class="incident-message">{{ entry.notice.impact_statement }}</p>
-        <details class="history-disclosure">
-          <summary>View original updates and timeline</summary>
-          {% for event in entry.events %}
-          <section class="operator-notice">
-            <h3>{{ event.state|replace('_', ' ')|title }} — {{ event.published_at|status_time }}</h3>
-            <p class="incident-message">{{ event.impact_statement }}</p>
-            <p><strong>User action:</strong> {{ event.recommended_user_action }}</p>
-            {% if event.recovery_expectation %}<p>Recovery {{ event.recovery_state|lower }}: {{ event.recovery_expectation|status_time }}</p>{% endif %}
-            {% if event.next_update_at %}<p>Next update: {{ event.next_update_at|status_time }}</p>{% endif %}
-          </section>
-          {% else %}<p>No earlier publication events are available.</p>{% endfor %}
-        </details>
-      </article>
-      {% else %}<p>No resolved incidents have been published yet.</p>{% endfor %}
-      {% if page > 1 or has_more %}
-      <nav aria-label="Incident history pages">
-        {% if page > 1 %}<a href="{{ url_for('incident_history', page=page - 1) }}">Newer incidents</a>{% endif %}
-        <span>Page {{ page }}</span>
-        {% if has_more %}<a href="{{ url_for('incident_history', page=page + 1) }}">Older incidents</a>{% endif %}
-      </nav>
-      {% endif %}
-    </div>
-  </section>
-</main>
+  </main>
+  {{ footer() }}
+</div>
 {% endblock %}

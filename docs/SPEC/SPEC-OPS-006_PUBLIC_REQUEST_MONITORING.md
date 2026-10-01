@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| SPEC-OPS-006 | 1.2 | 2026-09-25 | 1.1 | Subordinate implementation contract |
+| SPEC-OPS-006 | 1.3 | 2026-09-30 | 1.2 | Subordinate implementation contract |
 
 ## I. Purpose
 
@@ -142,26 +142,45 @@ under their existing policy and never transformed into request history.
 
 ## VIII. Public interface and operator interpretation
 
-Public layout follows the shared public-page design in this order: overall status
-hero, operator incident/update banner, simple teacher/student service cards, and
-platform status with database reachability plus request measurements/history.
+The public pages are written for teachers and students. Labels use plain language
+and describe what a reader can rely on; protocol names, enum values and
+investigation references never serve as headings. Public layout follows the shared
+public-page design in this order: overall status hero, operator incident/update
+banner, simple teacher/student service cards, and platform status with database
+reachability plus request measurements/history.
 
-Overall availability uses the existing independent endpoint/database checks polled
-every minute. Both fresh PASS results yield `APP REACHABLE`, including during idle
-request traffic. A fresh FAIL yields `AVAILABILITY CHECK FAILED`; missing, unknown,
-stale or future checks yield `AVAILABILITY NOT VERIFIED`. A current operator notice
-or fresh nonzero HTTP 5xx count qualifies the summary as `ISSUES REPORTED` unless a
-connectivity check already failed. The hero's timestamp is the older of the two
-fresh PASS/FAIL check timestamps, never stale/future evidence or the request snapshot time. Reachability establishes
-connectivity only, not business correctness.
+The hero asks "Is Classroom Token Hub Working?" and answers with exactly one state.
+Precedence is top to bottom; the first condition that holds decides:
 
-Feature cards describe recent activity, not yes/no functionality estimates. Any
-fresh 5xx is `Server errors observed`; otherwise p95 above 1,500 ms is `Slow responses
-observed`; otherwise a window containing 2xx/3xx is `Requests responding`. Windows
-with only remaining response classes say `Requests declined or not found` without
-claiming outage. These labels have no minimum count. Quiet windows say `No recent
-activity`; missing/stale collection says `Monitoring unavailable`/`Monitoring out of
-date`. All cards disclose their scope in visible text.
+| State | Public label | Condition |
+|---|---|---|
+| `maintenance` | `Under maintenance` | A fresh `gate` check reports the Application Availability Gate closed (§Independent platform checks) |
+| `unavailable` | `Mostly unavailable` | A fresh endpoint or database check is FAIL |
+| `degraded` | `Detected problems` | A current operator notice, or a fresh nonzero HTTP 5xx count |
+| `available` | `No known issues` | Both endpoint and database checks are fresh PASS, including during idle request traffic |
+| `unknown` | `Unknown` | Anything else: missing, unknown, stale or future checks |
+
+`Under maintenance` is gate messaging under DOM-OPS-001 §Application Availability
+Gate. It communicates an access restriction and makes no claim about application
+health; it overrides the other states because readers cannot enter while the gate is
+closed, whatever the checks report. `No known issues` claims only the absence of a
+known problem: reachability establishes connectivity, not business correctness. The
+hero's timestamp is the older of the two fresh endpoint/database PASS/FAIL check
+timestamps, never stale/future evidence or the request snapshot time. Each state
+carries a visible word as well as its colour (INV-ARC-020).
+
+Feature cards describe recent activity, not yes/no functionality estimates. While
+the hero is `Under maintenance`, every card reads `Closed for maintenance`: nobody
+can enter, whatever requests from behind the gate show. Otherwise a
+current operator notice for the card's capability takes precedence: an `AWARE`
+notice reads `Checking reports`, any other active notice `Having problems`.
+Otherwise any fresh 5xx is `Checking: errors seen` — an automatic observation at the
+`AWARE` level, which never creates or implies a notice; p95 above 1,500 ms is
+`Slower than usual`; a window containing 2xx/3xx is `Working`. Windows with only
+remaining response classes say `Nothing to report`, claiming neither success nor
+outage. These labels have no minimum count. Quiet windows say `Quiet`; missing or
+stale collection says `Status unknown`. All cards disclose their scope in visible
+text.
 
 The current telemetry projection retains `last_activity`, a map of the closed
 component keys to their latest nonempty, valid, fresh source window's `sampled_at`,
@@ -177,9 +196,11 @@ They never establish present health or conceal a monitoring failure. Public GET
 remains read-only.
 
 Counts, 404/500/5xx percentages, p80/p95, source timing and 90-day history appear in
-the lower platform section. Explain their scope and thresholds there, without long
-technical qualifications on every teacher card. Preserve the original public brand
-wordmark, hero composition, typography and status-card styling. Historical bars
+the lower platform section, collapsed by default behind a visible disclosure, and
+the 90-day history may also be summarised beside the main column. Explain their
+scope and thresholds there, without long technical qualifications on every teacher
+card. The hero uses the public site's landing composition and the brand wordmark
+under SPEC-DES-001 §IX; the footer is the public site's footer. Historical bars
 expose full text and keyboard/touch disclosure, not color or hover alone.
 Operator notices are independent, explicitly attributed human
 interpretation, with optional snapshot links and an investigation evidence note
@@ -197,8 +218,10 @@ Installing the sampler and endpoint is a separate reviewed deployment operation.
 ### Independent platform checks
 
 Platform connectivity is persisted separately from request telemetry. Its record has
-exactly `schema_version: platform-check-v1`, UTC ISO `received_at`, and `checks`.
-Checks contain exactly one `endpoint` and one `database` result, each with `key`,
+exactly `schema_version`, UTC ISO `received_at`, and `checks`. A
+`platform-check-v2` record contains exactly one `endpoint`, one `database` and one
+`gate` result; a `platform-check-v1` record, written before v2, contains exactly the
+first two and is read as carrying no gate evidence. Each result has `key`,
 `outcome` (PASS/FAIL/UNKNOWN), `checked_at` (UTC ISO or null), and a closed diagnostic.
 Endpoint HTTP_OK is PASS; HTTP_UNAVAILABLE is FAIL. Actual database
 DATABASE_REACHABLE is PASS and DATABASE_UNAVAILABLE is FAIL. ACCESS_DENIED,
@@ -208,6 +231,22 @@ checked_at; proven checks preserve their source timestamp, never later than rece
 Current results expire after 300 seconds; future or malformed evidence is unknown.
 A bounded read of the existing health endpoint may obtain these two actual checks
 without collecting its feature placeholders. This is connectivity, not domain proof.
+
+The `gate` check observes whether the Application Availability Gate (DOM-OPS-001)
+is closed. Outside operational work the application hostname has no Cloudflare
+Access policy in front of public pages, so the check sends one bounded GET for a
+static public asset on that hostname with **no** service token or other credential,
+follows no redirect, and reads only the status line and `Location` header. A
+redirect whose `Location` host is a Cloudflare Access login host
+(`*.cloudflareaccess.com`) is `GATE_CLOSED` (FAIL). Any other HTTP response — including
+an application error, which the endpoint check reports separately — is `GATE_OPEN`
+(PASS). An HTTP 401 or 403 is `UNEXPECTED_DENIAL` (UNKNOWN), because a public asset is
+never denied when the gate is open and the gate's own response is not otherwise
+established. Transport failure is `TRANSPORT_UNAVAILABLE` (UNKNOWN). The service-token
+health read cannot stand in for this check: there `ACCESS_DENIED` also describes a
+lapsed or revoked monitoring credential, so it remains UNKNOWN and never implies the
+gate is closed. A closed gate is an access restriction, not an application failure,
+and never contributes FAIL to the endpoint or database results.
 
 `platform_observations` retains append-only records for seven days using `expires_at`;
 `platform_current/current` is a monotonic replaceable projection. Reads are pure.
@@ -219,7 +258,9 @@ Focused tests cover strict schema/redaction, query failure, malformed/multi-seri
 responses, no/low traffic, thresholds and their boundaries, 404 versus semantic
 failure, stale/future timestamps, retry idempotency, monotonic current pointer,
 UTC rollover, history denominators/gaps, independent notices, auth/CSRF and pure
-GET. Render populated/idle/stale history and cards for keyboard/touch access.
+GET. Gate tests cover an Access redirect, an open response, an application error,
+401/403, transport failure, and a lapsed service token with an open gate. Render
+populated/idle/stale history and cards for keyboard/touch access.
 A deployed claim requires source → collector → Firestore → rendered evidence.
 
 ## X. Amendment

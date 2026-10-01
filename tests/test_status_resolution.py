@@ -1,7 +1,7 @@
 """Selection-bound, atomic external notice resolution."""
 
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import importlib
 import re
 import sys
@@ -75,8 +75,8 @@ def setup(monkeypatch):
             rows = rows[self.skip:]
             if self.maximum is not None:
                 rows = rows[:self.maximum]
-            if self.name == "external_status_notices":
-                assert self.maximum == 21, "History query must be bounded at the store boundary"
+            if self.name == "external_status_notices" and ("state", "RESOLVED") in self.filters:
+                assert self.maximum is not None and self.maximum <= 21, "History query must be bounded at the store boundary"
                 store.history_reads.append(len(rows))
             return [SimpleNamespace(id=key, to_dict=lambda value=deepcopy(value): value)
                     for key, value in rows]
@@ -109,7 +109,7 @@ def setup(monkeypatch):
 
 
 def form(client):
-    page = client.get("/operator/notices").get_data(as_text=True)
+    page = client.get("/operator/notices?action=resolve").get_data(as_text=True)
     with client.session_transaction() as session:
         csrf = session["csrf_token"]
     return csrf, re.findall(r'name="selected_issue" value="([^"]+)"', page), page
@@ -186,7 +186,7 @@ def test_resolving_all_removes_notice_warning_but_does_not_invent_health(setup):
         "csrf_token": csrf, "selected_issue": tokens, "resolution_message": "Recovered"}).status_code == 302
     client.application.config["STATUS_SERVICE_MODE"] = "public"
     page = client.get("/").get_data(as_text=True)
-    assert "DETECTED PROBLEMS" not in page
+    assert "Detected problems" not in page
     assert "Monitoring unavailable" in page
 
 
@@ -268,7 +268,8 @@ def test_detailed_resolution_saved_and_visible_in_history(setup, length):
     assert "Original incident report" in history and "x" * length in history
     assert "&lt;script&gt;" in history and "<script>" not in history
     assert "PRIVATE-OPERATOR" not in history and "operator@example.com" not in history
-    assert history.index("Original incident report") < history.index("Resolved —")
+    # The story reads in order: the original update comes before the resolution.
+    assert history.index("Original incident report") < history.index("Marked resolved.")
     assert history.count("<h1>") == 1
     assert data == before
 
@@ -324,3 +325,100 @@ def test_storage_budget_rejects_before_writes_and_preserves_report(setup, report
         assert report in response.get_data(as_text=True)
         assert "No issues were resolved" in response.get_data(as_text=True)
         assert data == before
+
+
+# ─── AWARE stage and the one-issue-at-a-time console (SPEC-OPS-002 §5.2) ───
+
+def test_aware_notice_is_active_and_resolvable(setup):
+    data, store, client, _ = setup
+    data["external_status_notices"]["two"]["state"] = "AWARE"
+    from status_service.store import FirestoreNoticeStore
+    active = {n["id"]: n["state"] for n in FirestoreNoticeStore.list_active_notices(store)}
+    assert active["two"] == "AWARE"
+    csrf, tokens, page = form(client)
+    assert len(tokens) == 3
+    assert client.post("/operator/notices/resolve", data={
+        "csrf_token": csrf, "selected_issue": tokens[1:2], "resolution_message": "It was nothing."}).status_code == 302
+    assert data["external_status_notices"]["two"]["state"] == "RESOLVED"
+
+
+def publish(client, store, **fields):
+    csrf, _, _ = form(client)
+    published = []
+    store.append_event = lambda notice, *args: published.append(notice)
+    body = dict(csrf_token=csrf, incident_ref="ops-1", capability="payroll", state="AWARE",
+                impact_statement="Some payroll runs may be failing.", recommended_user_action="Wait.",
+                recovery_state="UNAVAILABLE", next_update_choice="none")
+    body.update(fields)
+    return client.post("/operator/notices", data=body), published
+
+
+def test_operator_can_publish_an_aware_notice(setup):
+    _, store, client, _ = setup
+    response, published = publish(client, store)
+    assert response.status_code == 302 and "ref=ops-1" in response.headers["Location"]
+    assert published[0]["state"] == "AWARE" and published[0]["next_update_unavailable"] is True
+
+
+def test_quick_next_update_is_relative_to_publish_time(setup):
+    _, store, client, _ = setup
+    before = datetime.now(timezone.utc)
+    _, published = publish(client, store, next_update_choice="60")
+    due = published[0]["next_update_at"]
+    assert before + timedelta(minutes=60) <= due <= datetime.now(timezone.utc) + timedelta(minutes=60)
+    assert published[0]["next_update_unavailable"] is False
+
+
+def test_local_times_are_stored_in_utc_using_the_reported_offset(setup):
+    _, store, client, _ = setup
+    _, published = publish(client, store, next_update_choice="custom", next_update_at="2026-09-30T22:30",
+                           tz_offset_minutes="-420", recovery_state="ESTIMATED",
+                           recovery_expectation="2026-09-30T23:00")
+    assert published[0]["next_update_at"] == datetime(2026, 10, 1, 5, 30, tzinfo=timezone.utc)
+    assert published[0]["recovery_expectation"] == datetime(2026, 10, 1, 6, 0, tzinfo=timezone.utc)
+
+
+@pytest.mark.parametrize("offset", ["", "abc", "9999"])
+def test_missing_or_implausible_offset_means_utc(setup, offset):
+    _, store, client, _ = setup
+    _, published = publish(client, store, next_update_choice="custom", next_update_at="2026-09-30T22:30",
+                           tz_offset_minutes=offset)
+    assert published[0]["next_update_at"] == datetime(2026, 9, 30, 22, 30, tzinfo=timezone.utc)
+
+
+def test_selected_issue_carries_its_identity_so_updates_need_no_retyping(setup):
+    _, _, client, _ = setup
+    page = client.get("/operator/notices?issue=two").get_data(as_text=True)
+    assert '<input type="hidden" name="external_notice_id" value="two">' in page
+    assert '<input type="hidden" name="incident_ref" value="incident-two">' in page
+    assert 'aria-current="page">Post update' in page and "Publish update" in page
+    assert '<option>RESOLVED</option>' not in page and 'value="RESOLVED"' not in page
+
+
+def test_new_issue_suggests_a_reference_and_starts_at_aware(setup):
+    _, _, client, _ = setup
+    page = client.get("/operator/notices?issue=new").get_data(as_text=True)
+    assert re.search(r'name="incident_ref" type="text" maxlength="160" required value="ops-\d{4}-\d{2}-\d{2}-001"', page)
+    assert re.search(r'name="state" value="AWARE" required\s+checked', page)
+    assert 'name="external_notice_id"' not in page
+
+
+def test_detection_offers_an_aware_draft_but_publishes_nothing(setup):
+    data, store, client, _ = setup
+    from status.measurements import COMPONENT_KEYS, COUNT_FIELDS, SCHEMA_VERSION
+    now = datetime.now(timezone.utc)
+    snapshot = {"schema_version": SCHEMA_VERSION, "sampled_at": now.isoformat(), "source_latest_at": now.isoformat(),
+                "window_seconds": 300, "components": [
+                    {"key": key, "collection_state": "OK", **dict.fromkeys(COUNT_FIELDS, 0), "request_count": 10,
+                     "http_2xx_count": 9 if key == "payroll" else 10, "http_5xx_count": 1 if key == "payroll" else 0,
+                     "http_500_count": 1 if key == "payroll" else 0, "p80_ms": 100, "p95_ms": 200}
+                    for key in COMPONENT_KEYS]}
+    store.current_snapshot = lambda: {"snapshot": snapshot}
+    before = deepcopy(data)
+    page = client.get("/operator/notices").get_data(as_text=True)
+    assert "Detected automatically · 1" in page and "issue=auto-payroll" in page
+    draft = client.get("/operator/notices?issue=auto-payroll").get_data(as_text=True)
+    assert "Draft from automatic detection" in draft
+    assert re.search(r'name="capability" value="payroll" required\s+checked', draft)
+    assert f'value="telemetry:{snapshot["sampled_at"]}"' in draft
+    assert data == before

@@ -75,3 +75,14 @@ def test_validation_and_store_use_one_post_fetch_clock(monkeypatch):
     result = collect(store, client_id="id", client_secret="secret", fetch=lambda *_: json.dumps(snapshot()).encode())
     assert result is not None and len(calls) == 1
     assert store.record[1] == NOW + timedelta(seconds=300)
+
+
+def test_malformed_telemetry_response_is_recorded_as_transport_failure():
+    """http.client.HTTPException is not an OSError; it must still be recorded."""
+    from http.client import BadStatusLine
+
+    def broken(*_):
+        raise BadStatusLine("private proxy garbage")
+    store = Store()
+    assert collect(store, client_id="id", client_secret="secret", now=NOW, fetch=broken) is None
+    assert store.record == (None, NOW, "TRANSPORT_UNAVAILABLE")
