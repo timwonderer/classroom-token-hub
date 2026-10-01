@@ -4,14 +4,14 @@ The canonical class-level payroll-run orchestrator and the sole coordination poi
 for the economic-cycle boundary. It owns nothing but sequencing and atomicity: every
 substantive operation underneath it is a separately-certified substrate command.
 
-    complete_payroll_cycle(...)
-        1. resolve_completed_run   ── found → RETURN existing payroll_cycle_id (STOP)
-        2. allocate_payroll_cycle_id
-        3. settle_class_payroll_cycle           (PROD)
-        4. compute_partial_payload              (ITR compute — complete 17/17)
-        5. materialize_interpretation_cycle     (ITR — one immutable record)
-        6. record_run_completion                (replay anchor)
-        —— caller's FEATContext commits once ——
+    complete_payroll_cycle(...)          (step numbers are FEAT-PROD-004 §III's)
+        0. resolve_completed_run   ── found → RETURN existing payroll_cycle_id (STOP)
+        1. allocate_payroll_cycle_id
+        2. settle_class_payroll_cycle           (PROD)
+        3. compute_partial_payload              (ITR compute — complete 17/17)
+           materialize_interpretation_cycle     (ITR — one immutable record)
+        4. record_run_completion                (replay anchor)
+        5. —— caller's FEATContext commits once ——
 
 Two orderings are held as hard invariants:
 
@@ -87,16 +87,16 @@ def complete_payroll_cycle(
         raise ValueError("complete_payroll_cycle requires an idempotency_key")
     class_id = ctx.class_id
 
-    # 1. REPLAY GUARD — literally first. No domain work, no config read, no id
+    # 0. REPLAY GUARD — literally first. No domain work, no config read, no id
     #    allocation, no timestamp before this resolves.
     existing = resolve_completed_run(class_id, idempotency_key)
     if existing is not None:
         return CompletePayrollCycleResult(payroll_cycle_id=existing, created=False)
 
-    # 2. Only a genuinely new run allocates a cycle identity.
+    # 1. Only a genuinely new run allocates a cycle identity.
     payroll_cycle_id = allocate_payroll_cycle_id()
 
-    # 3. PROD — settle the closing cycle, stamping payroll_cycle_id on every event.
+    # 2. PROD — settle the closing cycle, stamping payroll_cycle_id on every event.
     settlement = settle_class_payroll_cycle(
         class_id=class_id,
         payroll_cycle_id=payroll_cycle_id,
@@ -106,7 +106,7 @@ def complete_payroll_cycle(
         actor_ctx=ctx,
     )
 
-    # 4-5. ITR — compute the complete payload and materialize one immutable record
+    # 3. ITR — compute the complete payload and materialize one immutable record
     #      bound to this cycle. The writer re-validates completeness and freezes the
     #      reference configuration governing the closing cycle.
     observations_json = compute_partial_payload(class_id, cycle_started_at, cycle_completed_at)
@@ -122,8 +122,10 @@ def complete_payroll_cycle(
     # an effective-dated row in its owning domain's table, in force from its
     # effective date with nothing to activate (DOM-CLASS-003 §VII).
 
-    # 6. Replay anchor — literally last. It exists iff everything above committed.
+    # 4. Replay anchor — literally last. It exists iff everything above committed.
     completion = record_run_completion(class_id, idempotency_key, payroll_cycle_id)
+
+    # 5. Commit belongs to the caller's FEATContext("FEAT-PROD-004"), exactly once.
 
     return CompletePayrollCycleResult(
         payroll_cycle_id=payroll_cycle_id,
