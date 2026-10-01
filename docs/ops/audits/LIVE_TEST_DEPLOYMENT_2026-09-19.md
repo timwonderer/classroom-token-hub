@@ -238,7 +238,7 @@ post-test batch by operator decision — none blocks the live test.
 | Class creation (FEAT-CLASS-001) | `users` 1 (teacher), `classes` 1, `seats` 1 (teacher, claimed), `identity_profiles` 1 — exactly FEAT-CLASS-001 §X: one boundary, one teacher seat, no student seats or users. `class_timezone` populated at creation (immutable thereafter). |
 | Vendored Bootstrap | `static/vendor/bootstrap/*` served 200 from the app, no CDN request — today's fix confirmed in production |
 | Design tokens + fonts | `tokens.css`, `style.css` and all three font faces 200 |
-| nginx `real_ip` | access log records `206.72.73.208`, in none of Cloudflare's 15 published IPv4 ranges — a resolved client, not an edge |
+| nginx `real_ip` | access log records a client address [client IP redacted 2026-09-29] that is in none of Cloudflare's 15 published IPv4 ranges — a resolved client, not an edge |
 | Cloudflare origin monitor | correctly warned "Request not from Cloudflare IP: 127.0.0.1" for a direct origin curl — working as designed |
 | Worker count | systemd cgroup shows master + exactly 1 worker |
 | Ledger settlement (scheduled) | the $19.65 payroll transaction flipped `PENDING` → `POSTED` unattended and a `LedgerBalanceSnapshot` was written (`posted_balance_cents` 1965) at 19:44:53Z, 44 min after the 19:00:42Z transaction — the single worker's APScheduler doing real work, confirming `-w 1` was correctly applied |

@@ -54,6 +54,9 @@ def test_student_claim_blocked_without_turnstile(client, monkeypatch):
     claimed_before = Seat.query.filter(
         Seat.class_id == classroom.class_id, Seat.user_id.isnot(None),
     ).count()
+    # The claimant is nobody: claiming while signed in is refused (DOM-IDEN-005 §VII).
+    with client.session_transaction() as sess:
+        sess.clear()
 
     monkeypatch.setattr('app.routes.student.verify_turnstile_token', lambda *a, **k: False)
     response = client.post('/student/claim-account', data={

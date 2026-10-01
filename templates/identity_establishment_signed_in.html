@@ -1,0 +1,40 @@
+{% from "macros/auth_brand.html" import auth_brand %}
+{#- Shown in place of claim, credential setup and recovery while someone is signed
+    in (DOM-IDEN-005 §VII). Reads nothing from the session and writes nothing:
+    no flashed messages, no form, no CSRF token. -#}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Classroom Token Hub - Request Cancelled</title>
+    <link href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}">
+
+    <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
+    <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
+</head>
+
+<body class="student-shell auth-page">
+    <main id="main-content" aria-labelledby="request-cancelled-heading">
+    <div class="auth-container">
+        {{ auth_brand() }}
+        <div class="auth-body">
+            <h1 id="request-cancelled-heading" class="h3 fw-bold mb-2 text-primary">{{ heading }}</h1>
+            <p class="subtitle mb-4">{{ cancelled }}</p>
+
+            <h2 class="h5 fw-bold">Why is this happening?</h2>
+            <p>Your sign-in changed while this page was open, so we can't safely determine which account should complete this request. This can happen when you sign in to another account in a different tab or when someone else uses the same browser.</p>
+
+            <h2 class="h5 fw-bold">What can I do?</h2>
+            <p class="mb-4">Return to the login page and sign in again. Before continuing, close any older Classroom Token Hub tabs that are still open.</p>
+
+            {#- Goes through the signed-in role's logout, which ends the sign-in and lands on that role's login page. -#}
+            <a href="{{ return_to_login_url }}" class="btn btn-primary w-100 btn-lg mb-4">Return to login</a>
+        </div>
+    </div>
+</main>
+</body>
+
+</html>

@@ -98,14 +98,20 @@ def test_teacher_form_has_separate_unchecked_labeled_permissions(client):
 
 
 def test_alternate_operator_detail_cannot_bypass_report_permission(client):
+    """Escalated without the report permission: every operator surface withholds it."""
     from tests.dom.interpretation.helpers import create_sysadmin, login_sysadmin
     classroom, student = initialize_support_student('chemistry_p1', client, client.application)
     issue = _submit_issue(classroom, student, explanation='WITHHELD REPORT CONTENT')
+    login_teacher(client, classroom)
+    assert client.post(f"/admin/issues/{make_opaque_ref('issue', issue.id)}/escalate", data={
+        'escalation_reason': 'System Error', 'share_balances': 'on',
+    }).status_code == 302
     sysadmin = create_sysadmin(username='disclosure_operator')
     login_sysadmin(client, 'disclosure_operator', sysadmin.id)
-    response = client.get(f"/sysadmin/issues/{make_opaque_ref('issue', issue.id)}")
-    assert response.status_code == 200
-    assert 'WITHHELD REPORT CONTENT' not in response.text
+    for url in (f"/sysadmin/issues/{make_opaque_ref('issue', issue.id)}", "/sysadmin/support?tab=issues"):
+        response = client.get(url)
+        assert response.status_code == 200, url
+        assert 'WITHHELD REPORT CONTENT' not in response.text, url
 
 
 def test_permission_migration_defaults_old_rows_to_no_consent(monkeypatch):

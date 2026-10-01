@@ -776,3 +776,47 @@ def volatile_student_setup_store():
                 process.terminate()
                 process.wait(timeout=5)
             original.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def request_lock_guard(request):
+    """Fail any test whose request finished still holding row locks it took.
+
+    See tests/helpers/request_lock_guard.py (incident OPS-DB-001). A test that
+    provokes a violation on purpose clears ``violations`` before it ends.
+    """
+    from flask import request_finished, request_started
+    from tests.helpers.request_lock_guard import RequestLockGuard
+
+    guard = RequestLockGuard()
+    request_started.connect(guard.started, flask_app)
+    request_finished.connect(guard.finished, flask_app)
+    try:
+        yield guard
+    finally:
+        request_started.disconnect(guard.started, flask_app)
+        request_finished.disconnect(guard.finished, flask_app)
+    if guard.violations:
+        pytest.fail(
+            "Request(s) left row locks or uncommitted writes open past the response "
+            f"(end the transaction before returning; OPS-DB-001): {guard.violations}"
+        )
+
+
+@pytest.fixture
+def tlcp_trace_enabled(app):
+    """Run the production ``after_request`` TLCP trace writer in this test.
+
+    The writer is off under TESTING by default. It opens its own connection, so
+    it sees only what is committed and it contends for row locks exactly as it
+    does in production.
+    """
+    previous = app.config.get("TLCP_REQUEST_TRACE_ENABLED")
+    app.config["TLCP_REQUEST_TRACE_ENABLED"] = True
+    try:
+        yield
+    finally:
+        if previous is None:
+            app.config.pop("TLCP_REQUEST_TRACE_ENABLED", None)
+        else:
+            app.config["TLCP_REQUEST_TRACE_ENABLED"] = previous

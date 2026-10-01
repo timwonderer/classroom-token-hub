@@ -428,7 +428,7 @@ def create_app():
 
     @app.after_request
     def attach_request_id_header(response):
-        from app.services.tlcp import persist_request_trace
+        from app.services.tlcp import TRACE_LOCK_TIMEOUT, persist_request_trace
         from sqlalchemy.orm import Session
 
         request_id = getattr(g, "request_id", None)
@@ -438,15 +438,21 @@ def create_app():
         # has no canonical actor/class context and must not enter TLCP traces.
         if request.path == "/metrics":
             return response
-        if app.config.get("TESTING"):
-            # Test fixtures wrap each test in transactions; the independent TLCP
-            # writer can otherwise contend with teardown deletes.
+        if not app.config.get("TLCP_REQUEST_TRACE_ENABLED", not app.config.get("TESTING")):
+            # Off under TESTING unless a test opts in (the tlcp_trace_enabled
+            # fixture): most tests share one session with their requests and
+            # never commit it, which this independent writer cannot see.
             return response
         context = getattr(g, "correlation_context", None)
         if context:
             try:
                 with Session(db.engine) as tlcp_session:
                     with tlcp_session.begin():
+                        # Whatever this writer meets, a lock wait ends in an
+                        # error that is logged below; the response still goes.
+                        tlcp_session.execute(
+                            sa.text(f"SET LOCAL lock_timeout = '{TRACE_LOCK_TIMEOUT}'")
+                        )
                         persist_request_trace(
                             context=context,
                             request_id=request_id,
@@ -871,6 +877,12 @@ def create_app():
     app.register_blueprint(docs_bp)
     app.register_blueprint(analytics_bp)
     app.register_blueprint(recovery_bp)
+
+    # Claim, credential setup and recovery setup require that nobody is signed in
+    # (DOM-IDEN-005 §VII). Registered after validate_canonical_session_nonce, so a
+    # revoked session has already been cleared when this decides.
+    from app.routes.identity_establishment import refuse_authenticated_identity_establishment
+    app.before_request(refuse_authenticated_identity_establishment)
 
     # Private Prometheus scrape surface.  It deliberately carries no CTH
     # session, tenant, or identity context and is useful only to a local or

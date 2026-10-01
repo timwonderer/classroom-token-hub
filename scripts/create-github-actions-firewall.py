@@ -116,8 +116,6 @@ def main():
         print(f"{RED}Error: Droplet ID required{NC}")
         print("\nUsage:")
         print(f"  python3 {sys.argv[0]} <droplet-id>")
-        print("\nExample:")
-        print(f"  python3 {sys.argv[0]} 487710074")
         print("\nGet your droplet ID:")
         print("  doctl compute droplet list")
         sys.exit(1)

@@ -3,7 +3,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| FEAT-IDEN-002 | 2.2 | 2026-09-29 | 2.1 | Normative | ACTIVE |
+| FEAT-IDEN-002 | 2.3 | 2026-10-01 | 2.2 | Normative | ACTIVE |
 
 ---
 
@@ -30,6 +30,17 @@ to initial claim, not recovery (DOM-IDEN-002 §IX; INV-ARC-019 §VI).
 ---
 
 ## II. Execution Context
+
+### 0. Precondition: No Authenticated Principal (MANDATORY)
+
+Per DOM-IDEN-005 §VII (v2.3, operator ruling 2026-10-01), credential setup, on both the initial-claim and the recovery path, requires the absence of an
+authenticated canonical principal. If the request boundary has authenticated a `user_id` for the
+session (DOM-IDEN-006 §VIII step 1) — student, teacher or sysadmin, with or without a selected
+class — the request is refused before this FEAT runs: no Turnstile check, no username generation or retention check, no lock, and no
+setup state written. The refusal infers nothing about how the signed-in principal relates to the
+identity being established. One gate enforces this for every endpoint of the workflow
+(`app/routes/identity_establishment.py`); a structural test fails any view that reaches
+establishment state without being declared there.
 
 ### 1. Required Inputs
 
@@ -270,6 +281,7 @@ When the FEAT fails, the system SHALL:
 | Passphrase invalid | `INVALID_PASSPHRASE` | 400 | "Passphrase must be 8+ characters with letters and numbers." |
 | User/seat mismatch | `CONTEXT_MISMATCH` | 400 | "Setup state mismatch. Please start over." |
 | Database error | `INTERNAL_ERROR` | 500 | "An error occurred during setup. Please try again." |
+| Browser is signed in (an authenticated principal is present) | `SIGNED_IN` | 409 (a page load renders the refusal with 200) | "We are having trouble determining who you are right now. For your protection, this request was cancelled." The page offers **Return to login**, which ends the current sign-in through that role's logout. |
 
 ---
 
@@ -381,6 +393,11 @@ Revisions to this document SHALL:
 3. Maintain consistency with INV-ARC-019, DOM-IDEN-005 §V, §VII and §VIII, and DOM-IDEN-002 §VI, §VII and §VIII.
 4. Maintain consistency with FEAT-CORE-000.
 5. Maintain consistency with FEAT-IDEN-001.
+
+**Version 2.3 (2026-10-01), operator ruling 2026-10-01:** §II.0 makes the absence of an authenticated
+principal a precondition of every setup step (DOM-IDEN-005 v2.3 §VII); a setup begun signed out cannot
+continue or complete after a sign-in in the same browser. §VI adds `SIGNED_IN`. Matching amendments:
+FEAT-IDEN-001 v3.1, FEAT-IDEN-004 v1.4.
 
 **Version 2.2 (2026-09-29):** §II.2 states the lock sequence: an unlocked read of the Seat's database `class_id`, then the class lock, then the Seat lock. §VII lists `FAILED` beside the only successful outcome.
 
