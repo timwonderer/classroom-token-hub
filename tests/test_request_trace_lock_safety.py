@@ -130,7 +130,13 @@ def _row_is_free(engine, sql, params):
 
 def test_OPS_DB_001__signed_in_claim_in_own_class_does_not_wait_on_itself(
         client, app, side_engine, tlcp_trace_enabled):
-    """The production shape: signed in to class H, claiming another seat of H."""
+    """The production shape: signed in to class H, claiming another seat of H.
+
+    The identity-establishment gate (#1457) now refuses this request with 409
+    before any staging runs, so it takes no row lock at all. The request must
+    still finish promptly with its trace written: the refusal path is not
+    allowed to reintroduce the wait.
+    """
     classroom = _class_with_unclaimed_seat(client, app)
     signed_in = classroom.students[0]
     login_student(client, signed_in)
@@ -139,7 +145,7 @@ def test_OPS_DB_001__signed_in_claim_in_own_class_does_not_wait_on_itself(
         response = _claim(client, classroom)
 
     assert report["cancelled"] == [], "the trace writer waited on its own request's lock"
-    assert response.status_code == 302
+    assert response.status_code == 409
     assert report["elapsed"] < 5
     # Nothing was contended, so the trace was written, not skipped.
     assert _traces(signed_in.seat.public_id) >= 1
