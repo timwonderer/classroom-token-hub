@@ -1,7 +1,7 @@
 # DOM-IDEN-005: Identity Binding and Lifecycle
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-IDEN-005   | 2.2     | 2026-09-18    | 2.1 | Constitutional   |
+| DOM-IDEN-005   | 2.3     | 2026-10-01    | 2.2 | Constitutional   |
 
 ---
 ## I. Purpose
@@ -106,6 +106,26 @@ Student participation SHALL become active through either unauthenticated claim o
 >
 > Classroom Token Hub does not infer identity by design. Identity resolution is scoped to a specific Class, and unauthenticated claim SHALL NOT search for or infer existing User identities outside the current claim transaction. If a human entity with existing `user` row used an unauthenticated claim path to claim a new seat, the workflow SHALL provision a new User because no authenticated principal exists and the system SHALL NOT infer or merge existing identities.
 
+### Unauthenticated establishment requires the absence of a principal
+
+The premise above is a precondition, not an assumption. Every unauthenticated
+identity-establishment workflow — unauthenticated claim, the credential setup that
+completes it, and recovery credential setup — SHALL require the absence of an
+authenticated canonical principal. A principal exists when the request boundary has
+authenticated a `user_id` for the session (DOM-IDEN-006 §VIII step 1), whatever its role
+and whether or not a class context has been selected.
+
+A request that carries an authenticated principal SHALL be refused before verification:
+before any bot check, seat resolution, reset-code consumption, lock, or write of setup
+state. The refusal SHALL NOT infer any relationship between the signed-in principal and
+the identity being established — not whether they belong to the class, hold or conflict
+with the seat, or are the same person. The system knows only that the session represents
+someone. The refusal tells the person to sign out first; an authenticated student who
+wants another class uses authenticated class binding instead.
+
+A session whose authentication the boundary rejected (for example a rotated session
+nonce) carries no principal and is not refused on that account.
+
 Following successful binding:
 
 - a canonical User exists or has been reused;
@@ -126,7 +146,10 @@ Binding SHALL satisfy the following invariants:
 
 - One `Seat` SHALL bind to exactly one `User`.
 - One `User` MAY bind to multiple `Seats`.
-- One `User` SHALL own at most one `Seat` within the same `Class`.
+- One `User` SHALL own at most one `Seat` within the same `Class`. Authenticated class
+  binding SHALL refuse a principal that already holds a `Seat` in the target `Class`
+  before any mutation, as a capability check (INV-ARC-000), not by relying on a
+  uniqueness constraint at write time.
 - Binding SHALL occur atomically.
 - Binding SHALL preserve referential integrity.
 - An existing binding SHALL NOT migrate directly between Users. Teacher-authorized Unclaim first ends that binding. A later claimant must prove fresh claim entitlement before a new binding is created.
@@ -183,6 +206,13 @@ Revisions to this document SHALL:
 3. Maintain consistency with INV-CORE-000.
 4. Maintain consistency with DOM-IDEN-001.
 5. Maintain consistency with DOM-IDEN-006.
+
+**Version 2.3 (2026-10-01), operator ruling 2026-10-01:** §VII requires the absence of an
+authenticated principal for unauthenticated claim, credential setup, and recovery setup,
+refused before verification and without inferring any relationship between principals
+(incident OPS-DB-001: a signed-in session ran the claim and a second `User` was created).
+§VIII makes the one-Seat-per-Class rule an explicit pre-mutation refusal in authenticated
+class binding.
 ## Explicit Unclaim
 
 A teacher may detach a claimed student User from a Seat without destroying the Seat

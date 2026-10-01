@@ -1052,7 +1052,7 @@ def add_class():
         )
 
         if not result.success:
-            category = "warning" if result.error_code == "SEAT_ALREADY_CLAIMED" else "danger"
+            category = "warning" if result.error_code in ("SEAT_ALREADY_CLAIMED", "ALREADY_IN_CLASS") else "danger"
             flash(result.error_message, category)
             return redirect(_get_return_target())
 

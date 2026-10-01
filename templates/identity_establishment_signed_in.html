@@ -1,0 +1,43 @@
+{% from "macros/auth_brand.html" import auth_brand %}
+{#- Shown in place of claim, credential setup and recovery while someone is signed
+    in (DOM-IDEN-005 §VII). Reads nothing from the session and writes nothing:
+    no flashed messages, no form, no CSRF token. -#}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Classroom Token Hub - Signed In</title>
+    <link href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}">
+
+    <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
+    <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
+</head>
+
+<body class="student-shell auth-page">
+    <main id="main-content" aria-labelledby="signed-in-heading">
+    <div class="auth-container">
+        {{ auth_brand() }}
+        <div class="auth-body">
+            <div class="mb-3">
+                <small class="text-muted">STUDENT PORTAL</small>
+                <h1 id="signed-in-heading" class="h3 fw-bold mb-2 text-primary">You're signed in</h1>
+                <p class="subtitle mb-0">{{ message }}</p>
+            </div>
+
+            <a href="{{ sign_out_url }}" class="btn btn-primary w-100 btn-lg mb-4">Sign out</a>
+
+            {% if add_class_url %}
+            <div class="text-center pt-3 border-top">
+                <p class="mb-2 text-muted small">Adding a class to your own account?</p>
+                <a href="{{ add_class_url }}" class="text-decoration-none">Join another class</a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</main>
+</body>
+
+</html>

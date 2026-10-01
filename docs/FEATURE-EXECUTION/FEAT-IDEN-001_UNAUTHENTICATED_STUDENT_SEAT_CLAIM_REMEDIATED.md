@@ -3,7 +3,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| FEAT-IDEN-001 | 3.0 | 2026-09-28 | 2.3 | Normative | ACTIVE |
+| FEAT-IDEN-001 | 3.1 | 2026-10-01 | 3.0 | Normative | ACTIVE |
 
 ---
 
@@ -27,6 +27,17 @@ This FEAT writes nothing. It provisions no `User`, binds no `Seat` and clears no
 ---
 
 ## II. Execution Context
+
+### 0. Precondition: No Authenticated Principal (MANDATORY)
+
+Per DOM-IDEN-005 §VII (v2.3, operator ruling 2026-10-01), the unauthenticated claim requires the absence of an
+authenticated canonical principal. If the request boundary has authenticated a `user_id` for the
+session (DOM-IDEN-006 §VIII step 1) — student, teacher or sysadmin, with or without a selected
+class — the request is refused before this FEAT runs: no Turnstile check, no seat resolution, no lock, and no
+setup state written. The refusal infers nothing about how the signed-in principal relates to the
+identity being established. One gate enforces this for every endpoint of the workflow
+(`app/routes/identity_establishment.py`); a structural test fails any view that reaches
+establishment state without being declared there.
 
 ### 1. Required Inputs
 
@@ -175,6 +186,7 @@ the first gate on this surface. Every submission must also pass Cloudflare Turns
 | Several matches, no dedupe code given | `AMBIGUOUS_IDENTITY` | 400 | "Multiple students in this class share that name. Enter your deduplication code from your teacher." |
 | Dedupe code matches no single seat | `INVALID_DEDUPE_CODE` | 400 | "Invalid deduplication code. Check with your teacher." |
 | Database failure | `INTERNAL_ERROR` | 500 | "An error occurred during account claim. Please try again or contact support." |
+| Browser is signed in (an authenticated principal is present) | `SIGNED_IN` | 409 (a page load renders the refusal with 200) | "You're currently signed in. Sign out before claiming a different account." |
 
 A seat claimed concurrently between verification and setup is refused by FEAT-IDEN-002 (`INVALID_SEAT_STATE`), not here.
 
@@ -218,6 +230,10 @@ Revisions to this document SHALL:
 2. Update the effective date.
 3. Stay consistent with INV-ARC-019, DOM-IDEN-005 §V, §VII and §VIII, and DOM-IDEN-002 §VIII.
 4. Stay consistent with FEAT-CORE-000 and FEAT-IDEN-002.
+
+**Version 3.1 (2026-10-01), operator ruling 2026-10-01:** §II.0 makes the absence of an authenticated
+principal a precondition (DOM-IDEN-005 v2.3 §VII), checked before verification; §VII adds `SIGNED_IN`.
+Incident OPS-DB-001: a signed-in browser ran this verification and FEAT-IDEN-002 created a second `User`.
 
 **Version 3.0 (2026-09-28):**
 - FEAT-IDEN-001 is the read-only verification phase of the claim. User provisioning, seat binding,
