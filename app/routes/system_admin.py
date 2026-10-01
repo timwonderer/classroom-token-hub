@@ -60,6 +60,13 @@ from app.services.admin_identity_service import (
 )
 from app.services import passkey_service
 from app.utils.issue_helpers import record_resolution_action, update_issue_status
+from app.services.support_operator_access import (
+    escalated_clause,
+    get_sysadmin_visible_issue,
+    is_sysadmin_direct_lifecycle,
+    sysadmin_visible_issues,
+    teacher_authored_clause,
+)
 
 # Create blueprint
 sysadmin_bp = Blueprint('sysadmin', __name__, url_prefix='/sysadmin')
@@ -439,18 +446,18 @@ def dashboard():
     total_students = Seat.query.filter(Seat.role == 'student').count()
     system_admin_count = User.query.filter(User.user_role == UserRole.SYSADMIN).count()
 
-    # Open tickets = new user reports + pending/in-review escalated issues
-    new_reports_count = Issue.query.filter(
-        Issue.status.in_([Issue.STATUS_OPEN, Issue.STATUS_TEACHER_REVIEW]),
-    ).count()
-    open_issues_count = Issue.query.filter(
+    # Open tickets = open teacher reports + pending/in-review escalated issues.
+    # Only tickets system support may see are counted: a student ticket the
+    # teacher has not escalated is not one (DOM-SUP-001 §VIII).
+    open_tickets = sysadmin_visible_issues().filter(
         Issue.status.in_([
+            Issue.STATUS_OPEN,
+            Issue.STATUS_TEACHER_REVIEW,
             Issue.STATUS_ESCALATED_TO_DEV,
             'elevated',
             'developer_review',
         ])
     ).count()
-    open_tickets = new_reports_count + open_issues_count
 
     # Recent errors (last 5)
     recent_errors = get_recent_error_events(limit=5)
@@ -726,14 +733,19 @@ def support_tickets():
     """
     Unified support ticket dashboard combining admin issues and escalated student issues.
     Tab 1: Teacher issues (teacher-submitted support tickets)
-    Tab 2: Escalated Issues (student-escalated issues awaiting developer review)
+    Tab 2: Escalated Issues (student issues a teacher escalated for developer review)
+
+    Both tabs read only tickets system support may see
+    (app/services/support_operator_access.py). Tab 1 is selected by authorship,
+    not by ``issue_type``: a student's general ticket is also ``general``.
     """
     active_tab = request.args.get('tab', 'reports')
 
     # ── Teacher Issues (Tab 1) ──
     status_filter = request.args.get('status', 'all')
     report_type_filter = request.args.get('type', 'all')
-    report_query = Issue.query.filter(Issue.issue_type == 'general')
+    teacher_reports = sysadmin_visible_issues().filter(teacher_authored_clause())
+    report_query = teacher_reports
     if status_filter != 'all':
         report_query = report_query.filter(Issue.status == status_filter.upper())
     reports = [
@@ -753,15 +765,19 @@ def support_tickets():
 
     from sqlalchemy import func as sqlfunc
     status_counts = dict(
-        db.session.query(Issue.status, sqlfunc.count(Issue.id))
-        .filter(Issue.issue_type == 'general')
+        teacher_reports.with_entities(Issue.status, sqlfunc.count(Issue.id))
         .group_by(Issue.status).all()
     )
-    new_reports = status_counts.get('new', 0)
-    reviewed_reports = status_counts.get('reviewed', 0)
+    # These read the v1 report statuses 'new'/'reviewed', which no Issue row
+    # carries, so both cards always showed zero.
+    new_reports = status_counts.get(Issue.STATUS_OPEN, 0)
+    reviewed_reports = (
+        status_counts.get(Issue.STATUS_DEV_RESOLVED, 0) + status_counts.get(Issue.STATUS_CLOSED, 0)
+    )
 
     # ── Escalated Issues (Tab 2) ──
-    all_issues = Issue.query.filter(
+    all_issues = sysadmin_visible_issues().filter(
+        escalated_clause(),
         Issue.status.in_([
             Issue.STATUS_ESCALATED_TO_DEV,
             Issue.STATUS_DEV_RESOLVED,
@@ -812,11 +828,12 @@ def support_tickets():
 @sysadmin_bp.route('/issues/<issue_ref>')
 @system_admin_required
 def view_issue(issue_ref):
-    """View a ticket at any point in its lifecycle."""
-    issue_id = _resolve_issue_id_from_ref(issue_ref)
-    if issue_id is None:
-        raise NotFound("Ticket not found")
-    issue = db.session.get(Issue, issue_id)
+    """View a ticket at any point in its lifecycle.
+
+    A ticket system support may not see is indistinguishable from one that
+    does not exist.
+    """
+    issue = get_sysadmin_visible_issue(_resolve_issue_id_from_ref(issue_ref))
     if not issue:
         raise NotFound("Ticket not found")
 
@@ -850,9 +867,12 @@ def view_issue(issue_ref):
         page_title=f'Ticket #{issue.id}',
         issue=_issue_to_view(issue),
         issue_ref=issue_ref,
+        direct_lifecycle=is_sysadmin_direct_lifecycle(issue.id),
         history=history,
         correlation_pack=_correlation_pack_to_view(issue.correlation_pack),
-        reporter_ticket_count=Issue.query.filter_by(actor_public_id=issue.actor_public_id).count(),
+        reporter_ticket_count=sysadmin_visible_issues().filter(
+            Issue.actor_public_id == issue.actor_public_id,
+        ).count(),
         tz_mode=tz_mode,
         class_timezone=class_timezone,
         display_timezone=display_timezone,
@@ -864,20 +884,26 @@ def view_issue(issue_ref):
 @system_admin_required
 @requires_feat_context("FEAT-OPS-001")
 def update_issue(issue_ref):
-    """Move a ticket through the direct, non-escalation lifecycle.
+    """Move a teacher's direct report through its lifecycle.
 
-    Owns exactly the three states a sysadmin may set without the
-    escalation/bug-bounty workflow (see resolve_escalated_issue for
-    ESCALATED_TO_DEV -> DEV_RESOLVED). A ticket already inside that workflow
-    (TEACHER_REVIEW, ESCALATED_TO_DEV, TEACHER_FINAL_REVIEW) must not be
-    dragged out of it by this form.
+    Owns exactly the three states a sysadmin may set on a ticket a teacher
+    wrote to system support and never escalated. Any other ticket is refused:
+    a student ticket before escalation is not system support's to see
+    (DOM-SUP-001 §VIII), and after escalation system support's only transition
+    is ESCALATED_TO_DEV -> DEV_RESOLVED, through resolve_escalated_issue.
     """
-    issue_id = _resolve_issue_id_from_ref(issue_ref)
-    if issue_id is None:
-        raise NotFound("Ticket not found")
-    issue = db.session.get(Issue, issue_id)
+    issue = get_sysadmin_visible_issue(_resolve_issue_id_from_ref(issue_ref))
     if not issue:
         raise NotFound("Ticket not found")
+    issue_id = issue.id
+
+    if not is_sysadmin_direct_lifecycle(issue.id):
+        flash(
+            "This ticket is in the escalation workflow, which this form does not "
+            "change. Use the technical-resolution action instead.",
+            "error",
+        )
+        return redirect(url_for('sysadmin.view_issue', issue_ref=issue_ref))
 
     new_status = request.form.get('status')
     admin_notes = request.form.get('admin_notes', '').strip()
@@ -1181,8 +1207,9 @@ def start_review_escalated_issue(issue_ref):
     issue_id = _resolve_issue_id_from_ref(issue_ref)
     if issue_id is None:
         raise NotFound("Issue not found")
-    issue = Issue.query.filter(
+    issue = sysadmin_visible_issues().filter(
         Issue.id == issue_id,
+        escalated_clause(),
         Issue.status.in_([Issue.STATUS_ESCALATED_TO_DEV, 'elevated', 'developer_review'])
     ).first_or_404()
 
@@ -1198,8 +1225,9 @@ def resolve_escalated_issue(issue_ref):
     issue_id = _resolve_issue_id_from_ref(issue_ref)
     if issue_id is None:
         raise NotFound("Issue not found")
-    issue = Issue.query.filter(
+    issue = sysadmin_visible_issues().filter(
         Issue.id == issue_id,
+        escalated_clause(),
         Issue.status.in_([Issue.STATUS_ESCALATED_TO_DEV, 'elevated', 'developer_review'])
     ).first_or_404()
 
