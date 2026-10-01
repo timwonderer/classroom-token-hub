@@ -785,7 +785,7 @@ Two defects, one of which only the repository owner can clear because it is a se
   gates in front: the `via=` path in the log (assertion vs trusted header). The historical note below
   is kept as recorded.
 - **The operator console's front door was `operator.status.classroomtokenhub.com`,** served by a
-  Google Cloud load balancer (`136.68.93.205`, with a Google-managed certificate for that name). An
+  Google Cloud load balancer (with a Google-managed certificate for that name) [load balancer IP redacted 2026-09-29]. An
   unauthenticated request to `/operator/notices` or `/health` gets IAP's own 302 to Google sign-in
   (`x-goog-iap-generated-response: true`, body "Invalid IAP credentials: empty token"); the
   application is never reached. A first check on 2026-09-15 went through a local resolver that
