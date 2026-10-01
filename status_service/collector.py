@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 from datetime import datetime, timezone
+from http.client import HTTPException
 from urllib.error import HTTPError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
@@ -62,7 +63,7 @@ def gate_check(stamp: str, fetch=fetch_gate) -> dict:
     """Classify the Application Availability Gate without inferring app health."""
     try:
         code, location = fetch()
-    except (OSError, TimeoutError, ValueError):
+    except (OSError, TimeoutError, ValueError, HTTPException):
         return {"key": "gate", "outcome": "UNKNOWN", "checked_at": None, "diagnostic": "TRANSPORT_UNAVAILABLE"}
     host = (urlsplit(location or "").hostname or "").lower()
     if 300 <= code < 400 and (host == ACCESS_LOGIN_DOMAIN or host.endswith("." + ACCESS_LOGIN_DOMAIN)):
@@ -91,7 +92,9 @@ def collect(store: FirestoreNoticeStore, *, client_id: str, client_secret: str, 
         body = fetch(client_id, client_secret)
     except HTTPError as exc:
         diagnostic = "ACCESS_DENIED" if exc.code in (301, 302, 303, 307, 308, 401, 403) else "TRANSPORT_UNAVAILABLE"
-    except (OSError, TimeoutError):
+    # http.client.HTTPException (e.g. BadStatusLine from a broken proxy) is not
+    # an OSError; it is still a transport failure, never a lost record.
+    except (OSError, TimeoutError, HTTPException):
         diagnostic = "TRANSPORT_UNAVAILABLE"
     except (ValueError, TypeError, KeyError, OverflowError):
         diagnostic = "INVALID_SNAPSHOT"
@@ -126,7 +129,9 @@ def collect_platform(store, *, client_id: str, client_secret: str,
             transport = "ACCESS_DENIED"
         else:
             transport, http_failure = "TRANSPORT_UNAVAILABLE", True
-    except (OSError, TimeoutError):
+    # http.client.HTTPException (e.g. BadStatusLine from a broken proxy) is not
+    # an OSError; it is still a transport failure, never a lost record.
+    except (OSError, TimeoutError, HTTPException):
         transport = "TRANSPORT_UNAVAILABLE"
     except (ValueError, TypeError, KeyError, OverflowError):
         transport = "INVALID_RESPONSE"

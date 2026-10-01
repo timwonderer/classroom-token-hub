@@ -184,3 +184,29 @@ def test_invalid_gate_records_are_rejected(change):
     change(record)
     with pytest.raises(ValueError):
         validate_platform(record)
+
+
+def test_malformed_gate_response_keeps_the_minute_of_platform_evidence():
+    """http.client.HTTPException is not an OSError; it must not abort the record."""
+    from http.client import BadStatusLine
+    store = Store()
+
+    def broken():
+        raise BadStatusLine("private proxy garbage")
+    record = collect_platform(store, client_id="id", client_secret="secret", now=NOW,
+                              fetch=lambda *_: json.dumps(source()).encode(), fetch_gate=broken)
+    gate = record["checks"][2]
+    assert (gate["outcome"], gate["diagnostic"]) == ("UNKNOWN", "TRANSPORT_UNAVAILABLE")
+    assert [c["outcome"] for c in record["checks"][:2]] == ["PASS", "PASS"]
+    assert store.platform == record and "private" not in json.dumps(record)
+
+
+def test_malformed_health_response_is_transport_failure_not_a_lost_record():
+    from http.client import IncompleteRead
+    store = Store()
+
+    def broken(*_):
+        raise IncompleteRead(b"partial")
+    record = collect_platform(store, client_id="id", client_secret="secret", now=NOW, fetch=broken, fetch_gate=OPEN)
+    assert [c["diagnostic"] for c in record["checks"][:2]] == ["TRANSPORT_UNAVAILABLE", "TRANSPORT_UNAVAILABLE"]
+    assert store.platform == record
