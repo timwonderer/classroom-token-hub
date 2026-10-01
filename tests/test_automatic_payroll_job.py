@@ -184,7 +184,7 @@ def test_one_class_failing_to_derive_its_date_does_not_block_another(app, monkey
     broken_classroom = initialize("chemistry_p1", app)
     healthy_classroom = initialize("ap_csp_p3", app)
     broken_cid, *_ = _seed_due_class(broken_classroom, due=True)
-    healthy_cid, _, _, healthy_occurrence = _seed_due_class(healthy_classroom, due=True)
+    healthy_cid, healthy_occurrence = _seed_due_class(healthy_classroom, due=True)
 
     real_next_payroll_date = schedule_module.next_payroll_date
 
