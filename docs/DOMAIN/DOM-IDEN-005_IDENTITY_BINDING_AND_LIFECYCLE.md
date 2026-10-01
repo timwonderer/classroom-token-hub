@@ -120,8 +120,9 @@ before any bot check, seat resolution, reset-code consumption, lock, or write of
 state. The refusal SHALL NOT infer any relationship between the signed-in principal and
 the identity being established — not whether they belong to the class, hold or conflict
 with the seat, or are the same person. The system knows only that the session represents
-someone. The refusal tells the person to sign out first; an authenticated student who
-wants another class uses authenticated class binding instead.
+someone. The refusal cancels the request and offers a return to login that first ends the
+current sign-in. An authenticated student who wants another class uses authenticated class
+binding instead.
 
 A session whose authentication the boundary rejected (for example a rotated session
 nonce) carries no principal and is not refused on that account.

@@ -35,8 +35,13 @@ IDENTITY_ESTABLISHMENT_ENDPOINTS = frozenset({
     'recovery.account_lookup',
 })
 
-SIGNED_IN_MESSAGE = "You're currently signed in. Sign out before claiming a different account."
+REFUSAL_HEADING = "We are having trouble determining who you are right now."
+REFUSAL_CANCELLED = "For your protection, this request was cancelled."
+SIGNED_IN_MESSAGE = f"{REFUSAL_HEADING} {REFUSAL_CANCELLED}"
 
+# "Return to login" must end the sign-in that caused the refusal, or the next
+# attempt is refused again. Each role's logout clears it and lands on that
+# role's login page.
 _SIGN_OUT_ENDPOINTS = {
     'student': 'student.logout',
     'teacher': 'admin.logout',
@@ -77,12 +82,13 @@ def refuse_authenticated_identity_establishment():
         return None
 
     status = 200 if request.method in ('GET', 'HEAD') else 409
-    if request.accept_mimetypes.best == 'application/json':
-        return jsonify(verified=False, message=SIGNED_IN_MESSAGE, redirect=url_for('student.claim_account')), 409
     role = getattr(user.user_role, 'value', user.user_role)
+    return_to_login_url = url_for(_SIGN_OUT_ENDPOINTS.get(role, 'student.logout'))
+    if request.accept_mimetypes.best == 'application/json':
+        return jsonify(verified=False, message=SIGNED_IN_MESSAGE, redirect=return_to_login_url), 409
     return render_template(
         'identity_establishment_signed_in.html',
-        message=SIGNED_IN_MESSAGE,
-        sign_out_url=url_for(_SIGN_OUT_ENDPOINTS.get(role, 'student.logout')),
-        add_class_url=url_for('student.add_class') if role == 'student' else None,
+        heading=REFUSAL_HEADING,
+        cancelled=REFUSAL_CANCELLED,
+        return_to_login_url=return_to_login_url,
     ), status

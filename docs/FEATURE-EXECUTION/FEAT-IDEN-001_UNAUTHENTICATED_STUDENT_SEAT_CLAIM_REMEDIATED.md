@@ -186,7 +186,7 @@ the first gate on this surface. Every submission must also pass Cloudflare Turns
 | Several matches, no dedupe code given | `AMBIGUOUS_IDENTITY` | 400 | "Multiple students in this class share that name. Enter your deduplication code from your teacher." |
 | Dedupe code matches no single seat | `INVALID_DEDUPE_CODE` | 400 | "Invalid deduplication code. Check with your teacher." |
 | Database failure | `INTERNAL_ERROR` | 500 | "An error occurred during account claim. Please try again or contact support." |
-| Browser is signed in (an authenticated principal is present) | `SIGNED_IN` | 409 (a page load renders the refusal with 200) | "You're currently signed in. Sign out before claiming a different account." |
+| Browser is signed in (an authenticated principal is present) | `SIGNED_IN` | 409 (a page load renders the refusal with 200) | "We are having trouble determining who you are right now. For your protection, this request was cancelled." The page offers **Return to login**, which ends the current sign-in through that role's logout. |
 
 A seat claimed concurrently between verification and setup is refused by FEAT-IDEN-002 (`INVALID_SEAT_STATE`), not here.
 

@@ -281,7 +281,7 @@ When the FEAT fails, the system SHALL:
 | Passphrase invalid | `INVALID_PASSPHRASE` | 400 | "Passphrase must be 8+ characters with letters and numbers." |
 | User/seat mismatch | `CONTEXT_MISMATCH` | 400 | "Setup state mismatch. Please start over." |
 | Database error | `INTERNAL_ERROR` | 500 | "An error occurred during setup. Please try again." |
-| Browser is signed in (an authenticated principal is present) | `SIGNED_IN` | 409 (a page load renders the refusal with 200) | "You're currently signed in. Sign out before claiming a different account." |
+| Browser is signed in (an authenticated principal is present) | `SIGNED_IN` | 409 (a page load renders the refusal with 200) | "We are having trouble determining who you are right now. For your protection, this request was cancelled." The page offers **Return to login**, which ends the current sign-in through that role's logout. |
 
 ---
 

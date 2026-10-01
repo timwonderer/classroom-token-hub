@@ -41,7 +41,21 @@ from tests.helpers.operation_routes import seed_sysadmin_session
 # Imported at collection: it loads wsgi, which must happen before the app serves a request.
 from tests.dom.operation.test_sysadmin_grafana_auth import _create_sysadmin_via_cli
 
-SIGNED_IN = "You're currently signed in. Sign out before claiming a different account."
+SIGNED_IN = "We are having trouble determining who you are right now."
+CANCELLED = "For your protection, this request was cancelled."
+# The owner's copy, verbatim (operator decision on PR #1457).
+REFUSAL_COPY = (
+    ("h1", SIGNED_IN),
+    ("p", CANCELLED),
+    ("h2", "Why is this happening?"),
+    ("p", "Your sign-in changed while this page was open, so we can't safely determine which account "
+          "should complete this request. This can happen when you sign in to another account in a "
+          "different tab or when someone else uses the same browser."),
+    ("h2", "What can I do?"),
+    ("p", "Return to the login page and sign in again. Before continuing, close any older Classroom "
+          "Token Hub tabs that are still open."),
+    ("a", "Return to login"),
+)
 ONBOARDING_KEYS = (
     'onboarding_seat_ref', 'onboarding_user_ref', 'onboarding_claim_generation',
     'recovery_setup_authorization', 'student_setup_token',
@@ -65,6 +79,22 @@ def _session_state(client):
     state = _session(client)
     state.pop(DISPLAY_METADATA_SESSION_KEY, None)
     return state
+
+
+def _return_to_login(page):
+    return next(a for a in page.find_all('a') if a.get_text(strip=True) == "Return to login")
+
+
+def _assert_return_to_login_signs_out(client, page, logout_path, login_path):
+    """The button ends the sign-in that caused the refusal and lands on that role's login page."""
+    button = _return_to_login(page)
+    assert button['href'] == logout_path
+    response = client.get(button['href'])
+    assert response.status_code == 302 and response.location.split('?')[0].endswith(login_path)
+    # The principal is gone; admin logout leaves a stale nonce key, which names nobody.
+    assert 'user_id' not in _session(client)
+    landed = client.get(response.location)
+    assert landed.status_code == 200
 
 
 def _sign_out_browser(client):
@@ -162,11 +192,19 @@ def test_OPS_DB_001__signed_in_claim_page_renders_refusal_without_touching_the_s
     response = client.get('/student/claim-account')
     assert response.status_code == 200
     page = BeautifulSoup(response.data, 'html.parser')
-    assert SIGNED_IN in html.unescape(page.get_text(' '))
-    assert page.select_one('form[action$="/student/claim-account"]') is None, "the claim form is not offered"
-    assert page.select_one('a[href="/student/logout"]') is not None
-    assert page.select_one('a[href="/student/add-class"]') is not None
+    assert page.select_one('form') is None, "the claim form is not offered"
+    shown = [(el.name, ' '.join(el.get_text(' ', strip=True).split()))
+             for el in page.select_one('.auth-body').find_all(['h1', 'h2', 'p', 'a'])]
+    assert shown == list(REFUSAL_COPY), "the page says exactly the owner's copy and nothing else"
+    assert page.select_one('a[href="/student/add-class"]') is None
     assert _session_state(client) == before, "GET must not change the session"
+
+
+def test_OPS_DB_001__return_to_login_signs_the_student_out(client, shared_chromebook):
+    page = BeautifulSoup(client.get('/student/claim-account').data, 'html.parser')
+    _assert_return_to_login_signs_out(client, page, '/student/logout', '/student/login')
+    # Signed out, the claim is no longer refused.
+    assert SIGNED_IN not in _body(client.get('/student/claim-account'))
 
 
 def test_OPS_DB_001__full_incident_sequence_creates_no_second_user(client, shared_chromebook):
@@ -227,6 +265,7 @@ def test_OPS_DB_001__workflow_posts_are_refused_mid_setup(client, mid_setup_then
     response = client.post(path, data=data)
     assert response.status_code == 409
     assert SIGNED_IN in _body(response)
+    assert CANCELLED in _body(response) and 'Return to login' in _body(response)
     assert _session_state(client) == before
 
 
@@ -248,7 +287,8 @@ def test_OPS_DB_001__json_retention_check_is_refused_as_json(client, mid_setup_t
     assert response.status_code == 409
     assert response.is_json
     assert response.json['verified'] is False
-    assert response.json['message'] == SIGNED_IN
+    assert response.json['message'] == f"{SIGNED_IN} {CANCELLED}"
+    assert response.json['redirect'] == '/student/logout', "the page script follows it and ends the sign-in"
 
 
 # ------------------------------------------------------------- recovery entry
@@ -290,11 +330,10 @@ def test_OPS_DB_001__teacher_session_is_refused(client, shared_chromebook):
     db.session.commit()
     page = BeautifulSoup(client.get('/student/claim-account').data, 'html.parser')
     assert SIGNED_IN in html.unescape(page.get_text(' '))
-    assert page.select_one('a[href="/admin/logout"]') is not None
-    assert page.select_one('a[href="/student/add-class"]') is None, "add-class is a student action"
     response = _claim(client, classroom)
     assert response.status_code == 409
     assert shared_chromebook["calls"]["resolve_seat_claim"] == 0
+    _assert_return_to_login_signs_out(client, page, '/admin/logout', '/admin/login')
 
 
 def test_OPS_DB_001__sysadmin_session_is_refused(client, shared_chromebook):
@@ -304,10 +343,10 @@ def test_OPS_DB_001__sysadmin_session_is_refused(client, shared_chromebook):
     db.session.commit()
     page = BeautifulSoup(client.get('/student/claim-account').data, 'html.parser')
     assert SIGNED_IN in html.unescape(page.get_text(' '))
-    assert page.select_one('a[href="/sysadmin/logout"]') is not None
     response = _claim(client, shared_chromebook["classroom"])
     assert response.status_code == 409
     assert shared_chromebook["calls"]["resolve_seat_claim"] == 0
+    _assert_return_to_login_signs_out(client, page, '/sysadmin/logout', '/sysadmin/login')
 
 
 def test_OPS_DB_001__revoked_session_counts_as_signed_out(client, shared_chromebook):
@@ -333,8 +372,7 @@ def test_OPS_DB_001__shared_chromebook_sign_out_then_claim(client, shared_chrome
     maria_seats = {s.id for s in Seat.query.filter_by(user_id=maria.user.id)}
 
     refused = client.get('/student/claim-account')
-    sign_out = BeautifulSoup(refused.data, 'html.parser').select_one('a[href="/student/logout"]')
-    client.get(sign_out['href'])
+    client.get(_return_to_login(BeautifulSoup(refused.data, 'html.parser'))['href'])
     assert 'user_id' not in _session(client)
 
     response = _claim(client, classroom)

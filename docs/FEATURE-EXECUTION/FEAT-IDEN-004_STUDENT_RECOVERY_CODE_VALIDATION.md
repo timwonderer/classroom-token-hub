@@ -221,7 +221,7 @@ When the FEAT fails, the system SHALL:
 | Code already used | `CODE_ALREADY_USED` | 400 | "Invalid or expired recovery code." |
 | Rate limit exceeded | `RATE_LIMIT_EXCEEDED` | 429 | "Too many attempts. Please wait before trying again." |
 | Database error | `INTERNAL_ERROR` | 500 | "An error occurred. Please try again." |
-| Browser is signed in (an authenticated principal is present) | `SIGNED_IN` | 409 (a page load renders the refusal with 200) | "You're currently signed in. Sign out before claiming a different account." |
+| Browser is signed in (an authenticated principal is present) | `SIGNED_IN` | 409 (a page load renders the refusal with 200) | "We are having trouble determining who you are right now. For your protection, this request was cancelled." The page offers **Return to login**, which ends the current sign-in through that role's logout. |
 
 ---
 

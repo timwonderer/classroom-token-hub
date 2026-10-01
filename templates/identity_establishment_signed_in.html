@@ -8,7 +8,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Classroom Token Hub - Signed In</title>
+    <title>Classroom Token Hub - Request Cancelled</title>
     <link href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css') }}">
 
@@ -17,24 +17,21 @@
 </head>
 
 <body class="student-shell auth-page">
-    <main id="main-content" aria-labelledby="signed-in-heading">
+    <main id="main-content" aria-labelledby="request-cancelled-heading">
     <div class="auth-container">
         {{ auth_brand() }}
         <div class="auth-body">
-            <div class="mb-3">
-                <small class="text-muted">STUDENT PORTAL</small>
-                <h1 id="signed-in-heading" class="h3 fw-bold mb-2 text-primary">You're signed in</h1>
-                <p class="subtitle mb-0">{{ message }}</p>
-            </div>
+            <h1 id="request-cancelled-heading" class="h3 fw-bold mb-2 text-primary">{{ heading }}</h1>
+            <p class="subtitle mb-4">{{ cancelled }}</p>
 
-            <a href="{{ sign_out_url }}" class="btn btn-primary w-100 btn-lg mb-4">Sign out</a>
+            <h2 class="h5 fw-bold">Why is this happening?</h2>
+            <p>Your sign-in changed while this page was open, so we can't safely determine which account should complete this request. This can happen when you sign in to another account in a different tab or when someone else uses the same browser.</p>
 
-            {% if add_class_url %}
-            <div class="text-center pt-3 border-top">
-                <p class="mb-2 text-muted small">Adding a class to your own account?</p>
-                <a href="{{ add_class_url }}" class="text-decoration-none">Join another class</a>
-            </div>
-            {% endif %}
+            <h2 class="h5 fw-bold">What can I do?</h2>
+            <p class="mb-4">Return to the login page and sign in again. Before continuing, close any older Classroom Token Hub tabs that are still open.</p>
+
+            {#- Goes through the signed-in role's logout, which ends the sign-in and lands on that role's login page. -#}
+            <a href="{{ return_to_login_url }}" class="btn btn-primary w-100 btn-lg mb-4">Return to login</a>
         </div>
     </div>
 </main>
