@@ -32,6 +32,19 @@ def test_transfer_page_renders_flat_when_interest_unconfigured(client, app):
     assert "4.5% annual simple interest" not in body
 
 
+def test_transfer_page_labels_the_forecast_as_the_next_payout(client, app):
+    """The forecast figure is one payout window, weekly or monthly, not a month.
+
+    It was labelled "Estimated Monthly Interest" while showing a week's worth
+    for a class paid weekly.
+    """
+    initialize_as_student("chemistry_p1", client, app)
+
+    body = client.get("/student/transfer").get_data(as_text=True)
+    assert "Estimated interest next payout" in body
+    assert "Estimated Monthly Interest" not in body
+
+
 def test_unsettled_savings_are_disclosed_rather_than_left_contradicting(client, app):
     """The card and the projection may differ, but the page must say why.
 
