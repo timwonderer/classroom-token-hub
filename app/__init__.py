@@ -878,6 +878,12 @@ def create_app():
     app.register_blueprint(analytics_bp)
     app.register_blueprint(recovery_bp)
 
+    # Claim, credential setup and recovery setup require that nobody is signed in
+    # (DOM-IDEN-005 §VII). Registered after validate_canonical_session_nonce, so a
+    # revoked session has already been cleared when this decides.
+    from app.routes.identity_establishment import refuse_authenticated_identity_establishment
+    app.before_request(refuse_authenticated_identity_establishment)
+
     # Private Prometheus scrape surface.  It deliberately carries no CTH
     # session, tenant, or identity context and is useful only to a local or
     # explicitly private Prometheus network path.
