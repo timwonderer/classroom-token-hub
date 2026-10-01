@@ -481,6 +481,31 @@ def test_monthly_window_accrues_only_the_days_money_was_held(client, app, monkey
     ]
 
 
+def test_a_leap_year_february_accrues_29_days_at_rate_over_365(client, app, monkeypatch):
+    """SPEC-ECON-001 §5.2 (v1.2): the daily rate is r/365 in every year, leap years too.
+
+    February 2028 has 29 days. Each of them, February 29 included, earns
+    ``balance × r / 365``: 1000 × 0.1733 × 29/365 = 13.77. A 366-day year would
+    pay 13.73. The payout job and the forecast must agree on 13.77.
+    """
+    classroom = initialize_as_teacher("chemistry_p1", client, app)
+    tz_name = classroom.economy.class_timezone
+    seat = classroom.students[0].seat
+    _configure_interest(client, classroom, payout="monthly", calc="simple")
+
+    february = datetime(2028, 2, 1).date()
+    march = datetime(2028, 3, 1).date()
+    assert calendar.isleap(february.year)
+    _fund_savings(monkeypatch, app, classroom, seat, "1000.00", _local(tz_name, february, 0, 30))
+    _tick(monkeypatch, app, _local(tz_name, february, 1))  # settles the deposit
+    forecast = _forecast(monkeypatch, app, classroom, seat, _local(tz_name, february, 1, 30), months=1)
+    _tick(monkeypatch, app, _local(tz_name, march, 1))
+
+    rows = _interest_rows(app, classroom, seat)
+    assert [row.amount for row in rows] == [_simple("1000.00", 29)] == [Decimal("13.77")]
+    assert forecast.next_credit == Decimal("13.77")
+
+
 # --------------------------------------------------------------------------- #
 # Transition from month-keyed payouts                                          #
 # --------------------------------------------------------------------------- #

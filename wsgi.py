@@ -25,7 +25,7 @@ os.environ['TZ'] = 'UTC'
 if platform.system() != 'Windows':
     time.tzset()  # Apply timezone change
 
-from flask import has_request_context, render_template, request, session
+from flask import has_request_context, jsonify, render_template, request, session
 from datetime import datetime, timedelta, timezone
 import traceback
 import collections
@@ -33,7 +33,7 @@ import collections
 # -------------------- APPLICATION FACTORY --------------------
 # Import and create the Flask application using the factory pattern
 from app import app
-from app.extensions import db, migrate, csrf
+from app.extensions import db, migrate, csrf, limiter
 from app.feats.base import FEATContext
 
 
@@ -366,6 +366,22 @@ def too_many_requests_error(error):
         error_message=f"Rate limited on {request.path}: {limit_description}",
         stack_trace=None
     )
+
+    # /api/* callers are scripts that parse JSON; the styled page made their
+    # r.json() throw. Retry-After tells a poller when its window reopens.
+    if request.path.startswith('/api/'):
+        message = "Too many requests. Please wait a moment and try again."
+        response = jsonify({"status": "error", "error": message, "message": message})
+        response.status_code = 429
+        current_limit = limiter.current_limit
+        if current_limit is not None:
+            try:
+                response.headers['Retry-After'] = str(
+                    max(1, int(current_limit.reset_at - time.time()))
+                )
+            except Exception:
+                app.logger.debug("Could not compute Retry-After", exc_info=True)
+        return response
 
     return render_template(
         'error_429.html',

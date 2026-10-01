@@ -284,8 +284,12 @@
                                     <div class="fw-semibold mb-1 type-sm">{{ issue.escalation_reason
                                         }}</div>
                                     <div class="text-muted text-truncate type-xs sa-maxw-400">
+                                        {% if issue.student_explanation %}
                                         {{ issue.student_explanation[:150] }}{% if issue.student_explanation|length >
                                         150 %}...{% endif %}
+                                        {% else %}
+                                        The teacher has not shared this report’s content.
+                                        {% endif %}
                                     </div>
                                     <div class="text-muted mt-1 type-2xs">
                                         {% if pill_id == 'pending' %}

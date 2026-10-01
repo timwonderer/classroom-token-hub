@@ -258,7 +258,10 @@ def _make_productivity_policy(classroom):
 
 
 def test_file_claim_productivity_form_renders_and_submits(app, client):
-    from datetime import datetime, timezone
+    from app.utils.canonical_temporal_resolver import (
+        CLASS_LEVEL_EVALUATION,
+        canonical_temporal_resolver,
+    )
     with app.app_context():
         classroom = provision_classroom("chemistry_p1")
         enable_class_feature(class_id=classroom.class_id, feature="insurance")
@@ -270,6 +273,7 @@ def test_file_claim_productivity_form_renders_and_submits(app, client):
             policy_uuid=policy_uuid, idempotency_key=f"ins:{uuid4().hex}")
         db.session.commit()
         class_id, seat_id = classroom.class_id, student.seat.id
+        student_ctx = _student_ctx(classroom)
         login_student(client, student)
 
     # The productivity claim surface renders (multi-date rows, not the txn picker).
@@ -282,7 +286,13 @@ def test_file_claim_productivity_form_renders_and_submits(app, client):
     # the route (approval depends on the student's work records — a FEAT concern
     # covered end-to-end in test_insurance_claim_feat.py — so we assert the route
     # wiring never 500s and the claim_subject shape is accepted for parsing).
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    # claim_date is a class-local day; the UTC date is tomorrow there every evening.
+    with app.app_context():
+        today = canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=student_ctx,
+            primitive="current_evaluation_day",
+        ).evaluation_date.isoformat()
     resp = client.post(
         f"/student/insurance/claim/{policy_uuid}",
         data={"claim_date": today, "claim_hours": "2.0",

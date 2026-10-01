@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-ECON-001    | 1.2     | 2026-09-30     | 1.1        | Normative       |
+| SPEC-ECON-001    | 1.3     | 2026-09-30     | 1.2        | Normative       |
 
 ---
 
@@ -195,6 +195,18 @@ Daily accrual SHALL compute as:
 
 Equivalent formulas MAY exist for weekly/monthly accrual periods.
 
+**Day-count convention** (operator ruling 2026-09-30). The daily periodic rate SHALL be the
+annual rate divided by 365, in every year, leap years included. Each of the 366 days of a leap
+year, February 29 included, SHALL accrue at annual rate ÷ 365. This matches `SPEC-ECON-003`
+§5.5 and is permitted for the daily balance method by Regulation DD (12 CFR 1030, Supplement I,
+comment 7(a)(1)-4, which allows 1/365 or 1/366 of the interest rate for the 366 days of a leap
+year).
+
+The convention applies alike to runtime accrual (§9.2), to every projection or forecast (§10),
+and to the daily-compounding term of the doubling-time ceiling (`SPEC-ECON-003` §5.4). An
+implementation SHALL define the divisor once and read it everywhere; it SHALL NOT be restated
+as a separate literal in any of those paths. Changing it requires an amendment to this section.
+
 ---
 
 ### 5.3 Precision
@@ -356,7 +368,7 @@ interest is credited at the close of each payout window.
   earlier credit.
 - Each day accrues `earning base × annual rate / 365` (`SPEC-ECON-003` §5.5), where the earning
   base is determined by compound frequency (§6.2). A non-positive earning base accrues nothing.
-- The annual rate for a day is the rate in force at the end of that day: the `economic_engine` version with the greatest `effective_at` at or before that instant (`DOM-CLASS-003` §VII; 1.2). A version saved mid-window and dated for later earns nothing before its `effective_at`.
+- The annual rate for a day is the rate in force at the end of that day: the `economic_engine` version with the greatest `effective_at` at or before that instant (`DOM-CLASS-003` §VII; 1.3). A version saved mid-window and dated for later earns nothing before its `effective_at`.
 - The credited amount is the window's accrued interest, rounded once (§5.3).
 
 Because end-of-day balances derive from posted ledger effects and their posting times,
@@ -453,7 +465,7 @@ after the window closed.
 
 ### 14.2 Banking Policy Changes
 
-*(1.2, operator ruling 2026-09-30: the transition-activation protocol that stood here is withdrawn with the retired `policy_versions` / `policy_transitions` tables.)*
+*(1.3, operator ruling 2026-09-30: the transition-activation protocol that stood here is withdrawn with the retired `policy_versions` / `policy_transitions` tables.)*
 
 The accrual service MUST NOT:
 
@@ -478,7 +490,12 @@ Revisions to this document SHALL:
 
 ### Revision history
 
-- **1.2 (2026-09-30)** — Operator ruling 2026-09-30: `policy_versions` / `policy_transitions` are retired. §14.1 item 4 reads banking terms from the `economic_engine` version in force; §14.2's transition-activation protocol is withdrawn; §9.2's rate for a day is the version in force by `effective_at`, so a rate dated for later never accrues early.
+- **1.3 (2026-09-30)** — Operator ruling 2026-09-30: `policy_versions` / `policy_transitions` are retired. §14.1 item 4 reads banking terms from the `economic_engine` version in force; §14.2's transition-activation protocol is withdrawn; §9.2's rate for a day is the version in force by `effective_at`, so a rate dated for later never accrues early.
+- **1.2 (2026-09-30)** — Operator ruling 2026-09-30. §5.2 states the day-count convention
+  explicitly: annual rate ÷ 365 in every year, leap years included, for runtime and forecast
+  alike, defined once (Regulation DD, 12 CFR 1030, Supplement I, comment 7(a)(1)-4). Adds
+  non-normative Appendix A recording known deviation KD-1: credited interest joins the earning
+  base under simple interest, contrary to §4.1. No rule changes.
 - **1.1 (2026-09-30)** — Operator ruling 2026-09-30 adopts the daily balance method (12 CFR
   1030.7). §9.2 states it: interest accrues daily on each class-local day's end-of-day posted
   savings balance and is credited at the close of each payout window. §5.1 fixes accrual as daily.
@@ -487,3 +504,22 @@ Revisions to this document SHALL:
   payout frequency changes. §9.2 says a credit participates from its window's close.
   §14.1 credits only closed windows, replayed from the ledger.
 - **1.0 (2026-07-25)** — Initial specification.
+
+---
+
+## Appendix A. Known Deviations (non-normative)
+
+This appendix is descriptive. It records where the runtime does not yet conform to this
+specification, so that no surface presents the affected behavior as correct. It adds, removes
+and relaxes no rule; the sections it cites govern. An entry is removed when the runtime conforms.
+
+### KD-1. Simple interest: credited interest earns interest
+
+| Field | Value |
+| --- | --- |
+| Rule | §4.1: under simple interest, previously accrued **or previously paid** interest SHALL NOT participate in future accrual. |
+| Runtime | Accrued interest stays out of the earning base within a payout window, as §6.2 requires. Once a window is credited, the credit is part of the posted savings balance, and every later day's earning base is that posted balance (§9.2), for every calculation type. Under simple interest, credited interest therefore earns interest in later windows. |
+| Effect | A class set to simple interest earns slightly more than simple interest from the second payout window on. Over months the growth is close to compounding at the payout frequency. |
+| Status | Known, deferred (operator ruling 2026-09-30). The simple option stays available. Tracked in `docs/TRACKING/POST_LAUNCH_TRACKER_2026.md`. |
+| Disclosure | While KD-1 stands, the teacher banking settings and the user guides say that paid interest also earns under simple interest, and none describes simple interest as fully supported (operator ruling 2026-09-30). |
+

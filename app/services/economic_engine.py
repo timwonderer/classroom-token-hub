@@ -568,10 +568,17 @@ _MIN_DOUBLING_YEARS: dict[str, Decimal] = {
     "comfortable": Decimal("2"),
 }
 
+# Day-count convention for savings interest (SPEC-ECON-001 §5.2): a 365-day year in
+# every year, leap years included, so each day earns ``annual_rate / 365``. Runtime
+# accrual, the forecast and the daily-compounding ceiling below all read this one
+# constant; do not repeat the literal. 12 CFR 1030, Supplement I, comment 7(a)(1)-4
+# permits 1/365 on all 366 days of a leap year.
+SAVINGS_DAYS_PER_YEAR = Decimal("365")
+
 # Compounding frequency per year (SPEC §5.6). ``never`` is simple interest and is
 # special-cased in the doubling-time rearrangement (no compound term).
 _COMPOUND_FREQ_PER_YEAR: dict[str, int] = {
-    "daily": 365,
+    "daily": int(SAVINGS_DAYS_PER_YEAR),
     "weekly": 52,
     "monthly": 12,
 }
@@ -703,10 +710,6 @@ def resolve_savings(
     )
 
 
-# Daily periodic rate divisor (SPEC-ECON-001 §5.2, §9.2): each day earns
-# ``annual_rate / 365``, the daily balance method of 12 CFR 1030.7.
-SAVINGS_DAYS_PER_YEAR = Decimal("365")
-
 _SAVINGS_COMPOUND_FREQUENCIES = frozenset({"never", "daily", "weekly", "monthly"})
 
 
@@ -744,13 +747,18 @@ def accrue_daily_interest(
 
     This is the single authoritative accrual formula; the runtime payout and the
     projection both call it (SPEC-ECON-001 §10). Each day earns
-    ``earning_base × annual_rate / 365``, where the earning base is the day's
+    ``earning_base × annual_rate / SAVINGS_DAYS_PER_YEAR`` (365, leap years too,
+    §5.2), where the earning base is the day's
     end-of-day posted balance plus whatever accrued interest has joined it:
 
     - ``never`` / simple: accrued interest never joins (§4.1).
     - ``daily``: interest accrued earlier in the window joins every day (§4.2).
     - ``weekly`` / ``monthly``: interest accrued so far joins at each day marked
       ``capitalizes`` — a class-local week or month start inside the window.
+
+    Interest already credited is part of ``end_of_day_balance`` for every
+    calculation type, simple included. For simple interest that does not conform
+    to §4.1; it is a tracked known deviation (SPEC-ECON-001 Appendix A, KD-1).
 
     A non-positive earning base earns nothing. Full ``Decimal`` precision is kept;
     the caller rounds once, when the window is credited (§5.3).

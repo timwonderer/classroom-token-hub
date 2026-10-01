@@ -524,7 +524,11 @@ def bind_authenticated_student_to_class(
     principal = User.query.filter_by(id=user_id, user_role="student").populate_existing().with_for_update().one_or_none()
     if principal is None:
         return ClassBindingResult(False, error_code="INVALID_PRINCIPAL", error_message="Sign in again before joining a class.")
-
+    # One Seat per User per Class (DOM-IDEN-005 §VIII). Checked under the class and
+    # principal locks, before any write, rather than left to uq_seats_user_class at
+    # flush (INV-ARC-000: capability checks precede command execution).
+    if Seat.query.filter_by(class_id=class_id, user_id=user_id).first() is not None:
+        return ClassBindingResult(False, error_code="ALREADY_IN_CLASS", error_message="You're already in this class.")
 
     # Step 2: Find unclaimed seats (both user_id and claimed_at must be NULL)
     unclaimed_seats = (

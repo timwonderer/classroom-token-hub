@@ -1,6 +1,6 @@
 """A savings rate dated for later never accrues before its effective date.
 
-SPEC-ECON-001 §9.2 (1.2): each class-local day accrues at the rate in force at
+SPEC-ECON-001 §9.2 (1.3): each class-local day accrues at the rate in force at
 the end of that day — the Economic Engine version with the greatest
 ``effective_at`` at or before that instant (DOM-CLASS-003 §VII). The accrual
 timeline ordered versions by ``created_at``, so a teacher who saved a new rate

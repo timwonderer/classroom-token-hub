@@ -385,7 +385,7 @@
                     </form>
                 </div>
             </div>
-            {% elif issue.status in ['OPEN', 'DEV_RESOLVED', 'CLOSED', 'submitted', 'developer_resolved'] %}
+            {% elif direct_lifecycle and issue.status in ['OPEN', 'DEV_RESOLVED', 'CLOSED', 'submitted', 'developer_resolved'] %}
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-primary text-white">
                     <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">edit_square</span>Update Ticket</h5>
