@@ -36,10 +36,12 @@ forward). Pay frequency is derived from it, never stored as a number of days
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date, datetime
 from types import SimpleNamespace
 
+from app.extensions import db
 from app.models import PayrollEvent
 from app.services.payroll.settings import (
     classes_with_payroll_settings,
@@ -52,6 +54,8 @@ from app.utils.canonical_temporal_resolver import (
     ensure_utc,
     utc_now,
 )
+
+logger = logging.getLogger(__name__)
 
 SCHEDULED_OCCURRENCE_KEY = "scheduled_occurrence"
 
@@ -274,11 +278,22 @@ def due_payroll_occurrences(*, now=None) -> list[tuple[str, datetime]]:
 
     Pure read for the automatic-payroll job: due means the derived next payroll
     date is at or before ``now``.
+
+    Each class is derived on its own: a class whose date cannot be derived (no
+    boundary within ``_MAX_BOUNDARY_STEPS``, an unreadable ``summary_json``, a
+    failed read) is logged and left out, so it cannot keep any other class from
+    being paid. The read runs under a SAVEPOINT so a database error in one class
+    leaves the session usable for the next.
     """
     now = ensure_utc(now or utc_now())
     due = []
     for class_id in classes_with_payroll_settings():
-        occurrence = next_payroll_date(class_id, as_of=now)
+        try:
+            with db.session.begin_nested():
+                occurrence = next_payroll_date(class_id, as_of=now)
+        except Exception:
+            logger.exception("Could not derive the next payroll date for class %s; skipping it", class_id)
+            continue
         if occurrence is not None and occurrence <= now:
             due.append((class_id, occurrence))
     return due

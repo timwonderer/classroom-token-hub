@@ -80,11 +80,20 @@ The collector also performs the existing bounded GET `/health/status` using its
 same Cloudflare service-token identity. The app executes its existing `SELECT 1`;
 no new application endpoint or business query is introduced. Only endpoint
 response and the structured database signal are persisted in the separate
-`platform-check-v1` record. All unregistered feature/integrity placeholders are
+platform record (`platform-check-v2`; earlier `platform-check-v1` records carry
+no gate check and stay readable). All unregistered feature/integrity placeholders are
 ignored. HTTP200 establishes endpoint response even if the database check fails.
 Only the actual `DATABASE_UNAVAILABLE` result can mark that database check failed;
 Access denial, network failure, invalid response and stale source evidence mean
 monitoring could not verify it. Original database `checked_at` governs freshness.
+
+The same record carries a `gate` check (SPEC-OPS-006 §Independent platform
+checks). The collector requests `https://app.classroomtokenhub.com/static/manifest.json`
+**without** the service token and follows no redirect. A redirect to a
+`*.cloudflareaccess.com` host means the Access gate is up, and the public page
+shows *Under maintenance*. When you next put the gate up, confirm from the
+collector host that this request returns that redirect rather than a bare 403;
+a 401/403 is recorded as `UNEXPECTED_DENIAL` and does not show maintenance.
 
 Request snapshots and platform checks are collected independently. Test the
 service token against both fixed URLs. A platform failure must not discard an

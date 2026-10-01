@@ -135,7 +135,7 @@ Archived material is deliberately absent; see §VI.
 - [FEAT-SUP-002 — Class Announcement Management](../FEATURE-EXECUTION/FEAT-SUP-002_CLASS_ANNOUNCEMENT_MANAGEMENT.md)
 
 ### Specifications (SPEC)
-- [SPEC-DES-001 — Design System and Visual Identity](../SPEC/SPEC-DES-001_DESIGN_SYSTEM_AND_VISUAL_IDENTITY.md)
+- [SPEC-DES-001 — Design System and Visual Identity](../SPEC/SPEC-DES-001_DESIGN_SYSTEM_AND_VISUAL_IDENTITY.md) — v2.3: the status service carries the runtime token layer.
 - [SPEC-DISPLAY-001 — Display Metadata Resolver](../SPEC/SPEC-DISPLAY-001_DISPLAY_IDENTITY_METADATA_RESOLVER.md)
 - [SPEC-IDEN-001 — Username Retention Verification](../SPEC/SPEC-IDEN-001_USERNAME_RETENTION_VERIFICATION.md) — incorporated by FEAT-IDEN-002; memory-only setup staging, retrieval verification and page-bound proof.
 - [SPEC-ECON-001 — Savings Interest Accrual and Disbursement Specification](../SPEC/SPEC-ECON-001_SAVINGS_INTEREST_ACCRUAL_AND_DISBURSEMENT_SPECIFICATION.md)
@@ -146,11 +146,11 @@ Archived material is deliberately absent; see §VI.
 - [SPEC-LED-001 — Ledger Verification Proof Surfaces](../SPEC/SPEC-LED-001_LEDGER_VERIFICATION_PROOF_SURFACES.md)
 - [SPEC-LED-002 — Command Idempotency Reservation and Structural Enforcement](../SPEC/SPEC-LED-002_COMMAND_IDEMPOTENCY_RESERVATION_AND_ENFORCEMENT.md)
 - [SPEC-OPS-001 — Reversal, Void, and Transaction Finality Specification](../SPEC/SPEC-OPS-001_REVERSAL_AND_VOID.md)
-- [SPEC-OPS-002 — External Status Persistence Model](../SPEC/SPEC-OPS-002_EXTERNAL_STATUS_PERSISTENCE_MODEL.md)
+- [SPEC-OPS-002 — External Status Persistence Model](../SPEC/SPEC-OPS-002_EXTERNAL_STATUS_PERSISTENCE_MODEL.md) — v1.6: `AWARE` notice state.
 - [SPEC-OPS-003 — Application Observability Contract](../SPEC/SPEC-OPS-003_APPLICATION_OBSERVABILITY_CONTRACT.md)
 - [SPEC-OPS-004 — System Administration Console](../SPEC/SPEC-OPS-004_SYSTEM_ADMINISTRATION_CONSOLE.md)
 - [SPEC-OPS-005 — Feature Health Evidence (internal integrity)](../SPEC/SPEC-OPS-005_FEATURE_HEALTH_EVIDENCE.md)
-- [SPEC-OPS-006 — Public Request Monitoring](../SPEC/SPEC-OPS-006_PUBLIC_REQUEST_MONITORING.md) — v1.2: active availability checks and retained feature activity.
+- [SPEC-OPS-006 — Public Request Monitoring](../SPEC/SPEC-OPS-006_PUBLIC_REQUEST_MONITORING.md) — v1.3: plain-language hero states and area labels, Under maintenance from the access-gate check.
 - [SPEC-SEC-001 — Credentials and Identity Lookup Code Contract](../SPEC/SPEC-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_CODE_CONTRACT.md)
 - [SPEC-STORE-001 — Store Product Policy Payload Schema](../SPEC/SPEC-STORE-001_PRODUCT_POLICY_PAYLOAD_SCHEMA.md)
 - [SPEC-TEST-001 — Canonical Test Initializer](../SPEC/SPEC-TEST-001_CANONICAL_TEST_INITIALIZER.md)

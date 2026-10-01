@@ -901,7 +901,11 @@ class AttendanceSession(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     target_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
-    actor_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=False, index=True)
+    # CASCADE, not SET NULL: the column is NOT NULL and the row is append-only,
+    # so SET NULL could never succeed, and on a `self` row (actor == target) it
+    # aborted lawful seat removal. The delete guard still refuses the cascade
+    # while the row's target seat survives (DOM-PROD-001 §VII.1.a).
+    actor_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
     mechanism = db.Column(db.String(20), nullable=False, default="self")
     status = db.Column(db.String(20), nullable=False, default="active")
     reason_code = db.Column(db.String(32), nullable=False, index=True)
@@ -945,7 +949,10 @@ class PayrollEvent(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
     target_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
-    actor_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=False, index=True)
+    # CASCADE, not SET NULL: the column is NOT NULL and the row is append-only,
+    # so SET NULL could never succeed. The delete guard still refuses the cascade
+    # while the event's target seat survives (DOM-PROD-001 §XI.3).
+    actor_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
     correlation_id = db.Column(db.String(100), nullable=False, index=True)
     idempotency_key = db.Column(db.String(255), nullable=False, index=True)
     # The payroll_settings.policy_uuid that priced the amount. Required for

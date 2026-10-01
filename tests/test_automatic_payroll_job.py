@@ -18,7 +18,9 @@ effective-dated row that is in force from its date (DOM-CLASS-003 §VII).
 
 from __future__ import annotations
 
-from datetime import timedelta
+from contextlib import contextmanager
+from datetime import datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from app.extensions import db
 from app.feats.base import FEATContext
@@ -30,8 +32,9 @@ from app.models import (
 from app.scheduled_tasks import run_automatic_payroll_job
 from app.services.payroll import schedule as schedule_module
 from app.services.payroll.cycle_completion import resolve_completed_run
-from app.services.payroll.schedule import next_payroll_date
+from app.services.payroll.schedule import class_timezone_name, next_payroll_date
 from tests.helpers.class_domain import put_payroll_setting_in_force
+from app.utils import canonical_temporal_resolver as resolver_module
 from app.utils.canonical_temporal_resolver import utc_now
 from tests.helpers.classroom_initializer import initialize
 
@@ -46,6 +49,15 @@ def _local_midnight(cid, instant):
         CLASS_LEVEL_EVALUATION, canonical_execution_context=SimpleNamespace(class_id=cid),
         primitive="evaluation_day_boundaries", reference_time_utc=instant,
     ).boundary_start_utc
+
+
+def _local_midnight_days_after(cid, instant, days):
+    """Class-local midnight ``days`` calendar days after ``instant``'s local day,
+    in UTC. Not ``instant + timedelta(days=...)``: across a DST change local
+    midnight is an hour more or less than a multiple of 24h away."""
+    tz = ZoneInfo(class_timezone_name(cid))
+    local_day = instant.astimezone(tz).date() + timedelta(days=days)
+    return datetime.combine(local_day, time.min, tzinfo=tz).astimezone(timezone.utc)
 
 
 def _seed_due_class(classroom, *, due=True):
@@ -74,7 +86,36 @@ def _seed_due_class(classroom, *, due=True):
     return cid, occurrence
 
 
+@contextmanager
+def _pinned_clock(monkeypatch, instant):
+    """Moves the resolver's clock (the one application code reads) to start at
+    ``instant``. It keeps ticking, so rows stamped in sequence stay distinct."""
+    offset = instant - datetime.now(timezone.utc)
+
+    class _Pinned(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            moved = datetime.now(timezone.utc) + offset
+            return moved.astimezone(tz) if tz else moved.replace(tzinfo=None)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(resolver_module, "datetime", _Pinned)
+        yield
+
+
 def test_due_class_runs_full_lifecycle_and_advances_next_date(app):
+    _run_full_lifecycle_and_assert_next_date(app)
+
+
+def test_next_date_is_class_local_midnight_across_a_dst_change(app, monkeypatch):
+    """The run 7 days before America/Los_Angeles leaves daylight time
+    (2026-11-01): the next payday is local midnight 14 calendar days on, which is
+    14 days and one hour later in UTC."""
+    with _pinned_clock(monkeypatch, datetime(2026, 10, 25, 19, 0, tzinfo=timezone.utc)):
+        _run_full_lifecycle_and_assert_next_date(app)
+
+
+def _run_full_lifecycle_and_assert_next_date(app):
     classroom = initialize("chemistry_p1", app)
     cid, occurrence = _seed_due_class(classroom, due=True)
 
@@ -94,7 +135,7 @@ def test_due_class_runs_full_lifecycle_and_advances_next_date(app):
     # frequency on from the occurrence → the class is no longer due.
     assert {event.mechanism for event in PayrollEvent.query.filter_by(
         class_id=cid, payroll_cycle_id=cycle_id)} == {"SYSTEM"}
-    assert next_payroll_date(cid) == occurrence + timedelta(days=14)
+    assert next_payroll_date(cid) == _local_midnight_days_after(cid, occurrence, 14)
 
     # A second tick is inert — the class is not due.
     events_before = PayrollEvent.query.filter_by(class_id=cid).count()
@@ -134,3 +175,31 @@ def test_replaying_same_occurrence_is_idempotent(app, monkeypatch):
     # short-circuits: no new payroll events, still one interpretation record.
     assert PayrollEvent.query.filter_by(class_id=cid).count() == events_after_first
     assert InterpretationCycleRecord.query.filter_by(class_id=cid).count() == 1
+
+
+def test_one_class_failing_to_derive_its_date_does_not_block_another(app, monkeypatch):
+    """A class whose next payroll date cannot be derived is skipped, not fatal:
+    every other due class is still enumerated and paid, keeping the job's
+    "one class's failure cannot roll back or block another" contract."""
+    broken_classroom = initialize("chemistry_p1", app)
+    healthy_classroom = initialize("ap_csp_p3", app)
+    broken_cid, *_ = _seed_due_class(broken_classroom, due=True)
+    healthy_cid, _, _, healthy_occurrence = _seed_due_class(healthy_classroom, due=True)
+
+    real_next_payroll_date = schedule_module.next_payroll_date
+
+    def _next_payroll_date(class_id, *, as_of=None):
+        if class_id == broken_cid:
+            raise ValueError(f"No payroll boundary found for class {class_id}.")
+        return real_next_payroll_date(class_id, as_of=as_of)
+
+    monkeypatch.setattr(schedule_module, "next_payroll_date", _next_payroll_date)
+
+    assert schedule_module.due_payroll_occurrences() == [(healthy_cid, healthy_occurrence)]
+
+    run_automatic_payroll_job()
+
+    assert resolve_completed_run(
+        healthy_cid, f"auto-payroll:{healthy_cid}:{healthy_occurrence.isoformat()}"
+    ) is not None
+    assert PayrollEvent.query.filter_by(class_id=broken_cid).count() == 0

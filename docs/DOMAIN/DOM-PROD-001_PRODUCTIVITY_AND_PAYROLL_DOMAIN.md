@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-PROD-001 | 1.5 | 2026-09-30 | 1.4 | Constitutional |
+| DOM-PROD-001 | 1.6 | 2026-10-01 | 1.5 | Constitutional |
 
 ---
 
@@ -105,7 +105,7 @@ Append-only productivity timeline facts. Each row records a single tap-in or tap
 
 Current attendance state, accumulated daily minutes, and hall-pass elapsed time are derived from this timeline and are not stored on this table.
 
-Once written, an `attendance_sessions` row is permanent. It SHALL NOT be edited, deleted, soft-deleted, marked as deleted, hidden from payroll, or corrected in place.
+Once written, an `attendance_sessions` row is permanent for as long as its seat exists. It SHALL NOT be edited, deleted, soft-deleted, marked as deleted, hidden from payroll, or corrected in place. The sole exceptions are lifecycle destruction of the seat or of the class universe, defined in §VII.1.a.
 
 Inactive attendance records must include a reason:
 
@@ -116,6 +116,51 @@ Inactive attendance records must include a reason:
 If the inactive reason is `hall_pass`, the row must carry the specific consumed entitlement instance identifier. This is the same value stored in `hall_pass_logs.hall_pass_id`.
 
 This table does not store hall-pass destination or payroll amount.
+
+#### VII.1.a Immutability Scope and Lifecycle Destruction
+
+Attendance immutability applies to the productivity timeline **of a seat that
+exists, within a surviving class universe**. While its seat exists, an
+attendance row MUST NOT be edited or deleted by any path, for any purpose.
+
+A row's seat is its `target_seat_id`: the seat whose participation the row
+records and whose pay it can justify. `actor_seat_id` is a provenance
+reference — the seat that initiated the event (§XI.1) — and does not own the
+row, in the same sense that DOM-LED-001 §VII.2 distinguishes ledger provenance
+from economic ownership.
+
+This is membership by existence (INV-ARC-013, derived from INV-CORE-000
+§III.6) applied to the records anchored on an identity: an entry anchored to the
+class boundary (`class_id`) or to an economic actor seat (`seat_id`) exists only
+while that anchor exists, and ceases with it (owner ruling 2026-10-01).
+
+Two lifecycle events destroy attendance rows, and neither is correction in
+place:
+
+1. **Lawful seat removal.** Removing a seat from a class erases that seat from
+   the class "as if they never existed in that class" (INV-CORE-000 §III.6).
+   The seat's attendance rows are destroyed together with the seat, in the same
+   transaction, by the deletion of the seat itself. There is never a lawful
+   state in which the seat is gone but its attendance remains, and never one in
+   which the seat remains but some of its attendance is gone.
+2. **Lawful class or teacher-account destruction.** The entire class-scoped
+   timeline is removed with the class universe (INV-CORE-000 §III.5).
+
+The distinction is between mutating a timeline that continues to exist and
+destroying the entity whose timeline it is. While the seat exists, its
+attendance is evidence that payroll and Interpretation still depend on, and
+removing any part of it would falsify that evidence. When the seat is
+destroyed, the participation and everything it justified cease together.
+
+**Enforcement consequence.** The database guard on `attendance_sessions`
+refuses every `UPDATE`. It refuses every `DELETE` except (a) one that removes
+a row whose target seat no longer exists — reachable only through the
+foreign-key cascade of the seat's own deletion — or (b) one made inside a
+transaction that has declared class or teacher-account destruction. Deleting
+the attendance rows of a seat that still exists is refused regardless of
+caller. Deleting an actor seat does not license deleting the rows it acted on:
+a cascade from `actor_seat_id` reaches the same guard and is refused while the
+row's target seat survives.
 
 ### 2. `hall_pass_logs`
 
@@ -181,7 +226,7 @@ Rules:
 - MUST set `hall_pass_id` when `reason_code = hall_pass`
 - MUST not store current attendance state, accumulated daily minutes, hall-pass destination, or payroll amount
 - MUST not infer or mutate hall-pass entitlement state
-- MUST NOT provide delete, soft-delete, mark-deleted, edit, or correction-in-place behavior for attendance rows
+- MUST NOT provide delete, soft-delete, mark-deleted, edit, or correction-in-place behavior for attendance rows. Destruction of a seat's rows together with the seat, or of a class's rows together with the class (§VII.1.a), is lifecycle destruction and not such behavior.
 - MUST NOT correct payroll outcomes by mutating attendance history
 
 If a teacher believes an attendance row produced an incorrect payroll outcome, the correction path is a payroll reversal through `FEAT-PROD-003`, not mutation of the attendance row.
@@ -277,12 +322,12 @@ Rules:
 
 - **INV-PROD-001: Seat-Scoped Isolation**. All productivity and payroll state shall be anchored to a `seat_id` and `class_id`. No cross-class leakage is permitted.
 - **INV-PROD-002: Append-Only Facts**. Productivity sessions and payroll events must be recorded append-only. Corrections require new events or records, not mutation of the original fact.
-- **INV-PROD-002A: Attendance Immutability**. Attendance session rows are forever facts after insertion. They may not be deleted, soft-deleted, edited, marked as deleted, excluded from payroll by mutation, or otherwise corrected in place.
+- **INV-PROD-002A: Attendance Immutability**. Attendance session rows are permanent facts after insertion for as long as their seat exists. They may not be deleted, soft-deleted, edited, marked as deleted, excluded from payroll by mutation, or otherwise corrected in place. Lawful seat removal destroys the seat's attendance with the seat, and lawful class destruction destroys the class's attendance with the class (INV-CORE-000 §III.5–§III.6, §VII.1.a); this is lifecycle destruction, not correction in place.
 - **INV-PROD-003: Business Truth Ownership**. This domain owns the business truth for productivity-based earning and payroll settlement. Ledger does not own payroll meaning.
 - **INV-PROD-004: Payroll Settlement Requires Authority**. A payroll monetary posting may only occur after this domain has established that the underlying productivity record and payroll event authorize it.
 - **INV-PROD-005: No Hidden Payroll State**. Payroll status, payroll eligibility, and reversal permission must be explicit domain state or derived from authoritative domain records. They may not be reconstructed from ledger rows alone.
 - **INV-PROD-006: Class-Time Evaluation**. Productivity windows and payroll eligibility MUST use class-local temporal evaluation.
-- **INV-PROD-007: Hall-Pass History Preservation**. Completed hall-pass history must not be silently erased.
+- **INV-PROD-007: Hall-Pass History Preservation**. Completed hall-pass history must not be silently erased. Hall-pass history is never erased in place: while its seat exists, a `hall_pass_logs` row is neither deleted nor corrected. It is destroyed only with its seat, by lawful seat removal, or with its class, by lawful class or teacher-account destruction (INV-CORE-000 §III.5–§III.6; membership by existence, INV-ARC-013) — the same lifecycle boundary §VII.1.a states for attendance. That destruction is not an erasure of surviving history.
 - **INV-PROD-008: No Financial Truth**. This domain does not compute balances, spendable funds, or monetary reconciliation.
 
 ---
@@ -294,8 +339,8 @@ Rules:
 Key fields:
 
 - `id`
-- `actor_seat_id` — FK to `seats`
-- `target_seat_id` - FK to `seats`
+- `actor_seat_id` — FK to `seats` (`ON DELETE CASCADE`); provenance — the seat that initiated the event. For `self` rows it equals `target_seat_id`.
+- `target_seat_id` - FK to `seats` (`ON DELETE CASCADE`); the seat the row belongs to (§VII.1.a)
 - `mechanism` - `self` | `teacher` | `system`
 - `class_id` — FK to `classes`; canonical isolation boundary
 - `status` — `active` | `inactive`
@@ -308,8 +353,8 @@ Rules:
 
 - `attendance_sessions` is append-only.
 - Rows are never edited after creation.
-- Rows are never deleted or marked as deleted after creation.
-- There is no canonical attendance-row deletion, soft-deletion, or correction API.
+- Rows are never deleted or marked as deleted while their target seat exists. They are destroyed only with their seat or with their class (§VII.1.a).
+- There is no canonical attendance-row deletion, soft-deletion, or correction API. Seat removal removes a seat's rows only by deleting the seat; class and teacher-account destruction declare themselves before removing the class's rows.
 - Teacher correction of an already-paid attendance outcome is performed by reversing the affected payroll event, not by changing attendance history.
 - Every session is scoped to exactly one `class_id`.
 - At most one active session may exist for a given `(class_id, target_seat_id)` without a corresponding inactive event.
@@ -338,7 +383,7 @@ Key fields:
 
 Rules:
 
-- This table is immutable, append-only. 
+- This table is immutable, append-only. Rows are destroyed only with their seat or their class (INV-PROD-007).
 - A row gets created when the pass is approved.
 - The presence of a row indicates the pass is approved and consumed.
 - Actual exit time and return time are not stored here.
@@ -364,7 +409,7 @@ Key fields:
 
 Rules:
 
-- `payroll_event` is append-only. The database refuses every UPDATE, and refuses DELETE except while a class universe is being destroyed (`FEAT-CLASS-006`, `FEAT-IDEN-007`), the same exemption `ledger_transaction` carries.
+- `payroll_event` is append-only and permanent for as long as its seat exists. A payroll event belongs to its `target_seat_id`; `actor_seat_id` is a provenance reference and does not own it. The database refuses every UPDATE. It refuses every DELETE except (a) one removing an event whose target seat no longer exists, reachable only through the foreign-key cascade of that seat's own deletion (lawful seat removal, `FEAT-IDEN-006`), or (b) one inside a transaction that has declared class-universe destruction (`FEAT-CLASS-006`, `FEAT-IDEN-007`). This is membership by existence (`INV-ARC-013`, `INV-CORE-000` §III.6): an entry anchored to `seat_id` or `class_id` ceases with its anchor, the same lifecycle boundary §VII.1.a states for attendance. Deleting the events of a seat that still exists is refused regardless of caller, and deleting an actor seat does not license deleting the events it recorded.
 - Each row records one payroll business event for one class.
 - Each row records one payroll business event for one affected seat.
 - `payroll` events are the only boundary-bearing event type.
@@ -480,7 +525,7 @@ Successful completion of a class-level payroll run — whether initiated manuall
 1. the closing economic cycle is settled against productivity facts under the configuration that governed it, and
 2. downstream domains may lawfully materialize a permanent, cycle-bound view of that closed cycle.
 
-A payroll-governing change the teacher saved during the open cycle is not activated here: it is a `payroll_settings` row already dated to this boundary, in force from it with nothing to activate (§XV.3, `DOM-CLASS-003` §VII). *(1.5: the former third fact, activation of a staged change, belonged to the retired `policy_transitions` table.)*
+A payroll-governing change the teacher saved during the open cycle is not activated here: it is a `payroll_settings` row already dated to this boundary, in force from it with nothing to activate (§XV.3, `DOM-CLASS-003` §VII). *(1.6: the former third fact, activation of a staged change, belonged to the retired `policy_transitions` table.)*
 
 This domain owns fact (1). It does NOT own fact (2), and it MUST NOT invoke Interpretation directly. Interpretation's materialization is a downstream side effect orchestrated by the canonical completion FEAT (`FEAT-PROD-004`), never by a direct domain-to-domain call, per `INV-ARC-021` §V.1–§V.2.
 

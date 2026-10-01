@@ -12,9 +12,11 @@
         rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='cth-public.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='status-overrides.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='tokens.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='status.css') }}">
+    <script src="{{ url_for('static', filename='status.js') }}" defer></script>
 </head>
 
-<body class="landing-page">{% block content %}{% endblock %}</body>
+<body class="{% block body_class %}landing-page{% endblock %}">{% block content %}{% endblock %}</body>
 
 </html>
