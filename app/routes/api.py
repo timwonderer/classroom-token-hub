@@ -20,7 +20,7 @@ from sqlalchemy.orm import aliased
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from app.hash_utils import verify_password
 
-from app.extensions import db, limiter
+from app.extensions import db, limiter, student_status_seat_limit_key
 from app.models import (
     Transaction, TransactionStatus, AttendanceSession,
     AttendanceReasonCode, HallPassLog, HallPassSettings,
@@ -1713,11 +1713,21 @@ def handle_tap():
     })
 
 
+# The dashboard polls this every 10 seconds per visible tab: 6 a minute, 12 for
+# two tabs side by side, plus one refresh after each hall-pass action. The
+# limit is per seat, not per address (see student_status_seat_limit_key), and
+# sits below @login_required so it keys on the context that decorator
+# validated. It replaces the address-keyed defaults, which one student's
+# poller alone exhausted in about 33 minutes. A caller without a session is
+# refused by login_required before this limit is consulted.
 @api_bp.route('/student-status', methods=['GET'])
 @login_required
+@limiter.limit("30 per minute", key_func=student_status_seat_limit_key)
 def student_status():
     from app.services.context_resolver import resolve_canonical_context, ContextResolutionError
 
+    # Tracked debt: this re-resolves the context login_required already
+    # validated and attached to g (DOM-IDEN-006 §IX, §X).
     context = resolve_canonical_context()
     if not context:
         return jsonify({"status": "error", "message": "No class selected."}), 400

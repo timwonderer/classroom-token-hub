@@ -347,6 +347,6 @@ doctl compute firewall get <firewall-id> | grep -E "46.137|52.62|54.79"
 
 - **UptimeRobot Docs:** https://uptimerobot.com/help/
 - **UptimeRobot Support:** support@uptimerobot.com
-- **App Support:** timothy.cs.chang@gmail.com
+- **App Support:** support@classroomtokenhub.com [personal email redacted 2026-09-29]
 ## XV. Amendment
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.
