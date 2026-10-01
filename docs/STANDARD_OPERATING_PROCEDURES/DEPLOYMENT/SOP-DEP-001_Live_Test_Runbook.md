@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-001      | 2.4     | 2026-09-21     | 2.3 | Normative |
+| SOP-DEP-001      | 2.5     | 2026-10-01     | 2.4 | Normative |
 
 ## I. Purpose
 
@@ -135,14 +135,30 @@ git status --porcelain  # must be empty
 6. `systemctl daemon-reload`, and confirm the unit does not start before the
    environment completeness check in §VIII passes.
 
-> **Worker count for a first test deployment: one.**
-> The APScheduler background scheduler starts inside `create_app`, so every
-> worker process starts its own. With N workers, each hourly job — ledger
-> settlement, savings interest, automatic payroll, rent reconciliation,
-> insurance expiry — runs N times per hour concurrently. No leader election or
-> advisory lock guards this today. Run a single worker for the live test, and
-> treat single-runner enforcement as a prerequisite for any multi-worker
-> deployment.
+> **Worker count: more than one is permitted; production runs two.**
+> Single-runner scheduling is enforced in code (`app/scheduler_ownership.py`,
+> since 2026-09-27). Nothing starts the scheduler on import or in `create_app`;
+> each gunicorn worker's `post_worker_init` hook asks, and only the process
+> holding a PostgreSQL session-level advisory lock (`pg_try_advisory_lock`) runs
+> the hourly jobs — ledger settlement, savings interest, automatic payroll, rent
+> reconciliation, insurance expiry. Every other worker waits and retries, and
+> takes over only after the owner's database session ends.
+> `tests/test_scheduler_ownership.py` holds this, including a second worker
+> running as a separate process.
+>
+> By operator ruling of 2026-10-01, production runs **two** sync workers, so
+> that one stalled request cannot make the site unavailable. Under one worker,
+> four hung requests did exactly that for about eight minutes on 2026-09-30
+> (incident OPS-DB-001).
+>
+> After any restart or worker-count change, verify single-runner scheduling from
+> the unit's journal (`journalctl -u classroom-economy --since <restart time>`):
+> exactly **one** line `Scheduler started in pid <pid>: this process holds the
+> scheduler lock.`, and one `Scheduler not started in pid <pid>: another process
+> holds the scheduler lock.` for each other worker. Zero owner lines means no
+> scheduled jobs are running; two or more is a defect — stop and escalate. A
+> `Scheduler lock no longer held` line means the owner lost its database session
+> and released its jobs; confirm a single new owner line follows it.
 
 ### Cloudflare Access gate verification
 

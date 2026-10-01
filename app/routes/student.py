@@ -497,7 +497,23 @@ def _setup_record(seat, user):
     return token, binding, student_setup.read(token, binding)
 
 
+def _end_setup_staging_transaction():
+    """Release the staging locks. The transaction wrote nothing, so roll it back."""
+    db.session.rollback()
+
+
 def _begin_username_setup(seat, user):
+    # The staging locks need only cover the Redis write: once the record exists,
+    # every destruction path erases it with forget_owner under these same locks.
+    # Held to request teardown they deadlocked the after_request trace writer
+    # (OPS-DB-001), so the transaction ends here on every path, raises included.
+    try:
+        _stage_username_setup(seat, user)
+    finally:
+        _end_setup_staging_transaction()
+
+
+def _stage_username_setup(seat, user):
     # Serialize staging creation with identity destruction/revocation. A deleted
     # parent must not acquire a new volatile record after its cleanup ran.
     if user is not None:
