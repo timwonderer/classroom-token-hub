@@ -1,4 +1,7 @@
-"""Attendance rows cannot be edited, and can only be deleted by teardown.
+"""Attendance rows cannot be edited, and are deleted only with their seat or class.
+
+Seat removal (the row's target seat already gone) is covered in
+``tests/dom/attendance/test_student_removal_destroys_attendance.py``.
 
 DOM-PROD-001 says this four times (§108, §176-177, §184, §185) and, until this
 migration, the database enforced none of it. `attendance_sessions` carried no
