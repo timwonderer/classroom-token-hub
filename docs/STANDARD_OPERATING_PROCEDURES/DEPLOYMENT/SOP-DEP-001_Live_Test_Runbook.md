@@ -151,14 +151,23 @@ git status --porcelain  # must be empty
 > four hung requests did exactly that for about eight minutes on 2026-09-30
 > (incident OPS-DB-001).
 >
-> After any restart or worker-count change, verify single-runner scheduling from
-> the unit's journal (`journalctl -u classroom-economy --since <restart time>`):
-> exactly **one** line `Scheduler started in pid <pid>: this process holds the
-> scheduler lock.`, and one `Scheduler not started in pid <pid>: another process
-> holds the scheduler lock.` for each other worker. Zero owner lines means no
-> scheduled jobs are running; two or more is a defect — stop and escalate. A
-> `Scheduler lock no longer held` line means the owner lost its database session
-> and released its jobs; confirm a single new owner line follows it.
+> After any restart or worker-count change, verify **current** ownership in the
+> database: exactly one backend holds the scheduler advisory lock
+> (`SCHEDULER_LOCK_KEY` = 7425163849122001 in `app/scheduler_ownership.py`):
+>
+> ```sql
+> SELECT count(*) FROM pg_locks
+> WHERE locktype = 'advisory' AND granted AND objsubid = 1
+>   AND ((classid::bigint << 32) | objid::bigint) = 7425163849122001;
+> ```
+>
+> The result must be `1`. `0` means no scheduled jobs are running; more than one
+> is impossible for one key and means the query is wrong. As supporting
+> evidence only, the unit's journal since the restart
+> (`journalctl -u classroom-economy --since <restart time>`) shows one
+> `Scheduler started in pid <pid>: this process holds the scheduler lock.` line;
+> a startup-line count alone cannot show who holds the lock now, since the owner
+> can lose it (`Scheduler lock no longer held`) and another worker take over.
 
 ### Cloudflare Access gate verification
 

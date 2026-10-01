@@ -265,11 +265,15 @@ def test_request_lock_guard_reports_staging_that_keeps_its_locks(
     classroom = _class_with_unclaimed_seat(client, app)
     monkeypatch.setattr(student_routes, '_end_setup_staging_transaction', lambda: None)
 
-    response = _claim(client, classroom)
-    assert response.status_code == 302
+    try:
+        response = _claim(client, classroom)
+        assert response.status_code == 302
 
-    assert request_lock_guard.violations == ["POST /student/claim-account -> 302"]
-    assert not _row_is_free(side_engine, "SELECT 1 FROM classes WHERE class_id = :c",
-                            {"c": classroom.class_id})
-    request_lock_guard.violations.clear()
-    db.session.rollback()
+        assert request_lock_guard.violations == ["POST /student/claim-account -> 302"]
+        assert not _row_is_free(side_engine, "SELECT 1 FROM classes WHERE class_id = :c",
+                                {"c": classroom.class_id})
+    finally:
+        # Release the locks this test leaked on purpose, even if an assertion
+        # failed, so they cannot block later tests or schema teardown.
+        request_lock_guard.violations.clear()
+        db.session.rollback()
