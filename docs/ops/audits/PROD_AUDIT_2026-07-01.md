@@ -1,7 +1,7 @@
 # Production Infrastructure Audit
 
 Audit date: 2026-07-01  
-Host: `app-server`  
+Host: production droplet [hostname redacted 2026-09-29]  
 Scope: read-only snapshot of the current production environment before the Classroom Token Hub v2 migration.
 
 ## 1. Operating System
@@ -11,7 +11,7 @@ Scope: read-only snapshot of the current production environment before the Class
 | Distribution | Ubuntu 22.04.5 LTS |
 | Version | 22.04 (jammy) |
 | Kernel | `5.15.0-174-generic` |
-| Hostname | `app-server` |
+| Hostname | [redacted 2026-09-29] |
 | Uptime | 85 days, 2:32 |
 | CPU | x86-64 on DigitalOcean Droplet VM |
 | Memory | 3.8 GiB total, 1.0 GiB used, 2.5 GiB available |

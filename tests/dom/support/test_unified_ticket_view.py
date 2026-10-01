@@ -8,6 +8,10 @@ Consolidated into sysadmin.view_issue() / sysadmin_view_issue.html; the action
 panel now varies by the ticket's current lifecycle position, not by which of
 the two old doors it came in through.
 
+The never-escalated case here is a teacher's direct report. A student's ticket
+never reaches this surface before its teacher escalates it (DOM-SUP-001 §VIII;
+tests/dom/support/test_sysadmin_escalation_boundary.py).
+
 Also covers the UTC/class-time display toggle added to that unified surface
 (INV-ARC-015 SS X.2): a presentation-only lens, resolved server-side, that
 never grants sysadmin canonical class context and never touches the stored
@@ -21,7 +25,12 @@ from app.utils.issue_helpers import create_issue
 from app.utils.opaque_refs import make_opaque_ref
 from tests.dom.interpretation.helpers import create_sysadmin, login_sysadmin
 from tests.helpers.canonical_classroom import login_teacher
-from tests.helpers.support_domain import initialize_support_student, seed_support_issue_categories
+from tests.helpers.support_domain import (
+    initialize_support_student,
+    initialize_support_teacher,
+    seed_support_issue_categories,
+    submit_support_ticket,
+)
 
 
 def _submit_issue(classroom, student, *, explanation="Balance looks wrong."):
@@ -38,23 +47,33 @@ def _submit_issue(classroom, student, *, explanation="Balance looks wrong."):
     )
 
 
+def _submit_teacher_ticket(client, *, title="Gradebook export fails"):
+    """A teacher's direct report, filed through the production help-support route."""
+    initialize_support_teacher('chemistry_p1', client, client.application)
+    seed_support_issue_categories()
+    response = submit_support_ticket(
+        client, issue_category="bug", title=title, description="Export returns an error.",
+    )
+    assert response.status_code == 200
+    return Issue.query.filter_by(title=title).one()
+
+
 def _sysadmin_client(client, username="unified_ticket_operator"):
     sysadmin = create_sysadmin(username=username)
     login_sysadmin(client, username, sysadmin.id)
     return sysadmin
 
 
-def test_a_never_escalated_ticket_is_viewable_on_the_unified_route(client):
+def test_a_never_escalated_teacher_ticket_is_viewable_on_the_unified_route(client):
     """This is the exact case /user-reports/<ref> used to own exclusively."""
-    classroom, student = initialize_support_student('chemistry_p1', client, client.application)
-    issue = _submit_issue(classroom, student)
+    issue = _submit_teacher_ticket(client)
     _sysadmin_client(client)
 
     response = client.get(f"/sysadmin/issues/{make_opaque_ref('issue', issue.id)}")
 
     assert response.status_code == 200
     assert b"Update Ticket" in response.data, (
-        "an OPEN, never-escalated ticket must show the direct update form, "
+        "an OPEN, never-escalated teacher ticket must show the direct update form, "
         "not the escalation/bug-bounty form"
     )
     assert b"Record Technical Resolution" not in response.data
@@ -79,8 +98,7 @@ def test_an_escalated_ticket_shows_the_resolution_form_not_the_update_form(clien
 
 
 def test_update_ticket_form_transitions_a_direct_lifecycle_ticket(client):
-    classroom, student = initialize_support_student('chemistry_p1', client, client.application)
-    issue = _submit_issue(classroom, student)
+    issue = _submit_teacher_ticket(client)
     issue_id = issue.id
     _sysadmin_client(client)
 
@@ -123,8 +141,7 @@ def test_update_ticket_form_refuses_to_pull_an_escalated_ticket_out_of_workflow(
 
 def test_time_display_defaults_to_utc_and_toggles_to_class_timezone(client):
     """Test classrooms default to America/Los_Angeles -- September there is PDT."""
-    classroom, student = initialize_support_student('chemistry_p1', client, client.application)
-    issue = _submit_issue(classroom, student)
+    issue = _submit_teacher_ticket(client)
     _sysadmin_client(client)
     ref = make_opaque_ref('issue', issue.id)
 

@@ -277,20 +277,31 @@ def sysadmin_reward_issue_state(client, app):
     with FEATContext("FEAT-IDEN-001", idempotency_key="sysadmin_issue_reward:category"):
         db.session.add(category)
         db.session.flush()
-    with FEATContext("FEAT-TEST-001", idempotency_key="sysadmin_issue_reward:issue"):
-        issue = Issue(
-            actor_public_id=student.seat.public_id,
-            class_public_id=classroom.economy.class_public_id,
-            category_id=category.id,
-            issue_type="general",
-            student_explanation="Found a reproducible bug in the app.",
-            student_expected_outcome="Expected behavior should work.",
-            status=Issue.STATUS_ESCALATED_TO_DEV,
-            eligible_for_reward=True,
-        )
-        db.session.add(issue)
-        db.session.flush()
-    db.session.commit()
+    # The student files the ticket and the teacher escalates it, both through
+    # production code. A hand-built ESCALATED_TO_DEV row without the escalation
+    # (no `escalated_at`) is a state no path produces, and system support does
+    # not see it (app/services/support_operator_access.py).
+    from app.utils.issue_helpers import create_issue
+    from app.utils.opaque_refs import make_opaque_ref
+    from tests.helpers.canonical_classroom import login_teacher
+    issue = create_issue(
+        student.seat,
+        student.user.id,
+        classroom.class_id,
+        category.id,
+        "Found a reproducible bug in the app.",
+        expected_outcome="Expected behavior should work.",
+        correlation_id="sysadmin_issue_reward:issue",
+        idempotency_key="sysadmin_issue_reward:issue",
+    )
+    login_teacher(client, classroom)
+    response = client.post(
+        f"/admin/issues/{make_opaque_ref('issue', issue.id)}/escalate",
+        data={"escalation_reason": "Reproducible bug"},
+    )
+    assert response.status_code == 302
+    db.session.refresh(issue)
+    assert issue.status == Issue.STATUS_ESCALATED_TO_DEV
     return classroom, student, issue
 
 
