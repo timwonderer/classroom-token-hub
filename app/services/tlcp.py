@@ -18,6 +18,9 @@ from app.utils.canonical_temporal_resolver import utc_now
 CORRELATION_VERSION = 1
 DEFAULT_TRACE_LIMIT = 20
 DEFAULT_TRACE_TTL_DAYS = 7
+# Bound on any lock wait in the independent after_request trace session. A
+# trace is supplemental; a worker must never wait longer than this for one.
+TRACE_LOCK_TIMEOUT = "2s"
 DEFAULT_ERROR_WINDOW_HOURS = 2
 DEFAULT_RECENT_ERROR_MINUTES = 15
 DEFAULT_TRACE_FETCH_MULTIPLIER = 4
@@ -190,6 +193,17 @@ def persist_request_trace(
     # This writer runs in its own session after the response; a seat that is
     # locked for deletion or update is skipped rather than waited on, since a
     # trace is supplemental diagnostics (DOM-SUP-001 §X).
+    #
+    # The trace's class_id foreign key takes FOR KEY SHARE on the class row at
+    # INSERT. Take it here first, skip-locked, in the class-then-seat order every
+    # class-scoped command uses, so the FK check reuses it and never waits. When
+    # the class row is held FOR UPDATE (destruction, unclaim, or this request's
+    # own still-open transaction, as in OPS-DB-001) the trace is skipped.
+    class_exists = sess.query(ClassEconomy.class_id).filter_by(
+        class_id=context["class_id"],
+    ).with_for_update(read=True, key_share=True, skip_locked=True).first()
+    if class_exists is None:
+        return
     actor_exists = sess.query(Seat.id).filter_by(
         public_id=context["actor_public_id"], class_id=context["class_id"],
         role=context.get("actor_type"),
