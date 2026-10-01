@@ -10,7 +10,9 @@ DOM-PROD-001 §XV.3/§XV.5):
   late scheduled run does not drift it;
 * a run spanning two settings records enough to reproduce its amount;
 * payroll_settings and payroll_event refuse UPDATE and DELETE at the database,
-  except while a class universe is being destroyed.
+  except while a class universe is being destroyed or, for payroll_event, when
+  the event's own seat has been deleted (covered in
+  test_student_removal_destroys_payroll_events.py).
 
 The clock is pinned as in test_payroll_change_governs_next_cycle.py.
 """

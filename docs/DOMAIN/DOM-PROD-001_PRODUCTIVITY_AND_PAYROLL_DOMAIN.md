@@ -409,7 +409,7 @@ Key fields:
 
 Rules:
 
-- `payroll_event` is append-only. The database refuses every UPDATE, and refuses DELETE except while a class universe is being destroyed (`FEAT-CLASS-006`, `FEAT-IDEN-007`), the same exemption `ledger_transaction` carries.
+- `payroll_event` is append-only and permanent for as long as its seat exists. A payroll event belongs to its `target_seat_id`; `actor_seat_id` is a provenance reference and does not own it. The database refuses every UPDATE. It refuses every DELETE except (a) one removing an event whose target seat no longer exists, reachable only through the foreign-key cascade of that seat's own deletion (lawful seat removal, `FEAT-IDEN-006`), or (b) one inside a transaction that has declared class-universe destruction (`FEAT-CLASS-006`, `FEAT-IDEN-007`). This is membership by existence (`INV-ARC-013`, `INV-CORE-000` §III.6): an entry anchored to `seat_id` or `class_id` ceases with its anchor, the same lifecycle boundary §VII.1.a states for attendance. Deleting the events of a seat that still exists is refused regardless of caller, and deleting an actor seat does not license deleting the events it recorded.
 - Each row records one payroll business event for one class.
 - Each row records one payroll business event for one affected seat.
 - `payroll` events are the only boundary-bearing event type.

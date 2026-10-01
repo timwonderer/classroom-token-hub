@@ -13,7 +13,6 @@ from app.models import (
     ClassEconomy,
     EntitlementEvent,
     PendingAction,
-    PayrollEvent,
     RecoveryRequest,
     Transaction,
     Seat,
@@ -216,22 +215,18 @@ def _delete_student_scoped_rows(
     if tx_ids:
         Transaction.query.filter(Transaction.id.in_(tx_ids)).delete(synchronize_session=False)
     if seat_ids_for_student:
-        # attendance_sessions is deliberately absent. Its delete guard refuses
-        # the rows of a seat that still exists (DOM-PROD-001 §VII.1.a), so they
-        # are destroyed by the seats FK cascade when the seat row itself is
-        # deleted, in remove_student_from_teacher_scope — the guard admits them
-        # only once the seat is gone (INV-CORE-000 §III.6).
+        # attendance_sessions and payroll_event are deliberately absent. Their
+        # delete guards refuse the rows of a seat that still exists
+        # (DOM-PROD-001 §VII.1.a, §XI.3), so they are destroyed by the seats FK
+        # cascade when the seat row itself is deleted, in
+        # remove_student_from_teacher_scope — the guards admit them only once
+        # the seat is gone (INV-ARC-013, INV-CORE-000 §III.6).
         hall_pass_query = HallPassLog.query.filter(
             HallPassLog.requested_by_seat_id.in_(seat_ids_for_student)
         )
-        payroll_query = PayrollEvent.query.filter(
-            PayrollEvent.target_seat_id.in_(seat_ids_for_student)
-        )
         if scoped_class_id:
             hall_pass_query = hall_pass_query.filter(HallPassLog.class_id == scoped_class_id)
-            payroll_query = payroll_query.filter(PayrollEvent.class_id == scoped_class_id)
         hall_pass_query.delete(synchronize_session=False)
-        payroll_query.delete(synchronize_session=False)
     if seat_ids:
         LedgerBalanceSnapshot.query.filter(LedgerBalanceSnapshot.seat_id.in_(seat_ids)).delete(synchronize_session=False)
 

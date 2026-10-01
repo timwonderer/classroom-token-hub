@@ -26,9 +26,26 @@ DOM-POL-001A §V.F, DOM-PROD-001 §XI.3/§XV):
 * ``rounding_mode`` is RETIRED (operator ruling 2026-09-30): it was never defined
   or applied to pay. It is kept, as nullable historical data, rather than
   dropped; production's values (``up`` on 7 rows) stay. Nothing writes it.
-* UPDATE is refused on both tables, and DELETE is refused except while a class
-  universe is being destroyed (``cth.class_universe_destroying``, the flag
-  ``ledger_transaction`` already honours).
+* UPDATE is refused on both tables. DELETE on ``payroll_settings`` (class-owned)
+  is refused except while a class universe is being destroyed
+  (``cth.class_universe_destroying``). DELETE on ``payroll_event`` is refused
+  except during that destruction or when the row's seat (``target_seat_id``)
+  no longer exists, which only the seat's own FK cascade can produce: a removed
+  student's payroll history is destroyed with the seat (membership by
+  existence, INV-ARC-013 / INV-CORE-000 §III.6; DOM-PROD-001 §XI.3), the
+  mechanism migration bb5557cb1609 installed for ``attendance_sessions``.
+  Deleting a live seat's events stays refused.
+* ``payroll_event.actor_seat_id`` goes from ``ON DELETE SET NULL`` to
+  ``ON DELETE CASCADE`` (as bb5557cb1609 did for attendance). The column is
+  NOT NULL and the table refuses UPDATE, so SET NULL could never succeed; on an
+  event whose actor is the removed seat it would abort the removal. The
+  cascaded DELETE still passes the guard, which refuses it while the event's
+  target seat survives, so deleting an actor cannot strip another seat's
+  history. Every runtime writer records the teacher seat as actor today.
+
+Deploy: re-creating the actor FK takes SHARE ROW EXCLUSIVE on payroll_event and
+seats; production's role carries lock_timeout=10s, so run this upgrade with
+PGOPTIONS='-c lock_timeout=0'.
 
 Data mapping for existing ``payroll_settings`` rows:
 
@@ -194,18 +211,28 @@ LEGAL_SETTINGS_COLUMNS = (
 TEARDOWN_SETTING = "cth.class_universe_destroying"
 
 APPEND_ONLY_TABLES = {
-    # table: (update fn, delete fn, update trigger, delete trigger, citation)
+    # table: (update fn, delete fn, update trigger, delete trigger, citation, seat anchor)
+    #
+    # ``seat anchor`` names the column of the seat that owns the row. A DELETE
+    # whose owning seat no longer exists is the seat's own FK cascade and is
+    # admitted (INV-ARC-013, DOM-PROD-001 §XI.3); ``None`` means the table is
+    # class-owned and only class-universe destruction may delete from it.
     "payroll_settings": (
         "prevent_payroll_settings_update", "prevent_payroll_settings_delete",
         "payroll_settings_no_update", "payroll_settings_no_delete",
         "payroll_settings is append-only (DOM-POL-001 §VI.2). A payroll change is a new row effective at the next payroll date.",
+        None,
     ),
     "payroll_event": (
         "prevent_payroll_event_update", "prevent_payroll_event_delete",
         "payroll_event_no_update", "payroll_event_no_delete",
         "payroll_event is append-only (DOM-PROD-001 §XI.3). Correct a payroll outcome with a reversal through FEAT-PROD-003.",
+        "target_seat_id",
     ),
 }
+
+PAYROLL_EVENT_ACTOR_COLUMN = "actor_seat_id"
+PAYROLL_EVENT_ACTOR_FK = "payroll_event_actor_seat_id_fkey"
 
 PAYROLL_EVENT_CHECK = "ck_payroll_event_payroll_policy"
 SETTINGS_ORDER_UNIQUE = "uq_payroll_settings_class_effective_created"
@@ -408,8 +435,56 @@ def _reshape_payroll_settings(conn):
         )
 
 
+def _delete_function_sql(delete_fn, message, seat_anchor):
+    """The DELETE guard: class-universe destruction, or (for a seat-owned table)
+    the owning seat is already gone — the FK cascade of the seat's own deletion."""
+    if seat_anchor:
+        seat_clause = f"""
+    -- Lawful seat removal: the row's seat is already deleted and this DELETE is
+    -- the FK cascade destroying the seat's payroll history with it
+    -- (INV-ARC-013, INV-CORE-000 §III.6, DOM-PROD-001 §XI.3).
+    IF NOT EXISTS (SELECT 1 FROM seats WHERE id = OLD.{seat_anchor}) THEN
+        RETURN OLD;
+    END IF;"""
+        removed_only = "with their seat, or when the class universe is destroyed"
+    else:
+        seat_clause = ""
+        removed_only = "when the class universe is destroyed"
+    return f"""
+CREATE OR REPLACE FUNCTION {delete_fn}()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Class or teacher-account destruction declares itself (SET LOCAL).
+    IF coalesce(current_setting('{TEARDOWN_SETTING}', true), 'off') = 'on' THEN
+        RETURN OLD;
+    END IF;{seat_clause}
+    RAISE EXCEPTION '{message} Rows are removed only {removed_only}.';
+END;
+$$ LANGUAGE plpgsql;
+"""
+
+
+def _set_payroll_event_actor_fk_ondelete(ondelete):
+    """Re-point payroll_event.actor_seat_id's FK at seats with ``ondelete``; no-op if already so."""
+    existing = get_foreign_keys_by_column('payroll_event', PAYROLL_EVENT_ACTOR_COLUMN)
+    if len(existing) == 1 and existing[0].get('referred_table') == 'seats' and (
+        (existing[0].get('options') or {}).get('ondelete', '').upper() == ondelete
+    ):
+        print(f"ℹ️  payroll_event.{PAYROLL_EVENT_ACTOR_COLUMN} FK is already ON DELETE {ondelete}, skipping...")
+        return
+    for fk in existing:
+        op.drop_constraint(fk['name'], 'payroll_event', type_='foreignkey')
+        print(f"❌ Dropped FK {fk['name']} on payroll_event.{PAYROLL_EVENT_ACTOR_COLUMN}")
+    if not foreign_key_exists('payroll_event', PAYROLL_EVENT_ACTOR_FK):
+        op.create_foreign_key(
+            PAYROLL_EVENT_ACTOR_FK, 'payroll_event', 'seats',
+            [PAYROLL_EVENT_ACTOR_COLUMN], ['id'], ondelete=ondelete,
+        )
+        print(f"✅ Created FK {PAYROLL_EVENT_ACTOR_FK} ON DELETE {ondelete}")
+
+
 def _install_append_only_triggers(conn):
-    for table, (update_fn, delete_fn, update_trg, delete_trg, message) in APPEND_ONLY_TABLES.items():
+    for table, (update_fn, delete_fn, update_trg, delete_trg, message, seat_anchor) in APPEND_ONLY_TABLES.items():
         if not function_exists(update_fn):
             conn.execute(text(f"""
                 CREATE FUNCTION {update_fn}()
@@ -420,19 +495,9 @@ def _install_append_only_triggers(conn):
                 $$ LANGUAGE plpgsql;
             """))
             print(f"✅ Created {update_fn}()")
-        if not function_exists(delete_fn):
-            conn.execute(text(f"""
-                CREATE FUNCTION {delete_fn}()
-                RETURNS TRIGGER AS $$
-                BEGIN
-                    IF coalesce(current_setting('{TEARDOWN_SETTING}', true), 'off') <> 'on' THEN
-                        RAISE EXCEPTION '{message} Rows are removed only when the class universe is destroyed.';
-                    END IF;
-                    RETURN OLD;
-                END;
-                $$ LANGUAGE plpgsql;
-            """))
-            print(f"✅ Created {delete_fn}()")
+        # CREATE OR REPLACE: converges a database that ran an earlier body.
+        conn.execute(text(_delete_function_sql(delete_fn, message, seat_anchor)))
+        print(f"✅ Installed {delete_fn}()")
         if not trigger_exists(update_trg):
             conn.execute(text(
                 f"CREATE TRIGGER {update_trg} BEFORE UPDATE ON {table} "
@@ -456,6 +521,7 @@ def upgrade():
     _remap_payroll_event(conn)
     _ensure_payroll_event_check(conn)
     _reshape_payroll_settings(conn)
+    _set_payroll_event_actor_fk_ondelete('CASCADE')
     _install_append_only_triggers(conn)
 
 
@@ -464,7 +530,7 @@ def upgrade():
 # ============================================================================
 
 def _drop_append_only_triggers(conn):
-    for table, (update_fn, delete_fn, update_trg, delete_trg, _message) in APPEND_ONLY_TABLES.items():
+    for table, (update_fn, delete_fn, update_trg, delete_trg, _message, _anchor) in APPEND_ONLY_TABLES.items():
         for trigger in (update_trg, delete_trg):
             if trigger_exists(trigger):
                 conn.execute(text(f"DROP TRIGGER {trigger} ON {table};"))
@@ -652,5 +718,6 @@ def downgrade():
         return
     conn = op.get_bind()
     _drop_append_only_triggers(conn)
+    _set_payroll_event_actor_fk_ondelete('SET NULL')
     _restore_payroll_event(conn)
     _restore_payroll_settings(conn)
