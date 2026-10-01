@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| FEAT-CLASS-005 | 1.0 | 2026-08-09 | N/A | Normative |
+| FEAT-CLASS-005 | 1.1 | 2026-09-30 | 1.0 | Normative |
 
 ---
 
@@ -66,6 +66,7 @@ Primary Key: `economic_version_id` (UUID)
 | `economy_policy_mode` | String | NOT NULL | Economic mode ('tight', 'default', 'comfortable') |
 | `previous_version_id` | UUID | FK(economic_engine), nullable | Link to prior version (audit lineage) |
 | `created_at` | DateTime(UTC) | NOT NULL | When this version was created |
+| `effective_at` | DateTime(UTC) | NOT NULL, `>= created_at` | When this version governs from (1.1) |
 
 **Immutability:** Once inserted, an `economic_engine` row is immutable (versioned history).
 
@@ -92,9 +93,9 @@ Primary Key: `economic_version_id` (UUID)
 - `effective_at` is not in the past (or within allowed correction window)
 
 **Postconditions:**
-- New row inserted in `economic_engine`: `(economic_version_id=NEW_UUID, class_id, economy_policy_mode=new_policy_mode, previous_version_id=CURRENT_ENGINE_ID, created_at=now)`
+- New row inserted in `economic_engine`: `(economic_version_id=NEW_UUID, class_id, economy_policy_mode=new_policy_mode, previous_version_id=ENGINE_IN_FORCE_AT_effective_at, created_at=now, effective_at=effective_at)`. Unchanged fields are carried from the version that will be in force at `effective_at`, so a future-dated evolution replaces the terms it will actually follow
 - For each feature in `feature_list`: new row inserted in `class_features` linking the new engine version: `(class_id, feature, effective_at, economic_version_id=NEW_ENGINE_ID, deleted_at=NULL, created_at=now)`
-- Query `get_effective_economic_engine(class_id, feature, effective_at)` returns the new engine version for all affected features
+- `economic_engine_effective_at(class_id, t)` returns the new version for every `t` at or after its `effective_at`
 - Prior engine versions remain in table (audit trail)
 
 **Failure contract:**
@@ -117,12 +118,15 @@ Primary Key: `economic_version_id` (UUID)
 
 Per SPEC-TIME-001 and SPEC-ECON-002:
 
-- `effective_at` (in `class_features`) determines when economic engine version becomes active
-- `created_at` (in `economic_engine`) records when the version was authored
-- Example: Engine created Aug 20, effective Sep 1 (teacher schedules policy change)
-- Example: Engine created Aug 20, effective Aug 20 (immediate activation)
-- Queries use `effective_at` in `class_features` to determine which engine governs at a point in time
+- `effective_at` (on the `economic_engine` row, and on the `class_features` rows it writes) determines when the version governs; `created_at` records when it was authored
+- The class-level version in force at instant *t* is the row with the greatest `effective_at` ≤ *t*, the latest `created_at` breaking a tie (`DOM-CLASS-003` §VII). One resolver answers it (`economic_engine_effective_at`); readers never order the table by `created_at`
+- A version whose `effective_at` is ahead is pending: visible, immutable, and in force once its date arrives. Nothing activates it
+- Example: Engine created Aug 20, effective Sep 1 (teacher schedules policy change) — Aug 20–31 still resolve the prior version
+- Example: Engine created Aug 20, effective Aug 20 (immediate)
+- There is no feature-scoped engine query. A `class_features` row records whether a feature is on; the engine version in force is the class-level answer above, for every feature (owner ruling 2026-09-30: one authoritative resolver; the former `get_effective_economic_engine`, which followed the `class_features` link timeline, is removed)
 - Version chain via `previous_version_id` preserves complete policy history
+
+*(1.1, operator ruling 2026-09-30.)* Before 1.1 only `class_features` carried the date, and the class-level reader took the newest `created_at`, so a version dated for later governed from the moment it was saved. Existing versions were dated `effective_at = created_at` (migration `624c6b7223df`).
 
 ---
 

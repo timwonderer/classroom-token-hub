@@ -2,7 +2,10 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-PROD-004 | 1.1 | 2026-09-30 | 1.0 | Normative |
+| FEAT-PROD-004 | 1.2 | 2026-09-30 | 1.1 | Normative |
+
+> [!NOTE]
+> **1.2 (2026-09-30), operator ruling.** The CLASS activation step is removed. It activated pending rows of the class-wide `policy_versions` / `policy_transitions` tables, which were never authorized as canonical and are retired (`DOM-CLASS-003` §V). A change saved for the next cycle is a row of its owning domain's table carrying its own effective date, in force from that date with nothing to activate (`DOM-CLASS-003` §VII). The run now coordinates PROD and ITR only.
 
 ---
 
@@ -35,7 +38,7 @@ This FEAT does not itself write `payroll_event` rows; it owns the run identity a
 
 - `payroll_cycle_id`: a fresh UUID **allocated only for a genuinely new run**. It is the durable economic-period identity for the run and is stamped, unchanged, onto every `payroll` event written during the run.
 
-**Replay resolves before allocation.** The persistent completion anchor (`DOM-PROD-001` §XV; `payroll_cycle_completion`) is consulted first: if this class-level `idempotency_key` already resolves to a completed run, the FEAT returns that run's original `payroll_cycle_id` and performs no downstream work. Only when no completed run resolves does the FEAT allocate a new `payroll_cycle_id`. A replay therefore never allocates a second cycle identity, never re-reads or recaptures the (possibly since-advanced) governing configuration, and never re-invokes settlement, interpretation, or activation.
+**Replay resolves before allocation.** The persistent completion anchor (`DOM-PROD-001` §XV; `payroll_cycle_completion`) is consulted first: if this class-level `idempotency_key` already resolves to a completed run, the FEAT returns that run's original `payroll_cycle_id` and performs no downstream work. Only when no completed run resolves does the FEAT allocate a new `payroll_cycle_id`. A replay therefore never allocates a second cycle identity, never re-reads or recaptures the (possibly since-advanced) governing configuration, and never re-invokes settlement or interpretation.
 
 `payroll_cycle_id` MUST NOT be derived from `idempotency_key`, `correlation_id`, or any per-command replay nonce. See `DOM-PROD-001` §XV.2.
 
@@ -49,22 +52,21 @@ This FEAT does not itself write `payroll_event` rows; it owns the run identity a
 
 ## III. Orchestration Contract
 
-This FEAT coordinates three domains in a fixed, lawful order. Each cross-domain effect is a declared side effect of this contract, auditable via `request_id` and the originating FEAT code, and idempotent on replay (`INV-ARC-021` §V.8).
+This FEAT coordinates two domains in a fixed, lawful order. Each cross-domain effect is a declared side effect of this contract, auditable via `request_id` and the originating FEAT code, and idempotent on replay (`INV-ARC-021` §V.8).
 
 ### Execution steps
 
-0. **Resolve replay (FIRST).** Consult the persistent completion anchor for `(class_id, idempotency_key)`. If a completed run resolves, return its original `payroll_cycle_id` immediately — before any configuration read, cycle-id allocation, timestamp resolution, eligible-seat query, `reference_configuration` capture, or ITR/CLASS invocation. This step is the sole protection of the historical-configuration seam and MUST precede every other operation.
+0. **Resolve replay (FIRST).** Consult the persistent completion anchor for `(class_id, idempotency_key)`. If a completed run resolves, return its original `payroll_cycle_id` immediately — before any configuration read, cycle-id allocation, timestamp resolution, eligible-seat query, `reference_configuration` capture, or ITR invocation. This step is the sole protection of the historical-configuration seam and MUST precede every other operation.
 1. **Open the cycle (new run only).** Confirm the actor is lawful for the class. Allocate a fresh `payroll_cycle_id` (UUID). Consume the caller-supplied lawful closed-cycle window / evaluation time (this FEAT does not derive boundary legality).
 2. **Settle the closing cycle (PROD).** For each eligible seat, invoke `FEAT-PROD-003` `record_payroll_event(...)` with `payroll_event_type = payroll`, supplying the run's `payroll_cycle_id` and `run_mechanism`. PROD prices each settled session by the payroll setting in force when that session closed (`DOM-PROD-001` §XV.3). The governing configuration is NOT re-read or re-interpreted after this step.
 3. **Materialize interpretation (ITR).** Invoke the Interpretation compute + materialize path (`FEAT-ITR-001` and its materialization contract) for the just-closed cycle, passing `class_id` and `payroll_cycle_id`. Interpretation produces one durable, immutable `interpretation_cycle_record` bound permanently to this `payroll_cycle_id` and the economic reference values in effect for the closed cycle (`DOM-ITR-001` §VIII–§IX). Interpretation is read-only over economic truth and MUST NOT mutate PROD, Ledger, or Policy state.
-4. **Activate pending next-cycle policy (CLASS).** If a pending next-boundary transition exists for the class, invoke the lawful Class-domain transition command to activate it. If none is pending, this step is a no-op. *(Operator ruling 2026-09-30: payroll settings take no part in this step. A payroll change is an effective-dated `payroll_settings` row that is in force from its `effective_date` (`DOM-CLASS-003` §VII); nothing activates it. The transition mechanism this step invokes belongs to the legacy `policy_versions` / `policy_transitions` tables, which are pending retirement.)*
-5. **Record completion (LAST before commit).** Write the persistent completion anchor for `(class_id, idempotency_key)` binding it to this run's `payroll_cycle_id`. This is the final step before commit: the anchor means "this entire economic-cycle transition completed", so it MUST NOT be written early as an in-progress marker. Because it is last and shares the one transaction, a completed-run identity survives **iff** settlement, interpretation, and activation all committed.
-6. **Commit.** The owning FEAT transaction commits exactly once. On any step failure, the whole run fails closed and no partial cross-domain state — including the completion anchor — is committed, so a retry is a genuinely fresh attempt under the still-current closing-cycle configuration.
+4. **Record completion (LAST before commit).** Write the persistent completion anchor for `(class_id, idempotency_key)` binding it to this run's `payroll_cycle_id`. This is the final step before commit: the anchor means "this entire economic-cycle transition completed", so it MUST NOT be written early as an in-progress marker. Because it is last and shares the one transaction, a completed-run identity survives **iff** settlement and interpretation both committed.
+5. **Commit.** The owning FEAT transaction commits exactly once. On any step failure, the whole run fails closed and no partial cross-domain state — including the completion anchor — is committed, so a retry is a genuinely fresh attempt under the still-current closing-cycle configuration.
 
 ### Ordering guarantees
 
 - Interpretation is materialized against the configuration that governed the **closing** cycle, and only after PROD settlement completes.
-- The pending policy is activated **after** the closing cycle is settled and interpreted, so the next cycle — not the closing one — is the first to be governed by the new configuration (`INV-ARC-015` §VI.7).
+- Nothing is activated at the boundary. A change saved during the closing cycle is dated to the next boundary by its owning domain, so the next cycle — not the closing one — is the first it governs (`INV-ARC-015` §VI.7, `DOM-CLASS-003` §VII).
 
 ---
 
@@ -79,11 +81,11 @@ This FEAT coordinates three domains in a fixed, lawful order. Each cross-domain 
 ## V. Invariants
 
 1. `payroll_cycle_id` is generated exactly once per class-level run and stamped identically on every `payroll` event in the run.
-2. The FEAT is the sole cross-domain orchestrator for payroll completion; no domain calls Interpretation or Class Configuration directly.
-3. Interpretation materialization and pending-policy activation are declared, auditable, idempotent side effects of this FEAT.
-4. Configuration governing the closing cycle is never mutated mid-run; the pending policy activates only for the next cycle.
+2. The FEAT is the sole cross-domain orchestrator for payroll completion; no domain calls Interpretation directly.
+3. Interpretation materialization is a declared, auditable, idempotent side effect of this FEAT.
+4. Configuration governing the closing cycle is never mutated mid-run; the FEAT writes no configuration at all.
 5. The run fails closed; partial cross-domain effects are never committed.
-6. Replay under the same `idempotency_key` produces no duplicate settlement, no duplicate interpretation record, and no duplicate policy activation.
+6. Replay under the same `idempotency_key` produces no duplicate settlement and no duplicate interpretation record.
 
 ---
 

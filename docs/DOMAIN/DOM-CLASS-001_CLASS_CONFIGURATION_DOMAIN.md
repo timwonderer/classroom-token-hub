@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-CLASS-001 | 3.4 | 2026-09-24 | 3.3 | Constitutional |
+| DOM-CLASS-001 | 3.5 | 2026-09-30 | 3.4 | Constitutional |
 
 ## I. Purpose
 
@@ -107,7 +107,7 @@ Class-level economic setup and projection state.
 
 Rules:
 
-- One record per class.
+- Append-only versions per class; each version carries the `effective_at` from which it governs, and the version in force at an instant is the one with the greatest `effective_at` at or before it (`DOM-CLASS-003` §VII; 3.5, operator ruling 2026-09-30). A version is never rewritten.
 - Stores canonical class-level economic configuration facts only.
 - The exact persisted fields are derived from `DOM-CLASS-002` and may be refined during the reconstruction.
 - The stored state is configuration truth, not operational execution truth.

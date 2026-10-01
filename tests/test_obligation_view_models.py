@@ -222,7 +222,7 @@ def test_build_student_obligation_view_with_assessment(app):
         # Current period should exist
         assert view.current_period is not None
         # NOTE: amount_due is 0 because schema doesn't store amounts on assessment events (per DOM-OBL-001 v2.5)
-        # amounts come from PolicyVersion or ClassConfiguration
+        # amounts come from the rent_settings row named by the frozen policy_uuid
         assert view.current_period['amount_due'] == Decimal('0.00')
         assert view.current_period['amount_paid'] == Decimal('0.00')
         assert view.current_period['balance'] == Decimal('0.00')

@@ -10,7 +10,7 @@ from alembic.operations import Operations
 
 from app import db
 from app.feats.base import FEATContext
-from app.models import AttendanceSession, PayrollEvent, PolicyVersion, Seat, Transaction, User
+from app.models import AttendanceSession, PayrollEvent, Seat, Transaction, User
 from app.services.ledger_posting_service import create_pending_transaction
 from app.services.payroll.settings import current_payroll_setting
 from app.utils.student_deletion import delete_user_if_orphaned
@@ -145,10 +145,10 @@ def test_migration_refuses_legacy_bulk_replay_without_rewriting_history(client):
             transaction.rollback()
 
 
-def test_class_destroy_removes_seat_authored_announcements_and_policy_lineage(client):
-    from app.models import Announcement, PolicyTransition, ClassEconomy
+def test_class_destroy_removes_seat_authored_announcements_and_policy_definitions(client):
+    from app.models import Announcement, ClassEconomy, InsurancePolicy
     from app.services.announcement_service import create_class_announcement
-    from app.services.insurance_policy_service import create_policy_version
+    from app.services.insurance_definition_service import create_insurance_definition
     from tests.helpers.classroom_initializer import initialize_as_teacher
     from tests.dom.identity.helpers import admin_delete_class, valid_destruction_gate
     classroom = initialize_as_teacher('chemistry_p1', client, client.application)
@@ -156,26 +156,27 @@ def test_class_destroy_removes_seat_authored_announcements_and_policy_lineage(cl
         announcement = create_class_announcement(created_by_seat_id=classroom.teacher_seat.id,
             class_id=classroom.class_id, title='Class note', message='Class message',
             priority='normal', is_active=True, expires_at=None)
-        version = create_policy_version(class_id=classroom.class_id,
-            actor_seat_id=classroom.teacher_seat.id, payload={'name': 'Test policy'})
-        announcement_id, version_id = announcement.id, version.id
-        transition_id = version.created_by_transition_id
+        policy = create_insurance_definition(class_id=classroom.class_id,
+            actor_seat_id=classroom.teacher_seat.id, definition={
+                'title': 'Test policy', 'insurance_type': 'NON_MONETARY',
+                'premium': Decimal('0.00'), 'charge_frequency': 'MONTHLY',
+                'claims_per_week_equivalent': Decimal('1'), 'waiting_period_days': 3,
+                'bill_preview_days': 3, 'nonpayment_mode': 'ACCUMULATE'})
+        announcement_id, policy_uuid = announcement.id, policy.policy_uuid
     from app.routes.admin import _class_delete_confirmation_phrase
     response = admin_delete_class(client, **valid_destruction_gate(
         _class_delete_confirmation_phrase(db.session.get(ClassEconomy, classroom.class_id))))
     assert response.status_code == 200, response.get_data(as_text=True)
     db.session.expire_all()
     assert db.session.get(Announcement, announcement_id) is None
-    assert db.session.get(PolicyVersion, version_id) is None
-    assert db.session.get(PolicyTransition, transition_id) is None
+    assert db.session.get(InsurancePolicy, policy_uuid) is None
     assert db.session.get(ClassEconomy, classroom.class_id) is None
 
 
-@pytest.mark.parametrize('record', ['announcement', 'product', 'policy'])
+@pytest.mark.parametrize('record', ['announcement', 'product'])
 def test_authors_cannot_be_borrowed_from_another_class(client, record):
     from app.services.announcement_service import create_class_announcement
     from app.services.store_service import publish_product, InvalidDefinition
-    from app.services.insurance_policy_service import create_policy_version
     classroom = initialize('chemistry_p1', client.application)
     sibling = initialize('ap_csp_p3', client.application)
     with pytest.raises((ValueError, InvalidDefinition), match='teacher seat in this class'):
@@ -184,11 +185,9 @@ def test_authors_cannot_be_borrowed_from_another_class(client, record):
                 create_class_announcement(created_by_seat_id=sibling.teacher_seat.id,
                     class_id=classroom.class_id, title='No', message='No',
                     priority='normal', is_active=True, expires_at=None)
-            elif record == 'product':
+            else:
                 publish_product(class_id=classroom.class_id, actor_seat_id=sibling.teacher_seat.id,
                     definition={'name': 'No', 'price': Decimal('1.00'), 'item_type': 'delayed', 'economic_role': 'necessity'})
-            else:
-                create_policy_version(class_id=classroom.class_id, actor_seat_id=sibling.teacher_seat.id, payload={})
 
 
 def test_migration_preserves_legacy_transfer_replay_without_principal_material(client):
@@ -226,6 +225,12 @@ def test_removing_legacy_audit_principal_leaves_signed_history_unchanged(client)
             assert before
             # The legacy anchor was not a signed field. Simulate populated old metadata.
             conn.execute(sa.text('ALTER TABLE audit_events ADD COLUMN teacher_id INTEGER DEFAULT 123'))
+            # This replays a historical revision against today's schema. It was
+            # written against a schema that still had the lineage table retired
+            # by dd52b19d48d8, so give it that table back for the replay (the
+            # transaction is rolled back).
+            conn.execute(sa.text('CREATE TABLE policy_transitions (id SERIAL PRIMARY KEY,'
+                                 ' class_id VARCHAR(36), created_by_seat_id INTEGER)'))
             _migration(conn).upgrade()
             assert 'teacher_id' not in {c['name'] for c in sa.inspect(conn).get_columns('audit_events')}
             assert conn.execute(query).all() == before

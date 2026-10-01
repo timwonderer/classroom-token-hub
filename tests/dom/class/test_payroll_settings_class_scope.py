@@ -1,6 +1,6 @@
 from app.extensions import db
 from app.services.class_configuration_query_service import (
-    get_effective_economic_engine,
+    get_current_economic_engine,
     get_payroll_settings,
 )
 from app.services.payroll.builders import build_payroll_settings_display
@@ -78,6 +78,6 @@ def test_DOM_CLASS_001__expected_weekly_hours_update_writes_to_economic_engine(c
     assert response.headers["Location"].endswith("/admin/economic-engine")
 
     # The new engine version governing payroll for this class should carry 7.5
-    engine = get_effective_economic_engine(class_row.class_id, "payroll")
+    engine = get_current_economic_engine(class_row.class_id)
     assert engine is not None
     assert float(engine.expected_weekly_hours) == 7.5

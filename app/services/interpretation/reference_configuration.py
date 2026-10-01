@@ -11,8 +11,8 @@ The projection is explicitly:
   economic decision (§IX),
 * **bound to the closed cycle** — from ``schema_version`` 2 the pay rate and the
   ``policy`` block name the ``payroll_settings`` row in force just before the
-  cycle's closing boundary (operator ruling 2026-09-30; DOM-ITR-001 §IX), not
-  a row of the legacy ``policy_versions`` table,
+  cycle's closing boundary (operator ruling 2026-09-30; DOM-ITR-001 §IX), the
+  owning table's own ``policy_uuid``,
 * **not a cross-domain FK** — ``policy.policy_uuid`` / ``policy.version`` are
   informational lineage strings (INV-ARC-021 §V.7),
 * **versioned** via its own ``schema_version`` so the Economic Engine can evolve

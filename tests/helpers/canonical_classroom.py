@@ -226,7 +226,7 @@ def provision_classroom(classroom_key: str, *, with_payroll_settings: bool = Tru
         # ClassEconomy after_insert listener (single canonical root creator).
         # The harness must NOT create a competing root here — doing so produced
         # two previous_version_id=None roots per class and broke version-chain
-        # resolution (get_economic_engine_history/current returned the orphan).
+        # resolution (the engine resolver returned the orphan).
         # Interest/policy values are set post-creation via FEAT-CLASS-005.
 
         hall_pass_settings = HallPassSettings(

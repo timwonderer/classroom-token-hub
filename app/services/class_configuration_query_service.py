@@ -9,6 +9,7 @@ Per SPEC-ECON-002: effective_at parameter enables future-law visibility
 Per multi-tenancy rules: All queries scoped by class_id (never teacher_id alone)
 """
 
+from bisect import bisect_right
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -22,6 +23,7 @@ from app.models import (
     RentSettings,
 )
 from app.utils.canonical_temporal_resolver import (
+    ensure_utc,
     SYSTEM_LEVEL_EVALUATION,
     canonical_temporal_resolver,
 )
@@ -94,147 +96,109 @@ def get_class_economy_by_join_code(join_code: str) -> Optional[ClassEconomy]:
 
 
 # ============================================================================
-# 2. ECONOMIC ENGINE QUERIES (3 functions)
+# 2. ECONOMIC ENGINE QUERIES — the one effective-at resolver
 # ============================================================================
+#
+# ``economic_engine`` is append-only with an effective date (DOM-CLASS-003
+# §VII). Owner ruling 2026-09-30: there is one authoritative answer to "which
+# engine version governs this class at instant t", and every reader asks it.
+# The class-feature link timeline is not a second answer: a ``class_features``
+# row says whether a feature is on, never which engine version is in force.
+# ``tests/guards/economic_engine_reads.py`` refuses an ``economic_engine`` read
+# anywhere but this module.
 
 
-def get_effective_economic_engine(
-    class_id: str,
-    feature: str,
-    effective_at: Optional[datetime] = None,
-) -> Optional[EconomicEngine]:
-    """Get the EconomicEngine that governs a specific feature at a specific time.
-
-    Returns the immutable economic policy version that is effective for the given
-    feature and timestamp. This enables querying current, historical, and future
-    policy across feature-scoped timelines.
-
-    Args:
-        class_id: The class (UUID)
-        feature: Feature name ('store', 'rent', 'payroll', 'hall_pass', etc.) [REQUIRED]
-        effective_at: Timezone-aware UTC datetime to query at (default: canonical now via SPEC-TIME-001)
-
-    Returns:
-        EconomicEngine instance that governs this (class, feature, time), or None if not found
-
-    Example:
-        # Current policy
-        store_engine = get_effective_economic_engine(class_id, "store")
-        # Returns Engine B if teacher switched on Day 5
-
-        # Historical query (what governed rent on Day 10?)
-        past_engine = get_effective_economic_engine(class_id, "rent", day_10)
-        # Returns Engine A (if switch was scheduled for Day 20)
-
-        # Future query (what will govern rent on Day 25?)
-        future_engine = get_effective_economic_engine(class_id, "rent", day_25)
-        # Returns Engine B (precomputed timeline)
-    """
-    query_time = _resolve_query_time(effective_at)
-
-    # Find the most-recent-effective ClassFeature for this (class, feature) pair
-    # where effective_at <= query_time and feature is enabled (has economic_version_id)
-    class_feature = ClassFeature.query.filter(
-        ClassFeature.class_id == class_id,
-        ClassFeature.feature == feature,
-        ClassFeature.effective_at <= query_time,
-        ClassFeature.economic_version_id.isnot(None),
-    ).order_by(
-        ClassFeature.effective_at.desc()  # Most recent effective_at first
-    ).first()
-
-    if not class_feature:
-        return None
-
-    return db.session.get(EconomicEngine, class_feature.economic_version_id)
-
-
-def get_current_economic_engine(class_id: str) -> Optional[EconomicEngine]:
-    """Return the newest class Economic Engine snapshot."""
-    return (
-        EconomicEngine.query
-        .filter_by(class_id=class_id)
-        .order_by(EconomicEngine.created_at.desc(), EconomicEngine.economic_version_id.desc())
-        .first()
+def _engine_newest_first(query):
+    return query.order_by(
+        EconomicEngine.effective_at.desc(),
+        EconomicEngine.created_at.desc(),
+        EconomicEngine.economic_version_id.desc(),
     )
 
 
-def get_initial_economic_engine(class_id: str) -> Optional[EconomicEngine]:
-    """Get the original (first) EconomicEngine created for a class.
+def economic_engine_effective_at(class_id: str, instant: Optional[datetime]) -> Optional[EconomicEngine]:
+    """The Economic Engine version in force for ``class_id`` at ``instant``.
 
-    Returns the immutable economic policy version that was active when the class
-    was created. Useful for analytics, baseline comparisons, or understanding
-    the original economy design. This engine is never authoritative over current
-    policy—it's simply the earliest immutable version in the timeline.
-
-    Args:
-        class_id: The class (UUID)
-
-    Returns:
-        EconomicEngine linked by the ClassFeature with earliest effective_at,
-        or None if not found
-
-    Example:
-        # Show teacher the original economy they designed
-        initial = get_initial_economic_engine(class_id)
-        if initial:
-            print(f"Original mode: {initial.economy_policy_mode}")
+    The version in force is the one with the greatest ``effective_at`` at or
+    before ``instant``, the latest ``created_at`` breaking a tie. A version
+    whose ``effective_at`` is still ahead is pending and governs nothing yet.
     """
-    # Find the earliest ClassFeature (first feature ever created for this class)
-    # Include all rows (even disabled) to find the true original engine
-    class_feature = ClassFeature.query.filter(
-        ClassFeature.class_id == class_id,
-    ).order_by(
-        ClassFeature.effective_at.asc()  # Earliest effective_at first
+    if not class_id:
+        return None
+    query_time = _resolve_query_time(instant)
+    return _engine_newest_first(
+        EconomicEngine.query.filter(
+            EconomicEngine.class_id == class_id,
+            EconomicEngine.effective_at <= query_time,
+        )
     ).first()
 
-    if not class_feature:
-        return None
 
-    return db.session.get(EconomicEngine, class_feature.economic_version_id)
+def get_current_economic_engine(class_id: str) -> Optional[EconomicEngine]:
+    """The Economic Engine version in force now."""
+    return economic_engine_effective_at(class_id, None)
+
+
+class EconomicEngineTimeline:
+    """Every version of one class's engine, answering ``at(instant)`` in memory.
+
+    For a reader that resolves many instants at once (daily savings accrual):
+    the same rule as ``economic_engine_effective_at``, read from one query
+    instead of one per instant.
+    """
+
+    def __init__(self, versions):
+        # Oldest governing first; among equal effective_at the latest created
+        # sorts last, so it wins the bisect exactly as it wins the resolver.
+        self.versions = list(reversed(versions))
+        self._starts = [ensure_utc(version.effective_at) for version in self.versions]
+
+    def at(self, instant: datetime) -> Optional[EconomicEngine]:
+        index = bisect_right(self._starts, ensure_utc(instant)) - 1
+        return self.versions[index] if index >= 0 else None
+
+
+def economic_engine_timeline(class_id: str) -> EconomicEngineTimeline:
+    if not class_id:
+        return EconomicEngineTimeline([])
+    return EconomicEngineTimeline(
+        _engine_newest_first(EconomicEngine.query.filter_by(class_id=class_id)).all()
+    )
+
+
+def pending_economic_engines(class_id: str, *, as_of: Optional[datetime] = None) -> list[EconomicEngine]:
+    """Engine versions recorded but not yet in force, soonest first.
+
+    For each future effective date only the version that will be in force at
+    that date is returned; a pending version superseded before its date stays
+    in history but is not a pending change.
+    """
+    if not class_id:
+        return []
+    query_time = _resolve_query_time(as_of)
+    rows = (
+        EconomicEngine.query.filter(
+            EconomicEngine.class_id == class_id,
+            EconomicEngine.effective_at > query_time,
+        )
+        .order_by(EconomicEngine.effective_at.asc(), EconomicEngine.created_at.desc())
+        .all()
+    )
+    winners: dict = {}
+    for row in rows:
+        winners.setdefault(row.effective_at, row)
+    return list(winners.values())
 
 
 def get_economic_engine_by_version(class_id: str, economic_version_id: str) -> Optional[EconomicEngine]:
-    """Get a specific EconomicEngine version by its ID, scoped to a class.
+    """A specific version by its identity, scoped to a class.
 
-    Args:
-        class_id: The class (UUID)
-        economic_version_id: The engine version UUID
-
-    Returns:
-        EconomicEngine if found and belongs to class, else None
+    Resolving a frozen reference, not a question of which version is in force.
     """
     return EconomicEngine.query.filter_by(
         economic_version_id=economic_version_id,
         class_id=class_id,
     ).first()
-
-
-def get_economic_engine_history(class_id: str) -> list[EconomicEngine]:
-    """Get all EconomicEngine versions for a class in chronological order.
-
-    Ordered by created_at DESC (most recent first).
-
-    Args:
-        class_id: The class to retrieve history for (UUID)
-
-    Returns:
-        List of EconomicEngine instances, ordered by creation time (may be empty)
-
-    Note:
-        Use created_at (not effective_at, which does not exist on EconomicEngine).
-        Traverse previous_version_id for audit lineage (INV-ARC-016).
-
-    Example:
-        history = get_economic_engine_history(classroom.class_id)
-        for engine in history:
-            print(f"Version created at {engine.created_at}: mode={engine.economy_policy_mode}")
-    """
-    return EconomicEngine.query.filter_by(
-        class_id=class_id
-    ).order_by(
-        EconomicEngine.created_at.desc()
-    ).all()
 
 
 # ============================================================================
@@ -360,7 +324,7 @@ def get_payroll_settings(class_id: str) -> Optional[PayrollSettings]:
     """Get payroll configuration for a class.
 
     Includes pay_rate ($/minute). Note: expected_weekly_hours is a CWI parameter
-    on EconomicEngine, not on PayrollSettings — use `get_effective_economic_engine`.
+    on EconomicEngine, not on PayrollSettings — use `get_current_economic_engine`.
 
     Args:
         class_id: The class (UUID)
@@ -493,7 +457,7 @@ def calculate_cwi(class_id: str) -> Optional[float]:
 
 def resolve_expected_weekly_hours(class_id: str) -> Optional[float]:
     """Return the canonical Economic Engine expected-hours value for payroll."""
-    engine = get_effective_economic_engine(class_id, 'payroll')
+    engine = get_current_economic_engine(class_id)
     if engine is None or engine.expected_weekly_hours is None:
         return None
     return float(engine.expected_weekly_hours)
@@ -502,9 +466,8 @@ def resolve_expected_weekly_hours(class_id: str) -> Optional[float]:
 def get_policy_mode(class_id: str, feature: str = 'payroll') -> Optional[str]:
     """Get the current economic policy mode for a class via a feature anchor.
 
-    Looks up the EconomicEngine linked to the specified feature to determine
-    the active policy mode. Defaults to the 'payroll' feature as the canonical
-    anchor, since payroll is the most commonly enabled feature.
+    The mode of the Economic Engine version in force, when ``feature`` is
+    enabled. Defaults to the 'payroll' feature, which is always enabled.
 
     Args:
         class_id: The class (UUID)
@@ -519,7 +482,9 @@ def get_policy_mode(class_id: str, feature: str = 'payroll') -> Optional[str]:
         if mode == 'tight':
             print("Restricted economy")
     """
-    engine = get_effective_economic_engine(class_id, feature)
+    if not is_feature_enabled(class_id, feature):
+        return None
+    engine = get_current_economic_engine(class_id)
     if not engine:
         return None
 

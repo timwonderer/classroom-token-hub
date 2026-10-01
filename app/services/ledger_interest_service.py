@@ -1,7 +1,7 @@
 """Ledger-owned savings-interest command."""
 
 import re
-from bisect import bisect_right, insort
+from bisect import insort
 from datetime import date
 from decimal import Decimal
 from functools import lru_cache
@@ -11,8 +11,8 @@ from typing import NamedTuple
 from app.extensions import db
 from app.models import Seat, Transaction, TransactionStatus
 from app.services.class_configuration_query_service import (
+    economic_engine_timeline,
     get_current_economic_engine,
-    get_economic_engine_history,
 )
 from app.services.economic_engine import (
     ProjectedSavingsDay,
@@ -166,30 +166,29 @@ def _compounding_period(policy):
 
 
 def _rate_timeline(class_id, annual_rate_override=None):
-    """The annual rate in force at any instant, from the engine version history.
+    """The annual rate in force at any instant (SPEC-ECON-001 §9.2, §12).
 
-    A version governs from its ``created_at`` until the next one, which is how
-    ``get_current_economic_engine`` chooses the current policy; reading the same
-    history by date gives each accrual day the rate in force on it (§12). An
-    explicit override (the deterministic-replay path) applies to every day.
+    Each accrual day takes the rate of the Economic Engine version in force at
+    its end, as the one resolver answers it (``economic_engine_timeline``, the
+    in-memory form of ``economic_engine_effective_at``, DOM-CLASS-003 §VII). A
+    version saved mid-window and dated for later earns nothing before its date.
+    An explicit override (the deterministic-replay path) applies to every day.
     """
     if annual_rate_override is not None:
         return (lambda _instant: annual_rate_override), annual_rate_override > 0
-    versions = sorted(
-        get_economic_engine_history(class_id),
-        key=lambda engine: (ensure_utc(engine.created_at), engine.economic_version_id),
-    )
-    starts = [ensure_utc(engine.created_at) for engine in versions]
-    rates = [
-        Decimal(str(engine.interest_rate)) if engine.interest_rate is not None else None
-        for engine in versions
-    ]
+    timeline = economic_engine_timeline(class_id)
+
+    def _rate(engine):
+        if engine is None or engine.interest_rate is None:
+            return None
+        return Decimal(str(engine.interest_rate))
 
     def rate_at(instant_utc):
-        index = bisect_right(starts, instant_utc) - 1
-        return rates[index] if index >= 0 else None
+        return _rate(timeline.at(instant_utc))
 
-    return rate_at, any(rate is not None and rate > 0 for rate in rates)
+    return rate_at, any(
+        rate is not None and rate > 0 for rate in map(_rate, timeline.versions)
+    )
 
 
 def savings_interest_idempotency_key(class_id, seat_id, window):
@@ -403,7 +402,10 @@ def forecast_savings(seat_id, class_id, *, months=12, reference_time_utc=None):
     from today).
     """
     policy = resolve_savings_policy(class_id)
-    if policy.annual_rate is None or policy.annual_rate <= 0:
+    rate_at, ever_positive = _rate_timeline(class_id)
+    # A rate dated for later is part of the forecast from its effective date, so
+    # a class with no rate in force yet can still have interest to project.
+    if not ever_positive:
         posted_now = get_posted_balance(seat_id, class_id, "savings")
         return SimpleNamespace(
             policy=policy, next_credit=Decimal("0.00"), series=[posted_now] * (months + 1)
@@ -431,8 +433,6 @@ def forecast_savings(seat_id, class_id, *, months=12, reference_time_utc=None):
         ).boundary_start_utc
         for month in range(1, months + 1)
     ]
-    rate_at, _ever_positive = _rate_timeline(class_id)
-
     # The open window always; then every window closing by the last forecast point.
     horizon = checkpoints_utc[-1] if checkpoints_utc else None
     windows = []

@@ -5,16 +5,15 @@ economic-cycle completion; the scheduler owns only "is this class due now?" and
 then calls ``complete_payroll_cycle``. These tests prove:
 
 * a due class runs the full lifecycle through FEAT-PROD-004 (events + ITR record +
-  policy activation + completion anchor keyed by the scheduled occurrence);
+  completion anchor keyed by the scheduled occurrence);
 * the derived next payroll date advances so the class is no longer due, and a
   second job tick is inert (DOM-PROD-001 §XV.5: the date is derived from the
   run's SYSTEM payroll events, never stored);
 * the scheduled occurrence is the deterministic command identity: replaying the
   same occurrence resolves the completed run and reproduces nothing.
 
-The pending ``policy_transitions`` row seeded here exercises FEAT-PROD-004's
-generic next-boundary activation step (legacy, pending retirement); payroll
-settings themselves take no part in it (DOM-CLASS-003 §VII).
+Nothing is activated at the boundary: a change saved for the next cycle is an
+effective-dated row that is in force from its date (DOM-CLASS-003 §VII).
 """
 
 from __future__ import annotations
@@ -29,8 +28,6 @@ from app.models import (
     AttendanceSession,
     InterpretationCycleRecord,
     PayrollEvent,
-    PolicyTransition,
-    PolicyVersion,
 )
 from app.scheduled_tasks import run_automatic_payroll_job
 from app.services.payroll import schedule as schedule_module
@@ -69,21 +66,6 @@ def _seed_due_class(classroom, *, due=True):
     now = utc_now()
     occurrence = _local_midnight(cid, now if due else now + timedelta(days=7))
 
-    with FEATContext("FEAT-BYPASS-LEGACY", correlation_id=f"seed:{cid}"):
-        v1 = PolicyVersion(class_id=cid, domain="payroll", version_number=1,
-                           policy_payload_json="{}", activated_at=now, is_active=True)
-        db.session.add(v1)
-        db.session.flush()
-        v2 = PolicyVersion(class_id=cid, domain="payroll", version_number=2,
-                           policy_payload_json="{}", activated_at=None, is_active=False)
-        db.session.add(v2)
-        db.session.flush()
-        db.session.add(PolicyTransition(
-            class_id=cid, domain="payroll", source_policy_version_id=v1.id,
-            target_policy_version_id=v2.id, activation_mode="next_payroll",
-            status="pending", created_at=now,
-        ))
-        v1_id, v2_id = v1.id, v2.id
     # The schedule: the first pay date is the occurrence (due, or a week out).
     put_payroll_setting_in_force(cid, first_pay_date=occurrence, pay_schedule_type="biweekly")
 
@@ -101,7 +83,7 @@ def _seed_due_class(classroom, *, due=True):
         ))
         db.session.flush()
 
-    return cid, v1_id, v2_id, occurrence
+    return cid, occurrence
 
 
 @contextmanager
@@ -135,7 +117,7 @@ def test_next_date_is_class_local_midnight_across_a_dst_change(app, monkeypatch)
 
 def _run_full_lifecycle_and_assert_next_date(app):
     classroom = initialize("chemistry_p1", app)
-    cid, v1_id, v2_id, occurrence = _seed_due_class(classroom, due=True)
+    cid, occurrence = _seed_due_class(classroom, due=True)
 
     run_automatic_payroll_job()
 
@@ -148,8 +130,6 @@ def _run_full_lifecycle_and_assert_next_date(app):
     ).count() >= 1
     record = InterpretationCycleRecord.query.filter_by(class_id=cid, payroll_cycle_id=cycle_id).one()
     assert record.observations_json["coverage"]["complete"] is True
-    assert db.session.get(PolicyVersion, v2_id).is_active is True
-    assert db.session.get(PolicyVersion, v1_id).is_active is False
 
     # The run is SYSTEM and names its occurrence, so the derived next date is one
     # frequency on from the occurrence → the class is no longer due.
@@ -176,7 +156,7 @@ def test_not_due_class_is_skipped(app):
 
 def test_replaying_same_occurrence_is_idempotent(app, monkeypatch):
     classroom = initialize("chemistry_p1", app)
-    cid, v1_id, v2_id, occurrence = _seed_due_class(classroom, due=True)
+    cid, occurrence = _seed_due_class(classroom, due=True)
 
     run_automatic_payroll_job()
     events_after_first = PayrollEvent.query.filter_by(class_id=cid).count()
@@ -204,7 +184,7 @@ def test_one_class_failing_to_derive_its_date_does_not_block_another(app, monkey
     broken_classroom = initialize("chemistry_p1", app)
     healthy_classroom = initialize("ap_csp_p3", app)
     broken_cid, *_ = _seed_due_class(broken_classroom, due=True)
-    healthy_cid, _, _, healthy_occurrence = _seed_due_class(healthy_classroom, due=True)
+    healthy_cid, healthy_occurrence = _seed_due_class(healthy_classroom, due=True)
 
     real_next_payroll_date = schedule_module.next_payroll_date
 

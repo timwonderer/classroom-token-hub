@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| SPEC-ECON-002 | 2.1 | 2026-08-30 | 2.0 | Constitutional |
+| SPEC-ECON-002 | 2.2 | 2026-09-30 | 2.1 | Constitutional |
 
 # I. Purpose
 
@@ -222,7 +222,7 @@ Displayed information MUST include:
 
 ## 4. Payroll Domain
 
-Payroll-governing changes (e.g., hourly pay rate, expected weekly hours) made during an open economic cycle are pending next-cycle policy transitions (`activation_mode = next_boundary`; see `DOM-CLASS-003` §VII). The lawful boundary that activates them is payroll cycle completion (`DOM-PROD-001` §XV).
+Payroll-governing changes (e.g., hourly pay rate) made during an open economic cycle are `payroll_settings` rows whose `effective_date` is the class's next payroll date (`DOM-CLASS-003` §VII, `DOM-POL-001` §VI.2). They are pending until that date and in force from it; nothing activates them. *(2.2, operator ruling 2026-09-30: the earlier text described them as pending policy transitions, a mechanism that was never authorized and is retired.)*
 
 Pending payroll policy changes MUST appear:
 - inside teacher payroll configuration surfaces,

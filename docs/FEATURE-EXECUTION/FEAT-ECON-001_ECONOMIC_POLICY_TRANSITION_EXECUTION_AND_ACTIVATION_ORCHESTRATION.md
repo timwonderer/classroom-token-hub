@@ -1,25 +1,25 @@
-# FEAT-ECON-001: Economic Policy Transition Execution and Activation Orchestration
+# FEAT-ECON-001: Economic Rebalance Execution
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| FEAT-ECON-001 | 2.1 | 2026-09-15 | 2.0 | FEAT |
+| FEAT-ECON-001 | 3.0 | 2026-09-30 | 2.1 | FEAT |
+
+> [!IMPORTANT]
+> **3.0 (2026-09-30), operator ruling.** Versions 1.x–2.x executed economic changes by creating rows in the class-wide `policy_versions` / `policy_transitions` tables and activating them at operational boundaries. Those tables were never authorized as canonical and are retired (`DOM-CLASS-003` §V, v2.4). This version replaces transition creation, activation, supersession and cancellation with one rule: each change is a new row in its owning domain's table, carrying the instant from which it governs. The file keeps its former name so existing references resolve.
+>
+> **Owner decisions 2026-09-30 (incorporated in 3.0 before release).** (a) The teacher no longer chooses an activation mode. "Apply Immediately" for rent is removed: a rent period already billed keeps its frozen terms either way, so it did exactly what the next-cycle option did, and offering both was misleading. Each change now takes effect the one way its owner defines (§VI–§VIII). (b) A policy-mode change never revokes a scheduled rebalance (§X).
 
 ## I. Purpose
 
-This specification defines lawful FEAT-layer orchestration for:
-- economic rebalance execution,
-- policy transition creation,
-- transition activation sequencing,
-- transition cancellation,
-- transition supersession handling,
-- immediate activation execution,
-- operational-boundary-triggered activation.
+This specification defines lawful FEAT-layer execution of a teacher's economic rebalance:
+- routing each selected change to the command that owns it,
+- recording a change for the owning domain's next boundary,
+- refusing a change that cannot run in the requested mode.
 
 This specification governs execution behavior only.
 
 Economic governance law remains defined by:
 `DOM-CLASS-003`
-
 
 ---
 
@@ -27,12 +27,9 @@ Economic governance law remains defined by:
 
 This specification governs:
 - teacher rebalance workflows,
-- transition creation execution,
-- transition activation orchestration,
-- apply-now execution behavior,
-- cancellation execution behavior,
-- operational-domain activation coordination,
-- idempotent policy transition execution.
+- immediate execution,
+- next-boundary execution,
+- idempotent rebalance execution.
 
 This specification does NOT define:
 - economic formulas,
@@ -49,6 +46,7 @@ This specification is subordinate to:
 - FEAT-CORE-000
 - DOM-CLASS-003
 - DOM-CLASS-001
+- DOM-POL-001
 - INV-ARC-015
 - INV-ARC-016
 
@@ -58,9 +56,9 @@ This specification is subordinate to:
 
 ### FEAT-ECON-001 — FEAT Executes, Does Not Govern
 
-FEAT layer orchestrates policy transition execution.
+The FEAT layer carries out a rebalance through the owning domains' commands.
 
-FEAT layer MUST NOT define:
+The FEAT layer MUST NOT define:
 - economic law,
 - policy legality,
 - operational timing legality,
@@ -70,7 +68,7 @@ FEAT layer MUST NOT define:
 
 ### FEAT-ECON-002 — FEAT Is Idempotent
 
-All policy transition execution MUST be idempotent.
+All rebalance execution MUST be idempotent.
 
 Execution MUST include:
 
@@ -81,32 +79,26 @@ feat_id
 class_id
 ```
 
-Duplicate execution MUST NOT produce duplicate policy activation.
+Duplicate execution MUST NOT record a change twice.
 
 ---
 
-### FEAT-ECON-003 — FEAT Must Remain Append-Only
+### FEAT-ECON-003 — FEAT Writes Only Through the Owning Command
 
-FEAT execution MUST:
-- create lineage,
-- record execution,
-- update transition state lawfully.
+A rebalance keeps no record of its own. The owning command's new row is the whole record of each change.
 
-FEAT MUST NOT:
-- mutate historical versions,
-- mutate historical transitions,
-- bypass transition lineage.
+The FEAT MUST NOT:
+- rewrite a row of any policy table,
+- keep a second record of a change beside the owning row (no version, transition, queue or activation row),
+- skip a selected change and still report success.
 
 ---
 
 ### FEAT-ECON-004 — FEAT Must Respect Sovereignty
 
-Operational domains remain sole authority over:
-- lawful boundary detection,
-- operational rollover legality,
-- activation timing legality.
+Operational domains remain sole authority over their boundaries (`DOM-CLASS-003` §VII).
 
-FEAT MUST NOT independently determine:
+The FEAT MUST NOT independently determine:
 - rent cycle closure,
 - insurance renewal legality,
 - accrual rollover legality.
@@ -123,152 +115,62 @@ System displays:
 - projected impacts,
 - selectable changes.
 
-Teacher selects:
-- desired changes,
-- activation mode for each change.
+Teacher selects the desired changes. There is no activation choice: the review states when each change takes effect (§VI–§VIII), and a submitted activation mode is ignored.
+
+### Step 2 — FEAT Routes Each Change to Its Owner
+
+Each selected change is carried out by the command that owns it (`FEAT-CLASS-005` §XI):
+
+| Change | Owning command | Record |
+|---|---|---|
+| Rent amount, rent late penalty | rent supersession (`DOM-POL-001` §VI.1) | a new `rent_settings` row |
+| Store price | product-version supersession | a new `store_products` version |
+| Overdraft fee | Economic Engine evolution (`FEAT-CLASS-005`) | a new `economic_engine` version |
+
+A change type with no owning command is refused, not skipped. Insurance premiums are advisory in the review and change only through insurance management (`FEAT-CLASS-003`).
+
+Grouped teacher rebalance actions MUST NOT collapse several domains into shared pending state. Terms of one contract (a rent amount and its late penalty) are recorded as one row of that contract.
 
 ---
 
-### Step 2 — FEAT Creates Policy Transitions
+## VI. When Each Change Takes Effect
 
-Each selected economic change SHALL create an independent `policy_transition`.
+| Change | Takes effect |
+|---|---|
+| Rent amount, rent late penalty | from the first rent period not yet billed (§VII) |
+| Store price, overdraft fee | at once (§VIII) |
 
-Grouped teacher rebalance actions MUST NOT collapse multiple domains into shared mutable pending state.
-
-Example:
-- rent transition
-- insurance transition
-- banking transition
-
-Each transition remains independently executable.
+Rent has no "immediate" option: a rent period already billed keeps the `policy_uuid` it froze (`DOM-OBL-001` §V.7), so a rent change can only ever govern the first period not yet billed. Execution MUST remain append-only and preserve historical replayability. Direct mutation of active policy state is prohibited.
 
 ---
 
-### Step 3 — Transition Creation
+## VII. Next-Boundary Execution
 
-FEAT SHALL:
-- create target policy version,
-- create policy transition lineage,
-- associate correlation metadata,
-- persist activation intent,
-- emit audit lineage events.
+A change whose owner has a later boundary is recorded now as a row of its owning table dated to that boundary (`DOM-CLASS-003` §VII):
 
----
+- **Rent** — the start of the first rent period not yet issued. The open period is billed under the terms it froze; the next period issued takes the new row.
 
-## VI. Immediate Activation Flow
-
-### Immediate Activation
-
-If `activation_mode = immediate`:
-
-FEAT SHALL:
-- activate target policy version immediately,
-- mark prior version inactive,
-- mark transition applied,
-- supersede conflicting pending transitions.
+The row is pending until its date and visible as pending (`DOM-CLASS-003` §X). Nothing is queued and nothing activates it later: no job, command or boundary hook runs when the date arrives.
 
 ---
 
-### Immediate Activation Constraints
+## VIII. Change Types Without a Later Boundary
 
-Immediate activation MUST:
-- remain append-only,
-- preserve historical replayability,
-- emit operational lineage,
-- preserve idempotency guarantees.
-
-Direct mutation of active policy state is prohibited.
+Store prices change by product-version supersession, which retires the live version at once, and the overdraft fee by Economic Engine evolution with no operational boundary. Neither owning domain defines a later boundary, so both take effect at once, in the same submission as any rent change.
 
 ---
 
-## VII. Delayed Activation Flow
+## IX. Supersession
 
-### Pending Transition Creation
-
-If `activation_mode = next_boundary`:
-
-FEAT SHALL:
-- create pending transition,
-- preserve target policy version,
-- expose future economic law visibility.
-
-No operational activation occurs yet.
+A later row of the same owning table supersedes an earlier one for the same effective instant (`DOM-CLASS-003` §VIII). Superseded rows remain as history, remain replayable, and MUST NOT be deleted while any fact froze them.
 
 ---
 
-## VIII. Operational Boundary Activation
+## X. Withdrawing a Scheduled Change
 
-### Operational Trigger Authority
+A scheduled change is a real row of its owning table. It is withdrawn the way any policy is changed: by recording another row for the same boundary through the owning domain's own surface. No row is deleted or marked cancelled.
 
-Operational domains determine lawful activation boundaries.
-
-Examples:
-- Rent domain determines rent cycle closure.
-- Insurance domain determines renewal legality.
-- Banking domain determines accrual rollover legality.
-
----
-
-### Activation Request Flow
-
-When lawful boundary occurs:
-- operational domain requests activation,
-- FEAT validates pending transition,
-- FEAT performs activation sequence.
-
----
-
-### FEAT Activation Sequence
-
-FEAT SHALL:
-- validate transition state,
-- validate active source version,
-- activate target policy version,
-- mark transition applied,
-- emit operational lineage,
-- preserve idempotency.
-
----
-
-## IX. Supersession Execution
-
-### Supersession Conditions
-
-If newer lawful transition conflicts with existing pending transition:
-
-```
-new_transition.created_at > existing_pending_transition.created_at
-```
-
-FEAT SHALL:
-- mark older transition superseded,
-- preserve historical lineage,
-- prevent future activation of superseded transition.
-
----
-
-### Supersession Constraints
-
-Superseded transitions:
-- MUST remain visible historically,
-- MUST remain replayable,
-- MUST NOT be deleted.
-
----
-
-## X. Cancellation Execution
-
-Teachers MAY cancel pending transitions.
-
-Cancellation SHALL:
-- preserve lineage,
-- mark transition cancelled,
-- prevent future activation.
-
-Cancellation MUST NOT:
-- delete transitions,
-- mutate historical versions,
-- erase execution evidence.
+A policy-mode change MUST NOT withdraw, supersede or otherwise revoke a scheduled rebalance, and no other action may do so implicitly. Owner ruling 2026-09-30: "Scheduling the rebalance was an explicit teacher action. Changing mode should not implicitly revoke a separately requested future action. If we want cancellation, that should itself be explicit." If a cancel action is ever offered it MUST be its own explicit teacher action.
 
 ---
 
@@ -277,19 +179,15 @@ Cancellation MUST NOT:
 ### Teacher Actions
 
 Teachers MUST be able to:
-- view pending transitions,
-- apply pending transitions immediately,
-- cancel pending transitions,
-- navigate to affected operational domains.
-
----
+- see which economy changes are scheduled and when each takes effect,
+- navigate to the owning domain's surface to change a scheduled row.
 
 ### Operational Domain UI Integration
 
 Operational domains SHALL expose:
 - pending future policy,
 - future economic impact,
-- activation intent,
+- the date a pending row takes effect,
 - current active policy.
 
 ---
@@ -298,9 +196,8 @@ Operational domains SHALL expose:
 
 The FEAT layer SHALL NOT:
 - mutate historical transactions,
-- mutate historical policy versions,
-- bypass transition lineage,
-- activate transitions outside lawful operational boundaries,
+- mutate historical policy rows,
+- record a change anywhere but the owning table,
 - bypass idempotency enforcement,
 - perform write-on-GET behavior.
 
@@ -308,17 +205,11 @@ The FEAT layer SHALL NOT:
 
 ## XIII. Observability Requirements
 
-FEAT execution MUST emit:
-- transition creation events,
-- activation events,
-- supersession events,
-- cancellation events,
-- failed activation events.
+Rebalance execution MUST record, through the owning commands' own evidence and the application log:
+- which changes were applied and which were scheduled, with the date a scheduled one takes effect,
+- refusals.
 
-All execution events MUST:
-- preserve correlation lineage,
-- preserve idempotency lineage,
-- remain auditable through DOM-OPS observability systems.
+All execution evidence MUST preserve correlation and idempotency lineage and remain auditable through DOM-OPS observability systems.
 
 ---
 
@@ -334,14 +225,15 @@ DOM-OPS owns:
 FEAT owns:
 - lawful orchestration behavior.
 
+DOM-OPS runs no job that activates a scheduled change (`DOM-OPS-001` §8).
+
 ---
 
 ## XV. Architectural Outcome
 
 This specification establishes:
-- deterministic policy transition execution,
-- lawful operational-boundary activation,
-- append-only transition lineage,
+- one record of each economic change, in its owning table,
+- time, not a command, putting a scheduled change in force,
 - idempotent economic governance execution,
 - sovereign operational timing authority,
 - replayable execution history.
@@ -351,5 +243,5 @@ The FEAT layer therefore acts as constitutional execution orchestrator rather th
 
 ### Seat attribution (INV-ARC-019)
 
-Policy/product authors and transition initiators are recorded as `created_by_seat_id`
-within the explicit `class_id`. No User foreign key or principal author alias is permitted.
+Policy/product authors are recorded as `created_by_seat_id` within the explicit `class_id`
+where the owning table carries an author. No User foreign key or principal author alias is permitted.

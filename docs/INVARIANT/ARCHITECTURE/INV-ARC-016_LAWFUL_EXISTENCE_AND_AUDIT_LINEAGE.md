@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| INV-ARC-016      | 2.1     | 2026-09-06     | 2.0        | Foundational    |
+| INV-ARC-016      | 2.2     | 2026-09-30     | 2.1        | Foundational    |
 
 ## I. Purpose
 
@@ -42,7 +42,7 @@ This invariant applies equally to:
 - monetary truth,
 - operational truth,
 - constitutional economic policy truth,
-- policy transition lineage,
+- effective-dated economic policy history,
 - and future economic law objects.
 
 The auditor of a protected row's lawfulness is the HMAC-SHA256 chain maintained by `DOM-OPS-002`. A row is lawful if and only if:
@@ -50,9 +50,7 @@ The auditor of a protected row's lawfulness is the HMAC-SHA256 chain maintained 
 1. Its `lineage_event_id` references an `AuditEvent` whose `payload_digest` matches the row's current protected field values, and
 2. That `AuditEvent` sits within a continuous, unbroken chain for its scope.
 
-Constitutional economic policy objects include:
-- `policy_versions`
-- `policy_transitions`
+Constitutional economic policy truth is held in each owning domain's own append-only, effective-dated table (`DOM-CLASS-003` §V); `DOM-OPS-002` §5.4 declares which of those tables are protected. *(2.2, operator ruling 2026-09-30: the class-wide `policy_versions` / `policy_transitions` tables formerly listed here were never authorized as canonical and are retired.)*
 
 Future economic law that lacks lawful lineage is constitutionally invalid regardless of physical persistence.
 
@@ -115,13 +113,13 @@ Two write paths are lawful for producing `AuditEvent` chain entries:
 
 ### Economic Policy Governance Clarification
 
-Economic policy evolution MUST occur through lawful append-only policy transition lineage.
+Economic policy evolution MUST occur by appending rows to the owning domain's own table, each carrying the instant from which it governs (`DOM-CLASS-003` §V, §VII).
 
 The following are prohibited:
-- direct mutation of immutable historical policy versions,
+- direct mutation of immutable historical policy rows,
 - hidden delayed economic mutation,
 - orphaned future economic state,
-- policy activation without lawful lineage.
+- a separate transition or activation record standing in for the owning row.
 
 Immediate economic policy changes and delayed economic policy changes are equally subject to lawful lineage requirements.
 
@@ -129,7 +127,7 @@ Immediate economic policy changes and delayed economic policy changes are equall
 
 This invariant exists to make unauthorized, hidden, or convenience-based database mutations visible and operationally embarrassing. Its goal is not to prevent all possible privileged compromise, but to ensure that any mutation outside the canonical execution path is detectable during the nightly chain walk and surfaces through the Operations status-signal pipeline as a degraded state.
 
-This includes hidden future economic law, delayed policy mutation outside lawful transition lineage, and constitutional economic state that bypasses canonical policy governance.
+This includes hidden future economic law, delayed policy mutation that is not a visible effective-dated row of the owning table, and constitutional economic state that bypasses canonical policy governance.
 
 ## XI. Downstream Consequence
 
@@ -137,9 +135,7 @@ This includes hidden future economic law, delayed policy mutation outside lawful
 
 `FEAT` execution contracts must call `audit_protected()` for every write to a protected table.
 
-Protected constitutional economic policy objects include:
-- `policy_versions`
-- `policy_transitions`
+Protected economic policy tables are those `DOM-OPS-002` §5.4 registers among the owning domains' tables (`DOM-CLASS-003` §V). The retired class-wide lineage tables are not among them.
 
 CI guardrails in `scripts/policy_guardrails.py` enforce this structurally.
 

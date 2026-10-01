@@ -5,10 +5,13 @@ Covers ``app.feats.class_configuration.feat_class_003_insurance_policy_managemen
 lawful teacher/class scope, then delegates the immutable definition write to
 FEAT-POL-001, which persists to the typed ``insurance_policies`` table.
 
-The 8 Step-3 proof points:
+The Step-3 proof points:
  1. creating/editing produces a fresh ``InsurancePolicy.policy_uuid``;
- 2. no insurance config writes ``PolicyVersion(domain="insurance")``;
- 3. FEAT-CLASS-003 delegates through FEAT-POL-001 (no direct PolicyVersion path);
+ 2. (retired with the class-wide policy-lineage tables, operator ruling
+    2026-09-30: ``insurance_policies`` is the only insurance store, and
+    ``tests/test_retired_policy_lineage_guard.py`` refuses any reference to the
+    retired tables);
+ 3. FEAT-CLASS-003 delegates through FEAT-POL-001;
  4. a lawful submission stores an immutable definition row;
  5. editing never mutates the previous definition (new uuid, old row intact);
  6. recommendation-range overrides remain allowed (advisory, not enforced);
@@ -29,7 +32,7 @@ from uuid import uuid4
 import pytest
 
 from app.extensions import db
-from app.models import InsurancePolicy, PolicyVersion
+from app.models import InsurancePolicy
 from app.services import insurance_definition_service as defs
 from app.services.context_resolver import CanonicalContext
 from app.feats.class_configuration import (
@@ -132,10 +135,6 @@ def _set_availability(classroom, policy_uuid, state, *, class_id=None, canonical
     )
 
 
-def _pv_count(class_id):
-    return PolicyVersion.query.filter_by(class_id=class_id, domain="insurance").count()
-
-
 # ---------------------------------------------------------------------------
 # Proof points 1, 3, 4: lawful create → fresh policy_uuid via FEAT-POL-001.
 # ---------------------------------------------------------------------------
@@ -167,20 +166,6 @@ class TestLawfulCreate:
             assert p.insurance_type == "PRODUCTIVITY"
             assert n.insurance_type == "NON_MONETARY"
             assert len({t.policy_uuid, p.policy_uuid, n.policy_uuid}) == 3
-
-
-# ---------------------------------------------------------------------------
-# Proof point 2: no PolicyVersion(domain="insurance") writes.
-# ---------------------------------------------------------------------------
-class TestNoPolicyVersionResidue:
-    def test_configure_writes_no_policy_version(self, app):
-        classroom = initialize("chemistry_p1", app)
-        with app.app_context():
-            before = _pv_count(classroom.class_id)
-            _configure(classroom, _transaction_submission())
-            _configure(classroom, _productivity_submission())
-            after = _pv_count(classroom.class_id)
-            assert before == after == 0
 
 
 # ---------------------------------------------------------------------------

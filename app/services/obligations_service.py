@@ -1371,12 +1371,10 @@ def get_cycle_rent_amount(
     This function DOES NOT BELONG in Obligations domain (violates DOM-OBL-001).
     Rent amount is Class Configuration authority, not Obligations authority.
 
-    Obligations domain stores assessment amounts in policy_version_id references
-    to the upstream PolicyVersion, not in obligation tables.
+    An assessment resolves its amount from the ``rent_settings`` row named by the
+    ``policy_uuid`` it froze (DOM-OBL-001), not from obligation tables.
 
-    Caller should fetch amount from Class Configuration, pass to assessment creator.
-
-    TODO: Remove this function. Rent amount should be determined upstream by
-    Class Configuration and passed to FEAT-OBLI-001 via correlation/policy_version_id.
+    TODO: Remove this function. Rent amount is determined upstream by the rent
+    policy's ``policy_uuid`` passed to FEAT-OBLI-001.
     """
     return None

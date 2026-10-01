@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DB-001       | 1.5     | 2026-09-28     | 1.4 | Normative |
+| SOP-DB-001       | 1.6     | 2026-09-30     | 1.5 | Normative |
 
 > [!NOTE]
 > v1.1 (2026-09-14) adds §V.A, a named exception to Golden Rule 3. Rule 3 is not weakened:
@@ -227,7 +227,7 @@ merged migration, so the remedy is a baseline replacement, not an edit under thi
 | Revision | Absent element | Historical operation | Corrected |
 |----------|----------------|----------------------|-----------|
 | `3a69db4907b4` | `announcements.user_id` | backfill delete + `alter_column(nullable=False)` | 2026-09-17 |
-| `8f1a2c3d4b5e` | `policy_transitions.created_by` | `create_foreign_key("fk_policy_transitions_created_by")` | 2026-09-17 |
+| `8f1a2c3d4b5e` | `policy_transitions.created_by` (table retired 2026-09-30) | `create_foreign_key("fk_policy_transitions_created_by")` | 2026-09-17 |
 
 **`3a69db4907b4` — Clean up announcement model.** Announcement authorship moved from a `User` to a
 `Seat`; `announcements` now carries `created_by_seat_id` and no `user_id`. The bootstrap therefore
@@ -247,8 +247,10 @@ forbids. If the frozen-baseline remedy lands, this disappears with the rest of t
 future change ever makes that downgrade reachable, it becomes a live candidate and must be evaluated
 on its own evidence.
 
-**`8f1a2c3d4b5e` — Add policy transition created_by FK.** The same rename: `policy_transitions` now
-carries `created_by_seat_id` and no `created_by`. The revision adds a foreign key on `created_by`,
+**`8f1a2c3d4b5e` — Add policy transition created_by FK.** The same rename: `policy_transitions`
+carried `created_by_seat_id` and no `created_by`. (1.6: the table itself was retired by operator ruling
+2026-09-30 and is dropped by `dd52b19d48d8`; the frozen baseline still creates it at step 0, so this
+historical revision replays unchanged and the correction stays load-bearing.) The revision adds a foreign key on `created_by`,
 which cannot exist on a fresh chain. The correction returns early unless
 `column_exists("policy_transitions", "created_by")`, and adds the `column_exists` helper the file
 lacked. The pre-existing `foreign_key_exists` guard is preserved beneath it.

@@ -65,7 +65,6 @@ from sqlalchemy.exc import IntegrityError, InternalError
 
 from app.models import EconomicEngine, ClassFeature
 from app.extensions import db
-from app.services.class_configuration_query_service import get_initial_economic_engine
 from app.services.context_resolver import CanonicalContext
 from app.feats.class_configuration.feat_class_004_feature_enablement import (
     execute_enable_feature,
@@ -79,6 +78,14 @@ from app.utils.canonical_temporal_resolver import (
     SYSTEM_LEVEL_EVALUATION,
 )
 from tests.helpers.classroom_initializer import initialize
+
+
+def _root_engine(class_id):
+    """The class's first Economic Engine version (the listener-seeded root)."""
+    from app.services.class_configuration_query_service import economic_engine_timeline
+
+    versions = economic_engine_timeline(class_id).versions
+    return versions[0] if versions else None
 
 
 # --------------------------------------------------------------------------- #
@@ -166,7 +173,7 @@ class TestEconomicEngineImmutability:
         """A configured engine version is created through the canonical evolution
         FEAT and persists its field values."""
         with app.app_context():
-            root = get_initial_economic_engine(classroom.class_id)
+            root = _root_engine(classroom.class_id)
             assert root is not None
 
             result = execute_evolve_economic_engine(
@@ -194,7 +201,7 @@ class TestEconomicEngineImmutability:
         """An in-place UPDATE of a persisted engine row is rejected by the
         append-only immutability trigger (invariant 2/7)."""
         with app.app_context():
-            root = get_initial_economic_engine(classroom.class_id)
+            root = _root_engine(classroom.class_id)
 
             with pytest.raises(InternalError, match="immutable"):
                 db.session.execute(
@@ -213,7 +220,7 @@ class TestEconomicEngineImmutability:
         """The lawful way to 'change' configuration is a NEW version; the prior
         version is left untouched (append-only lineage, invariant 3/7)."""
         with app.app_context():
-            root = get_initial_economic_engine(classroom.class_id)
+            root = _root_engine(classroom.class_id)
             root_id = root.economic_version_id
             root_mode = root.economy_policy_mode
 
@@ -237,7 +244,7 @@ class TestEconomicEngineImmutability:
     def test_economic_engine_null_fields_preserved(self, app, classroom):
         """The seeded root engine preserves NULL 'not specified' banking fields."""
         with app.app_context():
-            root = get_initial_economic_engine(classroom.class_id)
+            root = _root_engine(classroom.class_id)
             assert root.interest_rate is None
             assert root.interest_calculation_type is None
             assert root.compound_frequency is None
@@ -258,14 +265,14 @@ class TestEconomicEngineVersionChain:
                 class_id=classroom.class_id, previous_version_id=None
             ).all()
             assert len(roots) == 1
-            initial = get_initial_economic_engine(classroom.class_id)
+            initial = _root_engine(classroom.class_id)
             assert roots[0].economic_version_id == initial.economic_version_id
 
     def test_version_chain_creation(self, app, classroom):
         """Successive evolutions build a same-class previous_version_id chain
         (invariant 3), rooted at the single NULL-predecessor root."""
         with app.app_context():
-            root = get_initial_economic_engine(classroom.class_id)
+            root = _root_engine(classroom.class_id)
             ctx = _ctx(classroom)
 
             r1 = execute_evolve_economic_engine(
@@ -295,7 +302,7 @@ class TestEconomicEngineVersionChain:
     def test_first_version_has_null_previous_id(self, app, classroom):
         """The root version has a NULL previous_version_id (invariant 1/3)."""
         with app.app_context():
-            root = get_initial_economic_engine(classroom.class_id)
+            root = _root_engine(classroom.class_id)
             assert root.previous_version_id is None
 
     def test_referenced_version_cannot_be_deleted(self, app, classroom):
@@ -304,7 +311,7 @@ class TestEconomicEngineVersionChain:
         Proximate enforcer is the append-only no_delete trigger, which subsumes
         the RESTRICT foreign key (no historical version is deletable at all)."""
         with app.app_context():
-            root = get_initial_economic_engine(classroom.class_id)
+            root = _root_engine(classroom.class_id)
             r = execute_evolve_economic_engine(
                 canonical_context=_ctx(classroom), class_id=classroom.class_id,
                 updates={"economy_policy_mode": "comfortable"},
@@ -388,7 +395,7 @@ class TestClassFeatureAppendOnly:
         the enable is a genuine first-enablement rather than a no-op re-enable."""
         with app.app_context():
             ctx = _ctx(classroom)
-            root = get_initial_economic_engine(classroom.class_id)
+            root = _root_engine(classroom.class_id)
 
             enabled = execute_enable_feature(
                 canonical_context=ctx, class_id=classroom.class_id,
@@ -414,7 +421,7 @@ class TestClassFeatureAppendOnly:
         Probed at the DB boundary via raw SQL — INSERT is not intercepted by the
         append-only triggers (which guard UPDATE/DELETE only)."""
         with app.app_context():
-            root = get_initial_economic_engine(classroom.class_id)
+            root = _root_engine(classroom.class_id)
             at = _now()
             _raw_insert_feature(
                 classroom.class_id, "banking", at,
@@ -434,7 +441,7 @@ class TestClassFeatureAppendOnly:
         Uses 'hall_pass' (not in the default seed) so the initial enable is genuine."""
         with app.app_context():
             ctx = _ctx(classroom)
-            root = get_initial_economic_engine(classroom.class_id)
+            root = _root_engine(classroom.class_id)
 
             enabled = execute_enable_feature(
                 canonical_context=ctx, class_id=classroom.class_id,
@@ -468,7 +475,7 @@ class TestClassFeatureAppendOnly:
         from enabled resolution (invariant 6)."""
         with app.app_context():
             ctx = _ctx(classroom)
-            root = get_initial_economic_engine(classroom.class_id)
+            root = _root_engine(classroom.class_id)
 
             execute_enable_feature(
                 canonical_context=ctx, class_id=classroom.class_id,
@@ -614,7 +621,7 @@ class TestClassFeatureCheckConstraints:
             # Append another feature so the cascade must remove more than the
             # seeded 'payroll' and 'banking' rows. 'hall_pass' is not default-enabled,
             # so this is a genuine first-enablement.
-            root = get_initial_economic_engine(cid)
+            root = _root_engine(cid)
             enabled = execute_enable_feature(
                 canonical_context=ctx, class_id=cid, feature="hall_pass",
                 economic_version_id=root.economic_version_id,

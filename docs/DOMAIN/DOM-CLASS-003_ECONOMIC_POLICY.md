@@ -2,13 +2,16 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| DOM-CLASS-003 | 2.3 | 2026-09-30 | 2.2 | Constitutional |
+| DOM-CLASS-003 | 2.4 | 2026-09-30 | 2.3 | Constitutional |
+
+> [!IMPORTANT]
+> **v2.4 (2026-09-30), operator ruling.** "policy versions is explicitly legacy, it was never authorized by me as a canonical table. any documentation that said otherwise were direct violation of my directive." The class-wide tables `policy_versions` and `policy_transitions` are **retired** and dropped (migration `dd52b19d48d8`). The owner removed them from the Policies domain on 2026-08-03 (`184910af8`, PR #1293); this document recreated them on 2026-08-08 (`abb49d75e`, PR #1321) without that authority, and v2.3 had marked them legacy. From v2.4, economic policy lineage **is** each owning domain's own append-only, effective-dated table (§V). There is no separate version table, no transition row, and no activation step.
 
 # I. Purpose
 
 This specification defines the constitutional governance model for class economics within Classroom Token Hub (CTH).
 
-This specification derives its authority from `DOM-CLASS-002`, which in turn derives from `DOM-CLASS-001`. This document controls only economics-specific policy lineage, not the general policy domain. The broader policy domain owns non-economic policy versioning.
+This specification derives its authority from `DOM-CLASS-002`, which in turn derives from `DOM-CLASS-001`. It governs how class economics evolves over time. It owns no table of its own: every economic change is a new row in the owning domain's own table (§V), and `DOM-POL-001` owns how definition tables version.
 
 This specification establishes:
 - immutable economics policy lineage,
@@ -24,8 +27,8 @@ This specification establishes:
 # II. Scope
 
 This specification governs:
-- economics policy versions,
-- policy activation legality,
+- how economic policy evolves in its owning tables,
+- when a recorded change governs,
 - economic policy mode semantics for `tight`, `default`, and `comfortable`,
 - rebalance governance,
 - pending future policy visibility,
@@ -84,11 +87,11 @@ This specification does NOT define:
 
 ## ECON-CONST-001 — Economic Policy Evolution Is Append-Only
 
-Class economics MUST evolve through lawful economics policy versions and activation events.
+Class economics MUST evolve by appending rows to the owning domain's table (§V), each carrying the instant from which it governs (§VII).
 
 Direct mutation of active economics policy state is prohibited.
 
-All economics policy evolution SHALL be represented as immutable policy lineage.
+All economics policy evolution SHALL be represented as immutable rows of the owning table.
 
 This includes:
 - immediate policy changes,
@@ -147,13 +150,11 @@ Examples:
 ## ECON-CONST-005 — Policy Governance Owns Policy Lineage
 
 Class economics governance remains sole authority over:
-- policy version lineage,
-- policy transition lineage,
-- supersession legality,
-- active policy selection,
-- pending policy state.
+- the rule that selects the row in force at an instant (§VII),
+- supersession legality (§VIII),
+- what counts as pending policy state (§X).
 
-Operational domains MUST NOT directly mutate policy lineage objects.
+The lineage itself is the owning domain's append-only table (§V). No domain rewrites a row of it.
 
 ---
 
@@ -171,102 +172,46 @@ Policy activation behavior MUST NOT depend on:
 
 # V. Canonical Objects
 
-> **Legacy, pending retirement (operator ruling 2026-09-30).** `policy_versions` and `policy_transitions` were never authorized by the owner as canonical tables. They are legacy for every domain and are scheduled for retirement. No new reference to either table may be added. Payroll no longer reads or writes them (§VII); the remaining non-payroll uses are tracked for removal. The descriptions below record what the tables are, not a mandate to use them.
+Economic policy lineage is held in the owning domain's own table. Each row is immutable once written; a change is a new row; the row's own identity (`policy_uuid`, or `economic_version_id` for the Economic Engine) is its version (`DOM-POL-001` §VI.0).
 
-## 1. policy_versions
+| Economic policy | Owning table | Versioned by |
+|---|---|---|
+| Payroll | `payroll_settings` | `policy_uuid`, with `effective_date` (`DOM-POL-001` §VI.2) |
+| Rent | `rent_settings` | `policy_uuid`; binds when a period is issued (`DOM-OBL-001` §V.7) |
+| Insurance | `insurance_policies` | `policy_uuid`; frozen per bill cycle and entitlement (`DOM-STORE-001`) |
+| Store prices | `store_products` | `policy_uuid` within a product lineage |
+| Banking, overdraft fee, economy mode, CWI inputs | `economic_engine` | `economic_version_id`, with `effective_at` (§VII) |
 
-Represents immutable constitutional economics policy truth.
+Downstream facts freeze the owning row's identity (bill cycles and assessments freeze `policy_uuid`, `DOM-OBL-001`; payroll events freeze `payroll_settings.policy_uuid`, `DOM-PROD-001` §XI.3).
 
-A policy version defines the exact economic rules active for a `class_id` during a given operational period.
-
-Example fields:
-
-```
-id
-class_id
-version_number
-policy_payload_json
-created_at
-activated_at
-created_by_transition_id
-```
-
-Constraints:
-- activation is derived from append-only policy transitions or a separate mutable status projection; it is not immutable policy truth
-- historical versions MUST remain immutable
-
----
-
-## 2. policy_transitions
-
-Represents append-only economics policy evolution lineage.
-
-A policy record defines:
-- source policy state,
-- target policy state,
-- activation intent,
-- activation legality,
-- lineage.
-
-Example fields:
-
-```
-id
-class_id
-source_policy_version_id
-target_policy_version_id
-activation_mode
-status
-created_at
-created_by
-applied_at
-correlation_id
-superseded_by_transition_id
-cancelled_at
-```
-
-The `policy_transitions` and `policy_versions` tables only record the evolution of economic policies. For domain-specific versioning, consult DOM-POL-001. 
-
+The class-wide tables `policy_versions` and `policy_transitions` were retired by operator ruling 2026-09-30. They were never authorized as canonical, and they MUST NOT be reintroduced under any name: no class-wide version table, no transition table, no pointer from a domain row to either.
 
 ---
 
 # VI. Policy States
 
-Allowed transition states:
-
-```
-pending | applied | cancelled | superseded | failed
-```
-
-Definitions:
+A recorded row is in exactly one of these states, determined by time alone:
 
 | State | Meaning |
 |---|---|
-| pending | Future economic law exists but is not yet active |
-| applied | Transition lawfully activated |
-| cancelled | Transition intentionally withdrawn |
-| superseded | Replaced by newer lawful transition |
-| failed | Transition activation failed |
+| pending | Its effective date is still ahead. It is visible future economic law (§X) and governs nothing yet. |
+| in force | It is the row selected at the current instant (§VII). |
+| superseded | A later row governs. It remains readable for every fact that froze it. |
+
+There is no `applied`, `cancelled` or `failed` state and no transition row carrying one. A pending row that should not take effect is superseded by saving another row for the same boundary (§VIII); nothing is deleted or rewritten.
 
 ---
 
 # VII. Activation Intent
 
-Economics governance MAY store abstract activation intent.
+A change is recorded with the instant from which it governs:
 
-Allowed activation modes:
-
-```
-immediate | next_boundary | manual
-```
-
-Definitions:
-
-| Mode | Meaning |
+| Intent | Recorded as |
 |---|---|
-| immediate | Activate immediately |
-| next_boundary | Activate at next lawful operational boundary |
-| manual | Await explicit activation |
+| immediate | a row effective when recorded |
+| next boundary | a row effective at the owning domain's next boundary, which that domain defines (ECON-CONST-004) |
+
+The row in force at instant *t* is the one with the greatest effective instant at or before *t*; among rows sharing it, the latest recorded wins. Nothing activates a row. Time does: a pending row becomes the row in force when its date is reached. That is not hidden deferred mutation (§XI.1) — the future row is visible, immutable, and carries its own date.
 
 Economics governance MUST NOT encode:
 - operational cycle calculations,
@@ -274,9 +219,15 @@ Economics governance MUST NOT encode:
 - timezone legality,
 - operational timing interpretation.
 
+Each owning domain states its boundary:
+- **Payroll** — the class's next payroll date (below).
+- **Rent** — the first rent period not yet issued. A rent policy binds when a period is issued (`DOM-OBL-001` §V.7), so every period already issued keeps the `policy_uuid` it froze and a change saved mid-period governs the next period. `rent_settings.rent_effective_at` records the start of that period.
+- **Economic Engine** — no operational boundary is defined; a change governs from the `effective_at` it is saved with, immediate unless a later instant is given. Which version is in force is answered by one resolver only, the version with the greatest `effective_at` at or before the instant (owner ruling 2026-09-30). A `class_features` row records whether a feature is on; it is not a second answer to which engine version governs.
+- **Store prices** and **insurance definitions** — no later boundary; a new row governs new purchases at once, and every bill cycle or entitlement already created keeps the `policy_uuid` it froze.
+
 ## Pending Next-Cycle Payroll-Governing Changes
 
-*Restated by operator ruling 2026-09-30 (v2.3). The previous text recorded a payroll change as a `pending` `policy_transitions` row with `activation_mode = next_boundary`. That mechanism was never authorized for payroll and is withdrawn: `policy_versions` / `policy_transitions` are legacy tables pending retirement (§V) and are not an authority for payroll.*
+*Restated by operator ruling 2026-09-30 (v2.3). The earlier text recorded a payroll change as a pending transition row with `activation_mode = next_boundary`. That mechanism was never authorized and is retired (§V).*
 
 When a teacher changes a payroll setting (pay rate, pay frequency, first pay date, daily limit, or any other `payroll_settings` column) while a payroll cycle is open, the change MUST NOT govern the open cycle (`INV-ARC-015` §VI.7). Work done under the old setting is paid under the old setting. The change governs from the next payroll cycle boundary.
 
@@ -287,7 +238,7 @@ The change is recorded as an **effective-dated append** to `payroll_settings`, t
 3. The first payroll setting a class ever records governs from the moment it is saved (`effective_date = created_at`): there is no earlier setting to protect.
 4. The setting in force at an instant is the row with the greatest `effective_date` at or before it; among rows sharing that `effective_date`, the latest `created_at` wins. A second save before the same boundary therefore supersedes the first at that boundary, while both remain as history. No row is deleted, hidden, or rewritten to express supersession.
 
-Activation needs no transition, command, or scheduler flag: a pending row simply becomes the row in force when its `effective_date` is reached. That is not hidden deferred mutation (§XI.1) — the future setting is a visible, immutable row carrying its own effective date, and nothing is mutated when it takes effect. A manual payroll run does not move the boundary (`DOM-PROD-001` §XV.5), so running payroll early never activates a pending change early.
+Activation needs no transition, command, or scheduler flag: a pending row simply becomes the row in force when its `effective_date` is reached. A manual payroll run does not move the boundary (`DOM-PROD-001` §XV.5), so running payroll early never activates a pending change early.
 
 Pending settings MUST be visible (§X): the teacher's payroll surface shows the setting currently in force and every pending setting with the date it takes effect.
 
@@ -295,36 +246,28 @@ Pending settings MUST be visible (§X): the teacher's payroll surface shows the 
 
 # VIII. Policy Supersession
 
-If a newer lawful economics policy version conflicts with an existing pending version in the same `class_id` scope:
+Supersession is expressed by recording, never by rewriting. When two rows of the same owning table and `class_id` claim the same effective instant, the one recorded later governs, and the tie-breaker when timestamps are equal is the table's documented total order (for `payroll_settings` and `economic_engine`: `effective_date`/`effective_at`, then `created_at`, then the row identity). Exactly one row governs each `class_id` at each instant.
 
-```
-new_transition.created_at > existing_pending_transition.created_at
-```
-
-the older version MUST become `superseded`. If timestamps are equal or clock-skewed, the authoritative ordering MUST use a monotonic sequence or a documented total-order tie-breaker, such as the transition identifier. Exactly one pending version MUST be authoritative for each `class_id` scope.
-
-The newer lawful version becomes authoritative.
-
-Supersession MUST remain append-only lineage.
-
-Previously recorded policy versions MUST NOT be deleted.
+Superseded rows remain as history and MUST NOT be deleted while any fact froze them.
 
 ---
 
 # IX. Rebalance Governance
 
-Teacher-visible rebalance operations represent grouped class economics governance actions.
+A teacher-visible rebalance groups several economic changes into one review. It writes nothing of its own:
 
-Operationally:
-- each selected economic change SHALL create an independent economics policy version,
-- each operational domain SHALL retain sovereign activation legality,
-- rebalance execution SHALL create a new policy version on respective domain-defined tables
+- each selected change is carried out by the command that owns it, and its record is that command's new row in the owning table;
+- each owning domain keeps its own boundary legality (ECON-CONST-004);
+- a change the teacher schedules for the next cycle is a row dated to the owning domain's next boundary (§VII); a change type whose owner defines no later boundary can only be applied immediately.
 
 Examples:
-- rent rebalance --> `rent_settings`
-- store pricing correction --> `store_items`
+- rent rebalance → a new `rent_settings` row (scheduled: dated to the first rent period not yet issued)
+- store price correction → a superseding `store_products` version
+- overdraft fee → a new `economic_engine` version
 
-Each change creates new immutable version rows with specific effective date
+Changing the class's economy mode MUST NOT cancel, supersede or otherwise revoke a scheduled rebalance, and nothing may revoke one implicitly: the scheduled change is already a row of its owning table, and it is changed, like any other row, by recording another. Owner ruling 2026-09-30: "Scheduling the rebalance was an explicit teacher action. Changing mode should not implicitly revoke a separately requested future action. If we want cancellation, that should itself be explicit."
+
+The teacher does not choose when a rebalanced change takes effect; its owning domain does (§VII). A rent change takes effect from the first rent period not yet billed, and there is no "apply immediately" for rent (owner ruling 2026-09-30: a billed period keeps its frozen terms either way, so offering both options was misleading).
 
 ---
 
@@ -379,21 +322,21 @@ Economics governance MUST NOT determine:
 Economics governance MUST NOT rely on:
 - singleton mutable settings blobs,
 - mutable pending payload pointers,
-- overwrite-style future-state mutation.
+- overwrite-style future-state mutation,
+- a class-wide version or transition table beside the owning tables (§V).
 
 ---
 
 # XII. Relationship to Operational Domains
 
 Operational domains:
-- consume active policy versions,
-- determine lawful activation boundaries,
-- trigger lawful activation requests,
+- consume the row in force, and freeze its identity on the facts they create,
+- define their own boundaries (§VII),
 - apply operational consequences.
 
 Operational domains do NOT:
-- own policy lineage,
-- mutate policy versions,
+- rewrite a policy row,
+- keep a second record of policy lineage,
 - determine policy supersession legality.
 
 ---
@@ -403,7 +346,7 @@ Operational domains do NOT:
 FEAT layer:
 - orchestrates execution,
 - enforces idempotency,
-- coordinates transition application,
+- writes the owning domain's new row through that domain's command,
 - records execution correlation.
 
 FEAT layer does NOT:
@@ -429,10 +372,10 @@ DOM-OPS does NOT own economic policy truth.
 # XV. Architectural Outcome
 
 This model establishes:
-- append-only economic governance,
+- append-only economic governance in the owning tables,
 - immutable economic history,
 - visible future economic law,
-- deterministic policy evolution,
+- deterministic selection by time,
 - sovereign operational timing authority,
 - replayable economic policy lineage,
 - constitutional economic transparency.

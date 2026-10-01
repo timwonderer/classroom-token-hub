@@ -24,6 +24,7 @@ from app.extensions import db
 from tests.helpers.canonical_classroom import provision_classroom
 
 PREVIOUS = "f4b8d2a6c1e9"
+THIS = "a7e3c9d1f5b2"
 CLASSROOM_KEYS = (
     "tz_pacific_p1", "tz_line_islands_p1", "tz_tokyo_p1", "chemistry_p1",
     "ap_csp_p3", "biology_block_a", "unicode",
@@ -182,10 +183,14 @@ def test_upgrade_refuses_an_event_whose_policy_version_is_another_classs(app):
 
 
 def test_downgrade_and_upgrade_cycle_preserves_the_mapping(app):
+    """Across this revision only. The next revision (dd52b19d48d8) retires
+    policy_versions and recreates it empty on downgrade, so stepping back past
+    both needs payroll PolicyVersions that no longer exist; that refusal is held
+    in tests/dom/class/test_policy_lineage_retirement_migration.py."""
     with app.app_context():
         classrooms = _provision_and_downgrade(("chemistry_p1", "ap_csp_p3"))
         expected = _seed_production_shape(classrooms)
-        alembic_upgrade()
+        alembic_upgrade(revision=THIS)
 
         alembic_downgrade(revision=PREVIOUS)
         assert "policy_version_id" in _columns("payroll_event")
