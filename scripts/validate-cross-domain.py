@@ -125,7 +125,6 @@ BASELINE_FOREIGN_KEYS = {
     "issues.related_transaction_id -> ledger_transaction.id (DOM-SUP -> DOM-LED)",
     "issue_resolution_actions.related_transaction_id -> ledger_transaction.id (DOM-SUP -> DOM-LED)",
     "ledger_transaction.lineage_event_id -> audit_events.id (DOM-LED -> DOM-OPS)",
-    "payroll_event.policy_version_id -> policy_versions.id (DOM-PROD -> DOM-CLASS)",
 }
 
 

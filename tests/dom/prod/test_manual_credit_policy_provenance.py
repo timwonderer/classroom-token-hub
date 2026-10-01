@@ -1,11 +1,15 @@
 """Payroll policy provenance follows the authority that decided the amount (DOM-PROD-001 §VIII).
 
-Attendance-derived payroll is priced under a payroll policy version and must
-record it. A teacher's manual credit is an amount the teacher chose, so a class
-with no payroll configuration can still pay students manually. A manual_credit
-posted for another domain's lawful calculation (productivity insurance) may still
-carry the policy provenance that calculation used: the rule is a minimum for
-payroll, never "manual credits have no policy".
+Attendance-derived payroll is priced under a payroll setting and must record
+it. A teacher's manual credit is an amount the teacher chose, so a class with no
+payroll configuration can still pay students manually. A manual_credit posted
+for another domain's lawful calculation (productivity insurance) may still carry
+the policy provenance that calculation used: the rule is a minimum for payroll,
+never "manual credits have no policy".
+
+Operator ruling 2026-09-30: the provenance is a ``payroll_settings.policy_uuid``.
+``payroll_event.policy_version_id`` — a reference into the legacy
+``policy_versions`` table — is gone.
 """
 from __future__ import annotations
 
@@ -17,9 +21,10 @@ from sqlalchemy.exc import IntegrityError
 from app.extensions import db
 from app.feats.base import FEATContext
 from app.feats.prod import record_payroll_event
-from app.models import PayrollEvent, PolicyVersion, Transaction
+from app.models import PayrollEvent, Transaction
 from app.services.context_resolver import CanonicalContext
-from app.services.payroll_settings_service import upsert_payroll_settings
+from app.services.payroll.settings import class_has_payroll_settings, current_payroll_setting
+from tests.helpers.canonical_classroom import login_teacher, provision_classroom
 from tests.helpers.class_domain import manual_payroll
 from tests.helpers.classroom_initializer import initialize_as_teacher
 
@@ -30,8 +35,9 @@ def _ctx(classroom):
 
 
 def test_manual_payment_works_in_a_class_without_payroll_setup(client, app):
-    classroom = initialize_as_teacher("chemistry_p1", client, app)
-    assert PolicyVersion.query.filter_by(class_id=classroom.class_id, domain="payroll").count() == 0
+    classroom = provision_classroom("chemistry_p1", with_payroll_settings=False)
+    login_teacher(client, classroom)
+    assert not class_has_payroll_settings(classroom.class_id)
     seat = classroom.students[0].seat
 
     response = manual_payroll(client, student_ids=[seat.public_id], description="Helped clean up", amount="12.50")
@@ -39,17 +45,19 @@ def test_manual_payment_works_in_a_class_without_payroll_setup(client, app):
     assert response.status_code == 302
     event = PayrollEvent.query.filter_by(class_id=classroom.class_id, target_seat_id=seat.id,
                                          payroll_event_type="manual_credit").one()
-    assert event.policy_version_id is None and event.policy_uuid is None
+    assert event.policy_uuid is None
     credit = Transaction.query.filter_by(class_id=classroom.class_id, seat_id=seat.id, type="manual_payment").one()
     assert credit.amount == Decimal("12.50")
 
 
-def test_payroll_event_without_policy_version_is_rejected(client, app):
+def test_payroll_event_amount_is_derived_never_supplied(client, app):
+    """A payroll event is priced from attendance under the settings in force; a
+    caller cannot hand it an amount (or a policy) to record instead."""
     classroom = initialize_as_teacher("chemistry_p1", client, app)
-    with pytest.raises(ValueError, match="policy_version_id"):
+    with pytest.raises(ValueError, match="derives a payroll event's amount"):
         record_payroll_event(ctx=_ctx(classroom), target_seat_id=classroom.students[0].seat.id,
                              payroll_event_type="payroll", correlation_id="corr-no-policy",
-                             idempotency_key="payroll:no-policy", policy_version_id=None,
+                             idempotency_key="payroll:no-policy",
                              mechanism="TEACHER", amount=Decimal("1.00"))
     db.session.rollback()
 
@@ -69,18 +77,15 @@ def test_database_requires_policy_provenance_for_payroll_events(client, app):
 
 def test_manual_credit_may_keep_policy_provenance_from_a_calculation(client, app):
     classroom = initialize_as_teacher("chemistry_p1", client, app)
-    with FEATContext("FEAT-TEST-SETUP", idempotency_key="payroll:provenance-policy"):
-        upsert_payroll_settings(class_id=classroom.class_id, settings_data={"pay_rate": 0.25})
-        db.session.flush()
-    version = (PolicyVersion.query.filter_by(class_id=classroom.class_id, domain="payroll", is_active=True)
-               .order_by(PolicyVersion.id.desc()).first())
-    assert version is not None
+    setting = current_payroll_setting(classroom.class_id)
+    assert setting is not None
     result = record_payroll_event(
         ctx=_ctx(classroom), target_seat_id=classroom.students[0].seat.id,
         payroll_event_type="manual_credit", correlation_id="corr-insurance-like",
-        idempotency_key="payroll:insurance-like", policy_version_id=version.id,
+        idempotency_key="payroll:insurance-like", policy_uuid=setting.policy_uuid,
         mechanism="system", amount=Decimal("4.00"),
         summary_json={"description": "Policy-derived reimbursement"},
     )
-    assert result.payroll_event.policy_version_id == version.id
-    assert result.payroll_event.policy_uuid == version.policy_uuid
+    assert result.payroll_event.policy_uuid == setting.policy_uuid
+    # The mechanism vocabulary is TEACHER | SYSTEM (DOM-PROD-001 §XI.3).
+    assert result.payroll_event.mechanism == "SYSTEM"

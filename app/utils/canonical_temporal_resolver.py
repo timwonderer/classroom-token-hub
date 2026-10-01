@@ -511,3 +511,55 @@ def canonical_temporal_resolver(
         tz=tz,
         result=result,
     )
+
+
+def advance_local_calendar_days(occurrence_utc, days: int, timezone_name: str) -> datetime:
+    """Move ``occurrence_utc`` forward ``days`` calendar days in ``timezone_name``.
+
+    Class-calendar arithmetic, so it lives with the resolver (the temporal
+    guardrail bans ``timedelta`` arithmetic in services, FEATs and routes). The
+    payroll schedule (DOM-PROD-001 §XV.5) and the automatic job use it.
+
+    The local wall-clock time is preserved, so an occurrence at 07:00 local stays
+    at 07:00 local across a DST change. Adding the elapsed UTC duration instead
+    lands on the wrong local date on a 23- or 25-hour day.
+
+    Ambiguous and nonexistent local times are decided explicitly:
+
+    * **Ambiguous** (fall back — the clock reads 01:30 twice): take the
+      chronologically earlier instant, so the interval never silently lengthens.
+    * **Nonexistent** (spring forward — 02:30 never happens): take the smallest
+      forward shift onto a time that does exist, so 02:30 becomes 03:30.
+
+    Both are chosen by comparing candidate instants rather than by an ``is_dst``
+    flag: in Europe/Dublin the tz database models winter as *negative* DST, so
+    ``is_dst=True`` on an ambiguous Dublin time returns the **later** instant.
+    """
+    tz = pytz.timezone(timezone_name)
+    local_occurrence = ensure_utc(occurrence_utc).astimezone(tz)
+    target_naive = datetime.combine(
+        local_occurrence.date() + timedelta(days=days),
+        local_occurrence.time(),
+    )
+
+    try:
+        target_local = tz.localize(target_naive, is_dst=None)
+    except pytz.exceptions.AmbiguousTimeError:
+        target_local = min(
+            (tz.localize(target_naive, is_dst=flag) for flag in (True, False)),
+            key=lambda candidate: candidate.astimezone(timezone.utc),
+        )
+    except pytz.exceptions.NonExistentTimeError:
+        candidates = [
+            tz.normalize(tz.localize(target_naive, is_dst=flag))
+            for flag in (False, True)
+        ]
+        target_local = min(
+            candidates,
+            key=lambda candidate: (
+                candidate.replace(tzinfo=None) <= target_naive,
+                abs(candidate.replace(tzinfo=None) - target_naive),
+            ),
+        )
+
+    return target_local.astimezone(timezone.utc)

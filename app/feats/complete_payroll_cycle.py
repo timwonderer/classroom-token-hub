@@ -72,13 +72,17 @@ def complete_payroll_cycle(
     idempotency_key: str,
     cycle_started_at,
     cycle_completed_at,
+    run_mechanism: str,
+    scheduled_occurrence=None,
 ) -> CompletePayrollCycleResult:
     """Orchestrate one class-level payroll-cycle completion. NO COMMIT.
 
     Must run inside the caller's ``FEATContext("FEAT-PROD-004", idempotency_key=...)``.
     ``cycle_started_at`` / ``cycle_completed_at`` are the lawful closed-cycle window
     supplied by the caller; ``cycle_completed_at`` is the boundary used for
-    settlement and next-boundary activation.
+    settlement and next-boundary activation. ``run_mechanism`` is ``SYSTEM`` for
+    the automatic schedule — which also names the ``scheduled_occurrence`` it
+    settles — and ``TEACHER`` for the teacher's run (FEAT-PROD-004 §II.1).
     """
     if ctx is None or not getattr(ctx, "class_id", None):
         raise ValueError("complete_payroll_cycle requires a lawful class-bound context")
@@ -100,6 +104,8 @@ def complete_payroll_cycle(
         class_id=class_id,
         payroll_cycle_id=payroll_cycle_id,
         boundary_utc=cycle_completed_at,
+        run_mechanism=run_mechanism,
+        scheduled_occurrence=scheduled_occurrence,
         actor_ctx=ctx,
     )
 
@@ -115,8 +121,10 @@ def complete_payroll_cycle(
         observations_json=observations_json,
     )
 
-    # 6. CLASS — activate the pending next-cycle policy at this boundary (no-op if
-    #    nothing is pending). The next cycle, not the closing one, gets the new law.
+    # 6. CLASS — activate a pending next-boundary transition (no-op if nothing is
+    #    pending). Payroll settings take no part: a payroll change is an
+    #    effective-dated payroll_settings row, in force from its effective_date
+    #    with nothing to activate (DOM-CLASS-003 §VII).
     activation = apply_next_boundary_transition(
         class_id=class_id, boundary_at=cycle_completed_at
     )

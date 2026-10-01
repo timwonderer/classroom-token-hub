@@ -81,7 +81,9 @@ def materialize_interpretation_cycle(
     validate_for_materialization(observations_json)
 
     # 2. Freeze the governing reference configuration at the cycle boundary.
-    reference_configuration = capture_reference_configuration(class_id)
+    reference_configuration = capture_reference_configuration(
+        class_id, cycle_completed_at=cycle_completed_at
+    )
 
     # 3. Idempotency / conflict — scoped by (class_id, payroll_cycle_id).
     existing = (

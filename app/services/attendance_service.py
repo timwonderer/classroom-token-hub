@@ -245,9 +245,23 @@ def _legacy_paid_through(legacy_times, session_end):
     return max(earlier) if earlier else None
 
 
-def calculate_seat_payroll_attendance(
+@dataclass(frozen=True)
+class SeatPayrollIntervals:
+    """The intervals behind :class:`SeatPayrollAttendance`, as of one instant.
+
+    ``payable`` holds the closed, unpaid part of each session a run at that
+    instant settles; each interval ends when its session closed, which is the
+    instant that decides the setting that prices it (DOM-PROD-001 §XV.3).
+    ``in_progress`` is the still-open session, if any.
+    """
+
+    payable: tuple
+    in_progress: tuple
+
+
+def calculate_seat_payroll_intervals(
     seat_id: int, class_id: str, *, ctx, as_of_utc=None
-) -> SeatPayrollAttendance:
+) -> SeatPayrollIntervals:
     """The single PROD reading of what a seat's attendance owes (DOM-PROD-001 §VI.3).
 
     A session is payable once it has closed after the seat's last ``payroll``
@@ -309,9 +323,22 @@ def calculate_seat_payroll_attendance(
         if end > start:
             open_intervals.append((start, end))
 
+    return SeatPayrollIntervals(payable=tuple(payable), in_progress=tuple(open_intervals))
+
+
+def elapsed_attendance_seconds(ctx, intervals) -> int:
+    """Elapsed seconds across ``intervals`` under the canonical temporal resolver."""
+    return _elapsed_seconds(ctx, list(intervals))
+
+
+def calculate_seat_payroll_attendance(
+    seat_id: int, class_id: str, *, ctx, as_of_utc=None
+) -> SeatPayrollAttendance:
+    """Seconds of :func:`calculate_seat_payroll_intervals`: payable and in progress."""
+    intervals = calculate_seat_payroll_intervals(seat_id, class_id, ctx=ctx, as_of_utc=as_of_utc)
     return SeatPayrollAttendance(
-        payable_seconds=_elapsed_seconds(ctx, payable),
-        in_progress_seconds=_elapsed_seconds(ctx, open_intervals),
+        payable_seconds=_elapsed_seconds(ctx, list(intervals.payable)),
+        in_progress_seconds=_elapsed_seconds(ctx, list(intervals.in_progress)),
     )
 
 

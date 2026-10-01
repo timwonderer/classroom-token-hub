@@ -367,7 +367,7 @@ class TestTeacherEnteredDatesResolveInTheClassTimezone:
         """
         from tests.helpers import canonical_identities
         from tests.helpers.classroom_initializer import initialize_as_teacher
-        from app.models import PayrollSettings
+        from app.services.payroll.settings import payroll_setting_history
 
         forced_tz = "Asia/Tokyo"
         patched = dict(canonical_identities.CLASSROOMS["chemistry_p1"])
@@ -396,12 +396,9 @@ class TestTeacherEnteredDatesResolveInTheClassTimezone:
         assert response.status_code in (200, 302)
 
         with app.app_context():
-            setting = (
-                PayrollSettings.query
-                .filter_by(class_id=classroom.class_id)
-                .order_by(PayrollSettings.id.desc())
-                .first()
-            )
+            # The newest save (the provisioned default defines no payroll
+            # boundary, so the save is also the setting in force).
+            setting = payroll_setting_history(classroom.class_id)[0]
             assert setting is not None, "payroll settings did not persist"
             assert setting.first_pay_date is not None, (
                 "first_pay_date did not persist; without it this test cannot "

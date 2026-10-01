@@ -118,13 +118,10 @@ def _unclaim_in_place(seat):
 def test_DOM_IDEN_002__payroll_history_hides_events_of_an_unclaimed_seat(client):
     """A payroll event recorded before the unclaim stays on the seat, unlisted."""
     from app.feats.prod import record_payroll_event
-    from app.models import PayrollEvent, PolicyVersion
+    from app.models import PayrollEvent
 
     classroom = initialize_as_teacher("chemistry_p1", client, client.application)
     student = classroom.students[0].seat
-    policy = PolicyVersion.query.filter_by(
-        class_id=classroom.class_id, domain="payroll", is_active=True
-    ).first()
 
     record_payroll_event(
         ctx=_teacher_context(classroom),
@@ -132,7 +129,6 @@ def test_DOM_IDEN_002__payroll_history_hides_events_of_an_unclaimed_seat(client)
         payroll_event_type="manual_credit",
         correlation_id="corr_unclaimed_history",
         idempotency_key=f"manual_credit:{classroom.class_id}:{student.id}:history",
-        policy_version_id=policy.id if policy else None,
         mechanism="TEACHER",
         summary_json={"description": "Manual Credit: paid while claimed"},
         amount=Decimal("12.00"),

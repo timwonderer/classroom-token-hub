@@ -374,21 +374,15 @@ def get_payroll_settings(class_id: str) -> Optional[PayrollSettings]:
             hourly = float(payroll.pay_rate) * 60
             print(f"Rate: ${hourly}/hr")
 
-    ``payroll_settings`` is append-only (DOM-POL-001 §VI.1): a class accumulates
-    one immutable row per teacher submission, so "the current policy" is the
-    newest ``IN_USE`` row, not merely the only row. Ordering is explicit and
-    total — ``created_at`` can collide within a request, so ``id`` breaks the tie.
-
-    This resolves the policy in force for NEW work. A payroll event that already
-    exists resolves its own terms and must not call this function
-    (DOM-POL-001 §VII).
+    ``payroll_settings`` is append-only and effective-dated (DOM-POL-001 §VI.2):
+    this is the row in force now, resolved by the one payroll-settings resolver.
+    A pending row saved for the next payroll date is not returned until it is in
+    force. A payroll event that already exists resolves its own terms and must
+    not call this function (DOM-POL-001 §VII).
     """
-    return (
-        PayrollSettings.query
-        .filter_by(class_id=class_id, availability_state='IN_USE')
-        .order_by(PayrollSettings.created_at.desc(), PayrollSettings.id.desc())
-        .first()
-    )
+    from app.services.payroll.settings import current_payroll_setting
+
+    return current_payroll_setting(class_id)
 
 
 def get_rent_settings(class_id: str) -> Optional[RentSettings]:

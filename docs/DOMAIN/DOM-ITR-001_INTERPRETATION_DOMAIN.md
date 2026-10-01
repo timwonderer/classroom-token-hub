@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-ITR-001      | 1.5     | 2026-08-30     | 1.4        | Normative       |
+| DOM-ITR-001      | 1.6     | 2026-09-30     | 1.5        | Normative       |
 
 ## I-A. Authority Level and Dependencies
 
@@ -263,6 +263,8 @@ It is:
 - **NOT something Interpretation may subsequently resolve, refresh, or recompute** — once written it is frozen with the cycle,
 - **versioned** via `schema_version` so the Economic Engine can evolve without schema churn on this table, and so old interpretations stay self-describing under whatever shape was current when they were materialized,
 - **NOT a foreign key** into any other domain's table; `policy.policy_uuid` and `policy.version` are stored as informational lineage values only.
+
+From `schema_version` 2 (operator ruling 2026-09-30), `policy` names the `payroll_settings` row that governed the closed cycle — the row in force immediately before the cycle's closing boundary (`DOM-POL-001` §VI.2) — with `version` carrying that row's `effective_date`; `hourly_pay_rate` and `cwi` are computed from the same row. Version 1 records named a row of the legacy `policy_versions` table and keep that meaning.
 
 #### Cross-domain reference rule
 

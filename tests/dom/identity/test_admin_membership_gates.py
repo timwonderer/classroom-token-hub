@@ -4,6 +4,7 @@ import pytest
 
 from app.extensions import db
 from app.feats.base import FEATContext
+from app.services.payroll.settings import current_payroll_setting
 from app.models import (
     ClassEconomy,
     IdentityProfile,
@@ -221,14 +222,18 @@ def test_DOM_IDEN_001__payroll_settings_uses_feature_scope_blocks_not_student_bl
                 "settings_mode": "simple",
                 "simple_pay_rate": "15.0",
                 "simple_frequency": "biweekly",
+                "simple_first_pay_date": "2026-10-09",
                 "expected_weekly_hours": "5.0",
             },
         )
 
     assert response.status_code == 302
     assert response.headers["Location"].endswith("/admin/payroll")
-    saved = PayrollSettings.query.filter_by(class_id=class_row.class_id, block="B").first()
-    assert saved is None
+    # `block` is not a payroll_settings column at all any more (DOM-POL-001A
+    # §V.F), so a submitted label cannot scope the saved row: it is the class's.
+    saved = current_payroll_setting(class_row.class_id)
+    assert saved is not None and saved.class_id == class_row.class_id
+    assert not hasattr(saved, "block")
 
 
 def test_DOM_IDEN_006__edit_student_requires_active_canonical_class_scope(client):
@@ -323,7 +328,9 @@ def test_DOM_IDEN_006__class_scoped_post_rejects_request_class_mismatch(client):
     """
     from decimal import Decimal
 
-    class_a = initialize("chemistry_p1", client.application)
+    # Class A starts without payroll settings, so the posted setting is its
+    # first and is in force at once (DOM-CLASS-003 §VII).
+    class_a = initialize("chemistry_p1", client.application, with_payroll_settings=False)
     class_b = initialize("biology_block_a", client.application)
     admin = class_a.teacher_user
     teacher_seat = _teacher_seat(class_a)
@@ -341,6 +348,7 @@ def test_DOM_IDEN_006__class_scoped_post_rejects_request_class_mismatch(client):
             "settings_mode": "simple",
             "simple_pay_rate": "15.0",
             "simple_frequency": "biweekly",
+            "simple_first_pay_date": "2026-10-09",
         },
         follow_redirects=False,
     )
@@ -359,8 +367,7 @@ def test_DOM_IDEN_006__class_scoped_post_rejects_request_class_mismatch(client):
         "the request join_code, governs the write target"
     )
 
-    # Class A did receive the submission, so it has a retired predecessor plus
-    # the successor now governing it. Read the one that governs.
+    # Class A did receive the submission; read the setting that governs it.
     class_a_settings = get_payroll_settings(class_a.class_id)
     assert class_a_settings.pay_rate == posted_rate, (
         "Canonical class must receive the posted payroll update"
