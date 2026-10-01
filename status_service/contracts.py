@@ -6,10 +6,17 @@ from enum import Enum
 
 
 class NoticeState(str, Enum):
+    # AWARE: a possible problem, not yet confirmed (SPEC-OPS-002 §5.2).
+    AWARE = "AWARE"
     INVESTIGATING = "INVESTIGATING"
     IDENTIFIED = "IDENTIFIED"
     MONITORING = "MONITORING"
     RESOLVED = "RESOLVED"
+
+
+# Every state that keeps a notice open; only RESOLVED ends one.
+ACTIVE_STATES = (NoticeState.AWARE.value, NoticeState.INVESTIGATING.value,
+                 NoticeState.IDENTIFIED.value, NoticeState.MONITORING.value)
 
 
 class RecoveryExpectationState(str, Enum):

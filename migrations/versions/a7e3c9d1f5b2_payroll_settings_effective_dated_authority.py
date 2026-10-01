@@ -70,7 +70,7 @@ class's earliest one); downgrade refuses if an event that needs one has none,
 which is the case for any class first configured after this upgrade.
 
 Revision ID: a7e3c9d1f5b2
-Revises: f4b8d2a6c1e9
+Revises: bb5557cb1609
 Create Date: 2026-09-30
 """
 from alembic import op
@@ -79,7 +79,7 @@ from sqlalchemy import text
 
 
 revision = 'a7e3c9d1f5b2'
-down_revision = 'f4b8d2a6c1e9'
+down_revision = 'bb5557cb1609'
 branch_labels = None
 depends_on = None
 

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-PROD-001 | 1.2 | 2026-09-15 | 1.1 | Normative |
+| FEAT-PROD-001 | 1.3 | 2026-10-01 | 1.2 | Normative |
 
 ---
 
@@ -80,7 +80,7 @@ Rules:
 - MUST not store accumulated daily minutes
 - MUST not store hall-pass destination
 - MUST not store payroll amount
-- MUST NOT delete, soft-delete, edit, mark as deleted, hide, or correct an existing `attendance_sessions` row
+- MUST NOT delete, soft-delete, edit, mark as deleted, hide, or correct an existing `attendance_sessions` row (destruction of a seat's rows with the seat, or of a class's rows with the class, is lifecycle destruction outside this FEAT — `DOM-PROD-001` §VII.1.a)
 - MUST NOT provide a teacher-facing attendance-row deletion or correction endpoint
 - MUST NOT use attendance-row mutation to correct a payroll outcome
 
@@ -134,8 +134,8 @@ All other attendance-related behavior MUST delegate to this FEAT.
 ## VI. Invariants
 
 1. Attendance writes are append-only.
-2. Attendance rows are immutable and permanent after insertion.
-3. There is no delete, soft-delete, mark-deleted, or correction-in-place attendance path.
+2. Attendance rows are immutable after insertion and permanent for as long as their target seat exists; they are destroyed only with that seat or with the class (`DOM-PROD-001` §VII.1.a, `INV-CORE-000` §III.6).
+3. There is no delete, soft-delete, mark-deleted, or correction-in-place attendance path. Lifecycle destruction of the seat or class is not such a path.
 4. Payroll correction is handled through payroll reversal, not attendance mutation.
 5. Hall-pass attendance rows must carry the same consumed entitlement instance `entitlement_id` recorded as `hall_pass_logs.hall_pass_id`.
 6. The FEAT must fail closed if `ctx.class_id` or `ctx.seat_id` cannot be established.

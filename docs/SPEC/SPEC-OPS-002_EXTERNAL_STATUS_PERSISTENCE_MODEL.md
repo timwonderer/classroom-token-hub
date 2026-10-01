@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-OPS-002 | 1.5 | 2026-09-21 | 1.4 | Normative |
+| SPEC-OPS-002 | 1.6 | 2026-09-30 | 1.5 | Normative |
 
 ## I. Purpose
 
@@ -98,7 +98,7 @@ Required logical fields:
 
 - stable external notice ID;
 - append-only notice event ID, event type, and publication timestamp;
-- notice state: `INVESTIGATING`, `IDENTIFIED`, `MONITORING`, or `RESOLVED`;
+- notice state: `AWARE`, `INVESTIGATING`, `IDENTIFIED`, `MONITORING`, or `RESOLVED`;
 - affected capability key;
 - impact statement;
 - recommended user action, including `NO_ACTION_REQUIRED` where applicable;
@@ -110,6 +110,14 @@ Required logical fields:
 - optional reconciliation reference.
 
 The notice is not a canonical incident. Its existence MUST NOT imply that a canonical incident exists.
+
+`AWARE` records that an operator has been told of, or has seen signs of, a possible
+problem that is not yet confirmed — the problem may not be happening at all. It
+precedes `INVESTIGATING`, which records a confirmed problem whose cause is not yet
+known. `AWARE`, `INVESTIGATING`, `IDENTIFIED` and `MONITORING` are the active states;
+only `RESOLVED` ends a notice. An `AWARE` notice is still operator communication: an
+automated measurement alone never creates one (DOM-OPS-001), though an operator may
+draft one from it.
 
 ### 5.3 Public Status Projection — replaceable derived state
 
