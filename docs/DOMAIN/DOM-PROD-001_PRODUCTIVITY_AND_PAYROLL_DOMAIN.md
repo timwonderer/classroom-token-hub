@@ -321,7 +321,7 @@ Rules:
 - **INV-PROD-004: Payroll Settlement Requires Authority**. A payroll monetary posting may only occur after this domain has established that the underlying productivity record and payroll event authorize it.
 - **INV-PROD-005: No Hidden Payroll State**. Payroll status, payroll eligibility, and reversal permission must be explicit domain state or derived from authoritative domain records. They may not be reconstructed from ledger rows alone.
 - **INV-PROD-006: Class-Time Evaluation**. Productivity windows and payroll eligibility MUST use class-local temporal evaluation.
-- **INV-PROD-007: Hall-Pass History Preservation**. Completed hall-pass history must not be silently erased.
+- **INV-PROD-007: Hall-Pass History Preservation**. Completed hall-pass history must not be silently erased. Hall-pass history is never erased in place: while its seat exists, a `hall_pass_logs` row is neither deleted nor corrected. It is destroyed only with its seat, by lawful seat removal, or with its class, by lawful class or teacher-account destruction (INV-CORE-000 §III.5–§III.6) — the same lifecycle boundary §VII.1.a states for attendance. That destruction is not an erasure of surviving history.
 - **INV-PROD-008: No Financial Truth**. This domain does not compute balances, spendable funds, or monetary reconciliation.
 
 ---
@@ -377,7 +377,7 @@ Key fields:
 
 Rules:
 
-- This table is immutable, append-only. 
+- This table is immutable, append-only. Rows are destroyed only with their seat or their class (INV-PROD-007).
 - A row gets created when the pass is approved.
 - The presence of a row indicates the pass is approved and consumed.
 - Actual exit time and return time are not stored here.
