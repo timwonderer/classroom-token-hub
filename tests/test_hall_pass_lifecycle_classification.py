@@ -22,7 +22,6 @@ question can no longer be answered two different ways.
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from types import SimpleNamespace
 
 from app.extensions import db
 from app.feats.base import FEATContext
@@ -297,7 +296,10 @@ def test_history_reports_returned_and_ignores_an_unrelated_stray_active_row(app,
     with app.app_context():
         today = canonical_temporal_resolver(
             CLASS_LEVEL_EVALUATION,
-            canonical_execution_context=SimpleNamespace(class_id=classroom.class_id),
+            canonical_execution_context=CanonicalContext(
+                user_id=student.user.id, class_id=classroom.class_id,
+                seat_id=student.seat.id, actor_role="student",
+            ),
             primitive="current_evaluation_day",
         ).evaluation_date.isoformat()
     response = client.get(

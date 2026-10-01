@@ -258,8 +258,6 @@ def _make_productivity_policy(classroom):
 
 
 def test_file_claim_productivity_form_renders_and_submits(app, client):
-    from types import SimpleNamespace
-
     from app.utils.canonical_temporal_resolver import (
         CLASS_LEVEL_EVALUATION,
         canonical_temporal_resolver,
@@ -275,6 +273,7 @@ def test_file_claim_productivity_form_renders_and_submits(app, client):
             policy_uuid=policy_uuid, idempotency_key=f"ins:{uuid4().hex}")
         db.session.commit()
         class_id, seat_id = classroom.class_id, student.seat.id
+        student_ctx = _student_ctx(classroom)
         login_student(client, student)
 
     # The productivity claim surface renders (multi-date rows, not the txn picker).
@@ -291,7 +290,7 @@ def test_file_claim_productivity_form_renders_and_submits(app, client):
     with app.app_context():
         today = canonical_temporal_resolver(
             CLASS_LEVEL_EVALUATION,
-            canonical_execution_context=SimpleNamespace(class_id=class_id),
+            canonical_execution_context=student_ctx,
             primitive="current_evaluation_day",
         ).evaluation_date.isoformat()
     resp = client.post(
