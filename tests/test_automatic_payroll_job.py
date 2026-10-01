@@ -154,3 +154,31 @@ def test_replaying_same_occurrence_is_idempotent(app, monkeypatch):
     # short-circuits: no new payroll events, still one interpretation record.
     assert PayrollEvent.query.filter_by(class_id=cid).count() == events_after_first
     assert InterpretationCycleRecord.query.filter_by(class_id=cid).count() == 1
+
+
+def test_one_class_failing_to_derive_its_date_does_not_block_another(app, monkeypatch):
+    """A class whose next payroll date cannot be derived is skipped, not fatal:
+    every other due class is still enumerated and paid, keeping the job's
+    "one class's failure cannot roll back or block another" contract."""
+    broken_classroom = initialize("chemistry_p1", app)
+    healthy_classroom = initialize("ap_csp_p3", app)
+    broken_cid, *_ = _seed_due_class(broken_classroom, due=True)
+    healthy_cid, _, _, healthy_occurrence = _seed_due_class(healthy_classroom, due=True)
+
+    real_next_payroll_date = schedule_module.next_payroll_date
+
+    def _next_payroll_date(class_id, *, as_of=None):
+        if class_id == broken_cid:
+            raise ValueError(f"No payroll boundary found for class {class_id}.")
+        return real_next_payroll_date(class_id, as_of=as_of)
+
+    monkeypatch.setattr(schedule_module, "next_payroll_date", _next_payroll_date)
+
+    assert schedule_module.due_payroll_occurrences() == [(healthy_cid, healthy_occurrence)]
+
+    run_automatic_payroll_job()
+
+    assert resolve_completed_run(
+        healthy_cid, f"auto-payroll:{healthy_cid}:{healthy_occurrence.isoformat()}"
+    ) is not None
+    assert PayrollEvent.query.filter_by(class_id=broken_cid).count() == 0
