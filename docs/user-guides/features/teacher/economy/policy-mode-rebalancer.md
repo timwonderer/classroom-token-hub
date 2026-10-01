@@ -3,7 +3,7 @@ title: Economic Policy and Rebalancing
 category: features
 subcategory: teacher-economy
 roles: [teacher]
-description: Choose an economic policy mode, review the rent rebalance, and schedule or apply the change.
+description: Choose an economic policy mode, review the recommended rebalance, and schedule or apply the changes.
 keywords: [economic policy, rebalance, policy mode, tight, comfortable, cwi, economy health, effective date, scheduled]
 related:
   - user-guides/features/teacher/economy/economic-engine
@@ -19,7 +19,7 @@ The **Economic Policy** card sits on the Economic Engine page, below the CWI car
 
 Every pricing recommendation on the page — rent range, insurance premium range, fine range, store tiers, minimum weekly savings — is derived from your CWI *and* the active policy. Changing the policy changes all of them at once. It does not change any price by itself.
 
-The **Rent Rebalance Preview** is the second half: it compares your live rent setting against the new policy and offers to update it for you. Other pricing domains remain on their own settings pages.
+The **Economy Pricing Rebalance Preview** is the second half: it lists the prices that fall outside the new policy's recommended ranges and offers to update the ones it can change for you — rent, the rent late penalty, store item prices, and the overdraft fee. Insurance premiums are listed for review only; you change those on the Insurance page.
 
 ## Step-by-step instructions
 
@@ -45,25 +45,30 @@ After you save, the page reopens with the rebalance review already showing.
 
 You can also reach this at any time with **Review Recommended Rebalance**, next to the save button. The button only appears once payroll is configured.
 
-The **Rent Rebalance Preview** table has four columns:
+The **Economy Pricing Rebalance Preview** table has four columns:
 
 | Column | What it shows |
 | --- | --- |
-| Apply | A checkbox. Changes the engine is confident about are pre-checked |
-| Feature | The setting that would change |
+| Select | A checkbox for each change the rebalance can make. Nothing is checked for you |
+| Feature | The setting, with a link to its own settings page |
 | Current | What it is set to now |
-| Recommended | What the active policy suggests |
+| Recommended range / action | The range the active policy suggests, and what to set it to |
 
-Uncheck anything you want to keep as-is. If your settings already match the policy closely enough, no table appears — you get a green message saying no changes are recommended.
+Only prices outside their recommended range appear. A row can be:
 
-In practice the table holds one row at most. **Rent is the only setting the rebalance can change.** Insurance premiums, fines, and store prices all have recommended ranges on this page, but none of them appear here and none of them are rebalanced — you adjust those on their own settings pages.
+- **Rent** and **Rent: Late penalty**
+- **Store:** one row for each store item whose price is out of range
+- **Banking: Overdraft / NSF fee**
+- **Insurance:** shown as **Review only**, with no checkbox. The rebalance never changes an insurance premium, because the premium is part of the coverage students bought. Change it on the **Insurance** page if you want to.
+
+For each row you check, choose **Set midpoint** to use the middle of the recommended range, or **Custom** to enter any amount inside it. Rows you leave unchecked stay as they are. If every price already matches the policy closely enough, no table appears — you get a green message saying no changes are recommended.
 
 ### When it takes effect
 
 You don't pick a date. Each change takes effect the one way it can:
 
 - **Rent and the rent late penalty** are saved now and start with the first rent bill that has not been sent yet. Bills students already have keep their amounts.
-- **Store prices and the overdraft fee** have no cycle to wait for, so they change as soon as you apply.
+- **Store prices and the overdraft fee** have no cycle to wait for, so they change as soon as you apply. A purchase students already made keeps the price they paid.
 
 Select **Apply Selected Rebalance** to commit, or **Cancel** to leave everything alone.
 
@@ -82,7 +87,7 @@ Select **Apply Selected Rebalance** to commit, or **Cancel** to leave everything
 > Not sure which mode to pick? Stay on **Default**, watch the Economic Balance alerts and the savings figure for a week or two, then move tighter or more comfortable based on what you actually see students able to afford.
 
 > [!NOTE]
-> Everything except rent is edited on its own settings page. The recommended ranges on the Economic Engine tell you what to aim for; the rebalance does not carry them over for you.
+> Insurance premiums, and any setting the rebalance does not list, are edited on their own settings pages. The recommended ranges on the Economic Engine tell you what to aim for; the rebalance does not change them for you.
 
 ## Related guides
 
