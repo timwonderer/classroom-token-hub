@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-DES-001 | 2.2 | 2026-09-20 | `FEAT-DES-001` v1.1 (archived) | Normative |
+| SPEC-DES-001 | 2.3 | 2026-09-30 | `FEAT-DES-001` v1.1 (archived) | Normative |
 
 > Supersedes `docs/archive/v1-docs/FEATURES/DESIGN/FEAT-DES-001_Design_System.md` (archived, non-normative). That document described the v1 token set and carries values that no longer match the implementation; it governs nothing and is retained as history only.
 
@@ -399,7 +399,7 @@ The token layer conforms when:
 
 `github-pages/style.css` carried `--secondary: #d3af37` and `--primary-color: #236960` through v2.1; both were reconciled on 2026-09-19. `status_service/` is served from the same stylesheet: `status_service/static/cth-public.css` is a byte-identical copy of `github-pages/style.css`, and a divergence between them is therefore a diff, not a silent fork. It held one for roughly a day — a copy frozen immediately before the 2026-09-19 fix, which left `.toc a:hover` accessible on one host and at 3.16:1 on the other — and that is the failure mode the byte-identity requirement exists to prevent.
 
-The status service additionally carries `status_service/static/status-overrides.css`, which is **subordinate to this specification**: it may add state chrome the marketing stylesheet has no use for, but every design value in it MUST resolve through a token defined in the shared public token block. It MUST NOT introduce a colour. Service states derive from the status quartet in §VI, differentiated by shape where two states share a fill, per §XI.2.
+The status service also carries the runtime token layer: `status_service/static/tokens.css` is a byte-identical copy of `static/css/tokens.css`, loaded after `cth-public.css`, so the status pages and the operator console draw on the same spacing, type, radius, elevation and colour tokens as the application, and the operator console takes the sysadmin identity through `body.sysadmin-shell` (§V.2). Its own stylesheet, `status_service/static/status.css`, is **subordinate to this specification**: it may add state chrome the other stylesheets have no use for, but every design value in it MUST resolve through a token defined in those two token layers. It MUST NOT introduce a colour. Service states derive from the status colours in §VI and always carry a word as well as a colour, per §XI.2.
 
 ---
 
@@ -418,7 +418,7 @@ Rules 1, 5, 6 and 7 scan `templates/`. Rules 8, 9 and 10 scan the token layer an
 7. No selector appearing in both a template `<style>` block and `style.css`.
 8. No colour literal outside a token definition, on any surface. A literal is legitimate only in a declaration that *defines* a custom property — a property test, not a selector test, since the role themes are token blocks mounted on `body.student-shell` and `body.sysadmin-shell` rather than on `:root`. An achromatic value used as an operand inside a colour function (`color-mix(… , black)`, `rgba(0,0,0,.08)`) is a shading operation rather than a brand colour and is admitted; the same word standing alone as a whole value is not, because `color: white` is `--text-inverse` spelled wrong.
 9. No `var(--token)` reference that the surface's own token layer does not define. Such a declaration is invalid and the property falls back silently, which is how `--font-data` rendered the status page's capability ids in Inter, and how the public site's `--secondary-color` leaked into `style.css` and failed on seven lines. Framework namespaces (`--bs-`, `--ifm-`) are owned elsewhere and are exempt per surface.
-10. A stylesheet declared a copy of another is byte-identical to it. `status_service/static/cth-public.css` MUST equal `github-pages/style.css`. A copy that is allowed to drift is a fork nobody declared; this one drifted for a day and left the same selector accessible on one host and at 3.16:1 on the other.
+10. A stylesheet declared a copy of another is byte-identical to it. `status_service/static/cth-public.css` MUST equal `github-pages/style.css`, and `status_service/static/tokens.css` MUST equal `static/css/tokens.css`. A copy that is allowed to drift is a fork nobody declared; this one drifted for a day and left the same selector accessible on one host and at 3.16:1 on the other.
 
 Rule 7 catches a failure mode the others miss. A page copy that loses the cascade renders nothing, so it can drift arbitrarily far from the shared rule without any visible symptom — it is edited, reviewed, and merged as if it were live. The fourteen auth templates each carried a `.btn-primary` block that had not rendered since `style.css` claimed the selector with `!important`, and three of them had independently drifted the hover fill to a colour that would have failed contrast had it ever applied.
 

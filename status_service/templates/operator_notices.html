@@ -1,1 +1,206 @@
-{% extends "base_public_v2.html" %}{% block title %}Operator status notices{% endblock %}{% block content %}<main class="operator-page"><section class="landing-hero"><div class="landing-shell landing-hero-grid"><div class="landing-brand"><div class="landing-brand-row"><span class="material-symbols-outlined" aria-hidden="true">local_atm</span><span>CLASSROOM</span></div><div class="landing-brand-row"><span class="material-symbols-outlined" aria-hidden="true">store</span><span>TOKEN</span></div><div class="landing-brand-row"><span class="material-symbols-outlined" aria-hidden="true">finance_mode</span><span>HUB</span></div></div><div class="landing-welcome"><p class="version">OPERATIONS CONSOLE</p><h1>Publish a status notice</h1><p>Communicate bounded service updates to teachers and students.</p></div></div></section><section class="landing-content"><div class="landing-shell operator-content"><p class="operator-intro">This creates a bounded external communication record. It does not create a canonical incident.</p><form class="operator-form" method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><div class="operator-form-grid"><label class="operator-field-wide">Investigation reference<input name="incident_ref" required maxlength="160" placeholder="For example: ops-2026-09-05-001"><span class="operator-help">Use the same reference for every update and the final resolution. An unresolved reference remains active.</span></label><label>Capability<select name="capability" required>{% for capability in capabilities %}<option value="{{ capability }}">{{ capability }}</option>{% endfor %}</select></label><label>State<select name="state" required><option>INVESTIGATING</option><option>IDENTIFIED</option><option>MONITORING</option></select></label><label class="operator-field-wide">Current impact<textarea name="impact_statement" maxlength="500" required></textarea></label><label class="operator-field-wide">Recommended user action<textarea name="recommended_user_action" maxlength="240" required></textarea></label><label>Recovery expectation<select name="recovery_state"><option value="UNAVAILABLE">No estimate available</option><option value="ESTIMATED">Estimated</option><option value="KNOWN">Known</option></select></label><label>Recovery time (UTC)<input name="recovery_expectation" type="datetime-local"></label><label>Next update (UTC)<input name="next_update_at" type="datetime-local"></label><label class="operator-check"><input name="next_update_unavailable" type="checkbox"> <span>Next update time unavailable</span></label><label class="operator-field-wide">Source snapshot or observation IDs (optional) <span class="operator-help">comma-separated</span><input name="source_observation_ids"></label></div><button class="operator-submit" type="submit"><span class="material-symbols-outlined" aria-hidden="true">publish</span>Publish notice</button></form><p><a href="{{ url_for('incident_history') }}">Past incidents and resolutions</a></p>{% include "resolve_notices.html" %}<section class="operator-history" aria-labelledby="recent-notices-heading"><div class="operator-section-heading"><p class="eyebrow">Record history</p><h2 id="recent-notices-heading">Recent notices</h2></div>{% for notice in notices %}<article class="operator-notice"><div><span class="status-pill">{{ notice.state }}</span><span class="operator-notice-capability">{{ notice.capability }}</span><span class="operator-notice-capability">{{ notice.incident_ref or "unmatched legacy notice" }}</span></div><p>{{ notice.impact_statement }}</p></article>{% else %}<p class="muted">No notices published.</p>{% endfor %}</section></div></section><footer class="landing-footer"><div class="landing-shell landing-footer-meta"><p>Classroom Token Hub</p><p>Independent service status communication for teachers and students.</p></div></footer></main>{% endblock %}
+{% extends "base_public_v2.html" %}
+{% from "_status_macros.html" import chip, icon, when, when_both, notice_card %}
+{% block title %}Status notices — Classroom Token Hub{% endblock %}
+{% block body_class %}sysadmin-shell operator-body{% endblock %}
+{% block content %}
+<div class="operator-page">
+  <header class="op-bar">
+    <div class="op-wordmark" role="img" aria-label="Classroom Token Hub">
+      <span>{{ icon('local_atm') }}CLASSROOM</span>
+      <span>{{ icon('store') }}TOKEN</span>
+      <span>{{ icon('finance_mode') }}HUB</span>
+    </div>
+    <span class="op-title">Status notices</span>
+    <nav class="op-who" aria-label="Console links">
+      <a href="{{ url_for('incident_history') }}">Past incidents</a>
+      <a href="https://status.classroomtokenhub.com" target="_blank" rel="noopener">View public page ↗</a>
+    </nav>
+  </header>
+
+  <div class="op-grid">
+    <aside class="op-rail" aria-label="Issues">
+      <h2>Open issues · {{ open_notices|length }}</h2>
+      {% for n in open_notices %}
+      <a class="op-issue" href="{{ url_for('operator_notices_get', issue=n.id) }}"{% if selected and selected.id == n.id %} aria-current="page"{% endif %}>
+        <span class="t">{{ n.area.name }}: {{ n.impact_statement|truncate(90) }}</span>
+        <span class="m">{{ chip(n.stage.tone, n.stage.icon, n.stage.label) }}<span class="ref">{{ n.incident_ref or 'No reference — cannot resolve' }}</span></span>
+        <span class="m m--text">Updated {{ when(n.updated_at) }}{% if n.next_update_at %} · next update due {{ when(n.next_update_at, 'time') }}{% endif %}</span>
+      </a>
+      {% else %}
+      <p class="op-hint">No open issues.</p>
+      {% endfor %}
+
+      {% if detections %}
+      <h2>Detected automatically · {{ detections|length }}</h2>
+      {% for d in detections %}
+      <a class="op-issue op-issue--detect" href="{{ url_for('operator_notices_get', issue='auto-' ~ d.key) }}"{% if draft and draft.key == d.key %} aria-current="page"{% endif %}>
+        <span class="t">Server errors on {{ d.name }}</span>
+        <span class="m">{{ chip('bad', 'error', ('5xx %.1f%%'|format(d.percent)) if d.percent is not none else 'Server errors') }}{% if d.sampled_at %}<span>window ending {{ when(d.sampled_at, 'time') }}</span>{% endif %}</span>
+        <span class="m m--text">The public page already shows this as "Checking". Draft an Aware notice →</span>
+      </a>
+      {% endfor %}
+      {% endif %}
+
+      <a class="op-issue op-issue--new" href="{{ url_for('operator_notices_get', issue='new') }}"{% if not selected and not draft %} aria-current="page"{% endif %}>{{ icon('add') }}Start a new issue</a>
+
+      <div class="op-rail-foot">
+        <a href="{{ url_for('incident_history') }}">Past incidents and resolutions</a>
+        <p class="op-hint">A notice is a status message for teachers and students. Publishing one does not open a canonical incident.</p>
+      </div>
+    </aside>
+
+    <div class="op-work">
+      <section class="op-panel" aria-labelledby="work-heading">
+        <div class="op-panel-h">
+          <h1 id="work-heading">{% if selected %}{{ selected.area.name }}: {{ selected.stage.label|lower }}{% elif draft %}Draft from automatic detection{% else %}New issue{% endif %}</h1>
+          {% if selected %}
+          <nav class="op-seg" aria-label="Action">
+            <a href="{{ url_for('operator_notices_get', issue=selected.id) }}"{% if mode == 'update' %} aria-current="page"{% endif %}>Post update</a>
+            <a href="{{ url_for('operator_notices_get', issue=selected.id, action='resolve') }}"{% if mode == 'resolve' %} aria-current="page"{% endif %}>Resolve</a>
+          </nav>
+          {% endif %}
+        </div>
+
+        {% if mode == 'resolve' %}
+        <form class="op-form" method="post" action="{{ url_for('operator_notices_resolve') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <p class="op-hint">Resolving moves an issue to Past incidents and removes it from the public page. Its earlier updates are kept unchanged. Unselected issues stay open.</p>
+          <fieldset>
+            <legend>Issues to resolve</legend>
+            {% for n in open_notices %}
+            <label class="op-check">
+              <input type="checkbox" name="selected_issue" value="{{ n.resolution_token or '' }}"{% if not n.resolution_token %} disabled{% elif selected and selected.id == n.id %} checked{% endif %}>
+              <span><strong>{{ n.area.name }}: {{ n.impact_statement }}</strong><br>
+                {{ n.stage.label }} · <span class="ref">{{ n.incident_ref or 'Missing reference — cannot resolve' }}</span> · updated {{ when(n.updated_at) }}
+                {% if not n.resolution_token %}<br>Required issue lineage is missing.{% endif %}</span>
+            </label>
+            {% endfor %}
+          </fieldset>
+          <div class="op-field">
+            <label class="op-label" for="resolution_message">Resolution message for teachers and students</label>
+            <p class="op-hint">Shown at the top of this incident on Past incidents. Say what happened and whether anyone needs to do anything.</p>
+            <textarea id="resolution_message" name="resolution_message" rows="6" required></textarea>
+          </div>
+          <div class="op-actions">
+            <a class="op-btn op-btn--ghost" href="{{ url_for('operator_notices_get', issue=selected.id) }}">Cancel</a>
+            <button class="op-btn op-btn--primary" type="submit">{{ icon('task_alt', 'sm') }}Resolve selected issues</button>
+          </div>
+        </form>
+        {% else %}
+        <form class="op-form" method="post" action="{{ url_for('operator_notices_post') }}" data-notice-form
+              data-stages="{{ stages|tojson|forceescape }}" data-areas="{{ areas|tojson|forceescape }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="tz_offset_minutes" value="" data-tz-offset>
+          {% if selected %}<input type="hidden" name="external_notice_id" value="{{ selected.id }}">{% endif %}
+
+          <fieldset>
+            <legend>Affected area</legend>
+            <div class="op-picks">
+              {% for key in capabilities %}
+              <label class="op-pick"><input type="radio" name="capability" value="{{ key }}" required
+                {% if (selected and selected.capability == key) or (draft and draft.key == key) %} checked{% endif %}><span>{{ icon(areas[key].icon, 'sm') }}{{ areas[key].name }}</span></label>
+              {% endfor %}
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Where are we?</legend>
+            <div class="op-picks op-picks--stages">
+              {% for key in publishable %}
+              <label class="op-pick"><input type="radio" name="state" value="{{ key }}" required
+                {% if (selected and selected.state == key) or (not selected and key == 'AWARE') %} checked{% endif %}><span>{{ stages[key].label }}<small>{{ stages[key].meaning }}</small></span></label>
+              {% endfor %}
+            </div>
+          </fieldset>
+
+          <div class="op-field">
+            <label class="op-label" for="impact_statement">What are people seeing?</label>
+            <p class="op-hint">Plain language. No internals, error codes or class names.</p>
+            <textarea id="impact_statement" name="impact_statement" maxlength="500" required data-preview-source="impact" data-count="impact-count">{{ selected.impact_statement if selected else '' }}</textarea>
+            <span class="op-count" id="impact-count"></span>
+          </div>
+          <div class="op-field">
+            <label class="op-label" for="recommended_user_action">What should they do?</label>
+            <textarea id="recommended_user_action" name="recommended_user_action" maxlength="240" required data-preview-source="action" data-count="action-count">{{ selected.recommended_user_action if selected else '' }}</textarea>
+            <span class="op-count" id="action-count"></span>
+          </div>
+
+          <fieldset>
+            <legend>Next update</legend>
+            <div class="op-picks op-picks--quick">
+              {% for value, label in [('30', 'In 30 min'), ('60', 'In 1 hour'), ('120', 'In 2 hours'), ('custom', 'Pick a time'), ('none', 'No time yet')] %}
+              <label class="op-pick"><input type="radio" name="next_update_choice" value="{{ value }}"{% if value == '30' %} checked{% endif %}><span>{{ label }}</span></label>
+              {% endfor %}
+            </div>
+            <div class="op-field" data-custom-time>
+              <label class="op-label" for="next_update_at">Next update time <span data-tz-label>(UTC)</span></label>
+              <input id="next_update_at" name="next_update_at" type="datetime-local" data-time-echo="next-echo">
+              <span class="op-time-echo" id="next-echo"></span>
+            </div>
+          </fieldset>
+
+          <details>
+            <summary>Recovery estimate and evidence (optional)</summary>
+            <div class="op-row">
+              <div class="op-field">
+                <label class="op-label" for="recovery_state">Recovery</label>
+                <select id="recovery_state" name="recovery_state">
+                  <option value="UNAVAILABLE">No estimate</option>
+                  <option value="ESTIMATED">Estimated</option>
+                  <option value="KNOWN">Known</option>
+                </select>
+              </div>
+              <div class="op-field">
+                <label class="op-label" for="recovery_expectation">Recovery time <span data-tz-label>(UTC)</span></label>
+                <input id="recovery_expectation" name="recovery_expectation" type="datetime-local" data-time-echo="recovery-echo">
+                <span class="op-time-echo" id="recovery-echo"></span>
+              </div>
+            </div>
+            <div class="op-field">
+              <label class="op-label" for="source_observation_ids">Evidence or snapshot IDs</label>
+              <p class="op-hint">Comma-separated. Optional when the reference below points to your investigation notes.</p>
+              <input id="source_observation_ids" name="source_observation_ids" type="text" value="{{ 'telemetry:' ~ draft.sampled_at if draft and draft.sampled_at else '' }}">
+            </div>
+          </details>
+
+          {% if selected %}
+          <input type="hidden" name="incident_ref" value="{{ selected.incident_ref }}">
+          {% else %}
+          <div class="op-field">
+            <label class="op-label" for="incident_ref">Investigation reference</label>
+            <p class="op-hint">Every later update and the resolution reuse this, so you won't type it again.</p>
+            <input id="incident_ref" name="incident_ref" type="text" maxlength="160" required value="{{ suggested_ref }}">
+          </div>
+          {% endif %}
+
+          <div class="op-actions">
+            <p class="op-hint">{% if selected %}Posting as an update to <span class="ref">{{ selected.incident_ref }}</span>.{% else %}Nothing is public until you publish.{% endif %}</p>
+            <button class="op-btn op-btn--primary" type="submit">{{ icon('campaign', 'sm') }}{{ 'Publish update' if selected else 'Publish notice' }}</button>
+          </div>
+        </form>
+        {% endif %}
+
+        {% if events %}
+        <div class="op-timeline">
+          <h2 class="op-label">Earlier updates</h2>
+          <ol class="timeline">
+            {% for event in events %}
+            <li>
+              <div class="timeline-head">{{ chip(event.stage.tone, event.stage.icon, event.stage.label) }}{{ when_both(event.published_at) }}</div>
+              <p>{{ event.impact_statement }}</p>
+            </li>
+            {% endfor %}
+          </ol>
+        </div>
+        {% endif %}
+      </section>
+
+      <aside class="op-preview" aria-live="polite" aria-labelledby="preview-heading">
+        <h2 id="preview-heading">{{ icon('visibility', 'sm') }} Teachers and students will see</h2>
+        {{ notice_card(preview, preview=true) }}
+        <p class="op-hint">Times appear in each reader's own time zone.</p>
+      </aside>
+    </div>
+  </div>
+</div>
+{% endblock %}

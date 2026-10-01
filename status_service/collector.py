@@ -5,6 +5,7 @@ import json
 import os
 from datetime import datetime, timezone
 from urllib.error import HTTPError
+from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from status.measurements import parse_time, validate_fresh_snapshot, validate_snapshot
@@ -13,6 +14,11 @@ from .store import FirestoreNoticeStore
 
 TELEMETRY_URL = "https://app.classroomtokenhub.com/health/telemetry"
 PLATFORM_URL = "https://app.classroomtokenhub.com/health/status"
+# A static public asset on the application hostname. The gate probe sends no
+# credential: outside operational work nothing stands in front of it, so an
+# Access login redirect here can only mean the gate is closed (SPEC-OPS-006).
+GATE_URL = "https://app.classroomtokenhub.com/static/manifest.json"
+ACCESS_LOGIN_DOMAIN = "cloudflareaccess.com"
 
 
 class _NoRedirect(HTTPRedirectHandler):
@@ -40,6 +46,32 @@ def fetch_telemetry(client_id: str, client_secret: str) -> bytes:
 
 def fetch_platform(client_id: str, client_secret: str) -> bytes:
     return _fetch_json(PLATFORM_URL, client_id, client_secret)
+
+
+def fetch_gate() -> tuple[int, str | None]:
+    """Status code and redirect target of one uncredentialed request; no body is read."""
+    request = Request(GATE_URL, headers={"Accept": "text/html,*/*"})
+    try:
+        with build_opener(_NoRedirect()).open(request, timeout=10) as response:
+            return response.status, None
+    except HTTPError as exc:
+        return exc.code, exc.headers.get("Location") if exc.headers else None
+
+
+def gate_check(stamp: str, fetch=fetch_gate) -> dict:
+    """Classify the Application Availability Gate without inferring app health."""
+    try:
+        code, location = fetch()
+    except (OSError, TimeoutError, ValueError):
+        return {"key": "gate", "outcome": "UNKNOWN", "checked_at": None, "diagnostic": "TRANSPORT_UNAVAILABLE"}
+    host = (urlsplit(location or "").hostname or "").lower()
+    if 300 <= code < 400 and (host == ACCESS_LOGIN_DOMAIN or host.endswith("." + ACCESS_LOGIN_DOMAIN)):
+        return {"key": "gate", "outcome": "FAIL", "checked_at": stamp, "diagnostic": "GATE_CLOSED"}
+    if code in (401, 403):
+        # A public asset is never refused while the gate is open, but a bare
+        # denial does not establish that the gate is what refused it.
+        return {"key": "gate", "outcome": "UNKNOWN", "checked_at": None, "diagnostic": "UNEXPECTED_DENIAL"}
+    return {"key": "gate", "outcome": "PASS", "checked_at": stamp, "diagnostic": "GATE_OPEN"}
 
 
 def _unique_object(pairs):
@@ -82,7 +114,7 @@ def collect(store: FirestoreNoticeStore, *, client_id: str, client_secret: str, 
 
 
 def collect_platform(store, *, client_id: str, client_secret: str,
-                     now: datetime | None = None, fetch=fetch_platform) -> dict:
+                     now: datetime | None = None, fetch=fetch_platform, fetch_gate=fetch_gate) -> dict:
     """Keep the real SELECT1 result; discard every feature placeholder."""
     body = None
     transport = None
@@ -136,8 +168,11 @@ def collect_platform(store, *, client_id: str, client_secret: str,
                 database.update(outcome=signal["outcome"], checked_at=signal["checked_at"], diagnostic=diagnostic)
         except (ValueError, TypeError, KeyError, OverflowError):
             database["diagnostic"] = "INVALID_RESPONSE"
+    # The gate is probed without the service token, so a lapsed token (which
+    # makes the endpoint ACCESS_DENIED) can never read as a closed gate.
+    gate = gate_check(stamp, fetch_gate)
     record = validate_platform({"schema_version": PLATFORM_SCHEMA, "received_at": stamp,
-                                "checks": [endpoint, database]})
+                                "checks": [endpoint, database, gate]})
     store.append_platform(record)
     return record
 
