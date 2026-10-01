@@ -48,7 +48,7 @@
     white-space: nowrap;
 }
 
-.chip--ok { background: var(--success-subtle); color: var(--success); }
+.chip--ok { background: var(--success-subtle); color: var(--alert-success-text); }
 .chip--warn { background: var(--warning-subtle); color: var(--alert-warning-text); }
 .chip--bad { background: var(--danger-subtle); color: var(--alert-danger-text); }
 .chip--info { background: var(--info-subtle); color: var(--alert-info-text); }
@@ -108,7 +108,7 @@
     flex: none;
 }
 
-.state-pill--ok { color: var(--success); }
+.state-pill--ok { color: var(--alert-success-text); }
 .state-pill--ok .state-dot { background: var(--success); }
 .state-pill--problems { color: var(--alert-warning-text); }
 .state-pill--problems .state-dot { background: var(--warning); }

@@ -106,7 +106,7 @@ Defined on `:root`, identical in every role.
 | Neutrals | `--neutral-50` … `--neutral-900` | Warm-tinted grayscale |
 | Surfaces | `--background`, `--surface`, `--border-color` | `--background` is `--neutral-100` |
 | Text | `--text-primary`, `--text-secondary`, `--text-muted`, `--text-inverse` | |
-| Contrast-pinned text | `--accent-text-on-light`, `--alert-warning-text`, `--alert-danger-text`, `--alert-info-text`, `--text-on-dark-muted` | §VI.6 |
+| Contrast-pinned text | `--accent-text-on-light`, `--alert-success-text`, `--alert-warning-text`, `--alert-danger-text`, `--alert-info-text`, `--text-on-dark-muted` | §VI.6 |
 
 ### 2. Required Scales
 
@@ -186,6 +186,7 @@ A brand token and a *legible text* token are not the same thing. A role theme is
 | Token | Pinned against | Why the theme token fails |
 |---|---|---|
 | `--accent-text-on-light` `#735816` | `--surface` / white | Sysadmin `--secondary-hover` `#c09840` is 2.69:1 — fails even the 3:1 large-text threshold. Pinned value is 6.70:1. |
+| `--alert-success-text` `#1f5c42` | `--success-subtle` | `--success` `#2e7d5b` is 4.41:1 on `--success-subtle`, below AA for body-size text. Pinned value is 6.94:1. |
 | `--alert-warning-text` `#5f3d00` | `--warning-subtle` | `--warning` `#D4A857` is a fill, not a text color |
 | `--alert-danger-text` `#8f1f1f` | `--danger-subtle` | ditto |
 | `--alert-info-text` `#1f4f73` | `--info-subtle` | ditto |

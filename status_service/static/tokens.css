@@ -162,6 +162,9 @@
     --alert-warning-text: #5f3d00;
     --alert-danger-text: #8f1f1f;
     --alert-info-text: #1f4f73;
+    /* --success on --success-subtle is 4.41:1, below AA for body-size text;
+       this pins the pair at 6.94:1 like its three siblings above. */
+    --alert-success-text: #1f5c42;
 
     /* Muted label on the dark landing hero. Lighter than the neutral ramp
        because that ramp is tuned for dark-on-light, not light-on-dark. */
