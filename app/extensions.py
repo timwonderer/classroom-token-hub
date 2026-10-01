@@ -43,6 +43,31 @@ def get_real_ip_for_limiter():
     except RuntimeError:
         return get_remote_address()
 
+
+def student_status_seat_limit_key():
+    """Key the student status poll by seat, not by network address.
+
+    Students in a school leave through a small pool of shared public
+    addresses, so an address-keyed budget is spent by whoever else sits behind
+    the same address. The poll is authenticated, class-scoped activity: its
+    budget belongs to ``(class_id, seat_id)``.
+
+    Reads only the ``g.canonical_context`` that ``login_required`` validated
+    and attached; it never resolves context again (DOM-IDEN-006 §IX) and reads
+    neither the session nor the database. It is therefore only meaningful on a
+    limit decorator placed *below* ``@login_required``. Anything else falls
+    back to the address key, and the key is never empty: Flask-Limiter skips a
+    limit whose key is empty.
+    """
+    from flask import g
+
+    context = getattr(g, "canonical_context", None)
+    class_id = getattr(context, "class_id", None)
+    seat_id = getattr(context, "seat_id", None)
+    if class_id and seat_id:
+        return f"seat:{class_id}:{seat_id}"
+    return f"ip:{get_real_ip_for_limiter() or 'unknown'}"
+
 # Use memory storage in CI/testing environments, Redis in production
 # This prevents Redis connection errors in GitHub Actions
 if os.environ.get('RATELIMIT_STORAGE_URI'):

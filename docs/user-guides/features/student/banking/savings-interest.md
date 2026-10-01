@@ -4,7 +4,7 @@ category: features
 subcategory: student-banking
 roles: [student]
 description: Find your interest rate, read the 12-month savings projection, and understand what the chart is and is not promising you.
-keywords: [savings, interest, interest rate, projection, chart, compound, simple, APY, payout, monthly interest]
+keywords: [savings, interest, interest rate, projection, chart, compound, simple, APY, payout, next payout, monthly interest]
 related:
   - user-guides/features/student/banking/accounts-transfers
   - user-guides/diagnostics/student/money
@@ -28,7 +28,7 @@ The **Statistics** card, to the right of your balances, carries four numbers. Tw
 | --- | --- |
 | **Total Earnings** | Everything you have earned in this class |
 | **Monthly Interest Rate** | Your class's annual rate divided by twelve, shown as a percentage |
-| **Estimated Monthly Interest** | What your next payout will be if your savings stay as they are until the payout period ends. Despite the label, this is one payout: a week's worth if your class pays weekly |
+| **Estimated interest next payout** | What your next payout will be if your savings stay as they are until the payout period ends: a week's worth if your class pays weekly, a month's worth if it pays monthly |
 | **Total Transactions** | How many entries are in your history |
 
 **Monthly Interest Rate** is a *monthly* slice of an *annual* rate. If your class is set to 6% a year, this reads 0.50%. It is not a separate rate — it is the same rate expressed per month.
@@ -53,8 +53,10 @@ A flat line is not a broken chart. It is the app declining to show you growth th
 
 The caption names which one your class uses.
 
-- **Simple** — interest is worked out on the balance, period after period.
-- **Compound** — interest is worked out on the balance *including interest already credited*, so the line curves upward instead of running straight. The caption also names how often it compounds.
+- **Simple** — interest is worked out on your savings balance. Interest that is still building up does not earn anything until it is paid.
+- **Compound** — interest that is still building up also earns, so the line curves upward faster. The caption also names how often it compounds.
+
+In both cases, once interest is paid into your savings it is part of your balance and earns like the rest of it. For **Simple** that is a known issue: true simple interest would never earn on interest already paid. A fix is being tracked.
 
 Over one term the difference is usually small. Over the whole chart it is visible.
 
@@ -85,7 +87,7 @@ Payouts happen automatically — nobody has to press a button, and you cannot tr
 > **The chart has a text version.** The same month-by-month figures are published in a table beside the chart for screen readers, captioned *Projected savings balance by month*. Nothing in the chart is picture-only.
 
 > [!TIP]
-> Compare **Estimated Monthly Interest** against the price of something in the store. If a month of interest does not buy a pencil, the way to grow savings faster is a bigger balance, not a longer wait — the rate is fixed, the balance is the part you control.
+> Compare **Estimated interest next payout** against the price of something in the store. If a payout of interest does not buy a pencil, the way to grow savings faster is a bigger balance, not a longer wait — the rate is fixed, the balance is the part you control.
 
 ## Related guides
 
