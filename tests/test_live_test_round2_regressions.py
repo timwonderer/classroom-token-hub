@@ -23,11 +23,8 @@ from app.extensions import db
 from app.feats.base import FEATContext
 from app.models import HallPassLog, HallPassSettings
 from app.services.entitlement_service import grant_hall_passes
-from app.services.hall_pass_request_queue import (
-    PendingHallPassRequest,
-    enqueue_hall_pass_request,
-    get_pending_hall_pass_request,
-)
+from app.services.hall_pass_request_queue import get_pending_hall_pass_request
+from tests.helpers.hall_pass_requests import seed_pending_hall_pass_request
 from tests.helpers.class_domain import enable_class_feature
 from tests.helpers.classroom_initializer import initialize_as_teacher
 
@@ -60,13 +57,13 @@ def _seed_hall_pass_policy(class_id: str) -> None:
 
 
 def _pending_request(classroom, student, request_id="req-1"):
-    return enqueue_hall_pass_request(PendingHallPassRequest(
+    return seed_pending_hall_pass_request(
         request_id=request_id,
         class_id=classroom.class_id,
-        requested_by_seat_id=student.seat.id,
+        seat_id=student.seat.id,
         destination="Bathroom",
         requested_at_utc=datetime(2026, 9, 21, 4, 0, tzinfo=timezone.utc),
-    ))
+    )
 
 
 # --------------------------------------------------------------------------

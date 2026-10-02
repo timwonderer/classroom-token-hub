@@ -1,64 +1,49 @@
-"""Pending hall-pass request queue, shared by every application worker.
+"""Pending hall-pass requests, persisted as ``pending_actions`` rows.
 
-Pending hall-pass requests are operational workflow state, not canonical PROD
-truth. Approval is the first durable PROD write, through FEAT-PROD-002
-(DOM-PROD-001 §VIII.2 ``record_hall_pass_log``; MAP-UI-001 rows "Teacher views
-hall-pass queue" and "Teacher approves or rejects pending hall-pass request").
+DOM-STORE-001 §IX names "a hall-pass request remains pending until the
+authoritative FEAT resolves it" as a pending action, and §VII.B makes those
+rows persisted, with no generic TTL, deleted only by lawful resolution or with
+the governing class boundary. Owner ruling 2026-10-01.
 
-The queue therefore stays non-durable — no table, no cookie — but it must be
-visible to every gunicorn worker. Until 2026-10-01 it was a module-level dict,
-which was correct only while production ran one worker: once a second worker
-started, a request enqueued by one was invisible to the other, so the teacher's
-page showed half the requests and Approve/Reject/Cancel answered "Pending
-request not found." about half the time.
+Until 2026-10-01 the queue was a module-level dict, so each gunicorn worker had
+its own copy. With two workers a request enqueued by one was invisible to the
+other, and Approve, Reject and Cancel answered "Pending request not found."
+about half the time. A table row is seen by every worker, and survives restarts
+and deploys.
 
-It now lives in Redis, following the pattern of the volatile student-setup
-store (``app/services/student_setup.py``): a URL from app config or the
-environment, one cached client per URL, short socket timeouts, a ``cth:``
-key prefix, a fixed TTL that never slides, and a fail-closed error carrying no
-connection details when the store is missing or unreachable. There is no
-worker-local fallback, because a fallback is exactly the defect.
+Row shape (§VII.B):
 
-Layout — every key carries ``class_id``:
+* ``pending_action_id`` — the request id the routes and pages use;
+* ``class_id`` / ``seat_id`` — the class boundary and the requesting seat;
+* ``entitlement_id`` — the hall-pass grant available at submission, i.e. the
+  entitlement lifecycle being acted upon;
+* ``correlation_id`` — ``hall_pass_request:{class_id}:{pending_action_id}``;
+* ``authoritative_feat`` — ``FEAT-PROD-002``, the one FEAT that resolves it;
+* ``payload`` — the typed envelope ``{"kind": "hall_pass_request",
+  "requested_by_seat_id", "destination"}``: the inputs FEAT-PROD-002 takes
+  when the pass is recorded. No names.
+* ``submitted_at`` — the class-canonical request time, authoritative.
 
-* ``cth:hall-pass-queue:{class_id}:request:{request_id}`` — one request, as
-  JSON of the dataclass fields only (ids, destination, timestamp). No names.
-* ``cth:hall-pass-queue:{class_id}:index`` — set of the class's request ids,
-  so listing a class needs no key scan. A member whose request has expired is
-  ignored on read and pruned by the next write to that class.
-
-Lifetime: ``TTL_SECONDS`` (3 hours), fixed at enqueue and never extended. A
-request can only be made while the student's work session is active, and every
-active session is closed at the end of the class-local day (DOM-PROD-001 §XI.1
-automatic transitions), so a request has no lawful meaning past that day. Three hours
-outlasts the longest class block, so a teacher never loses a live request
-mid-period, while yesterday's abandoned request never reappears.
+Reads here are pure and take no locks; GET handlers call them (INV-ARC-007).
+The commands (``enqueue``, ``pop``, ``clear``) flush, so they only run inside
+the owning FEAT (``app/feats/hall_pass_request_feat.py``).
 """
 
 from __future__ import annotations
 
-import json
-import os
-import re
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from functools import lru_cache
 
-from flask import current_app
-from redis import Redis, RedisError
+from app.extensions import db
+from app.models import PendingAction
 
-PREFIX = 'cth:hall-pass-queue:'
-TTL_SECONDS = 3 * 60 * 60
-# The index outlives its newest member by a margin, like the setup owner index.
-INDEX_TTL_SECONDS = TTL_SECONDS + 60
-
-# ``secrets.token_urlsafe(18)`` ids, with headroom. Anything else is not a
-# request this queue issued, and is never turned into a key.
-_REQUEST_ID = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
+KIND = "hall_pass_request"
+AUTHORITATIVE_FEAT = "FEAT-PROD-002"
 
 
-class HallPassQueueUnavailable(RuntimeError):
-    """Deliberately carries no connection details or request values."""
+class HallPassRequestNotFound(LookupError):
+    """No pending request with that id in this class (or not the caller's)."""
 
 
 @dataclass(frozen=True)
@@ -67,193 +52,128 @@ class PendingHallPassRequest:
     class_id: str
     requested_by_seat_id: int
     destination: str
-    requested_at_utc: object
+    requested_at_utc: datetime
 
 
-@lru_cache(maxsize=4)
-def _connection(url):
-    return Redis.from_url(url, decode_responses=True, socket_timeout=2, socket_connect_timeout=2)
+def new_request_id() -> str:
+    return str(uuid.uuid4())
 
 
-def client():
-    url = (
-        current_app.config.get('HALL_PASS_QUEUE_REDIS_URL')
-        or os.environ.get('HALL_PASS_QUEUE_REDIS_URL')
-        or os.environ.get('REDIS_URL')
+def _aware_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        # The column is timestamptz; a naive value here can only be UTC.
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _hall_pass_rows(class_id: str):
+    return PendingAction.query.filter(
+        PendingAction.class_id == class_id,
+        PendingAction.authoritative_feat == AUTHORITATIVE_FEAT,
+        PendingAction.payload["kind"].as_string() == KIND,
     )
-    if not url:
-        raise HallPassQueueUnavailable('Hall-pass requests are temporarily unavailable.')
-    try:
-        return _connection(url)
-    except (RedisError, ValueError):
-        raise HallPassQueueUnavailable('Hall-pass requests are temporarily unavailable.') from None
 
 
-def _class_prefix(class_id: str) -> str:
-    if not isinstance(class_id, str) or not class_id or ':' in class_id:
-        raise ValueError('A pending hall-pass request requires a class_id.')
-    return f'{PREFIX}{class_id}:'
-
-
-def _index_key(class_id: str) -> str:
-    return _class_prefix(class_id) + 'index'
-
-
-def _request_key(class_id: str, request_id: str) -> str:
-    return _class_prefix(class_id) + 'request:' + request_id
-
-
-def _valid_request_id(request_id) -> bool:
-    return isinstance(request_id, str) and bool(_REQUEST_ID.match(request_id))
-
-
-def _encode(request: PendingHallPassRequest) -> str:
-    requested_at = request.requested_at_utc
-    if not isinstance(requested_at, datetime) or requested_at.tzinfo is None:
-        raise ValueError('requested_at_utc must be a timezone-aware datetime.')
-    return json.dumps({
-        'request_id': request.request_id,
-        'class_id': request.class_id,
-        'requested_by_seat_id': int(request.requested_by_seat_id),
-        'destination': request.destination,
-        'requested_at_utc': requested_at.astimezone(timezone.utc).isoformat(),
-    }, separators=(',', ':'))
-
-
-def _decode(raw: str | None, class_id: str) -> PendingHallPassRequest | None:
-    if not raw:
-        return None
-    record = json.loads(raw)
-    if record.get('class_id') != class_id:
-        return None
+def _to_request(row: PendingAction) -> PendingHallPassRequest:
+    payload = row.payload or {}
     return PendingHallPassRequest(
-        request_id=record['request_id'],
-        class_id=record['class_id'],
-        requested_by_seat_id=int(record['requested_by_seat_id']),
-        destination=record['destination'],
-        requested_at_utc=datetime.fromisoformat(record['requested_at_utc']),
+        request_id=row.pending_action_id,
+        class_id=row.class_id,
+        requested_by_seat_id=int(payload.get("requested_by_seat_id", row.seat_id)),
+        destination=str(payload.get("destination") or ""),
+        requested_at_utc=_aware_utc(row.submitted_at),
     )
 
 
-def _store(request: PendingHallPassRequest, ttl_ms: int) -> None:
-    conn = client()
-    with conn.pipeline() as pipe:
-        pipe.set(_request_key(request.class_id, request.request_id), _encode(request), px=ttl_ms)
-        pipe.sadd(_index_key(request.class_id), request.request_id)
-        pipe.expire(_index_key(request.class_id), INDEX_TTL_SECONDS)
-        pipe.execute()
-
-
-def enqueue_hall_pass_request(request: PendingHallPassRequest) -> PendingHallPassRequest:
-    if not _valid_request_id(request.request_id):
-        raise ValueError('Invalid hall-pass request id.')
-    try:
-        _store(request, TTL_SECONDS * 1000)
-    except RedisError:
-        raise HallPassQueueUnavailable('Hall-pass requests are temporarily unavailable.') from None
-    return request
-
+# ---------------------------------------------------------------------------
+# Pure reads
+# ---------------------------------------------------------------------------
 
 def get_pending_hall_pass_request(request_id: str, *, class_id: str) -> PendingHallPassRequest | None:
-    if not _valid_request_id(request_id):
+    if not request_id or not class_id:
         return None
-    try:
-        raw = client().get(_request_key(class_id, request_id))
-    except RedisError:
-        raise HallPassQueueUnavailable('Hall-pass requests are temporarily unavailable.') from None
-    return _decode(raw, class_id)
-
-
-def _take(request_id: str, class_id: str):
-    """Atomically remove one request; return (request, remaining_ttl_ms).
-
-    GET, PTTL and DEL run in one MULTI/EXEC transaction, so of any number of
-    workers or teachers racing for the same request exactly one receives it.
-    """
-    if not _valid_request_id(request_id):
-        return None, 0
-    key = _request_key(class_id, request_id)
-    try:
-        with client().pipeline() as pipe:  # transaction=True: MULTI ... EXEC
-            pipe.get(key)
-            pipe.pttl(key)
-            pipe.delete(key)
-            pipe.srem(_index_key(class_id), request_id)
-            raw, ttl_ms, deleted, _ = pipe.execute()
-    except RedisError:
-        raise HallPassQueueUnavailable('Hall-pass requests are temporarily unavailable.') from None
-    if not deleted:
-        return None, 0
-    return _decode(raw, class_id), ttl_ms
-
-
-def pop_pending_hall_pass_request(request_id: str, *, class_id: str) -> PendingHallPassRequest | None:
-    request, _ttl_ms = _take(request_id, class_id)
-    return request
-
-
-def claim_pending_hall_pass_request(request_id: str, *, class_id: str):
-    """Take a request for resolution: ``(request, remaining_ttl_ms)``.
-
-    The caller holds the only copy. On success it simply drops it; if the
-    durable write fails it must hand it back with
-    ``restore_pending_hall_pass_request`` so the request stays pending, as it
-    did before claiming moved ahead of the write.
-    """
-    return _take(request_id, class_id)
-
-
-def restore_pending_hall_pass_request(request: PendingHallPassRequest, ttl_ms: int) -> bool:
-    """Put back a claimed request whose resolution failed, without extending it.
-
-    The request regains only the lifetime it had when claimed. Returns False if
-    that lifetime had already run out.
-    """
-    if not request or ttl_ms is None or ttl_ms <= 0:
-        return False
-    try:
-        _store(request, int(ttl_ms))
-    except RedisError:
-        raise HallPassQueueUnavailable('Hall-pass requests are temporarily unavailable.') from None
-    return True
-
-
-def _class_requests(conn, class_id: str) -> list[tuple[str, PendingHallPassRequest | None]]:
-    request_ids = sorted(conn.smembers(_index_key(class_id)))
-    request_ids = [request_id for request_id in request_ids if _valid_request_id(request_id)]
-    if not request_ids:
-        return []
-    raws = conn.mget([_request_key(class_id, request_id) for request_id in request_ids])
-    return [
-        (request_id, _decode(raw, class_id))
-        for request_id, raw in zip(request_ids, raws)
-    ]
+    row = _hall_pass_rows(class_id).filter(PendingAction.pending_action_id == str(request_id)).one_or_none()
+    return _to_request(row) if row is not None else None
 
 
 def list_pending_hall_pass_requests_for_class(class_id: str) -> list[PendingHallPassRequest]:
-    """Read-only: GET handlers call this, so it never prunes (INV-ARC-007)."""
-    try:
-        pairs = _class_requests(client(), class_id)
-    except RedisError:
-        raise HallPassQueueUnavailable('Hall-pass requests are temporarily unavailable.') from None
-    requests = [request for _request_id, request in pairs if request is not None]
-    return sorted(requests, key=lambda request: (request.requested_at_utc, request.request_id))
+    rows = (
+        _hall_pass_rows(class_id)
+        .order_by(PendingAction.submitted_at.asc(), PendingAction.pending_action_id.asc())
+        .all()
+    )
+    return [_to_request(row) for row in rows]
 
 
-def clear_pending_hall_pass_requests_for_seat(*, class_id: str, seat_id: int) -> None:
-    try:
-        conn = client()
-        pairs = _class_requests(conn, class_id)
-        stale_ids = [
-            request_id
-            for request_id, request in pairs
-            if request is None or request.requested_by_seat_id == seat_id
-        ]
-        if not stale_ids:
-            return
-        with conn.pipeline() as pipe:
-            pipe.delete(*[_request_key(class_id, request_id) for request_id in stale_ids])
-            pipe.srem(_index_key(class_id), *stale_ids)
-            pipe.execute()
-    except RedisError:
-        raise HallPassQueueUnavailable('Hall-pass requests are temporarily unavailable.') from None
+# ---------------------------------------------------------------------------
+# Domain commands — run only inside the owning FEAT
+# ---------------------------------------------------------------------------
+
+def enqueue_hall_pass_request(
+    request: PendingHallPassRequest, *, entitlement_id: str,
+) -> PendingHallPassRequest:
+    """Persist one submitted request as a ``pending_actions`` row."""
+    requested_at = request.requested_at_utc
+    if not isinstance(requested_at, datetime) or requested_at.tzinfo is None:
+        raise ValueError("requested_at_utc must be a timezone-aware datetime.")
+    if not entitlement_id:
+        raise ValueError("A hall-pass request must name the entitlement it acts upon.")
+    db.session.add(PendingAction(
+        pending_action_id=request.request_id,
+        class_id=request.class_id,
+        seat_id=request.requested_by_seat_id,
+        entitlement_id=entitlement_id,
+        correlation_id=f"{KIND}:{request.class_id}:{request.request_id}",
+        authoritative_feat=AUTHORITATIVE_FEAT,
+        payload={
+            "kind": KIND,
+            "requested_by_seat_id": int(request.requested_by_seat_id),
+            "destination": request.destination,
+        },
+        submitted_at=_aware_utc(requested_at),
+    ))
+    db.session.flush()
+    return request
+
+
+def pop_pending_hall_pass_request(
+    request_id: str, *, class_id: str, seat_id: int | None = None,
+) -> PendingHallPassRequest | None:
+    """Lock, then delete, one request; return it, or None if it is not there.
+
+    ``SELECT ... FOR UPDATE`` serialises concurrent resolutions of the same row
+    across workers: a second transaction waits for the first, and once the first
+    commits its delete the row is gone and the second gets None. The delete is
+    part of the caller's FEAT transaction, so if the resolution fails the row
+    comes back with the rollback (DOM-STORE-001 §VII.B: a failed resolution
+    leaves the pending action intact).
+
+    ``seat_id`` restricts the take to that seat's own request (student cancel).
+    """
+    if not request_id or not class_id:
+        return None
+    query = _hall_pass_rows(class_id).filter(PendingAction.pending_action_id == str(request_id))
+    if seat_id is not None:
+        query = query.filter(PendingAction.seat_id == seat_id)
+    row = query.with_for_update().populate_existing().one_or_none()
+    if row is None:
+        return None
+    request = _to_request(row)
+    db.session.delete(row)
+    db.session.flush()
+    return request
+
+
+def clear_pending_hall_pass_requests_for_seat(*, class_id: str, seat_id: int) -> int:
+    """Delete the seat's own pending requests in this class; return how many."""
+    rows = (
+        _hall_pass_rows(class_id)
+        .filter(PendingAction.seat_id == seat_id)
+        .with_for_update()
+        .all()
+    )
+    for row in rows:
+        db.session.delete(row)
+    if rows:
+        db.session.flush()
+    return len(rows)

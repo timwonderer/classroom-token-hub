@@ -138,7 +138,7 @@ git status --porcelain  # must be empty
 > **Worker count: production runs ONE worker.** More than one is permitted only
 > when no request or workflow state is held in process memory: every worker must
 > see the same pending requests, sessions and queues, which therefore live in
-> PostgreSQL or in a Redis store shared by all workers, never in a module global.
+> PostgreSQL (or another store shared by all workers), never in a module global.
 > `tests/test_process_local_state_guard.py` enforces this for `app/`: it refuses a
 > module-level dict, list or set that a function mutates, outside a short
 > allowlist of read memos whose value is the same in every worker.
@@ -147,10 +147,11 @@ git status --porcelain  # must be empty
 > hall-pass requests were kept in a per-process dict
 > (`app/services/hall_pass_request_queue.py`), so with two workers a request
 > enqueued by one was invisible to the other, and teachers' Approve and Reject
-> answered "Pending request not found." about half the time. The queue now lives
-> in Redis (`HALL_PASS_QUEUE_REDIS_URL`, falling back to `REDIS_URL`). Two
-> workers may be restored, as a separate operations step, only after that change
-> is deployed and approvals are verified under it. Until then run one.
+> answered "Pending request not found." about half the time. Pending requests
+> are now `pending_actions` rows (DOM-STORE-001 §VII.B, §IX; owner ruling
+> 2026-10-01). Two workers may be restored, as a separate operations step, only
+> after that change is deployed and approvals are verified under it. Until then
+> run one.
 >
 > Single-runner scheduling is enforced in code (`app/scheduler_ownership.py`,
 > since 2026-09-27). Nothing starts the scheduler on import or in `create_app`;
@@ -218,8 +219,6 @@ never print or commit values.
 - `TURNSTILE_SECRET_KEY` / `TURNSTILE_SITE_KEY` — pair registered for the
   deployment domains.
 - `REDIS_URL`, or the explicitly approved rate-limit storage configuration.
-- `HALL_PASS_QUEUE_REDIS_URL`, or `REDIS_URL`, reachable by every worker:
-  pending hall-pass requests live there and fail closed (503) without it.
 - `CSRF_SECRET_KEY` where the security configuration requires it.
 - `SUPPORT_EMAIL`, `MARKETING_SITE_URL`, `EXTERNAL_DOCS_BASE_URL`, and the
   status/operations URLs.
@@ -475,5 +474,5 @@ revision; where they disagree, the code wins and this document is corrected.
 
 | Version | Date | Change |
 |---------|------|--------|
-| 2.6 | 2026-10-01 | §VII: production runs one worker, reverted 2026-10-01 after pending hall-pass requests held in per-process memory failed under two. More than one worker is permitted only when no request or workflow state is held in process memory (enforced by `tests/test_process_local_state_guard.py`). Two workers may be restored after the Redis-backed hall-pass queue is deployed and verified. §VIII: `HALL_PASS_QUEUE_REDIS_URL` or `REDIS_URL` added to the environment checklist. |
+| 2.6 | 2026-10-01 | §VII: production runs one worker, reverted 2026-10-01 after pending hall-pass requests held in per-process memory failed under two. More than one worker is permitted only when no request or workflow state is held in process memory (enforced by `tests/test_process_local_state_guard.py`). Two workers may be restored after pending hall-pass requests, now `pending_actions` rows, are deployed and verified. |
 | 2.5 | 2026-10-01 | §VII: more than one worker permitted; production to run two (operator ruling after incident OPS-DB-001). Scheduler ownership by advisory lock; verification query. |

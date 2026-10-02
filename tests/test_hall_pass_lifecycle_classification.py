@@ -30,10 +30,7 @@ from app.models import AttendanceSession, HallPassLog, HallPassSettings
 from app.services.context_resolver import CanonicalContext
 from app.utils.canonical_temporal_resolver import canonical_temporal_resolver, CLASS_LEVEL_EVALUATION
 from app.services.entitlement_service import grant_hall_passes
-from app.services.hall_pass_request_queue import (
-    PendingHallPassRequest,
-    enqueue_hall_pass_request,
-)
+from tests.helpers.hall_pass_requests import seed_pending_hall_pass_request
 from app.services.hall_pass_status_service import (
     HALL_PASS_STATUS_APPROVED,
     HALL_PASS_STATUS_LEFT,
@@ -69,13 +66,13 @@ def _approve_pass(app, client, classroom, student, request_id="req-1"):
     _seed_hall_pass_policy(classroom.class_id)
     with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"grant:{student.seat.id}:{request_id}"):
         grant_hall_passes(student.seat, 1, correlation_id=f"corr-grant-{request_id}")
-    enqueue_hall_pass_request(PendingHallPassRequest(
+    seed_pending_hall_pass_request(
         request_id=request_id,
         class_id=classroom.class_id,
-        requested_by_seat_id=student.seat.id,
+        seat_id=student.seat.id,
         destination="Bathroom",
         requested_at_utc=datetime(2026, 9, 21, 4, 0, tzinfo=timezone.utc),
-    ))
+    )
     ctx = CanonicalContext(
         user_id=student.user.id, class_id=classroom.class_id,
         seat_id=student.seat.id, actor_role="student",

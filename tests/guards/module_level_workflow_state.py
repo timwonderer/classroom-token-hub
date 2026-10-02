@@ -5,7 +5,8 @@ Incident 2026-10-01: pending hall-pass requests lived in a module-level dict
 gunicorn worker. When production went from one worker to two, a request
 enqueued by one worker was invisible to the other, and teachers' Approve and
 Reject failed about half the time. Every worker must see the same workflow
-state, so it belongs in the database or in the shared Redis store — never in a
+state, so it belongs in the database (pending hall-pass requests are now
+``pending_actions`` rows) or another store shared by all workers — never in a
 module global.
 
 Factored out of the test so it can be fed a synthetic violation and proved to
@@ -72,7 +73,7 @@ class Violation:
     def __str__(self) -> str:
         return (
             f"{self.path}:{self.line} — module-level mutable `{self.name}` is mutated "
-            f"in a function (process-local state; use the DB or shared Redis): {self.excerpt}"
+            f"in a function (process-local state; persist it where every worker sees it): {self.excerpt}"
         )
 
 
