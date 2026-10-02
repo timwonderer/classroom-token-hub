@@ -1,0 +1,31 @@
+{#
+  Work recorded before the class's first payroll setting (DOM-PROD-001 §XV.6).
+
+  Rendered only when the page view model returns a notice; the condition is
+  never reconstructed here. Static on load, so it is a labelled region rather
+  than a live region (INV-ARC-020). Dismiss is a real POST form (FEAT-CLASS-008)
+  that works with the keyboard and without JavaScript.
+
+  Expects: unpaid_work_notice and unpaid_work_notice_return ('dashboard' or
+  'payroll'). The POST is validated by DismissUnpaidWorkNoticeForm (CSRF).
+#}
+{% if unpaid_work_notice %}
+<section id="unpaid-work-notice" class="card alert-card border-warning mb-4" aria-labelledby="unpaid-work-notice-title">
+  <div class="card-header bg-warning text-dark d-flex align-items-center">
+    <span class="material-symbols-outlined me-2" aria-hidden="true">schedule</span>
+    <h2 id="unpaid-work-notice-title" class="h5 fw-bold mb-0 text-dark">Students are working, but payroll hasn't been set up yet.</h2>
+  </div>
+  <div class="card-body">
+    <p class="mb-3">These hours will be paid at your first rate once you set up payroll.</p>
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <a class="btn btn-warning text-dark fw-medium" href="{{ url_for('admin.payroll') }}#settings">Set up payroll</a>
+      <form method="post" action="{{ url_for('admin.dismiss_unpaid_work_notice') }}" class="d-inline m-0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="class_id" value="{{ unpaid_work_notice.class_id }}">
+        <input type="hidden" name="next" value="{{ unpaid_work_notice_return }}">
+        <button type="submit" class="btn btn-outline-secondary">Dismiss</button>
+      </form>
+    </div>
+  </div>
+</section>
+{% endif %}

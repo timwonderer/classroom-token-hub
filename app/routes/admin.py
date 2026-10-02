@@ -220,6 +220,7 @@ from app.hash_utils import hash_username_lookup
 from app.services.ledger_balance_query_service import get_batch_balances_by_class_seat
 from app.services.attendance_service import calculate_unpaid_attendance_seconds
 from app.services.payroll.pricing import estimate_payable_amount
+from app.services.unpaid_work_notice_view_model import build_unpaid_work_notice_view
 from app.services.payroll.schedule import (
     PAY_SCHEDULE_TYPES,
     next_payroll_boundary_after,
@@ -2482,6 +2483,9 @@ def dashboard():
     show_insurance_tier_prompt = False
     show_insurance_tier_prompt = False
 
+    # DOM-PROD-001 §XV.6: composed by the view model from the owning domains.
+    unpaid_work_notice = build_unpaid_work_notice_view(active_class_id)
+
     return render_template(
         'admin_dashboard.html',
         show_recovery_setup=show_recovery_setup,
@@ -2508,8 +2512,49 @@ def dashboard():
         seat_profiles=seat_profiles,
         show_insurance_tier_prompt=show_insurance_tier_prompt,
         payroll_correction_pending=class_has_pending_correction(active_class_id),
+        unpaid_work_notice=unpaid_work_notice,
         current_page="dashboard"
     )
+
+
+@admin_bp.route('/notices/unpaid-work/dismiss', methods=['POST'])
+@admin_required
+def dismiss_unpaid_work_notice():
+    """Record that the class's teacher dismissed the unpaid-work notice (FEAT-CLASS-008).
+
+    The class is the active canonical class. The form's ``class_id`` is the class
+    the notice was rendered for; it is checked against the active class and
+    refused on mismatch, never used to pick one. The FEAT does not re-check the
+    notice's condition: a dismissal after payroll setup is recorded harmlessly
+    (DOM-PROD-001 §XV.6).
+    """
+    from app.feats.class_configuration import execute_acknowledge_unpaid_work_notice
+    from app.forms import DismissUnpaidWorkNoticeForm
+    from app.services.unpaid_work_notice_view_model import RETURN_PAGES
+
+    form = DismissUnpaidWorkNoticeForm()
+    return_endpoint = RETURN_PAGES.get((form.next.data or '').strip(), 'admin.dashboard')
+    if not form.validate_on_submit():
+        flash("That request expired. Reload the page and try again.", "error")
+        return redirect(url_for(return_endpoint))
+
+    ctx = g.canonical_context
+    class_id = (getattr(ctx, "class_id", None) or "").strip()
+    posted_class_id = (form.class_id.data or "").strip()
+    if not class_id or posted_class_id != class_id:
+        flash("Switch to the selected class before making changes.", "error")
+        return redirect(url_for(return_endpoint))
+    if verify_teacher_owns_class(class_id, ctx.user_id) is None:
+        abort(403)
+
+    result = execute_acknowledge_unpaid_work_notice(canonical_context=ctx, class_id=class_id)
+    if not result.success:
+        current_app.logger.warning(
+            "FEAT-CLASS-008 refused: %s class_id=%s", result.error_code, class_id,
+        )
+        abort(403)
+    flash("Got it. This notice won't appear again for this class.", "success")
+    return redirect(url_for(return_endpoint))
 
 
 # -------------------- AUTHENTICATION --------------------
@@ -7406,6 +7451,7 @@ def payroll():
     current_setting = current_payroll_setting(selected_class_id, as_of=now_utc)
     pending_settings = pending_payroll_settings(selected_class_id, as_of=now_utc)
     show_setup_banner = current_setting is None
+    unpaid_work_notice = build_unpaid_work_notice_view(selected_class_id)
     # The form starts from the setting the next save would follow: the latest
     # pending one if any, else the one in force.
     form_setting = pending_settings[-1] if pending_settings else current_setting
@@ -7658,6 +7704,8 @@ def payroll():
         display_first_pay_date=display_first_pay_date,
         display_first_pay_date_iso=display_first_pay_date_iso,
         show_setup_banner=show_setup_banner,
+        # DOM-PROD-001 §XV.6: composed by the view model from the owning domains.
+        unpaid_work_notice=unpaid_work_notice,
         # Students tab (using pre-formatted view models per Phase 1)
         student_stats=student_payroll_views,
         scoped_balances_by_student=scoped_balances_by_student,

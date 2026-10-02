@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-PROD-001 | 1.6 | 2026-10-01 | 1.5 | Constitutional |
+| DOM-PROD-001 | 1.7 | 2026-10-01 | 1.6 | Constitutional |
 
 ---
 
@@ -510,6 +510,17 @@ Rules:
 - MUST fail closed if the relevant event cannot be established
 - MUST not authorize based on ledger rows alone
 
+### 7. `class_has_claimed_student_work(class_id)`
+
+*Owner rulings 2026-10-01 (1.7).* Answers whether any claimed student seat of `class_id` has work: a session in progress or a session already completed. It is the qualifying-work test of §XV.6.
+
+Rules:
+
+- MUST be read-only and MUST be scoped by `class_id`
+- MUST count only student seats that are claimed now (`seats.user_id IS NOT NULL`, `DOM-IDEN-002` §VIII "Participation and Visibility of an Unclaimed Seat", item 4); work kept on a seat that has since been unclaimed does not count
+- MUST read `attendance_sessions` only. A session exists once its opening `active` row exists, so an open session and a completed one both qualify; elapsed duration is not part of the test
+- MUST NOT consult `class_features`, `payroll_settings` or `payroll_event`
+
 The exact implementation may evolve, but business consumers SHALL interact with canonical domain operations rather than directly manipulating tables or reconstructing derived business state.
 
 ---
@@ -568,6 +579,26 @@ It takes one of three forms:
 The anchor for forms 2 and 3 is the *scheduled occurrence* the last `SYSTEM` `payroll` event settled, recorded in its `summary_json`, not the wall-clock instant the run happened to execute, so a late run never moves later paydays. An event that predates that record anchors on its `recorded_at`. Only `payroll` events with `mechanism = SYSTEM` anchor the schedule: a teacher-started (`TEACHER`) payroll run, a `manual_credit` (including a platform-computed correction recorded as `SYSTEM`), and a `reversal` never move it.
 
 `first_pay_date` and the pay schedule are read from the setting in force at the moment of evaluation. Every setting has a `first_pay_date`; a class without payroll settings has not set up payroll and has no scheduled payroll date. Every payroll date is a boundary of one recurrence anchored on `first_pay_date` (`SPEC-TIME-001` §IX.12, `anchored_recurrence_boundary`): boundary *n* is computed from the anchor and *n*, never from the previous boundary, at class-local midnight. `pay_schedule_type` is the whole cadence and is `weekly`, `biweekly` or `monthly`: weekly and biweekly step one or two weeks; monthly steps calendar months with `overflow = roll_forward`, so an anchor on the 31st runs 1/31 → 3/1 → 3/31 → 5/1 → 5/31. Pay frequency is derived this way and never stored as a number of days (operator ruling 2026-09-30). The next payroll date is boundary 0 until the schedule has run, then the first boundary strictly after the last `SYSTEM` occurrence.
+
+### 6. Work recorded before the class's first payroll setting
+
+*Owner rulings 2026-10-01 (1.7).* Start Work does not depend on payroll: a class can record productivity facts before it has any `payroll_settings` row. Those facts are payable. The first payroll run after the first setting exists pays them, priced by that first setting (§XV.3). Nothing is lost and nothing is excluded.
+
+While a class is in that state, its teacher is told once. This is a one-time bootstrap guard for the period before the first setting. It is not a recurring payroll-health warning.
+
+**Condition.** The notice applies to a class exactly when all three hold:
+
+1. the class has no `payroll_settings` row (`DOM-POL-001` §VI.2), read through the payroll settings service;
+2. `class_has_claimed_student_work(class_id)` is true (§XIII.7);
+3. the class's teacher has not acknowledged it: `classes.unpaid_work_notice_acknowledged_at` is NULL (`DOM-CLASS-001` §VII.1).
+
+`payroll_settings` is append-only, so once the first setting exists the notice is permanently inapplicable for the class. It can never recur, whether or not it was acknowledged. Payroll has no off switch (`DOM-CLASS-001` §VII.3), so the notice has no capability-disabled branch.
+
+**Derived, never stored.** The condition is computed on read from the three sources above and exposed to the page through a view model. No route or template reconstructs it. Rendering it is a pure read (`INV-ARC-007`): a page view never records an acknowledgement.
+
+**Disclosure.** The teacher's dashboard and payroll page show, in plain language, that students are working while payroll is not set up, and that those hours will be paid at the teacher's first rate once payroll is set up. Students see nothing: this notice has no student surface.
+
+**Acknowledgement.** The teacher dismisses the notice with an explicit POST, executed by `FEAT-CLASS-008`. Acknowledgement and resolution are independent. An acknowledgement records only that the class's teacher saw the notice. It does not assert that the condition still holds, it does not alter, exclude or pre-empt any productivity fact, and it does not stop the first payroll run from paying earlier work. A dismissal submitted after the class's first setting exists (for example, from a tab left open) is recorded like any other.
 
 ## XVI. Amendment
 

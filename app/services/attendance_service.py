@@ -49,6 +49,32 @@ def get_attendance_session_counts_by_seat(
     return {seat_id: int(count) for seat_id, count in rows if seat_id is not None}
 
 
+def class_has_claimed_student_work(class_id: str) -> bool:
+    """Whether any claimed student seat of ``class_id`` has work (DOM-PROD-001 §XIII.7).
+
+    Work is a Start Work session, open or already completed. Every session
+    opens with an ``active`` row, so one such row answers both cases; elapsed
+    duration plays no part. Only seats claimed *now* count: work kept on a seat
+    that was later unclaimed is retained but never displayed (DOM-IDEN-002 §VIII,
+    "Participation and Visibility of an Unclaimed Seat", items 2 and 4).
+    Read-only and scoped by ``class_id``.
+    """
+    if not class_id:
+        return False
+    return db.session.query(
+        AttendanceSession.query
+        .join(Seat, Seat.id == AttendanceSession.target_seat_id)
+        .filter(
+            AttendanceSession.class_id == class_id,
+            AttendanceSession.status == "active",
+            Seat.class_id == class_id,
+            Seat.role == "student",
+            Seat.user_id.isnot(None),
+        )
+        .exists()
+    ).scalar()
+
+
 def _current_evaluation_day_bounds(ctx):
     evaluation = canonical_temporal_resolver(
         CLASS_LEVEL_EVALUATION,
