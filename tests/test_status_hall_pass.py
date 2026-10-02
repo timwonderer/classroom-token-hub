@@ -149,12 +149,36 @@ def test_sampler_rejects_more_failures_than_404s():
 
 # ─── Classification ───
 
+def failed_request_reason(result):
+    return any("Hall-pass requests not found" in reason for reason in result["reasons"])
+
+
+def test_the_ruling_fixes_three_and_two_percent():
+    """Owner ruling 2026-10-02, stated in SPEC-OPS-006 §VI."""
+    assert getattr(measurements, "NOT_FOUND_FAILURE_MIN_COUNT", None) == 3
+    assert getattr(measurements, "NOT_FOUND_FAILURE_RATE_PERCENT", None) == 2
+
+
 def test_resolution_404s_degrade_hall_passes():
-    data = validate_snapshot(hall_pass_window(ok=8, not_found=2, failed=2))
+    data = validate_snapshot(hall_pass_window(ok=7, not_found=3, failed=3))
     result = classify_component(row(data, "hall_pass"), data, now=NOW)
     assert result["state"] == "ELEVATED_ERRORS"
-    assert result["http_404_failure_percent"] == 20
-    assert any("Hall-pass requests not found" in reason for reason in result["reasons"])
+    assert result["http_404_failure_percent"] == 30
+    assert failed_request_reason(result)
+
+
+@pytest.mark.parametrize("ok,failed,signals", [
+    (98, 2, False),   # two, even at 2%+: below the minimum (double click, stale tab)
+    (8, 2, False),    # two at 20%: still below the minimum
+    (97, 3, True),    # three at 3%: both conditions hold
+    (147, 3, False),  # three at exactly 2%: not above it
+    (197, 3, False),  # three at 1.5% (busy window): below the rate
+    (146, 3, True),   # three at 2.03%: just above it
+])
+def test_failed_requests_need_a_minimum_and_a_rate(ok, failed, signals):
+    data = validate_snapshot(hall_pass_window(ok=ok, not_found=failed, failed=failed))
+    result = classify_component(row(data, "hall_pass"), data, now=NOW)
+    assert failed_request_reason(result) is signals
 
 
 def test_other_hall_pass_404s_stay_neutral():
@@ -163,15 +187,6 @@ def test_other_hall_pass_404s_stay_neutral():
     result = classify_component(row(data, "hall_pass"), data, now=NOW)
     assert result["state"] == "NORMAL"
     assert result["http_404_failure_percent"] == 0
-
-
-def test_failed_request_threshold_is_strict():
-    # 1 of 50 is exactly 2%: not above it.
-    data = validate_snapshot(hall_pass_window(ok=49, not_found=1, failed=1))
-    assert classify_component(row(data, "hall_pass"), data, now=NOW)["state"] == "NORMAL"
-    # 1 of 49 is just above it.
-    data = validate_snapshot(hall_pass_window(ok=48, not_found=1, failed=1))
-    assert classify_component(row(data, "hall_pass"), data, now=NOW)["state"] == "ELEVATED_ERRORS"
 
 
 def test_server_errors_degrade_hall_passes():
@@ -276,13 +291,23 @@ def test_public_page_shows_a_hall_passes_line(page):  # noqa: F811
     assert "<h3>Hall pass requests</h3>" in html
 
 
-def test_resolution_404_reads_errors_seen_on_the_hall_pass_line_only(page):  # noqa: F811
+def test_resolution_404s_read_errors_seen_on_the_hall_pass_line_only(page):  # noqa: F811
     client, _, snapshot = page
-    set_hall_pass(snapshot, ok=19, not_found=1, failed=1)
+    set_hall_pass(snapshot, ok=17, not_found=3, failed=3)
     html = client.get("/").get_data(as_text=True)
     assert ">Checking: errors seen</span>" in hall_pass_card(html)
     assert areas(html).count(">Checking: errors seen</span>") == 1
     assert "Requests not found" in html
+
+
+@pytest.mark.parametrize("ok,failed", [(19, 1), (18, 2), (197, 3)])
+def test_stray_or_diluted_resolution_404s_read_working(page, ok, failed):  # noqa: F811
+    """One or two (a double click, a stale tab), or three in a busy window, stay quiet."""
+    client, _, snapshot = page
+    set_hall_pass(snapshot, ok=ok, not_found=failed, failed=failed)
+    html = client.get("/").get_data(as_text=True)
+    assert ">Working</span>" in hall_pass_card(html)
+    assert "No known issues" in hero(html)
 
 
 def test_other_hall_pass_404_reads_working(page):  # noqa: F811
@@ -300,11 +325,20 @@ def test_server_error_reads_errors_seen_on_the_hall_pass_line(page):  # noqa: F8
     assert ">Checking: errors seen</span>" in hall_pass_card(html)
 
 
-def test_resolution_404_does_not_change_the_hero(page):  # noqa: F811
-    """The hero rule is unchanged: only a fresh 5xx count makes it `Detected problems`."""
+@pytest.mark.parametrize("ok,not_found,failed,headline", [
+    (97, 3, 3, "Detected problems"),   # the rule trips
+    (98, 2, 2, "No known issues"),     # below the minimum
+    (197, 3, 3, "No known issues"),    # below the rate
+    (0, 20, 0, "No known issues"),     # neutral 404s, however many
+])
+def test_headline_follows_the_same_rule(page, ok, not_found, failed, headline):  # noqa: F811
+    """Owner ruling 2026-10-02: the card's rule, and only it, also qualifies the headline."""
     client, _, snapshot = page
-    set_hall_pass(snapshot, ok=1, not_found=1, failed=1)
-    assert "No known issues" in hero(client.get("/").get_data(as_text=True))
+    set_hall_pass(snapshot, ok=ok, not_found=not_found, failed=failed)
+    summary = hero(client.get("/").get_data(as_text=True))
+    assert headline in summary
+    if headline == "Detected problems":
+        assert "state-pill--problems" in summary
 
 
 def test_snapshot_from_before_the_amendment_shows_hall_passes_as_unknown(page):  # noqa: F811
@@ -323,13 +357,15 @@ def test_incident_shape_2026_10_01(page):  # noqa: F811
 
     Window: the student's page loads pass types (4), students ask (3), the
     teacher approves or rejects four and a student cancels once (5 resolutions,
-    2 found on the other worker, 3 not). Before the amendment hall passes had no
-    line; the 5xx-only card rule would have read this window as `Working`.
+    2 found on the other worker, 3 not): 3 failed of 12, 25%. Before the
+    amendment hall passes had no line, the 5xx-only card rule would have read
+    this window as `Working`, and the headline said `No known issues`.
     """
     client, _, snapshot = page
     set_hall_pass(snapshot, ok=4 + 3 + 2, not_found=3, failed=3)
     html = client.get("/").get_data(as_text=True)
     assert ">Checking: errors seen</span>" in hall_pass_card(html)
+    assert "Detected problems" in hero(html)
     item = row(snapshot, "hall_pass")
     result = classify_component(item, validate_snapshot(snapshot), now=datetime.now(timezone.utc))
     assert result["state"] == "ELEVATED_ERRORS"
@@ -338,12 +374,13 @@ def test_incident_shape_2026_10_01(page):  # noqa: F811
 
 def test_operator_drafts_a_not_found_detection():
     from status_service.presentation import detections
-    found = detections([{"key": "hall_pass", "collection_state": "OK", "http_5xx_count": 0,
-                         "http_404_failure_count": 2, "http_404_failure_percent": 20.0}], [])
-    assert [(item["key"], item["kind"]) for item in found] == [("hall_pass", "not_found")]
-    covered = detections([{"key": "hall_pass", "collection_state": "OK", "http_5xx_count": 0,
-                           "http_404_failure_count": 2}], [{"capability": "hall_pass"}])
-    assert covered == []
+    item = {"key": "hall_pass", "collection_state": "OK", "http_5xx_count": 0, "request_count": 10,
+            "http_404_failure_count": 3, "http_404_failure_percent": 30.0}
+    found = detections([item], [])
+    assert [(entry["key"], entry["kind"]) for entry in found] == [("hall_pass", "not_found")]
+    assert detections([item], [{"capability": "hall_pass"}]) == []
+    # Below the minimum is not offered either.
+    assert detections([dict(item, http_404_failure_count=2)], []) == []
 
 
 # ─── Persistence ───

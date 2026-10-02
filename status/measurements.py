@@ -22,6 +22,11 @@ DIAGNOSTICS = frozenset({"TRANSPORT_UNAVAILABLE", "ACCESS_DENIED", "INVALID_SNAP
 # found" there means a request the app had just shown could not be found
 # (2026-10-01). Every other component, and every other hall-pass route, has none.
 NOT_FOUND_FAILURE_ROUTES = {"hall_pass": "/api/hall-pass/request/[^/]+/(approve|reject|cancel)"}
+# Owner ruling 2026-10-02 (SPEC-OPS-006 §VI): failed-request 404s signal only when
+# a window holds at least this many AND they exceed this share of the component's
+# requests, so one stray 404 (a double click, a stale tab) never does.
+NOT_FOUND_FAILURE_MIN_COUNT = 3
+NOT_FOUND_FAILURE_RATE_PERCENT = 2
 _SCHEMAS = {SCHEMA_VERSION: (COMPONENT_KEYS, COUNT_FIELDS),
             LEGACY_SCHEMA_VERSION: (LEGACY_COMPONENT_KEYS, LEGACY_COUNT_FIELDS)}
 
@@ -29,6 +34,13 @@ _SCHEMAS = {SCHEMA_VERSION: (COMPONENT_KEYS, COUNT_FIELDS),
 def not_found_failures(component: dict) -> int:
     """Failed-request 404s; a legacy component predates the field and had none."""
     return component.get("http_404_failure_count") or 0
+
+
+def not_found_failures_signal(component: dict) -> bool:
+    """The rate-plus-minimum rule: card, headline, history and operator drafts share it."""
+    failures, count = not_found_failures(component), component.get("request_count") or 0
+    return (bool(count) and failures >= NOT_FOUND_FAILURE_MIN_COUNT
+            and 100 * failures / count > NOT_FOUND_FAILURE_RATE_PERCENT)
 
 
 def parse_time(value: str) -> datetime:
@@ -135,8 +147,9 @@ def classify_component(component: dict, snapshot: dict, *, now: datetime) -> dic
     reasons = []
     if result["http_5xx_percent"] > 2:
         reasons.append("Elevated server-error responses (5xx above 2%).")
-    if (result["http_404_failure_percent"] or 0) > 2:
-        reasons.append("Hall-pass requests not found when approved, rejected or cancelled (above 2%).")
+    if not_found_failures_signal(component):
+        reasons.append("Hall-pass requests not found when approved, rejected or cancelled "
+                       f"(at least {NOT_FOUND_FAILURE_MIN_COUNT}, above {NOT_FOUND_FAILURE_RATE_PERCENT}%).")
     if result["http_404_percent"] > 5:
         reasons.append("Elevated not-found responses (404 above 5%).")
     state = "ELEVATED_ERRORS" if reasons else "NORMAL"

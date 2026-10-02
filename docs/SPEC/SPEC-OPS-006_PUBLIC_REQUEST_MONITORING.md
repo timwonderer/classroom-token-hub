@@ -4,7 +4,7 @@
 |---|---|---|---|---|
 | SPEC-OPS-006 | 1.4 | 2026-10-02 | 1.3 | Subordinate implementation contract |
 
-*Revision 1.4 (2026-10-02; for owner ratification, under DOM-OPS-001 2.12): adds the `hall_pass` component and its route group (§V, §VI); adds `http_404_failure_count` and the closed list of failed-request routes, which at 1.4 is the hall-pass approve, reject and cancel routes only (§V, §VI); the failed-request threshold and card rule (§VI, §VIII); schema `request-telemetry-v2`, with `request-telemetry-v1` snapshots still read (§V, §VII). The hero rule is unchanged.*
+*Revision 1.4 (2026-10-02; ratified by the owner 2026-10-02, under DOM-OPS-001 2.12): adds the `hall_pass` component and its route group (§V, §VI); adds `http_404_failure_count` and the closed list of failed-request routes, which at 1.4 is the hall-pass approve, reject and cancel routes only (§V, §VI); the failed-request rule — at least 3 in the window and more than 2% of the component's requests (owner ruling 2026-10-02) — governing classification, the card and the hero (§VI, §VIII); schema `request-telemetry-v2`, with `request-telemetry-v1` snapshots still read (§V, §VII).*
 
 ## I. Purpose
 
@@ -115,16 +115,21 @@ sample from the same minute. Transport failure is not a source measurement.
 Initial policy thresholds are strict greater-than comparisons:
 
 - 5xx / requests > 2%: elevated server-error responses;
-- failed-request 404 / requests > 2%: requests not found when acted on (only a
-  component with failed-request routes; at 1.4, hall-pass requests not found when
-  approved, rejected or cancelled);
+- failed-request 404s at least 3 in the window **and** failed-request 404 / requests
+  > 2%: requests not found when acted on (only a component with failed-request
+  routes; at 1.4, hall-pass requests not found when approved, rejected or
+  cancelled). Both conditions must hold, so one or two stray 404s (a double click,
+  a stale page) never qualify. This is the *failed-request rule*; the card, the hero
+  and operator drafts use it too;
 - 404 / requests > 5%: elevated not-found responses;
 - p95 > 1500 ms: high latency.
 
 404 is a descriptive anomaly signal, not `SYSTEM_FAILURE`: expected resource
-absence may account for it. A failed-request 404 is an observed error on its
-component, at the level of a 5xx; it is still not `SYSTEM_FAILURE` or an outage. All threshold crossings remain visible regardless of sample size. Any nonempty
-window without a threshold crossing is `NORMAL`; there is no minimum count.
+absence may account for it. Failed-request 404s that meet the failed-request rule
+are a signal of a possible problem on their component; they are still not
+`SYSTEM_FAILURE`, an outage or an incident. Except for that rule's minimum, all
+threshold crossings remain visible regardless of sample size. Any nonempty window
+without a threshold crossing is `NORMAL`; there is no other minimum count.
 This numerical classification does not certify successful classroom actions.
 Distinct states are `NORMAL`, `ELEVATED_ERRORS`, `HIGH_LATENCY`,
 `NO_TRAFFIC`, `MONITOR_UNAVAILABLE`, and `STALE`. Show all applicable reasons;
@@ -187,7 +192,7 @@ Precedence is top to bottom; the first condition that holds decides:
 |---|---|---|
 | `maintenance` | `Under maintenance` | A fresh `gate` check reports the Application Availability Gate closed (§Independent platform checks) |
 | `unavailable` | `Mostly unavailable` | A fresh endpoint or database check is FAIL |
-| `degraded` | `Detected problems` | A current operator notice, or a fresh nonzero HTTP 5xx count |
+| `degraded` | `Detected problems` | A current operator notice, a fresh nonzero HTTP 5xx count, or a fresh window meeting the failed-request rule (§VI) |
 | `available` | `No known issues` | Both endpoint and database checks are fresh PASS, including during idle request traffic |
 | `unknown` | `Unknown` | Anything else: missing, unknown, stale or future checks |
 
@@ -195,7 +200,10 @@ Precedence is top to bottom; the first condition that holds decides:
 Gate. It communicates an access restriction and makes no claim about application
 health; it overrides the other states because readers cannot enter while the gate is
 closed, whatever the checks report. `No known issues` claims only the absence of a
-known problem: reachability establishes connectivity, not business correctness. The
+known problem: reachability establishes connectivity, not business correctness.
+`Detected problems` means signals of possible issues were observed. It does not
+declare an outage, open an incident or create a notice; the wording that accompanies
+it on the page names what was seen and never says or implies an outage. The
 hero's timestamp is the older of the two fresh endpoint/database PASS/FAIL check
 timestamps, never stale/future evidence or the request snapshot time. Each state
 carries a visible word as well as its colour (INV-ARC-020).
@@ -205,12 +213,12 @@ the hero is `Under maintenance`, every card reads `Closed for maintenance`: nobo
 can enter, whatever requests from behind the gate show. Otherwise a
 current operator notice for the card's capability takes precedence: an `AWARE`
 notice reads `Checking reports`, any other active notice `Having problems`.
-Otherwise any fresh 5xx, or any fresh failed-request 404 (§VI), is `Checking: errors
-seen` — an automatic observation at the `AWARE` level, which never creates or implies
-a notice; p95 above 1,500 ms is
+Otherwise any fresh 5xx, or a fresh window meeting the failed-request rule (§VI), is
+`Checking: errors seen` — an automatic observation at the `AWARE` level, which never
+creates or implies a notice; p95 above 1,500 ms is
 `Slower than usual`; a window containing 2xx/3xx is `Working`. Windows with only
 remaining response classes say `Nothing to report`, claiming neither success nor
-outage. These labels have no minimum count. Quiet windows say `Quiet`; missing or
+outage. Apart from the failed-request rule's minimum, these labels have no minimum count. Quiet windows say `Quiet`; missing or
 stale collection says `Status unknown`. All cards disclose their scope in visible
 text.
 
@@ -227,9 +235,11 @@ loss, visibly labeled `Last observed` with the original five-minute window end.
 They never establish present health or conceal a monitoring failure. Public GET
 remains read-only.
 
-A failed-request 404 does not change the hero: its `degraded` condition remains a
-fresh nonzero HTTP 5xx count. The operator console offers a fresh failed-request 404
-not covered by a notice as a draft, as it does a fresh 5xx; a draft is not a notice.
+A fresh window meeting the failed-request rule makes the hero `Detected problems`, as
+a fresh 5xx does; failed-request 404s below the rule, and every other 404, change
+neither the hero nor any card. The operator console offers a window meeting the
+rule, not covered by a notice, as a draft, as it does a fresh 5xx; a draft is not a
+notice.
 
 Counts, 404/500/5xx percentages (and, for a component with failed-request routes,
 its failed-request percentage), p80/p95, source timing and 90-day history appear in

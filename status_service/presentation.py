@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from status.measurements import not_found_failures, parse_time, retained_activity
+from status.measurements import not_found_failures_signal, parse_time, retained_activity
 
 AREAS = {
     "service": {"name": "Whole site", "icon": "language", "scope": "Every page of Classroom Token Hub"},
@@ -119,8 +119,14 @@ def overall_observation(checks, measurements, notices, *, now: datetime | None =
         state, detail = "maintenance", "Access is temporarily restricted while we work on Classroom Token Hub."
     elif any(row["state"] == "FAIL" for row in core):
         state, detail = "unavailable", "An application or database availability check failed."
-    elif notices or any(item["collection_state"] == "OK" and item["http_5xx_count"] for item in measurements):
-        state, detail = "degraded", "An operator notice or recent server errors need attention."
+    elif notices or any(item["collection_state"] == "OK" and (item["http_5xx_count"] or not_found_failures_signal(item))
+                        for item in measurements):
+        # Owner ruling 2026-10-02: hall-pass requests not found, at the card's
+        # rate-plus-minimum rule, qualify the headline as a 5xx does. Either is a
+        # sign of a possible problem, never an outage or an incident.
+        state = "degraded"
+        detail = ("An operator notice or recent server errors need attention." if notices else
+                  "Recent requests show signs of a possible problem: server errors, or hall-pass requests not found.")
     elif len(core) == 2 and all(row["state"] == "PASS" for row in core):
         state, detail = "available", "The app is responding and its database connection check passed."
     else:
@@ -133,10 +139,10 @@ def overall_observation(checks, measurements, notices, *, now: datetime | None =
 
 def request_outcome(item) -> dict:
     """Bounded response observations, never a business-success verdict."""
-    if item["http_5xx_count"] or not_found_failures(item):
+    if item["http_5xx_count"] or not_found_failures_signal(item):
         # Automatic, at the Aware level: it never creates or implies a notice.
-        # A hall-pass request that could not be found when a teacher approved or
-        # rejected it, or a student cancelled it, is a failed request (SPEC-OPS-006 §VIII).
+        # Hall-pass requests not found when a teacher approved or rejected them, or a
+        # student cancelled them, count once at least three exceed 2% (SPEC-OPS-006 §VIII).
         return {"tone": "checking", "icon": "hearing", "label": "Checking: errors seen"}
     if item["p95_ms"] > 1500:
         return {"tone": "warn", "icon": "hourglass_top", "label": "Slower than usual"}
@@ -237,7 +243,7 @@ def detections(measurements, notices, sampled_at=None) -> list[dict]:
         if item["http_5xx_count"]:
             found.append({"key": item["key"], "name": AREAS[item["key"]]["name"], "kind": "server_error",
                           "percent": item.get("http_5xx_percent"), "sampled_at": sampled_at})
-        elif not_found_failures(item):
+        elif not_found_failures_signal(item):
             found.append({"key": item["key"], "name": AREAS[item["key"]]["name"], "kind": "not_found",
                           "percent": item.get("http_404_failure_percent"), "sampled_at": sampled_at})
     return found

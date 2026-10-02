@@ -4,7 +4,7 @@
 |------------------|---------|----------------|------------|-----------------|
 | DOM-OPS-001      | 2.12    | 2026-10-02     | 2.11       | Normative       |
 
-*Revision 2.12 (2026-10-02; for owner ratification): §1 Public Request Monitoring — the closed component registry gains `hall_pass`, and a 404 on a request-resolution route that `SPEC-OPS-006` designates is reported on that component as a failed request, at the observed-error level of one fresh 5xx, never as an outage, and without changing the overall availability summary. Motivated by 2026-10-01, when a teacher's Approve or Reject and a student's Cancel answered 404 "Pending request not found." about half the time while the status page showed nothing: hall passes had no component, and no 404 counted.*
+*Revision 2.12 (2026-10-02; ratified by the owner 2026-10-02): §1 Public Request Monitoring — the closed component registry gains `hall_pass`. A 404 on a request-resolution route that `SPEC-OPS-006` designates is a failed request. It is never an outage or an incident. When such 404s reach `SPEC-OPS-006`'s rate-plus-minimum rule, they are a signal of a possible problem: they are reported on that component, and they qualify the overall summary as `Detected problems`, as a fresh 5xx does. Motivated by 2026-10-01, when a teacher's Approve or Reject and a student's Cancel answered 404 "Pending request not found." about half the time while the status page showed nothing: hall passes had no component, and no 404 counted.*
 
 ## 0. Authority Level and Dependencies
 
@@ -89,8 +89,11 @@ be displayed with request counts, observation window, source freshness and cover
 The approved numerical contract is documented in `SPEC-OPS-006`. Overall public
 availability follows the minute-by-minute application endpoint and database checks,
 with five-minute expiry if checks stop. Quiet request traffic does not revoke fresh
-connectivity evidence. Active operator notices and fresh observed server errors
-qualify the summary. Reachability never certifies business correctness.
+connectivity evidence. Active operator notices, fresh observed server errors, and
+failed-request 404s that reach the `SPEC-OPS-006` rule qualify the summary as
+`Detected problems`: signals of possible issues were observed. That state does not
+declare an outage, does not open an incident and never creates either automatically.
+Reachability never certifies business correctness.
 
 Feature cards report request outcomes without a minimum traffic count. Idle windows
 show `No recent activity` with the last observed outcome and original window timestamp
@@ -105,9 +108,12 @@ page calls only with an identifier it has just shown the user, to act on that it
 A 404 there means the item the user was shown could not be found, so it is a failed
 request rather than an expected absence. `SPEC-OPS-006` closes the list of designated
 routes; at 2.12 it is the hall-pass approve, reject and cancel routes and nothing
-else. Such a 404 is reported on its own component as an observed error, at the level
-of one fresh 5xx: never an outage, a diagnosis or a canonical incident. It does not
-by itself change the overall availability summary. Every other 404 keeps the rule above.
+else. Such a 404 is not an outage, a diagnosis or a canonical incident, and it never
+creates one. A single one may be a double click or a stale page, so it is a signal
+only when a window holds enough of them: `SPEC-OPS-006` fixes that rate-plus-minimum
+rule. When the rule holds, the component reports an observed error and the overall
+summary reads `Detected problems`, exactly as for a fresh 5xx: signals of a possible
+problem were observed. Every other 404 keeps the rule above and qualifies nothing.
 
 Public current cards and historical percentages do not depend on internal integrity
 evaluator registration. Internal readiness, correctness, lineage, reconciliation
