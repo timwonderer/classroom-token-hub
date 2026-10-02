@@ -5,7 +5,7 @@
 | Status | **ACTIVE — canonical tracker** |
 | Opened | 2026-09-28, after the v2.0.1 release |
 | Baseline commit | `c42f882` (`main`) |
-| Production | `00166e56`, released 2026-09-29 (untagged). Latest tag `v2.0.1` = `ad64a473f`, 2026-09-28 |
+| Production | `314158d53`, released 2026-09-30 (untagged). Latest tag `v2.0.1` = `ad64a473f`, 2026-09-28. v2.1.0 (2026-10-02) is pending tag and deploy |
 | Supersedes | `PRODUCTION_READINESS_2026-09.md`, the pre-launch ship tracker, archived at `docs/archive/v2-tracking-2026/` once launch closed its purpose |
 
 This file carries the open work that survived launch. Every item was checked against the code on
@@ -26,7 +26,9 @@ authority stays with `INV-*`, `DOM-*`, `FEAT-*`, `SPEC-*` and `SOP-*`.
 | (untagged) | `bc5c07a2` (#1439) | 2026-09-29 | None yet |
 | (untagged) | `eaca2a7e` (#1440) | 2026-09-29 | None yet |
 | (untagged) | `29b99b14` (#1442) | 2026-09-29 | None yet |
-| (untagged) | `00166e56` (#1443) | 2026-09-29 | None yet; production runs this commit |
+| (untagged) | `00166e56` (#1443) | 2026-09-29 | None yet |
+| (untagged) | `314158d53` (#1438, #1449, #1451) | 2026-09-30 | [DEPLOY_2026-09-30_314158d53.md](../ops/audits/DEPLOY_2026-09-30_314158d53.md); production runs this commit |
+| v2.1.0 (pending tag) | Merge commit of the release PR, set at tag time | Not yet deployed | Written after deploy |
 
 ---
 
@@ -35,8 +37,10 @@ authority stays with `INV-*`, `DOM-*`, `FEAT-*`, `SPEC-*` and `SOP-*`.
 - [ ] **Lift the Cloudflare Access window** and post the resolved status update. The update should
   say that everyone was signed out once and that passkeys must be registered again. Passkey
   registration and sign-in are verified, so nothing blocks this.
-- [ ] **Publish the security advisory** (drafted on GitHub; CVSS v4.0 9.2; CWE-304 with CWE-386 and
-  CWE-459), then link it from the `[2.0.1]` section of `CHANGELOG.md`.
+- [x] **Publish the security advisory.** Published 2026-09-28 as
+  [GHSA-5v6c-mw3v-fmf2](https://github.com/timwonderer/classroom-token-hub/security/advisories/GHSA-5v6c-mw3v-fmf2)
+  (critical; CVSS v4.0 9.2; CWE-304 with CWE-386 and CWE-459). Linked from the `[2.0.1]` section of
+  `CHANGELOG.md` in `05951375d` (#1464).
 - [ ] **Check public routes** once the window lifts. They were not verified at release because the
   gate was in place.
 - [ ] **Finish verifying the student-setup memory store.** Production has run the username-retention check
@@ -48,7 +52,7 @@ authority stays with `INV-*`, `DOM-*`, `FEAT-*`, `SPEC-*` and `SOP-*`.
   result. SOP-DEP-002 §VI item 6 keeps the store a release precondition.
 - [ ] **Record and tag the 2026-09-29 releases.** `bc5c07a2` (#1439), `eaca2a7e` (#1440), `29b99b14` (#1442) and
   `00166e56` (#1443) went to production through `release-v2.yml` with no `DEPLOY_*` record in `docs/ops/audits/`
-  and no tag; `CHANGELOG.md` still lists them as Unreleased.
+  and no tag. `CHANGELOG.md` now lists them under `[2.1.0]`, which tags them once v2.1.0 is cut; the records are still missing.
 - [ ] **FEAT-IDEN-003 `ACT-IDEN-003` audit event** is not implemented. It needs an identity
   audit-event design first; see #1427.
 - [x] **`production-docs-smoke` and `markdown-web-links`** are fixed on branch
@@ -311,6 +315,18 @@ against this tracker, the archived launch trackers and the live-test RESUME reco
   earns interest in later windows, so simple interest compounds across payout windows. Tracked and deferred by the
   owner; no production class uses simple interest. Until it is resolved, simple interest must not be described as
   fully supported or correct.
+- [ ] **Session-epoch binding for identity-establishment pages (follow-up to #1457, owner design 2026-10-01).**
+  #1457 refuses claim, setup and recovery requests from a signed-in browser. It cannot yet tell that a page was
+  opened under one sign-in and submitted under another (sign-in changed in another tab). Owner design:
+  - each authentication transition mints an opaque, random, non-secret `page_auth_epoch`, derived from nothing
+    reusable (not from the session nonce); its only valid operation is equality comparison, and it carries no
+    identity meaning and no authority;
+  - pages carry the epoch they were rendered under; at the server boundary, a submitted epoch that differs from the
+    current session epoch is rejected before capability evaluation or mutation;
+  - it marks authentication generation only; class context is a separate marker.
+  Refusal copy: the #1457 page ("We are having trouble determining who you are right now…"). Related items found
+  with #1457: `/student/logout` requires an active class (a student with none is sent to class selection, not signed
+  out); `/admin/logout` keeps `current_session_nonce`; all three logouts are GET-only.
 
 ---
 

@@ -94,7 +94,7 @@ After remediation, coordinated public disclosure is welcome.
 
 | Version | Status | Security fixes |
 | ------- | ------ | -------------- |
-| v2.0.x | Current. Latest tagged release is v2.0.1 (2026-09-28); production runs untagged `main` commit `00166e56` (2026-09-29). v2.0.0 was released 2026-09-26 | Yes |
+| v2.x | Current. v2.1.0 (2026-10-02) is pending tag and deploy; the latest tagged release is v2.0.1 (2026-09-28). Production runs untagged `main` commit `314158d53` (2026-09-30). v2.0.0 was released 2026-09-26 | Yes |
 | v1.x | Retired. v1.10.0 was the final v1 release | No |
 
 Security fixes are made on the `main` branch and reach production through a
