@@ -313,6 +313,18 @@ against this tracker, the archived launch trackers and the live-test RESUME reco
   earns interest in later windows, so simple interest compounds across payout windows. Tracked and deferred by the
   owner; no production class uses simple interest. Until it is resolved, simple interest must not be described as
   fully supported or correct.
+- [ ] **Session-epoch binding for identity-establishment pages (follow-up to #1457, owner design 2026-10-01).**
+  #1457 refuses claim, setup and recovery requests from a signed-in browser. It cannot yet tell that a page was
+  opened under one sign-in and submitted under another (sign-in changed in another tab). Owner design:
+  - each authentication transition mints an opaque, random, non-secret `page_auth_epoch`, derived from nothing
+    reusable (not from the session nonce); its only valid operation is equality comparison, and it carries no
+    identity meaning and no authority;
+  - pages carry the epoch they were rendered under; at the server boundary, a submitted epoch that differs from the
+    current session epoch is rejected before capability evaluation or mutation;
+  - it marks authentication generation only; class context is a separate marker.
+  Refusal copy: the #1457 page ("We are having trouble determining who you are right now…"). Related items found
+  with #1457: `/student/logout` requires an active class (a student with none is sent to class selection, not signed
+  out); `/admin/logout` keeps `current_session_nonce`; all three logouts are GET-only.
 
 ---
 
