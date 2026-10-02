@@ -58,6 +58,8 @@ def test_every_public_page_uses_the_reference_footer():
         lambda f: re.sub(r"\s*<p><a [^>]*mailto:support@[^<]*</a></p>", "", f),
         # A page leaving itself out of the link list.
         lambda f: f.replace('<a href="./terms.html" target="_self">Terms of Service</a>', ""),
+        # A page losing the way back to the landing page (the gap found 2026-10-02).
+        lambda f: f.replace('<a href="./index.html" target="_self">Home</a>', ""),
         # A one-character difference.
         lambda f: f.replace("</a></p>", "</a> </p>", 1),
     ],
