@@ -8,9 +8,12 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Documentation
+- **Deployment record for the v2.1.0 release (2026-10-02)** — `docs/ops/audits/DEPLOY_2026-10-02_5ac05ea6f.md` records the release of `5ac05ea6f` (tag `v2.1.0`, run 36966092454): the gate suite runs and the one test fixed after them, the encrypted pre-release backup and its verification, the read-only `payroll_settings` check for #1450, the application stop before the workflow and why, the five migrations and their output, and the post-release checks. Hall passes in a real class and the first payday on 2026-10-10 are recorded as not yet verified; production stays on one worker until the first is done (SOP-DEP-001 v2.6). README, SECURITY.md, DEVELOPMENT.md, the post-launch tracker and the public timeline now say v2.1.0 runs in production.
+
 ## [2.1.0] - 2026-10-02 — Payroll settings, OPS-DB-001 fixes, student removal
 
-Everything merged to `main` since v2.0.1. It includes the untagged production releases of 2026-09-29 (`bc5c07a2`, `eaca2a7e`, `29b99b14`, `00166e56`) and 2026-09-30 (`314158d53`). The release commit is set when the tag is cut, and the release record is written after deploy.
+Everything merged to `main` since v2.0.1. It includes the untagged production releases of 2026-09-29 (`bc5c07a2`, `eaca2a7e`, `29b99b14`, `00166e56`) and 2026-09-30 (`314158d53`). The release commit is `5ac05ea6f` (tag `v2.1.0`), deployed 2026-10-02; the release record is `docs/ops/audits/DEPLOY_2026-10-02_5ac05ea6f.md`.
 
 ### Added
 - **Teachers are told once when students work before payroll is set up (2026-10-01)** — Start Work does not need payroll, so a class can log hours before it has a payroll setting. The teacher dashboard and the payroll page now show "Students are working, but payroll hasn't been set up yet." with "These hours will be paid at your first rate once you set up payroll.", a **Set up payroll** link and a **Dismiss** button. It shows only while the class has no payroll setting, a claimed student has a session in progress or finished, and the teacher has not dismissed it. Once the first payroll setting exists it never shows again. Unclaimed seats do not count, and students see nothing.

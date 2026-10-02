@@ -1,7 +1,7 @@
 # Classroom Token Hub - Development Priorities
 
 **Last Updated:** 2026-10-02
-**Current Released Version:** 2.0.1 (security release, 2026-09-28), the latest tag. 2.1.0 (2026-10-02) is pending tag and deploy. v2.0.0 launched 2026-09-26
+**Current Released Version:** 2.1.0 (`5ac05ea6f`), the latest tag, deployed to production 2026-10-02. v2.0.0 launched 2026-09-26
 **Engineering State:** v2 in production; post-launch hardening
 **Active Integration Branch:** `main`
 
@@ -65,10 +65,13 @@ on a custom database URL.
   retention check, with setup state held only in a dedicated, non-persistent Redis (#1442, #1443).
   None of these has a release record yet.
 - **Untagged release, 2026-09-30.** `314158d53` pays savings interest at the teacher's configured
-  cadence by the daily balance method (#1449), with #1438 and #1451. Production runs `314158d53`;
-  see `docs/ops/audits/DEPLOY_2026-09-30_314158d53.md`.
-- **v2.1.0 (2026-10-02), pending tag and deploy.** It collects everything since v2.0.1, including
-  the untagged releases above. See the `[2.1.0]` section of the CHANGELOG.
+  cadence by the daily balance method (#1449), with #1438 and #1451.
+  See `docs/ops/audits/DEPLOY_2026-09-30_314158d53.md`.
+- **v2.1.0** (`5ac05ea6f`, deployed 2026-10-02). Production runs this release. It collects everything
+  since v2.0.1, including the untagged releases above; see the `[2.1.0]` section of the CHANGELOG and
+  `docs/ops/audits/DEPLOY_2026-10-02_5ac05ea6f.md`. Two checks are still open: hall passes in a
+  real class on one worker, and the first automatic payday on 2026-10-10. Restoring two workers
+  waits on the first (SOP-DEP-001 v2.6).
 - All ten domains (Identity, Class Configuration, Ledger, Productivity & Payroll, Obligations,
   Store & Entitlements, Operations, Interpretation, Policies, Support) run on the v2 model:
   `User` → `Seat` → `IdentityProfile`, with `ClassEconomy.class_id` as the tenant boundary and
@@ -79,8 +82,8 @@ on a custom database URL.
 The post-launch tracker is the working list. In priority order:
 
 1. **Operator follow-ups.** Lift the Cloudflare Access window with a status update, then check public
-   routes. (The v2.0.1 advisory is published as GHSA-5v6c-mw3v-fmf2 and linked from the CHANGELOG.) Tag v2.1.0, which contains
-   the 2026-09-29 releases, record those releases, and confirm the student-setup Redis host settings the app cannot check.
+   routes. (The v2.0.1 advisory is published as GHSA-5v6c-mw3v-fmf2 and linked from the CHANGELOG.) v2.1.0 is
+   tagged and deployed; record the 2026-09-29 releases it contains, apply the Grafana nginx snippet, and confirm the student-setup Redis host settings the app cannot check.
 2. **First real use.** Signed-in flows other than teacher passkeys, rent payment (its preview
    window opens 2026-09-29), daylight-saving transitions and load have not yet run in production.
 3. **Dependencies.** Twelve open Dependabot PRs have been reviewed, with a suggested merge order. CI
