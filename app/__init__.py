@@ -393,11 +393,30 @@ def create_app():
         from app.services.context_resolver import resolve_canonical_context, ContextResolutionError
         from app.services.tlcp import resolve_actor_context
 
+        from app.services.tlcp import observe_request
+
         try:
             g.canonical_context = resolve_canonical_context()
         except ContextResolutionError:
             g.canonical_context = None
-        g.correlation_context = resolve_actor_context(getattr(g, "canonical_context", None))
+        # Both dimensions, once: the surface the URL asked for and the
+        # principal the session authenticated (INV-ARC-019 §V, §XIII).
+        g.tlcp_observation = observe_request(g.canonical_context)
+        g.correlation_context = resolve_actor_context(
+            g.canonical_context, observation=g.tlcp_observation,
+        )
+
+    @app.after_request
+    def record_tlcp_surface_principal_mismatch(response):
+        # Read after the view, so a sign-in's outcome is observed, not guessed.
+        # Diagnostic only: a failure here must never change the response.
+        try:
+            from app.services.tlcp import record_surface_principal_mismatch
+
+            record_surface_principal_mismatch(getattr(g, "tlcp_observation", None))
+        except Exception:
+            app.logger.warning("Failed to record TLCP surface/principal observation", exc_info=True)
+        return response
 
     @app.before_request
     def validate_canonical_session_nonce():

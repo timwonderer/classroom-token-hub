@@ -90,20 +90,21 @@ def test_DOM_SUP_001__resolve_actor_context_ignores_every_sysadmin_endpoint(app)
     assert logged == []
 
 
-def test_DOM_SUP_001__sysadmin_request_carrying_canonical_context_fails_closed(app):
-    """The other half of the sysadmin/context matrix: sysadmin absent-context
-    is expected (see the two tests above), but a sysadmin request that
-    somehow DOES carry a CanonicalContext is not a legitimate class-scoped
-    actor -- a sysadmin session should never produce one at all, so this
-    would itself be a scope leak. It must fail closed (return None) and log
-    an invariant violation, exactly like the teacher/student "context
-    absent" cell does -- not be silently trusted as though sysadmin were
-    class-scoped.
+def test_DOM_SUP_001__a_teacher_context_on_a_sysadmin_page_is_not_a_violation(app):
+    """Until 2026-10-02 this test asserted the opposite: any canonical context
+    on a sysadmin endpoint was logged as ``TLCP-INVARIANT-VIOLATION``. But a
+    ``CanonicalContext`` is only ever resolved for a student or teacher
+    principal -- the resolver refuses one to a sysadmin -- so that rule fired
+    only for non-sysadmin principals who opened a sysadmin URL, and never for
+    the case it named. The URL says what surface was requested, not who
+    requested it (INV-ARC-019 §V, §XIII). The violation is now keyed on the
+    sysadmin principal, on any surface:
+    tests/dom/support/test_tlcp_surface_and_principal.py.
     """
     from unittest.mock import patch
 
     classroom = initialize_support_teacher("chemistry_p1", app.test_client(), app)
-    leaked_context = CanonicalContext(
+    teacher_context = CanonicalContext(
         user_id=classroom.teacher_user.id,
         class_id=classroom.class_id,
         seat_id=classroom.teacher_seat.id,
@@ -112,14 +113,13 @@ def test_DOM_SUP_001__sysadmin_request_carrying_canonical_context_fails_closed(a
 
     with app.test_request_context("/sysadmin/dashboard", method="GET"):
         with patch("app.services.tlcp.current_app.logger.error") as mock_error:
-            result = resolve_actor_context(leaked_context)
+            result = resolve_actor_context(teacher_context)
             logged = [call.args[0] for call in mock_error.call_args_list]
 
-    assert result is None
-    assert any(
-        "TLCP-INVARIANT-VIOLATION: sysadmin request unexpectedly carries canonical class context" in msg
-        for msg in logged
-    )
+    assert logged == []
+    assert result is not None
+    assert result["actor_type"] == "teacher"
+    assert result["class_id"] == classroom.class_id
 
 
 def _tlcp_violations(mock_error):
