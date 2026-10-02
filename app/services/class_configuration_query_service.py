@@ -704,3 +704,17 @@ def validate_payroll_rate(hourly_pay_rate: float, policy_mode: str) -> tuple[boo
         return True, f"Comfortable mode with rate < ${_COMFORTABLE_MODE_RATE_WARNING}/hr may feel restrictive"
 
     return True, None
+
+
+def get_unpaid_work_notice_acknowledged_at(class_id: str) -> Optional[datetime]:
+    """When the class's teacher dismissed the unpaid-work notice, or None.
+
+    DOM-CLASS-001 §VII.1. Read-only; one column of the class row.
+    """
+    if not class_id:
+        return None
+    return (
+        db.session.query(ClassEconomy.unpaid_work_notice_acknowledged_at)
+        .filter(ClassEconomy.class_id == class_id)
+        .scalar()
+    )

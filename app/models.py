@@ -327,6 +327,11 @@ class ClassEconomy(db.Model):
     # NOT NULL and immutable once set. Confirmed-UTC is persisted as 'Etc/UTC'.
     class_timezone = db.Column(db.String(64), nullable=False)
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+    # When the class's teacher dismissed the notice for work recorded before the
+    # class's first payroll setting (DOM-PROD-001 §XV.6). NULL = not dismissed.
+    # Write-once, only through FEAT-CLASS-008 (DOM-CLASS-001 §VII.1); who
+    # dismissed is the class's single teacher seat, derivable, so not stored.
+    unpaid_work_notice_acknowledged_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     features = db.relationship('ClassFeature', backref='class_economy', cascade='all, delete-orphan', lazy='dynamic')
     economic_versions = db.relationship('EconomicEngine', backref='class_economy', cascade='all, delete-orphan', lazy='dynamic')

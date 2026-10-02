@@ -383,3 +383,14 @@ class InsuranceClaimForm(FlaskForm):
         Optional(), Length(max=1000, message="Description must be 1000 characters or less."),
     ])
     submit = SubmitField('Submit claim')
+
+
+class DismissUnpaidWorkNoticeForm(FlaskForm):
+    """Dismiss the notice for work recorded before the first payroll setting.
+
+    Carries the CSRF token, the class the notice was rendered for (checked
+    against the active class, never used to choose one), and the page to return
+    to, from a closed set (FEAT-CLASS-008).
+    """
+    class_id = HiddenField()
+    next = HiddenField()

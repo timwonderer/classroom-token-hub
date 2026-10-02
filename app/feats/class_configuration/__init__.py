@@ -9,6 +9,7 @@ These FEATs orchestrate canonical class configuration mutations per DOM-CLASS-00
 - FEAT-CLASS-005: Economic engine evolution (immutable versioned policy transitions)
 - FEAT-CLASS-006: Destroy class boundary (counterpart of 001, not a mode of it;
   envelope lives in app/routes/admin.py::_hard_delete_class_scope)
+- FEAT-CLASS-008: Acknowledge the unpaid-work notice (write-once class timestamp)
 
 All FEATs enforce:
 - CanonicalContext (user_id, class_id, seat_id, actor_role=teacher)
@@ -43,6 +44,10 @@ from .feat_class_005_economic_engine_evolution import (
     execute_transition_economic_policy,
     EconomicEngineEvolutionResult,
 )
+from .feat_class_008_acknowledge_unpaid_work_notice import (
+    execute_acknowledge_unpaid_work_notice,
+    UnpaidWorkNoticeAcknowledgementResult,
+)
 
 __all__ = [
     "execute_create_class_boundary",
@@ -61,4 +66,6 @@ __all__ = [
     "FeatureDisablementResult",
     "execute_transition_economic_policy",
     "EconomicEngineEvolutionResult",
+    "execute_acknowledge_unpaid_work_notice",
+    "UnpaidWorkNoticeAcknowledgementResult",
 ]
