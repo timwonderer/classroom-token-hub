@@ -8,6 +8,10 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-10-02 — Payroll settings, OPS-DB-001 fixes, student removal
+
+Everything merged to `main` since v2.0.1. It includes the untagged production releases of 2026-09-29 (`bc5c07a2`, `eaca2a7e`, `29b99b14`, `00166e56`) and 2026-09-30 (`314158d53`). The release commit is set when the tag is cut, and the release record is written after deploy.
+
 ### Added
 - **Teachers are told once when students work before payroll is set up (2026-10-01)** — Start Work does not need payroll, so a class can log hours before it has a payroll setting. The teacher dashboard and the payroll page now show "Students are working, but payroll hasn't been set up yet." with "These hours will be paid at your first rate once you set up payroll.", a **Set up payroll** link and a **Dismiss** button. It shows only while the class has no payroll setting, a claimed student has a session in progress or finished, and the teacher has not dismissed it. Once the first payroll setting exists it never shows again. Unclaimed seats do not count, and students see nothing.
   - Dismiss is a CSRF-protected POST through the new `FEAT-CLASS-008`, which acts as the class's teacher seat after the ownership check. It sets `classes.unpaid_work_notice_acknowledged_at` once (migration `a4b50fee84c3`); a second dismissal keeps the first timestamp, and a dismissal from a tab left open after payroll setup is recorded without error. Rendering either page writes nothing (`INV-ARC-007`).

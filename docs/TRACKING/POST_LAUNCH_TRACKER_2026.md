@@ -5,7 +5,7 @@
 | Status | **ACTIVE — canonical tracker** |
 | Opened | 2026-09-28, after the v2.0.1 release |
 | Baseline commit | `c42f882` (`main`) |
-| Production | `00166e56`, released 2026-09-29 (untagged). Latest tag `v2.0.1` = `ad64a473f`, 2026-09-28 |
+| Production | `314158d53`, released 2026-09-30 (untagged). Latest tag `v2.0.1` = `ad64a473f`, 2026-09-28. v2.1.0 (2026-10-02) is pending tag and deploy |
 | Supersedes | `PRODUCTION_READINESS_2026-09.md`, the pre-launch ship tracker, archived at `docs/archive/v2-tracking-2026/` once launch closed its purpose |
 
 This file carries the open work that survived launch. Every item was checked against the code on
@@ -26,7 +26,9 @@ authority stays with `INV-*`, `DOM-*`, `FEAT-*`, `SPEC-*` and `SOP-*`.
 | (untagged) | `bc5c07a2` (#1439) | 2026-09-29 | None yet |
 | (untagged) | `eaca2a7e` (#1440) | 2026-09-29 | None yet |
 | (untagged) | `29b99b14` (#1442) | 2026-09-29 | None yet |
-| (untagged) | `00166e56` (#1443) | 2026-09-29 | None yet; production runs this commit |
+| (untagged) | `00166e56` (#1443) | 2026-09-29 | None yet |
+| (untagged) | `314158d53` (#1438, #1449, #1451) | 2026-09-30 | [DEPLOY_2026-09-30_314158d53.md](../ops/audits/DEPLOY_2026-09-30_314158d53.md); production runs this commit |
+| v2.1.0 (pending tag) | Merge commit of the release PR, set at tag time | Not yet deployed | Written after deploy |
 
 ---
 
@@ -48,7 +50,7 @@ authority stays with `INV-*`, `DOM-*`, `FEAT-*`, `SPEC-*` and `SOP-*`.
   result. SOP-DEP-002 §VI item 6 keeps the store a release precondition.
 - [ ] **Record and tag the 2026-09-29 releases.** `bc5c07a2` (#1439), `eaca2a7e` (#1440), `29b99b14` (#1442) and
   `00166e56` (#1443) went to production through `release-v2.yml` with no `DEPLOY_*` record in `docs/ops/audits/`
-  and no tag; `CHANGELOG.md` still lists them as Unreleased.
+  and no tag. `CHANGELOG.md` now lists them under `[2.1.0]`, which tags them once v2.1.0 is cut; the records are still missing.
 - [ ] **FEAT-IDEN-003 `ACT-IDEN-003` audit event** is not implemented. It needs an identity
   audit-event design first; see #1427.
 - [x] **`production-docs-smoke` and `markdown-web-links`** are fixed on branch
