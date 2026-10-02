@@ -111,6 +111,8 @@
     </div>
   
   </div>
+{% set unpaid_work_notice_return = 'payroll' %}
+{% include "components/unpaid_work_notice.html" %}
 <!-- Nav Tabs -->
 <ul class="nav nav-tabs mb-4" id="payrollTabs" role="tablist">
   <li class="nav-item" role="presentation">
@@ -328,8 +330,12 @@
       <!-- Setup/Update Banner -->
       {% if show_setup_banner %}
       <div class="col-12 mb-3">
-        {% call cards.alert_card('warning', 'No payroll settings yet', icon='warning', role='alert', dismissible=True) %}
-          <p class="mb-2">No Payroll Setting has been created yet. Do you want to use preset amounts?</p>
+        {# A setup helper, not an alert: the unpaid-work notice above the tabs is
+           the one alert about missing payroll (DOM-PROD-001 §XV.6). Static on
+           load, so no live-region role, and no browser-only close button that
+           would look like a recorded dismissal. #}
+        {% call cards.alert_card('info', 'Set up payroll', icon='settings') %}
+          <p class="mb-2">No payroll setting has been created yet. Students who use Start Work before then are paid at your first rate. Do you want to use preset amounts?</p>
           <button type="button" class="btn btn-sm btn-warning" id="usePresetBtn">
             <span class="material-symbols-outlined me-1" aria-hidden="true">check_circle</span>Yes, Use Preset Values
           </button>
@@ -785,6 +791,16 @@
       tab.show();
     }
     {% endif %}
+
+    // "Set up payroll" links here as #settings: open that tab, on load and when
+    // the link is followed from this page.
+    const showTabFromHash = () => {
+      if (window.location.hash !== '#settings') return;
+      const target = document.querySelector('#payrollTabs [data-bs-target="#settings"]');
+      if (target) bootstrap.Tab.getOrCreateInstance(target).show();
+    };
+    showTabFromHash();
+    window.addEventListener('hashchange', showTabFromHash);
 
     // Manual Payment Tab: Student Selection
     const selectAllCheckbox = document.getElementById('selectAllStudents');

@@ -40,6 +40,9 @@
 
 </div>
 
+{% set unpaid_work_notice_return = 'dashboard' %}
+{% include "components/unpaid_work_notice.html" %}
+
 {% if show_recovery_setup %}
 {% call cards.alert_card('warning', 'Action Required: Setup Account Recovery', icon='shield_lock', body_class='mb-4', role='alert', heading_tag='h2') %}
     <div class="d-flex flex-wrap align-items-center gap-3">

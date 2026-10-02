@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-CLASS-001 | 3.5 | 2026-09-30 | 3.4 | Constitutional |
+| DOM-CLASS-001 | 3.6 | 2026-10-01 | 3.5 | Constitutional |
 
 ## I. Purpose
 
@@ -55,6 +55,7 @@ Owned class-level facts include:
 - feature enablement
 - all class-level economic configuration facts
 - feature-gated UI and access state
+- the class teacher's acknowledgement of a class-level notice (§VII.1; 3.6)
 - class creation and class deletion lifecycle
 
 `timezone` is fixed at class creation and MUST NOT be mutated afterward.
@@ -88,6 +89,7 @@ Key fields:
 - `section`
 - `timezone`
 - `teacher_user_id`
+- `unpaid_work_notice_acknowledged_at`
 - `created_at`
 - `updated_at`
 
@@ -100,6 +102,14 @@ Rules:
 - `timezone` is fixed at class creation.
 - Class creation establishes the canonical class boundary and all required class-owned configuration rows.
 - Class deletion removes the class record and all class-owned configuration rows.
+
+`unpaid_work_notice_acknowledged_at` *(3.6, owner rulings 2026-10-01)* records when the class's teacher dismissed the notice for work recorded before the class's first payroll setting (`DOM-PROD-001` §XV.6). NULL means the teacher has not dismissed it.
+
+- It is nullable, set once, and never cleared or overwritten. A second dismissal is a successful no-op that keeps the first timestamp; the write is conditional on the value still being NULL.
+- It is written only by `FEAT-CLASS-008`, acting as the class's teacher seat after the ownership check. A class has exactly one teacher seat, so who acknowledged is derivable from the class and is not stored.
+- It records that the teacher saw the notice. It does not record, and is not checked against, whether the notice's condition still holds; a dismissal after the first payroll setting exists is recorded harmlessly.
+- It is a class-level operating fact, not economic policy truth. It does not govern pricing, settlement or any other domain's behavior, and `DOM-CLASS-003` does not version it.
+- It exists only as part of the class row, so it is destroyed with the class (`INV-ARC-013`) and needs no teardown of its own.
 
 ### 2. `economic_engine`
 
@@ -122,6 +132,7 @@ Rules:
 
 - One row per enabled feature per class.
 - Absence of a row means the feature is disabled.
+- `payroll` is enabled when the class is created and is never disabled: payroll cannot be turned off (owner ruling 2026-10-01, recorded in 3.6). A request to disable it is refused.
 
 ## VIII. Constraints
 

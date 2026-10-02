@@ -234,6 +234,9 @@ FEAT_REGISTRY = {
     # every class-scoped record and the class's seats (INV-CORE-000 §26, §33). It is
     # FEAT-CLASS-001's counterpart, never FEAT-CLASS-001 itself.
     "FEAT-CLASS-006": {"domain": "Class Configuration", "blast_radius": "HIGH", "desc": "Destroy class boundary"},
+    # FEAT-CLASS-007 is reserved by the 2026-09-19 registry reconciliation for the
+    # successor of FEAT-SETTINGS-001; one id names one workflow.
+    "FEAT-CLASS-008": {"domain": "Class Configuration", "blast_radius": "LOW", "desc": "Acknowledge unpaid-work notice"},
     "FEAT-SETTINGS-001": {"domain": "Class Configuration", "blast_radius": "MED", "desc": "Class Settings Update"},
     "FEAT-POL-001": {"domain": "Policies", "blast_radius": "MED", "desc": "Policy Reference Management (insurance policy family)"},
     "FEAT-ITR-001": {"domain": "Interpretation", "blast_radius": "LOW", "desc": "Compute Interpretation Snapshot"},

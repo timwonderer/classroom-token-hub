@@ -30,6 +30,10 @@ Payroll settings control how students earn pay from their attendance records. Th
 
 Settings are stored for the class you currently have selected. If you teach several periods and want different rates, switch class context and save again for each one.
 
+### If students start working before you set up payroll
+
+Students can use **Start Work** before the class has any payroll settings. Their hours are kept, and the first payroll after you save settings pays them at your first rate. While that is the case, your dashboard and the Payroll page show **Students are working, but payroll hasn't been set up yet.** Choose **Set up payroll** to open the Settings tab, or **Dismiss** if you have seen it. Dismissing hides it for that class only and does not change what students are paid. Once you save your first payroll settings, the message never appears for that class again. Students do not see it.
+
 ## Important notes
 
 > [!IMPORTANT]

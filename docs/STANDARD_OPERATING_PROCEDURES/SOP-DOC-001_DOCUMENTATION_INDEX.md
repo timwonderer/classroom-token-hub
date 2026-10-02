@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001      | 3.10    | 2026-09-29     | 3.9        | Normative |
+| SOP-DOC-001      | 3.11    | 2026-10-01     | 3.10       | Normative |
 
 ---
 
@@ -98,6 +98,7 @@ Archived material is deliberately absent; see §VI.
 - [FEAT-CLASS-004 — Feature Enablement](../FEATURE-EXECUTION/FEAT-CLASS-004_FEATURE_ENABLEMENT.md)
 - [FEAT-CLASS-005 — Economic Engine Evolution](../FEATURE-EXECUTION/FEAT-CLASS-005_ECONOMIC_ENGINE_EVOLUTION.md)
 - [FEAT-CLASS-006 — Destroying a Class Boundary](../FEATURE-EXECUTION/FEAT-CLASS-006_DESTROYING_CLASS_BOUNDARY.md)
+- [FEAT-CLASS-008 — Acknowledge the Unpaid-Work Notice](../FEATURE-EXECUTION/FEAT-CLASS-008_ACKNOWLEDGE_UNPAID_WORK_NOTICE.md)
 - [FEAT-CORE-000 — Feature Execution Constitutional Directive](../FEATURE-EXECUTION/FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md)
 - [FEAT-ECON-001 — Economic Policy Transition Execution and Activation Orchestration](../FEATURE-EXECUTION/FEAT-ECON-001_ECONOMIC_POLICY_TRANSITION_EXECUTION_AND_ACTIVATION_ORCHESTRATION.md)
 - [FEAT-IDEN-001 — Unauthenticated Student Seat Claim](../FEATURE-EXECUTION/FEAT-IDEN-001_UNAUTHENTICATED_STUDENT_SEAT_CLAIM_REMEDIATED.md)
@@ -268,6 +269,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.11 (2026-10-01):**
+- Registered `FEAT-CLASS-008` (Acknowledge the Unpaid-Work Notice), added under owner rulings 2026-10-01. `FEAT-CLASS-007` is left unassigned: the 2026-09-19 FEAT registry reconciliation proposes it for the successor of `FEAT-SETTINGS-001`.
 
 **Version 3.10 (2026-09-29):**
 - Removed `MAP-CLASS-002` from the Maps listing and recorded it under §VI as archived. The
