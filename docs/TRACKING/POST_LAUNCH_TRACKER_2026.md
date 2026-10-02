@@ -286,10 +286,10 @@ against this tracker, the archived launch trackers and the live-test RESUME reco
     2026-04-12. Loki has read from `/tmp/loki/chunks` since April, so nothing reaches these chunks.
   - Still on disk: the live-test database dumps and env-file copies. They are waiting on the owner confirming the
     keys are stored off the droplet.
-- [ ] **PROD-PAY-001 incident record not yet merged.** It is open as #1441
-  (`docs/ops/audits/INCIDENT_2026-09-28_PROD-PAY-001.md`), created at 04:27 UTC on 2026-09-29. The production
-  database shows the corrections approved between 04:21 and 04:26 UTC that day (79 students, $1,947.40). Check that
-  the record matches. Release records for the 2026-09-29 releases are tracked in §II.
+- [x] **PROD-PAY-001 incident record merged (#1441, 2026-10-01).**
+  `docs/ops/audits/INCIDENT_2026-09-28_PROD-PAY-001.md`. Checked against production (read-only, 2026-10-01): 79
+  `manual_credit` payroll events recorded between 04:21:32 and 04:25:47 UTC on 2026-09-29, matching the record's
+  04:21–04:25 window and 79 students. Release records for the 2026-09-29 releases are tracked in §II.
 - [ ] **No database backup of any kind exists.** The owner confirmed on 2026-09-30 that DigitalOcean droplet backups
   are off. There is also no scheduled dump and no WAL archiving.
   - **Direction (owner, 2026-09-30).** Scheduled encrypted off-host backups, with a replacement baseline after each
