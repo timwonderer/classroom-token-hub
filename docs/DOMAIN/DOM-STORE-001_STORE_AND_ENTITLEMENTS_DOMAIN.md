@@ -4,7 +4,7 @@
 |------------------|---------|----------------|------------|-----------------|
 | DOM-STORE-001 | 5.3 | 2026-10-01 | 5.2 | Normative |
 
-*Revision 5.3 (2026-10-01, owner ruling; for owner ratification): §VII.B and §IX — a pending action is also deleted with its seat on lawful seat removal (membership by existence, INV-ARC-013). §IX — the hall-pass example is made concrete: a pending hall-pass request is a `pending_actions` row submitted under `FEAT-STOR-002` and resolved by `FEAT-PROD-002` (approve, reject, student cancel); a student's new request cancels their earlier one. Before 5.3 the implementation kept pending hall-pass requests in per-process memory, which failed once production ran two workers.*
+*Revision 5.3 (2026-10-01, owner ruling; ratified by the owner 2026-10-01): §VII.B and §IX — a pending action is also deleted with its seat on lawful seat removal (membership by existence, INV-ARC-013). §IX — the hall-pass example is made concrete: a pending hall-pass request is a `pending_actions` row submitted under `FEAT-STOR-002` and resolved by `FEAT-PROD-002` (approve, reject, student cancel); a student's new request cancels their earlier one. Before 5.3 the implementation kept pending hall-pass requests in per-process memory, which failed once production ran two workers.*
 
 ## I. Purpose
 

@@ -4,7 +4,7 @@
 | :--- | :--- | :--- | :--- | :--- |
 | FEAT-PROD-002 | 1.1 | 2026-10-01 | 1.0 | Normative |
 
-*Revision 1.1 (2026-10-01; for owner ratification): adds §III.A, resolution of a pending hall-pass request (approve, reject, student cancel) held in `pending_actions` (DOM-STORE-001 5.3 §IX). §III is unchanged.*
+*Revision 1.1 (2026-10-01; ratified by the owner 2026-10-01): adds §III.A, resolution of a pending hall-pass request (approve, reject, student cancel) held in `pending_actions` (DOM-STORE-001 5.3 §IX). §III is unchanged.*
 
 ---
 

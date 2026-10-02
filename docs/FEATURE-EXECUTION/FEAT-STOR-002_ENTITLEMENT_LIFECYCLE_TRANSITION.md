@@ -4,7 +4,7 @@
 | :--- | :--- | :--- | :--- | :--- |
 | FEAT-STOR-002 | 2.2 | 2026-10-01 | 2.1 | Normative |
 
-*Revision 2.2 (2026-10-01; for owner ratification): adds §X.A, submission of a pending hall-pass request as a covered pending action (DOM-STORE-001 5.3 §IX).*
+*Revision 2.2 (2026-10-01; ratified by the owner 2026-10-01): adds §X.A, submission of a pending hall-pass request as a covered pending action (DOM-STORE-001 5.3 §IX).*
 
 ## I. Purpose
 
