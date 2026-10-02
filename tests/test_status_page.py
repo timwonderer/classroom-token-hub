@@ -309,7 +309,7 @@ def test_public_footer_matches_public_site_with_absolute_links(page):
     client, _, _ = page
     html = client.get('/').get_data(as_text=True)
     footer = html.split('<footer class="landing-footer">', 1)[1]
-    for href in ("https://classroomtokenhub.com/terms.html", "https://classroomtokenhub.com/privacy.html",
+    for href in ("https://classroomtokenhub.com/", "https://classroomtokenhub.com/terms.html", "https://classroomtokenhub.com/privacy.html",
                  "https://classroomtokenhub.com/district.html", "https://classroomtokenhub.com/docs/"):
         assert f'href="{href}"' in footer
     assert 'href="./' not in footer
