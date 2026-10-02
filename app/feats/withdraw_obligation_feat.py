@@ -96,7 +96,6 @@ def withdraw_assessment(request: WithdrawAssessmentRequest) -> ObligationAssessm
         correlation_id=assessment.correlation_id,
         event_type="WITHDRAWN",
         obligation_type=assessment.obligation_type,
-        policy_version_id=assessment.policy_version_id,
         bill_cycle_id=assessment.bill_cycle_id,
         notes=(request.notes or "").strip() or None,
     )

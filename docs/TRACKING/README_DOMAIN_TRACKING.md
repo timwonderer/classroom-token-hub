@@ -1,6 +1,6 @@
 # Tracking Documents
 
-**Effective:** 2026-09-03
+**Effective:** 2026-09-03 (amended 2026-09-28, after launch)
 **Replaces:** the `DOMAIN_PROGRESS_MATRIX_2026.md` system (archived 2026-09-03)
 
 ---
@@ -12,10 +12,15 @@ audits, and superseded plans live in [`docs/archive/v2-tracking-2026/`](https://
 
 | File | Purpose |
 |---|---|
-| [`PRODUCTION_READINESS_2026-09.md`](PRODUCTION_READINESS_2026-09.md) | **Canonical tracker.** Domain readiness, blocking issues, fix tracks, ship gate. |
-| [`ACCESSIBILITY_REVIEW_2026-09-03.md`](ACCESSIBILITY_REVIEW_2026-09-03.md) | Open accessibility remediation (INV-CORE-000 §III.7). |
-| [`DOCS_PLATFORM_ROADMAP.md`](DOCS_PLATFORM_ROADMAP.md) | Documentation platform plan. Post-ship. |
+| [`POST_LAUNCH_TRACKER_2026.md`](POST_LAUNCH_TRACKER_2026.md) | **Canonical tracker.** Operator follow-ups, surfaces not yet exercised in production, code hygiene, dependencies, and deferred features after v2.0.1. |
+| [`BATCH-B_OPERATIONS_VERIFIER_POLICY_DECISION_PACKAGE_20260901.md`](BATCH-B_OPERATIONS_VERIFIER_POLICY_DECISION_PACKAGE_20260901.md) | Approved Operations verifier policy decisions, cited by SOP-DOC-001. |
+| [`FEAT_REGISTRY_RECONCILIATION_2026-09-19.md`](FEAT_REGISTRY_RECONCILIATION_2026-09-19.md) | FEAT registry against implementation, cited from `app/feats/`. |
+| [`DOCS_PLATFORM_ROADMAP.md`](DOCS_PLATFORM_ROADMAP.md) | Documentation platform plan. |
 | [`DOMAIN_IMPLEMENTATION_PLAN_TEMPLATE.md`](DOMAIN_IMPLEMENTATION_PLAN_TEMPLATE.md) | Reusable SOP-DEV-002 plan template for a single domain. |
+
+The pre-launch ship tracker, `PRODUCTION_READINESS_2026-09.md`, was archived on 2026-09-28 after
+v2.0.0 and v2.0.1 shipped. Its open items were re-verified and carried into the post-launch
+tracker. Release and audit records are not tracking documents; they live in `docs/ops/audits/`.
 
 ---
 
@@ -32,7 +37,7 @@ and the gap is a finding against the code.
 
 The previous system failed because each sprint minted a new dated document while the nominally
 canonical one silently went stale — by 2026-09-03 the matrix was wrong about four domains. Update
-`PRODUCTION_READINESS_2026-09.md` in place. Record closures with a commit SHA.
+the canonical tracker (`POST_LAUNCH_TRACKER_2026.md`) in place. Record closures with a commit SHA.
 
 ### 3. Archive on completion, never delete
 
@@ -49,7 +54,7 @@ it become a second source of truth.
 ## Working a domain
 
 1. Read the domain's normative spec (`docs/DOMAIN/DOM-*.md`) and the invariants it cites.
-2. Read the domain's row and findings in `PRODUCTION_READINESS_2026-09.md`.
+2. Read the domain's open items in `POST_LAUNCH_TRACKER_2026.md`.
 3. If the work spans multiple phases, copy `DOMAIN_IMPLEMENTATION_PLAN_TEMPLATE.md`.
 4. Land the fix with a regression test that fails against the pre-fix commit.
 5. Update the tracker with the closing commit SHA.

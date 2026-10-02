@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import datetime, timezone, timedelta
 from uuid import uuid4
 
+from .contracts import ACTIVE_STATES
+
 class ResolutionTooLarge(ValueError):
     """The report cannot fit within Firestore's atomic write envelope."""
 
@@ -21,7 +23,7 @@ class FirestoreNoticeStore:
         """Read every unresolved notice, independent of bounded history views."""
         collection = self.client.collection("external_status_notices")
         active = []
-        for state in ("INVESTIGATING", "IDENTIFIED", "MONITORING"):
+        for state in ACTIVE_STATES:
             for snapshot in collection.where("state", "==", state).stream():
                 active.append({"id": snapshot.id, **snapshot.to_dict()})
         return sorted(active, key=lambda notice: notice["updated_at"], reverse=True)
@@ -208,7 +210,7 @@ class FirestoreNoticeStore:
             writes = []
             for key, snapshot in snapshots.items():
                 notice = snapshot.to_dict() if snapshot.exists else None
-                if (not notice or notice.get("state") not in {"INVESTIGATING", "IDENTIFIED", "MONITORING"}
+                if (not notice or notice.get("state") not in ACTIVE_STATES
                         or notice.get("last_event_id") != selections[key]
                         or notice.get("external_notice_id") != key
                         or not notice.get("incident_ref")):

@@ -46,8 +46,8 @@
                 <p class="mb-0">Please enter one word that fits the prompt above. It should have no spaces and be 3-12 letters long. We will combine it with two random words to create your unique username.</p>
             {% endcall %}
 
-            {% call cards.alert_card('warning', 'Your username is shown only once', icon='visibility', role='alert', body_class='mb-4') %}
-                <p class="mb-0">Your username will be generated and shown only once on the next page. You must write it down or save it before continuing, as it cannot be retrieved later.</p>
+            {% call cards.alert_card('warning', 'Save the username you get next', icon='visibility', role='alert', body_class='mb-4') %}
+                <p class="mb-0">Your username will be shown on the next page. Save it somewhere you can find later, then type it back to show you have it. It cannot be looked up later, even by your teacher.</p>
             {% endcall %}
 
             <form method="POST">

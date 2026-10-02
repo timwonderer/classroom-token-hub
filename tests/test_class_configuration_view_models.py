@@ -153,9 +153,9 @@ class TestEconomicView:
 
     def test_no_payroll_produces_warning(self, app):
         with app.app_context():
-            cr = provision_classroom("biology_block_a")
-            PayrollSettings.query.filter_by(class_id=cr.class_id).delete()
-            db.session.commit()
+            # payroll_settings is append-only (DOM-POL-001 §VI.2), so "no
+            # payroll" is a class provisioned without a setting.
+            cr = provision_classroom("biology_block_a", with_payroll_settings=False)
 
             view = build_economic_view(cr.class_id)
             assert any("Payroll" in w for w in view.warnings)

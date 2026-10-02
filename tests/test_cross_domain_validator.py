@@ -171,12 +171,12 @@ class Assessment(db.Model):
     __tablename__ = 'assessment_events'
     __table_args__ = (
         db.ForeignKeyConstraint(
-            ['policy_version_id'], ['policy_versions.id']
+            ['payroll_event_id'], ['payroll_event.id']
         ),
     )
 """)
     assert findings == [
-        "assessment_events.policy_version_id -> policy_versions.id (DOM-OBL -> DOM-CLASS)"
+        "assessment_events.payroll_event_id -> payroll_event.id (DOM-OBL -> DOM-PROD)"
     ]
 
 

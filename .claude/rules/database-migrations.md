@@ -10,7 +10,7 @@
 
 1. **NEVER modify `app/models.py` without creating a migration**
 2. **ALWAYS test migrations before committing** (upgrade AND downgrade)
-3. **NEVER edit old migrations after they're merged to main** — sole exception: a Replay-Safety Correction under `SOP-DB-001` §V.A, which requires all six of its conditions to be proven and recorded. It is not a license to improve an old migration; read §V.A before relying on it.
+3. **NEVER edit old migrations after they're merged to main** — the only exceptions are a Replay-Safety Correction under `SOP-DB-001` §V.A (all six conditions proven and recorded) and the narrower Bootstrap-Replay Correction under §V.B (an existence guard only, all seven conditions proven). Neither is a license to improve an old migration or change what it intends; read the section before relying on it.
 4. **ALWAYS review auto-generated migrations** before committing
 5. **NEVER skip migrations** - each schema change needs its own migration
 6. **ALWAYS include idempotency helpers** in every migration (table_exists, column_exists, index_exists, foreign_key_exists)
@@ -63,26 +63,29 @@ flask db upgrade
 flask db current
 ```
 
-**Save this revision ID** - you'll verify it in Step 5.
+**Save this revision ID** - you'll verify it in Step 6.
 
 ### Step 3: Modify the Model
 
 Edit `app/models.py` to make your schema change:
 
 ```python
-# Example: Adding a new field
-class Student(db.Model):
+# Example: Adding a new field (hypothetical column, for illustration only)
+class ClassEconomy(db.Model):          # __tablename__ = 'classes'
     # ... existing fields ...
-    email = db.Column(db.String(255), nullable=True)  # NEW FIELD
+    motto = db.Column(db.String(255), nullable=True)  # NEW FIELD
 ```
+
+A new table, or a column that changes what a table is responsible for, must also be
+consistent with `DOM-CORE-002` (the canonical runtime schema) before it is generated.
 
 ### Step 4: Generate the Migration
 
 ```bash
-flask db migrate -m "Add email field to Student model"
+flask db migrate -m "Add motto field to ClassEconomy model"
 ```
 
-This creates a new file in `migrations/versions/` with a random ID like `abc123def456_add_email_field_to_student_model.py`
+This creates a new file in `migrations/versions/` with a random ID like `abc123def456_add_motto_field_to_classeconomy_model.py`
 
 ### Step 5: Copy Idempotency Helpers (CRITICAL - NEW REQUIREMENT)
 
@@ -140,7 +143,7 @@ def get_foreign_keys_by_column(table_name, column_name):
         return []
 ```
 
-**Why this is critical:** The project has 40+ non-idempotent historical migrations that cause deployment failures when re-run.
+**Why this is critical:** 27 historical migrations still fail the idempotency linter; they are frozen in `migrations/lint_baseline.txt` as accepted pre-gate debt and are not rewritten. Re-running a non-idempotent migration is what causes deployment failures.
 
 ### Step 6: IMMEDIATELY Verify the Migration
 
@@ -149,7 +152,7 @@ def get_foreign_keys_by_column(table_name, column_name):
 1. **Verify `down_revision` matches the revision from Step 2**
 
 ```python
-# In migrations/versions/abc123def456_add_email_field_to_student_model.py
+# In migrations/versions/abc123def456_add_motto_field_to_classeconomy_model.py
 
 # This MUST match the output of `flask db current` from Step 2
 down_revision = 'xyz789...'  # Should match your current revision
@@ -177,29 +180,29 @@ Open the generated file and modify:
 ```python
 def upgrade():
     # NOT IDEMPOTENT - will fail if column exists
-    op.add_column('student', sa.Column('email', sa.String(length=255), nullable=True))
+    op.add_column('classes', sa.Column('motto', sa.String(length=255), nullable=True))
 ```
 
 **AFTER (Your responsibility - SAFE):**
 ```python
 def upgrade():
     # IDEMPOTENT - safe to run multiple times
-    if not column_exists('student', 'email'):
-        op.add_column('student', sa.Column('email', sa.String(length=255), nullable=True))
-        print("✅ Added email column to student")
+    if not column_exists('classes', 'motto'):
+        op.add_column('classes', sa.Column('motto', sa.String(length=255), nullable=True))
+        print("✅ Added motto column to classes")
     else:
-        print("⚠️  Column 'email' already exists on 'student', skipping...")
+        print("⚠️  Column 'motto' already exists on 'classes', skipping...")
 ```
 
 ✅ **Wrap downgrade operations too**
 ```python
 def downgrade():
     # Check before dropping
-    if column_exists('student', 'email'):
-        op.drop_column('student', 'email')
-        print("❌ Dropped email column from student")
+    if column_exists('classes', 'motto'):
+        op.drop_column('classes', 'motto')
+        print("❌ Dropped motto column from classes")
     else:
-        print("⚠️  Column 'email' does not exist on 'student', skipping...")
+        print("⚠️  Column 'motto' does not exist on 'classes', skipping...")
 ```
 
 **Required Patterns:**
@@ -215,22 +218,19 @@ def downgrade():
 ✅ **Check for data migrations if needed**
 ```python
 def upgrade():
-    # Schema change
-    op.add_column('transaction', sa.Column('join_code', sa.String(10), nullable=True))
+    # Schema change (guarded, as above)
+    if not column_exists('classes', 'motto'):
+        op.add_column('classes', sa.Column('motto', sa.String(length=255), nullable=True))
 
-    # Data migration (if needed)
+    # Data migration (if needed) — idempotent: only fills rows still NULL
     op.execute("""
-        UPDATE transaction t
-        SET join_code = (
-            SELECT tb.join_code
-            FROM teacher_block tb
-            WHERE tb.teacher_id = t.teacher_id
-            LIMIT 1
-        )
+        UPDATE classes
+        SET motto = COALESCE(display_name, '')
+        WHERE motto IS NULL
     """)
 
     # Make column non-nullable after backfill
-    op.alter_column('transaction', 'join_code', nullable=False)
+    op.alter_column('classes', 'motto', existing_type=sa.String(length=255), nullable=False)
 ```
 
 ### Step 8: Run Migration Linter
@@ -245,7 +245,7 @@ python scripts/lint_migrations.py migrations/versions/abc123def456_*.py
 python scripts/lint_migrations.py --baseline migrations/lint_baseline.txt
 ```
 
-`migrations/lint_baseline.txt` freezes the pre-gate debt SOP-DB-009 VI accepts.
+`migrations/lint_baseline.txt` freezes the pre-gate debt SOP-DB-009 §VI accepts (SOP-DB-009 is now archived, at `docs/archive/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-009_Migration_Compliance_Review.md`).
 It is not a place to put your migration — it only shrinks.
 
 This checks for:
@@ -276,8 +276,9 @@ flask db upgrade
 #
 #     ERROR [flask_migrate] Error: Ambiguous walk
 #
-# The head is a merge point today, so the bare form does not work. Get the
-# revision to step back to from `flask db history`.
+# Whether the head is a merge point changes as migrations land (it is not one at
+# the time of writing), so always pass the target explicitly. Get the revision
+# to step back to from `flask db history`.
 flask db downgrade <revision>
 ```
 
@@ -319,7 +320,7 @@ pytest tests/
 
 ```bash
 git add app/models.py migrations/versions/abc123def456_*.py
-git commit -m "Add email field to Student model with migration"
+git commit -m "Add motto field to ClassEconomy model with migration"
 ```
 
 ---
@@ -330,34 +331,34 @@ Use descriptive names that clearly state what changed:
 
 ### Adding Columns
 ```bash
-flask db migrate -m "Add email field to Student model"
-flask db migrate -m "Add join_code to Transaction table"
+flask db migrate -m "Add motto field to ClassEconomy model"
+flask db migrate -m "Add memo column to ledger_transaction"
 ```
 
 ### Creating Tables
 ```bash
 flask db migrate -m "Create RecoveryRequest table"
-flask db migrate -m "Create StudentRecoveryCode table"
+flask db migrate -m "Create RecoveryClassChallenge table"
 ```
 
 ### Removing Columns
 ```bash
-flask db migrate -m "Remove deprecated field from StoreItem"
+flask db migrate -m "Remove deprecated field from StoreProduct"
 ```
 
 ### Renaming
 ```bash
-flask db migrate -m "Rename student_id to user_id in Transaction"
+flask db migrate -m "Rename motto to tagline on classes"
 ```
 
 ### Relationships
 ```bash
-flask db migrate -m "Add foreign key relationship between Student and Teacher"
+flask db migrate -m "Add foreign key from announcements to seats"
 ```
 
 ### Complex Changes
 ```bash
-flask db migrate -m "Add join_code scoping to all financial tables"
+flask db migrate -m "Add class_id scoping to all financial tables"
 ```
 
 ---
@@ -373,52 +374,73 @@ flask db migrate -m "Add join_code scoping to all financial tables"
 ```python
 # Migration 1: Add column as nullable
 def upgrade():
-    op.add_column('student', sa.Column('email', sa.String(255), nullable=True))
+    if not column_exists('classes', 'motto'):
+        op.add_column('classes', sa.Column('motto', sa.String(255), nullable=True))
 
 def downgrade():
-    op.drop_column('student', 'email')
+    if column_exists('classes', 'motto'):
+        op.drop_column('classes', 'motto')
 ```
 
 ```python
 # Migration 2 (after backfilling data): Make non-nullable
 def upgrade():
     # Ensure all rows have values first
-    op.execute("UPDATE student SET email = 'default@example.com' WHERE email IS NULL")
-    op.alter_column('student', 'email', nullable=False)
+    op.execute("UPDATE classes SET motto = '' WHERE motto IS NULL")
+    op.alter_column('classes', 'motto', existing_type=sa.String(255), nullable=False)
 
 def downgrade():
-    op.alter_column('student', 'email', nullable=True)
+    op.alter_column('classes', 'motto', existing_type=sa.String(255), nullable=True)
 ```
 
 ### Scenario 2: Renaming a Column
 
 ```python
 def upgrade():
-    op.alter_column('transaction', 'student_id', new_column_name='user_id')
+    if column_exists('classes', 'motto') and not column_exists('classes', 'tagline'):
+        op.alter_column('classes', 'motto', new_column_name='tagline')
 
 def downgrade():
-    op.alter_column('transaction', 'user_id', new_column_name='student_id')
+    if column_exists('classes', 'tagline') and not column_exists('classes', 'motto'):
+        op.alter_column('classes', 'tagline', new_column_name='motto')
 ```
 
 ### Scenario 3: Adding Foreign Key
 
 ```python
+# Hypothetical: announcements gain an author seat.
 def upgrade():
     # Add column first
-    op.add_column('transaction', sa.Column('join_code', sa.String(10)))
+    if not column_exists('announcements', 'author_seat_id'):
+        op.add_column('announcements', sa.Column('author_seat_id', sa.Integer(), nullable=True))
 
-    # Add foreign key constraint
-    op.create_foreign_key(
-        'fk_transaction_join_code',  # Constraint name
-        'transaction',                # Source table
-        'teacher_block',              # Target table
-        ['join_code'],               # Source columns
-        ['join_code']                # Target columns
-    )
+    # Add the foreign key unless this migration's FK (to seats.id) is already there.
+    # Match on the target, not on "any FK on the column", so an unrelated
+    # constraint neither suppresses this one nor gets dropped by downgrade().
+    if not _author_seat_fks():
+        op.create_foreign_key(
+            'fk_announcements_author_seat_id',  # Constraint name
+            'announcements',                     # Source table
+            'seats',                             # Target table
+            ['author_seat_id'],                  # Source columns
+            ['id'],                              # Target columns
+            ondelete='SET NULL',
+        )
 
 def downgrade():
-    op.drop_constraint('fk_transaction_join_code', 'transaction', type_='foreignkey')
-    op.drop_column('transaction', 'join_code')
+    # Discover the FK by column and target; never drop by a hardcoded name (Golden Rule 7).
+    for fk in _author_seat_fks():
+        op.drop_constraint(fk['name'], 'announcements', type_='foreignkey')
+    # Dropping the column is the inverse of add_column() and discards its data;
+    # take a backup before downgrading past a column that holds live data.
+    if column_exists('announcements', 'author_seat_id'):
+        op.drop_column('announcements', 'author_seat_id')
+
+def _author_seat_fks():
+    return [
+        fk for fk in get_foreign_keys_by_column('announcements', 'author_seat_id')
+        if fk['referred_table'] == 'seats' and fk['referred_columns'] == ['id']
+    ]
 ```
 
 ### Scenario 4: Data Migration
@@ -428,20 +450,23 @@ When you need to transform existing data:
 ```python
 def upgrade():
     # Create new column
-    op.add_column('student', sa.Column('full_name', sa.String(255)))
+    if not column_exists('classes', 'display_label'):
+        op.add_column('classes', sa.Column('display_label', sa.String(160)))
 
     # Migrate data
-    connection = op.get_bind()
-    connection.execute("""
-        UPDATE student
-        SET full_name = first_name || ' ' || last_initial
+    op.execute("""
+        UPDATE classes
+        SET display_label = COALESCE(display_name, join_code)
+                            || COALESCE(' (' || section || ')', '')
+        WHERE display_label IS NULL
     """)
 
     # Make non-nullable if needed
-    op.alter_column('student', 'full_name', nullable=False)
+    op.alter_column('classes', 'display_label', existing_type=sa.String(160), nullable=False)
 
 def downgrade():
-    op.drop_column('student', 'full_name')
+    if column_exists('classes', 'display_label'):
+        op.drop_column('classes', 'display_label')
 ```
 
 ---
@@ -494,8 +519,8 @@ pytest tests/
 
 ```python
 # DON'T DO THIS
-class Student(db.Model):
-    email = db.Column(db.String(255))  # Added without migration
+class ClassEconomy(db.Model):
+    motto = db.Column(db.String(255))  # Added without migration
 ```
 
 **Result:** Database schema won't match models, queries will fail in production.
@@ -528,8 +553,8 @@ flask db migrate -m "changes"
 flask db migrate -m "fix"
 
 # GOOD
-flask db migrate -m "Add join_code to Transaction table"
-flask db migrate -m "Create RecoveryRequest model with foreign keys"
+flask db migrate -m "Add motto field to ClassEconomy model"
+flask db migrate -m "Create RecoveryClassChallenge table with foreign keys"
 ```
 
 ### ❌ NEVER: Commit failing migrations
@@ -687,17 +712,17 @@ Every time you change database schema:
 14. ✅ **Verify single head:** `flask db heads` (still must show exactly 1)
 15. ✅ Run tests: `pytest tests/`
 16. ✅ Commit model + migration together
-17. ✅ Update `docs/technical-reference/database_schema.md` if significant change
+17. ✅ Confirm the change against `DOM-CORE-002` (canonical runtime schema); drops, renames and FK changes also go through the `SOP-DB-003` Schema Change Gate
 18. ✅ Update `CHANGELOG.md`
 
 **NEW REQUIREMENTS (2026-02-04):**
 - All migrations MUST include idempotency helpers
 - All CREATE operations MUST check existence first
 - Migration linter MUST pass before committing
-- See `docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-009_Migration_Compliance_Review.md` for full audit report
+- See `docs/archive/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-009_Migration_Compliance_Review.md` (archived) for the full audit report; `SOP-DB-001` is the live migration specification
 
 ---
 
-**Last Updated:** 2025-12-13
-**Migrations Count:** 83 (and growing)
+**Last Updated:** 2026-09-28
+**Migrations Count:** 173 files in `migrations/versions/` (and growing)
 **Database:** PostgreSQL with Alembic

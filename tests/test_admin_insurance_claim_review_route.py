@@ -266,13 +266,8 @@ def _lost_time_claim(app, client):
         )
         with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"engine:{uuid4().hex}"):
             _make_economic_engine_ready(ids["class_id"])
-        # A lost-time payout is posted through payroll, which needs an active version.
-        from app.models import PolicyVersion
-        from app.utils.canonical_temporal_resolver import utc_now
-        with FEATContext("FEAT-BYPASS-LEGACY", correlation_id=f"seed-payroll:{uuid4().hex}"):
-            db.session.add(PolicyVersion(class_id=ids["class_id"], domain="payroll", version_number=1,
-                                         policy_payload_json="{}", activated_at=utc_now(), is_active=True))
-            db.session.flush()
+        # A lost-time payout is posted through payroll under the class's payroll
+        # setting, which the provisioned classroom already has.
         db.session.commit()
         policy_uuid = configure_insurance_definition(
             class_id=ids["class_id"],

@@ -20,7 +20,7 @@ Design (per architectural direction, 2026-08-25):
 
 - **INV-ARC-009 (Domain Authority for State).** CWI, economic mode, and the effective
   engine version are *domain-owned inputs* the engine READS via canonical domain
-  queries (``get_effective_economic_engine``, ``get_payroll_settings``). This module
+  queries (``get_current_economic_engine``, ``get_payroll_settings``). This module
   computes *derived economic reference values* (insurance presets/selection) from those
   authoritative inputs. It does not recompute or persist domain state, and it never
   persists derived recommendations — the same authoritative inputs deterministically
@@ -39,7 +39,7 @@ from enum import Enum
 from typing import Optional
 
 from app.services.class_configuration_query_service import (
-    get_effective_economic_engine,
+    get_current_economic_engine,
     get_payroll_settings,
 )
 from app.utils.economy_policy import POLICY_MODES
@@ -293,7 +293,7 @@ def resolve_base(class_id: str) -> EconomicBase:
 
         CWI = pay_rate_per_minute × 60 × expected_weekly_hours
     """
-    engine = get_effective_economic_engine(class_id, "payroll") if class_id else None
+    engine = get_current_economic_engine(class_id) if class_id else None
     payroll = get_payroll_settings(class_id) if class_id else None
 
     economic_version_id = getattr(engine, "economic_version_id", None) if engine else None
@@ -568,10 +568,17 @@ _MIN_DOUBLING_YEARS: dict[str, Decimal] = {
     "comfortable": Decimal("2"),
 }
 
+# Day-count convention for savings interest (SPEC-ECON-001 §5.2): a 365-day year in
+# every year, leap years included, so each day earns ``annual_rate / 365``. Runtime
+# accrual, the forecast and the daily-compounding ceiling below all read this one
+# constant; do not repeat the literal. 12 CFR 1030, Supplement I, comment 7(a)(1)-4
+# permits 1/365 on all 366 days of a leap year.
+SAVINGS_DAYS_PER_YEAR = Decimal("365")
+
 # Compounding frequency per year (SPEC §5.6). ``never`` is simple interest and is
 # special-cased in the doubling-time rearrangement (no compound term).
 _COMPOUND_FREQ_PER_YEAR: dict[str, int] = {
-    "daily": 365,
+    "daily": int(SAVINGS_DAYS_PER_YEAR),
     "weekly": 52,
     "monthly": 12,
 }
@@ -703,118 +710,135 @@ def resolve_savings(
     )
 
 
-# Payout capitalization periods per year (SPEC-ECON-001 §7.2). Weekly/monthly only.
-_PAYOUT_FREQ_PER_YEAR: dict[str, int] = {
-    "weekly": 52,
-    "monthly": 12,
-}
+_SAVINGS_COMPOUND_FREQUENCIES = frozenset({"never", "daily", "weekly", "monthly"})
 
 
-def _savings_period_factor(
-    *,
-    annual_rate: Decimal,
-    calculation_type: str,
-    compound_frequency: str,
-    years: Decimal,
-) -> Decimal:
-    """Multiplicative growth factor over ``years`` (SPEC-ECON-001 §4).
+@dataclass(frozen=True)
+class SavingsAccrualDay:
+    """One class-local day of a payout window, as the accrual engine sees it.
 
-    This is the single authoritative accrual formula. Both the runtime payout and
-    the UI projection MUST derive from it so forecasts cannot diverge from execution
-    (SPEC-ECON-001 §10, §11).
-
-    - Simple interest (``calculation_type == 'simple'`` or ``compound_frequency ==
-      'never'``): ``1 + r·t`` (§4.1). Previously credited interest never joins the
-      earning base — but because payout capitalizes into the posted balance, the
-      caller controls participation via the balance it passes.
-    - Compound interest (§4.2): ``(1 + r/n)^(n·t)`` where ``n`` is the compound
-      periods/year. Full ``Decimal`` precision is preserved here; rounding to cents
-      happens only at the lawful payout boundary (§5.3).
+    ``end_of_day_balance`` is the posted savings balance at that day's class-local
+    end (SPEC-ECON-001 §9.2). ``annual_rate`` is the rate in force that day; ``None``
+    earns nothing (§11). ``capitalizes`` marks a compounding boundary at the start
+    of the day: for weekly or monthly compounding, interest accrued so far in the
+    window joins the earning base from this day on (§3.3, §6.2).
     """
+
+    end_of_day_balance: Decimal
+    annual_rate: Optional[Decimal]
+    capitalizes: bool = False
+
+
+def _savings_compounding(calculation_type: str, compound_frequency: str) -> str:
     freq = (compound_frequency or "never").strip().lower()
-    calc = (calculation_type or "simple").strip().lower()
-    if calc == "simple" or freq == "never":
-        return Decimal("1") + annual_rate * years
-    if freq not in _COMPOUND_FREQ_PER_YEAR:
+    if freq not in _SAVINGS_COMPOUND_FREQUENCIES:
         raise ValueError(f"Unsupported compound_frequency: {compound_frequency!r}")
-    n = Decimal(_COMPOUND_FREQ_PER_YEAR[freq])
-    return (Decimal("1") + annual_rate / n) ** (n * years)
+    calc = (calculation_type or "simple").strip().lower()
+    return "never" if calc == "simple" else freq
 
 
-def savings_interest_for_payout_period(
+def accrue_daily_interest(
     *,
-    posted_balance: Decimal,
-    annual_rate: Decimal,
+    days,
     calculation_type: str,
     compound_frequency: str,
-    payout_frequency: str,
 ) -> Decimal:
-    """Interest owed for one payout window on an eligible posted balance (§4, §7, §9).
+    """Interest accrued over one payout window by the daily balance method.
 
-    ``posted_balance`` is the authoritative posted savings balance — the sole eligible
-    base (SPEC-ECON-001 §9.2/§13). No hidden default APY: the caller supplies the
-    Class-Config rate, and a ``None``/non-positive rate or balance yields zero (§11).
-    Result is quantized to cents at this payout boundary (§5.3).
+    This is the single authoritative accrual formula; the runtime payout and the
+    projection both call it (SPEC-ECON-001 §10). Each day earns
+    ``earning_base × annual_rate / SAVINGS_DAYS_PER_YEAR`` (365, leap years too,
+    §5.2), where the earning base is the day's
+    end-of-day posted balance plus whatever accrued interest has joined it:
+
+    - ``never`` / simple: accrued interest never joins (§4.1).
+    - ``daily``: interest accrued earlier in the window joins every day (§4.2).
+    - ``weekly`` / ``monthly``: interest accrued so far joins at each day marked
+      ``capitalizes`` — a class-local week or month start inside the window.
+
+    Interest already credited is part of ``end_of_day_balance`` for every
+    calculation type, simple included. For simple interest that does not conform
+    to §4.1; it is a tracked known deviation (SPEC-ECON-001 Appendix A, KD-1).
+
+    A non-positive earning base earns nothing. Full ``Decimal`` precision is kept;
+    the caller rounds once, when the window is credited (§5.3).
     """
-    if posted_balance is None or annual_rate is None:
+    compounding = _savings_compounding(calculation_type, compound_frequency)
+    accrued = Decimal("0")
+    capitalized = Decimal("0")
+    for day in days:
+        if day.capitalizes:
+            capitalized = accrued
+        if day.annual_rate is None or day.annual_rate <= 0:
+            continue
+        if compounding == "never":
+            base = day.end_of_day_balance
+        elif compounding == "daily":
+            base = day.end_of_day_balance + accrued
+        else:
+            base = day.end_of_day_balance + capitalized
+        if base > 0:
+            accrued += base * Decimal(day.annual_rate) / SAVINGS_DAYS_PER_YEAR
+    return accrued
+
+
+def credit_savings_interest(accrued: Decimal) -> Decimal:
+    """Round a window's accrued interest to cents, once, at crediting (§5.3)."""
+    if accrued is None or accrued <= 0:
         return Decimal("0.00")
-    if posted_balance <= 0 or annual_rate <= 0:
-        return Decimal("0.00")
-    payout = (payout_frequency or "monthly").strip().lower()
-    if payout not in _PAYOUT_FREQ_PER_YEAR:
-        raise ValueError(f"Unsupported payout_frequency: {payout_frequency!r}")
-    years = Decimal("1") / Decimal(_PAYOUT_FREQ_PER_YEAR[payout])
-    factor = _savings_period_factor(
-        annual_rate=annual_rate,
-        calculation_type=calculation_type,
-        compound_frequency=compound_frequency,
-        years=years,
-    )
-    return _money(posted_balance * (factor - Decimal("1")))
+    return _money(accrued)
+
+
+@dataclass(frozen=True)
+class ProjectedSavingsDay:
+    """A projection day: a known end-of-day balance, or ``None`` for "unchanged"."""
+
+    end_of_day_balance: Optional[Decimal]
+    annual_rate: Optional[Decimal]
+    capitalizes: bool = False
 
 
 def project_savings_balances(
     *,
     posted_balance: Decimal,
-    annual_rate: Optional[Decimal],
+    windows,
+    checkpoints,
     calculation_type: str,
     compound_frequency: str,
-    payout_frequency: str,
-    months: int = 12,
 ) -> list[Decimal]:
-    """Monthly posted-balance forecast built from the runtime payout recurrence (§10).
+    """Posted-balance forecast built from the runtime accrual (SPEC-ECON-001 §10).
 
-    Returns ``months + 1`` cent-quantized points (index 0 = now). The forecast walks
-    the SAME payout recurrence the runtime engine executes: each payout window credits
-    ``savings_interest_for_payout_period`` and capitalizes it into the running balance,
-    so the chart is exactly what will post. A ``None``/zero rate produces a flat line
-    (no hidden default APY — §11).
+    ``windows`` is the class-local payout calendar from now forward, each window a
+    sequence of ``ProjectedSavingsDay``. A day with a known balance (one already
+    ended in the open window) uses it; every other day assumes the balance is
+    left alone: today's posted balance plus interest credited since. Each window
+    is credited with ``credit_savings_interest(accrue_daily_interest(...))`` and
+    joins the balance for the next — exactly what the payout job will post.
+
+    ``checkpoints[k]`` is how many windows have closed by forecast point ``k + 1``.
+    Returns ``len(checkpoints) + 1`` points; index 0 is now.
     """
-    balance = _money(posted_balance or Decimal("0.00"))
-    if annual_rate is None or annual_rate <= 0:
-        return [balance for _ in range(months + 1)]
-
-    payout = (payout_frequency or "monthly").strip().lower()
-    if payout not in _PAYOUT_FREQ_PER_YEAR:
-        raise ValueError(f"Unsupported payout_frequency: {payout_frequency!r}")
-    payouts_per_year = _PAYOUT_FREQ_PER_YEAR[payout]
-
-    series: list[Decimal] = [balance]
-    for month in range(1, months + 1):
-        # Number of payout windows that close by the end of this month.
-        windows_to_date = (payouts_per_year * month) // 12
-        windows_prev = (payouts_per_year * (month - 1)) // 12
-        for _ in range(windows_prev, windows_to_date):
-            interest = savings_interest_for_payout_period(
-                posted_balance=balance,
-                annual_rate=annual_rate,
-                calculation_type=calculation_type,
-                compound_frequency=compound_frequency,
-                payout_frequency=payout,
+    opening = _money(posted_balance or Decimal("0.00"))
+    balance = opening
+    after_window = [opening]
+    for window in windows:
+        days = [
+            SavingsAccrualDay(
+                end_of_day_balance=(
+                    day.end_of_day_balance if day.end_of_day_balance is not None else balance
+                ),
+                annual_rate=day.annual_rate,
+                capitalizes=day.capitalizes,
             )
-            balance = _money(balance + interest)
-        series.append(balance)
-    return series
+            for day in window
+        ]
+        balance = _money(balance + credit_savings_interest(accrue_daily_interest(
+            days=days,
+            calculation_type=calculation_type,
+            compound_frequency=compound_frequency,
+        )))
+        after_window.append(balance)
+    return [opening] + [after_window[min(count, len(windows))] for count in checkpoints]
 
 
 @dataclass(frozen=True)

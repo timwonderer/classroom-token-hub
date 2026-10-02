@@ -14,6 +14,7 @@ Reference: SPEC-ECON-003 (Economic Engine Calculation & Reference Specification)
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass
 from enum import Enum
+from types import SimpleNamespace
 from decimal import Decimal
 import logging
 
@@ -61,7 +62,8 @@ class CWICalculation:
     time_unit: str                      # Unit type (seconds, minutes, hours, days)
     pay_rate_per_minute: float         # Normalized to per-minute
     expected_weekly_minutes: float     # Expected attendance per week
-    payroll_frequency_days: int        # How often payroll runs
+    pay_schedule_type: str             # weekly / biweekly / monthly (anchored, SPEC-TIME-001 §IX.12)
+    pay_period_days: int | None        # Calendar length of the current pay period
     notes: List[str]                   # Calculation notes
 
 
@@ -199,23 +201,21 @@ class EconomyBalanceChecker:
             for role, bounds in self.STORE_ROLE_BANDS.items()
         }
 
-    def _weekly_insurance_premium(self, policy_version) -> Optional[float]:
-        """Weekly premium of one offered insurance policy version, or None.
+    def _weekly_insurance_premium(self, policy) -> Optional[float]:
+        """Weekly premium of one offered insurance definition, or None.
 
-        A policy version carries its terms in its payload, not in columns. An
-        inactive version is not offered, and a version with no usable premium is
+        ``policy`` is an ``insurance_policies`` row; its premium and cadence are
+        typed columns (DOM-POL-001 §VI.0). A definition with no usable premium is
         skipped rather than priced by guesswork.
         """
-        import json
-
-        if not getattr(policy_version, "is_active", False):
+        premium = getattr(policy, "premium", None)
+        if premium is None:
             return None
         try:
-            payload = json.loads(getattr(policy_version, "policy_payload_json", None) or "{}")
-            premium = Decimal(str(payload["premium"]))
-        except (KeyError, TypeError, ValueError, ArithmeticError):
+            premium = Decimal(str(premium))
+        except (TypeError, ValueError, ArithmeticError):
             return None
-        frequency = str(payload.get("charge_frequency") or "weekly").lower()
+        frequency = str(getattr(policy, "charge_frequency", None) or "weekly").lower()
         return float(self._normalize_to_weekly(premium, frequency))
 
     def _normalize_to_weekly(
@@ -284,11 +284,11 @@ class EconomyBalanceChecker:
         if expected_weekly_hours is None:
             try:
                 from app.services.class_configuration_query_service import (
-                    get_effective_economic_engine,
+                    get_current_economic_engine,
                 )
                 class_id = getattr(payroll_settings, 'class_id', None)
                 if class_id:
-                    engine = get_effective_economic_engine(class_id, 'payroll')
+                    engine = get_current_economic_engine(class_id)
                     if engine and engine.expected_weekly_hours is not None:
                         expected_weekly_hours = _quantize_currency(engine.expected_weekly_hours)
                         notes.append(f"Using expected weekly hours from EconomicEngine: {expected_weekly_hours} hours")
@@ -318,13 +318,46 @@ class EconomyBalanceChecker:
         cwi = _quantize_currency(expected_weekly_minutes * pay_rate_per_minute)
         notes.append(f"CWI = {expected_weekly_minutes} min × ${pay_rate_per_minute:.4f}/min = ${cwi:.2f}")
 
+        # The pay frequency is the schedule type; a period's length comes from
+        # the anchored paydays, so a February period is shorter than a March one
+        # (DOM-PROD-001 §XV.5). It is never a stored number of days.
+        from app.services.payroll.schedule import pay_period_containing
+        from app.utils.canonical_temporal_resolver import (
+            CLASS_LEVEL_EVALUATION,
+            canonical_temporal_resolver,
+            utc_now,
+        )
+        pay_period_days = None
+        class_id = getattr(payroll_settings, 'class_id', None)
+        period = pay_period_containing(class_id, utc_now()) if class_id else None
+        if period is not None:
+            start, end = period
+            local = canonical_temporal_resolver(
+                CLASS_LEVEL_EVALUATION,
+                canonical_execution_context=SimpleNamespace(class_id=class_id),
+                primitive="current_evaluation_day",
+                reference_time_utc=end,
+            ).evaluation_date
+            first = canonical_temporal_resolver(
+                CLASS_LEVEL_EVALUATION,
+                canonical_execution_context=SimpleNamespace(class_id=class_id),
+                primitive="current_evaluation_day",
+                reference_time_utc=start,
+            ).evaluation_date
+            pay_period_days = (local - first).days
+            notes.append(
+                f"Payroll schedule: {payroll_settings.pay_schedule_type}; the current pay period is "
+                f"{pay_period_days} days ({first:%b %d} to {local:%b %d})"
+            )
+
         return CWICalculation(
             cwi=float(cwi),  # Convert to float for JSON serialization
             pay_rate=float(payroll_settings.pay_rate),  # Convert to float for JSON serialization
-            time_unit=payroll_settings.time_unit or "minutes",
+            time_unit="minutes",  # pay_rate is stored per minute (DOM-CORE-002 §11)
             pay_rate_per_minute=float(pay_rate_per_minute),
             expected_weekly_minutes=float(expected_weekly_minutes),
-            payroll_frequency_days=payroll_settings.payroll_frequency_days or 7,
+            pay_schedule_type=payroll_settings.pay_schedule_type,
+            pay_period_days=pay_period_days,
             notes=notes
         )
 

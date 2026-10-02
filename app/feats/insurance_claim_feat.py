@@ -103,12 +103,16 @@ from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
     ensure_utc,
 )
-from app.models import _quantize_currency, PolicyVersion
+from app.models import _quantize_currency
 from app.services.economic_engine import require_ready_base, EconomicEngineNotReady
 from app.services.attendance_service import (
     calculate_worked_attendance_seconds_for_date,
 )
-from app.payroll import get_daily_limit_seconds, get_pay_rate_for_class
+from app.services.payroll.settings import (
+    current_daily_limit_seconds,
+    current_payroll_setting,
+    pay_rate_per_second,
+)
 
 _TRANSACTION_INSURANCE_TYPE = "TRANSACTION"
 _PRODUCTIVITY_INSURANCE_TYPE = "PRODUCTIVITY"
@@ -899,13 +903,13 @@ def _enforce_productivity_daily_capacity(
 ) -> Optional["InsuranceClaimSubmissionResult"]:
     """Req 3: claimed loss-time ≤ remaining daily capacity after time worked.
 
-    The daily limit is the canonical ``get_daily_limit_seconds`` authority, keyed
+    The daily limit is the payroll-settings resolver's ``current_daily_limit_seconds``, keyed
     by ``class_id`` alone. When no limit is configured the resolver returns
     ``None`` and PRODUCTIVITY imposes no per-day ceiling. The worked duration is an
     authoritative attendance read for the exact class-local date — PRODUCTIVITY
     never interprets AttendanceSession rows itself.
     """
-    daily_cap_seconds = get_daily_limit_seconds(class_id=class_id)
+    daily_cap_seconds = current_daily_limit_seconds(class_id)
     if daily_cap_seconds is None:
         return None
 
@@ -1361,7 +1365,7 @@ def productivity_hourly_rate(class_id: str) -> Decimal:
 
 
 def _resolve_hourly_pay_rate(class_id: str) -> Decimal:
-    """Class-global hourly pay rate ($/hour) from active PayrollSettings.
+    """Class-global hourly pay rate ($/hour) from the payroll setting in force.
 
     ``PayrollSettings.pay_rate`` is stored per-minute; the hourly wage is ×60. This
     is a *payroll fact* read at adjudication time — the resulting per-date
@@ -1374,7 +1378,7 @@ def _resolve_hourly_pay_rate(class_id: str) -> Decimal:
     one (INV-ARC-014 §V). Resolving through the shared reader also keeps claim
     adjudication and payroll priced from the same row.
     """
-    per_second = get_pay_rate_for_class(class_id=class_id)
+    per_second = pay_rate_per_second(current_payroll_setting(class_id))
     return per_second * Decimal("3600")
 
 
@@ -1641,16 +1645,16 @@ def _approve_productivity_claim(
     # lineage. The entire approval unit is atomic, not merely the status field.
     payroll_event_id = None
     if total_recognized > Decimal("0.00"):
-        payroll_version = (
-            PolicyVersion.query.filter_by(
-                class_id=class_id, domain="payroll", is_active=True
-            ).first()
-        )
-        if payroll_version is None:
+        # The payout was priced at the hourly rate of the payroll setting in
+        # force, so the credit carries that setting as its provenance
+        # (DOM-PROD-001 §VIII.3: a manual_credit posting another domain's
+        # calculation retains the provenance that calculation used).
+        payroll_setting = current_payroll_setting(class_id)
+        if payroll_setting is None:
             return InsuranceClaimResolutionResult(
                 success=False,
                 error_code="PAYROLL_COMPENSATION_FAILED",
-                error_message="No active payroll policy version to post MANUAL_CREDIT",
+                error_message="No payroll settings to post MANUAL_CREDIT under",
             )
         # Nested FEAT-PROD-003 shares this thread's correlation (atomicity guard).
         active_correlation = get_correlation_id()
@@ -1665,8 +1669,8 @@ def _approve_productivity_claim(
                 idempotency_key=(
                     idempotency_key or f"FEAT-STOR-003:productivity-credit:{claim.claim_id}"
                 ),
-                policy_version_id=payroll_version.id,
-                mechanism="system",
+                policy_uuid=payroll_setting.policy_uuid,
+                mechanism="SYSTEM",
                 amount=total_recognized,
                 summary_json={
                     "description": (

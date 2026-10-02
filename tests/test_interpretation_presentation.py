@@ -178,16 +178,12 @@ def test_sections_group_candidates_thematically(app):
 def test_presents_a_real_materialized_cycle_record(app):
     """End-to-end: a cycle materialized by the payroll pipeline presents cleanly."""
     from app.feats.complete_payroll_cycle import complete_payroll_cycle
-    from app.models import AttendanceSession, PolicyVersion
+    from app.models import AttendanceSession
     from app.services.context_resolver import CanonicalContext
 
     classroom = initialize("chemistry_p1", app)
     cid = classroom.class_id
     now = utc_now()
-    with FEATContext("FEAT-BYPASS-LEGACY", correlation_id=f"pol:{cid}"):
-        db.session.add(PolicyVersion(class_id=cid, domain="payroll", version_number=1,
-                                     policy_payload_json="{}", activated_at=now, is_active=True))
-        db.session.flush()
     with FEATContext("FEAT-PROD-001", correlation_id=f"att:{cid}", idempotency_key=f"att:{cid}"):
         student = classroom.students[0]
         db.session.add(AttendanceSession(
@@ -206,7 +202,8 @@ def test_presents_a_real_materialized_cycle_record(app):
     key = "run:present"
     with FEATContext("FEAT-PROD-004", idempotency_key=key):
         complete_payroll_cycle(ctx=ctx, idempotency_key=key,
-                               cycle_started_at=now - timedelta(hours=1), cycle_completed_at=now)
+                               cycle_started_at=now - timedelta(hours=1), cycle_completed_at=now,
+                               run_mechanism="TEACHER")
 
     view = get_latest_cycle_view(cid)
     assert view is not None

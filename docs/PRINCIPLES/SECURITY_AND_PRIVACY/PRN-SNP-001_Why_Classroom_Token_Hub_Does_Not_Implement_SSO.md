@@ -23,7 +23,7 @@ This document outlines a risk-based engineering decision. SSO on our server woul
 ## 2. Scope
 
 > [!IMPORTANT]
-> This document is describing v2.0 architecture and invariants, which is currently being implemented across the codebase. At the time of this writing, not all components of the system have been migrated to v2.0, and some components may still be using v1.0 architecture. However, the system will be v2.0 compliant by public release. The v1.0 architecture is intentionally kept out of scope for the purposes of this document.
+> This document describes the v2 architecture and invariants, which are in production (v2.0.0 released 2026-09-26). It was written while the v2 migration was still in progress; the v1 architecture is out of scope.
 
 This document covers the authentication and identity architecture for all three CTH principals (Student, Teacher, System Administrator).
 
@@ -124,7 +124,6 @@ CTH's non-implementation of SSO is a deliberate, documented architectural decisi
 - `docs/INVARIANT/ARCHITECTURE/INV-ARC-019_IDENTITY_AND_OWNERSHIP_MODEL.md` — Principal/actor/boundary separation and `seats.public_id` semantics
 - `docs/DOMAIN/DOM-IDEN-002_STUDENT_IDENTITY_ARCHITECTURE.md` — No-DOB claim flow, `dedupe_code` disambiguation, student recovery
 - `docs/DOMAIN/DOM-IDEN-003_TEACHER_IDENTITY_ARCHITECTURE.md` — Unified teacher/student `users`/`seats` model, teacher recovery
-- `docs/SECURITY/SEC-CORE-000_Security_Foundation.md` — §IV (Security Precepts)
-- `docs/SECURITY/CONTROLS/SEC-CONT-026_Authorization_Architecture.md` — Role-Based Access Control model
-- `docs/SECURITY/INCIDENTS/SEC-INC-013_Critical_Same_Teacher_Leak.md` — Prior incident motivating tenant-isolation-first design
+- `docs/INVARIANT/CORE/INV-CORE-001_CAPABILITY_BASED_ARCHITECTURE_AND_AUTHORITY_MODEL.md` — Authority model. It covers what the v1 security precepts (`SEC-CORE-000`) and authorization architecture (`SEC-CONT-026`) specified; neither v1 document was carried into v2
+- `docs/archive/v1-docs/SECURITY/INCIDENTS/SEC-INC-013_Critical_Same_Teacher_Leak.md` — archived v1 incident report, historical: the same-teacher multi-period leak that motivated the tenant-isolation-first design
 - NIST Cybersecurity Framework (CSF) 2.0, Function: Protect, Category: Identity Management, Authentication, and Access Control (`PR.AA`)

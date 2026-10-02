@@ -1,28 +1,43 @@
 # FEAT-IDEN-001: Unauthenticated Student Seat Claim
-**[REMEDIATED - Compliant with DOM-IDEN Authority]**
+**[v2 - Compliant with INV-ARC-019 and DOM-IDEN Authority]**
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| FEAT-IDEN-001 | 2.3 | 2026-09-15 | 2.2 | Normative | REMEDIATED |
+| FEAT-IDEN-001 | 3.1 | 2026-10-01 | 3.0 | Normative | ACTIVE |
 
 ---
 
 ## I. Purpose
 
-This FEAT orchestrates the unauthenticated binding of a newly provisioned `User` to a classroom `Seat`. It is the primary entry point for a student to claim their classroom participation through a teacher-provided join code.
+This FEAT is the verification phase of the unauthenticated student claim. It resolves a teacher-provided join code and the student's roster name to exactly one unclaimed `Seat`, and hands that Seat to **FEAT-IDEN-002** (Student Credential Setup). FEAT-IDEN-002 then creates the student's `User`, activates its credentials and binds the Seat, all in one transaction.
+
+This FEAT writes nothing. It provisions no `User`, binds no `Seat` and clears no claim artifact. Per DOM-IDEN-005 §VIII, binding associates an **authenticated** `User` with an unclaimed `Seat`. Per INV-ARC-019 §XII, "claim/setup later proves entitlement to the seat and creates/binds the authentication principal". A `User` is therefore never created before it has credentials.
 
 > [!IMPORTANT]
 >
 > **Scope Clarification:** This FEAT handles **unauthenticated claim only**. It is for students claiming a classroom seat without prior authentication. For authenticated users joining a new classroom (reusing existing credentials), see **FEAT-IDEN-005** (Authenticated Class Binding).
 
 **Governing Authority:**
-- DOM-IDEN-005 §VII (Student Identity Lifecycle)
-- DOM-IDEN-002 §VIII (Student Claim Flow)
+- INV-ARC-019 §VII, §X and §XII (Operational Actor, claim artifacts, Roster Provisioning and Seat Claim)
+- DOM-IDEN-005 §V, §VII and §VIII (Membership by Existence, Student Identity Lifecycle, Identity Binding)
+- DOM-IDEN-002 §VIII (Roster Provisioning and Claim)
+- SPEC-SEC-001 §V.2 (lookup normalization and HMAC encoding)
 - FEAT-CORE-000 (Feature Execution Constitutional Directive)
 
 ---
 
 ## II. Execution Context
+
+### 0. Precondition: No Authenticated Principal (MANDATORY)
+
+Per DOM-IDEN-005 §VII (v2.3, operator ruling 2026-10-01), the unauthenticated claim requires the absence of an
+authenticated canonical principal. If the request boundary has authenticated a `user_id` for the
+session (DOM-IDEN-006 §VIII step 1) — student, teacher or sysadmin, with or without a selected
+class — the request is refused before this FEAT runs: no Turnstile check, no seat resolution, no lock, and no
+setup state written. The refusal infers nothing about how the signed-in principal relates to the
+identity being established. One gate enforces this for every endpoint of the workflow
+(`app/routes/identity_establishment.py`); a structural test fails any view that reaches
+establishment state without being declared there.
 
 ### 1. Required Inputs
 
@@ -31,7 +46,7 @@ This FEAT orchestrates the unauthenticated binding of a newly provisioned `User`
     * `first_name`: Student's first name (full or partial, as provided by teacher roster)
     * `last_name`: Student's last name (full or partial, as provided by teacher roster)
     * `dedupe_code`: (Optional) Short code provided by teacher to disambiguate duplicate names
-* `idempotency_key`: Client-provided unique request ID for retry safety.
+* `idempotency_key`: Accepted or generated per FEAT-CORE-000 §III.3.
 
 **Prohibited Inputs:** None of the following may be accepted:
 - ❌ DOB or DOB derivatives (per DOM-IDEN-002 §XI)
@@ -41,264 +56,153 @@ This FEAT orchestrates the unauthenticated binding of a newly provisioned `User`
 ### 2. Resolved Context (MANDATORY)
 
 The FEAT MUST resolve the following before mutation:
-* `class_id`: Resolved via `join_code` (classroom universe)
-* `roster_seat_id`: The unclaimed seat in the classroom's roster matching the credential hashes
+* `class_id`: Resolved via `join_code` at the `ClassEconomy` boundary (the only use of `join_code`; every later step uses `class_id`)
+* `roster_seat_id`: The unclaimed seat in that class matching the claim hashes
+* `claim_generation`: The resolved Seat's current server-stored generation (DOM-IDEN-005 §VIII; DOM-IDEN-007)
 
 ---
 
 ## III. Orchestration Logic
 
-### A. Verification Phase (Read-Only)
+### A. Verification (Read-Only)
 
-The following validation steps SHALL occur before any mutations:
+This FEAT has only a read-only phase. It SHALL perform no database write.
 
 #### Step 1: Resolve Class
-1. Look up `ClassEconomy` record where `join_code` matches the provided code.
-2. Extract `class_id` from the resolved `ClassEconomy`.
-3. **Failure Behavior**: If no class found, abort with `INVALID_JOIN_CODE`.
+1. Look up the `ClassEconomy` whose `join_code` matches the provided code.
+2. Take `class_id` from it.
+3. **Failure Behavior**: If no class is found, abort with `INVALID_JOIN_CODE`.
 
 #### Step 2: Resolve Roster Seat
-1. Query all unclaimed seats where:
-   - `class_id` matches the resolved class
-   - `user_id IS NULL` (unclaimed per DOM-IDEN-005 §VII)
-2. Compute name match hashes:
-   - `claim_first_name_hash = hash_claim_name(first_name, class_id=resolved_class_id, field="first")`
-   - `claim_last_name_hash = hash_claim_name(last_name, class_id=resolved_class_id, field="last")`
+1. Select the unclaimed seats in the class: `class_id` matches, and `user_id IS NULL` (DOM-IDEN-002 §VIII, *Student Seat State*).
+   - **Failure Behavior**: If there are none, abort with `NO_UNCLAIMED_SEATS`.
+2. Compute the claim hashes:
+   - `claim_first_name_hash = hash_claim_name(first_name, class_id=class_id, field="first")`
+   - `claim_last_name_hash = hash_claim_name(last_name, class_id=class_id, field="last")`
    - Both use the normalization and purpose-separated HMAC encoding in SPEC-SEC-001 §V.2.
-3. Find all seats where both name hashes match the computed hashes.
-4. **Deduplication Logic**:
-   - If exactly one seat matches: Use that seat.
-   - If multiple seats match: Require `dedupe_code` from student.
-     - Find seats where `dedupe_code` matches the provided code.
-     - If exactly one seat matches after dedupe: Use that seat.
-     - If zero or multiple seats match: abort with `INVALID_CREDENTIALS` or `AMBIGUOUS_IDENTITY`.
-   - If zero seats match: abort with `INVALID_CREDENTIALS`.
-5. Extract `roster_seat_id` from the resolved seat.
-6. **Failure Behavior**: Abort immediately if any step fails, with no user discovery.
+3. Select the seats whose two claim hashes both match.
+4. **Deduplication**:
+   - If exactly one seat matches, use it.
+   - If several match and no `dedupe_code` was given, abort with `AMBIGUOUS_IDENTITY`.
+   - If several match, keep those whose `dedupe_code` equals the given code. Exactly one must remain; otherwise abort with `INVALID_DEDUPE_CODE`.
+   - If none match, abort with `INVALID_CREDENTIALS`.
+5. Take `roster_seat_id` and its `claim_generation` from the resolved seat.
+6. **Failure Behavior**: Abort at the first failing step. A failure reveals no `User`, no seat identifier and no other student's data (see §VII on what a claimant can learn).
 
-#### Step 3: Identity Inference Prohibition Check
-Per DOM-IDEN-005 §VII (Identity Inference Prohibition):
+#### Step 3: Identity Inference Prohibition
+Per DOM-IDEN-005 §VII:
 > "unauthenticated claim SHALL NOT search for or infer existing User identities outside the current claim transaction."
 
 This FEAT **SHALL NOT**:
-- ❌ Search for existing `User` records
-- ❌ Compute or use identity_hash (DOB-based or otherwise)
-- ❌ Check if a user with similar credentials already exists
+- ❌ Search for, read or compare any `User` record
+- ❌ Compute or use an identity hash (DOB-based or otherwise)
 - ❌ Reuse or link to any pre-existing `User`
 
-**Rationale**: The unauthenticated claim context provides no way to authenticate that a returning student is the same human. Therefore, identity merging is prohibited by constitutional law.
+**Rationale**: An unauthenticated context cannot prove that a returning student is the same person. Identity merging is therefore prohibited, and FEAT-IDEN-002 always creates a new `User` for an unauthenticated claim.
 
----
+#### Step 4: Hand-off to FEAT-IDEN-002
+1. Record the resolved Seat reference and its `claim_generation` in the signed onboarding session (see *Claim verification lifetime* below).
+2. Record no `User` reference. None exists yet for this claim.
 
-### B. Mutation Phase (Atomic Transaction)
+### B. What this FEAT does not do
 
-All mutations in this section **MUST** occur within a single database transaction. **Any failure SHALL trigger complete rollback.**
+The following belong to **FEAT-IDEN-002**, in one atomic transaction (DOM-IDEN-005 §VIII; INV-ARC-019 §X and §XII):
+- creating the student `User` together with its credentials;
+- binding the Seat (`user_id`, `claimed_at`) under a row lock, after rechecking that it is still unclaimed and that its `claim_generation` is the one recorded here;
+- clearing `claim_first_name_hash`, `claim_last_name_hash`, `roster_fingerprint` and `dedupe_code`;
+- initializing `last_active_class_id` and `last_active_seat_id` (DOM-IDEN-002 §VIII, *Claim Flow* step 9).
 
-#### Step 1: User Provisioning (NEW USER ONLY)
-
-Per DOM-IDEN-005 §VII:
-> "the workflow SHALL provision a new User because no authenticated principal exists and the system SHALL NOT infer or merge existing identities."
-
-1. Create a new `User` record with `user_role = 'student'`.
-2. **DO NOT** populate authentication credentials (`pin_hash`, `passphrase_hash`, `username_hash`) yet.
-   - These will be activated in **FEAT-IDEN-002** (Credential Setup).
-   - Per DOM-IDEN-002 §VI: "A `users` row may be provisioned before claim; credentials are activated when a student claims a seat and completes setup."
-3. Write the new `User` record.
-4. Capture `user_id` for the next steps.
-
-#### Step 2: Seat Binding
-
-Per DOM-IDEN-005 §VIII (Identity Binding):
-> "Binding SHALL occur atomically."
-
-1. Acquire a row lock on the resolved `Seat` record before binding:
-   - Use `SELECT ... FOR UPDATE` (or equivalent ORM row lock) on the `Seat` row.
-2. Execute a conditional update requiring `Seat.user_id IS NULL` (guard against concurrent claims):
-   - Set `user_id = user_id` (bind seat to the newly provisioned user)
-   - Set `claimed_at = NOW()` (mark claim timestamp)
-   - Set `role = 'student'` (or verify already set)
-   - **WHERE** `Seat.user_id IS NULL` (conditional bind)
-3. Verify exactly one row was affected by the update. If zero rows were updated (seat was concurrently claimed), roll back the entire transaction including the newly provisioned `User` and return `SEAT_ALREADY_CLAIMED`.
-4. Verify `UNIQUE(user_id, class_id)` constraint is satisfied (only one seat per user per class).
-
-#### Step 3: Roster Finalization (PII Scrubbing)
-
-Per FEAT-IDEN-001 §IV (Invariants), PII on the roster seat SHALL be scrubbed:
-
-1. **ZERO OUT claim lookup hashes** on the resolved `Seat` record:
-   - Set `claim_first_name_hash = NULL`
-   - Set `claim_last_name_hash = NULL`
-   - Set `dedupe_code = NULL` (if used)
-   - Set `roster_fingerprint = NULL`
-
-**Rationale**: Once a seat is claimed, these hashes are no longer needed for lookup. Leaving them creates a PII liability. If a future password reset or recovery flow were to leak the roster, the hashes would still identify the student.
-
-#### Step 4: Membership Initialization
-
-Per DOM-IDEN-005 §V (Membership by Existence) and FEAT-IDEN-001 §III.2.4:
-
-1. **Call DOM-CLASS** to record the student's participation in the classroom.
-   - Expected outcome: Create a formal `ClassMembership` or equivalent record (if applicable in current schema).
-   - This step ensures the identity domain and class domain are synchronized.
-
-#### Step 5: Context Restoration
-
-Per DOM-IDEN-002 §VIII.IV.9:
-> "Initialize `last_active_class_id` and `last_active_seat_id` to the newly bound class and seat context."
-
-1. Set `User.last_active_class_id = class_id`
-2. Set `User.last_active_seat_id = seat_id`
-
-**Rationale**: These pointers enable DOM-IDEN-006 (Context Resolution) to restore the user's active class and seat upon login.
-
-#### Step 6: Audit Trace
-
-Per FEAT-CORE-000 §III.4 (Audit Logging & Correlation):
-> "Every FEAT execution **MUST** emit an audit record via DOM-OPS."
-
-1. Call `DOM-OPS` to emit an `ACT-IDEN-001` audit event.
-2. **Required fields**:
-   - `feat_id`: "FEAT-IDEN-001"
-   - `user_id`: The newly created `user_id`
-   - `seat_id`: The claimed `seat_id`
-   - `class_id`: The class context
-   - `roster_seat_id`: The original unclaimed seat (for traceability)
-   - `idempotency_key`: The provided key (for replay detection)
-   - `outcome`: `"NEW_USER_CLAIMED"` (only possible outcome)
-   - `timestamp`: ISO 8601 UTC timestamp
+**Membership is not a record.** Per DOM-IDEN-005 §V and INV-ARC-013, participation in a class *is* the existence of the bound `Seat`. Neither this FEAT nor FEAT-IDEN-002 creates a separate membership row. The v1 `ClassMembership` table does not exist.
 
 ---
 
 ## IV. Invariants & Constraints
 
-### 1. Atomic Binding (MANDATORY)
-The link between `User`, `Seat`, and `Class` must be created within the same transaction (per DOM-IDEN-005 §VIII):
-- User creation, seat binding, and context restoration all within one transaction.
-- Failure at any step triggers full rollback.
-- No partial claims.
+### 1. Read-Only (MANDATORY)
+This FEAT SHALL NOT write to the database. A verified claim that is never completed leaves no `User`, no binding and no changed claim artifact.
 
-### 2. New User Only (MANDATORY)
-Per DOM-IDEN-005 §VII:
-- **ALWAYS** create a new `User` record.
-- **NEVER** search for or reuse existing users.
-- **NEVER** merge identities.
+### 2. No User Before Credentials (MANDATORY)
+No `User` is provisioned by this FEAT. Per DOM-IDEN-005 §V and §VIII, a `User` exists only as an authenticated participant bound to a Seat.
 
-### 3. PII Scrubbing (MANDATORY)
-Once a seat is claimed:
-- Claim lookup hashes (`claim_first_name_hash`, `claim_last_name_hash`, `dedupe_code`) SHALL be zeroed out.
-- No DOB or DOB-derived data exists (per DOM-IDEN-002 §XI).
+### 3. Class Scope (MANDATORY)
+Every seat query is scoped by the `class_id` resolved in Step 1. The claim hashes include `class_id`, so the same name matches no seat in any other class (SPEC-SEC-001 §V.2).
 
-### 4. Deduplication (MANDATORY)
-Per DOM-IDEN-001 §VII (line 106):
-> "One `User` SHALL own at most one `Seat` within a `Class`."
-
-The seat binding step SHALL verify this constraint is satisfied.
+### 4. One Seat per User per Class
+Per DOM-IDEN-001 §VII ("One `User` may own at most one `Seat` within a `Class`") and DOM-IDEN-005 §VIII ("One `User` SHALL own at most one `Seat` within the same `Class`"). This is enforced at binding by FEAT-IDEN-002 and by `UNIQUE(user_id, class_id)` on `seats`.
 
 ### 5. No Identity Inference (MANDATORY)
-Per DOM-IDEN-005 §VII:
-- This FEAT **SHALL NOT** use identity_hash, DOB, or any cross-user identification.
-- Credential matching is scoped to the current claim transaction only.
+Per DOM-IDEN-005 §VII, as in Step 3. No DOB or DOB-derived data is accepted (DOM-IDEN-002 §XI).
 
 ---
 
 ## V. Idempotency
 
-**Mechanism:** Durable idempotency record store with request matching by `idempotency_key` + `seat_id`.
+Per FEAT-CORE-000 §III.3, an `idempotency_key` is accepted or generated. Because this FEAT writes nothing, a replay has no effect to duplicate: the same inputs resolve to the same Seat, or to the same failure.
 
-**Idempotency Record Format (Required):**
-
-An `IdempotencyRecord` entity MUST exist with:
-```
-idempotency_key    (String, PK part 1) — Unique request ID provided by client
-feat_id            (String, PK part 2) — Always "FEAT-IDEN-001"
-user_id            (Integer, PK part 3) — User ID claimed (optional; nullable for anonymous claims)
-seat_id            (Integer)            — Claimed seat (idempotency scope)
-outcome            (Enum)               — "NEW_USER_CLAIMED" or "DUPLICATE_CLAIM"
-created_at         (Timestamp)          — UTC timestamp of original request
-expires_at         (Timestamp)          — TTL (24 hours from created_at)
-```
-
-**Behavior:**
-1. **On entry**, check `IdempotencyRecord` where `idempotency_key = idempotency_key` and `feat_id = "FEAT-IDEN-001"`:
-   - If found and `expires_at > NOW()`: Return cached outcome and `user_id`/`seat_id` (idempotent success).
-   - If found but expired: Proceed with fresh execution (treat as new request).
-   - If not found: Proceed with execution.
-
-2. **On success**, create `IdempotencyRecord` atomically with FEAT outcome:
-   - `idempotency_key`: From request.
-   - `feat_id`: "FEAT-IDEN-001".
-   - `user_id`: The newly created or resolved user.
-   - `seat_id`: The claimed seat.
-   - `outcome`: "NEW_USER_CLAIMED" (successful claim).
-   - `created_at`: Current UTC timestamp.
-   - `expires_at`: UTC timestamp 24 hours in future.
-
-3. **On failure**, do NOT create idempotency record (client should retry with same key after resolving error).
-
-**Client Responsibility:**
-- Generate a stable, deterministic `idempotency_key` (e.g., `SHA256(session_id + user_agent + timestamp_seconds)` or similar).
-- Retry on transient errors (network, 500) with the SAME `idempotency_key`.
-- NEVER reuse the same `idempotency_key` for different logical requests.
+Replay safety for the claim itself belongs to FEAT-IDEN-002. The binding is conditional on `Seat.user_id IS NULL` and on the recorded `claim_generation`, so a replayed or stale verification cannot bind twice. An Unclaim invalidates every earlier verification by incrementing the generation.
 
 ---
 
 ## VI. Audit Requirements
 
-The `DOM-OPS` audit log **MUST** contain:
+Per FEAT-CORE-000 §III.4, the verification attempt **MUST** emit an audit record via DOM-OPS (`ACT-IDEN-001`):
 
 | Field | Type | Required | Rationale |
 |-------|------|----------|-----------|
-| `feat_id` | String | ✓ | Identifies the FEAT (always "FEAT-IDEN-001") |
-| `user_id` | Integer | ✓ | The newly provisioned user |
-| `seat_id` | Integer | ✓ | The claimed seat |
-| `class_id` | UUID | ✓ | The classroom context |
-| `roster_seat_id` | Integer | ✓ | The original unclaimed seat (for traceability) |
-| `idempotency_key` | String | ✓ | Replay detection; enables idempotency verification |
-| `outcome` | Enum | ✓ | Must be: `NEW_USER_CLAIMED` (only valid outcome) |
-| `join_code` | String | ✓ | The ingress code (for audit trail) |
-| `first_name` | String | ✗ | DO NOT log (PII) |
-| `last_name` | String | ✗ | DO NOT log (PII) |
-| `timestamp` | ISO 8601 | ✓ | UTC timestamp of claim completion |
-| `error_code` | String | ⚠️ | Only if outcome is `FAILED` |
+| `feat_id` | String | ✓ | Always "FEAT-IDEN-001" |
+| `class_id` | UUID | When resolved | The classroom context |
+| `seat_id` | Integer | On success | The verified, still unclaimed seat |
+| `correlation_id` | String | ✓ | Links this verification to the FEAT-IDEN-002 completion |
+| `idempotency_key` | String | ✓ | Replay detection |
+| `outcome` | Enum | ✓ | `SEAT_VERIFIED`, or the failure code from §VII |
+| `timestamp` | ISO 8601 | ✓ | UTC time of the attempt |
+| `user_id` | UUID | ✗ | None exists; the actor is unauthenticated |
+| `join_code` | String | ✗ | Not needed once `class_id` is resolved; keep it out of the record |
+| `first_name`, `last_name`, `dedupe_code` | String | ✗ | DO NOT log (PII and claim material) |
 
-**Outcomes (Only One Possible):**
-- `NEW_USER_CLAIMED`: Successful claim of a new unclaimed seat for a new user.
-
-**Explicitly Prohibited Outcomes:**
-- ❌ `EXISTING_USER_LINKED`: Cannot occur; unauthenticated claim always creates new user.
-- ❌ `USER_REUSED`: Cannot occur per DOM-IDEN-005.
+**Explicitly prohibited outcomes:**
+- ❌ `EXISTING_USER_LINKED`, `USER_REUSED`: identity inference is prohibited (DOM-IDEN-005 §VII).
+- ❌ `NEW_USER_CLAIMED`: this FEAT provisions no User. The claim completes in FEAT-IDEN-002.
 
 ---
 
 ## VII. Failure Scenarios
 
-When the FEAT fails, the system SHALL:
+A failure performs no write. It emits the audit record in §VI and returns an error. Messages SHALL NOT
+reveal any `User`, seat identifier, class membership beyond the submitted join code, or another student's data.
 
-1. **Rollback all mutations** atomically.
-2. **Emit audit event** with outcome `FAILED` and error code.
-3. **Return error response** to client with appropriate HTTP status.
-
-**Failure Cases:**
+What a claimant can learn is bounded by the flow itself. Anyone holding the join code learns that a submitted
+roster name matches, because a match proceeds to setup. `AMBIGUOUS_IDENTITY` adds only that the name matches
+more than one seat, and it is required: DOM-IDEN-002 §VIII (*Claim Flow* step 6 and *DOPO Handling*) makes the
+teacher-issued dedupe code mandatory for duplicate names, so the claimant must be asked for it. The join code is
+the first gate on this surface. Every submission must also pass Cloudflare Turnstile verification
+(`student.claim_account`), and the application-wide default rate limit applies.
 
 | Scenario | Error Code | HTTP Status | Message |
 |----------|-----------|-------------|---------|
 | Invalid join code | `INVALID_JOIN_CODE` | 400 | "Invalid join code or all seats already claimed. Check with your teacher." |
 | No unclaimed seats in class | `NO_UNCLAIMED_SEATS` | 400 | "Invalid join code or all seats already claimed. Check with your teacher." |
-| Name credentials don't match any seat | `INVALID_CREDENTIALS` | 400 | "No matching account found. Please check your join code and credentials." |
-| Multiple name matches, dedupe required but not provided | `AMBIGUOUS_IDENTITY` | 400 | "Multiple students in this class share that name. Enter your deduplication code from your teacher." |
-| Invalid dedupe code | `INVALID_DEDUPE_CODE` | 400 | "Invalid deduplication code. Check with your teacher." |
-| Seat binding constraint violated | `DUPLICATE_SEAT_BINDING` | 409 | "This seat is already claimed. Contact your teacher." |
-| Database transaction failure | `INTERNAL_ERROR` | 500 | "An error occurred during account claim. Please try again or contact support." |
+| Names match no unclaimed seat | `INVALID_CREDENTIALS` | 400 | "No matching account found. Please check your join code and credentials." |
+| Several matches, no dedupe code given | `AMBIGUOUS_IDENTITY` | 400 | "Multiple students in this class share that name. Enter your deduplication code from your teacher." |
+| Dedupe code matches no single seat | `INVALID_DEDUPE_CODE` | 400 | "Invalid deduplication code. Check with your teacher." |
+| Database failure | `INTERNAL_ERROR` | 500 | "An error occurred during account claim. Please try again or contact support." |
+| Browser is signed in (an authenticated principal is present) | `SIGNED_IN` | 409 (a page load renders the refusal with 200) | "We are having trouble determining who you are right now. For your protection, this request was cancelled." The page offers **Return to login**, which ends the current sign-in through that role's logout. |
+
+A seat claimed concurrently between verification and setup is refused by FEAT-IDEN-002 (`INVALID_SEAT_STATE`), not here.
 
 ---
 
 ## VIII. Dependencies
 
+- `docs/INVARIANT/ARCHITECTURE/INV-ARC-013_MEMBERSHIP_BY_EXISTENCE.md`
+- `docs/INVARIANT/ARCHITECTURE/INV-ARC-019_IDENTITY_AND_OWNERSHIP_MODEL.md`
 - `docs/FEATURE-EXECUTION/FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md`
+- `docs/FEATURE-EXECUTION/FEAT-IDEN-002_STUDENT_CREDENTIAL_SETUP.md`
 - `docs/DOMAIN/DOM-IDEN-001_CANONICAL_IDENTITY_MODEL.md`
 - `docs/DOMAIN/DOM-IDEN-002_STUDENT_IDENTITY_ARCHITECTURE.md`
 - `docs/DOMAIN/DOM-IDEN-005_IDENTITY_BINDING_AND_LIFECYCLE.md`
 - `docs/DOMAIN/DOM-IDEN-006_CANONICAL_CONTEXT_RESOLUTION.md`
+- `docs/SPEC/SPEC-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_CODE_CONTRACT.md`
 
 ---
 
@@ -306,18 +210,15 @@ When the FEAT fails, the system SHALL:
 
 Before code review, verify:
 
-- [ ] No DOB or DOB-derived fields are accepted or used
-- [ ] No existing user search or inference occurs
-- [ ] Only outcome is `NEW_USER_CLAIMED`
-- [ ] Idempotency_key is stored and used for replay detection
-- [ ] Both `last_active_class_id` AND `last_active_seat_id` are set
-- [ ] Claim lookup hashes are zeroed after binding
-- [ ] ClassMembership initialization occurs (if applicable)
-- [ ] Audit event is emitted with all required fields
-- [ ] All mutations occur in a single transaction
-- [ ] Rollback occurs on any failure
-- [ ] No intermediate user states are observable
-- [ ] Test covers idempotent retry case
+- [ ] The verification performs no database write
+- [ ] No `User` is read, searched for, created or reused
+- [ ] No DOB or DOB-derived field is accepted or used
+- [ ] Every seat query is scoped by the resolved `class_id`
+- [ ] Claim hashes use `hash_claim_name` with `class_id` (SPEC-SEC-001 §V.2)
+- [ ] The Seat reference and `claim_generation` are stored in the signed onboarding session
+- [ ] Failure messages do not reveal whether a name or seat exists
+- [ ] The `ACT-IDEN-001` audit record is emitted without PII
+- [ ] No membership record is created (membership is the bound Seat)
 
 ---
 
@@ -327,12 +228,30 @@ Revisions to this document SHALL:
 
 1. Increment the version.
 2. Update the effective date.
-3. Maintain consistency with DOM-IDEN-005 §VII and DOM-IDEN-002 §VIII.
-4. Maintain consistency with FEAT-CORE-000.
-5. Maintain consistency with INV-CORE-000.
+3. Stay consistent with INV-ARC-019, DOM-IDEN-005 §V, §VII and §VIII, and DOM-IDEN-002 §VIII.
+4. Stay consistent with FEAT-CORE-000 and FEAT-IDEN-002.
 
-**This is version 2.1 of FEAT-IDEN-001. Version 1.0 (2026-04-23) is superseded and withdrawn due to constitutional non-compliance.**
+**Version 3.1 (2026-10-01), operator ruling 2026-10-01:** §II.0 makes the absence of an authenticated
+principal a precondition (DOM-IDEN-005 v2.3 §VII), checked before verification; §VII adds `SIGNED_IN`.
+Incident OPS-DB-001: a signed-in browser ran this verification and FEAT-IDEN-002 created a second `User`.
 
+**Version 3.0 (2026-09-28):**
+- FEAT-IDEN-001 is the read-only verification phase of the claim. User provisioning, seat binding,
+  claim-artifact clearing and context initialization moved to FEAT-IDEN-002, which already
+  performed them. Version 2.x put an uncredentialed `User` and the binding here. That
+  contradicted DOM-IDEN-005 §VIII (binding associates an *authenticated* User) and INV-ARC-019
+  §XII.
+- §VII states what a claimant can learn, and why `AMBIGUOUS_IDENTITY` is required (DOM-IDEN-002 §VIII).
+- Removed the step that created a `ClassMembership` "or equivalent" record. Membership is the bound Seat
+  (DOM-IDEN-005 §V, INV-ARC-013), and `ClassMembership` does not exist in v2.
+- Removed the `IdempotencyRecord` entity, because a read-only phase has nothing to replay. Idempotency is
+  stated per FEAT-CORE-000 §III.3, and the binding's replay guard (`claim_generation`) is in FEAT-IDEN-002.
+- The audit record now describes a verification attempt: it records no `user_id` and no `join_code`. Types now
+  follow the schema (`users.id` has been a UUID since v2.0.1).
+- Corrected citations: DOM-IDEN-001 §VII says "may", not "SHALL". Context initialization is DOM-IDEN-002 §VIII,
+  *Claim Flow* step 9. Added INV-ARC-013, INV-ARC-019, SPEC-SEC-001 and FEAT-IDEN-002 as dependencies.
+
+Version 1.0 (2026-04-23) was withdrawn for constitutional non-compliance.
 
 ## Claim verification lifetime
 

@@ -1,4 +1,4 @@
-# App health collector activation (prelaunch)
+# App health collector activation
 
 This setup implements bounded external observation under `DOM-OPS-001`,
 `SPEC-OPS-002`, and `SOP-OPS-001`. The collector does not create canonical

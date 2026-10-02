@@ -32,9 +32,8 @@ produce a *fresh* ``policy_uuid`` row; a prior definition is never mutated in pl
 Only the availability projection (IN_USE / HIDDEN / RETIRED) may change on an
 existing row, via ``set_insurance_definition_availability``.
 
-This module writes NOTHING to ``PolicyVersion`` / ``PolicyTransition`` — that
-DOM-CLASS-003 *economic* version-control residue is not the insurance definition
-store. There is no fallback to it.
+The ``insurance_policies`` table is the only insurance definition store; there
+is no separate version table and no fallback to one.
 """
 
 from __future__ import annotations

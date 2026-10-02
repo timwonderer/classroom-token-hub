@@ -29,7 +29,6 @@ class AssessmentRequest:
     obligation_type: str  # RENT | INSURANCE_PREMIUM
     source_ref: str | None = None  # Opaque upstream authority reference
     source_version_ref: str | None = None  # Immutable version snapshot
-    policy_version_id: int | None = None
     policy_uuid: str | None = None  # Canonical upstream policy identity (rent amount resolves via this)
     bill_cycle_id: int | None = None  # Link to the recurring reminder cycle this assessment belongs to
     source_correlation_id: str | None = None  # Lawful lineage: the obligation this one AROSE FROM (e.g. LATE_FEE → its RENT)
@@ -92,7 +91,6 @@ def assess_obligation(
         correlation_id=request.correlation_id,
         event_type='ASSESSMENT',
         obligation_type=request.obligation_type,
-        policy_version_id=request.policy_version_id,
         policy_uuid=request.policy_uuid,
         bill_cycle_id=request.bill_cycle_id,
         source_correlation_id=request.source_correlation_id,
@@ -120,7 +118,6 @@ def execute_assess_obligation(
     *,
     source_ref: str | None = None,
     source_version_ref: str | None = None,
-    policy_version_id: int | None = None,
     policy_uuid: str | None = None,
     bill_cycle_id: int | None = None,
     source_correlation_id: str | None = None,
@@ -145,7 +142,6 @@ def execute_assess_obligation(
         obligation_type=obligation_type,
         source_ref=source_ref,
         source_version_ref=source_version_ref,
-        policy_version_id=policy_version_id,
         policy_uuid=policy_uuid,
         bill_cycle_id=bill_cycle_id,
         source_correlation_id=source_correlation_id,

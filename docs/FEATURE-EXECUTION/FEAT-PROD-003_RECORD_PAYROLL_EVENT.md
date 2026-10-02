@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-PROD-003 | 1.1 | 2026-09-17 | 1.0 | Normative |
+| FEAT-PROD-003 | 1.3 | 2026-09-30 | 1.2 | Normative |
 
 ---
 
@@ -29,7 +29,8 @@ This FEAT uses `CanonicalContext` for live request authority and the canonical t
 - `ctx`: `CanonicalContext`
 - `target_seat_id`: seat receiving the credit or reversal effect
 - `idempotency_key`: replay guard
-- `policy_version_id`: the policy version that priced the amount; required for `payroll`, omitted for a teacher-entered manual credit (see Rules)
+- `policy_uuid`: for a `manual_credit` posting another domain's calculation, the `payroll_settings.policy_uuid` that calculation used; omitted for a teacher-entered manual credit. For a `payroll` event it is not an input: the FEAT resolves it while pricing (see Rules). *(Operator ruling 2026-09-30: the former `policy_version_id` input named a row of the `policy_versions` table, which was never an authority for payroll and is retired (1.3).)*
+- `mechanism`: `TEACHER` or `SYSTEM`, supplied by the initiating caller; for `payroll`, `SYSTEM` means the automatic schedule started the run
 - `payroll_run_type`: `payroll`, `manual_credit`, or `reversal`
 - `correlation_id`: business-to-ledger linkage
 - `summary_json`: human-readable and structured metadata
@@ -61,11 +62,12 @@ Rules:
 
 - MUST require `class_id`, `actor_seat_id`, `target_seat_id`, `correlation_id`, `idempotency_key`, `mechanism`, `payroll_run_type`, `recorded_at`, and `summary_json`
 - MUST record policy provenance according to the authority that determined the amount, not the storage event type alone:
-  - `payroll` (amount priced by the payroll policy from attendance/hours): `policy_version_id` and `policy_uuid` are REQUIRED
+  - `payroll` (amount priced by the payroll settings from attendance/hours): `policy_uuid` is REQUIRED; each settled session is priced by the `payroll_settings` row in force when it closed, and `summary_json` records every setting's `policy_uuid`, priced seconds, and per-minute `pay_rate` (`DOM-PROD-001` §XV.3)
   - `manual_credit` initiated by a teacher who enters the amount directly: no payroll policy is required, and a class with no payroll configuration can still record it
   - `manual_credit` used as the posting mechanism for another domain's lawful calculation (for example a productivity insurance reimbursement): MUST retain the policy provenance that calculation used
   - `reversal`: carries the provenance of the event it compensates
-- This is a minimum requirement for `payroll` events only. It MUST NOT be inverted into a rule that `manual_credit` events carry no policy version
+- This is a minimum requirement for `payroll` events only. It MUST NOT be inverted into a rule that `manual_credit` events carry no policy provenance
+- MUST read payroll settings only through the single payroll-settings resolver (`payroll_settings` only)
 - MUST be append-only
 - MUST set `payroll_run_type` to `payroll`, `manual_credit`, or `reversal`
 - MUST use the original event's `correlation_id` when writing a reversal
@@ -77,8 +79,8 @@ Execution steps:
 
 1. Resolve `CanonicalContext` and confirm the actor is lawful for the class.
 2. Resolve `CLE` with `canonical_temporal_resolver("CLE", primitive="current_time", canonical_execution_context=ctx, reference_time_utc=reference_time_utc)`.
-3. Identify the target seat and the payroll policy version in effect.
-4. Compute the payroll amount from authoritative productivity facts or manual credit intent.
+3. Identify the target seat.
+4. Compute the payroll amount from authoritative productivity facts, pricing each settled session by the setting in force when it closed, or take the manual credit intent.
 5. Write the append-only `payroll_event` row with the immutable correlation ID.
 6. Post the matching Ledger credit using the same `correlation_id`.
 7. If the event is a reversal, compute and post the compensating negative Ledger amount from the original event lineage.
@@ -86,7 +88,7 @@ Execution steps:
 Failure conditions:
 
 - missing original event for reversal
-- missing policy version
+- no payroll setting to price a `payroll` event, or a supplied `policy_uuid` that is not a payroll setting of the class
 - missing target seat or class boundary
 - attempt to write a payroll amount directly onto the domain row
 

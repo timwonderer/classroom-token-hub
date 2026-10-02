@@ -27,8 +27,7 @@ from app.feats.class_configuration import (
 )
 from app.services.context_resolver import CanonicalContext
 from app.services.class_configuration_query_service import (
-    get_effective_economic_engine,
-    get_initial_economic_engine,
+    get_current_economic_engine,
 )
 from tests.helpers.classroom_initializer import initialize
 
@@ -47,6 +46,14 @@ _ENGINE_CARRY_FORWARD_FIELDS = (
 )
 
 
+def _root_engine(class_id):
+    """The class's first Economic Engine version (the listener-seeded root)."""
+    from app.services.class_configuration_query_service import economic_engine_timeline
+
+    versions = economic_engine_timeline(class_id).versions
+    return versions[0] if versions else None
+
+
 def _make_economic_engine_ready(class_id: str, *, expected_weekly_hours: str = "40") -> None:
     """Bring the effective payroll engine to READY so CWI-dependent features may enable.
 
@@ -60,7 +67,7 @@ def _make_economic_engine_ready(class_id: str, *, expected_weekly_hours: str = "
     Mirrors the sanctioned helper in ``tests/test_insurance_claim_feat.py``. Caller must
     already be inside a FEAT context.
     """
-    current = get_effective_economic_engine(class_id, "payroll")
+    current = get_current_economic_engine(class_id)
     if current is not None and current.expected_weekly_hours is not None:
         return
 
@@ -120,7 +127,7 @@ class TestFEATCLASS004FeatureEnablement:
         classroom = initialize("chemistry_p1", app)
         with app.app_context():
             # Get initial economic engine (created at class provision time)
-            initial_engine = get_initial_economic_engine(classroom.class_id)
+            initial_engine = _root_engine(classroom.class_id)
             assert initial_engine is not None, "Initial engine should exist"
 
             # `insurance` is a CWI-dependent feature: FEAT-CLASS-004 refuses to enable it
@@ -170,7 +177,7 @@ class TestFEATCLASS004FeatureEnablement:
         """
         classroom = initialize("chemistry_p1", app)
         with app.app_context():
-            initial_engine = get_initial_economic_engine(classroom.class_id)
+            initial_engine = _root_engine(classroom.class_id)
 
             # `insurance` is CWI-dependent; bring the Economic Engine base to READY so the
             # FEAT-CLASS-004 enablement gate is satisfied (lawful precondition).
@@ -223,7 +230,7 @@ class TestFEATCLASS004FeatureEnablement:
         """
         classroom = initialize("chemistry_p1", app)
         with app.app_context():
-            initial_engine = get_initial_economic_engine(classroom.class_id)
+            initial_engine = _root_engine(classroom.class_id)
 
             canonical_context = CanonicalContext(
                 user_id=classroom.teacher_user.id,
@@ -311,7 +318,7 @@ class TestFEATCLASS005EconomicEngineEvolution:
         """
         classroom = initialize("chemistry_p1", app)
         with app.app_context():
-            initial_engine = get_initial_economic_engine(classroom.class_id)
+            initial_engine = _root_engine(classroom.class_id)
 
             canonical_context = CanonicalContext(
                 user_id=classroom.teacher_user.id,
@@ -382,7 +389,7 @@ class TestFEATCLASS005EconomicEngineEvolution:
 
             # The single root must be the feature-linked initial engine, and it
             # must be a genuine root (no predecessor).
-            initial_engine = get_initial_economic_engine(classroom.class_id)
+            initial_engine = _root_engine(classroom.class_id)
             assert initial_engine is not None
             assert initial_engine.previous_version_id is None
             assert roots[0].economic_version_id == initial_engine.economic_version_id
@@ -415,7 +422,7 @@ class TestFEATCLASS005EconomicEngineEvolution:
         """Back-to-back transitions preserve the economic-engine version chain."""
         classroom = initialize("chemistry_p1", app)
         with app.app_context():
-            initial_engine = get_initial_economic_engine(classroom.class_id)
+            initial_engine = _root_engine(classroom.class_id)
 
             canonical_context = CanonicalContext(
                 user_id=classroom.teacher_user.id,
@@ -464,7 +471,7 @@ class TestFEATCLASS005EconomicEngineEvolution:
         """Future-dated transitions persist the requested effective_at timestamp."""
         classroom = initialize("chemistry_p1", app)
         with app.app_context():
-            initial_engine = get_initial_economic_engine(classroom.class_id)
+            initial_engine = _root_engine(classroom.class_id)
 
             canonical_context = CanonicalContext(
                 user_id=classroom.teacher_user.id,

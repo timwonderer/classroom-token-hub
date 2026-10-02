@@ -68,7 +68,7 @@ existing contract, or a documented reason it is exempt.
 | `FEAT-OBL-005` | Obligations · MED · "Insurance Cancellation (stop renewal)" | 1 | `app/feats/cancel_insurance_feat.py:78` | Write the contract. Cancellation semantics are settled (EXPIRED-only at cycle boundary, non-revocable); the contract records them. |
 | `FEAT-ADMN-001` | Logistics · LOW · "Bulk administration" | 1 | `app/routes/admin.py:7436` | **Question the domain first.** "Logistics" appears in no `DOM-*` document. Either the domain is real and undocumented, or this belongs to Class Configuration. |
 | `FEAT-IDEN-005` | Identity · MED · "Authenticated Class Binding" | 1 | `app/feats/identity_feat.py:462` | Write the contract, or fold into `FEAT-IDEN-002` if class binding is already that workflow. |
-| `FEAT-LED-003` | Ledger · HIGH · "Settlement Sweep" | 0 in app, 8 in tests | `docs/TRACKING/LEDGER_SERVICE_FEAT_CONSOLIDATION_20260904.md` | HIGH blast radius with no production caller. Decide whether it is live, or a test-only fixture that should not hold a HIGH id. |
+| `FEAT-LED-003` | Ledger · HIGH · "Settlement Sweep" | 0 in app, 8 in tests | `docs/archive/v2-tracking-2026/LEDGER_SERVICE_FEAT_CONSOLIDATION_20260904.md` (archived) | HIGH blast radius with no production caller. Decide whether it is live, or a test-only fixture that should not hold a HIGH id. |
 
 ## IV. Registered, no contract — not executing
 

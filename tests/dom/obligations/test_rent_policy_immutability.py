@@ -24,11 +24,12 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 import pytest
+from sqlalchemy import text
 
 from app.extensions import db
 from app.feats.base import FEATContext
 from app.feats.reconcile_rent_feat import execute_reconcile_rent
-from app.models import ObligationAssessment, RentSettings
+from app.models import BillCycle, ObligationAssessment, RentSettings, Seat
 from app.services import obligations_service
 from app.services.admin_settings_service import supersede_rent_settings
 from app.services.class_configuration_query_service import get_rent_settings
@@ -257,3 +258,54 @@ class TestHistoricalAssessmentsKeepTheirTerms:
             db.session.refresh(assessment)
             assert assessment.policy_uuid == frozen_uuid
             assert obligations_service.resolve_assessment_amount(assessment) == Decimal("50.00")
+
+
+class TestUnresolvedCyclePolicyIsNeverReplacedByCurrentTerms:
+    """A cycle's frozen policy that does not resolve must not fall back to current terms.
+
+    ``rent_settings`` has no database trigger refusing DELETE and
+    ``bill_cycles.policy_uuid`` has no foreign key, so a cycle can outlive its
+    policy row (the ``d5e6f7a8b9c0`` downgrade deletes superseded versions, for
+    one). Reconciliation used to read such a cycle's terms as ``... or settings``
+    and bill a seat claimed mid-period at the class's CURRENT rent. DOM-POL-001
+    §VII forbids that substitution: the cycle is skipped and reported instead.
+    """
+
+    def test_late_joiner_is_not_billed_at_current_terms_when_cycle_policy_is_gone(self, app):
+        classroom = initialize("chemistry_p1", app)
+        with app.app_context():
+            _setup_rent_class(classroom, rent_amount="50.00")
+            late_seat_id = classroom.students[0].seat.id
+
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"unclaim:{late_seat_id}"):
+                Seat.query.filter_by(id=late_seat_id).update({"claimed_at": None})
+                db.session.flush()
+
+            execute_reconcile_rent(classroom.class_id, reference_time_utc=_T_INITIAL)
+            cycle = BillCycle.query.filter_by(
+                class_id=classroom.class_id, internal_ref=f"rent:{classroom.class_id}"
+            ).one()
+            frozen_uuid = cycle.policy_uuid
+            assert frozen_uuid
+
+            # The class moves to 200, then cycle 1's own 50 row disappears.
+            customize_rent_settings(classroom.class_id, rent_amount=Decimal("200.00"))
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key="rent:drop-frozen"):
+                db.session.execute(
+                    text("DELETE FROM rent_settings WHERE policy_uuid = :p"), {"p": frozen_uuid}
+                )
+                db.session.flush()
+            assert RentSettings.query.filter_by(policy_uuid=frozen_uuid).first() is None
+
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"claim:{late_seat_id}"):
+                Seat.query.filter_by(id=late_seat_id).update({"claimed_at": _T_BEFORE_BOUNDARY})
+                db.session.flush()
+
+            result = execute_reconcile_rent(
+                classroom.class_id, reference_time_utc=_T_BEFORE_BOUNDARY
+            )
+
+            late = [a for a in _rent_assessments(classroom.class_id) if a.seat_id == late_seat_id]
+            assert late == [], "the late joiner was billed under terms cycle 1 never had"
+            assert result.assessments_created == 0
+            assert result.unresolved_policy_cycles == [cycle.cycle_number]

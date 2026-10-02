@@ -18,7 +18,10 @@ import pytz
 import app.utils.canonical_temporal_resolver as resolver_module
 from app.extensions import db
 from app.feats.base import FEATContext
-from app.models import PayrollSettings
+from app.models import PayrollEvent
+from app.services.payroll.schedule import SCHEDULED_OCCURRENCE_KEY
+from app.services.payroll.settings import append_payroll_setting
+from app.utils.canonical_temporal_resolver import utc_now
 from app.scheduled_tasks import _advance_local_calendar_days
 from tests.helpers.class_domain import enable_class_feature
 from tests.helpers.classroom_initializer import initialize_as_teacher
@@ -87,24 +90,41 @@ FIRST_PAY = _utc(2026, 3, 2, 8, 0)
 
 
 def test_INV_ARC_015__payroll_page_shows_the_schedulers_next_run(client, app):
-    """The page shows the cursor the automatic-payroll job runs on. It used to
+    """The page shows the date the automatic-payroll job runs on. It used to
     recompute first_pay + N × 14 × 24h, which after the March change lands at
-    01:00 PDT — not a time the job ever runs payroll."""
+    01:00 PDT — not a time the job ever runs payroll. The date is derived from
+    the last SYSTEM run's occurrence in class-local calendar days
+    (DOM-PROD-001 §XV.5)."""
     classroom = initialize_as_teacher("tz_pacific_p1", client, app)
     with app.app_context():
         enable_class_feature(class_id=classroom.class_id, feature="payroll")
-        # What the job stores after running the first payday (scheduled_tasks).
         next_run = _advance_local_calendar_days(
             FIRST_PAY, 14, SimpleNamespace(class_id=classroom.class_id)
         )
         assert next_run == _utc(2026, 3, 16, 7, 0)  # 00:00 PDT, Mar 16
-        with FEATContext("FEAT-BYPASS-LEGACY", correlation_id=f"seed:{classroom.class_id}"):
-            settings = PayrollSettings.query.filter_by(class_id=classroom.class_id).first()
-            if settings is None:
-                settings = PayrollSettings(class_id=classroom.class_id, pay_rate=0.25)
-                db.session.add(settings)
-            settings.availability_state = "IN_USE"
-            settings.next_payroll_date = next_run  # the mutable schedule cursor
+        # A biweekly schedule anchored on Mar 2, and the first payday's SYSTEM
+        # run as the job records it.
+        with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"sched:{classroom.class_id}"):
+            recorded = utc_now()
+            setting = append_payroll_setting(
+                class_id=classroom.class_id,
+                settings_data={
+                    "pay_rate": Decimal("0.25"),
+                    "pay_schedule_type": "biweekly",
+                    "first_pay_date": FIRST_PAY,
+                },
+                effective_date=recorded, created_at=recorded,
+            )
+        seat = classroom.students[0].seat
+        with FEATContext("FEAT-PROD-003", idempotency_key=f"seed:{classroom.class_id}"):
+            db.session.add(PayrollEvent(
+                class_id=classroom.class_id, target_seat_id=seat.id,
+                actor_seat_id=classroom.teacher_seat.id, correlation_id=f"seed:{uuid4().hex}",
+                idempotency_key=f"seed:{uuid4().hex}", policy_uuid=setting.policy_uuid,
+                mechanism="SYSTEM", payroll_event_type="payroll", recorded_at=FIRST_PAY,
+                summary_json={SCHEDULED_OCCURRENCE_KEY: FIRST_PAY.isoformat()},
+            ))
+            db.session.flush()
         db.session.commit()
 
     page = client.get("/admin/payroll").get_data(as_text=True)

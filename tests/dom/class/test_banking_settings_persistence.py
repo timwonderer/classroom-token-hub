@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from app.services.class_configuration_query_service import get_effective_economic_engine
+from app.services.class_configuration_query_service import get_current_economic_engine
 from tests.helpers.class_domain import enable_class_feature
 from tests.helpers.classroom_initializer import initialize_as_teacher
 
@@ -39,7 +39,7 @@ def test_DOM_CLASS_001__banking_settings_persist_interest_and_overdraft(client):
     assert response.status_code == 302, response.data
     assert response.headers["Location"].endswith("/admin/banking")
 
-    engine = get_effective_economic_engine(class_id, "banking")
+    engine = get_current_economic_engine(class_id)
     assert engine is not None
     # Interest: APY 4% is stored as the 0..1 fraction 0.04.
     assert Decimal(str(engine.interest_rate)) == Decimal("0.040000")
@@ -69,7 +69,7 @@ def test_DOM_CLASS_001__simple_interest_forces_never_compounding(client):
     )
 
     assert response.status_code == 302
-    engine = get_effective_economic_engine(class_id, "banking")
+    engine = get_current_economic_engine(class_id)
     assert engine.interest_calculation_type == "simple"
     assert engine.compound_frequency == "never"
 
@@ -88,7 +88,7 @@ def test_DOM_CLASS_001__blank_overdraft_fee_disables_the_fee(client):
         interest_payout_frequency="monthly",
         flat_overdraft_fee="8.00",
     )
-    engine = get_effective_economic_engine(class_id, "banking")
+    engine = get_current_economic_engine(class_id)
     assert Decimal(str(engine.flat_overdraft_fee)) == Decimal("8.00")
 
     # ...then clear it.
@@ -99,7 +99,7 @@ def test_DOM_CLASS_001__blank_overdraft_fee_disables_the_fee(client):
         interest_payout_frequency="monthly",
         flat_overdraft_fee="",
     )
-    engine = get_effective_economic_engine(class_id, "banking")
+    engine = get_current_economic_engine(class_id)
     assert engine.flat_overdraft_fee is None
 
 
@@ -132,6 +132,6 @@ def test_DOM_CLASS_001__interest_apy_over_100_is_rejected(client):
     )
     # Rejected with a redirect back to the banking surface; nothing persisted.
     assert response.status_code == 302
-    engine = get_effective_economic_engine(class_id, "banking")
+    engine = get_current_economic_engine(class_id)
     # interest_rate remains at its default (unchanged) — not 1.5.
     assert engine is None or engine.interest_rate is None or Decimal(str(engine.interest_rate)) <= Decimal("1.0")

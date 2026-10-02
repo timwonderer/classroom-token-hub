@@ -21,7 +21,7 @@ that say "never merge to `main`" describe the former v1 branch and no longer app
 pytest
 
 # Run a single test file
-pytest tests/test_student_recovery.py
+pytest tests/dom/identity/test_student_recovery.py
 
 # Run tests matching a pattern
 pytest -k "recovery"
@@ -34,7 +34,7 @@ flask db heads          # Must show exactly 1 head
 flask db current        # Note current revision before generating
 flask db migrate -m "Add X to Y"
 flask db upgrade
-flask db downgrade <revision>   # Test rollback (bare form aborts: head is a merge point)
+flask db downgrade <revision>   # Test rollback; pass an explicit revision (bare form aborts whenever the head is a merge point)
 flask db upgrade        # Re-apply
 
 # Start dev server
@@ -59,7 +59,7 @@ ClassEconomy (classes)    — isolation boundary; class_id (UUID) is canonical, 
 
 **Resolution chain:** `User.id` → `Seat` (via `Seat.user_id`) → `IdentityProfile` (via `IdentityProfile.seat_id`)
 
-**CanonicalContext** (`app/services/context_resolver.py`): Frozen dataclass with `user_id`, `class_id`, `seat_id`, `actor_role`. Accessing `join_code`, `teacher_id`, `student_id`, or `block` on it raises `AttributeError` by design.
+**CanonicalContext** (`app/services/context_resolver.py`): Frozen dataclass with `user_id`, `class_id`, `seat_id`, `actor_role`. Accessing `join_code`, `teacher_id`, `student_id`, `block`, or `section` on it raises `AttributeError` by design.
 
 **The v1 identity layer is gone.** `Student`, `Admin`, `TeacherBlock`, `StudentTeacher`, `ClassMembership`, `StudentBlock`, and `BalanceCache` exist neither as models nor as tables. Teacher authority lives on `User.user_role` plus `ClassEconomy.teacher_user_id`; sysadmin authority is `User.user_role == SYSADMIN`. Surviving mentions of "student"/"teacher" in the codebase are domain vocabulary (form labels, descriptions, log strings), not table references. Do not reintroduce these models.
 
@@ -81,12 +81,13 @@ Every query involving student/seat data MUST be scoped by `class_id`. `join_code
 
 | Blueprint | Prefix | File |
 |-----------|--------|------|
-| admin | `/admin` | `app/routes/admin.py` (~12K lines) |
-| student | `/student` | `app/routes/student.py` (~4K lines) |
-| analytics | `/admin/analytics` | `app/routes/analytics.py` |
+| admin | `/admin` | `app/routes/admin.py` (~11K lines) |
+| student | `/student` | `app/routes/student.py` (~3.3K lines) |
+| analytics | `/admin/interpretation` | `app/routes/analytics.py` |
 | sysadmin | `/sysadmin` | `app/routes/system_admin.py` |
 | api | `/api` | `app/routes/api.py` |
 | recovery | `/recovery` | `app/routes/recovery.py` |
+| docs | `/docs` | `app/routes/docs.py` (in-app help site) |
 | main | `/` | `app/routes/main.py` |
 
 ### Key Services
@@ -94,8 +95,8 @@ Every query involving student/seat data MUST be scoped by `class_id`. `join_code
 - `app/services/context_resolver.py` — `resolve_canonical_context()`, the sole legal way to get identity in routes
 - `app/services/ledger_balance_query_service.py` — balance reads, `get_available_balance(seat_id, class_id, account_type)`
 - `app/services/identity_service.py` — identity resolution helpers
-- `app/auth.py` — decorators (`admin_required`, `login_required`), session utilities
-- `app/feats/base.py` — `feat_shell` decorator, `FEATContext` manager
+- `app/auth.py` — decorators (`login_required` for students, `admin_required` for teachers, `system_admin_required` for sysadmins), session utilities
+- `app/feats/base.py` — `FEATContext` context manager, `requires_feat_context(feat_name)` decorator, `init_feat_enforcement()` (flush/commit guard); `FEATBypass` is test-only
 
 ### Test Helpers
 
@@ -106,7 +107,7 @@ Per SPEC-TEST-001, tests provision a whole classroom rather than assembling rows
 - `tests/helpers/canonical_session.py` — `set_canonical_context()` for direct session setup
 - `tests/helpers/ledger.py` — `create_ledger_idempotent_transaction()`, `create_ledger_transfer_pair()`, `settle_ledger_balances()`, and other ledger seeding
 - `tests/helpers/class_domain.py` — `enable_class_feature()` (bypasses the CWI enablement gate), settings updates, tap in/out
-- Domain-specific: `attendance_domain.py`, `banking_domain.py`, `store_products.py`, `support_domain.py`
+- Domain-specific: `attendance_domain.py`, `banking_domain.py`, `insurance_domain.py`, `store_products.py`, `support_domain.py`
 
 ## Critical Rules
 
@@ -132,12 +133,13 @@ Normative documents live **only** under these roots:
 - `docs/FEATURE-EXECUTION/` — FEAT contracts (execution-level, subordinate to above)
 - `docs/SPEC/` — technical contracts (SPEC-*)
 - `docs/STANDARD_OPERATING_PROCEDURES/` — SOPs (SOP-*)
+- `docs/REFERENCE/REF-TERM-001_DEVELOPER_VOCABULARY.md` — the one normative file in `REFERENCE/`: developer vocabulary; use its terms in specs, code review and internal docs
 
 When specs and implementation disagree, the constitutional docs (`INV-*`, `DOM-*`) define the target state.
 
 ### Nothing under `.claude/` is authoritative
 
-This file and every file under `.claude/rules/` are **operational guidance for agents, not normative documents**. They summarize; they do not govern. The same applies to `docs/TRACKING/`, `docs/MAP/`, `docs/PRINCIPLES/`, `docs/REFERENCE/`, `CHANGELOG.md`, and agent memory — all descriptive, none binding.
+This file and every file under `.claude/rules/` are **operational guidance for agents, not normative documents**. They summarize; they do not govern. The same applies to `docs/TRACKING/`, `docs/MAP/`, `docs/PRINCIPLES/`, `docs/REFERENCE/` (except `REF-TERM-001`), `CHANGELOG.md`, and agent memory — all descriptive, none binding. `REF-TERM-002` (user-facing vocabulary) is informative but strongly recommended for UI text and user guides, unless a term would breach the accessibility invariants (INV-CORE-000 §III.7, INV-ARC-020).
 
 Consequences:
 

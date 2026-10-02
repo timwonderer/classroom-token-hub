@@ -9,9 +9,28 @@ file and still 404 or 500 when served.
 It walks only same-host URLs under the start path, stops at `--max-urls`, and
 sleeps `--delay` seconds between requests. Those bounds exist because this is
 the one check in the suite that generates load on the live service.
+
+Three properties of the live service shape the crawl:
+
+- Redirects. Directory-style help pages 301 to a trailing-slash URL, and some
+  paths (e.g. `/docs/timeline`) 302 to the public site. Relative links on a page
+  are resolved against the URL the page was finally served from, not the one
+  requested; resolving against the requested URL lands every relative link one
+  level too high and invents hundreds of URLs that never existed.
+- The rate limiter (200 requests/hour per client by default). The same page is
+  linked as `x`, `x.md`, `x/` and `x/index`; they render one file, so the crawl
+  fetches one of them. A 429 ends the crawl: every later request would also be
+  refused, and a list of refusals says nothing about the docs.
+- Cloudflare Access. During a maintenance window the host answers with a
+  redirect to the Access login page on another host. That is reported as a
+  failure naming the destination, rather than as a 200 with nothing to crawl.
+  Set CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET (an Access service token)
+  to crawl through the gate.
 """
 from __future__ import annotations
 import argparse
+import os
+import re
 import time
 from collections import deque
 from html.parser import HTMLParser
@@ -26,7 +45,99 @@ class LinkParser(HTMLParser):
         if tag == "a":
             self.links.extend(value for name, value in attrs if name == "href" and value)
 
-def main():
+_PAGE_SUFFIX = re.compile(r"(?:/(?:index|readme))?(?:\.md)?/?$", re.IGNORECASE)
+
+def page_key(url):
+    """One key per rendered file: `x`, `x.md`, `x/`, `x/index` and `x/index.md` collide."""
+    parsed = urlparse(url)
+    path = _PAGE_SUFFIX.sub("", parsed.path) or "/"
+    return f"{parsed.netloc}{path}"
+
+def access_headers(environ=os.environ):
+    client_id, secret = environ.get("CF_ACCESS_CLIENT_ID"), environ.get("CF_ACCESS_CLIENT_SECRET")
+    if client_id and secret:
+        return {"CF-Access-Client-Id": client_id, "CF-Access-Client-Secret": secret}
+    return {}
+
+class _SameHostRedirects(request.HTTPRedirectHandler):
+    """Follow redirects within a host and scheme; stop at one that leaves either.
+
+    The check is about this host. A hand-off to another host (the public site,
+    or the Access login during a maintenance window) is judged by the redirect
+    itself, so the other host is never fetched and the service token is never
+    sent to it. A same-host downgrade from https to http is refused too:
+    urllib copies request headers onto a followed redirect, so following it
+    would send the service token in cleartext.
+    """
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new, old = urlparse(newurl), urlparse(req.full_url)
+        if new.netloc != old.netloc or new.scheme != old.scheme:
+            return None  # urllib then raises HTTPError carrying the 3xx
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+_opener = request.build_opener(_SameHostRedirects)
+
+def fetch(url, timeout, headers):
+    """Return (status, final_url, body, content_type). final_url is after same-host redirects."""
+    req = request.Request(url, headers={"User-Agent": "cth-docs-smoke/1.0", **headers})
+    try:
+        with _opener.open(req, timeout=timeout) as response:
+            return response.status, response.geturl(), response.read(1_000_001), response.headers.get_content_type()
+    except error.HTTPError as exc:
+        location = exc.headers.get("Location") if 300 <= exc.code < 400 and exc.headers else None
+        return exc.code, urljoin(exc.geturl() or url, location) if location else (exc.geturl() or url), b"", None
+    except error.URLError:
+        return None, url, b"", None
+
+def crawl(root, start_path, *, max_urls, timeout, delay=0.0, follow=True, headers=None, fetcher=fetch, log=print):
+    """Walk the docs surface. Returns (pages_reached, failures)."""
+    headers = headers or {}
+    host = urlparse(root).netloc
+    start = urljoin(root + "/", start_path.lstrip("/"))
+    queue, seen, reached, failures = deque([start]), set(), 0, 0
+    while queue and reached < max_urls:
+        url = urldefrag(queue.popleft()).url
+        key = page_key(url)
+        if key in seen:
+            continue
+        seen.add(key)
+        if delay and reached:
+            time.sleep(delay)
+        reached += 1
+        status, final_url, body, content_type = fetcher(url, timeout, headers)
+        if status == 429:
+            failures += 1
+            log(f"FAIL [429] {url}: rate limited by production; stopping after {reached} request(s)")
+            break
+        if status is None or not 200 <= status < 400:
+            failures += 1
+            log(f"FAIL [{status or 'ERR'}] {url}")
+            continue
+        final = urlparse(final_url)
+        if final.netloc != host:
+            if url == start:
+                failures += 1
+                reached -= 1  # the docs were never reached; the gate was
+                log(f"FAIL [{status}] {url}: redirected off-host to {final.scheme}://{final.netloc}{final.path}"
+                    " (Cloudflare Access gate? set CF_ACCESS_CLIENT_ID/CF_ACCESS_CLIENT_SECRET)")
+                break
+            log(f"OK   [{status}] {url} -> {final_url} (off-site; not crawled)")
+            continue
+        seen.add(page_key(final_url))
+        log(f"OK   [{status}] {url}" + (f" -> {final_url}" if final_url != url else ""))
+        if not follow or content_type != "text/html":
+            continue
+        parser = LinkParser(); parser.feed(body.decode("utf-8", errors="replace"))
+        for link in parser.links:
+            candidate = urldefrag(urljoin(final_url, link)).url
+            parsed = urlparse(candidate)
+            if parsed.scheme in {"http", "https"} and parsed.netloc == host and parsed.path.startswith("/docs/") and page_key(candidate) not in seen:
+                queue.append(candidate)
+    if queue and reached >= max_urls:
+        log(f"NOTE stopped at --max-urls {max_urls} with {len(queue)} link(s) still queued")
+    return reached, failures
+
+def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-url", required=True)
     parser.add_argument("--start-path", default="/docs/")
@@ -56,39 +167,15 @@ def main():
         default=1,
         help="Fail if fewer than this many URLs were reached.",
     )
-    args = parser.parse_args()
-    root = args.base_url.rstrip("/")
-    host = urlparse(root).netloc
-    queue, visited = deque([urljoin(root + "/", args.start_path.lstrip("/"))]), set()
-    failures = 0
-    while queue and len(visited) < args.max_urls:
-        url = urldefrag(queue.popleft()).url
-        if url in visited:
-            continue
-        visited.add(url)
-        if args.delay and len(visited) > 1:
-            time.sleep(args.delay)
-        try:
-            with request.urlopen(request.Request(url, headers={"User-Agent": "cth-docs-smoke/1.0"}), timeout=args.timeout) as response:
-                status, body, content_type = response.status, response.read(1_000_001), response.headers.get_content_type()
-        except (error.HTTPError, error.URLError) as exc:
-            status, body, content_type = getattr(exc, "code", None), b"", None
-        if status is None or not 200 <= status < 400:
-            failures += 1
-            print(f"FAIL [{status or 'ERR'}] {url}")
-            continue
-        print(f"OK   [{status}] {url}")
-        if not args.crawl or content_type != "text/html":
-            continue
-        parser = LinkParser(); parser.feed(body.decode("utf-8", errors="replace"))
-        for link in parser.links:
-            candidate = urldefrag(urljoin(url, link)).url
-            parsed = urlparse(candidate)
-            if parsed.scheme in {"http", "https"} and parsed.netloc == host and parsed.path.startswith("/docs/") and candidate not in visited:
-                queue.append(candidate)
-    print(f"Checked {len(visited)} production documentation URL(s)")
-    if len(visited) < args.min_urls:
-        print(f"FAIL reached {len(visited)} URL(s), expected at least {args.min_urls}")
+    args = parser.parse_args(argv)
+    reached, failures = crawl(
+        args.base_url.rstrip("/"), args.start_path,
+        max_urls=args.max_urls, timeout=args.timeout, delay=args.delay,
+        follow=args.crawl, headers=access_headers(), fetcher=fetch,
+    )
+    print(f"Checked {reached} production documentation page(s)")
+    if reached < args.min_urls:
+        print(f"FAIL reached {reached} page(s), expected at least {args.min_urls}")
         failures += 1
     return 1 if failures else 0
 

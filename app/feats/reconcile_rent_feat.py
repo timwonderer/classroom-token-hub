@@ -34,6 +34,7 @@ Lineage conventions (greenfield):
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
@@ -58,6 +59,8 @@ from app.services.obligations_service import SuccessionEligibility
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION, canonical_temporal_resolver, ensure_utc, utc_now,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # Safety bound on catch-up: never materialize more than this many cycles in one
@@ -86,6 +89,9 @@ class ReconcileRentResult:
     assessments_created: int = 0
     perks_expired: int = 0
     late_fees_created: int = 0
+    # Cycles whose frozen ``policy_uuid`` resolved to no rent policy row. No new
+    # assessment or late fee is created against them (DOM-POL-001 §VII).
+    unresolved_policy_cycles: list[int] = field(default_factory=list)
 
 
 def _rent_roster(class_id: str) -> list[Seat]:
@@ -298,6 +304,37 @@ def _grant_period_start_perks(class_id: str, cycle) -> int:
     return awarded
 
 
+def _cycle_terms(class_id: str, cycle, current_settings: RentSettings, result) -> RentSettings | None:
+    """The rent policy that governs new work against ``cycle``, or ``None``.
+
+    A cycle carrying a ``policy_uuid`` is frozen by reference: its terms resolve
+    from that exact row and MUST NOT be substituted by a newer or current one
+    (DOM-OBL-001 §V.7, DOM-POL-001 §VII). When that row does not resolve, the
+    cycle's terms are unknown, so no new assessment or late fee is created
+    against it: the cycle is recorded on ``result.unresolved_policy_cycles``
+    and logged, and the rest of the run proceeds. Billing it at the current
+    terms instead would charge an amount the period never had.
+
+    A cycle with no ``policy_uuid`` predates the frozen reference (DOM-OBL-001
+    §V.7: a bill cycle *may* carry one); it has no terms of its own to honour and
+    keeps the long-standing behaviour of using the class's current policy.
+    """
+    if not cycle.policy_uuid:
+        return current_settings
+    frozen = RentSettings.query.filter_by(
+        policy_uuid=cycle.policy_uuid, class_id=class_id
+    ).first()
+    if frozen is None:
+        if cycle.cycle_number not in result.unresolved_policy_cycles:
+            result.unresolved_policy_cycles.append(cycle.cycle_number)
+            logger.error(
+                "reconcile_rent: bill cycle %s (class %s, cycle %s) names rent policy %s, "
+                "which does not resolve; no new rent work is created against it",
+                cycle.id, class_id, cycle.cycle_number, cycle.policy_uuid,
+            )
+    return frozen
+
+
 def reconcile_rent(
     request: ReconcileRentRequest,
     *,
@@ -421,7 +458,13 @@ def reconcile_rent(
         for cycle in (current, upcoming):
             if cycle is None:
                 continue
-            backfilled = _assess_cycle(settings, class_id, cycle)
+            # A seat claimed mid-period is billed on the period's own terms. The
+            # policy saved since then governs the first period not yet issued,
+            # never one already issued (DOM-CLASS-003 §VII, DOM-POL-001 §VII).
+            cycle_settings = _cycle_terms(class_id, cycle, settings, result)
+            if cycle_settings is None:
+                continue
+            backfilled = _assess_cycle(cycle_settings, class_id, cycle)
             result.assessments_created += backfilled
             if backfilled and result.reason == "NOOP":
                 result.reason = "ROSTER_BACKFILLED"
@@ -438,10 +481,9 @@ def reconcile_rent(
     # Each bill's late fees follow the policy frozen on its own cycle, never the
     # class's current policy (DOM-POL-001 §VII; INV-CORE-000 non-retroactivity).
     for cycle in obligations_service.get_bill_cycles_for_internal_ref(internal_ref_cycle):
-        cycle_settings = (
-            RentSettings.query.filter_by(policy_uuid=cycle.policy_uuid, class_id=class_id).first()
-            if cycle.policy_uuid else None
-        ) or settings
+        cycle_settings = _cycle_terms(class_id, cycle, settings, result)
+        if cycle_settings is None:
+            continue
         result.late_fees_created += _assess_late_fees(cycle_settings, class_id, cycle, now)
 
     if result.late_fees_created and result.reason in ("NOOP",):

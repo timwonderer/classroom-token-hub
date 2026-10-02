@@ -383,13 +383,19 @@
 
               <div class="mb-4">
                 <label for="interest_calculation_type" class="form-label fw-bold">Interest Type</label>
-                <select name="interest_calculation_type" id="interest_calculation_type" class="form-select">
+                <select name="interest_calculation_type" id="interest_calculation_type" class="form-select"
+                  aria-describedby="interest_calculation_type_help interest_calculation_type_caveat">
                   <option value="simple" {% if interest_calculation_type != 'compound' %}selected{% endif %}>
-                    Simple (accrued interest does not compound)</option>
+                    Simple</option>
                   <option value="compound" {% if interest_calculation_type == 'compound' %}selected{% endif %}>
                     Compound</option>
                 </select>
-                <small class="text-muted">Simple interest never compounds; compound interest grows on prior interest.</small>
+                <small class="text-muted d-block" id="interest_calculation_type_help">Compound interest also earns on
+                  interest that has built up but not been paid yet. Simple interest does not.</small>
+                <small class="text-muted d-block" id="interest_calculation_type_caveat"><strong>Known issue:</strong>
+                  with Simple, interest that has already been paid into savings still earns interest in later
+                  payout periods, so Simple currently grows a little like compounding once per payout. We are
+                  tracking a fix.</small>
               </div>
 
               <div class="mb-4" id="compoundFrequencyGroup">

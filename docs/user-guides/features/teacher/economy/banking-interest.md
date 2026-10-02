@@ -26,7 +26,7 @@ The controls live in the **Savings Interest** block on the **Settings** tab of *
 | Control | What it does |
 | --- | --- |
 | **Annual Percentage Yield (APY %)** | *Annual yield applied to savings balances. Set 0 to disable interest.* |
-| **Interest Type** | **Simple (accrued interest does not compound)** or **Compound**. *Simple interest never compounds; compound interest grows on prior interest.* |
+| **Interest Type** | **Simple** or **Compound**. *Compound interest also earns on interest that has built up but not been paid yet. Simple interest does not.* The page also shows a **Known issue** note about Simple; see below. |
 | **Compound Frequency** | **Daily**, **Weekly**, or **Monthly**. *How often compound interest is applied. Ignored for simple interest.* |
 | **Payout Frequency** | **Weekly** or **Monthly**. *How often interest is paid into savings accounts.* |
 
@@ -40,11 +40,18 @@ These two settings are routinely confused, and they answer different questions.
 
 You can compound daily and pay out monthly. The student sees one deposit a month, but it was calculated on a balance that grew every day.
 
-If **Interest Type** is **Simple**, the compound setting does nothing at all. Interest is always calculated on the original balance, never on interest already earned.
+Payouts run automatically once each payout period ends in your class's time zone: a **Weekly** period is Monday to Sunday and pays just after midnight going into Monday; a **Monthly** period is the calendar month and pays just after midnight on the 1st.
+
+Interest is calculated by the daily balance method, the way US banks do it. Each day earns the APY divided by 365 (365 in leap years too) on the student's savings balance at the end of that day; the payout is the period's days added together, rounded to the cent once. A deposit made late in the period earns only the days it was there, and a withdrawal does not take back interest already earned on earlier days. With **Daily** compounding, interest earned earlier in the period also earns from the next day; with **Weekly** or **Monthly** compounding it joins at the start of each week or month inside the period.
+
+If **Interest Type** is **Simple**, the compound setting does nothing at all. Interest built up during a payout period does not earn anything until it is paid.
+
+> [!WARNING]
+> **Known issue with Simple.** Once interest is paid into a student's savings, it is part of their savings balance, and from then on it earns interest like any other money in savings. So Simple is not true simple interest yet: over several payouts it grows a little like compounding once per payout. The difference is small, but a student checking the maths by hand will see it after the first payout. We are tracking a fix; the option stays available until then.
 
 ### Choosing simple or compound
 
-Simple interest is predictable and easy for students to compute by hand — useful if you want them to check your maths. Compound interest is the concept most teachers actually want to demonstrate, but it accelerates, and it accelerates fastest for the students who already have the most saved.
+Simple interest is predictable and easy for students to compute by hand for a single payout period — useful if you want them to check your maths. Across several payouts, see the known issue above. Compound interest is the concept most teachers actually want to demonstrate, but it accelerates, and it accelerates fastest for the students who already have the most saved.
 
 The page shows an Economic Engine advisory ceiling for your APY. You can exceed it, but you will be warned. The reason is that a high compounding rate inflates the class money supply faster than payroll can be adjusted to compensate.
 

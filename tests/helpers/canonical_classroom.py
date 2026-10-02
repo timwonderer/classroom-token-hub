@@ -27,7 +27,10 @@ identity setup.
 """
 
 from dataclasses import dataclass, field
+from datetime import datetime, time, timedelta
 from decimal import Decimal
+
+import pytz
 
 from app.extensions import db
 from app.feats.base import FEATContext
@@ -46,6 +49,7 @@ from app.services.classroom_setup import (
     create_student_user_for_seat,
     create_teacher,
 )
+from app.utils.canonical_temporal_resolver import utc_now
 from app.utils.join_code import generate_join_code
 from app.utils.username_generation import build_username
 from tests.helpers.canonical_identities import CLASSROOMS, TEACHERS
@@ -90,7 +94,7 @@ class ProvisionedClassroom:
 # Core provision
 # ---------------------------------------------------------------------------
 
-def provision_classroom(classroom_key: str) -> ProvisionedClassroom:
+def provision_classroom(classroom_key: str, *, with_payroll_settings: bool = True) -> ProvisionedClassroom:
     """Provision a canonical classroom entirely through production code.
 
     Creates:
@@ -188,12 +192,28 @@ def provision_classroom(classroom_key: str) -> ProvisionedClassroom:
         # --- Default settings for newly created classroom ---
         # These are created by default so tests can query them.
         # In production, teachers would configure these via UI.
-        payroll_settings = PayrollSettings(
-            class_id=economy.class_id,
-            pay_rate=Decimal('0.50'),  # $0.50 per minute
-            payroll_frequency_days=14,
-        )
-        db.session.add(payroll_settings)
+        # The class's first payroll setting is in force from the moment it is
+        # recorded (DOM-CLASS-003 §VII). Every setting anchors a schedule, so
+        # the default's first payday is a year out (class-local midnight): no
+        # provisioned class is due for automatic payroll unless a test makes it
+        # so. A later save on top of it waits for that payday, so a test that
+        # needs a save in force at once opts out of the default
+        # (``with_payroll_settings=False``) or uses
+        # ``class_domain.put_payroll_setting_in_force``.
+        if with_payroll_settings:
+            settings_recorded_at = utc_now()
+            class_tz = pytz.timezone(economy.class_timezone)
+            first_payday = class_tz.localize(datetime.combine(
+                (settings_recorded_at.astimezone(class_tz) + timedelta(days=365)).date(), time.min,
+            ))
+            db.session.add(PayrollSettings(
+                class_id=economy.class_id,
+                pay_rate=Decimal('0.50'),  # $0.50 per minute
+                pay_schedule_type='biweekly',
+                first_pay_date=first_payday,
+                created_at=settings_recorded_at,
+                effective_date=settings_recorded_at,
+            ))
 
         rent_settings = RentSettings(
             class_id=economy.class_id,
@@ -206,7 +226,7 @@ def provision_classroom(classroom_key: str) -> ProvisionedClassroom:
         # ClassEconomy after_insert listener (single canonical root creator).
         # The harness must NOT create a competing root here — doing so produced
         # two previous_version_id=None roots per class and broke version-chain
-        # resolution (get_economic_engine_history/current returned the orphan).
+        # resolution (the engine resolver returned the orphan).
         # Interest/policy values are set post-creation via FEAT-CLASS-005.
 
         hall_pass_settings = HallPassSettings(

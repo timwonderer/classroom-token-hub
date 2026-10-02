@@ -69,7 +69,9 @@ def _assert_rows_claimable(classroom, rows):
 def _claim(classroom, first, last, username):
     claim = resolve_seat_claim(join_code=classroom.join_code, first_name=first, last_name=last)
     assert claim.success, claim.error_code
+    from tests.dom.identity.helpers import prepared_credential_attempt
     result = activate_student_credentials(
+        **prepared_credential_attempt(seat_id=claim.seat_id, username=username),
         seat_id=claim.seat_id, user_id=None, claim_generation=claim.claim_generation,
         username=username, pin="4826", passphrase="roster-dedupe-pass7",
         correlation_id="corr_roster_dedupe_claim", idempotency_key=f"roster-dedupe:claim:{username}",

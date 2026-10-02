@@ -5,6 +5,8 @@ on:
     paths:
       - 'templates/**'
       - 'static/css/**'
+      - 'static/js/username_retention_check.js'
+      - 'tests/test_username_retention_check_browser.py'
       - 'app/routes/**'
       - 'app/forms.py'
 
@@ -43,6 +45,9 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+
+      - name: Install memory-only setup test dependency
+        run: sudo apt-get update && sudo apt-get install -y redis-server
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -101,3 +106,8 @@ jobs:
         run: |
           echo "♿ Running template-scoped accessibility audit..."
           pytest tests/test_accessibility.py -v
+
+      - name: Check username retention interaction in Chromium
+        env:
+          DATABASE_URL: postgresql://user:password@localhost:5432/classroom_test_db
+        run: pytest -q tests/test_username_retention_check_browser.py

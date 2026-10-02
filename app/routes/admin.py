@@ -51,7 +51,7 @@ from app.feats.base import requires_feat_context, FEATContext, InvariantViolatio
 from app.access.scope import Scope
 from app.access import AccessScopeDenied, resolve_scope
 from app.models import (
-    ClassEconomy, EconomicEngine, Transaction, TransactionStatus, AttendanceSession, StoreProduct, StoreItemVisibility,
+    ClassEconomy, Transaction, TransactionStatus, AttendanceSession, StoreProduct, StoreItemVisibility,
     # Legacy tap table removed; use attendance_sessions (DOM-PROD-001).
     # StudentItem removed — student_items unauthorized; use store_purchases + redemption_events (DOM-STORE-001)
     # StoreItemBlock removed — store_item_blocks unauthorized; use store_item_visibility (DOM-STORE-001)
@@ -59,12 +59,12 @@ from app.models import (
     # Legacy tap reason enum removed with the legacy tap table.
     # StorePurchase, Entitlement, EntitlementConsumption, GrantType, RedemptionEvent, etc. deleted per Phase 2 migration
     RentSettings,
-    HallPassLog, HallPassSettings, PayrollSettings,
+    HallPassLog, HallPassSettings,
     ClassFeature,
     Announcement, Issue, IssueCategory, IssueStatusHistory, IssueResolutionAction, Seat,
     LedgerBalanceSnapshot, User, UserRole, _quantize_currency,
     ObligationAssessment,
-    AttendanceReasonCode, IdentityProfile, PayrollEvent, PolicyVersion,
+    AttendanceReasonCode, IdentityProfile, PayrollEvent,
     EntitlementEvent, InsuranceClaim, InsurancePolicy, PendingAction,
 )
 from app.auth import (
@@ -98,16 +98,9 @@ from app.utils.economy_policy import (
     resolve_feature_class_for_class,
 )
 from app.utils.economy_rebalance import (
-    REBALANCE_ACTIVATION_IMMEDIATE,
-    REBALANCE_ACTIVATION_NEXT_RENEWAL,
-    REBALANCE_ACTIVATION_NEXT_PAYROLL,
-    activate_due_rebalances,
-    apply_rebalance_changes,
-    cancel_pending_policy_transitions,
-    get_pending_policy_transition_count,
-    get_pending_policy_transition_effective_at,
-    prepare_scheduled_rebalance_changes,
-    queue_scheduled_policy_transitions,
+    RENT_CHANGE_TYPES,
+    execute_rebalance,
+    get_pending_rebalance_effective_at,
 )
 
 from app.services.announcement_service import (
@@ -135,7 +128,6 @@ from app.services.classroom_setup import (
     create_teacher,
     delete_seat_with_profile,
 )
-from app.services.payroll_settings_service import upsert_payroll_settings
 from app.services import store_service
 from app.services.entitlement_read_service import derive_display_status
 from app.services.hall_pass_status_service import (
@@ -163,7 +155,6 @@ from app.services.class_configuration_query_service import (
     get_class_economy_by_join_code,
     get_all_classes_by_teacher,
     verify_teacher_owns_class,
-    get_payroll_settings,
     get_rent_settings,
     get_current_economic_engine,
     get_hall_pass_settings,
@@ -227,10 +218,18 @@ from app.feats.transaction_void_feat import (
 )
 from app.hash_utils import hash_username_lookup
 from app.services.ledger_balance_query_service import get_batch_balances_by_class_seat
-from app.payroll import get_pay_rate_for_class
-from app.services.attendance_service import (
-    calculate_payable_attendance_seconds,
-    calculate_unpaid_attendance_seconds,
+from app.services.attendance_service import calculate_unpaid_attendance_seconds
+from app.services.payroll.pricing import estimate_payable_amount
+from app.services.payroll.schedule import (
+    PAY_SCHEDULE_TYPES,
+    next_payroll_boundary_after,
+    next_payroll_date as derive_class_next_payroll_date,
+)
+from app.services.payroll.settings import (
+    class_has_payroll_settings,
+    current_payroll_setting,
+    pending_payroll_settings,
+    save_payroll_setting,
 )
 from app.services.hall_pass_request_queue import list_pending_hall_pass_requests_for_class
 from app.services import access_policy_service, obligations_service
@@ -924,10 +923,6 @@ def _build_payroll_preview_state(students):
         if not economy:
             continue
 
-        # The run prices through the same reader (FEAT-PROD-003), so the estimate
-        # and the payout cannot price the same work differently.
-        rate_per_second = get_pay_rate_for_class(class_id=class_id)
-
         seat_ids = [seat.id for seat in class_students]
         latest_payroll_events = (
             PayrollEvent.query
@@ -955,11 +950,13 @@ def _build_payroll_preview_state(students):
 
         summary = {}
         for seat in class_students:
-            # What a run now would pay: closed, unpaid sessions only.
-            attendance_seconds = calculate_payable_attendance_seconds(
+            # What a run now would pay: closed, unpaid sessions only, each at
+            # the setting in force when it closed. The run prices through the
+            # same module (FEAT-PROD-003), so the estimate and the payout cannot
+            # price the same work differently (DOM-PROD-001 §XV.3).
+            summary[seat.id] = estimate_payable_amount(
                 seat.id, class_id, ctx=g.canonical_context
             )
-            summary[seat.id] = (Decimal(attendance_seconds) * rate_per_second).quantize(Decimal("0.01"))
 
         anchor_by_class_id[class_id] = anchor
         summary_by_class_id[class_id] = summary
@@ -1716,14 +1713,7 @@ def _get_frozen_economy_analysis_payload(
 def _resolve_payroll_settings_for_class_id(canonical_context, class_id):
     if not class_id:
         return None
-    return (
-        PayrollSettings.query.filter(
-            PayrollSettings.class_id == class_id,
-            PayrollSettings.availability_state == 'IN_USE',
-        )
-        .order_by(desc(PayrollSettings.block.isnot(None)))
-        .first()
-    )
+    return current_payroll_setting(class_id)
 
 
 def _resolve_rent_settings_for_class_id(class_id, policy_uuid=None):
@@ -1763,9 +1753,7 @@ def _resolve_rent_settings_for_class_id(class_id, policy_uuid=None):
 def _resolve_economic_engine_for_class_id(class_id):
     if not class_id:
         return None
-    return EconomicEngine.query.filter_by(class_id=class_id).order_by(
-        EconomicEngine.created_at.desc(), EconomicEngine.economic_version_id.desc()
-    ).first()
+    return get_current_economic_engine(class_id)
 
 
 def _format_money(value):
@@ -1916,15 +1904,13 @@ def _build_policy_summary(class_scope, analysis, rent_settings, insurance_polici
         'overall_status': overall_status,
         'is_aligned': overall_status == 'aligned',
         'updated_at': getattr(settings_row, 'economy_policy_updated_at', None),
-        'has_pending_policy_transition': bool(get_pending_policy_transition_count(getattr(settings_row, 'class_id', None))),
+        'has_pending_economy_change': get_pending_rebalance_effective_at(class_scope.get('class_id')) is not None,
     }
 
 
-def _extract_pending_rebalance_effective_at(policy_summary: dict) -> datetime | None:
-    """Return the next known effective timestamp for a pending policy transition."""
-    settings_row = policy_summary.get('settings_row')
-    class_id = getattr(settings_row, 'class_id', None) if settings_row else None
-    return get_pending_policy_transition_effective_at(class_id)
+def _extract_pending_rebalance_effective_at(class_id) -> datetime | None:
+    """The soonest date a recorded economy change takes effect (DOM-CLASS-003 §X)."""
+    return get_pending_rebalance_effective_at(class_id)
 
 
 def _safe_rebalance_owner_url(endpoint):
@@ -1945,23 +1931,12 @@ def _build_rebalance_preview(canonical_context, class_id, checker, cwi, rent_set
     if insurance_policies:
         from app.services.economic_engine import resolve_insurance
         from app.services.insurance_policy_service import normalize_insurance_type
-        import json
 
-        for policy_version in insurance_policies:
-            if not getattr(policy_version, 'is_active', False):
+        for policy in insurance_policies:
+            if policy.premium is None:
                 continue
-            try:
-                payload = json.loads(policy_version.policy_payload_json or '{}')
-            except (TypeError, ValueError, json.JSONDecodeError):
-                continue
-            raw_premium = payload.get('premium')
-            if raw_premium in (None, ''):
-                continue
-            try:
-                current = Decimal(str(raw_premium))
-            except (InvalidOperation, ValueError):
-                continue
-            product = normalize_insurance_type(payload.get('insurance_type') or payload.get('claim_type'))
+            current = Decimal(str(policy.premium))
+            product = normalize_insurance_type(policy.insurance_type)
             recommendation = resolve_insurance(
                 product=product,
                 cwi=cwi,
@@ -1975,8 +1950,8 @@ def _build_rebalance_preview(canonical_context, class_id, checker, cwi, rent_set
             if minimum <= current <= maximum:
                 continue
             preview_items.append({
-                'key': f"insurance:{policy_version.id}",
-                'label': f"Insurance: {payload.get('name') or payload.get('title') or 'Policy'}",
+                'key': f"insurance:{policy.policy_uuid}",
+                'label': f"Insurance: {policy.title or policy.tier_name or 'Policy'}",
                 'owner_label': 'Insurance',
                 'owner_url': _safe_rebalance_owner_url('admin.insurance_management'),
                 'current': _format_money(current),
@@ -2111,27 +2086,14 @@ def _load_economy_rebalance_context(canonical_context, class_id):
 
     payroll_settings = _resolve_payroll_settings_for_class_id(canonical_context, selected_class_id)
     rent_settings = _resolve_rent_settings_for_class_id(selected_class_id)
-    from app.services.insurance_policy_service import list_insurance_policy_versions
-    insurance_policies = list_insurance_policy_versions(selected_class_id)
+    # The insurance definitions offered today: the class's IN_USE rows of its own
+    # definition table (DOM-POL-001 §VI.0), not a mirror of them.
+    from app.services.insurance_definition_service import IN_USE, list_insurance_definitions
+    insurance_policies = list_insurance_definitions(
+        class_id=selected_class_id, availability_states=[IN_USE]
+    )
 
     return payroll_settings, rent_settings, insurance_policies
-
-
-def _apply_rebalance_plan(canonical_context, class_id, change_plan, activation_mode):
-    """Apply rebalance plan for a class (wrapper for economy_rebalance function)."""
-    user_id = canonical_context.user_id
-    applied_labels = apply_rebalance_changes(
-        canonical_context.seat_id, class_id, change_plan, activation_mode,
-        canonical_context=canonical_context,
-    )
-    current_app.logger.info(
-        "Applied economy rebalance for teacher=%s class_id=%s activation=%s changes=%s",
-        user_id,
-        class_id,
-        activation_mode,
-        applied_labels,
-    )
-    return applied_labels
 
 
 def _check_onboarding_redirect():
@@ -2502,30 +2464,16 @@ def dashboard():
     payroll_updated_at = payroll_preview["latest_updated_at"]
     total_payroll_estimate = sum(payroll_summary.values())
 
-    # The next payroll date is read from the class's payroll settings, which is
-    # the row the scheduler actually fires on — not derived here.
+    # The next payroll date is derived, never stored (DOM-PROD-001 §XV.5): the
+    # same derivation the automatic-payroll job fires on, so this card cannot
+    # state a schedule the scheduler will not run.
     #
     # This previously projected a date from the last payroll run (+14 days) and,
-    # with no runs to project from, invented "the next Friday". It consulted
-    # `payroll_settings` at no point, so a class with no payroll configured was
-    # shown a confident date for a run that would never happen, and a class with
-    # a configured schedule was shown a date contradicting it. The estimate
-    # beneath it is a real figure, which made the invented date read as equally
-    # real.
-    #
-    # None is a legitimate answer and the template renders it as "Not scheduled":
-    # an unconfigured schedule must not display as a scheduled one, the same rule
+    # with no runs to project from, invented "the next Friday". None is a
+    # legitimate answer and the template renders it as "Not scheduled": an
+    # unconfigured schedule must not display as a scheduled one, the same rule
     # `/health/status` holds by reporting UNKNOWN rather than healthy.
-    # `availability_state='IN_USE'` matters: PayrollSettings is append-only and
-    # keeps RETIRED and HIDDEN rows, and `run_automatic_payroll_job` selects only
-    # IN_USE. Taking the highest id instead would let a superseded row drive this
-    # card, so the dashboard could state a schedule the scheduler will not run —
-    # a subtler version of the invented date this replaced.
-    _payroll_settings = PayrollSettings.query.filter_by(
-        class_id=active_class_id,
-        availability_state='IN_USE',
-    ).order_by(PayrollSettings.id.desc()).first()
-    next_payroll_date = _payroll_settings.next_payroll_date if _payroll_settings else None
+    next_payroll_date = derive_class_next_payroll_date(active_class_id) if active_class_id else None
 
     # v2: DOB-based recovery setup prompt is disabled.
     show_recovery_setup = False
@@ -4993,9 +4941,7 @@ def edit_store_item(product_lineage_uuid):
             return redirect(url_for('admin.store_management'))
         flash(f"'{item_name}' has been updated.", "success")
         return redirect(url_for('admin.store_management'))
-    payroll_settings = PayrollSettings.query.filter_by(
-        class_id=selected_scope['class_id'], availability_state='IN_USE'
-    ).first()
+    payroll_settings = current_payroll_setting(selected_scope['class_id'])
     return render_template(
         'admin_edit_item.html',
         form=form,
@@ -5269,10 +5215,7 @@ def rent_settings():
 
     class_id = class_row.class_id
 
-    payroll_settings = PayrollSettings.query.filter_by(
-        class_id=class_id,
-        availability_state='IN_USE',
-    ).first()
+    payroll_settings = current_payroll_setting(class_id)
 
     # Get or create rent settings for this canonical class
     settings = get_rent_settings(class_id)
@@ -5781,9 +5724,9 @@ def _next_tenant_scoped_tier_id(seed, existing_ids):
 # Insurance policy management (Step 3): typed InsurancePolicy definitions.
 #
 # These routes drive the STOR-owned, POL-managed ``insurance_policies``
-# definition-of-record through the FEAT-CLASS-003 orchestration boundary. They
-# write NOTHING to PolicyVersion / PolicyTransition. Identifiers are the
-# canonical ``policy_uuid``; a "change" is a new immutable row (DOM-POL-001).
+# definition-of-record through the FEAT-CLASS-003 orchestration boundary.
+# Identifiers are the canonical ``policy_uuid``; a "change" is a new immutable
+# row (DOM-POL-001).
 #
 # Layer separation:
 # - The route resolves canonical teacher/class context and marshals form input.
@@ -6592,12 +6535,14 @@ def update_economy_policy():
         flash(f"Error updating economy policy: {result.error_message}", "error")
         return redirect(url_for('admin.economic_engine'))
 
-    # Update display metadata on FeatureSettings + cancel superseded pending
-    # transitions. execute_evolve_economic_engine() above opened its OWN
-    # FEAT-CLASS-005 context, committed, and CLOSED it — so there is no ambient
-    # FEAT context here. These trailing mutations (lazy FeatureSettings create,
-    # economy_policy_updated_at write, transition cancellation) must run inside
+    # Update display metadata on FeatureSettings. execute_evolve_economic_engine()
+    # above opened its OWN FEAT-CLASS-005 context, committed, and CLOSED it — so
+    # there is no ambient FEAT context here. These trailing mutations (lazy
+    # FeatureSettings create, economy_policy_updated_at write) must run inside
     # their own inline FEAT or they are blocked at flush by the integrity hook.
+    # A mode change never revokes a scheduled rebalance: scheduling it was an
+    # explicit teacher action, and any cancellation must itself be explicit
+    # (owner ruling 2026-09-30; DOM-CLASS-003 §IX, FEAT-ECON-001 §X).
     with FEATContext(
         "FEAT-CLASS-005",
         idempotency_key=f"feat:class-005:policy-meta:{class_id}:{policy_mode}",
@@ -6605,7 +6550,6 @@ def update_economy_policy():
         settings_row = get_feature_settings_row_for_class(class_id, create=True)
         if settings_row:
             settings_row.economy_policy_updated_at = utc_now()
-        cancel_pending_policy_transitions(class_id, actor_seat_id=resolve_teacher_seat_for_class(class_id).id)
 
     current_app.logger.info(
         "Economy policy mode changed teacher=%s class_id=%s mode=%s",
@@ -6624,22 +6568,14 @@ def apply_economy_rebalance():
     selected_scope = next((option for option in feature_options if option.get('class_id') == current_class_id), None)
     if not selected_scope:
         abort(404)
-    activation_mode = (request.form.get('activation_mode') or REBALANCE_ACTIVATION_NEXT_RENEWAL).strip().lower()
+    # No activation choice (owner ruling 2026-09-30): rent terms take effect from
+    # the first unbilled rent period, store prices and the overdraft fee at once
+    # (FEAT-ECON-001 §VI-§VIII). A submitted activation_mode is ignored.
     selected_keys = set(request.form.getlist('selected_changes'))
     # No FeatureSettings row is read here. Fetching one with create=True flushed a
     # new row outside a FEAT context, so this route raised for any class that did
     # not already have one — and both branches below only ever needed the class_id
     # that `selected_scope` has already been authority-checked for.
-    allowed_activation_modes = {
-        REBALANCE_ACTIVATION_IMMEDIATE,
-        REBALANCE_ACTIVATION_NEXT_RENEWAL,
-        REBALANCE_ACTIVATION_NEXT_PAYROLL,
-    }
-
-    if activation_mode not in allowed_activation_modes:
-        flash("Invalid rebalance activation mode.", "warning")
-        return redirect(url_for('admin.economic_engine', review_rebalance=1))
-
     payroll_settings, rent_settings, insurance_policies = _load_economy_rebalance_context(
         g.canonical_context,
         selected_scope['class_id'],
@@ -6714,21 +6650,6 @@ def apply_economy_rebalance():
         flash("No rebalance changes were selected.", "warning")
         return redirect(url_for('admin.economic_engine', review_rebalance=1))
 
-    from app.utils.economy_rebalance import IMMEDIATE_ONLY_CHANGE_TYPES
-    if activation_mode != REBALANCE_ACTIVATION_IMMEDIATE and any(
-        change.get('type') in IMMEDIATE_ONLY_CHANGE_TYPES for change in change_plan
-    ):
-        flash(
-            "Store prices and the overdraft fee have no later cycle to wait for. "
-            "Apply them immediately, or schedule them separately from rent.",
-            "warning",
-        )
-        return redirect(url_for('admin.economic_engine', review_rebalance=1))
-
-    if activation_mode == REBALANCE_ACTIVATION_IMMEDIATE and request.form.get('confirm_immediate') != 'yes':
-        flash("Confirm the immediate change warning before applying now.", "warning")
-        return redirect(url_for('admin.economic_engine', review_rebalance=1))
-
     # FEAT-CLASS-005 is HIGH blast radius and requires an idempotency_key, so it cannot
     # be supplied via the bare @requires_feat_context route decorator (which passes no key
     # and would fail fatally on entry). Open the FEAT inline with a deterministic key that
@@ -6744,42 +6665,38 @@ def apply_economy_rebalance():
         mode = request.form.get(f"rebalance_mode_{safe_key}", "midpoint")
         choice_fingerprint.append(f"{key}:{mode}:{change.get('new_value')}")
     rebalance_fingerprint = hashlib.sha256(
-        f"{activation_mode}:{'|'.join(sorted(choice_fingerprint))}".encode("utf-8")
+        '|'.join(sorted(choice_fingerprint)).encode("utf-8")
     ).hexdigest()[:16]
     rebalance_idempotency_key = (
         f"feat:class-005:rebalance:{selected_scope['class_id']}:{rebalance_fingerprint}"
     )
     with FEATContext("FEAT-CLASS-005", idempotency_key=rebalance_idempotency_key):
-        if activation_mode == REBALANCE_ACTIVATION_IMMEDIATE:
-            applied_labels = _apply_rebalance_plan(
-                g.canonical_context,
-                selected_scope['class_id'],
-                change_plan,
-                activation_mode=REBALANCE_ACTIVATION_IMMEDIATE,
-            )
-            flash(f"Applied economy rebalance now for {len(applied_labels)} setting(s).", "success")
-        else:
-            scheduled_changes = prepare_scheduled_rebalance_changes(
-                change_plan,
-                rent_settings=rent_settings,
-                insurance_policies=insurance_policies,
-            )
-            queued_transition_count = queue_scheduled_policy_transitions(
-                resolve_teacher_seat_for_class(selected_scope["class_id"]).id,
-                selected_scope['class_id'],
-                scheduled_changes,
-                activation_mode=activation_mode,
-            )
-            current_app.logger.info(
-                "Scheduled economy rebalance teacher=%s class_id=%s changes=%s",
-                g.canonical_context.user_id,
-                selected_scope['class_id'],
-                [change.get('type') for change in change_plan],
-            )
-            flash(
-                f"Scheduled economy rebalance for the renewal after the upcoming bill ({len(change_plan)} setting(s), {queued_transition_count} policy transition(s)).",
-                "success",
-            )
+        applied_labels, scheduled_rows = execute_rebalance(
+            g.canonical_context.seat_id,
+            selected_scope['class_id'],
+            change_plan,
+            rent_settings=rent_settings,
+            canonical_context=g.canonical_context,
+        )
+    current_app.logger.info(
+        "Economy rebalance teacher=%s class_id=%s applied=%s scheduled_rent_rows=%s",
+        g.canonical_context.user_id,
+        selected_scope['class_id'],
+        applied_labels,
+        len(scheduled_rows),
+    )
+    messages = []
+    if applied_labels:
+        messages.append(f"Applied {len(applied_labels)} setting(s) now.")
+    if scheduled_rows:
+        rent_count = sum(
+            1 for change in change_plan if change.get('type') in RENT_CHANGE_TYPES
+        )
+        messages.append(
+            f"Saved {rent_count} rent setting(s); they take effect from the next rent bill "
+            "not yet sent, and bills already sent keep their amounts."
+        )
+    flash(" ".join(messages) or "No rebalance changes were applied.", "success")
 
     return redirect(url_for('admin.economic_engine'))
 
@@ -6888,7 +6805,7 @@ def economic_engine():
         fines,
         warnings=actionable_warnings,
     )
-    pending_rebalance_effective_at = _extract_pending_rebalance_effective_at(policy_summary)
+    pending_rebalance_effective_at = _extract_pending_rebalance_effective_at(selected_class_id)
     rebalance_preview = []
     show_rebalance_review = request.args.get('review_rebalance') == '1'
     if payroll_settings and show_rebalance_review and cwi_calc:
@@ -7093,7 +7010,7 @@ def reverse_payroll_event(payroll_event_id):
     route-level one would nest and fail — the defect this same batch fixed on
     hall-pass approval. Driving the FEAT rather than the bare domain command is
     what keeps the counter-entry and the payroll record one operation: the FEAT
-    inherits the original's ``policy_version_id`` and derives the amount as the
+    inherits the original's ``policy_uuid`` and derives the amount as the
     negation of the linked transaction, so the reversal is a compensating entry
     with the provenance of what it compensates, never a deletion.
     """
@@ -7271,11 +7188,14 @@ def _run_payroll():
         idempotency_key = f"manual-payroll:{class_id}:{token}"
 
         with FEATContext("FEAT-PROD-004", idempotency_key=idempotency_key):
+            # The teacher started this run, so it is TEACHER: it settles work but
+            # does not move the next payroll date (DOM-PROD-001 §XV.5).
             result = complete_payroll_cycle(
                 ctx=g.canonical_context,
                 idempotency_key=idempotency_key,
                 cycle_started_at=cycle_started_at,
                 cycle_completed_at=cycle_completed_at,
+                run_mechanism="TEACHER",
             )
 
         settled = len(result.settled_seat_ids or [])
@@ -7378,7 +7298,7 @@ def _post_payroll_corrections(ctx, seat_ids: set[int]) -> list[int]:
                 payroll_event_type="manual_credit",
                 correlation_id=posting.correlation_id,
                 idempotency_key=posting.idempotency_key,
-                policy_version_id=posting.policy_version_id,
+                policy_uuid=posting.policy_uuid,
                 mechanism="SYSTEM",
                 summary_json=posting.summary_json,
                 amount=posting.amount,
@@ -7481,34 +7401,22 @@ def payroll():
         .all()
     )
     students = seats
-    # Check if payroll settings exist for the canonical class
-    has_settings = (
-        PayrollSettings.query.filter_by(class_id=selected_class_id).first() is not None
+    # The setting in force now, and any saved to take effect at a later payroll
+    # date (DOM-CLASS-003 §VII, §X: pending payroll changes are disclosed).
+    current_setting = current_payroll_setting(selected_class_id, as_of=now_utc)
+    pending_settings = pending_payroll_settings(selected_class_id, as_of=now_utc)
+    show_setup_banner = current_setting is None
+    # The form starts from the setting the next save would follow: the latest
+    # pending one if any, else the one in force.
+    form_setting = pending_settings[-1] if pending_settings else current_setting
+
+    # Derived, never stored (DOM-PROD-001 §XV.5) — the date the automatic job
+    # fires on. A manual run does not move it. UTC; the template formats.
+    next_pay_date_utc = derive_class_next_payroll_date(selected_class_id, as_of=now_utc)
+    # When a change saved now would take effect.
+    next_change_effective_utc = (
+        next_payroll_boundary_after(selected_class_id, now_utc) if current_setting else None
     )
-    show_setup_banner = not has_settings
-
-    # Get payroll settings for the canonical class
-    block_settings = PayrollSettings.query.filter_by(
-        class_id=selected_class_id,
-        availability_state='IN_USE',
-    ).all()
-
-    # Get first block's settings for form pre-population (no global settings)
-    default_setting = block_settings[0] if block_settings else None
-
-    # Organize settings by block for display and lookup
-    settings_by_block = {}
-    for setting in block_settings:
-        if setting.block:
-            settings_by_block[setting.block] = setting
-
-
-
-    # Next scheduled payroll: the scheduler's own cursor, the instant the
-    # automatic-payroll job runs on (scheduled_tasks advances it by class-local
-    # calendar days). Recomputing it here as first_pay + N × 24h disagreed with
-    # that job by a class day after every DST change. UTC; the template formats.
-    next_pay_date_utc = default_setting.next_payroll_date if default_setting else None
 
     # Recent payroll activity (class-scoped via canonical class_id)
     my_class_ids = [selected_class_id] if selected_class_id else []
@@ -7642,15 +7550,21 @@ def payroll():
         build_student_payroll_status_view,
         build_payroll_configuration_view,
         build_payroll_settings_display,
+        build_payroll_settings_form,
     )
 
     # Pre-format pay rate display strings for the Settings tab (eliminates
-    # template-level "%.2f"|format() calls on raw PayrollSettings.pay_rate)
-    default_setting_display = build_payroll_settings_display(default_setting)
-    display_pay_rate_by_block = {
-        block_key: build_payroll_settings_display(setting)['display_pay_rate']
-        for block_key, setting in settings_by_block.items()
-    }
+    # template-level "%.2f"|format() calls on raw pay_rate values)
+    current_setting_display = build_payroll_settings_display(current_setting)
+    payroll_form = build_payroll_settings_form(form_setting)
+    pending_setting_views = [
+        {
+            'display_rate_with_unit': build_payroll_settings_display(pending)['display_rate_with_unit'],
+            'pay_schedule_type': pending.pay_schedule_type,
+            'effective_date': pending.effective_date,
+        }
+        for pending in pending_settings
+    ]
 
     # Convert student_stats to StudentPayrollStatusView objects
     student_payroll_views = []
@@ -7681,8 +7595,9 @@ def payroll():
     # Build payroll configuration view (eliminates payroll settings display logic)
     payroll_config = build_payroll_configuration_view(
         class_id=selected_class_id,
-        settings=default_setting,
+        settings=current_setting,
         student_statuses=student_payroll_views,
+        next_payroll_date=next_pay_date_utc,
     )
 
     # Payroll history for History tab: PROD payroll business events only.
@@ -7698,11 +7613,6 @@ def payroll():
         payroll_events=payroll_history_events,
         class_label=class_label,
     )
-    # CWI configuration is on the canonical PayrollSettings for this class.
-    cwi_setting = PayrollSettings.query.filter_by(
-        class_id=selected_scope['class_id'],
-    ).first()
-
     # Pre-format display values (Phase 1 Jinja2 remediation - no formatting in templates)
     display_payroll_updated_at = ""
     if payroll_updated_at:
@@ -7718,21 +7628,11 @@ def payroll():
     # is the same one-day walk `_local_date_of_end_of_day` documents for delist
     # dates, in the opposite direction.
     display_first_pay_date = ""
+    if current_setting and current_setting.first_pay_date:
+        display_first_pay_date = _class_local_date_of(current_setting.first_pay_date).strftime("%m/%d/%Y")
     display_first_pay_date_iso = ""
-    if default_setting and default_setting.first_pay_date:
-        _local_first_pay = _class_local_date_of(default_setting.first_pay_date)
-        display_first_pay_date = _local_first_pay.strftime("%m/%d/%Y")
-        display_first_pay_date_iso = _local_first_pay.strftime("%Y-%m-%d")
-
-    # Format created_at for each block setting
-    display_settings_created_at_list = []
-    for setting in block_settings:
-        if setting.created_at:
-            display_settings_created_at_list.append(
-                _class_local_date_of(setting.created_at).strftime("%B %d, %Y")
-            )
-        else:
-            display_settings_created_at_list.append("")
+    if form_setting and form_setting.first_pay_date:
+        display_first_pay_date_iso = _class_local_date_of(form_setting.first_pay_date).strftime("%Y-%m-%d")
 
     return render_template(
         'admin_payroll.html',
@@ -7750,15 +7650,13 @@ def payroll():
         display_avg_payout=display_avg_payout,
         # Settings tab
         settings_form=settings_form,
-        block_settings=block_settings,
-        default_setting=default_setting,
-        default_setting_display=default_setting_display,
+        current_setting=current_setting,
+        current_setting_display=current_setting_display,
+        pending_settings=pending_setting_views,
+        next_change_effective=next_change_effective_utc,  # Pass UTC timestamp
+        payroll_form=payroll_form,
         display_first_pay_date=display_first_pay_date,
         display_first_pay_date_iso=display_first_pay_date_iso,
-        display_settings_created_at_list=display_settings_created_at_list,
-        settings_by_block=settings_by_block,
-        display_pay_rate_by_block=display_pay_rate_by_block,
-        next_global_payroll=next_pay_date_utc,  # Pass UTC timestamp
         show_setup_banner=show_setup_banner,
         # Students tab (using pre-formatted view models per Phase 1)
         student_stats=student_payroll_views,
@@ -7769,8 +7667,6 @@ def payroll():
         all_students=student_payroll_views,
         # History tab
         payroll_history=payroll_history,
-        # CWI Configuration
-        cwi_setting=cwi_setting,
         payroll_correction_pending=class_has_pending_correction(selected_class_id),
         current_page="payroll",
         format_utc_iso=format_utc_iso,
@@ -7806,8 +7702,6 @@ def payroll_settings():
             pay_rate_per_minute = pay_rate_per_hour / Decimal('60')  # Convert to per-minute for storage
 
             frequency = request.form.get('simple_frequency', 'biweekly')
-            frequency_days_map = {'weekly': 7, 'biweekly': 14, 'monthly': 30}
-            payroll_frequency_days = frequency_days_map.get(frequency, 14)
 
             first_pay_date_str = request.form.get('simple_first_pay_date')
             first_pay_date = _class_local_date_start_utc(first_pay_date_str)
@@ -7833,24 +7727,17 @@ def payroll_settings():
                 total_hours = dl_hours_val + dl_minutes_val / 60.0
                 daily_limit_hours = total_hours if total_hours > 0 else None
 
-            # Create settings dict for simple mode
+            # Only the legal payroll_settings columns are stored (DOM-POL-001A
+            # §V.F). The simple form's daily limit is entered as hours + minutes
+            # and stored as minutes.
             settings_data = {
-                'settings_mode': 'simple',
                 'pay_rate': pay_rate_per_minute,
-                'payroll_frequency_days': payroll_frequency_days,
                 'first_pay_date': first_pay_date,
-                'daily_limit_hours': daily_limit_hours,
-                'time_unit': 'minutes',
                 'pay_schedule_type': frequency,
-                # Reset advanced fields
-                'overtime_enabled': False,
                 'overtime_threshold': None,
                 'overtime_threshold_unit': None,
-                'overtime_threshold_period': None,
-                'overtime_multiplier': Decimal('1.0'),
-                'max_time_per_day': None,
-                'max_time_per_day_unit': None,
-                'rounding_mode': 'down'
+                'max_time_per_day': round(daily_limit_hours * 60, 4) if daily_limit_hours else None,
+                'max_time_per_day_unit': 'minutes' if daily_limit_hours else None,
             }
 
         else:  # Advanced mode
@@ -7864,61 +7751,45 @@ def payroll_settings():
             from app.services.payroll.builders import rate_unit_to_per_minute
             pay_rate_per_minute = rate_unit_to_per_minute(pay_amount, time_unit)
 
-            # Overtime settings
+            # Overtime threshold: recorded, not yet applied to pay (owner ruling
+            # pending). Only the threshold and its unit are legal columns.
             overtime_enabled = 'adv_overtime_enabled' in request.form
             overtime_threshold_raw = request.form.get('adv_overtime_threshold')
             overtime_threshold = _quantize_currency(overtime_threshold_raw) if overtime_threshold_raw else None
             overtime_unit = request.form.get('adv_overtime_unit')
-            overtime_period = request.form.get('adv_overtime_period')
-            overtime_multiplier_raw = request.form.get('adv_overtime_multiplier')
-            overtime_multiplier = _quantize_currency(overtime_multiplier_raw) if overtime_multiplier_raw else Decimal('1.0')
 
             # Max time per day
             max_time_value_raw = request.form.get('adv_max_time_value')
             max_time_value = _quantize_currency(max_time_value_raw) if max_time_value_raw else None
             max_time_unit = request.form.get('adv_max_time_unit')
 
-            # Pay schedule
+            # Pay schedule: weekly, biweekly or monthly (validated below).
             pay_schedule = request.form.get('adv_pay_schedule', 'biweekly')
-            custom_value = request.form.get('adv_custom_schedule_value')
-            custom_unit = request.form.get('adv_custom_schedule_unit')
-
-            # Calculate payroll_frequency_days
-            if pay_schedule == 'custom':
-                custom_value = int(custom_value) if custom_value else 14
-                if custom_unit == 'weeks':
-                    payroll_frequency_days = custom_value * 7
-                else:  # days
-                    payroll_frequency_days = custom_value
-            else:
-                schedule_map = {'daily': 1, 'weekly': 7, 'biweekly': 14, 'monthly': 30}
-                payroll_frequency_days = schedule_map.get(pay_schedule, 14)
 
             first_pay_date_str = request.form.get('adv_first_pay_date')
             first_pay_date = _class_local_date_start_utc(first_pay_date_str)
 
-            rounding = request.form.get('adv_rounding', 'down')
-
+            # Only the legal payroll_settings columns are stored (DOM-POL-001A
+            # §V.F): the entry unit is folded into pay_rate (per minute).
             settings_data = {
-                'settings_mode': 'advanced',
                 'pay_rate': pay_rate_per_minute,
-                'time_unit': time_unit,
-                'overtime_enabled': overtime_enabled,
-                'overtime_threshold': overtime_threshold,
-                'overtime_threshold_unit': overtime_unit if overtime_enabled else None,
-                'overtime_threshold_period': overtime_period if overtime_enabled else None,
-                'overtime_multiplier': overtime_multiplier if overtime_enabled else 1.0,
-                'max_time_per_day': max_time_value,
+                'overtime_threshold': float(overtime_threshold) if overtime_enabled and overtime_threshold is not None else None,
+                'overtime_threshold_unit': overtime_unit if overtime_enabled and overtime_threshold is not None else None,
+                'max_time_per_day': float(max_time_value) if max_time_value else None,
                 'max_time_per_day_unit': max_time_unit if max_time_value else None,
                 'pay_schedule_type': pay_schedule,
-                'pay_schedule_custom_value': int(custom_value) if pay_schedule == 'custom' and custom_value else None,
-                'pay_schedule_custom_unit': custom_unit if pay_schedule == 'custom' else None,
-                'payroll_frequency_days': payroll_frequency_days,
                 'first_pay_date': first_pay_date,
-                'rounding_mode': rounding,
-                # Reset simple fields
-                'daily_limit_hours': None
             }
+
+        # Every setting anchors the payroll schedule (DOM-PROD-001 §XV.5), and
+        # the schedule is weekly, biweekly or monthly (operator ruling
+        # 2026-09-30). Refuse anything else before any write.
+        if settings_data['first_pay_date'] is None:
+            flash('Choose the first payday. Payroll settings need a first pay date.', 'error')
+            return redirect(url_for('admin.payroll'))
+        if settings_data['pay_schedule_type'] not in PAY_SCHEDULE_TYPES:
+            flash('Choose a pay schedule: weekly, every two weeks, or monthly.', 'error')
+            return redirect(url_for('admin.payroll'))
 
         payload_hash = hashlib.sha256(
             json.dumps(
@@ -7934,9 +7805,21 @@ def payroll_settings():
 
         db.session.rollback()
         with FEATContext("FEAT-ADMN-001", idempotency_key=idempotency_key):
-            upsert_payroll_settings(class_id=class_id, settings_data=settings_data)
+            saved = save_payroll_setting(class_id=class_id, settings_data=settings_data)
+            effective_date = saved.effective_date
+            immediate = saved.effective_date <= saved.created_at
 
-        flash(f'Payroll settings ({settings_mode} mode) saved successfully!', 'success')
+        # A change never reprices the open cycle (DOM-CLASS-003 §VII): say when
+        # it takes effect, in the class's own calendar.
+        if immediate:
+            flash('Payroll settings saved. They are in effect now.', 'success')
+        else:
+            flash(
+                'Payroll settings saved. They take effect on the next payroll date, '
+                f'{_class_local_date_of(effective_date).strftime("%B %d, %Y")}. '
+                'Work before then is paid at the current settings.',
+                'success',
+            )
 
     except Exception as e:
         db.session.rollback()
@@ -8066,8 +7949,7 @@ def payroll_manual_payment():
                     payroll_event_type="manual_credit",
                     correlation_id=generate_correlation_id(),
                     idempotency_key=f"manual_credit:{selected_class_id}:{student.id}:{request_nonce}",
-                    # Manual credits need no payroll policy (DOM-PROD-001 §VIII).
-                    policy_version_id=None,
+                    # Manual credits need no payroll setting (DOM-PROD-001 §VIII).
                     mechanism="TEACHER",
                     summary_json={
                         "description": f"Manual Credit: {description}",
@@ -9344,7 +9226,7 @@ def feature_settings():
 def update_class_feature_setting():
     """Toggle a single feature for the current class via FEAT-CLASS-004."""
     from app.feats.class_configuration import execute_enable_feature, execute_disable_feature
-    from app.services.class_configuration_query_service import get_economic_engine_history
+    from app.services.class_configuration_query_service import get_current_economic_engine
 
     class_id = g.canonical_context.class_id
     if not class_id:
@@ -9372,12 +9254,14 @@ def update_class_feature_setting():
         ctx = g.canonical_context
 
         if enabled:
-            engines = get_economic_engine_history(class_id)
-            if not engines:
+            # The version in force now; a version dated for later is not what a
+            # feature enabled today runs on (DOM-CLASS-003 §VII).
+            engine = get_current_economic_engine(class_id)
+            if not engine:
                 return jsonify({'status': 'error', 'message': 'No economic engine found for class.'}), 400
             # Capture the version id as a plain value up front so it survives the
             # session expiry when the inner FEAT opens its transaction boundary.
-            economic_version_id = engines[0].economic_version_id
+            economic_version_id = engine.economic_version_id
 
             idempotency_key = f"feat:class-004:enable:{class_id}:{feature}"
             # execute_enable_feature owns its own @requires_feat_context boundary;
@@ -9710,15 +9594,11 @@ def onboarding_status():
             # must too — otherwise a freshly created class with no claimed
             # students reads as incomplete even though the class exists.)
             roster_done = True
-            payroll_done = PayrollSettings.query.filter(
-                PayrollSettings.class_id == active_class_id
-            ).first() is not None
+            payroll_done = class_has_payroll_settings(active_class_id)
             store_done = StoreProduct.query.filter(
                 StoreProduct.class_id == active_class_id
             ).count() > 0
-            banking_done = EconomicEngine.query.filter(
-                EconomicEngine.class_id == active_class_id
-            ).first() is not None
+            banking_done = get_current_economic_engine(active_class_id) is not None
             rent_done = RentSettings.query.with_entities(RentSettings.id).filter(
                 RentSettings.class_id == active_class_id
             ).first() is not None
@@ -9878,16 +9758,7 @@ def _resolve_admin_payroll_settings_for_class_id(canonical_context, class_id: st
     ).strip()
     if not scoped_class_id:
         return None
-    class_id = scoped_class_id
-
-    return (
-        PayrollSettings.query.filter(
-            PayrollSettings.class_id == class_id,
-            PayrollSettings.availability_state == 'IN_USE',
-        )
-        .order_by(desc(PayrollSettings.block.isnot(None)))
-        .first()
-    )
+    return current_payroll_setting(scoped_class_id)
 
 
 @admin_bp.route('/api/economy/analyze', methods=['POST'])

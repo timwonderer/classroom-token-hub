@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-POL-001A | 2.1 | 2026-09-24 | 2.0 | Constitutional Appendix |
+| DOM-POL-001A | 2.2 | 2026-09-30 | 2.1 | Constitutional Appendix |
 
 ## I. Purpose
 
@@ -154,6 +154,25 @@ A recurring policy family carries the terms that schedule its obligations. Each 
 These terms are frozen with the purchased policy version: a later submission changes them only for entitlements purchased under the new `policy_uuid`.
 
 **Policies read.** Policies exposes one family-agnostic read, "the preview interval for `policy_uuid` X", used by Obligations to schedule succession. Obligations does not open `rent_settings` or `insurance_policies`, and does not branch on the family.
+
+### F. Payroll settings (effective-dated)
+
+*Operator ruling 2026-09-30.* `payroll_settings` is append-only and effective-dated (`DOM-POL-001` §VI.2). Its legal columns are exactly:
+
+| Column | Meaning |
+|---|---|
+| `policy_uuid` | Primary key; the version identity (`DOM-POL-001` §VI.0) |
+| `class_id` | Class boundary (FK to `classes`) |
+| `pay_rate` | Dollars per minute, `NUMERIC(18,8)` (`DOM-CORE-002` §11) |
+| `effective_date` | The instant from which the row is in force |
+| `created_at` | When the row was recorded; breaks ties between rows sharing an `effective_date` |
+| `overtime_threshold` / `overtime_threshold_unit` | Recorded threshold; no overtime is computed until the owner rules on its semantics |
+| `max_time_per_day` / `max_time_per_day_unit` | The daily working limit enforced on attendance |
+| `pay_schedule_type` | The pay frequency: `weekly`, `biweekly` or `monthly` (DB check). Paydays are derived from it and `first_pay_date` through the anchored recurrence (`SPEC-TIME-001` §IX.12; monthly is a calendar month rolled forward); no day count is stored |
+| `rounding_mode` | **RETIRED** (operator ruling 2026-09-30). Not a supported setting: rounding was never defined or applied to pay (pricing is exact seconds × rate, `DOM-PROD-001` §XV.3). Kept, nullable, only as historical data on rows recorded before the ruling; nothing reads or writes it |
+| `first_pay_date` | Required: the anchor of the payroll schedule (`DOM-PROD-001` §XV.5) |
+
+"Pay frequency" in the owner's list is `pay_schedule_type` with the anchored derivation, not a stored number of days: the former `payroll_frequency_days` column is dropped (operator ruling 2026-09-30). No other column is legal. In particular there is no availability state, section/`block` label, stored next payroll date, update timestamp, surrogate integer id, or form-presentation state (the rate's entry unit, a simple/advanced mode); the teacher form converts entered values into these columns and stores nothing else. `(class_id, effective_date, created_at)` is unique, so the row in force at any instant is determined.
 
 ## VI. Deferred Policy Schema Areas
 

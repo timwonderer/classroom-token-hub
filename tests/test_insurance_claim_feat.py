@@ -30,13 +30,11 @@ from app.models import (
     PayrollEvent,
     PayrollSettings,
 )
-from app.models import PolicyVersion
 from app.services.context_resolver import CanonicalContext
 from app.services import insurance_claim_service
-from app.services.payroll_settings_service import upsert_payroll_settings
 from app.services.class_configuration_query_service import (
     get_economic_engine_by_version,
-    get_effective_economic_engine,
+    get_current_economic_engine,
 )
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
@@ -828,7 +826,7 @@ def _make_economic_engine_ready(class_id: str, *, expected_weekly_hours: str = "
     later-effective ClassFeature row (INSERT-only; matches the canonical evolution shape).
     Caller must already be inside a FEAT context.
     """
-    current = get_effective_economic_engine(class_id, "payroll")
+    current = get_current_economic_engine(class_id)
     if current is not None and current.expected_weekly_hours is not None:
         return
 
@@ -912,21 +910,6 @@ def _add_productivity_granted_event(
         start_utc=granted_event.timestamp,
     )
     return granted_event
-
-
-def _seed_active_payroll_policy(class_id: str) -> PolicyVersion:
-    """An active payroll PolicyVersion so PRODUCTIVITY approval can post MANUAL_CREDIT."""
-    policy = PolicyVersion(
-        class_id=class_id,
-        domain="payroll",
-        version_number=1,
-        policy_payload_json='{"source":"test"}',
-        activated_at=datetime(2026, 8, 26, 12, 0, tzinfo=timezone.utc),
-        is_active=True,
-    )
-    db.session.add(policy)
-    db.session.flush()
-    return policy
 
 
 class TestProductivityClaimLifecycle:
@@ -1137,7 +1120,6 @@ class TestProductivityClaimLifecycle:
                     classroom, student, entitlement_id, make_policy_uuid("prod-approve"),
                     granted_at=granted_at,
                 )
-                _seed_active_payroll_policy(classroom.class_id)
 
             hourly = _resolve_hourly_pay_rate(classroom.class_id)
 
@@ -1191,7 +1173,6 @@ class TestProductivityClaimLifecycle:
                     classroom, student, entitlement_id, make_policy_uuid("prod-adjust"),
                     granted_at=granted_at,
                 )
-                _seed_active_payroll_policy(classroom.class_id)
 
             hourly = _resolve_hourly_pay_rate(classroom.class_id)
             d1 = (datetime.now(timezone.utc) - timedelta(days=2)).date()
@@ -1250,7 +1231,6 @@ class TestProductivityClaimLifecycle:
                     premium="10.00",
                     payout_multiple="1",  # cap = $10.00
                 )
-                _seed_active_payroll_policy(classroom.class_id)
 
             hourly = _resolve_hourly_pay_rate(classroom.class_id)
             # 2h at the hourly rate exceeds the $10 cap by construction.
@@ -1292,17 +1272,17 @@ def _set_global_daily_limit_hours(class_id: str, hours: float) -> None:
     Payroll policy is append-only (DOM-POL-001 §VI.1), so this supersedes the
     current row rather than editing it in place — an in-place edit now raises.
     """
-    existing = (
-        PayrollSettings.query.filter(
-            PayrollSettings.class_id == class_id,
-            PayrollSettings.availability_state == 'IN_USE',
-        ).first()
-    )
-    assert existing is not None, "default classroom must have a global payroll settings row"
-    upsert_payroll_settings(
-        class_id=class_id,
-        settings_data={"settings_mode": "simple", "daily_limit_hours": float(hours)},
-    )
+    from app.models import PayrollSettings
+    from app.services.payroll.settings import append_payroll_setting, current_payroll_setting
+    from app.utils.canonical_temporal_resolver import utc_now
+
+    current = current_payroll_setting(class_id)
+    assert current is not None, "default classroom must have a payroll setting"
+    # In force from now: the limit under test, not a change awaiting payday.
+    data = {field: getattr(current, field) for field in PayrollSettings.SETTING_FIELDS}
+    data.update(max_time_per_day=float(hours), max_time_per_day_unit="hours")
+    now = utc_now()
+    append_payroll_setting(class_id=class_id, settings_data=data, effective_date=now, created_at=now)
     db.session.flush()
 
 
@@ -1366,7 +1346,7 @@ class TestProductivityReadinessAndCapacity:
         with app.app_context():
             class_id = classroom.class_id
             # Default classroom: insurance disabled, expected_weekly_hours NULL.
-            current_engine = get_effective_economic_engine(class_id, "payroll")
+            current_engine = get_current_economic_engine(class_id)
             assert current_engine.expected_weekly_hours is None
 
             blocked = execute_enable_feature(
@@ -1388,7 +1368,7 @@ class TestProductivityReadinessAndCapacity:
             with FEATContext("FEAT-TEST-SETUP", idempotency_key="enable-ready:make"):
                 _make_economic_engine_ready(class_id)
 
-            ready_engine = get_effective_economic_engine(class_id, "payroll")
+            ready_engine = get_current_economic_engine(class_id)
             assert ready_engine.expected_weekly_hours is not None
 
             enabled = execute_enable_feature(
@@ -1445,7 +1425,7 @@ class TestProductivityReadinessAndCapacity:
         with app.app_context():
             class_id = classroom.class_id
             # Prevention: enablement refuses while unready.
-            engine = get_effective_economic_engine(class_id, "payroll")
+            engine = get_current_economic_engine(class_id)
             prevented = execute_enable_feature(
                 canonical_context=self._teacher_context(classroom),
                 class_id=class_id,
@@ -1800,7 +1780,6 @@ class TestProductivityAdjudicationAtomicity:
                 classroom, student, entitlement_id, make_policy_uuid(idem),
                 granted_at=granted_at,
             )
-            _seed_active_payroll_policy(classroom.class_id)
 
         d1 = (datetime.now(timezone.utc) - timedelta(days=2)).date()
         submit = submit_insurance_claim(

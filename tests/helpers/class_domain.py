@@ -246,3 +246,25 @@ def tap_out_students(client, seat_ids: list[int] | None = None, *, tap_out_all: 
     )
 
 
+
+
+def put_payroll_setting_in_force(class_id: str, **overrides):
+    """Fixture: record a payroll setting that is in force from now.
+
+    A real save waits for the next payroll date when the class already has a
+    setting (DOM-CLASS-003 §VII). Tests that only need "the class's setting is
+    X" — a daily limit, a pay rate — record it effective now, carrying the other
+    terms from the setting in force. Commits.
+    """
+    from app.models import PayrollSettings
+    from app.services.payroll.settings import append_payroll_setting, current_payroll_setting
+    from app.utils.canonical_temporal_resolver import utc_now
+
+    current = current_payroll_setting(class_id)
+    data = {field: getattr(current, field) for field in PayrollSettings.SETTING_FIELDS} if current else {}
+    data.update(overrides)
+    now = utc_now()
+    with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"payroll-setting-in-force:{class_id}:{now.isoformat()}"):
+        row = append_payroll_setting(class_id=class_id, settings_data=data, effective_date=now, created_at=now)
+    db.session.commit()
+    return row

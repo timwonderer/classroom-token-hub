@@ -12,15 +12,10 @@ from app.models import (
     HallPassLog,
     HallPassSettings,
     PayrollEvent,
-    PolicyVersion,
     Seat,
     Transaction,
 )
-from app.payroll import get_pay_rate_for_class
-from app.services.attendance_service import (
-    CLOSED_SESSION_SETTLEMENT_RULE,
-    calculate_payable_attendance_seconds,
-)
+from app.services.attendance_service import CLOSED_SESSION_SETTLEMENT_RULE
 from app.services.context_resolver import CanonicalContext
 from app.services.entitlement_service import (
     consume_hall_pass,
@@ -28,6 +23,8 @@ from app.services.entitlement_service import (
     get_hall_pass_balance,
 )
 from app.services.ledger_posting_service import create_pending_transaction
+from app.services.payroll.pricing import SUMMARY_PRICING_KEY, price_payable_attendance
+from app.services.payroll.settings import payroll_setting_by_uuid
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
     canonical_temporal_resolver,
@@ -63,17 +60,6 @@ def _resolve_class_economy(class_id: str) -> ClassEconomy:
     if not economy:
         raise LookupError(f"No class economy found for class_id={class_id!r}.")
     return economy
-
-
-def _resolve_pay_rate_per_second(class_id: str) -> Decimal:
-    """The class's per-second pay rate.
-
-    Scoped by ``class_id`` alone — `block` is display metadata and never an
-    execution key (INV-ARC-014 §V). Delegates to the single canonical reader so
-    a payroll run and the projection shown to the student before it cannot
-    price the same work differently.
-    """
-    return get_pay_rate_for_class(class_id=class_id)
 
 
 def _latest_hall_pass_attendance_state(log: HallPassLog) -> str:
@@ -496,24 +482,32 @@ def _record_payroll_event_impl(
     payroll_event_type: str,
     correlation_id: str,
     idempotency_key: str,
-    policy_version_id: int | None,
     mechanism: str,
+    policy_uuid: str | None = None,
     summary_json: dict | None = None,
     reference_time_utc=None,
     amount: Decimal | None = None,
     payroll_cycle_id: str | None = None,
 ) -> PayrollEventResult:
     ctx = _require_context(ctx)
-    # DOM-PROD-001 §VIII: attendance-derived payroll is computed under a payroll
-    # policy version and must record it. A manual credit is teacher intent, not a
-    # policy computation, so it needs no payroll configuration.
-    if payroll_event_type == "payroll" and policy_version_id is None:
-        raise ValueError("FEAT-PROD-003 requires a payroll policy_version_id for payroll events.")
-    policy_version = None
-    if policy_version_id is not None:
-        policy_version = db.session.get(PolicyVersion, policy_version_id)
-        if policy_version is None or policy_version.class_id != ctx.class_id:
-            raise ValueError("FEAT-PROD-003 requires a payroll policy version owned by the current class.")
+    # The initiating caller states the mechanism (FEAT-PROD-004 §II.1); it is
+    # never inferred, because a SYSTEM payroll event anchors the next payroll
+    # date (DOM-PROD-001 §XV.5).
+    mechanism = (mechanism or "").strip().upper()
+    if mechanism not in {"TEACHER", "SYSTEM"}:
+        raise ValueError("FEAT-PROD-003 mechanism must be TEACHER or SYSTEM.")
+    # DOM-PROD-001 §VIII: attendance-derived payroll records the payroll setting
+    # that priced it, and resolves that setting itself while pricing — a caller
+    # cannot name one. A manual credit is teacher intent, not a policy
+    # computation, so it needs no payroll configuration; one that posts another
+    # domain's calculation carries the setting that calculation used.
+    if payroll_event_type == "payroll" and policy_uuid is not None:
+        raise ValueError(
+            "FEAT-PROD-003 prices payroll events by the settings in force; "
+            "a caller-supplied policy_uuid is refused."
+        )
+    if policy_uuid is not None and payroll_setting_by_uuid(ctx.class_id, policy_uuid) is None:
+        raise ValueError("FEAT-PROD-003 requires a payroll setting owned by the current class.")
     evaluation = canonical_temporal_resolver(
         CLASS_LEVEL_EVALUATION,
         canonical_execution_context=ctx,
@@ -526,17 +520,25 @@ def _record_payroll_event_impl(
     # here — pay rate is resolved from `class_id` alone (INV-ARC-014 §V).
     _resolve_class_economy(ctx.class_id)
 
-    if payroll_event_type == "payroll" and amount is None:
+    if payroll_event_type == "payroll":
+        if amount is not None:
+            raise ValueError("FEAT-PROD-003 derives a payroll event's amount; it cannot be supplied.")
         # Only closed, unpaid sessions are payable; an open session is settled
-        # in full by the run after it closes (DOM-PROD-001 §VI.3).
-        attendance_seconds = calculate_payable_attendance_seconds(
+        # in full by the run after it closes (DOM-PROD-001 §VI.3). Each is priced
+        # by the setting in force when it closed, never by the one in force now
+        # (DOM-PROD-001 §XV.3), and the pricing inputs are recorded so the
+        # amount is reproducible without storing it (INV-CORE-000 §III.3).
+        priced = price_payable_attendance(
             target_seat_id, ctx.class_id, ctx=ctx, as_of_utc=recorded_at
         )
-        rate_per_second = _resolve_pay_rate_per_second(ctx.class_id)
-        amount = (Decimal(attendance_seconds) * rate_per_second).quantize(Decimal("0.01"))
+        amount = priced.amount
+        policy_uuid = priced.policy_uuid
+        if policy_uuid is None:
+            raise ValueError("FEAT-PROD-003 found no payable attendance to price for this payroll event.")
         summary_json = {
             **(summary_json or {}),
             "settlement_rule": CLOSED_SESSION_SETTLEMENT_RULE,
+            SUMMARY_PRICING_KEY: priced.summary(),
         }
     elif payroll_event_type == "manual_credit" and amount is None:
         raise ValueError("manual_credit payroll events require an amount.")
@@ -552,10 +554,9 @@ def _record_payroll_event_impl(
         )
         if original is None:
             raise LookupError("Unable to establish original payroll event for reversal.")
-        if policy_version is None and original.policy_version_id is not None:
+        if policy_uuid is None and original.policy_uuid is not None:
             # A reversal carries the provenance of the event it compensates.
-            policy_version = db.session.get(PolicyVersion, original.policy_version_id)
-            policy_version_id = original.policy_version_id
+            policy_uuid = original.policy_uuid
         if amount is None:
             active_correlation_id = get_correlation_id()
             linked = (
@@ -591,8 +592,7 @@ def _record_payroll_event_impl(
         target_seat_id=target_seat_id,
         correlation_id=correlation_id,
         idempotency_key=idempotency_key,
-        policy_version_id=policy_version_id,
-        policy_uuid=policy_version.policy_uuid if policy_version else None,
+        policy_uuid=policy_uuid,
         mechanism=mechanism,
         payroll_event_type=payroll_event_type,
         recorded_at=recorded_at,
@@ -629,8 +629,8 @@ def record_payroll_event(
     payroll_event_type: str,
     correlation_id: str,
     idempotency_key: str,
-    policy_version_id: int | None,
     mechanism: str,
+    policy_uuid: str | None = None,
     summary_json: dict | None = None,
     reference_time_utc=None,
     amount: Decimal | None = None,
@@ -642,7 +642,7 @@ def record_payroll_event(
         payroll_event_type=payroll_event_type,
         correlation_id=correlation_id,
         idempotency_key=idempotency_key,
-        policy_version_id=policy_version_id,
+        policy_uuid=policy_uuid,
         mechanism=mechanism,
         summary_json=summary_json,
         reference_time_utc=reference_time_utc,
@@ -659,7 +659,7 @@ def record_payroll_reversal(
     correlation_id: str,
     idempotency_key: str,
     mechanism: str,
-    policy_version_id: int | None = None,
+    policy_uuid: str | None = None,
     summary_json: dict | None = None,
     reference_time_utc=None,
 ) -> PayrollEventResult:
@@ -669,7 +669,7 @@ def record_payroll_reversal(
         payroll_event_type="reversal",
         correlation_id=correlation_id,
         idempotency_key=idempotency_key,
-        policy_version_id=policy_version_id,
+        policy_uuid=policy_uuid,
         mechanism=mechanism,
         summary_json=summary_json,
         reference_time_utc=reference_time_utc,

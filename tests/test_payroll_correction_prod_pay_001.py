@@ -16,11 +16,10 @@ from uuid import uuid4
 
 from app.extensions import db
 from app.feats.base import FEATContext
-from app.feats.prod import _record_payroll_event_impl
-from app.models import AttendanceSession, PayrollEvent, PolicyVersion, Transaction
-from app.payroll import get_pay_rate_for_class
+from app.models import AttendanceSession, PayrollEvent, Transaction
 from app.routes import admin as admin_routes
 from app.services.context_resolver import CanonicalContext
+from app.services.ledger_posting_service import create_pending_transaction
 from app.services.payroll import corrections as corrections_module
 from app.services.payroll.corrections import (
     CORRECTED,
@@ -30,6 +29,13 @@ from app.services.payroll.corrections import (
     build_class_correction_proposal,
     correction_key,
 )
+from app.services.payroll.settings import (
+    append_payroll_setting,
+    first_payroll_setting,
+    pay_rate_per_second,
+    payroll_setting_history,
+)
+from tests.helpers.canonical_classroom import provision_classroom
 from tests.helpers.class_domain import enable_class_feature
 from tests.helpers.classroom_initializer import (
     initialize,
@@ -55,19 +61,9 @@ def _teacher_ctx(classroom) -> CanonicalContext:
 
 
 def _pay_for(cid: str, minutes: int) -> Decimal:
-    rate = get_pay_rate_for_class(class_id=cid)
+    # One setting per class, as in production: the rate every run was priced at.
+    rate = pay_rate_per_second(first_payroll_setting(cid))
     return (Decimal(minutes * 60) * rate).quantize(Decimal("0.01"))
-
-
-def _activate_policy(cid: str) -> int:
-    with FEATContext("FEAT-BYPASS-LEGACY", correlation_id=f"pol:{cid}"):
-        policy = PolicyVersion(
-            class_id=cid, domain="payroll", version_number=1,
-            policy_payload_json="{}", activated_at=T0 - timedelta(days=1), is_active=True,
-        )
-        db.session.add(policy)
-        db.session.flush()
-        return policy.id
 
 
 def _attendance(classroom, seat_id: int, *rows) -> None:
@@ -84,22 +80,30 @@ def _attendance(classroom, seat_id: int, *rows) -> None:
         db.session.flush()
 
 
-def _legacy_run(classroom, policy_id: int, seat_id: int, at: datetime, amount: Decimal) -> None:
-    """A payroll event as the earlier rule wrote it: no settlement_rule marker."""
+def _legacy_run(classroom, seat_id: int, at: datetime, amount: Decimal) -> None:
+    """A payroll event as the earlier rule wrote it: no settlement_rule marker.
+
+    FEAT-PROD-003 derives every payroll amount now, so the historical event and
+    its ledger credit are written as they were recorded in production.
+    """
     key = f"payroll-cycle:{uuid4()}:seat:{seat_id}"
+    correlation_id = f"legacy:{uuid4()}"
     with FEATContext("FEAT-PROD-004", idempotency_key=f"legacy:{uuid4()}"):
-        _record_payroll_event_impl(
-            ctx=_teacher_ctx(classroom),
-            target_seat_id=seat_id,
-            payroll_event_type="payroll",
-            correlation_id=f"legacy:{uuid4()}",
-            idempotency_key=key,
-            policy_version_id=policy_id,
-            mechanism="TEACHER",
+        db.session.add(PayrollEvent(
+            class_id=classroom.class_id, target_seat_id=seat_id,
+            actor_seat_id=classroom.teacher_seat_id, correlation_id=correlation_id,
+            idempotency_key=key, policy_uuid=first_payroll_setting(classroom.class_id).policy_uuid,
+            mechanism="TEACHER", payroll_event_type="payroll", recorded_at=at,
             summary_json={"source": "class_payroll_settlement", "description": "Payroll based on attendance"},
-            reference_time_utc=at,
-            amount=amount,
-        )
+        ))
+        if amount != Decimal("0.00"):
+            create_pending_transaction(
+                seat_id=seat_id, class_id=classroom.class_id, target_seat_id=seat_id,
+                actor_seat_id=classroom.teacher_seat_id, mechanism="teacher", amount=amount,
+                account_type="checking", type="payroll",
+                description="Payroll based on attendance", idempotency_key=key,
+            )
+        db.session.flush()
 
 
 def _incident(classroom, *, underpaid_first_run: Decimal | None = None):
@@ -111,13 +115,12 @@ def _incident(classroom, *, underpaid_first_run: Decimal | None = None):
     """
     cid = classroom.class_id
     working, finished = classroom.students[0].seat.id, classroom.students[1].seat.id
-    policy_id = _activate_policy(cid)
     _attendance(classroom, working, ("active", _at(0)), ("inactive", _at(50)))
     _attendance(classroom, finished, ("active", _at(0)), ("inactive", _at(20)))
-    _legacy_run(classroom, policy_id, working, _at(30), underpaid_first_run or _pay_for(cid, 30))
-    _legacy_run(classroom, policy_id, finished, _at(30), _pay_for(cid, 20))
-    _legacy_run(classroom, policy_id, working, _at(60), Decimal("0.00"))
-    _legacy_run(classroom, policy_id, finished, _at(60), Decimal("0.00"))
+    _legacy_run(classroom, working, _at(30), underpaid_first_run or _pay_for(cid, 30))
+    _legacy_run(classroom, finished, _at(30), _pay_for(cid, 20))
+    _legacy_run(classroom, working, _at(60), Decimal("0.00"))
+    _legacy_run(classroom, finished, _at(60), Decimal("0.00"))
     return working, finished
 
 
@@ -158,7 +161,8 @@ def test_PROD_PAY_001__approval_posts_a_system_calculated_credit_under_the_teach
     assert event.mechanism == "SYSTEM"
     assert event.idempotency_key == correction_key(PROD_PAY_001, cid, working)
     assert event.summary_json["incident"] == "PROD-PAY-001"
-    assert event.policy_version_id is not None
+    # Provenance: the class's payroll setting that priced the corrected run.
+    assert event.policy_uuid == first_payroll_setting(cid).policy_uuid
     (credit,) = Transaction.query.filter_by(
         class_id=cid, seat_id=working, type="manual_payment"
     ).all()
@@ -239,7 +243,6 @@ def test_PROD_PAY_001__a_teacher_cannot_correct_another_class(client):
     other_working, _ = _incident(other)
     classroom = initialize_as_teacher("chemistry_p1", client, app)
     enable_class_feature(class_id=classroom.class_id, feature="payroll")
-    _activate_policy(classroom.class_id)
 
     client.post("/admin/payroll/correction", data={"seat_ids": [str(other_working)]})
 
@@ -271,10 +274,9 @@ def test_PROD_PAY_001__overlapping_approvals_skip_the_student_already_paid(app, 
     cid = classroom.class_id
     working, _finished = _incident(classroom)
     second = classroom.students[2].seat.id
-    policy_id = PolicyVersion.query.filter_by(class_id=cid, is_active=True).one().id
     _attendance(classroom, second, ("active", _at(0)), ("inactive", _at(50)))
-    _legacy_run(classroom, policy_id, second, _at(30), _pay_for(cid, 30))
-    _legacy_run(classroom, policy_id, second, _at(60), Decimal("0.00"))
+    _legacy_run(classroom, second, _at(30), _pay_for(cid, 30))
+    _legacy_run(classroom, second, _at(60), Decimal("0.00"))
 
     # The other request planned both students before this one posted either.
     stale_plan = corrections_module.plan_class_corrections(
@@ -307,3 +309,32 @@ def test_PROD_PAY_001__banner_check_is_cached_until_an_approval(app, monkeypatch
     _approve(classroom, {working})
 
     assert corrections_module.class_has_pending_correction(cid) is False
+
+
+def test_PROD_PAY_001__results_are_unchanged_when_the_setting_predates_the_runs(app):
+    """Production's shape: each class has exactly one payroll setting, recorded
+    before the incident's runs (2026-09-28). Resolving the rate per run through
+    the effective-dated resolver must give the amount the single rate gave."""
+    classroom = provision_classroom("chemistry_p1", with_payroll_settings=False)
+    cid = classroom.class_id
+    with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"setting:{cid}"):
+        # $1.50/minute, the production rate, in force from before the first run.
+        append_payroll_setting(
+            class_id=cid,
+            settings_data={
+                "pay_rate": Decimal("1.5"), "first_pay_date": T0 - timedelta(hours=1),
+                "pay_schedule_type": "biweekly",
+            },
+            effective_date=T0 - timedelta(hours=1), created_at=T0 - timedelta(hours=1),
+        )
+    (setting,) = payroll_setting_history(cid)
+
+    working, finished = _incident(classroom)
+    (row,) = build_class_correction_proposal(cid).rows
+
+    assert row.seat_id == working and row.status == PROPOSED
+    assert row.unpaid_seconds == 20 * 60
+    assert row.amount == Decimal("30.00")  # 20 minutes at $1.50
+    assert _approve(classroom, {working, finished}) == [working]
+    (event,) = _corrections(cid)
+    assert event.policy_uuid == setting.policy_uuid

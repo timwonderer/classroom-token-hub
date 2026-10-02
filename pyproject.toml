@@ -13,6 +13,21 @@ exclude_links = [
   "https://fonts.gstatic.com/*",
   "https://cdn.jsdelivr.net/*",
   "https://img.shields.io/*",
+  # Loopback addresses name a developer's own machine or the production host's
+  # local listeners (docs-site dev server, nginx→Grafana on :3000). No CI runner
+  # can reach them, so a failure says nothing about the document.
+  "http://127.0.0.1*",
+  "https://127.0.0.1*",
+  # Deliberate elisions and code fragments inside the dated audit record
+  # docs/ops/audits/LIVE_TEST_DEPLOYMENT_2026-09-19.md, which the checker reads
+  # as links. The record is not rewritten (DEPLOY_2026-09-27_4f9854fca.md
+  # follow-ups): the host is elided on purpose, and the quote is Python source.
+  "https://.../*",
+  "https://stats.uptimerobot.com/'",
+  # CHANGELOG cites the December 2025 PromptPwnd disclosure as the source of a
+  # historical security fix. The vendor has since removed the post; the entry
+  # records where the finding came from, not a page readers must still reach.
+  "https://www.aikido.dev/blog/promptpwnd-ai-prompt-injection-in-github-actions",
 ]
 force_get_requests_for_links = ["https://app.classroomtokenhub.com/*"]
 throttle_groups = 40

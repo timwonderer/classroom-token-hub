@@ -1,0 +1,96 @@
+{#
+  Shared pieces of the status pages. The public page and the operator preview
+  render the same notice card, so the preview cannot drift from what teachers see.
+#}
+
+{% macro icon(name, size='', cls='') -%}
+<span class="status-icon{{ ' icon-' ~ size if size }}{{ ' ' ~ cls if cls }}" aria-hidden="true">{{ name }}</span>
+{%- endmacro %}
+
+{% macro wordmark_rows() -%}
+<div class="landing-brand-row"><span class="material-symbols-outlined" aria-hidden="true">local_atm</span><span>CLASSROOM</span></div>
+<div class="landing-brand-row"><span class="material-symbols-outlined" aria-hidden="true">store</span><span>TOKEN</span></div>
+<div class="landing-brand-row"><span class="material-symbols-outlined" aria-hidden="true">finance_mode</span><span>HUB</span></div>
+{%- endmacro %}
+
+{# The public site's landing hero: wordmark, gold rule, then the page's own heading. #}
+{% macro hero() -%}
+<section class="landing-hero">
+    <div class="landing-shell landing-hero-grid">
+        <div class="landing-brand" role="img" aria-label="Classroom Token Hub">{{ wordmark_rows() }}</div>
+        <div class="landing-welcome">{{ caller() }}</div>
+    </div>
+</section>
+{%- endmacro %}
+
+{% macro state_pill(tone, label) -%}
+<span class="state-pill state-pill--{{ tone }}"><span class="state-dot" aria-hidden="true"></span>{{ label }}</span>
+{%- endmacro %}
+
+{% macro chip(tone, icon_name, label) -%}
+<span class="chip chip--{{ tone }}">{{ icon(icon_name, 'sm') }}{{ label }}</span>
+{%- endmacro %}
+
+{#
+  A moment in time. The server writes UTC, which is unambiguous without
+  JavaScript; status.js rewrites it in the reader's own time zone.
+  style: "time" (10:30 PM PDT), "datetime" (Sep 30, 10:30 PM PDT), "date" (Sep 30).
+#}
+{% macro when(value, style='datetime') -%}
+{%- set iso = value|iso_utc -%}
+{%- if iso -%}
+<time datetime="{{ iso }}" data-local="{{ style }}" title="{{ value|status_time }}">{{ value|status_time }}</time>
+{%- else -%}
+{{ value|status_time }}
+{%- endif -%}
+{%- endmacro %}
+
+{# Local first, UTC echoed underneath: what an operator needs to avoid time-zone mistakes. #}
+{% macro when_both(value) -%}
+{{ when(value) }}{% if value|iso_utc %} <span class="op-time-echo">({{ value|status_time }})</span>{% endif %}
+{%- endmacro %}
+
+{% macro notice_card(n, preview=false) -%}
+<article class="notice notice--{{ n.stage.tone }}"{% if preview %} data-preview{% endif %}>
+    <div class="notice-head">
+        <h3 data-preview-headline>{{ n.headline[:1]|upper ~ n.headline[1:] if n.headline else '' }}</h3>
+        <span data-preview-chip>{{ chip(n.stage.tone, n.stage.icon, n.stage.label) }}</span>
+    </div>
+    <p data-preview-impact>{{ n.impact_statement }}</p>
+    <div class="notice-todo">{{ icon('lightbulb') }}<p><b>What to do:</b> <span data-preview-action>{{ n.recommended_user_action }}</span></p></div>
+    <div class="notice-meta">
+        <span data-preview-next>{% if n.next_update_at %}<b>Next update</b> by {{ when(n.next_update_at, 'time') }}{% else %}Next update time not set yet{% endif %}</span>
+        {% if n.recovery_expectation %}<span><b>{{ 'Expected fix' if n.recovery_state == 'KNOWN' else 'Estimated fix' }}</b> around {{ when(n.recovery_expectation, 'time') }}</span>{% endif %}
+        {% if n.updated_at %}<span>Posted {{ when(n.updated_at, 'time') }}</span>{% endif %}
+    </div>
+    {% if n.incident_ref and not preview %}<p class="ref">Reference {{ n.incident_ref }} · mention this if you contact support</p>{% endif %}
+</article>
+{%- endmacro %}
+
+{# The public site's footer (github-pages/index.html), with links made absolute for this host. #}
+{% macro footer() -%}
+<footer class="landing-footer">
+    <div class="landing-shell landing-footer-grid">
+        <div class="landing-footer-links">
+            <a href="https://github.com/timwonderer/classroom-token-hub" target="_blank" rel="noopener">Project Repository <span class="visually-hidden">(opens in a new tab)</span></a>
+            <a href="https://github.com/timwonderer/classroom-token-hub/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog <span class="visually-hidden">(opens in a new tab)</span></a>
+        </div>
+        <div class="landing-footer-links">
+            <a href="https://status.classroomtokenhub.com">System Status</a>
+            <a href="https://classroomtokenhub.com/terms.html">Terms of Service</a>
+            <a href="https://classroomtokenhub.com/privacy.html">Privacy Policy</a>
+            <a href="https://classroomtokenhub.com/district.html">District Partners</a>
+        </div>
+        <div class="landing-footer-links">
+            <a href="https://classroomtokenhub.com/docs/">Developer Documentation</a>
+            <a href="https://github.com/timwonderer/classroom-token-hub/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing <span class="visually-hidden">(opens in a new tab)</span></a>
+            <a href="https://polyformproject.org/licenses/noncommercial/1.0.0" target="_blank" rel="noopener">License <span class="visually-hidden">(opens in a new tab)</span></a>
+        </div>
+        <div class="landing-footer-meta">
+            <p>&copy; <span data-current-year>2026</span> Classroom Token Hub. Licensed under PolyForm Noncommercial v1.0.0</p>
+            <p><em>This app is developed, operated, maintained, and self-funded by a full-time high school teacher. As such, we do not display advertisements, use third-party tracking tools, or collect information about you unless it is necessary for the operation of the platform.</em></p>
+            <p><a href="mailto:support@classroomtokenhub.com">Need help? Reach us at support@classroomtokenhub.com</a></p>
+        </div>
+    </div>
+</footer>
+{%- endmacro %}

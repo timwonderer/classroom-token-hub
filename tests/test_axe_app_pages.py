@@ -103,6 +103,8 @@ def test_no_axe_violations_across_pages_needing_no_domain_setup(app, client, wca
         ("/student/add-class", student_session),
         ("/student/select-class-context", student_session),
         ("/student/setup-complete", student_session),
+        # Signed in, so this renders the "sign out first" refusal (DOM-IDEN-005 §VII).
+        ("/student/claim-account", student_session),
         ("/student/help-support", student_session),
         ("/student/help-support/submit-issue", student_session),
         # Group F -- public, no auth, no setup

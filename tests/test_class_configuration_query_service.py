@@ -19,9 +19,8 @@ from decimal import Decimal
 from app.services.class_configuration_query_service import (
     get_class_economy,
     get_class_economy_by_join_code,
-    get_effective_economic_engine,
-    get_initial_economic_engine,
-    get_economic_engine_history,
+    economic_engine_effective_at,
+    economic_engine_timeline,
     get_class_features,
     get_class_feature,
     get_class_feature_history,
@@ -78,119 +77,56 @@ class TestClassEntityQueries:
 
 
 class TestEconomicEngineQueries:
-    """Test economic engine query functions."""
+    """The one effective-at resolver (owner ruling 2026-09-30, DOM-CLASS-003 §VII)."""
 
-    # ========== get_effective_economic_engine Tests ==========
-
-    def test_get_effective_economic_engine_returns_current_engine(self, app):
-        """Happy path: returns effective engine for feature at now."""
+    def test_current_engine_is_the_version_in_force(self, app):
         classroom = initialize("chemistry_p1", app)
 
-        engine = get_effective_economic_engine(classroom.class_id, "payroll")
+        engine = get_current_economic_engine(classroom.class_id)
 
         assert engine is not None
         assert engine.economy_policy_mode in ["tight", "default", "comfortable"]
 
-    def test_get_effective_economic_engine_returns_none_for_missing_feature(self, app):
-        """Empty state: missing feature returns None."""
+    def test_the_answer_does_not_depend_on_which_feature_asks(self, app):
+        """There is no feature-scoped engine: a class has one version in force."""
         classroom = initialize("chemistry_p1", app)
-
-        engine = get_effective_economic_engine(classroom.class_id, "nonexistent_feature")
-
-        assert engine is None
-
-    def test_get_effective_economic_engine_respects_feature_scope(self, app):
-        """Feature scope: returns None for features that don't have ClassFeature records."""
-        classroom = initialize("chemistry_p1", app)
-
-        # Payroll should have an engine (seeded by default)
-        payroll_engine = get_effective_economic_engine(classroom.class_id, "payroll")
-        assert payroll_engine is not None
-
-        # Store should not have an engine (not seeded by default)
-        store_engine = get_effective_economic_engine(classroom.class_id, "store")
-        assert store_engine is None
-
-    def test_get_effective_economic_engine_with_temporal_query(self, app):
-        """Temporal: can query engine state at specific times."""
-        classroom = initialize("chemistry_p1", app)
-
-        # Use a far-future reference time to ensure it's after class creation (SPEC-TIME-001)
         reference_time = datetime(2099, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-        engine_now = get_effective_economic_engine(classroom.class_id, "payroll", effective_at=reference_time)
-        assert engine_now is not None
 
-        # Query with a later timestamp should return the same engine
-        # (since we only have one engine version)
-        future_time = reference_time + timedelta(days=10)
-        engine_future = get_effective_economic_engine(classroom.class_id, "payroll", effective_at=future_time)
-        assert engine_future is not None
-        assert engine_future.economic_version_id == engine_now.economic_version_id
-
-    # ========== get_initial_economic_engine Tests ==========
-
-    def test_get_initial_economic_engine_returns_original_engine(self, app):
-        """Happy path: returns the original/first engine."""
-        classroom = initialize("chemistry_p1", app)
-
-        engine = get_initial_economic_engine(classroom.class_id)
+        engine = economic_engine_effective_at(classroom.class_id, reference_time)
 
         assert engine is not None
-        # Should be the earliest created engine
-        all_engines = get_economic_engine_history(classroom.class_id)
-        assert engine.economic_version_id == all_engines[-1].economic_version_id  # Last in DESC order = first created
+        assert engine.economic_version_id == get_current_economic_engine(classroom.class_id).economic_version_id
 
-    def test_get_initial_economic_engine_returns_none_for_missing_class(self, app):
-        """Empty state: non-existent class returns None."""
-        engine = get_initial_economic_engine("nonexistent-class-id")
-        assert engine is None
-
-    def test_get_initial_economic_engine_multi_tenancy(self, app):
-        """Multi-tenancy: each class has its own initial engine."""
-        classroom1 = initialize("chemistry_p1", app)
-        classroom2 = initialize("biology_block_a", app)
-
-        engine1 = get_initial_economic_engine(classroom1.class_id)
-        engine2 = get_initial_economic_engine(classroom2.class_id)
-
-        assert engine1 is not None
-        assert engine2 is not None
-        # Different classes have different engines
-        assert engine1.economic_version_id != engine2.economic_version_id
-
-    # ========== get_economic_engine_history Tests ==========
-
-    def test_get_economic_engine_history_returns_all_versions(self, app):
-        """Happy path: returns all engine versions in chronological order."""
+    def test_nothing_is_in_force_before_the_first_version(self, app):
         classroom = initialize("chemistry_p1", app)
 
-        history = get_economic_engine_history(classroom.class_id)
+        assert economic_engine_effective_at(
+            classroom.class_id, datetime(2000, 1, 1, tzinfo=timezone.utc)
+        ) is None
 
-        # Should have at least one engine (the initial one)
-        assert len(history) >= 1
-        # Should be ordered by created_at DESC (most recent first)
-        for i in range(len(history) - 1):
-            assert history[i].created_at >= history[i + 1].created_at
+    def test_missing_class_has_no_engine(self, app):
+        assert get_current_economic_engine("nonexistent-class-id") is None
+        assert economic_engine_timeline("nonexistent-class-id").versions == []
 
-    def test_get_economic_engine_history_returns_empty_for_missing_class(self, app):
-        """Empty state: non-existent class returns empty list."""
-        history = get_economic_engine_history("nonexistent-class-id")
-        assert history == []
+    def test_timeline_answers_as_the_resolver_does(self, app):
+        classroom = initialize("chemistry_p1", app)
+        instant = datetime(2099, 1, 1, tzinfo=timezone.utc)
 
-    def test_get_economic_engine_history_multi_tenancy(self, app):
-        """Multi-tenancy: each class has separate engine history."""
+        timeline = economic_engine_timeline(classroom.class_id)
+
+        assert timeline.at(instant).economic_version_id == (
+            economic_engine_effective_at(classroom.class_id, instant).economic_version_id
+        )
+
+    def test_engines_are_class_scoped(self, app):
         classroom1 = initialize("chemistry_p1", app)
         classroom2 = initialize("biology_block_a", app)
 
-        history1 = get_economic_engine_history(classroom1.class_id)
-        history2 = get_economic_engine_history(classroom2.class_id)
+        ids1 = {e.economic_version_id for e in economic_engine_timeline(classroom1.class_id).versions}
+        ids2 = {e.economic_version_id for e in economic_engine_timeline(classroom2.class_id).versions}
 
-        assert len(history1) > 0
-        assert len(history2) > 0
-        # Should have different engines
-        engine_ids_1 = {e.economic_version_id for e in history1}
-        engine_ids_2 = {e.economic_version_id for e in history2}
-        assert len(engine_ids_1 & engine_ids_2) == 0  # No intersection
+        assert ids1 and ids2
+        assert not ids1 & ids2
 
 
 class TestClassFeatureQueries:
@@ -322,7 +258,7 @@ class TestSettingsQueries:
         assert payroll is not None
         assert payroll.class_id == classroom.class_id
         assert payroll.pay_rate is not None
-        assert payroll.payroll_frequency_days is not None
+        assert payroll.pay_schedule_type in ("weekly", "biweekly", "monthly")
 
     def test_get_payroll_settings_returns_none_for_missing_class(self, app):
         """Empty state: non-existent class returns None."""

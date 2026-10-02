@@ -224,6 +224,12 @@ class StudentCreateUsernameForm(FlaskForm):
     write_in_word = StringField('Your Word', validators=[DataRequired()])
     submit = SubmitField('Generate Username')
 
+class StudentVerifySavedUsernameForm(FlaskForm):
+    # Proves the student can reproduce the username from their own saved copy.
+    # The route compares it with the canonical lookup digest; never echo it back.
+    saved_username = StringField('Your username', validators=[DataRequired()])
+    submit = SubmitField('Check my username')
+
 class StudentPinPassphraseForm(FlaskForm):
     pin = PasswordField('PIN', validators=[DataRequired()])
     passphrase = PasswordField('Passphrase', validators=[DataRequired()])
@@ -262,7 +268,6 @@ class AdminClaimProcessForm(FlaskForm):
 class PayrollSettingsForm(FlaskForm):
     block = SelectField('Class Block/Period', choices=[], validators=[Optional()])  # Empty choices, populated dynamically
     pay_rate = FloatField('Pay Rate ($ per minute)', validators=[DataRequired()], default=0.25)
-    payroll_frequency_days = IntegerField('Payroll Frequency (days)', validators=[DataRequired()], default=14)
     overtime_multiplier = FloatField('Overtime Multiplier', validators=[Optional()], default=1.0)
     apply_to_all = BooleanField('Apply to All Blocks', default=False)
     is_active = BooleanField('Settings Active', default=True)

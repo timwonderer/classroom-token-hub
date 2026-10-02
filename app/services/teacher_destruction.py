@@ -15,11 +15,12 @@ from app.feats.base import InvariantViolation
 from app.models import (
     Announcement, AttendanceSession, ClassEconomy, EntitlementEvent, HallPassLog,
     HallPassSettings, Issue, IssueResolutionAction, IssueStatusHistory, LedgerBalanceSnapshot,
-    PayrollEvent, PayrollSettings, PendingAction, RentSettings, Seat, StoreItemVisibility,
+    PayrollEvent, PendingAction, RentSettings, Seat, StoreItemVisibility,
     StoreProduct, Transaction, User,
 )
 from app.services.admin_identity_service import delete_admin_account_rows, delete_admin_credentials_for_user
 from app.services.class_configuration_query_service import get_class_economy
+from app.services.payroll.settings import destroy_payroll_settings_for_classes
 from app.services.recovery_service import delete_recovery_rows_for_user
 from app.utils.student_deletion import delete_orphaned_users
 from sqlalchemy import text as sa_text
@@ -66,7 +67,7 @@ def _destroy_class_scope_rows(*, class_id, canonical_context, **_ignored):
     # destruction is the authorized lifecycle exception for immutable history rows.
     db.session.execute(text("SET LOCAL cth.class_universe_destroying = 'on'"))
 
-    class_row = get_class_economy(class_id)
+    class_row = ClassEconomy.query.filter_by(class_id=class_id).with_for_update().one_or_none()
     if not class_row:
         return
 
@@ -96,6 +97,10 @@ def _destroy_class_scope_rows(*, class_id, canonical_context, **_ignored):
         )
         current_app.logger.critical("P0 INVARIANT VIOLATION: %s", message)
         raise InvariantViolation(message)
+
+    from app.services.student_setup import forget_owner
+    for (setup_seat_id,) in db.session.query(Seat.id).filter(Seat.class_id == class_id).all():
+        forget_owner(f'seat:{setup_seat_id}')
 
     scoped_student_ids = [
         sid for (sid,) in db.session.query(Seat.user_id)
@@ -162,7 +167,7 @@ def _destroy_class_scope_rows(*, class_id, canonical_context, **_ignored):
 
     # Financial ledger (only here)
     Transaction.query.filter(Transaction.class_id == class_id).delete(synchronize_session=False)
-    PayrollSettings.query.filter(PayrollSettings.class_id == class_id).delete(synchronize_session=False)
+    destroy_payroll_settings_for_classes([class_id])
     RentSettings.query.filter(RentSettings.class_id == class_id).delete(synchronize_session=False)
 
     # Remove store items and their visibility/entitlement rows for this class.
@@ -243,9 +248,7 @@ def _delete_teacher_settings_activity_and_audit_rows(canonical_context):
     HallPassSettings.query.filter(
         HallPassSettings.class_id.in_(sa.select(class_ids_subq))
     ).delete(synchronize_session=False)
-    PayrollSettings.query.filter(
-        PayrollSettings.class_id.in_(sa.select(class_ids_subq))
-    ).delete(synchronize_session=False)
+    destroy_payroll_settings_for_classes(sa.select(class_ids_subq))
     Announcement.query.filter(
         Announcement.class_id.in_(sa.select(class_ids_subq))
     ).delete(synchronize_session=False)

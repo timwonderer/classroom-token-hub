@@ -6,61 +6,56 @@ This directory contains the canonical v2 documentation for the Classroom Token H
 
 ## Document Tier Classification
 
-All documents are classified into one of three tiers. See [SOP-DOC-000 Section V](STANDARD_OPERATING_PROCEDURES/SOP-DOC-000_DOCUMENTATION_STANDARD.md) for full definitions.
+Every document belongs to one of four tiers. This table summarises
+[SOP-DOC-000 §V](STANDARD_OPERATING_PROCEDURES/SOP-DOC-000_DOCUMENTATION_STANDARD.md), which is
+the authority; where they differ, SOP-DOC-000 wins.
 
-| Tier               | Authority                              | Namespaces / Locations                        |
-|--------------------|----------------------------------------|-----------------------------------------------|
-| **Constitutional** | Inviolable — cannot be overridden      | `INV-CORE-*`, `INV-ARC-*`                    |
-| **Normative**      | Binding — must be followed             | `DOM`, `FEAT`, `SOP`,|
-| **Informative**    | Descriptive — no normative authority   |`REF`, any agent docs,  root files   |
+| Tier | Authority | Namespaces / Locations |
+|------|-----------|------------------------|
+| **0 — Foundational** | Non-negotiable laws of the system | `INV-CORE-*` (`INVARIANT/CORE/`) |
+| **1 — Constitutional** | Enforcement mechanisms and bounded domain rules | `INV-ARC-*` (`INVARIANT/ARCHITECTURE/`), `DOM-*` (`DOMAIN/`) |
+| **2 — Normative** | Implementation flows, transactions, procedures | `FEAT-*`, `SOP-*`, `SPEC-*` (binding when incorporated by an INV, DOM or FEAT contract), `REF-TERM-001` (developer vocabulary) |
+| **3 — Informative** | Memory, rationale, plans, guides; defines no runtime rule | `MAP-*`, `PRN-*`, other `REF-*`, `user-guides/`, `self-hosting/`, `TRACKING/`, `ops/`, `archive/`, root files |
+
+Tier 3 documents describe; they can drift, and they are never cited as authority. `REF-TERM-002` (user-facing vocabulary) is
+highly recommended for standardization, but accessibility wins: INV-CORE-000 §III.7 and INV-ARC-020
+govern wording where a term would create a barrier.
+`.claude/` is outside the tier system.
 
 ---
 
 ## Documentation Namespaces
 
-### Constitutional & Normative (v2 canonical)
+### Governing (Tiers 0–2)
 
 | Directory | Tier | Purpose |
 |-----------|------|---------|
-| **[INVARIANT/](INVARIANT/)** | Constitutional | Core invariants and architecture invariants |
-| **[DOMAIN/](DOMAIN/)** | Normative | Per-domain authority specs and contracts |
-| **[FEATURE-EXECUTION/](FEATURE-EXECUTION/)** | Normative | FEAT contracts for all state mutations |
-| **[MAP/](MAP/)** | Normative/Informative | Domain to UI interface wiring specification |
-| **[SPEC/](SPEC/)** | Normative | Build specifications and requirements|
-| **[STANDARD_OPERATING_PROCEDURES/](STANDARD_OPERATING_PROCEDURES/)** | Normative | SOPs for database, deployment, devops, documentation |
+| **[INVARIANT/](INVARIANT/)** | 0 and 1 | Core invariants (`INV-CORE`) and architecture invariants (`INV-ARC`) |
+| **[DOMAIN/](DOMAIN/)** | 1 | Per-domain authority specs and contracts |
+| **[FEATURE-EXECUTION/](FEATURE-EXECUTION/)** | 2 | FEAT contracts for all state mutations |
+| **[SPEC/](SPEC/)** | 2 | Technical contracts |
+| **[STANDARD_OPERATING_PROCEDURES/](STANDARD_OPERATING_PROCEDURES/)** | 2 | SOPs for database, deployment, devops, operations, security, testing, documentation |
 
-
-### Reference & Principles
+### Informative and descriptive
 
 | Directory | Tier | Purpose |
 |-----------|------|---------|
-| **[REFERENCE/](REFERENCE/)** | Normative | Authoritative vocabulary and terminology (`REF-TERM-*`) |
-| **[PRINCIPLES/](PRINCIPLES/)** | Informative | Design principles (security, privacy, SSO rationale) |
+| **[MAP/](MAP/)** | 3 | Domain-to-FEAT capability maps and UI wiring maps |
+| **[PRINCIPLES/](PRINCIPLES/)** | 3 | Why a design was chosen (security, privacy, SSO, project philosophy) |
+| **[REFERENCE/](REFERENCE/)** | 2 (`REF-TERM-001`); 3 (others) | Vocabulary and interface references (`REF-TERM-*`, `REF-API-001`, `REF-DES-001`) |
+| **[user-guides/](user-guides/)** | 3 | Teacher and student help served by the in-app `/docs` site |
+| **[self-hosting/](self-hosting/README.md)** | 3 | Running your own instance |
+| **[TRACKING/](TRACKING/)** | 3 | The post-launch tracker and open decision packages |
+| **[ops/](ops/)** | 3 | Production host notes and dated release and audit records (`ops/audits/`) |
+| **[archive/](archive/)** | 3 | Superseded material, kept for history only (see below) |
 
-### User-Facing
+### Outside `docs/`
 
-| Directory | Tier | Purpose |
-|-----------|------|---------|
-| **[user-guides/](user-guides/)** | Informative | Teacher, student, and sysadmin help served by the in-app `/docs` site |
-
-### Planning & Status
-
-| Directory | Tier | Purpose |
-|-----------|------|---------|
-| **[TRACKING/](TRACKING/)** | Informative | Migration progress, compliance validation, launch readiness |
-
-### Historical
-
-| Directory | Tier | Purpose |
-|-----------|------|---------|
-| **[archive/](archive/)** | Informative | v1 docs (GitHub Pages assets, old dev artifacts) |
-
-### Other
-
-| Location | Tier | Purpose |
-|----------|------|---------|
-| `.claude/rules/` | Informative | AI agent operational rules, non-normative for repo operation |
-| Root files | Informative | Project orientation and contributor reference |
+| Location | Purpose |
+|----------|---------|
+| Root files (`README.md`, `CHANGELOG.md`, `DEVELOPMENT.md`, `CONTRIBUTING.md`, `SECURITY.md`) | Project orientation, chronology, roadmap, contributor and security policy |
+| `.claude/` | Operational guidance for AI agents. Never authoritative |
+| `docs-site/` | Docusaurus workspace that publishes the developer tree to classroomtokenhub.com/docs |
 
 ---
 
@@ -75,7 +70,6 @@ All documents are classified into one of three tiers. See [SOP-DOC-000 Section V
 - **[Canonical Temporal Resolver](SPEC/SPEC-TIME-001_CANONICAL_TEMPORAL_RESOLVER.md)** — normative build spec for SLE/CLE temporal authority, primitives, elapsed-duration evaluation, and browser display timezone
 - **[Display Metadata Resolver](SPEC/SPEC-DISPLAY-001_DISPLAY_IDENTITY_METADATA_RESOLVER.md)** — normative build spec for display-only identity, class, and page-context metadata derived from canonical context
 - **[Canonical Schema Definition](DOMAIN/DOM-CORE-002_CANONICAL_SCHEMA_DEFINITION.md)** — Runtime schema, table ownership, and structural constraints
-- **[Class Scope Normalization](MAP/MAP-CLASS-002_CLASS_SCOPE_NORMALIZATION_TARGET.md)** — Long-term class_id scoping model
 - **[Canonical Domain Reconstruction Workflow](STANDARD_OPERATING_PROCEDURES/DEVOPS/SOP-DEV-002_CANONICAL_DOMAIN_RECONSTRUCTION_WORKFLOW.md)** — Repeatable truth-to-interface workflow for rebuilding domains and rewiring surfaces
 - **[Template to FEAT Wiring Map](MAP/MAP-UI-001_TEMPLATE_TO_FEAT_WIRING_MAP.md)** — Template audit findings mapped to route, context, FEAT, domain, persistence, and read-model obligations
 - **[Request Context and View Model Pipeline](MAP/MAP-UI-002_REQUEST_CONTEXT_AND_VIEW_MODEL_PIPELINE.md)** — Four-question request pipeline for authority, time, display metadata, and page view models
@@ -86,16 +80,19 @@ All documents are classified into one of three tiers. See [SOP-DOC-000 Section V
 
 ## Archive
 
-The `archive/` directory contains genuinely superseded v1 documentation:
+`archive/` holds superseded material. None of it is authority. Cite it only with a label that
+says it is archived (SOP-DOC-000 §V, *Citing archived material*).
 
 | Directory | Contents |
 |-----------|----------|
 | `archive/v1-architecture/` | Early v1 identity and core architectural specs |
 | `archive/v1-development/` | v1→v2 migration planning and legacy schema analysis |
 | `archive/v1-docs/` | v1 security audits, deployment SOPs, ARC-* specs, FEATURES/*, DOMAINS/* (~55 files) |
+| `archive/PHASE_PLANNING/` | Phase 3–5 roadmaps, store domain implementation tracking, demolition and migration plans |
+| `archive/STANDARD_OPERATING_PROCEDURES/` | Retired SOPs, at their original namespace paths |
+| `archive/MAP/` | Retired maps (`MAP-CLASS-002`, archived 2026-09-28: its `class_id`-first target is now the current model) |
+| `archive/v2-tracking-2026/` | v2 migration and launch tracking, including the pre-launch ship tracker (archived 2026-09-28); its README says why each file was archived |
 | `archive/github-pages/` | Historical GitHub Pages landing site assets |
-| `archive/PHASE_PLANNING/` | Phase 3-5 roadmaps, store domain implementation tracking, and demolition/migration plans |
-| `../github-pages/` | Deployable GitHub Pages v2 transition site |
 
 > [!NOTE]
 > 

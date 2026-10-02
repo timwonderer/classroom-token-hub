@@ -3,7 +3,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| FEAT-IDEN-004 | 1.2 | 2026-09-15 | 1.1 | Normative | ACTIVE |
+| FEAT-IDEN-004 | 1.4 | 2026-10-01 | 1.3 | Normative | ACTIVE |
 
 ---
 
@@ -25,6 +25,17 @@ This FEAT implements Steps 2-3 of the recovery flow.
 ---
 
 ## II. Execution Context
+
+### 0. Precondition: No Authenticated Principal (MANDATORY)
+
+Per DOM-IDEN-005 §VII (v2.3, operator ruling 2026-10-01), recovery, which serves someone who cannot sign in, requires the absence of an
+authenticated canonical principal. If the request boundary has authenticated a `user_id` for the
+session (DOM-IDEN-006 §VIII step 1) — student, teacher or sysadmin, with or without a selected
+class — the request is refused before this FEAT runs: no Turnstile check, no reset-code lookup or consumption, no lock, and no
+setup state written. The refusal infers nothing about how the signed-in principal relates to the
+identity being established. One gate enforces this for every endpoint of the workflow
+(`app/routes/identity_establishment.py`); a structural test fails any view that reaches
+establishment state without being declared there.
 
 ### 1. Required Inputs
 
@@ -210,6 +221,7 @@ When the FEAT fails, the system SHALL:
 | Code already used | `CODE_ALREADY_USED` | 400 | "Invalid or expired recovery code." |
 | Rate limit exceeded | `RATE_LIMIT_EXCEEDED` | 429 | "Too many attempts. Please wait before trying again." |
 | Database error | `INTERNAL_ERROR` | 500 | "An error occurred. Please try again." |
+| Browser is signed in (an authenticated principal is present) | `SIGNED_IN` | 409 (a page load renders the refusal with 200) | "We are having trouble determining who you are right now. For your protection, this request was cancelled." The page offers **Return to login**, which ends the current sign-in through that role's logout. |
 
 ---
 
@@ -271,13 +283,13 @@ FEAT-IDEN-002 validates this state and activates new credentials.
 | Aspect | FEAT-IDEN-001 (Claim) | FEAT-IDEN-004 (Recovery) |
 |--------|---------------------|-------------------------|
 | Purpose | First claim of new seat | Regain access (lost creds) |
-| User State | Pre-provisioned, no creds | Already has old creds |
+| User State | None yet; FEAT-IDEN-002 creates it | Already has old creds |
 | Authorization | Name + dedupe code | Reset code |
 | Seat | New, unclaimed | Not resolved |
-| Output | user_id, seat_id for setup | user_id only for setup |
+| Output | seat_id and claim_generation for setup | user_id only for setup |
 | Next Step | FEAT-IDEN-002 | FEAT-IDEN-002 |
 
-Both workflows funnel to FEAT-IDEN-002 for credential activation (code reuse).
+Both workflows funnel to FEAT-IDEN-002: an initial claim to create and bind the User, and recovery to replace credentials.
 
 ---
 
@@ -320,5 +332,11 @@ Revisions to this document SHALL:
 3. Maintain consistency with DOM-IDEN-002 §IX.
 4. Maintain consistency with FEAT-CORE-000.
 5. Maintain consistency with FEAT-IDEN-003 and FEAT-IDEN-002.
+
+**Version 1.4 (2026-10-01), operator ruling 2026-10-01:** §II.0 makes the absence of an authenticated
+principal a precondition of code acceptance (DOM-IDEN-005 v2.3 §VII): a signed-in browser is refused
+without consuming the code. §V adds `SIGNED_IN`.
+
+**Version 1.3 (2026-09-28): §IX follows FEAT-IDEN-001 v3.0 and FEAT-IDEN-002 v2.0. An initial claim has no User until FEAT-IDEN-002 creates one.**
 
 **Version 1.2 (2026-09-15): consume the code at acceptance and bind reset authority to a server-validated session nonce.**

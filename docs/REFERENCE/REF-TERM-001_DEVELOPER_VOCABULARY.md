@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| REF-TERM-001     | 1.0     | 2026-06-15     | N/A        | Normative       |
+| REF-TERM-001     | 1.1     | 2026-09-30     | 1.0        | Normative       |
 
 ## I. Purpose
 
@@ -34,10 +34,10 @@ Normative. Subordinate to `INV-CORE-000` and `INV-CORE-001`.
 ### A
 
 **Activation Intent**
-The abstract timing mode attached to a policy transition: immediate, next-boundary, or manual. Governs when a pending policy version becomes the active constitutional truth. Subsumes the `next_boundary` activation mode.
+When a recorded economic change governs: immediately, or from the owning domain's next boundary. It is carried as the effective date of the owning table's new row; nothing activates the row when the date arrives (`DOM-CLASS-003` §VII).
 
 **Append-Only Policy Evolution**
-Core economic governance rule that policy changes are represented as new transition lineage (`policy_transitions` → `policy_versions`), never as in-place mutation of the active record. The inverse of the forbidden Hidden Deferred Mutation pattern (formerly operationalized as `economy_pending_rebalance_json`).
+Core economic governance rule that a policy change is a new row in the owning domain's own table (`payroll_settings`, `rent_settings`, `insurance_policies`, `store_products`, `economic_engine`), never an in-place mutation of the active record (`DOM-CLASS-003` §V). The inverse of the forbidden Hidden Deferred Mutation pattern (formerly operationalized as `economy_pending_rebalance_json`).
 
 **Attendance Sessions** (`attendance_sessions`)
 Canonical v2 table for tap-in/tap-out attendance facts. It is the authoritative attendance fact source for the active runtime and replaces legacy `tap_events`.
@@ -202,13 +202,13 @@ Structured JSON operational logs with indexed trace fields (`timestamp`, `correl
 WebAuthn-based passwordless authentication capability owned by `users` and optionally used by teacher and sysadmin accounts.
 
 **Policy Mode**
-Teacher-selectable economy climate (tight, default, comfortable) that shapes recommended ratios, pacing, and solvency expectations. Stored in `economy_policy_mode`; in v2 it is an operational projection derived from `policy_versions` rather than independent constitutional truth.
+Teacher-selectable economy climate (tight, default, comfortable) that shapes recommended ratios, pacing, and solvency expectations. Stored in `economic_engine.economy_policy_mode`; the value in force is the one on the engine version in force (`DOM-CLASS-003` §VII).
 
-**Policy Transitions** (`policy_transitions`)
-Append-only lineage objects describing source/target policy versions, activation mode (see Activation Intent), status, and supersession relationships. The backbone of append-only policy evolution.
+**Policy Transitions** (`policy_transitions`) — *retired*
+Retired by operator ruling 2026-09-30 and dropped; never authorized as canonical. Do not use the term for a change of policy: say "a new row effective at …" in the owning table.
 
-**Policy Versions** (`policy_versions`)
-Immutable constitutional policy records representing the active or historical economic truth for a class/domain pair. Once created, a policy version is never modified — it is superseded by a new version through a policy transition.
+**Policy Versions** (`policy_versions`) — *retired*
+Retired by operator ruling 2026-09-30 and dropped; never authorized as canonical. A policy's version is its own row's `policy_uuid` (`DOM-POL-001` §VI.0).
 
 ### S
 

@@ -727,3 +727,96 @@ def create_class_scope(app):
         }
 
     return _factory
+
+
+@pytest.fixture(scope='session', autouse=True)
+def volatile_student_setup_store():
+    """Use the real memory-only backend on an isolated socket, started on demand."""
+    import shutil
+    import tempfile
+    import time
+    from unittest.mock import patch
+    from app.services import student_setup
+
+    with tempfile.TemporaryDirectory(prefix='cth-setup-', dir='/tmp') as directory:
+        socket = str(Path(directory) / 'redis.sock')
+        url = 'unix://' + socket
+        original = student_setup._connection
+        processes = []
+        previous = flask_app.config.get('STUDENT_SETUP_REDIS_URL')
+        flask_app.config['STUDENT_SETUP_REDIS_URL'] = url
+
+        def connection(requested_url):
+            if requested_url == url and not processes:
+                binary = shutil.which('redis-server')
+                if not binary:
+                    pytest.fail('Student setup tests require redis-server (memory-only, isolated test instance).')
+                process = subprocess.Popen([
+                    binary, '--port', '0', '--unixsocket', socket,
+                    '--save', '', '--appendonly', 'no', '--slowlog-log-slower-than', '-1',
+                    '--dir', directory, '--maxmemory', '32mb', '--maxmemory-policy', 'noeviction',
+                ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                processes.append(process)
+                for _ in range(500):
+                    if Path(socket).exists():
+                        break
+                    if process.poll() is not None:
+                        pytest.fail('Isolated student setup Redis failed to start.')
+                    time.sleep(0.01)
+                else:
+                    pytest.fail('Isolated student setup Redis did not create its socket.')
+            return original(requested_url)
+
+        try:
+            with patch.object(student_setup, '_connection', connection):
+                yield
+        finally:
+            flask_app.config['STUDENT_SETUP_REDIS_URL'] = previous
+            for process in processes:
+                process.terminate()
+                process.wait(timeout=5)
+            original.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def request_lock_guard(request):
+    """Fail any test whose request finished still holding row locks it took.
+
+    See tests/helpers/request_lock_guard.py (incident OPS-DB-001). A test that
+    provokes a violation on purpose clears ``violations`` before it ends.
+    """
+    from flask import request_finished, request_started
+    from tests.helpers.request_lock_guard import RequestLockGuard
+
+    guard = RequestLockGuard()
+    request_started.connect(guard.started, flask_app)
+    request_finished.connect(guard.finished, flask_app)
+    try:
+        yield guard
+    finally:
+        request_started.disconnect(guard.started, flask_app)
+        request_finished.disconnect(guard.finished, flask_app)
+    if guard.violations:
+        pytest.fail(
+            "Request(s) left row locks or uncommitted writes open past the response "
+            f"(end the transaction before returning; OPS-DB-001): {guard.violations}"
+        )
+
+
+@pytest.fixture
+def tlcp_trace_enabled(app):
+    """Run the production ``after_request`` TLCP trace writer in this test.
+
+    The writer is off under TESTING by default. It opens its own connection, so
+    it sees only what is committed and it contends for row locks exactly as it
+    does in production.
+    """
+    previous = app.config.get("TLCP_REQUEST_TRACE_ENABLED")
+    app.config["TLCP_REQUEST_TRACE_ENABLED"] = True
+    try:
+        yield
+    finally:
+        if previous is None:
+            app.config.pop("TLCP_REQUEST_TRACE_ENABLED", None)
+        else:
+            app.config["TLCP_REQUEST_TRACE_ENABLED"] = previous

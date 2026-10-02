@@ -1,9 +1,9 @@
 """Class-wide payroll-cycle settlement (DOM-PROD-001 §XV, slice 8.3b).
 
 Owns exactly one thing: given a ``class_id``, a ``payroll_cycle_id``, and a lawful
-resolved cycle boundary, settle the entire eligible class under the currently
-governing payroll configuration, stamping the same ``payroll_cycle_id`` on every
-payroll event produced.
+resolved cycle boundary, settle the entire eligible class — each session priced by the payroll setting
+in force when it closed (DOM-PROD-001 §XV.3) — stamping the same
+``payroll_cycle_id`` and the run's mechanism on every payroll event produced.
 
     enumerate eligible seats (attendance-derived, PROD doctrine)
         -> derive each seat's pay window/facts (the per-seat primitive)
@@ -31,12 +31,19 @@ from app.models import (
     AttendanceSession,
     ClassEconomy,
     PayrollEvent,
-    PolicyVersion,
     Seat,
 )
 from app.services.attendance_service import calculate_payable_attendance_seconds
 from app.services.context_resolver import CanonicalContext
 from app.services.identity_service import resolve_teacher_seat_for_class
+from app.services.payroll.schedule import SCHEDULED_OCCURRENCE_KEY
+from app.services.payroll.settings import class_has_payroll_settings
+from app.utils.canonical_temporal_resolver import ensure_utc
+
+# FEAT-PROD-004 §II.1: which path started the run. SYSTEM is the automatic
+# schedule, TEACHER the teacher's own run. Only SYSTEM runs anchor the next
+# payroll date (DOM-PROD-001 §XV.5), so the caller must say which it is.
+RUN_MECHANISMS = frozenset({"TEACHER", "SYSTEM"})
 
 
 class ClassSettlementError(Exception):
@@ -59,21 +66,6 @@ class ClassSettlementResult(NamedTuple):
     settled_seat_ids: list[int]      # seats that received a fresh payroll event this call
     skipped_seat_ids: list[int]      # seats already settled for this cycle (idempotent)
     events: list[PayrollEvent]
-
-
-def _active_payroll_policy_version_id(class_id: str) -> int:
-    policy = (
-        PolicyVersion.query
-        .filter_by(class_id=class_id, domain="payroll", is_active=True)
-        .order_by(PolicyVersion.version_number.desc(), PolicyVersion.id.desc())
-        .first()
-    )
-    if policy is None:
-        raise ClassSettlementError(
-            f"No active payroll policy version exists for class {class_id}; "
-            "cannot settle a payroll cycle."
-        )
-    return policy.id
 
 
 def _build_teacher_context(class_id: str) -> CanonicalContext:
@@ -147,6 +139,8 @@ def settle_class_payroll_cycle(
     class_id: str,
     payroll_cycle_id: str,
     boundary_utc,
+    run_mechanism: str,
+    scheduled_occurrence=None,
     actor_ctx: CanonicalContext | None = None,
 ) -> ClassSettlementResult:
     """Settle the eligible class for one payroll cycle. NO COMMIT (§8.3b).
@@ -160,10 +154,24 @@ def settle_class_payroll_cycle(
     """
     if not class_id or not payroll_cycle_id:
         raise ValueError("class_id and payroll_cycle_id are required for settlement")
-
-    policy_version_id = _active_payroll_policy_version_id(class_id)
+    if run_mechanism not in RUN_MECHANISMS:
+        raise ValueError(f"run_mechanism must be one of {sorted(RUN_MECHANISMS)}")
+    if run_mechanism == "SYSTEM" and scheduled_occurrence is None:
+        raise ValueError("A SYSTEM payroll run must name the scheduled occurrence it settles.")
+    if not class_has_payroll_settings(class_id):
+        raise ClassSettlementError(
+            f"Class {class_id} has no payroll settings; cannot settle a payroll cycle."
+        )
     ctx = actor_ctx or _build_teacher_context(class_id)
     correlation_id = get_correlation_id()
+    summary = {
+        "source": "class_payroll_settlement",
+        "description": "Payroll based on attendance",
+    }
+    if scheduled_occurrence is not None:
+        # The occurrence, not the run's wall-clock time, anchors the next
+        # payroll date, so a late run does not move later paydays (§XV.5).
+        summary[SCHEDULED_OCCURRENCE_KEY] = ensure_utc(scheduled_occurrence).isoformat()
 
     settled: list[int] = []
     skipped: list[int] = []
@@ -185,12 +193,8 @@ def settle_class_payroll_cycle(
             payroll_event_type="payroll",
             correlation_id=correlation_id,
             idempotency_key=f"payroll-cycle:{payroll_cycle_id}:seat:{seat_id}",
-            policy_version_id=policy_version_id,
-            mechanism="TEACHER",
-            summary_json={
-                "source": "class_payroll_settlement",
-                "description": "Payroll based on attendance",
-            },
+            mechanism=run_mechanism,
+            summary_json=dict(summary),
             reference_time_utc=boundary_utc,
             payroll_cycle_id=payroll_cycle_id,
         )

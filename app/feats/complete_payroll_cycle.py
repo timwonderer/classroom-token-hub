@@ -4,21 +4,20 @@ The canonical class-level payroll-run orchestrator and the sole coordination poi
 for the economic-cycle boundary. It owns nothing but sequencing and atomicity: every
 substantive operation underneath it is a separately-certified substrate command.
 
-    complete_payroll_cycle(...)
-        1. resolve_completed_run   ── found → RETURN existing payroll_cycle_id (STOP)
-        2. allocate_payroll_cycle_id
-        3. settle_class_payroll_cycle           (PROD)
-        4. compute_partial_payload              (ITR compute — complete 17/17)
-        5. materialize_interpretation_cycle     (ITR — one immutable record)
-        6. apply_next_boundary_transition       (CLASS — activate next-cycle policy)
-        7. record_run_completion                (replay anchor)
-        —— caller's FEATContext commits once ——
+    complete_payroll_cycle(...)          (step numbers are FEAT-PROD-004 §III's)
+        0. resolve_completed_run   ── found → RETURN existing payroll_cycle_id (STOP)
+        1. allocate_payroll_cycle_id
+        2. settle_class_payroll_cycle           (PROD)
+        3. compute_partial_payload              (ITR compute — complete 17/17)
+           materialize_interpretation_cycle     (ITR — one immutable record)
+        4. record_run_completion                (replay anchor)
+        5. —— caller's FEATContext commits once ——
 
 Two orderings are held as hard invariants:
 
 * **The replay guard is literally first.** A completed replay resolves the
   completion anchor and returns; it does NOT allocate a cycle id, settle, compute a
-  timestamp, capture reference_configuration, or invoke ITR/CLASS. This protects the
+  timestamp, capture reference_configuration, or invoke ITR. This protects the
   seam 8.2c exposed: a replay never recaptures an advanced configuration.
 * **record_run_completion is literally last before commit.** The completion row
   means "this entire economic-cycle transition completed", so if anything before it
@@ -37,7 +36,6 @@ from __future__ import annotations
 
 from typing import NamedTuple
 
-from app.services.class_boundary_activation import apply_next_boundary_transition
 from app.services.context_resolver import CanonicalContext
 from app.services.interpretation.compute import compute_partial_payload
 from app.services.interpretation.materialization import materialize_interpretation_cycle
@@ -62,7 +60,6 @@ class CompletePayrollCycleResult(NamedTuple):
     created: bool
     settled_seat_ids: list[int] | None = None
     interpretation_record_id: str | None = None
-    activation_applied: bool | None = None
     completion_created: bool | None = None
 
 
@@ -72,13 +69,17 @@ def complete_payroll_cycle(
     idempotency_key: str,
     cycle_started_at,
     cycle_completed_at,
+    run_mechanism: str,
+    scheduled_occurrence=None,
 ) -> CompletePayrollCycleResult:
     """Orchestrate one class-level payroll-cycle completion. NO COMMIT.
 
     Must run inside the caller's ``FEATContext("FEAT-PROD-004", idempotency_key=...)``.
     ``cycle_started_at`` / ``cycle_completed_at`` are the lawful closed-cycle window
     supplied by the caller; ``cycle_completed_at`` is the boundary used for
-    settlement and next-boundary activation.
+    settlement. ``run_mechanism`` is ``SYSTEM`` for the automatic schedule —
+    which also names the ``scheduled_occurrence`` it settles — and ``TEACHER``
+    for the teacher's run (FEAT-PROD-004 §II.1).
     """
     if ctx is None or not getattr(ctx, "class_id", None):
         raise ValueError("complete_payroll_cycle requires a lawful class-bound context")
@@ -86,24 +87,26 @@ def complete_payroll_cycle(
         raise ValueError("complete_payroll_cycle requires an idempotency_key")
     class_id = ctx.class_id
 
-    # 1. REPLAY GUARD — literally first. No domain work, no config read, no id
+    # 0. REPLAY GUARD — literally first. No domain work, no config read, no id
     #    allocation, no timestamp before this resolves.
     existing = resolve_completed_run(class_id, idempotency_key)
     if existing is not None:
         return CompletePayrollCycleResult(payroll_cycle_id=existing, created=False)
 
-    # 2. Only a genuinely new run allocates a cycle identity.
+    # 1. Only a genuinely new run allocates a cycle identity.
     payroll_cycle_id = allocate_payroll_cycle_id()
 
-    # 3. PROD — settle the closing cycle, stamping payroll_cycle_id on every event.
+    # 2. PROD — settle the closing cycle, stamping payroll_cycle_id on every event.
     settlement = settle_class_payroll_cycle(
         class_id=class_id,
         payroll_cycle_id=payroll_cycle_id,
         boundary_utc=cycle_completed_at,
+        run_mechanism=run_mechanism,
+        scheduled_occurrence=scheduled_occurrence,
         actor_ctx=ctx,
     )
 
-    # 4-5. ITR — compute the complete payload and materialize one immutable record
+    # 3. ITR — compute the complete payload and materialize one immutable record
     #      bound to this cycle. The writer re-validates completeness and freezes the
     #      reference configuration governing the closing cycle.
     observations_json = compute_partial_payload(class_id, cycle_started_at, cycle_completed_at)
@@ -115,20 +118,19 @@ def complete_payroll_cycle(
         observations_json=observations_json,
     )
 
-    # 6. CLASS — activate the pending next-cycle policy at this boundary (no-op if
-    #    nothing is pending). The next cycle, not the closing one, gets the new law.
-    activation = apply_next_boundary_transition(
-        class_id=class_id, boundary_at=cycle_completed_at
-    )
+    # Nothing is activated at the boundary. A change saved for the next cycle is
+    # an effective-dated row in its owning domain's table, in force from its
+    # effective date with nothing to activate (DOM-CLASS-003 §VII).
 
-    # 7. Replay anchor — literally last. It exists iff everything above committed.
+    # 4. Replay anchor — literally last. It exists iff everything above committed.
     completion = record_run_completion(class_id, idempotency_key, payroll_cycle_id)
+
+    # 5. Commit belongs to the caller's FEATContext("FEAT-PROD-004"), exactly once.
 
     return CompletePayrollCycleResult(
         payroll_cycle_id=payroll_cycle_id,
         created=True,
         settled_seat_ids=list(settlement.settled_seat_ids),
         interpretation_record_id=materialization.record.id,
-        activation_applied=activation.applied,
         completion_created=completion.created,
     )

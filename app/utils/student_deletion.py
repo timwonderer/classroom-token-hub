@@ -13,8 +13,6 @@ from app.models import (
     ClassEconomy,
     EntitlementEvent,
     PendingAction,
-    AttendanceSession,
-    PayrollEvent,
     RecoveryRequest,
     Transaction,
     Seat,
@@ -217,22 +215,18 @@ def _delete_student_scoped_rows(
     if tx_ids:
         Transaction.query.filter(Transaction.id.in_(tx_ids)).delete(synchronize_session=False)
     if seat_ids_for_student:
-        attendance_query = AttendanceSession.query.filter(
-            AttendanceSession.target_seat_id.in_(seat_ids_for_student)
-        )
+        # attendance_sessions and payroll_event are deliberately absent. Their
+        # delete guards refuse the rows of a seat that still exists
+        # (DOM-PROD-001 §VII.1.a, §XI.3), so they are destroyed by the seats FK
+        # cascade when the seat row itself is deleted, in
+        # remove_student_from_teacher_scope — the guards admit them only once
+        # the seat is gone (INV-ARC-013, INV-CORE-000 §III.6).
         hall_pass_query = HallPassLog.query.filter(
             HallPassLog.requested_by_seat_id.in_(seat_ids_for_student)
         )
-        payroll_query = PayrollEvent.query.filter(
-            PayrollEvent.target_seat_id.in_(seat_ids_for_student)
-        )
         if scoped_class_id:
-            attendance_query = attendance_query.filter(AttendanceSession.class_id == scoped_class_id)
             hall_pass_query = hall_pass_query.filter(HallPassLog.class_id == scoped_class_id)
-            payroll_query = payroll_query.filter(PayrollEvent.class_id == scoped_class_id)
-        attendance_query.delete(synchronize_session=False)
         hall_pass_query.delete(synchronize_session=False)
-        payroll_query.delete(synchronize_session=False)
     if seat_ids:
         LedgerBalanceSnapshot.query.filter(LedgerBalanceSnapshot.seat_id.in_(seat_ids)).delete(synchronize_session=False)
 
@@ -274,11 +268,17 @@ def delete_orphaned_users(user_ids):
     if not orphan_ids:
         return []
 
+    # Serialize volatile setup creation with erasure of the owning principal.
+    User.query.filter(User.id.in_(orphan_ids)).order_by(User.id).with_for_update().all()
+
     # Only authentication-owned artifacts depend on the detached principal.
     RecoveryRequest.query.filter(
         RecoveryRequest.user_id.in_(orphan_ids)
     ).delete(synchronize_session=False)
 
+    from app.services.student_setup import forget_owner
+    for uid in orphan_ids:
+        forget_owner(f'user:{uid}')
     User.query.filter(User.id.in_(orphan_ids)).delete(synchronize_session=False)
     return orphan_ids
 
@@ -304,6 +304,8 @@ def remove_student_from_teacher_scope(seat_id, user_id):
     _clear_support_transaction_refs(tx_ids)
     _delete_student_scoped_rows(student_user_id, entitlement_ids, issue_ids, tx_ids,
                                seat_ids, seat_ids_for_student=[seat_id], scoped_class_id=seat.class_id)
+    from app.services.student_setup import forget_owner
+    forget_owner(f'seat:{seat.id}')
     db.session.delete(seat)
     db.session.flush()
     return delete_user_if_orphaned(student_user_id) if student_user_id else False

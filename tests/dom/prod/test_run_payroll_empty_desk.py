@@ -26,7 +26,7 @@ from decimal import Decimal
 from app.extensions import db
 from app.feats.base import FEATContext
 from app.feats.prod import record_attendance_session
-from app.models import AttendanceReasonCode, PayrollEvent, PolicyVersion, Seat
+from app.models import AttendanceReasonCode, PayrollEvent, Seat
 from app.services.context_resolver import CanonicalContext
 from tests.helpers.canonical_classroom import _provision_roster_seat
 from tests.helpers.class_domain import enable_class_feature
@@ -40,24 +40,6 @@ def _student_ctx(classroom, student) -> CanonicalContext:
         seat_id=student.seat.id,
         actor_role="student",
     )
-
-
-def _seed_active_payroll_policy(class_id: str) -> PolicyVersion:
-    with FEATContext(
-        "FEAT-BYPASS-LEGACY",
-        correlation_id=f"test_payroll_policy:{class_id}",
-    ):
-        policy = PolicyVersion(
-            class_id=class_id,
-            domain="payroll",
-            version_number=1,
-            policy_payload_json='{"source":"test"}',
-            activated_at=datetime(2026, 8, 26, 12, 0, tzinfo=timezone.utc),
-            is_active=True,
-        )
-        db.session.add(policy)
-        db.session.flush()
-    return policy
 
 
 def _record_done_for_day_interval(ctx: CanonicalContext, *, start, end) -> None:
@@ -95,7 +77,6 @@ def test_DOM_PROD_003__run_payroll_pays_attended_seat_and_skips_empty_desk(clien
     attended = classroom.students[0]
 
     enable_class_feature(class_id=classroom.class_id, feature="payroll")
-    _seed_active_payroll_policy(classroom.class_id)
 
     # Claimed student works, then is done for the day -> payroll has earnings.
     now = datetime.now(timezone.utc)

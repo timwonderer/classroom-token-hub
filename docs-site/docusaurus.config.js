@@ -63,7 +63,8 @@ const config = {
           exclude: [
             // Owned by the Flask app's /docs help centre.
             "user-guides/**",
-            // Superseded v1 material — history only, never authority.
+            // Superseded material (v1, and v2 tracking retired after launch) —
+            // history only, never authority.
             "archive/**",
             "assets/**",
             // The repository-side index; this site has its own landing page.
@@ -72,9 +73,9 @@ const config = {
             // raw test evidence. These describe an operation, not the software,
             // and nothing in the public tree links to them.
             "ops/**",
-            // docs/TRACKING/ is working state. Three documents there are durable
-            // enough to publish — the roadmap, the tracking README, and the plan
-            // template — and everything else is a dated snapshot of an
+            // docs/TRACKING/ is working state. Two documents there are durable
+            // enough to publish — the roadmap and the plan template — and
+            // everything else is a dated snapshot or a live tracker of an
             // in-progress decision. A filled worksheet is included in that:
             // .gitignore keeps it out of the repository, but the site builds
             // from the working tree, so the exclude list is the layer that
@@ -87,18 +88,9 @@ const config = {
             // An index *into* the excluded working documents. Published on its
             // own it is a table of contents whose entries 404.
             "TRACKING/README_DOMAIN_TRACKING.md",
-            "TRACKING/ACCESSIBILITY_REVIEW_2026-09-03.md",
             "TRACKING/BATCH-B_OPERATIONS_VERIFIER_POLICY_DECISION_PACKAGE_20260901.md",
-            "TRACKING/CI_CLASSIFIER_DESIGN_2026-08-26.md",
-            "TRACKING/CI_EVIDENCE_REUSE_MATRIX_2026-08-26.md",
             "TRACKING/FEAT_REGISTRY_RECONCILIATION_2026-09-19.md",
-            "TRACKING/LEDGER_SERVICE_FEAT_CONSOLIDATION_20260904.md",
-            "TRACKING/PRODUCTION_READINESS_2026-09.md",
-            "TRACKING/PUBLIC_PRIVACY_DISTRICT_AUDIT_20260915.md",
-            "TRACKING/USER_GUIDE_COVERAGE_2026-09.md",
-            "TRACKING/USER_GUIDE_INVENTORY_2026-09.md",
-            "TRACKING/V2_INVARIANT_VERIFIER_RECONCILIATION_20260831.md",
-            "TRACKING/V2_LEDGER_BALANCE_CONTRACT_RESOLUTION_20260831.md",
+            "TRACKING/POST_LAUNCH_TRACKER_2026.md",
           ],
           sidebarPath: require.resolve("./sidebars.js"),
           // Function form, not a string: the plugin reads from `../docs`, so a

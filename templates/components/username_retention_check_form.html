@@ -1,0 +1,43 @@
+{#- Username retention check: the student types back the username they saved.
+
+    Used inside the setup page's modal and on the standalone page. The username
+    itself is never rendered here. Paste is blocked on this one input only, by
+    static/js/username_retention_check.js; normal sign-in fields keep paste.
+
+    Expects: verify_form (StudentVerifySavedUsernameForm), error_message (or None).
+-#}
+<form method="POST" action="{{ url_for('student.verify_saved_username') }}" data-retention-check-form>
+    {% if verify_form.csrf_token is defined %}
+    {{ verify_form.csrf_token(id="retention-csrf-token") }}
+    {% endif %}
+    <input type="hidden" name="retention_page_token" value="{{ retention_page_token }}">
+    <input type="hidden" name="paste_accommodation" value="0" data-paste-accommodation>
+    <fieldset disabled data-retention-controls>
+    <div class="form-group">
+        <label class="form-label text-secondary" for="saved-username">Your username</label>
+        {{ verify_form.saved_username(
+            class="form-control form-control-lg",
+            id="saved-username",
+            value="",
+            autocomplete="off",
+            autocapitalize="none",
+            autocorrect="off",
+            spellcheck="false",
+            **{
+                "aria-describedby": "saved-username-hint" ~ (" retention-check-error" if error_message else ""),
+                "aria-invalid": "true" if error_message else "false",
+                "data-retention-check-input": "",
+            }
+        ) }}
+        <small id="saved-username-hint" class="form-text">Type it exactly as you saved it. Capital letters count. Pasting is turned off for this box.</small>
+        <div id="retention-paste-notice" class="small mt-2" role="status" aria-live="polite" aria-atomic="true"></div>
+    </div>
+    <button type="submit" class="btn btn-primary w-100 btn-lg">{{ verify_form.submit.label.text }}</button>
+    <details class="retention-paste-accommodation mt-3 small">
+        <summary>Can't type in this box?</summary>
+        <p class="mt-2 mb-2">If you use switch access, an AAC app, or other assistive technology that enters text by pasting, you can turn pasting back on for this check. Paste from the copy you saved.</p>
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-allow-paste>Allow pasting for this check</button>
+    </details>
+    </fieldset>
+    <noscript><p role="alert">Turn on JavaScript to check your saved username, then reload this page.</p></noscript>
+</form>

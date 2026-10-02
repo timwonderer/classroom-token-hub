@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-OPS-001      | 2.10    | 2026-09-25     | 2.9        | Normative       |
+| DOM-OPS-001      | 2.11    | 2026-09-30     | 2.10       | Normative       |
 
 ## 0. Authority Level and Dependencies
 
@@ -53,7 +53,7 @@ An operator notice records its investigation evidence note or reference; links t
 *   **Attendance Facts**: It does not own the tap logs or session status.
 *   **Obligation Facts**: It does not own debt or assessment logic.
 *   **Entitlement Balances**: It does not own the count of perks or items.
-*   **Economic Policy Truth**: It does not own `policy_versions` or `policy_transitions`. Class configuration and `economic-engine` are owned by `DOM-CLASS-001`; `policy_versions` and `policy_transitions` are owned by `DOM-CLASS-003`.
+*   **Economic Policy Truth**: It does not own any economic policy table. Class configuration and `economic_engine` are owned by `DOM-CLASS-001`; each policy's history is its owning domain's own table (`DOM-CLASS-003` §V).
 *   **Operational Boundary Legality**: It does not determine whether a rent cycle has closed, an insurance period has expired, or an accrual rollover is lawful. Those determinations belong to the owning operational domain (see §8).
 
 ### Application Availability Gate
@@ -370,37 +370,19 @@ health event.
 
 ---
 
-## 8. Scheduled Activation Infrastructure
+## 8. Scheduled Policy Activation (none)
 
-Operations owns the **execution evidence** of scheduled policy activation jobs. It does NOT own policy truth or boundary legality.
+*Amended 2.11 (operator ruling 2026-09-30).* There is no scheduled policy activation, and no OPS job exists to perform one. A change saved for a later boundary is a row of its owning domain's append-only table carrying the instant from which it governs (`DOM-CLASS-003` §V, §VII); the row in force is selected by time, so nothing activates it. The class-wide `policy_versions` / `policy_transitions` tables and the activation job that read them were retired and removed.
 
-### 8.1 Activation Sequence
-
-When a scheduled OPS job fires that may trigger pending policy transition activation, the lawful sequence is:
-
-1. **OPS job fires** — Records a `STARTED` event in `job_events`. Carries a stable `correlation_id`.
-2. **Operational domain checks boundary legality** — The owning domain (`DOM-OBL-001` for rent/insurance, `DOM-BANK-001` for accrual rollover) determines whether a lawful boundary has occurred. OPS does not make this determination.
-3. **If boundary is lawful** — The operational domain signals `FEAT-ECON-001` to validate the pending transition and execute the activation sequence.
-4. **FEAT-ECON-001 orchestrates activation** — Creates target policy version as active, marks prior version inactive, marks transition applied, supersedes conflicting pending transitions. All within a single transaction boundary.
-5. **DOM-CLASS-001 receives the activated state** — `policy_versions` and `policy_transitions` reflect the new constitutional state.
-6. **DOM-OPS records execution evidence** — Appends `SUCCESS` (or `FAILED`) to `job_events`. Appends audit event with `correlation_id`, `class_id`, `domain`, and transition reference.
-
-### 8.2 Prohibited OPS Activation Patterns
+### 8.1 Prohibited OPS Policy Patterns
 
 The following are constitutionally prohibited:
 
-- OPS job directly mutating `policy_versions` or `policy_transitions`
-- OPS job determining rent cycle legality or insurance renewal legality
-- OPS job calling GET-style handlers to trigger policy activation as a side effect
-- OPS job bypassing `FEAT-ECON-001` to activate transitions directly
-- OPS job activating transitions without recording execution evidence in `job_events`
+- an OPS job writing or rewriting a row of an economic policy table;
+- an OPS job determining rent cycle legality or insurance renewal legality;
+- an OPS job calling GET-style handlers to change policy as a side effect;
+- an OPS job, table or flag that "activates" a recorded policy row: a row governs from its own date, and whether it has taken effect is answered by the owning domain's resolver, never by execution state.
 
-### 8.3 Activation Evidence Requirements
+### 8.2 Evidence
 
-For every scheduled policy activation attempt, OPS MUST record:
-
-- `job_events`: `STARTED`, and `SUCCESS` or `FAILED`
-- `audit_log`: activation action with `before`/`after` state reference, `class_id`, `domain`, `correlation_id`
-- Any `FAILED` event MUST include the failure reason in `payload`
-
-OPS evidence does not constitute policy truth. Policy truth remains in `policy_versions` under `DOM-CLASS-001` authority.
+Operational jobs that consume policy (payroll, rent reconciliation, interest) record their own execution evidence in `job_events` (§4, §5). OPS evidence does not constitute policy truth. Policy truth remains in the owning domain's table (`DOM-CLASS-003` §V).

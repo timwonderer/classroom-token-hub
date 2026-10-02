@@ -1,6 +1,6 @@
 from app.extensions import db
 from app.services.class_configuration_query_service import (
-    get_effective_economic_engine,
+    get_current_economic_engine,
     get_payroll_settings,
 )
 from app.services.payroll.builders import build_payroll_settings_display
@@ -15,7 +15,9 @@ def test_DOM_CLASS_001__payroll_settings_update_persists_class_scoped_row(client
     EconomicEngine per DOM-CLASS-002 — so the form should still succeed and the
     row should carry the pay rate scoped to class_id.
     """
-    classroom = initialize_as_teacher("chemistry_p1", client, client.application)
+    classroom = initialize_as_teacher(
+        "chemistry_p1", client, client.application, with_payroll_settings=False
+    )
     class_row = classroom.economy
 
     response = update_payroll_settings(
@@ -23,6 +25,7 @@ def test_DOM_CLASS_001__payroll_settings_update_persists_class_scoped_row(client
         settings_mode="simple",
         simple_pay_rate="15.0",
         simple_frequency="biweekly",
+        simple_first_pay_date="2026-10-09",
     )
 
     assert response.status_code == 302
@@ -38,13 +41,16 @@ def test_DOM_CLASS_001__payroll_settings_update_persists_class_scoped_row(client
 
 def test_DOM_CLASS_001__simple_hourly_rate_round_trips_without_precision_loss(client):
     """An hourly rate remains exact after per-minute database storage."""
-    classroom = initialize_as_teacher("chemistry_p1", client, client.application)
+    classroom = initialize_as_teacher(
+        "chemistry_p1", client, client.application, with_payroll_settings=False
+    )
 
     response = update_payroll_settings(
         client,
         settings_mode="simple",
         simple_pay_rate="80.00",
         simple_frequency="biweekly",
+        simple_first_pay_date="2026-10-09",
     )
 
     assert response.status_code == 302
@@ -72,6 +78,6 @@ def test_DOM_CLASS_001__expected_weekly_hours_update_writes_to_economic_engine(c
     assert response.headers["Location"].endswith("/admin/economic-engine")
 
     # The new engine version governing payroll for this class should carry 7.5
-    engine = get_effective_economic_engine(class_row.class_id, "payroll")
+    engine = get_current_economic_engine(class_row.class_id)
     assert engine is not None
     assert float(engine.expected_weekly_hours) == 7.5

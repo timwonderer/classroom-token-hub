@@ -26,7 +26,7 @@ from app.extensions import db
 from app.feats.base import requires_feat_context
 from app.models import ClassEconomy, User, Seat
 from app.services.class_configuration_query_service import (
-    get_initial_economic_engine,
+    get_current_economic_engine,
 )
 from app.services.context_resolver import CanonicalContext
 from app.utils.canonical_temporal_resolver import canonical_temporal_resolver, CLASS_LEVEL_EVALUATION, SYSTEM_LEVEL_EVALUATION
@@ -260,11 +260,12 @@ def _execute_create_class_boundary_impl(
     # FEAT-CLASS-001 owns orchestration only and MUST NOT create a competing root
     # (ECON-CONST-005: operational domains must not mutate policy lineage directly).
     #
-    # We therefore read back the listener-seeded root rather than minting a second one.
+    # We therefore read back the listener-seeded root rather than minting a second one:
+    # at creation it is the only version, so it is the one in force.
     # `expected_weekly_hours` is not applied at root creation; it is set post-creation
     # via FEAT-CLASS-005 (economic engine evolution), the sole lawful writer for engine
     # evolution.
-    initial_engine = get_initial_economic_engine(class_id)
+    initial_engine = get_current_economic_engine(class_id)
     initial_engine_id = initial_engine.economic_version_id if initial_engine else None
 
     return CreateClassBoundaryResult(

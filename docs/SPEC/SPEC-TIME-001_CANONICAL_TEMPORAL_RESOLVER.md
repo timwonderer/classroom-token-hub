@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-TIME-001 | 1.1 | 2026-09-24 | 1.0 | Implementation Spec |
+| SPEC-TIME-001 | 1.2 | 2026-09-30 | 1.1 | Implementation Spec |
 
 ---
 
@@ -423,13 +423,9 @@ Output:
 elapsed_seconds = 3022
 ```
 
-PROD may then apply payroll policy:
+PROD prices the seconds as they are: payroll defines no time rounding (`DOM-PROD-001` §XV.3; operator ruling 2026-09-30). Any business rounding a domain might define belongs to that domain.
 
-```text
-3022 seconds -> round payable minutes up/down according to payroll policy
-```
-
-`canonical_temporal_resolver` must not perform that payroll rounding.
+`canonical_temporal_resolver` must not perform business rounding.
 
 ### 10. `shift_timestamp`
 

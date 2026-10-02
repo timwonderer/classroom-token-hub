@@ -323,8 +323,10 @@ SURFACES = (
     ),
     Surface(
         "status",
-        ("status_service/static/cth-public.css",),
-        ("status_service/static/cth-public.css", "status_service/static/status-overrides.css"),
+        ("status_service/static/cth-public.css", "status_service/static/tokens.css"),
+        ("status_service/static/cth-public.css", "status_service/static/tokens.css",
+         "status_service/static/status.css"),
+        ("--bs-",),
     ),
     Surface(
         "guide",
@@ -338,7 +340,11 @@ SURFACES = (
 # site and the status service are served from one stylesheet; when the copy was
 # allowed to drift the two hosts rendered the same selector at different
 # contrast, and nothing reported it.
-MIRRORS = (("github-pages/style.css", "status_service/static/cth-public.css"),)
+MIRRORS = (
+    ("github-pages/style.css", "status_service/static/cth-public.css"),
+    # The status service draws on the application's token layer (SPEC-DES-001 §XIII).
+    ("static/css/tokens.css", "status_service/static/tokens.css"),
+)
 
 TOKEN_BLOCK = re.compile(r":root\b|^html\b")
 SCRIM = re.compile(

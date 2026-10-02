@@ -27,7 +27,8 @@ from datetime import timedelta
 
 from app.extensions import db
 from app.feats.base import FEATContext
-from app.models import ClassEconomy, PayrollCycleCompletion, PayrollEvent, PolicyVersion
+from app.models import ClassEconomy, PayrollCycleCompletion, PayrollEvent
+from app.services.payroll.settings import first_payroll_setting
 from app.services.payroll.cycle_completion import (
     PayrollCycleCompletionConflict,
     allocate_payroll_cycle_id,
@@ -48,17 +49,12 @@ def _seed_payroll_event(classroom, *, recorded_at, event_type="payroll"):
     cid = classroom.class_id
     seat = classroom.students[0]
     with FEATContext("FEAT-BYPASS-LEGACY", correlation_id=f"win:{cid}:{recorded_at.isoformat()}"):
-        policy = PolicyVersion.query.filter_by(class_id=cid, domain="payroll").first()
-        if policy is None:
-            policy = PolicyVersion(class_id=cid, domain="payroll", version_number=1,
-                                   policy_payload_json="{}", activated_at=utc_now(), is_active=True)
-            db.session.add(policy)
-            db.session.flush()
+        setting = first_payroll_setting(cid)
         db.session.add(PayrollEvent(
             class_id=cid, target_seat_id=seat.seat_id,
             actor_seat_id=classroom.teacher_seat_id, correlation_id=f"corr_win:{recorded_at.isoformat()}",
-            idempotency_key=f"win:{recorded_at.isoformat()}", policy_version_id=policy.id,
-            policy_uuid=policy.policy_uuid, mechanism="TEACHER",
+            idempotency_key=f"win:{recorded_at.isoformat()}",
+            policy_uuid=setting.policy_uuid, mechanism="TEACHER",
             payroll_event_type=event_type, recorded_at=recorded_at,
         ))
         db.session.flush()

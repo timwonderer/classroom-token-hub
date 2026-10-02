@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001      | 3.8     | 2026-09-21     | 3.7        | Normative |
+| SOP-DOC-001      | 3.10    | 2026-09-29     | 3.9        | Normative |
 
 ---
 
@@ -135,8 +135,9 @@ Archived material is deliberately absent; see §VI.
 - [FEAT-SUP-002 — Class Announcement Management](../FEATURE-EXECUTION/FEAT-SUP-002_CLASS_ANNOUNCEMENT_MANAGEMENT.md)
 
 ### Specifications (SPEC)
-- [SPEC-DES-001 — Design System and Visual Identity](../SPEC/SPEC-DES-001_DESIGN_SYSTEM_AND_VISUAL_IDENTITY.md)
+- [SPEC-DES-001 — Design System and Visual Identity](../SPEC/SPEC-DES-001_DESIGN_SYSTEM_AND_VISUAL_IDENTITY.md) — v2.3: the status service carries the runtime token layer.
 - [SPEC-DISPLAY-001 — Display Metadata Resolver](../SPEC/SPEC-DISPLAY-001_DISPLAY_IDENTITY_METADATA_RESOLVER.md)
+- [SPEC-IDEN-001 — Username Retention Verification](../SPEC/SPEC-IDEN-001_USERNAME_RETENTION_VERIFICATION.md) — incorporated by FEAT-IDEN-002; memory-only setup staging, retrieval verification and page-bound proof.
 - [SPEC-ECON-001 — Savings Interest Accrual and Disbursement Specification](../SPEC/SPEC-ECON-001_SAVINGS_INTEREST_ACCRUAL_AND_DISBURSEMENT_SPECIFICATION.md)
 - [SPEC-ECON-002 — Economic Policy Visibility and Disclosure](../SPEC/SPEC-ECON-002_ECONOMIC_POLICY_VISIBILITY_AND_DISCLOSURE.md)
 - [SPEC-ECON-003 — Economic Engine Calculation and Reference Specification](../SPEC/SPEC-ECON-003_ECONOMIC_ENGINE_CALCULATION_AND_REFERENCE_SPECIFICATION.md)
@@ -145,11 +146,11 @@ Archived material is deliberately absent; see §VI.
 - [SPEC-LED-001 — Ledger Verification Proof Surfaces](../SPEC/SPEC-LED-001_LEDGER_VERIFICATION_PROOF_SURFACES.md)
 - [SPEC-LED-002 — Command Idempotency Reservation and Structural Enforcement](../SPEC/SPEC-LED-002_COMMAND_IDEMPOTENCY_RESERVATION_AND_ENFORCEMENT.md)
 - [SPEC-OPS-001 — Reversal, Void, and Transaction Finality Specification](../SPEC/SPEC-OPS-001_REVERSAL_AND_VOID.md)
-- [SPEC-OPS-002 — External Status Persistence Model](../SPEC/SPEC-OPS-002_EXTERNAL_STATUS_PERSISTENCE_MODEL.md)
+- [SPEC-OPS-002 — External Status Persistence Model](../SPEC/SPEC-OPS-002_EXTERNAL_STATUS_PERSISTENCE_MODEL.md) — v1.6: `AWARE` notice state.
 - [SPEC-OPS-003 — Application Observability Contract](../SPEC/SPEC-OPS-003_APPLICATION_OBSERVABILITY_CONTRACT.md)
 - [SPEC-OPS-004 — System Administration Console](../SPEC/SPEC-OPS-004_SYSTEM_ADMINISTRATION_CONSOLE.md)
 - [SPEC-OPS-005 — Feature Health Evidence (internal integrity)](../SPEC/SPEC-OPS-005_FEATURE_HEALTH_EVIDENCE.md)
-- [SPEC-OPS-006 — Public Request Monitoring](../SPEC/SPEC-OPS-006_PUBLIC_REQUEST_MONITORING.md) — v1.2: active availability checks and retained feature activity.
+- [SPEC-OPS-006 — Public Request Monitoring](../SPEC/SPEC-OPS-006_PUBLIC_REQUEST_MONITORING.md) — v1.3: plain-language hero states and area labels, Under maintenance from the access-gate check.
 - [SPEC-SEC-001 — Credentials and Identity Lookup Code Contract](../SPEC/SPEC-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_CODE_CONTRACT.md)
 - [SPEC-STORE-001 — Store Product Policy Payload Schema](../SPEC/SPEC-STORE-001_PRODUCT_POLICY_PAYLOAD_SCHEMA.md)
 - [SPEC-TEST-001 — Canonical Test Initializer](../SPEC/SPEC-TEST-001_CANONICAL_TEST_INITIALIZER.md)
@@ -188,7 +189,6 @@ Archived material is deliberately absent; see §VI.
 
 ### Maps (MAP)
 - [MAP-ADV-001 — Adversarial Evidence Documentation Protocol](../MAP/MAP-ADV-001_ADVERSARIAL_EVIDENCE_DOCUMENTATION_PROTOCOL.md)
-- [MAP-CLASS-002 — Class Scope Normalization Target](../MAP/MAP-CLASS-002_CLASS_SCOPE_NORMALIZATION_TARGET.md)
 - [MAP-CORE-001 — Domain to FEAT Capability Map](../MAP/MAP-CORE-001_DOMAIN_TO_FEAT_CAPABILITY_MAP.md)
 - [MAP-UI-001 — Template to FEAT Wiring Map](../MAP/MAP-UI-001_TEMPLATE_TO_FEAT_WIRING_MAP.md)
 - [MAP-UI-002 — Request Context and View Model Pipeline](../MAP/MAP-UI-002_REQUEST_CONTEXT_AND_VIEW_MODEL_PIPELINE.md)
@@ -215,7 +215,7 @@ on the site — and a normative index is the wrong place to depend on a descript
 published at all.
 
 - `docs/TRACKING/BATCH-B_OPERATIONS_VERIFIER_POLICY_DECISION_PACKAGE_20260901.md` — Operations freshness, aggregation, and evidence-registry owner decisions
-- `docs/TRACKING/V2_INVARIANT_VERIFIER_RECONCILIATION_20260831.md` — v1 economic checker to v2 verifier disposition
+- `docs/archive/v2-tracking-2026/V2_INVARIANT_VERIFIER_RECONCILIATION_20260831.md` — v1 economic checker to v2 verifier disposition (archived 2026-09-28; its §VIII records the reconciliation as closed)
 
 ---
 
@@ -241,7 +241,9 @@ The material itself is preserved and browsable:
 | `docs/archive/v1-architecture/` | Early v1 identity and core architectural specs (`ARC-*`) |
 | `docs/archive/v1-docs/` | v1 security audits (`SEC-*`), deployment SOPs, `ARC-*` specs, `FEATURES/*`, `DOMAINS/*` |
 | `docs/archive/v1-development/` | v1→v2 migration planning and legacy schema analysis |
-| `docs/archive/v2-tracking-2026/` | Superseded v2 tracking, audits, and migration plans |
+| `docs/archive/v2-tracking-2026/` | Superseded v2 tracking, audits, and migration plans, including the pre-launch ship tracker `PRODUCTION_READINESS_2026-09.md` (archived 2026-09-28) |
+| `docs/archive/STANDARD_OPERATING_PROCEDURES/` | Retired SOPs, at their original namespace paths (`DATABASE/`, `DEPLOYMENT/`, `DEVOPS/`) |
+| `docs/archive/MAP/` | Retired maps: `MAP-CLASS-002` (class-scope normalization target, archived 2026-09-28; its `class_id`-first target is the current model under INV-ARC-019 and DOM-IDEN-001) |
 | `docs/archive/PHASE_PLANNING/` | Phase 3–5 roadmaps and store domain implementation tracking |
 | `docs/archive/github-pages/` | Historical GitHub Pages landing site assets |
 
@@ -266,6 +268,20 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.10 (2026-09-29):**
+- Removed `MAP-CLASS-002` from the Maps listing and recorded it under §VI as archived. The
+  `class_id`-first scoping it described as a future target is the current model (INV-ARC-019,
+  DOM-IDEN-001). Its text still called `join_code` the main operational class boundary.
+- Added the `docs/archive/STANDARD_OPERATING_PROCEDURES/` and `docs/archive/MAP/` locations to the
+  §VI archive table.
+- Repointed the `V2_INVARIANT_VERIFIER_RECONCILIATION_20260831.md` tracking record to its archived
+  location.
+- Versions 3.7 and 3.8 were published without change notes; their content is in the repository
+  history.
+
+**Version 3.9 (2026-09-28):**
+- Registered `SPEC-IDEN-001`, the first specification in the `IDEN` area.
 
 **Version 3.6 (2026-09-20):**
 - Registered `REF-DES-001`, an informative, commit-cited history of visual identity,

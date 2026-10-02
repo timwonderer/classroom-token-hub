@@ -78,6 +78,58 @@ def test_importing_the_app_in_a_non_test_process_does_not_start_the_scheduler(ap
     assert "OWNER_THREAD=False" in result.stdout
 
 
+def _server_worker_probe(app, seconds=4):
+    """A separate OS process doing what a gunicorn worker's post_worker_init does."""
+    env = {
+        "PATH": os.environ.get("PATH", ""),
+        "HOME": os.environ.get("HOME", ""),
+        "FLASK_ENV": "development",
+        "DATABASE_URL": app.config["SQLALCHEMY_DATABASE_URI"],
+        "SECRET_KEY": "test-secret",
+        "PEPPER_KEY": "test-primary-pepper",
+        "ENCRYPTION_KEY": "jhe53bcYZI4_MZS4Kb8hu8-xnQHHvwqSX8LN4sDtzbw=",
+        "AUDIT_HMAC_KEY": "test-audit-hmac-key-for-tests-only-not-for-production",
+        "PYTHONPATH": str(REPO_ROOT),
+    }
+    probe = (
+        "import time\n"
+        "from app import app\n"
+        "from app.extensions import scheduler\n"
+        "from app.scheduler_ownership import start_scheduler_when_owner, stop_scheduler_ownership\n"
+        "start_scheduler_when_owner(app, retry_seconds=0.2)\n"
+        f"time.sleep({seconds})\n"
+        "print('SCHEDULER_RUNNING=' + str(scheduler.running))\n"
+        "stop_scheduler_ownership()\n"
+    )
+    return subprocess.run(
+        [sys.executable, "-c", probe], cwd=REPO_ROOT, env=env,
+        capture_output=True, text=True, timeout=120,
+    )
+
+
+def test_a_second_worker_process_does_not_start_the_scheduler_while_the_lock_is_held(app):
+    """Multi-worker deployment (SOP-DEP-001 §VII): every worker runs the hook, and
+    only the lock holder may run the jobs. The holder here is this test process;
+    the second worker is a real separate process."""
+    with app.app_context():
+        owner = try_acquire_scheduler_lock(db.engine)
+    assert owner is not None
+    try:
+        result = _server_worker_probe(app)
+    finally:
+        owner.close()
+    assert result.returncode == 0, result.stderr[-2000:]
+    assert "SCHEDULER_RUNNING=False" in result.stdout
+    assert "another process holds the scheduler lock" in result.stderr + result.stdout
+
+    # Control: the same process, with no other holder, does start it. Without
+    # this the assertion above could pass because the probe never started anything.
+    result = _server_worker_probe(app)
+    assert result.returncode == 0, result.stderr[-2000:]
+    assert "SCHEDULER_RUNNING=True" in result.stdout
+    assert "this process holds the scheduler lock" in result.stderr + result.stdout
+
+
 def test_init_scheduled_tasks_refuses_without_the_scheduler_lock(app):
     with pytest.raises(SchedulerOwnershipError):
         init_scheduled_tasks(app)
