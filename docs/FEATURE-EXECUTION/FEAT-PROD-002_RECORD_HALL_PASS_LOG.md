@@ -2,7 +2,9 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-PROD-002 | 1.0 | 2026-07-19 | N/A | Normative |
+| FEAT-PROD-002 | 1.1 | 2026-10-01 | 1.0 | Normative |
+
+*Revision 1.1 (2026-10-01; ratified by the owner 2026-10-01): adds §III.A, resolution of a pending hall-pass request (approve, reject, student cancel) held in `pending_actions` (DOM-STORE-001 5.3 §IX). §III is unchanged.*
 
 ---
 
@@ -83,6 +85,24 @@ Failure conditions:
 - hall-pass settings prohibit the requested pass
 - queue or simultaneous limits are reached
 - attempt to backfill exit or return data into the hall-pass table
+
+### III.A Resolving a pending hall-pass request
+
+A pending hall-pass request is a `pending_actions` row with `authoritative_feat = FEAT-PROD-002` and payload kind `hall_pass_request`, submitted under `FEAT-STOR-002` §X.A. This FEAT is its only resolver (`DOM-STORE-001` §VII.B, §IX). Every resolution is scoped by `ctx.class_id`: a request in another class is not found.
+
+**Approve** (teacher):
+
+1. Lock the request row with `SELECT ... FOR UPDATE` and delete it. A concurrent resolution of the same request waits on that lock and, once this transaction commits, finds no row. Exactly one approval therefore succeeds; every other attempt fails as not found. The FEAT idempotency key is not relied on for this.
+2. Record the pass through `record_hall_pass_log(...)` (§III) with the payload's `requested_by_seat_id` and `destination`, the approving seat from `ctx`, and the entitlement consumption §III requires.
+3. Commit the deletion, the `hall_pass_logs` row and the pass consumption atomically.
+
+If any step is refused (for example, no pass is available, or the settings prohibit the destination), the transaction rolls back and the request stays pending, unchanged, with its original `submitted_at` (`DOM-STORE-001` §VII.B: a failed resolution leaves the pending action intact).
+
+**Reject** (teacher): lock and delete the row. Nothing else is written; no pass is consumed.
+
+**Cancel** (student): lock and delete the row only when its `seat_id` is the student's own seat in `ctx`. Any other request is not found. Nothing else is written.
+
+Reads of pending requests (teacher queue, dashboard, student status) take no lock and write nothing.
 
 ---
 

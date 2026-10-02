@@ -2,7 +2,9 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-STORE-001 | 5.2 | 2026-09-24 | 5.1 | Normative |
+| DOM-STORE-001 | 5.3 | 2026-10-01 | 5.2 | Normative |
+
+*Revision 5.3 (2026-10-01, owner ruling; ratified by the owner 2026-10-01): §VII.B and §IX — a pending action is also deleted with its seat on lawful seat removal (membership by existence, INV-ARC-013). §IX — the hall-pass example is made concrete: a pending hall-pass request is a `pending_actions` row submitted under `FEAT-STOR-002` and resolved by `FEAT-PROD-002` (approve, reject, student cancel); a student's new request cancels their earlier one. Before 5.3 the implementation kept pending hall-pass requests in per-process memory, which failed once production ran two workers.*
 
 ## I. Purpose
 
@@ -233,6 +235,7 @@ Rules:
 - A successful resolution SHALL atomically write the canonical durable record(s) the action produces (entitlement event(s), or claim state under §VII.C) and delete the pending action.
 - Resolving or deleting a pending action SHALL NOT delete or rewrite any durable record the work produced.
 - A failed resolution SHALL leave the pending action intact.
+- A pending action is anchored to its `seat_id` and `class_id` and ceases with either: lawful seat removal deletes the seat's pending actions with the seat, and lawful class destruction deletes the class's (membership by existence, INV-ARC-013; owner ruling 2026-10-01; the same lifecycle boundary as DOM-PROD-001 §VII.1.a). This is lifecycle destruction, not a resolution, and SHALL NOT be used to discard a seat's pending action while the seat exists.
 
 ### C. `insurance_claims`
 
@@ -445,9 +448,17 @@ Examples:
 
 - an insurance claim submitted while coverage is valid remains eligible even if coverage expires before review (the claim's own `submitted_at` governs; §VII.C);
 - a delayed-use redemption submitted before expiration remains governed by the submission timestamp where the policy requires that boundary;
-- a hall-pass request remains pending until the authoritative FEAT resolves it.
+- a hall-pass request remains pending until the authoritative FEAT resolves it (see below).
 
-Pending actions SHALL be deleted only as part of successful lawful resolution or lawful deletion of the governing class boundary.
+Pending actions SHALL be deleted only as part of successful lawful resolution, lawful removal of the seat they are anchored to, or lawful deletion of the governing class boundary (§VII.B; membership by existence, INV-ARC-013).
+
+**Hall-pass requests.** A student's request for an approval-gated hall pass is a `pending_actions` row:
+
+- it is submitted under `FEAT-STOR-002`, which writes the typed payload `{kind: "hall_pass_request", requested_by_seat_id, destination}`, names the hall-pass entitlement available at submission as `entitlement_id`, and sets `authoritative_feat = FEAT-PROD-002`;
+- its `submitted_at` is the request time in class canonical time and is authoritative;
+- a seat holds at most one pending hall-pass request in a class: a student's new request cancels their earlier one, in the same transaction that submits the new one;
+- it is resolved only by `FEAT-PROD-002`: approval writes the `hall_pass_logs` record and consumes the pass in the same transaction that deletes the row; rejection deletes the row; the student's own cancellation deletes the row;
+- it has no TTL; it survives process restarts and deploys, and ceases otherwise only with its seat or class.
 
 Pending actions SHALL NOT be interpreted as entitlement consumption, approval, rejection, or revocation.
 

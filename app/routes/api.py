@@ -48,7 +48,7 @@ from app.feats.attendance import (
     save_hall_pass_setup_config as feat_save_hall_pass_setup_config,
     update_hall_pass_queue_settings as feat_update_hall_pass_queue_settings,
 )
-from app.feats.prod import record_attendance_session, record_hall_pass_log
+from app.feats.prod import record_attendance_session
 from app.routes.student import (
     get_feature_settings_for_student,
 )
@@ -73,13 +73,13 @@ from app.services.hall_pass_status_service import (
     HALL_PASS_STATUS_RETURNED,
     resolve_hall_pass_lifecycle_status,
 )
-from app.services.hall_pass_request_queue import (
-    PendingHallPassRequest,
-    clear_pending_hall_pass_requests_for_seat,
-    enqueue_hall_pass_request,
-    get_pending_hall_pass_request,
-    pop_pending_hall_pass_request,
+from app.feats.hall_pass_request_feat import (
+    approve_hall_pass_request,
+    cancel_hall_pass_request,
+    reject_hall_pass_request,
+    submit_hall_pass_request,
 )
+from app.services.hall_pass_request_queue import HallPassRequestNotFound
 from app.utils.economy_policy import resolve_class_scope, resolve_feature_class, resolve_feature_class_for_class
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
@@ -628,7 +628,7 @@ def reject_redemption():
 @api_bp.route('/hall-pass/request', methods=['POST'])
 @login_required
 def request_hall_pass():
-    """Create an ephemeral hall-pass request for teacher approval."""
+    """Submit a hall-pass request for teacher approval (a ``pending_actions`` row)."""
     context = getattr(g, "canonical_context", None)
     student = db.session.get(Seat, context.seat_id) if context else None
     if not context or not student or student.class_id != context.class_id:
@@ -668,20 +668,17 @@ def request_hall_pass():
         canonical_execution_context=context,
         primitive="current_time",
     )
-    request_id = secrets.token_urlsafe(18)
-    clear_pending_hall_pass_requests_for_seat(
-        class_id=context.class_id,
-        seat_id=student.id,
-    )
-    pending_request = enqueue_hall_pass_request(
-        PendingHallPassRequest(
-            request_id=request_id,
-            class_id=context.class_id,
-            requested_by_seat_id=student.id,
+    # A pending_actions row (DOM-STORE-001 §VII.B, §IX), written by the
+    # submitting FEAT. It replaces any earlier pending request from this seat.
+    try:
+        pending_request = submit_hall_pass_request(
+            ctx=context,
             destination=destination,
             requested_at_utc=evaluation.canonical_now_utc,
+            idempotency_key=f"hall_pass_request:{context.class_id}:{student.id}:{secrets.token_urlsafe(12)}",
         )
-    )
+    except ValueError:
+        return jsonify({"status": "error", "message": "No hall passes available."}), 403
     return jsonify({
         "status": "success",
         "message": "Hall pass request sent.",
@@ -696,74 +693,67 @@ def request_hall_pass():
 @api_bp.route('/hall-pass/request/<request_id>/cancel', methods=['POST'])
 @login_required
 def cancel_pending_hall_pass_request(request_id):
-    """Cancel the current student's ephemeral pending hall-pass request."""
+    """Cancel the current student's own pending hall-pass request."""
     context = getattr(g, "canonical_context", None)
     student = db.session.get(Seat, context.seat_id) if context else None
-    pending_request = get_pending_hall_pass_request(request_id)
-    if (
-        not context
-        or not student
-        or not pending_request
-        or pending_request.class_id != context.class_id
-        or pending_request.requested_by_seat_id != student.id
-    ):
+    if not context or not student or student.class_id != context.class_id:
         return jsonify({"status": "error", "message": "Pending request not found."}), 404
-
-    pop_pending_hall_pass_request(request_id)
+    try:
+        # Only the requesting seat's own row, in its own class, can be taken.
+        cancel_hall_pass_request(
+            ctx=context,
+            request_id=request_id,
+            idempotency_key=f"hall_pass_cancel:{context.class_id}:{request_id}",
+        )
+    except HallPassRequestNotFound:
+        return jsonify({"status": "error", "message": "Pending request not found."}), 404
     return jsonify({"status": "success", "message": "Hall pass request cancelled."})
 
 
 @api_bp.route('/hall-pass/request/<request_id>/<string:action>', methods=['POST'])
 @admin_required
 def handle_pending_hall_pass_request(request_id, action):
-    """Approve or reject an ephemeral hall-pass request."""
+    """Approve or reject a pending hall-pass request (a ``pending_actions`` row)."""
     ctx = g.canonical_context
-    pending_request = get_pending_hall_pass_request(request_id)
-    if not pending_request or pending_request.class_id != ctx.class_id:
-        return jsonify({"status": "error", "message": "Pending request not found."}), 404
-
     if action == "reject":
-        pop_pending_hall_pass_request(request_id)
+        try:
+            reject_hall_pass_request(
+                ctx=ctx,
+                request_id=request_id,
+                idempotency_key=f"hall_pass_reject:{ctx.class_id}:{request_id}",
+            )
+        except HallPassRequestNotFound:
+            return jsonify({"status": "error", "message": "Pending request not found."}), 404
         return jsonify({"status": "success", "message": "Hall pass request rejected."})
 
     if action != "approve":
         return jsonify({"status": "error", "message": "Unsupported hall pass action."}), 400
 
-    requested_seat = db.session.get(Seat, pending_request.requested_by_seat_id)
-    if not requested_seat or requested_seat.class_id != ctx.class_id:
-        return jsonify({"status": "error", "message": "Pending request not found."}), 404
-
     idempotency_key = f"hall_pass_approve:{ctx.class_id}:{request_id}"
     try:
-        # The FEAT envelope belongs to ``record_hall_pass_log``, which carries its
-        # own ``@requires_feat_context("FEAT-PROD-002")`` — and that decorator
-        # OPENS a context rather than merely asserting one. A route-level
-        # ``FEATContext`` here therefore made the call nest inside itself and
-        # raise ``FEATContextError`` on every approval, which neither handler
-        # below caught: teachers could not approve a hall pass at all, and the
-        # failure surfaced as a 500. ``/tap`` documents this exact trap in its
-        # own docstring; the knowledge did not travel this far up the file.
+        # One FEAT-PROD-002 transaction locks and deletes the pending row and
+        # records the pass. A concurrent approval of the same request waits on
+        # the row lock and then finds nothing, so it cannot record a second
+        # pass. The idempotency key is not what prevents that: nothing refuses a
+        # second write carrying the same key. A failed approval rolls back,
+        # leaving the request pending.
         #
-        # The decorator reads ``idempotency_key`` from kwargs, so the key below
-        # still reaches the envelope. A FEAT that already owns a context composes
-        # ``_record_hall_pass_log_impl`` instead — see entitlement_lifecycle_feat.
-        record_hall_pass_log(
+        # No route-level FEATContext: the FEAT opens its own, and nesting is
+        # forbidden (live-test finding 29).
+        approve_hall_pass_request(
             ctx=ctx,
-            requested_by_seat_id=requested_seat.id,
-            approved_by_seat_id=ctx.seat_id,
-            destination=pending_request.destination,
-            reason="teacher_approved",
+            request_id=request_id,
             idempotency_key=idempotency_key,
         )
-        pop_pending_hall_pass_request(request_id)
         return jsonify({"status": "success", "message": "Hall pass issued."})
+    except HallPassRequestNotFound:
+        return jsonify({"status": "error", "message": "Pending request not found."}), 404
     except ValueError as exc:
         _log_api_client_error("handle_pending_hall_pass_request", exc, extra=f"request_id={request_id}")
         return jsonify({"status": "error", "message": "Hall pass request cannot be approved."}), 400
     except FEATContextError as exc:
         # A constitutional violation is a server fault, not a client one, and it
-        # must be named as such rather than escaping as an unhandled 500 with no
-        # diagnosis attached — which is how the nesting above stayed invisible.
+        # must be named as such rather than escaping as an unhandled 500.
         current_app.logger.error(
             "Hall pass approval violated FEAT context rules: %s", exc, exc_info=True
         )

@@ -38,10 +38,7 @@ from app.feats.prod import record_attendance_session
 from app.models import AttendanceReasonCode, AttendanceSession, HallPassLog, HallPassSettings
 from app.services.context_resolver import CanonicalContext
 from app.services.entitlement_service import grant_hall_passes
-from app.services.hall_pass_request_queue import (
-    PendingHallPassRequest,
-    enqueue_hall_pass_request,
-)
+from tests.helpers.hall_pass_requests import seed_pending_hall_pass_request
 from tests.helpers.canonical_classroom import login_student, login_teacher
 from tests.helpers.class_domain import enable_class_feature
 from tests.helpers.classroom_initializer import initialize_as_teacher
@@ -88,13 +85,13 @@ def _put_student_out_on_a_pass(app, client, classroom, student):
     _seed_hall_pass_policy(classroom.class_id)
     with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"grant:{student.seat.id}"):
         grant_hall_passes(student.seat, 1, correlation_id="corr-grant-1")
-    enqueue_hall_pass_request(PendingHallPassRequest(
+    seed_pending_hall_pass_request(
         request_id="req-1",
         class_id=classroom.class_id,
-        requested_by_seat_id=student.seat.id,
+        seat_id=student.seat.id,
         destination="Bathroom",
         requested_at_utc=datetime(2026, 9, 21, 4, 0, tzinfo=timezone.utc),
-    ))
+    )
 
     ctx = _student_ctx(classroom, student)
     # No outer FEATContext: record_attendance_session already carries
