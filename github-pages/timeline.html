@@ -750,7 +750,7 @@
                             <summary>
                                 <span class="tl-badge tl-badge--crisis">Live test</span>
                                 <h3 class="tl-title">Testing on a Live Server</h3>
-                                <span class="tl-date">September 19, 2026 – ongoing</span>
+                                <span class="tl-date">September 19 – 25, 2026</span>
                                 <span class="tl-tags"><span class="tl-tag tl-tag--fixes">Fixes</span><span class="tl-tag tl-tag--security">Security</span></span>
                                 <span class="material-symbols-outlined tl-chevron" aria-hidden="true">expand_more</span>
                             </summary>
@@ -804,12 +804,64 @@
                             <summary>
                                 <span class="tl-badge tl-badge--milestone">v2.0</span>
                                 <h3 class="tl-title">Launch</h3>
-                                <span class="tl-date">Final testing</span>
+                                <span class="tl-date">September 26, 2026</span>
                                 <span class="tl-tags"><span class="tl-tag tl-tag--features">Features</span></span>
                                 <span class="material-symbols-outlined tl-chevron" aria-hidden="true">expand_more</span>
                             </summary>
                             <div class="tl-body">
-                                <p>Version 2 is in its final round of live testing. See the <a href="https://status.classroomtokenhub.com" target="_blank" rel="noopener">status page<span class="visually-hidden"> (opens in a new tab)</span></a> for how the app is doing right now.</p>
+                                <p>Version 2 went live for real classrooms. Everything from the test period was cleared first, so every class started fresh. See the <a href="https://status.classroomtokenhub.com" target="_blank" rel="noopener">status page<span class="visually-hidden"> (opens in a new tab)</span></a> for how the app is doing right now.</p>
+                            </div>
+                        </details>
+                    </li>
+                    </ol>
+                </section>
+                <section class="tl-era" data-tags="fixes security" aria-labelledby="era-7">
+                    <h2 class="tl-era-title" id="era-7">
+                        <span class="material-symbols-outlined" aria-hidden="true">school</span>
+                        In real classrooms
+                    </h2>
+                    <p class="tl-era-lede">Students started using version 2 every day. The first week found problems no test had, and each one was fixed and written up.</p>
+                    <ol class="tl-track">
+                    <li class="tl-entry" data-tags="security">
+                        <details class="tl-card tl-card--patch">
+                            <summary>
+                                <span class="tl-badge tl-badge--patch">v2.0.1</span>
+                                <h3 class="tl-title">Security Release</h3>
+                                <span class="tl-date">September 28, 2026</span>
+                                <span class="tl-tags"><span class="tl-tag tl-tag--security">Security</span></span>
+                                <span class="material-symbols-outlined tl-chevron" aria-hidden="true">expand_more</span>
+                            </summary>
+                            <div class="tl-body">
+                                <p>A passkey could sign in to an account other than the one it was registered to. The fix makes each passkey sign in only its own account. Everyone was signed out once, and passkeys had to be registered again. Read the <a href="https://github.com/timwonderer/classroom-token-hub/security/advisories/GHSA-5v6c-mw3v-fmf2" target="_blank" rel="noopener">published security advisory<span class="visually-hidden"> (opens in a new tab)</span></a>.</p>
+                            </div>
+                        </details>
+                    </li>
+                    <li class="tl-entry" data-tags="fixes">
+                        <details class="tl-card tl-card--crisis">
+                            <summary>
+                                <span class="tl-badge tl-badge--crisis">Payroll</span>
+                                <h3 class="tl-title">The First Payday Missed Some Work</h3>
+                                <span class="tl-date">September 28 – 29, 2026</span>
+                                <span class="tl-tags"><span class="tl-tag tl-tag--fixes">Fixes</span></span>
+                                <span class="material-symbols-outlined tl-chevron" aria-hidden="true">expand_more</span>
+                            </summary>
+                            <div class="tl-body">
+                                <p>Work sessions that were still open when payroll ran were not paid. Payroll now pays finished sessions only, each exactly once. A one-time correction, reviewed and approved by the teacher, paid 79 students what they were owed.</p>
+<div class="lesson-box"><strong>Key Learning:</strong> Money mistakes are fixed in the open. The correction went through the same review a teacher would expect, not a quiet change behind the scenes.</div>
+                            </div>
+                        </details>
+                    </li>
+                    <li class="tl-entry" data-tags="fixes">
+                        <details class="tl-card tl-card--crisis">
+                            <summary>
+                                <span class="tl-badge tl-badge--crisis">Outage</span>
+                                <h3 class="tl-title">Eight Minutes Offline</h3>
+                                <span class="tl-date">September 30, 2026</span>
+                                <span class="tl-tags"><span class="tl-tag tl-tag--fixes">Fixes</span></span>
+                                <span class="material-symbols-outlined tl-chevron" aria-hidden="true">expand_more</span>
+                            </summary>
+                            <div class="tl-body">
+                                <p>For eight minutes during class, the site stopped loading. One kind of sign-up request got stuck waiting on itself, and while it waited no one else could get through. No balances or accounts were affected. A stuck request is now cancelled after a few seconds, and the cause was removed.</p>
                             </div>
                         </details>
                     </li>

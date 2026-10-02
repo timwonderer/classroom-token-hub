@@ -156,7 +156,7 @@ Everything merged to `main` since v2.0.1. It includes the untagged production re
 
 ## [2.0.1] - 2026-09-28 — Security release
 
-Released as `ad64a473f`. The passkey fix below is the reason for this release. A security advisory is drafted and pending publication; this entry will link it once it is published.
+Released as `ad64a473f`. The passkey fix below is the reason for this release. Security advisory: [GHSA-5v6c-mw3v-fmf2](https://github.com/timwonderer/classroom-token-hub/security/advisories/GHSA-5v6c-mw3v-fmf2) (critical, published 2026-09-28).
 
 ### Security
 - **A passkey signs in only the account it was registered to; `users.id` is a random UUID (2026-09-28)** — Passkey sign-in trusted the `user_<id>` that passwordless.dev returned and checked only the account's role. It never checked that the credential belonged to that account here. `users.id` was a sequential integer that restarted at 1 in the 2026-09-26 launch wipe, and passwordless.dev still held pre-launch passkeys, so a passkey registered as `user_3` before the wipe would sign in whoever is user 3 today. Only the maintainer had pre-launch passkeys, so no one else could have been signed in this way. The same leftovers broke new registrations: a leftover alias made passwordless.dev refuse every registration for that username with `409 alias_conflict`, which the app reported as a 500. The fixes:

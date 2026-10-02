@@ -78,8 +78,8 @@ on a custom database URL.
 
 The post-launch tracker is the working list. In priority order:
 
-1. **Operator follow-ups.** Lift the Cloudflare Access window with a status update, publish the v2.0.1
-   security advisory and link it from the CHANGELOG, then check public routes. Tag v2.1.0, which contains
+1. **Operator follow-ups.** Lift the Cloudflare Access window with a status update, then check public
+   routes. (The v2.0.1 advisory is published as GHSA-5v6c-mw3v-fmf2 and linked from the CHANGELOG.) Tag v2.1.0, which contains
    the 2026-09-29 releases, record those releases, and confirm the student-setup Redis host settings the app cannot check.
 2. **First real use.** Signed-in flows other than teacher passkeys, rent payment (its preview
    window opens 2026-09-29), daylight-saving transitions and load have not yet run in production.
