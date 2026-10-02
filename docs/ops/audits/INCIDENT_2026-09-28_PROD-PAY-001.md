@@ -8,16 +8,17 @@ payroll run (see §5).
 unpaid. That came to 79 students and $1,947.40 across four classes, plus about $999 that the fixed
 payroll pays at the next run. No student was overpaid, and no data outside payroll was affected.
 
-All times are UTC. Every production figure below comes from read-only queries.
+All times are UTC. Every production figure below comes from read-only queries. Classes are named by
+subject and the first eight characters of their `class_id`; their join codes are not published here.
 
 ## 1. Timeline
 
 | Time | Event |
 |---|---|
 | 2026-09-28 16:14 | AP CSP (`1da9085a`): Run Payroll submitted three times within 3 s while 18 students were clocked in |
-| 17:29, 20:56 | Chemistry `TMUC5U` (`41e5092b`): runs 1 and 2 |
-| 19:22, 19:33 | Chemistry `ZDMKFB` (`bfe8cfc4`): runs 1 and 2; the second paid 1 of 24 students |
-| 22:15, 22:37, 22:44 | Chemistry `S65LQG` (`c393fd39`): runs 1–3; students paid per run went 22 → 3 → 0 |
+| 17:29, 20:56 | Chemistry A (`41e5092b`): runs 1 and 2 |
+| 19:22, 19:33 | Chemistry B (`bfe8cfc4`): runs 1 and 2; the second paid 1 of 24 students |
+| 22:15, 22:37, 22:44 | Chemistry C (`c393fd39`): runs 1–3; students paid per run went 22 → 3 → 0 |
 | after class | The teacher reported that a second run "didn't produce the amount expected" |
 | 2026-09-29 03:11 | Fix released: `bc5c07a2e` (#1439), [run 36516000067](https://github.com/timwonderer/classroom-token-hub/actions/runs/36516000067), health passed |
 | 04:08 | Correction tool released: `eaca2a7ef` (#1440), [run 36520218616](https://github.com/timwonderer/classroom-token-hub/actions/runs/36520218616), health passed |
@@ -66,14 +67,22 @@ per-student SQL calculation.
 
 | Class | Page | SQL (fractional seconds) | Result |
 |---|---|---|---|
-| AP CSP `V4JTT6` (`1da9085a`) | 18 × $0.05 = $0.90 | 18 students; the 2.3 s between the first two submissions | Match |
-| Chemistry `TMUC5U` (`41e5092b`) | 16 × $64.00 = $1,024.00 | 16 students at $64.01–$64.05, plus 8 at $0.01–$0.02 | Match |
-| Chemistry `ZDMKFB` (`bfe8cfc4`) | 23 × $9.88 = $227.24 | 23 students at $9.89–$9.92, plus 2 below $0.01 | Match |
-| Chemistry `S65LQG` (`c393fd39`) | 22 students, $695.26 | 22 students, each 1–7¢ higher | Match |
+| AP CSP (`1da9085a`) | 18 × $0.05 = $0.90 | 18 students; the 2.3 s between the first two submissions | Match |
+| Chemistry A (`41e5092b`) | 16 × $64.00 = $1,024.00 | 16 students at $64.01–$64.05, plus 8 at $0.01–$0.02 | Match |
+| Chemistry B (`bfe8cfc4`) | 23 × $9.88 = $227.24 | 23 students at $9.89–$9.92, plus 2 below $0.01 | Match |
+| Chemistry C (`c393fd39`) | 22 students, $695.26 | 22 students, each 1–7¢ higher | Match |
 
 Every difference is the page rounding down: it counts whole seconds, as the payroll run does, and
-rounds each payroll window separately. The SQL's extra sub-cent "students" are fractional-second
-remainders that neither the run nor the tool pays.
+rounds each payroll window separately. The SQL used fractional seconds, so it also listed students
+whose only unpaid time was a fraction of a second. The review page lists only students with an
+amount above zero, so those students do not appear on it and receive no correction.
+
+That is why Chemistry A has 16 students on the page and 24 entries in the SQL: the 16 match, and the
+other 8 are one- to two-cent amounts ($0.01–$0.02), not sub-cent ones. At that class's rate in §5
+($52.53 for 35.0 minutes, about $0.025 a second), one to two cents is under one second of work,
+which whole-second counting rounds down to zero. Chemistry B's 2 extra entries, each below $0.01,
+are the same case. This record does not keep the SQL's per-student seconds, so it cannot show each
+of the 8 remainders individually. The posted total agrees: 18 + 16 + 23 + 22 = 79 students.
 
 **Posted (verified in production after approval).** There are 79 `manual_credit` events, one per
 student, totalling $1,947.40. Every event is mechanism `SYSTEM`, with a single actor (the teacher's
@@ -89,7 +98,7 @@ counted only from that last run. This was measured read-only before approval.
 | Class | Students | Minutes | Amount |
 |---|---|---|---|
 | AP CSP (`1da9085a`) | 18 | 630.7 | ~$946.10 |
-| Chemistry `TMUC5U` (`41e5092b`) | 1 | 35.0 | ~$52.53 |
+| Chemistry A (`41e5092b`) | 1 | 35.0 | ~$52.53 |
 
 This means AP CSP's real loss was about 631 minutes. The "under 1 minute" figure given during the
 incident counted only the 2.3 s between submissions, because no later run had yet happened in that
@@ -97,8 +106,8 @@ class.
 
 ## 6. Follow-ups
 
-- [ ] At the next payroll run in any class, confirm new events carry `settlement_rule` and that AP CSP and `TMUC5U` receive the amounts in §5.
+- [ ] At the next payroll run in any class, confirm new events carry `settlement_rule` and that AP CSP and Chemistry A receive the amounts in §5.
 - [ ] Remove the correction tool after 2026-10-31: `app/services/payroll/corrections.py`, the `/admin/payroll/correction` route, its template, and the banner flags and include.
-- [ ] Advanced-mode time rounding is applied only by the unused `calculate_payroll_breakdown`, never by the real run (tracked separately).
+- [x] Advanced-mode time rounding was applied only by the unused `calculate_payroll_breakdown`, never by the real run. Rounding was removed as a payroll setting, and `app/payroll.py` with it, in #1450 (`46af1c873`); no remediation (see `docs/TRACKING/POST_LAUNCH_TRACKER_2026.md`).
 - [ ] "Time Today" can count a session left open from a previous day as running into today (tracked separately).
 - [ ] `test_history_reports_returned_and_ignores_an_unrelated_stray_active_row` uses the UTC date against a class-local endpoint and fails between 00:00 UTC and local midnight (tracked separately).
