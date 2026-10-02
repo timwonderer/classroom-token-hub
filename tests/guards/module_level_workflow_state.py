@@ -122,45 +122,93 @@ def _root_name(node: ast.AST) -> str | None:
     return node.id if isinstance(node, ast.Name) else None
 
 
-def _functions(tree: ast.AST):
-    for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
-            yield node
+_SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)
 
 
-def _function_mutations(func: ast.AST, containers: set[str]):
-    body = func.body if isinstance(func.body, list) else [func.body]
-    aliases: dict[str, str] = {}
+def _scope_nodes(scope: ast.AST):
+    """Nodes of one lexical scope, not descending into nested functions or classes.
+
+    ``ast.walk`` would include nested function bodies, whose bindings belong to
+    their own scope (CodeRabbit on #1462). A nested scope node itself is yielded,
+    so the caller can analyse it separately; its defaults and decorators belong
+    to the enclosing scope and are yielded too.
+    """
+    if isinstance(scope, ast.Lambda):
+        pending = [scope.body]
+    else:
+        pending = list(scope.body)
+    while pending:
+        node = pending.pop(0)
+        yield node
+        if isinstance(node, _SCOPES):
+            if not isinstance(node, ast.ClassDef):
+                pending.extend(d for d in node.args.defaults + node.args.kw_defaults if d is not None)
+            pending.extend(getattr(node, "decorator_list", []))
+            continue
+        pending.extend(ast.iter_child_nodes(node))
+
+
+def _scope_mutations(scope: ast.AST, containers: set[str], enclosing: dict[str, str | None]):
+    """Mutations of module containers in one function scope, then its nested ones.
+
+    ``enclosing`` maps each name visible from enclosing *function* scopes to what
+    it refers to there: the module container's name (an alias, or the container
+    itself), or ``None`` for a local that shadows it.
+    """
+    nodes = list(_scope_nodes(scope))
     declared_global: set[str] = set()
-    nodes = [n for stmt in body for n in ast.walk(stmt)]
-
+    declared_nonlocal: set[str] = set()
     for node in nodes:
         if isinstance(node, ast.Global):
             declared_global.update(node.names)
-        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Name) and node.value.id in containers:
-            for target in node.targets:
-                if isinstance(target, ast.Name):
-                    aliases[target.id] = node.value.id
+        elif isinstance(node, ast.Nonlocal):
+            declared_nonlocal.update(node.names)
 
-    # Names the function binds itself shadow the module's, unless declared global.
+    # Names this function binds itself: parameters and assignment targets.
     local: set[str] = set()
-    args = func.args
-    for arg in [*args.posonlyargs, *args.args, *args.kwonlyargs, args.vararg, args.kwarg]:
-        if arg is not None:
-            local.add(arg.arg)
+    if not isinstance(scope, ast.ClassDef):
+        args = scope.args
+        for arg in [*args.posonlyargs, *args.args, *args.kwonlyargs, args.vararg, args.kwarg]:
+            if arg is not None:
+                local.add(arg.arg)
     for node in nodes:
         if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
             local.add(node.id)
-    local -= declared_global
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            local.add(node.name)
+    local -= declared_global | declared_nonlocal
+
+    def source(name: str | None) -> str | None:
+        """The module container a *read* of ``name`` reaches, before aliases here."""
+        if name is None:
+            return None
+        if name in declared_global:
+            return name if name in containers else None
+        if name in local:
+            return None
+        if name in enclosing:
+            return enclosing[name]
+        return name if name in containers else None
+
+    # An alias is recorded only when its source resolves to the module container
+    # (CodeRabbit on #1462): a parameter or local of the same name is not it.
+    aliases: dict[str, str] = {}
+    for node in nodes:
+        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Name):
+            value = node.value.id
+            target_container = aliases.get(value) or source(value)
+            if target_container:
+                for target in node.targets:
+                    if isinstance(target, ast.Name) and target.id not in declared_global:
+                        aliases[target.id] = target_container
 
     def resolve(name: str | None) -> str | None:
         if name in aliases:
             return aliases[name]
-        if name in containers and name not in local:
-            return name
-        return None
+        return source(name)
 
-    for node in nodes:
+    # A class body runs once, at import; only its methods run per request.
+    for node in ([] if isinstance(scope, ast.ClassDef) else nodes):
         targets: list[ast.AST] = []
         if isinstance(node, ast.Assign):
             targets = list(node.targets)
@@ -175,13 +223,28 @@ def _function_mutations(func: ast.AST, containers: set[str]):
                     yield name, node
             elif isinstance(target, ast.Name) and target.id in containers and target.id in declared_global:
                 yield target.id, node
-            elif isinstance(target, ast.Name) and isinstance(node, ast.AugAssign) and target.id in declared_global:
-                if target.id in containers:
-                    yield target.id, node
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr in _MUTATORS:
             name = resolve(_root_name(node.func.value))
             if name:
                 yield name, node
+
+    # What this scope's names mean to the functions nested in it.
+    inner = dict(enclosing)  # a class body is not an enclosing scope for its methods
+    if not isinstance(scope, ast.ClassDef):
+        for name in local:
+            inner[name] = aliases.get(name)
+        for name in declared_global:
+            inner.pop(name, None)
+    for node in nodes:
+        if isinstance(node, _SCOPES):
+            yield from _scope_mutations(node, containers, inner)
+
+
+def _module_mutations(tree: ast.Module, containers: set[str]):
+    """Every function and class at module level (and nested), each in its own scope."""
+    for node in _scope_nodes(tree):
+        if isinstance(node, _SCOPES):
+            yield from _scope_mutations(node, containers, {})
 
 
 def find_violations(path: str, source: str) -> list[Violation]:
@@ -194,10 +257,9 @@ def find_violations(path: str, source: str) -> list[Violation]:
         return []
     lines = source.splitlines()
     found: dict[tuple[str, int], Violation] = {}
-    for func in _functions(tree):
-        for name, node in _function_mutations(func, set(containers)):
-            if (path, name) in ALLOWLIST:
-                continue
-            excerpt = lines[node.lineno - 1].strip() if 0 < node.lineno <= len(lines) else ""
-            found.setdefault((name, node.lineno), Violation(path, node.lineno, name, excerpt))
+    for name, node in _module_mutations(tree, set(containers)):
+        if (path, name) in ALLOWLIST:
+            continue
+        excerpt = lines[node.lineno - 1].strip() if 0 < node.lineno <= len(lines) else ""
+        found.setdefault((name, node.lineno), Violation(path, node.lineno, name, excerpt))
     return sorted(found.values(), key=lambda v: (v.line, v.name))

@@ -78,6 +78,14 @@ def test_the_original_defect_is_reported():
     # Rebinding module state from a request.
     "_ACTIVE = []\ndef replace(rows):\n    global _ACTIVE\n    _ACTIVE = list(rows)\n",
     "_COUNTS = {}\ndef bump(k):\n    _COUNTS[k] = _COUNTS.get(k, 0) + 1\n",
+    # A nested function's own binding is its own scope: it must not hide the
+    # enclosing function's write to module state (CodeRabbit, #1462).
+    "_PENDING = {}\n\ndef enqueue(key, value):\n    _PENDING[key] = value\n"
+    "    def scratch():\n        _PENDING = {}\n",
+    # The nested function writes through the enclosing function's alias.
+    "_PENDING = {}\ndef enqueue(r):\n    store = _PENDING\n    def put():\n        store[r.id] = r\n    put()\n",
+    # A nested function writes module state the enclosing function never binds.
+    "_PENDING = {}\ndef outer():\n    def inner(k):\n        _PENDING[k] = 1\n    return inner\n",
     # Declared inside a module-level try, as optional-import code does.
     "try:\n    import x\nexcept ImportError:\n    x = None\n_CACHE = {}\n"
     "def put(k, v):\n    _CACHE.update({k: v})\n",
@@ -98,6 +106,13 @@ def test_mutation_proof__each_process_local_write_is_reported(snippet):
     "ROWS = []\ndef build(ROWS):\n    ROWS.append(1)\n",
     # A copy is not the module's container.
     "BASE = {'a': 1}\ndef merged(extra):\n    out = dict(BASE)\n    out.update(extra)\n    return out\n",
+    # An alias of a parameter that shadows the module name is not module
+    # state (CodeRabbit, #1462).
+    "_ROWS = []\n\ndef build(_ROWS):\n    store = _ROWS\n    store.append(1)\n",
+    # Nor is an alias of a local that shadows it.
+    "_ROWS = []\ndef build():\n    _ROWS = []\n    store = _ROWS\n    store.append(1)\n    return store\n",
+    # A nested function's write to the enclosing function's own local.
+    "_ROWS = []\ndef build():\n    _ROWS = []\n    def add(x):\n        _ROWS.append(x)\n    add(1)\n    return _ROWS\n",
     # Prose.
     '"""Never keep state in a module-level dict such as _PENDING = {}."""\n',
 ])
