@@ -53,6 +53,8 @@ def test_focused_status_job_runs_collector_and_workflow_tests():
     command = next(step["run"] for step in steps if step.get("name") == "Run focused status tests")
     assert "tests/test_status_collector.py" in command
     assert "tests/test_status_deploy_workflow.py" in command
+    # The hall-pass component's tests read app/routes, so they run here too.
+    assert "tests/test_status_hall_pass.py" in command
 
 
 def test_collector_job_uses_shared_image_scoped_identity_and_secret_references():

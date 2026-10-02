@@ -4,12 +4,43 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from math import isfinite
 
-SCHEMA_VERSION = "request-telemetry-v1"
+SCHEMA_VERSION = "request-telemetry-v2"
+# Written before hall passes had a component (SPEC-OPS-006 v1.3). Still read, as
+# carrying no hall-pass evidence, so the sampler and the collector can be
+# upgraded in either order and retained activity survives the change.
+LEGACY_SCHEMA_VERSION = "request-telemetry-v1"
 WINDOW_SECONDS = 300
-COMPONENT_KEYS = ("service", "login", "attendance", "payroll", "roster", "classroom_economy")
-COUNT_FIELDS = ("request_count", "http_1xx_count", "http_2xx_count", "http_3xx_count", "http_4xx_count", "http_404_count", "http_500_count", "http_5xx_count")
+COMPONENT_KEYS = ("service", "login", "attendance", "hall_pass", "payroll", "roster", "classroom_economy")
+LEGACY_COMPONENT_KEYS = ("service", "login", "attendance", "payroll", "roster", "classroom_economy")
+LEGACY_COUNT_FIELDS = ("request_count", "http_1xx_count", "http_2xx_count", "http_3xx_count", "http_4xx_count", "http_404_count", "http_500_count", "http_5xx_count")
+# 404s that a component's contract counts as failed requests, not missing pages.
+COUNT_FIELDS = LEGACY_COUNT_FIELDS + ("http_404_failure_count",)
 LATENCY_FIELDS = ("p80_ms", "p95_ms")
 DIAGNOSTICS = frozenset({"TRANSPORT_UNAVAILABLE", "ACCESS_DENIED", "INVALID_SNAPSHOT", "STALE_SNAPSHOT"})
+# SPEC-OPS-006 §VI: the only routes whose 404 is a failed request. The hall-pass
+# page only ever approves, rejects or cancels a request id it was given, so "not
+# found" there means a request the app had just shown could not be found
+# (2026-10-01). Every other component, and every other hall-pass route, has none.
+NOT_FOUND_FAILURE_ROUTES = {"hall_pass": "/api/hall-pass/request/[^/]+/(approve|reject|cancel)"}
+# Owner ruling 2026-10-02 (SPEC-OPS-006 §VI): failed-request 404s signal only when
+# a window holds at least this many AND they exceed this share of the component's
+# requests, so one stray 404 (a double click, a stale tab) never does.
+NOT_FOUND_FAILURE_MIN_COUNT = 3
+NOT_FOUND_FAILURE_RATE_PERCENT = 2
+_SCHEMAS = {SCHEMA_VERSION: (COMPONENT_KEYS, COUNT_FIELDS),
+            LEGACY_SCHEMA_VERSION: (LEGACY_COMPONENT_KEYS, LEGACY_COUNT_FIELDS)}
+
+
+def not_found_failures(component: dict) -> int:
+    """Failed-request 404s; a legacy component predates the field and had none."""
+    return component.get("http_404_failure_count") or 0
+
+
+def not_found_failures_signal(component: dict) -> bool:
+    """The rate-plus-minimum rule: card, headline, history and operator drafts share it."""
+    failures, count = not_found_failures(component), component.get("request_count") or 0
+    return (bool(count) and failures >= NOT_FOUND_FAILURE_MIN_COUNT
+            and 100 * failures / count > NOT_FOUND_FAILURE_RATE_PERCENT)
 
 
 def parse_time(value: str) -> datetime:
@@ -24,38 +55,40 @@ def parse_time(value: str) -> datetime:
     return parsed.astimezone(timezone.utc)
 
 
-def unavailable_component(key: str) -> dict:
-    if key not in COMPONENT_KEYS:
+def unavailable_component(key: str, schema_version: str = SCHEMA_VERSION) -> dict:
+    keys, counts = _SCHEMAS[schema_version]
+    if key not in keys:
         raise ValueError("Unknown component")
-    return {"key": key, "collection_state": "UNAVAILABLE", **{field: None for field in COUNT_FIELDS + LATENCY_FIELDS}}
+    return {"key": key, "collection_state": "UNAVAILABLE", **{field: None for field in counts + LATENCY_FIELDS}}
 
 
 def validate_snapshot(payload: object) -> dict:
     if not isinstance(payload, dict) or set(payload) != {"schema_version", "sampled_at", "window_seconds", "source_latest_at", "components"}:
         raise ValueError("Unexpected snapshot fields")
-    if payload["schema_version"] != SCHEMA_VERSION or type(payload["window_seconds"]) is not int or payload["window_seconds"] != WINDOW_SECONDS:
+    if payload["schema_version"] not in _SCHEMAS or type(payload["window_seconds"]) is not int or payload["window_seconds"] != WINDOW_SECONDS:
         raise ValueError("Unsupported snapshot schema or window")
+    component_keys, count_fields = _SCHEMAS[payload["schema_version"]]
     sampled = parse_time(payload["sampled_at"])
     if payload["source_latest_at"] is not None and parse_time(payload["source_latest_at"]) > sampled:
         raise ValueError("Source event cannot be later than evaluation time")
     components = payload["components"]
-    if not isinstance(components, list) or len(components) != len(COMPONENT_KEYS):
+    if not isinstance(components, list) or len(components) != len(component_keys):
         raise ValueError("Incomplete components")
     seen = set()
     for component in components:
-        if not isinstance(component, dict) or set(component) != {"key", "collection_state", *COUNT_FIELDS, *LATENCY_FIELDS}:
+        if not isinstance(component, dict) or set(component) != {"key", "collection_state", *count_fields, *LATENCY_FIELDS}:
             raise ValueError("Unexpected component fields")
         key = component["key"]
-        if not isinstance(key, str) or key not in COMPONENT_KEYS or key in seen:
+        if not isinstance(key, str) or key not in component_keys or key in seen:
             raise ValueError("Unknown or duplicate component")
         seen.add(key)
         if component["collection_state"] == "UNAVAILABLE":
-            if any(component[field] is not None for field in COUNT_FIELDS + LATENCY_FIELDS):
+            if any(component[field] is not None for field in count_fields + LATENCY_FIELDS):
                 raise ValueError("Unavailable collection cannot contain measurements")
             continue
         if component["collection_state"] != "OK":
             raise ValueError("Unknown collection state")
-        for field in COUNT_FIELDS:
+        for field in count_fields:
             if type(component[field]) is not int or not 0 <= component[field] <= 1_000_000_000:
                 raise ValueError("Invalid count")
         count = component["request_count"]
@@ -63,6 +96,9 @@ def validate_snapshot(payload: object) -> dict:
             raise ValueError("Response classes must partition requests")
         if component["http_404_count"] > component["http_4xx_count"] or component["http_500_count"] > component["http_5xx_count"]:
             raise ValueError("Invalid response subsets")
+        if not_found_failures(component) > component["http_404_count"] or (
+                key not in NOT_FOUND_FAILURE_ROUTES and not_found_failures(component)):
+            raise ValueError("Failed-request 404s are a subset of a designated component's 404s")
         for field in LATENCY_FIELDS:
             value = component[field]
             if count == 0:
@@ -87,7 +123,8 @@ def validate_fresh_snapshot(payload: object, received_at: datetime) -> dict:
 
 def classify_component(component: dict, snapshot: dict, *, now: datetime) -> dict:
     """Describe requests only; never infer domain correctness or human impact."""
-    result = {"state": "MONITOR_UNAVAILABLE", "reasons": [], "http_404_percent": None, "http_500_percent": None, "http_5xx_percent": None}
+    result = {"state": "MONITOR_UNAVAILABLE", "reasons": [], "http_404_percent": None, "http_500_percent": None,
+              "http_5xx_percent": None, "http_404_failure_percent": None}
     age = (now - parse_time(snapshot["sampled_at"])).total_seconds()
     latest = snapshot["source_latest_at"]
     if age < 0 or (latest is not None and parse_time(latest) > now):
@@ -105,9 +142,14 @@ def classify_component(component: dict, snapshot: dict, *, now: datetime) -> dic
         return result
     for code in ("404", "500", "5xx"):
         result[f"http_{code}_percent"] = 100 * component[f"http_{code}_count"] / count
+    if component["key"] in NOT_FOUND_FAILURE_ROUTES:
+        result["http_404_failure_percent"] = 100 * not_found_failures(component) / count
     reasons = []
     if result["http_5xx_percent"] > 2:
         reasons.append("Elevated server-error responses (5xx above 2%).")
+    if not_found_failures_signal(component):
+        reasons.append("Hall-pass requests not found when approved, rejected or cancelled "
+                       f"(at least {NOT_FOUND_FAILURE_MIN_COUNT}, above {NOT_FOUND_FAILURE_RATE_PERCENT}%).")
     if result["http_404_percent"] > 5:
         reasons.append("Elevated not-found responses (404 above 5%).")
     state = "ELEVATED_ERRORS" if reasons else "NORMAL"
@@ -131,11 +173,15 @@ def retained_activity(activity: object, *, now: datetime) -> dict:
         try:
             if not isinstance(value, dict) or set(value) != {"sampled_at", "source_latest_at", "component"}:
                 continue
-            historical = validate_snapshot({"schema_version": SCHEMA_VERSION,
+            # Retained before or after the hall-pass amendment: validate it as written.
+            version = SCHEMA_VERSION if "http_404_failure_count" in value["component"] else LEGACY_SCHEMA_VERSION
+            if key not in _SCHEMAS[version][0]:
+                continue
+            historical = validate_snapshot({"schema_version": version,
                 "window_seconds": WINDOW_SECONDS, "sampled_at": value["sampled_at"],
                 "source_latest_at": value["source_latest_at"], "components": [
-                    value["component"] if name == key else unavailable_component(name)
-                    for name in COMPONENT_KEYS]})
+                    value["component"] if name == key else unavailable_component(name, version)
+                    for name in _SCHEMAS[version][0]]})
             sampled = parse_time(historical["sampled_at"])
             component = value["component"]
             if (0 <= (now - sampled).total_seconds() <= 7 * 86400 and component["request_count"]

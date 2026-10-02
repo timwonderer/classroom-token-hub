@@ -119,3 +119,33 @@ bound it to seven days. Idle historical observations do not become current succe
 Old daily counters retain their original policy; the page discloses that older
 windows required 20 requests. Verify quiet, error, recovery and stopped-monitoring
 views before calling the deployment complete.
+
+## Hall passes line (SPEC-OPS-006 v1.4)
+
+The snapshot becomes `request-telemetry-v2`: a seventh component, `hall_pass`, and
+a count of 404s on the hall-pass approve, reject and cancel routes
+(`http_404_failure_count`). The status service reads both versions, so a v1
+snapshot shows *Hall passes* as *Status unknown* and every other area as before.
+The sampler that writes v2 must therefore go in **after** the status service that
+reads it; the other order makes every area *Status unknown* until the service is
+deployed. No nginx, systemd unit or Firestore change is needed.
+
+1. Merge. `deploy-status.yml` runs on the push to `main` and deploys the public
+   service, the operator service and the collector job. Wait for it to succeed.
+2. On the host, back up `/opt/cth-status-sampler`, then install this commit's
+   `status/measurements.py`, `status_service/log_sampler.py` and
+   `status_service/route_groups.json` over the old copies (root-owned, 0644).
+   The timer starts a new process each minute, so nothing needs a restart or a
+   `daemon-reload`.
+3. Run `sudo systemctl start cth-status-sampler.service` once and check
+   `journalctl -u cth-status-sampler -n 5` says *Stored bounded request telemetry
+   snapshot*. Then check `/var/lib/cth-status/telemetry.json` has
+   `"schema_version":"request-telemetry-v2"`, seven components including
+   `hall_pass`, and `collection_state` `OK` for `hall_pass` (`UNAVAILABLE` there
+   means the extra query failed; check the Loki logs).
+4. After the next collector run, the public page shows a *Hall passes* line; during
+   a class with hall-pass traffic it reads *Working*. The collector job logs
+   *Stored request telemetry and platform checks*, not the *unavailable* form.
+
+Rollback: restore the three backed-up files. The status service keeps reading v1.
+Hall-pass daily history starts with the first v2 window.

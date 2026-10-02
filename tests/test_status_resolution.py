@@ -422,3 +422,25 @@ def test_detection_offers_an_aware_draft_but_publishes_nothing(setup):
     assert re.search(r'name="capability" value="payroll" required\s+checked', draft)
     assert f'value="telemetry:{snapshot["sampled_at"]}"' in draft
     assert data == before
+
+
+def test_hall_pass_not_found_detection_offers_a_draft(setup):
+    """SPEC-OPS-006 v1.4: failed-request 404s at the rule are offered like a 5xx, worded as not found."""
+    data, store, client, _ = setup
+    from status.measurements import COMPONENT_KEYS, COUNT_FIELDS, SCHEMA_VERSION
+    now = datetime.now(timezone.utc)
+    hall_pass = {"http_2xx_count": 7, "http_4xx_count": 3, "http_404_count": 3, "http_404_failure_count": 3}
+    snapshot = {"schema_version": SCHEMA_VERSION, "sampled_at": now.isoformat(), "source_latest_at": now.isoformat(),
+                "window_seconds": 300, "components": [
+                    {"key": key, "collection_state": "OK", **dict.fromkeys(COUNT_FIELDS, 0), "request_count": 10,
+                     "http_2xx_count": 10, "p80_ms": 100, "p95_ms": 200, **(hall_pass if key == "hall_pass" else {})}
+                    for key in COMPONENT_KEYS]}
+    store.current_snapshot = lambda: {"snapshot": snapshot}
+    before = deepcopy(data)
+    page = client.get("/operator/notices").get_data(as_text=True)
+    assert "Detected automatically · 1" in page and "issue=auto-hall_pass" in page
+    assert "Requests not found on Hall passes" in page and "Not found 30.0%" in page
+    assert "Server errors on Hall passes" not in page
+    draft = client.get("/operator/notices?issue=auto-hall_pass").get_data(as_text=True)
+    assert re.search(r'name="capability" value="hall_pass" required\s+checked', draft)
+    assert data == before

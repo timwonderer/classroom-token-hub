@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from status.measurements import COMPONENT_KEYS, COUNT_FIELDS, classify_component, unavailable_component, validate_fresh_snapshot, validate_snapshot
+from status.measurements import COMPONENT_KEYS, COUNT_FIELDS, SCHEMA_VERSION, classify_component, unavailable_component, validate_fresh_snapshot, validate_snapshot
 
 NOW = datetime(2026, 9, 22, 12, tzinfo=timezone.utc)
 
@@ -16,7 +16,7 @@ def snapshot(count=100):
                "p80_ms": 100 if count else None, "p95_ms": 200 if count else None}
         row.update(request_count=count, http_2xx_count=count)
         components.append(row)
-    return {"schema_version": "request-telemetry-v1", "sampled_at": NOW.isoformat(), "window_seconds": 300,
+    return {"schema_version": SCHEMA_VERSION, "sampled_at": NOW.isoformat(), "window_seconds": 300,
             "source_latest_at": (NOW - timedelta(seconds=10)).isoformat(), "components": components}
 
 

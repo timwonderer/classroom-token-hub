@@ -67,7 +67,8 @@ def test_public_page_separates_measurements_and_notices(page):
     assert "HTTP 500" in html and "p80" in html and "p95" in html
     assert "The app is responding and its database connection check passed." in html
     assert "Everything is working" not in html and "Platform health" not in html
-    assert html.count('class="disclosure history-disclosure"') == 6
+    # One per component, hall passes included (SPEC-OPS-006 v1.4).
+    assert html.count('class="disclosure history-disclosure"') == 7
     assert "No eligible measurements" in html
 
 
@@ -122,7 +123,7 @@ def test_layout_order_and_simple_cards(page):
     html = client.get("/").get_data(as_text=True)
     assert html.index('class="landing-hero"') < html.index('id="happening-heading"') < html.index('id="working-heading"') < html.index('id="platform-heading"')
     cards = areas(html)
-    assert cards.count('>Working</span>') == 4
+    assert cards.count('>Working</span>') == 5
     assert 'HTTP 500' not in cards and 'p95' not in cards and 'history-disclosure' not in cards
     assert 'Database access' in html and 'Application endpoint' in html
     assert 'local_atm' in html and 'finance_mode' in html
@@ -164,7 +165,7 @@ def test_global_unmapped_request_failure_controls_hero(page):
     row.update(http_2xx_count=0, http_5xx_count=20, http_500_count=20)
     html = client.get('/').get_data(as_text=True)
     assert 'Detected problems' in hero(html)
-    assert areas(html).count('>Working</span>') == 5
+    assert areas(html).count('>Working</span>') == 6
 
 
 def test_human_notice_prevents_reassuring_hero(page):
@@ -228,7 +229,7 @@ def test_closed_gate_reads_maintenance_over_every_other_state(page):
     # An access restriction is never presented as an application failure.
     assert 'Mostly unavailable' not in hero(html)
     # Requests from behind the gate cannot make an area look usable.
-    assert areas(html).count('>Closed for maintenance</span>') == 5
+    assert areas(html).count('>Closed for maintenance</span>') == 6
     assert '>Working</span>' not in areas(html)
 
 
@@ -248,7 +249,7 @@ def test_404_only_does_not_declare_outage_or_successful_activity(page):
         row.update(request_count=1, http_2xx_count=0, http_4xx_count=1, http_404_count=1)
     html = client.get('/').get_data(as_text=True)
     assert 'No known issues' in hero(html)
-    assert areas(html).count('>Nothing to report</span>') == 5
+    assert areas(html).count('>Nothing to report</span>') == 6
     assert 'Elevated not-found responses' in html
 
 

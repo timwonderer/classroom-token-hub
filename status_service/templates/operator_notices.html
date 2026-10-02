@@ -34,8 +34,13 @@
       <h2>Detected automatically · {{ detections|length }}</h2>
       {% for d in detections %}
       <a class="op-issue op-issue--detect" href="{{ url_for('operator_notices_get', issue='auto-' ~ d.key) }}"{% if draft and draft.key == d.key %} aria-current="page"{% endif %}>
+        {% if d.kind == 'not_found' %}
+        <span class="t">Requests not found on {{ d.name }}</span>
+        <span class="m">{{ chip('bad', 'error', ('Not found %.1f%%'|format(d.percent)) if d.percent is not none else 'Requests not found') }}
+        {% else %}
         <span class="t">Server errors on {{ d.name }}</span>
-        <span class="m">{{ chip('bad', 'error', ('5xx %.1f%%'|format(d.percent)) if d.percent is not none else 'Server errors') }}{% if d.sampled_at %}<span>window ending {{ when(d.sampled_at, 'time') }}</span>{% endif %}</span>
+        <span class="m">{{ chip('bad', 'error', ('5xx %.1f%%'|format(d.percent)) if d.percent is not none else 'Server errors') }}
+        {% endif %}{% if d.sampled_at %}<span>window ending {{ when(d.sampled_at, 'time') }}</span>{% endif %}</span>
         <span class="m m--text">The public page already shows this as "Checking". Draft an Aware notice →</span>
       </a>
       {% endfor %}
