@@ -37,8 +37,10 @@ authority stays with `INV-*`, `DOM-*`, `FEAT-*`, `SPEC-*` and `SOP-*`.
 - [ ] **Lift the Cloudflare Access window** and post the resolved status update. The update should
   say that everyone was signed out once and that passkeys must be registered again. Passkey
   registration and sign-in are verified, so nothing blocks this.
-- [ ] **Publish the security advisory** (drafted on GitHub; CVSS v4.0 9.2; CWE-304 with CWE-386 and
-  CWE-459), then link it from the `[2.0.1]` section of `CHANGELOG.md`.
+- [x] **Publish the security advisory.** Published 2026-09-28 as
+  [GHSA-5v6c-mw3v-fmf2](https://github.com/timwonderer/classroom-token-hub/security/advisories/GHSA-5v6c-mw3v-fmf2)
+  (critical; CVSS v4.0 9.2; CWE-304 with CWE-386 and CWE-459). Linked from the `[2.0.1]` section of
+  `CHANGELOG.md` in `05951375d` (#1464).
 - [ ] **Check public routes** once the window lifts. They were not verified at release because the
   gate was in place.
 - [ ] **Finish verifying the student-setup memory store.** Production has run the username-retention check
