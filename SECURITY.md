@@ -94,7 +94,7 @@ After remediation, coordinated public disclosure is welcome.
 
 | Version | Status | Security fixes |
 | ------- | ------ | -------------- |
-| v2.x | Current. v2.1.0 (2026-10-02) is pending tag and deploy; the latest tagged release is v2.0.1 (2026-09-28). Production runs untagged `main` commit `314158d53` (2026-09-30). v2.0.0 was released 2026-09-26 | Yes |
+| v2.x | Current. v2.1.0 (`5ac05ea6f`) is the latest tagged release and runs in production, deployed 2026-10-02 ([release record](docs/ops/audits/DEPLOY_2026-10-02_5ac05ea6f.md)). v2.0.1 (security) was released 2026-09-28 and v2.0.0 on 2026-09-26 | Yes |
 | v1.x | Retired. v1.10.0 was the final v1 release | No |
 
 Security fixes are made on the `main` branch and reach production through a

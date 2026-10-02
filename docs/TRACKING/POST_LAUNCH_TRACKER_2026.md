@@ -5,7 +5,7 @@
 | Status | **ACTIVE — canonical tracker** |
 | Opened | 2026-09-28, after the v2.0.1 release |
 | Baseline commit | `c42f882` (`main`) |
-| Production | `314158d53`, released 2026-09-30 (untagged). Latest tag `v2.0.1` = `ad64a473f`, 2026-09-28. v2.1.0 (2026-10-02) is pending tag and deploy |
+| Production | v2.1.0 = `5ac05ea6f`, deployed 2026-10-02 ([record](../ops/audits/DEPLOY_2026-10-02_5ac05ea6f.md)). Latest tag `v2.1.0` |
 | Supersedes | `PRODUCTION_READINESS_2026-09.md`, the pre-launch ship tracker, archived at `docs/archive/v2-tracking-2026/` once launch closed its purpose |
 
 This file carries the open work that survived launch. Every item was checked against the code on
@@ -27,8 +27,8 @@ authority stays with `INV-*`, `DOM-*`, `FEAT-*`, `SPEC-*` and `SOP-*`.
 | (untagged) | `eaca2a7e` (#1440) | 2026-09-29 | None yet |
 | (untagged) | `29b99b14` (#1442) | 2026-09-29 | None yet |
 | (untagged) | `00166e56` (#1443) | 2026-09-29 | None yet |
-| (untagged) | `314158d53` (#1438, #1449, #1451) | 2026-09-30 | [DEPLOY_2026-09-30_314158d53.md](../ops/audits/DEPLOY_2026-09-30_314158d53.md); production runs this commit |
-| v2.1.0 (pending tag) | Merge commit of the release PR, set at tag time | Not yet deployed | Written after deploy |
+| (untagged) | `314158d53` (#1438, #1449, #1451) | 2026-09-30 | [DEPLOY_2026-09-30_314158d53.md](../ops/audits/DEPLOY_2026-09-30_314158d53.md) |
+| v2.1.0 | `5ac05ea6f` (#1464) | 2026-10-02 | [DEPLOY_2026-10-02_5ac05ea6f.md](../ops/audits/DEPLOY_2026-10-02_5ac05ea6f.md); production runs this commit |
 
 ---
 
@@ -52,7 +52,7 @@ authority stays with `INV-*`, `DOM-*`, `FEAT-*`, `SPEC-*` and `SOP-*`.
   result. SOP-DEP-002 §VI item 6 keeps the store a release precondition.
 - [ ] **Record and tag the 2026-09-29 releases.** `bc5c07a2` (#1439), `eaca2a7e` (#1440), `29b99b14` (#1442) and
   `00166e56` (#1443) went to production through `release-v2.yml` with no `DEPLOY_*` record in `docs/ops/audits/`
-  and no tag. `CHANGELOG.md` now lists them under `[2.1.0]`, which tags them once v2.1.0 is cut; the records are still missing.
+  and no tag. `CHANGELOG.md` lists them under `[2.1.0]`, and tag `v2.1.0` (2026-10-02) contains them; the records are still missing.
 - [ ] **FEAT-IDEN-003 `ACT-IDEN-003` audit event** is not implemented. It needs an identity
   audit-event design first; see #1427.
 - [x] **`production-docs-smoke` and `markdown-web-links`** are fixed on branch
@@ -156,7 +156,8 @@ against this tracker, the archived launch trackers and the live-test RESUME reco
   - **Documentation gap.** There is no FEAT-LED-003 contract document.
   - **Minor.** The sweep selects POSTED rows that have a NULL `posted_at` but never repairs them.
   - **Status (2026-09-30).** Open, and it stays tracked. There is no PR yet; the fix waits on a FEAT-LED-003 contract.
-- [ ] **Savings interest is configured weekly but paid once per calendar month.**
+- [x] **Savings interest is configured weekly but paid once per calendar month.** Released: #1449 in `314158d53`
+  (2026-09-30); the 365-day-year and label follow-ups in #1454, released in v2.1.0 (2026-10-02).
   - **Configuration.** Every class with interest configured (6 `economic_engine` rows) is weekly payout with daily
     compounding.
   - **Code.** The payout idempotency key is monthly: `savings-interest:<class>:<seat>:<YYYY-MM>`
@@ -198,7 +199,7 @@ against this tracker, the archived launch trackers and the live-test RESUME reco
 - [ ] **Every authenticated request writes a TLCP trace row.** `persist_request_trace` in `after_request`
   (`app/__init__.py`) inserts one row and prunes on every request, including the 10-second
   `/api/student-status` poll: about 16,000 rows in 3.5 days. Decide whether high-frequency polls should be traced.
-- [ ] **`/api/student-status` is rate-limited per endpoint per IP** (default 200/hour and 500/day, `app/extensions.py`).
+- [x] **`/api/student-status` is rate-limited per endpoint per IP** (fixed by #1447, released in v2.1.0, 2026-10-02) (default 200/hour and 500/day, `app/extensions.py`).
   - The dashboard polls every 10 s (`static/js/attendance.js:118`), so a single student's tab exhausts the hourly
     limit in about 33 minutes. Shared school IPs make it sooner.
   - Production recorded 699 `429`s; support ticket #1 matches.
@@ -215,7 +216,8 @@ against this tracker, the archived launch trackers and the live-test RESUME reco
     docs-smoke crawler.
   - **Next step.** Decide endpoint by endpoint. Do not replace IP limiting wholesale, because unauthenticated
     credential endpoints need network limits.
-- [ ] **Student tickets are visible to sysadmin before teacher escalation.** This is a regression from `384176834`,
+- [x] **Student tickets are visible to sysadmin before teacher escalation.** Fixed by #1448, released in v2.1.0
+  (2026-10-02). This is a regression from `384176834`,
   and it is contrary to DOM-SUP-001 §VIII and FEAT-SUP-001.
   - Before escalation, sysadmin can see the IP, user agent, page URL, category and actor public id.
   - `update_issue` lets sysadmin close an un-escalated student ticket.
@@ -224,7 +226,8 @@ against this tracker, the archived launch trackers and the live-test RESUME reco
     sysadmin list, count, detail page and action, and SPEC-OPS-004 is corrected to v1.3.
   - **Before merging:** check whether `tests/simulated/test_group_d_pages.py`, which uses a fixed `ISSUE_ID = 1`,
     still passes.
-- [ ] **Advanced-mode payroll rounding is not applied by payroll runs.** The rounding added on 2026-09-08
+- [x] **Advanced-mode payroll rounding is not applied by payroll runs.** Rounding removed by #1450, released in
+  v2.1.0 (2026-10-02). The rounding added on 2026-09-08
   (`2d2ace33f`) lives in `app/payroll.py` `calculate_payroll_breakdown`, which has had no production caller since
   `db7079c7d` (2026-07-21). FEAT-PROD-003 (`app/feats/prod.py`) prices exact seconds × rate.
   - No test has ever referenced `_round_billable_seconds`.
@@ -238,7 +241,8 @@ against this tracker, the archived launch trackers and the live-test RESUME reco
       amount is not an amount students were owed. The gap computed during the walkthrough was ~$138.50 across 164
       payroll payments, ~$65.73 on the PROD-PAY-001 corrections, and at most $4.08 per student. It is recorded here,
       and no correction was made for the reason above.
-- [ ] **A saved pay rate governs the open payroll cycle immediately, contrary to DOM-CLASS-003 §VII.**
+- [x] **A saved pay rate governs the open payroll cycle immediately, contrary to DOM-CLASS-003 §VII.** Fixed by
+  #1450, released in v2.1.0 (2026-10-02).
   - **The rule.** DOM-CLASS-003 §VII requires a pending `next_boundary` transition, activated at payroll cycle
     completion (FEAT-PROD-004). DOM-PROD-001 §XV.3 and INV-ARC-015 §VI.7 say the same.
   - **The code.** `upsert_payroll_settings` (`app/services/payroll_settings_service.py:99-158`) makes the new
@@ -251,7 +255,9 @@ against this tracker, the archived launch trackers and the live-test RESUME reco
     effective-dated. The owner's rulings are implemented: a monthly schedule is the anchored calendar month
     (SPEC-TIME-001 §IX.12), pay frequency is derived rather than stored, and the only schedules are weekly, biweekly
     and monthly. `first_pay_date` is required.
-- [ ] **Payroll amounts are priced from a source other than the policy version the event records.**
+- [x] **Payroll amounts are priced from a source other than the policy version the event records.** Fixed by #1450
+  and #1452, released in v2.1.0 (2026-10-02); the release added the `payroll_settings` and `payroll_event`
+  immutability triggers.
   - **Two sources.** FEAT-PROD-003 prices from the live `PayrollSettings` row (`app/feats/prod.py:535` →
     `app/payroll.py:56-70`). The event records `PolicyVersion.is_active`, read once in `settlement.py:164`. They
     agree today only because `upsert_payroll_settings` writes both in one transaction.
@@ -279,6 +285,9 @@ against this tracker, the archived launch trackers and the live-test RESUME reco
     `GET /sysadmin/login` on every background request, about 60% of app log volume.
   - **Sysadmin login GET.** `GET /sysadmin/login` clears `user_id` from the session (`app/routes/system_admin.py`),
     which is a GET-time authentication-state mutation that needs review.
+  - **Status (2026-10-02).** #1446 is released in v2.1.0: `GET /sysadmin/login` no longer signs anyone out. Its
+    nginx snippet (`infra/grafana-auth/README.md`) is an operator step and has not been applied, so the Grafana
+    loop is still open. Loki and Tempo are unchanged by the release.
   - **Loki.** Loki stores chunks under `/tmp/loki/chunks`, which is emptied at boot, and has no retention period
     set. Local app logs rotate at 1 MB × 6.
   - **Tempo.** Tempo is still crash-looping (live-test finding 18, `RESUME_2026-09-22.md`): about 117,000 restarts,
