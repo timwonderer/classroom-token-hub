@@ -234,7 +234,11 @@ Tags mark the exact commit of each tagged release: `v2.0.0` is `26d1792b5` (rele
 - v2.0.1: [DEPLOY_2026-09-28_ad64a473f.md](docs/ops/audits/DEPLOY_2026-09-28_ad64a473f.md), which also covers the unrecorded `efdf09eda` release of 2026-09-27
 - v2.1.0: not yet deployed; its record is written after deploy
 
-Five untagged releases from `main` followed v2.0.1, each through the release workflow. On 2026-09-29: `bc5c07a2` (#1439, the payroll fix for the 2026-09-28 incident), `eaca2a7e` (#1440, a one-time payroll correction for teachers to review), `29b99b14` (#1442, the username retention check) and `00166e56` (#1443). None of these four has a release record in `docs/ops/audits/` yet. On 2026-09-30: `314158d53` (#1438, #1449, #1451), which production runs now, recorded in [DEPLOY_2026-09-30_314158d53.md](docs/ops/audits/DEPLOY_2026-09-30_314158d53.md). All five are part of v2.1.0 in [CHANGELOG.md](CHANGELOG.md).
+Five untagged releases from `main` followed v2.0.1, each through the release workflow. On 2026-09-29: `bc5c07a2` (#1439, the payroll fix for the 2026-09-28 incident), `eaca2a7e` (#1440, a one-time payroll correction for teachers to review), `29b99b14` (#1442, the username retention check) and `00166e56` (#1443). None of these four has a release record in `docs/ops/audits/` yet. On 2026-09-30: `314158d53` (#1438, #1449, #1451).
+
+Production currently runs `314158d53`. Its release record is [DEPLOY_2026-09-30_314158d53.md](docs/ops/audits/DEPLOY_2026-09-30_314158d53.md).
+
+All five releases are part of v2.1.0 in [CHANGELOG.md](CHANGELOG.md).
 
 ### Known limits of the release evidence
 
