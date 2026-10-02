@@ -2,7 +2,9 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-OPS-001      | 2.11    | 2026-09-30     | 2.10       | Normative       |
+| DOM-OPS-001      | 2.12    | 2026-10-02     | 2.11       | Normative       |
+
+*Revision 2.12 (2026-10-02; for owner ratification): §1 Public Request Monitoring — the closed component registry gains `hall_pass`, and a 404 on a request-resolution route that `SPEC-OPS-006` designates is reported on that component as a failed request, at the observed-error level of one fresh 5xx, never as an outage, and without changing the overall availability summary. Motivated by 2026-10-01, when a teacher's Approve or Reject and a student's Cancel answered 404 "Pending request not found." about half the time while the status page showed nothing: hall passes had no component, and no 404 counted.*
 
 ## 0. Authority Level and Dependencies
 
@@ -79,7 +81,7 @@ Genuine service errors retain their normal HTTP error handling.
 
 The public automated status surface reports bounded HTTP request measurements,
 not feature correctness certification. Its closed component registry is `service`,
-`login`, `attendance`, `payroll`, `roster`, and `classroom_economy`. Route groups
+`login`, `attendance`, `hall_pass`, `payroll`, `roster`, and `classroom_economy`. Route groups
 identify the measured request family; they do not establish domain truth or prove
 that a user journey completed. HTTP 404, 500 and 5xx rates and p80/p95 latency may
 be displayed with request counts, observation window, source freshness and coverage.
@@ -97,6 +99,15 @@ be represented as current health or cleared solely because requests stop. Failed
 stale monitoring remains explicit. HTTP 4xx responses, including 404, remain numerical
 observations and MUST NOT by themselves declare a feature outage. One fresh 5xx is
 reported as an observed server error, not a diagnosis or canonical incident.
+
+A component MAY designate request-resolution routes: routes the application's own
+page calls only with an identifier it has just shown the user, to act on that item.
+A 404 there means the item the user was shown could not be found, so it is a failed
+request rather than an expected absence. `SPEC-OPS-006` closes the list of designated
+routes; at 2.12 it is the hall-pass approve, reject and cancel routes and nothing
+else. Such a 404 is reported on its own component as an observed error, at the level
+of one fresh 5xx: never an outage, a diagnosis or a canonical incident. It does not
+by itself change the overall availability summary. Every other 404 keeps the rule above.
 
 Public current cards and historical percentages do not depend on internal integrity
 evaluator registration. Internal readiness, correctness, lineage, reconciliation

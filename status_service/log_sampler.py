@@ -12,7 +12,8 @@ from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-from status.measurements import COMPONENT_KEYS, COUNT_FIELDS, SCHEMA_VERSION, WINDOW_SECONDS, unavailable_component, validate_snapshot
+from status.measurements import (COMPONENT_KEYS, COUNT_FIELDS, NOT_FOUND_FAILURE_ROUTES, SCHEMA_VERSION, WINDOW_SECONDS,
+                                 unavailable_component, validate_snapshot)
 
 LOKI_URL = "http://127.0.0.1:3100"
 OUTPUT_PATH = Path("/var/lib/cth-status/telemetry.json")
@@ -127,6 +128,13 @@ def _component(key: str, sampled_at: datetime, deadline: float, fetch) -> dict:
             if status in {"404", "500"}:
                 record[f"http_{status}_count"] += count
         total = record["request_count"]
+        if key in NOT_FOUND_FAILURE_ROUTES:
+            # SPEC-OPS-006 §VI: 404s on these routes are failed requests. Counted
+            # from the same window and stream; no route label leaves the host.
+            failures = _metric(fetch, f'sum(count_over_time({base} | uri=~{json.dumps(NOT_FOUND_FAILURE_ROUTES[key])} | status="404" | __error__="" [5m]))', sampled_at, deadline)
+            if failures is not None and failures != int(failures):
+                raise ValueError("Invalid failed-request count")
+            record["http_404_failure_count"] = 0 if failures is None else int(failures)
         # Quantiles must cover every counted request, not only a parseable subset.
         covered = _metric(fetch, f'sum(count_over_time({base} | request_time >= 0 | request_time <= 600 | __error__="" [5m]))', sampled_at, deadline)
         if (0 if covered is None else covered) != total:

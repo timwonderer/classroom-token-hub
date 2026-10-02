@@ -8,12 +8,14 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from status.measurements import parse_time, retained_activity
+from status.measurements import not_found_failures, parse_time, retained_activity
 
 AREAS = {
     "service": {"name": "Whole site", "icon": "language", "scope": "Every page of Classroom Token Hub"},
     "login": {"name": "Signing in", "icon": "login", "scope": "Teacher and student sign-in"},
     "attendance": {"name": "Attendance", "icon": "schedule", "scope": "Tap in, tap out and attendance history"},
+    "hall_pass": {"name": "Hall passes", "icon": "directions_walk",
+                  "scope": "Asking for, approving and checking hall passes"},
     "payroll": {"name": "Payroll", "icon": "payments", "scope": "Running payroll and payroll history"},
     "roster": {"name": "Student roster", "icon": "group", "scope": "Adding, editing and exporting students"},
     "classroom_economy": {"name": "Store, rent & insurance", "icon": "storefront",
@@ -131,8 +133,10 @@ def overall_observation(checks, measurements, notices, *, now: datetime | None =
 
 def request_outcome(item) -> dict:
     """Bounded response observations, never a business-success verdict."""
-    if item["http_5xx_count"]:
+    if item["http_5xx_count"] or not_found_failures(item):
         # Automatic, at the Aware level: it never creates or implies a notice.
+        # A hall-pass request that could not be found when a teacher approved or
+        # rejected it, or a student cancelled it, is a failed request (SPEC-OPS-006 §VIII).
         return {"tone": "checking", "icon": "hearing", "label": "Checking: errors seen"}
     if item["p95_ms"] > 1500:
         return {"tone": "warn", "icon": "hourglass_top", "label": "Slower than usual"}
@@ -224,13 +228,18 @@ def incident_entry(notice: dict, events: list[dict]) -> dict:
 
 
 def detections(measurements, notices, sampled_at=None) -> list[dict]:
-    """Fresh server errors no operator notice covers yet: drafts, never notices."""
+    """Fresh failed requests no operator notice covers yet: drafts, never notices."""
     covered = {notice.get("capability") for notice in notices}
     found = []
     for item in measurements:
-        if item["collection_state"] == "OK" and item["http_5xx_count"] and item["key"] not in covered:
-            found.append({"key": item["key"], "name": AREAS[item["key"]]["name"],
+        if item["collection_state"] != "OK" or item["key"] in covered:
+            continue
+        if item["http_5xx_count"]:
+            found.append({"key": item["key"], "name": AREAS[item["key"]]["name"], "kind": "server_error",
                           "percent": item.get("http_5xx_percent"), "sampled_at": sampled_at})
+        elif not_found_failures(item):
+            found.append({"key": item["key"], "name": AREAS[item["key"]]["name"], "kind": "not_found",
+                          "percent": item.get("http_404_failure_percent"), "sampled_at": sampled_at})
     return found
 
 

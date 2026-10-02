@@ -1,5 +1,6 @@
 {
   "attendance": "/api/(tap|attendance/history|student-status)|/admin/(attendance-log|tap-in-students|tap-out-students)",
+  "hall_pass": "/api/hall-pass/(request|request/[^/]+/[^/]+|[0-9]+/[^/]+|checkout|checkin|settings|history|setup|verify-token/rotate|available-types)|/admin/hall-pass|/verify/hallpass/[^/]+",
   "payroll": "/admin/(run_payroll|payroll|payroll-history|payroll/settings|payroll/manual-payment|payroll/event/[^/]+/reverse|payroll/transactions/[^/]+/void|payroll/transactions/void-bulk)|/student/payroll",
   "roster": "/admin/(students|students/[^/]+|students/bulk-delete|students/deletion-preview|student/(edit|unclaim|archive|delete|add-individual)|pending-students/(delete|bulk-delete)|upload-students|export-class-roster|export-students)",
   "login": "/(admin|student)/login",

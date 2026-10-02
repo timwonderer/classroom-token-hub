@@ -22,7 +22,8 @@ from status.platform import platform_rows
 from .store import FirestoreNoticeStore, ResolutionTooLarge
 
 COMPONENT_NAMES = {"service": "Application requests", "login": "Login requests",
-                   "attendance": "Attendance requests", "payroll": "Payroll requests",
+                   "attendance": "Attendance requests", "hall_pass": "Hall pass requests",
+                   "payroll": "Payroll requests",
                    "roster": "Roster requests", "classroom_economy": "Classroom economy requests"}
 STATE_LABELS = {"NORMAL": "Within expected range", "ELEVATED_ERRORS": "Elevated response errors",
                 "HIGH_LATENCY": "High latency",
@@ -44,7 +45,7 @@ def measurement_cards(attempt, history, *, now):
         component = next((item for item in snapshot["components"] if item["key"] == key), None) if snapshot else None
         result = classify_component(component, snapshot, now=now) if component else {
             "state": "MONITOR_UNAVAILABLE", "reasons": [], "http_404_percent": None,
-            "http_500_percent": None, "http_5xx_percent": None}
+            "http_500_percent": None, "http_5xx_percent": None, "http_404_failure_percent": None}
         if result["state"] in {"STALE", "MONITOR_UNAVAILABLE"}:
             component = unavailable_component(key)
         daily = []

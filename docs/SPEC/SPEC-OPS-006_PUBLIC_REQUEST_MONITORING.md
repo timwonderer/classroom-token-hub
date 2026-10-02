@@ -2,7 +2,9 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| SPEC-OPS-006 | 1.3 | 2026-09-30 | 1.2 | Subordinate implementation contract |
+| SPEC-OPS-006 | 1.4 | 2026-10-02 | 1.3 | Subordinate implementation contract |
+
+*Revision 1.4 (2026-10-02; for owner ratification, under DOM-OPS-001 2.12): adds the `hall_pass` component and its route group (§V, §VI); adds `http_404_failure_count` and the closed list of failed-request routes, which at 1.4 is the hall-pass approve, reject and cancel routes only (§V, §VI); the failed-request threshold and card rule (§VI, §VIII); schema `request-telemetry-v2`, with `request-telemetry-v1` snapshots still read (§V, §VII). The hero rule is unchanged.*
 
 ## I. Purpose
 
@@ -37,29 +39,39 @@ field and cannot be relabeled as an independent feature verifier.
 
 A snapshot contains exactly:
 
-- `schema_version`: `request-telemetry-v1`;
+- `schema_version`: `request-telemetry-v2`;
 - `sampled_at`: source-generated UTC ISO timestamp for the shared query evaluation time;
 - `window_seconds`: integer `300`;
 - `source_latest_at`: newest nginx log EVENT UTC ISO timestamp (not ingestion time), or null;
-- `components`: one object for each of `service`, `login`, `attendance`, `payroll`,
-  `roster`, `classroom_economy`, with no duplicate, missing or additional keys.
+- `components`: one object for each of `service`, `login`, `attendance`, `hall_pass`,
+  `payroll`, `roster`, `classroom_economy`, with no duplicate, missing or additional keys.
 
 Each component contains exactly:
 
 - `key`: one closed component key;
 - `request_count`, `http_1xx_count`, `http_2xx_count`, `http_3xx_count`, `http_4xx_count`,
-  `http_404_count`, `http_500_count`, `http_5xx_count`: nonnegative integers or null;
+  `http_404_count`, `http_500_count`, `http_5xx_count`, `http_404_failure_count`:
+  nonnegative integers or null;
 - `p80_ms`, `p95_ms`: finite nonnegative numbers or null;
 - `collection_state`: `OK` or `UNAVAILABLE`.
 
 For `OK`, all counts are integers and the 1xx/2xx/3xx/4xx/5xx counts partition total.
-404 is a subset of 4xx and 500 a subset of 5xx. Zero requests requires null
+404 is a subset of 4xx and 500 a subset of 5xx. `http_404_failure_count` counts the
+404s on the component's failed-request routes (§VI) and is a subset of 404; a
+component with no such routes carries `0`. Zero requests requires null
 quantiles. A nonempty window requires usable ordered quantiles (`p80_ms <= p95_ms`).
 For `UNAVAILABLE`, every numerical value is null. Unknown fields, arbitrary labels,
 booleans used as numbers, nonfinite numbers and unbounded values are rejected.
 Counts are bounded at 1,000,000,000 per window and latency at 600,000 milliseconds.
 Rates are derived from counts; an absent denominator never means zero percent.
 Only this reduced schema leaves the monitoring boundary, never log lines or labels.
+
+A `request-telemetry-v1` snapshot, written before 1.4, has the six components without
+`hall_pass` and components without `http_404_failure_count`, under the same rules.
+Readers accept it and treat it as carrying no hall-pass evidence and no failed-request
+404s; it can carry neither. A snapshot of either version with the other version's
+keys or fields is rejected. This lets the host sampler and the status service be
+upgraded in either order, and keeps retained activity readable (§VIII).
 
 ## VI. Collection, freshness and classification
 
@@ -68,6 +80,19 @@ UTC evaluation time. It aggregates away all labels. Caller-defined queries are
 forbidden. Request counts and latency come from the same 300-second window.
 The service group observes upstream application requests. Route groups are proxies,
 not a complete registry of business operations. Source evidence may overlap groups.
+The `hall_pass` group is the hall-pass API (`/api/hall-pass/...`), the teacher's
+Hall Pass page (`/admin/hall-pass`) and the verification page office staff use
+(`/verify/hallpass/<token>`). No other group matches these routes, so adding it
+changes no other component's numbers; `service` already counted them.
+
+Failed-request routes are closed and fixed by this specification. At 1.4 they are,
+for `hall_pass` only, `/api/hall-pass/request/<id>/approve`, `.../reject` and
+`.../cancel`: the teacher's Hall Pass page approves or rejects, and the student's
+page cancels, only a request id the application has just shown, so a 404 there means
+the request the user was looking at could not be found. Every other route, on
+hall passes or elsewhere, has none. The sampler counts their 404s with one fixed
+query on the same stream, window and evaluation time as the component's counts,
+reduced to a single number; no route or status label leaves the host.
 
 Sample once per minute. A snapshot older than 300 seconds is stale; source lag
 older than 180 seconds makes monitoring unavailable/stale rather than normal.
@@ -90,18 +115,23 @@ sample from the same minute. Transport failure is not a source measurement.
 Initial policy thresholds are strict greater-than comparisons:
 
 - 5xx / requests > 2%: elevated server-error responses;
+- failed-request 404 / requests > 2%: requests not found when acted on (only a
+  component with failed-request routes; at 1.4, hall-pass requests not found when
+  approved, rejected or cancelled);
 - 404 / requests > 5%: elevated not-found responses;
 - p95 > 1500 ms: high latency.
 
 404 is a descriptive anomaly signal, not `SYSTEM_FAILURE`: expected resource
-absence may account for it. All threshold crossings remain visible regardless of sample size. Any nonempty
+absence may account for it. A failed-request 404 is an observed error on its
+component, at the level of a 5xx; it is still not `SYSTEM_FAILURE` or an outage. All threshold crossings remain visible regardless of sample size. Any nonempty
 window without a threshold crossing is `NORMAL`; there is no minimum count.
 This numerical classification does not certify successful classroom actions.
 Distinct states are `NORMAL`, `ELEVATED_ERRORS`, `HIGH_LATENCY`,
 `NO_TRAFFIC`, `MONITOR_UNAVAILABLE`, and `STALE`. Show all applicable reasons;
 where a single state is required, unavailable/stale takes precedence, followed by
 elevated errors, high latency, no traffic and normal. Elevated errors
-must distinguish server-error responses from not-found responses in visible wording.
+must distinguish server-error responses, failed-request 404s and other not-found
+responses in visible wording.
 These numerical thresholds are disclosed publicly and changed only with a versioned
 code/contract amendment. They do not diagnose user impact or create incidents.
 
@@ -131,7 +161,8 @@ A daily single-state tally follows classification precedence while current cards
 preserve all applicable threshold reasons.
 
 Historical rollups retain the policy applied at collection; older windows may have
-required 20 requests. This distinction is disclosed beside history; old counters
+required 20 requests. `hall_pass` history starts with the first `request-telemetry-v2`
+window; days before it have no `hall_pass` counters, shown as gaps. This distinction is disclosed beside history; old counters
 are not recomputed or relabeled as uptime.
 
 Detailed snapshots expire after seven days; daily rollups after 90 days. Use
@@ -174,8 +205,9 @@ the hero is `Under maintenance`, every card reads `Closed for maintenance`: nobo
 can enter, whatever requests from behind the gate show. Otherwise a
 current operator notice for the card's capability takes precedence: an `AWARE`
 notice reads `Checking reports`, any other active notice `Having problems`.
-Otherwise any fresh 5xx is `Checking: errors seen` — an automatic observation at the
-`AWARE` level, which never creates or implies a notice; p95 above 1,500 ms is
+Otherwise any fresh 5xx, or any fresh failed-request 404 (§VI), is `Checking: errors
+seen` — an automatic observation at the `AWARE` level, which never creates or implies
+a notice; p95 above 1,500 ms is
 `Slower than usual`; a window containing 2xx/3xx is `Working`. Windows with only
 remaining response classes say `Nothing to report`, claiming neither success nor
 outage. These labels have no minimum count. Quiet windows say `Quiet`; missing or
@@ -195,7 +227,12 @@ loss, visibly labeled `Last observed` with the original five-minute window end.
 They never establish present health or conceal a monitoring failure. Public GET
 remains read-only.
 
-Counts, 404/500/5xx percentages, p80/p95, source timing and 90-day history appear in
+A failed-request 404 does not change the hero: its `degraded` condition remains a
+fresh nonzero HTTP 5xx count. The operator console offers a fresh failed-request 404
+not covered by a notice as a draft, as it does a fresh 5xx; a draft is not a notice.
+
+Counts, 404/500/5xx percentages (and, for a component with failed-request routes,
+its failed-request percentage), p80/p95, source timing and 90-day history appear in
 the lower platform section, collapsed by default behind a visible disclosure, and
 the 90-day history may also be summarised beside the main column. Explain their
 scope and thresholds there, without long technical qualifications on every teacher
@@ -256,7 +293,8 @@ These records do not contribute to request-window history or service-card proofs
 
 Focused tests cover strict schema/redaction, query failure, malformed/multi-series
 responses, no/low traffic, thresholds and their boundaries, 404 versus semantic
-failure, stale/future timestamps, retry idempotency, monotonic current pointer,
+failure, failed-request 404s on the designated routes against 404s elsewhere, both
+schema versions, every hall-pass route falling in the hall-pass group and no other, stale/future timestamps, retry idempotency, monotonic current pointer,
 UTC rollover, history denominators/gaps, independent notices, auth/CSRF and pure
 GET. Gate tests cover an Access redirect, an open response, an application error,
 401/403, transport failure, and a lapsed service token with an open gate. Render

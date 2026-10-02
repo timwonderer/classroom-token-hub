@@ -74,8 +74,8 @@
             <details class="disclosure">
               <summary>{{ icon('chevron_right', 'sm', 'chev') }}What the numbers mean</summary>
               <p>We check the app and its database every minute. A check expires after five minutes if polling stops, and it doesn't test every classroom action.</p>
-              <p>The areas above describe the requests we saw in the last five minutes. A quiet area shows when it was last seen, kept for up to seven days as history rather than a claim about now. One server error is enough to show. Refusals and missing pages don't count as an outage.</p>
-              <p>We flag HTTP 5xx above 2%, HTTP 404 above 5%, and p95 above 1,500 ms. p80 and p95 are the response times that 80% and 95% of requests came in under. Application requests include our own health checks.</p>
+              <p>The areas above describe the requests we saw in the last five minutes. A quiet area shows when it was last seen, kept for up to seven days as history rather than a claim about now. One server error is enough to show. Refusals and missing pages don't count as an outage, with one exception: when a teacher approves or rejects a hall-pass request, or a student cancels one, and the app can't find it, that counts as an error.</p>
+              <p>We flag HTTP 5xx above 2%, HTTP 404 above 5%, hall-pass requests not found above 2%, and p95 above 1,500 ms. p80 and p95 are the response times that 80% and 95% of requests came in under. Application requests include our own health checks.</p>
               <p>History counts the five-minute windows that stayed within those thresholds, sampled once a minute. It isn't uptime or request success. Empty windows and missing or stale monitoring are left out, and older windows required 20 requests. Dates use UTC.</p>
             </details>
             {% for card in measurements %}
@@ -89,6 +89,9 @@
                   {% for label, value in [('HTTP 404', card.http_404_percent), ('HTTP 500', card.http_500_percent), ('HTTP 5xx', card.http_5xx_percent)] %}
                   <div><dt>{{ label }}</dt><dd>{{ ('%.1f%%'|format(value)) if value is not none else 'Unavailable' }}</dd></div>
                   {% endfor %}
+                  {% if card.key == 'hall_pass' %}
+                  <div><dt>Requests not found</dt><dd>{{ ('%.1f%%'|format(card.http_404_failure_percent)) if card.http_404_failure_percent is not none else 'Unavailable' }}</dd></div>
+                  {% endif %}
                   {% for label, value in [('p80', card.p80_ms), ('p95', card.p95_ms)] %}
                   <div><dt>{{ label }}</dt><dd>{{ ('%.0f ms'|format(value)) if value is not none else 'Unavailable' }}</dd></div>
                   {% endfor %}

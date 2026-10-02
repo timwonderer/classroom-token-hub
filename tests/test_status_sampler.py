@@ -20,6 +20,9 @@ def fake_loki(endpoint, params, *, timeout):
     assert 'upstream_addr="127.0.0.1:8000"' in query
     if "sum by (status)" in query:
         result = [{"metric": {"status": code}, "value": [NOW.timestamp(), str(count)]} for code, count in [("200", 90), ("404", 6), ("500", 1), ("502", 3)]]
+    elif 'status="404"' in query:
+        # Hall-pass resolution 404s (SPEC-OPS-006 §VI): a subset of the six 404s.
+        result = [{"metric": {}, "value": [NOW.timestamp(), "2"]}]
     else:
         value = "0.1" if "0.80" in query else "0.2" if "0.95" in query else "100"
         if "quantile_over_time" in query:
