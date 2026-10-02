@@ -106,7 +106,7 @@ def test_teacher_can_approve_a_hall_pass_request(app, client):
         assert logs[0].hall_pass_id is not None
 
     # The request leaves the queue only on a successful approval.
-    assert get_pending_hall_pass_request("req-1") is None
+    assert get_pending_hall_pass_request("req-1", class_id=classroom.class_id) is None
 
 
 def test_approval_without_an_available_pass_is_refused_as_a_client_error(app, client):

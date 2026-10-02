@@ -158,7 +158,7 @@ flask create-sysadmin   # follow the prompts and scan the QR code with an authen
 flask run               # http://localhost:5000
 ```
 
-The app won't start without the six keys above. Everything else is optional, except that student account setup also needs `STUDENT_SETUP_REDIS_URL`:
+The app won't start without the six keys above. Everything else is optional, except that student account setup also needs `STUDENT_SETUP_REDIS_URL`, and hall passes need `HALL_PASS_QUEUE_REDIS_URL` or `REDIS_URL`:
 
 | Variable | Purpose |
 | -------- | ------- |
@@ -169,6 +169,7 @@ The app won't start without the six keys above. Everything else is optional, exc
 | `PASSWORDLESS_API_KEY`, `PASSWORDLESS_API_PUBLIC`, `PASSWORDLESS_API_URL` | Passkey sign-in |
 | `REDIS_URL`, `RATELIMIT_STORAGE_URI`, `DEV_ENABLE_RATELIMIT` | Rate-limit storage; rate limits are off in development unless `DEV_ENABLE_RATELIMIT=1` |
 | `STUDENT_SETUP_REDIS_URL` | Dedicated, non-persistent Redis for student account setup ([infra/student-setup/README.md](infra/student-setup/README.md)). Required: student claim and recovery setup refuse to run without it. Never point it at the rate-limit store |
+| `HALL_PASS_QUEUE_REDIS_URL` | Redis shared by all workers for pending hall-pass requests; falls back to `REDIS_URL`. Required: hall-pass requests, approvals and the teacher's hall-pass page answer 503 without it. Never point it at the student-setup store |
 | `EXTERNAL_DOCS_BASE_URL`, `MARKETING_SITE_URL`, `STATUS_PAGE_URL`, `GRAFANA_URL`, `SUPPORT_EMAIL` | External links |
 | `LOG_LEVEL`, `LOG_FILE` | Logging |
 

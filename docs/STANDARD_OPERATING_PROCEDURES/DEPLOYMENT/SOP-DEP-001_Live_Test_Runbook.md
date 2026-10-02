@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-001      | 2.5     | 2026-10-01     | 2.4 | Normative |
+| SOP-DEP-001      | 2.6     | 2026-10-01     | 2.5 | Normative |
 
 ## I. Purpose
 
@@ -135,7 +135,23 @@ git status --porcelain  # must be empty
 6. `systemctl daemon-reload`, and confirm the unit does not start before the
    environment completeness check in §VIII passes.
 
-> **Worker count: more than one is permitted; production runs two.**
+> **Worker count: production runs ONE worker.** More than one is permitted only
+> when no request or workflow state is held in process memory: every worker must
+> see the same pending requests, sessions and queues, which therefore live in
+> PostgreSQL or in a Redis store shared by all workers, never in a module global.
+> `tests/test_process_local_state_guard.py` enforces this for `app/`: it refuses a
+> module-level dict, list or set that a function mutates, outside a short
+> allowlist of read memos whose value is the same in every worker.
+>
+> Production was reverted from two workers to one on 2026-10-01. Pending
+> hall-pass requests were kept in a per-process dict
+> (`app/services/hall_pass_request_queue.py`), so with two workers a request
+> enqueued by one was invisible to the other, and teachers' Approve and Reject
+> answered "Pending request not found." about half the time. The queue now lives
+> in Redis (`HALL_PASS_QUEUE_REDIS_URL`, falling back to `REDIS_URL`). Two
+> workers may be restored, as a separate operations step, only after that change
+> is deployed and approvals are verified under it. Until then run one.
+>
 > Single-runner scheduling is enforced in code (`app/scheduler_ownership.py`,
 > since 2026-09-27). Nothing starts the scheduler on import or in `create_app`;
 > each gunicorn worker's `post_worker_init` hook asks, and only the process
@@ -146,10 +162,11 @@ git status --porcelain  # must be empty
 > `tests/test_scheduler_ownership.py` holds this, including a second worker
 > running as a separate process.
 >
-> By operator ruling of 2026-10-01, production runs **two** sync workers, so
-> that one stalled request cannot make the site unavailable. Under one worker,
-> four hung requests did exactly that for about eight minutes on 2026-09-30
-> (incident OPS-DB-001).
+> The operator ruling of 2026-10-01 to run **two** sync workers, so that one
+> stalled request cannot make the site unavailable (under one worker, four hung
+> requests did exactly that for about eight minutes on 2026-09-30, incident
+> OPS-DB-001), stands as the target. It is suspended until the condition above
+> holds in the deployed release.
 >
 > After any restart or worker-count change, verify **current** ownership in the
 > database: exactly one backend holds the scheduler advisory lock
@@ -201,6 +218,8 @@ never print or commit values.
 - `TURNSTILE_SECRET_KEY` / `TURNSTILE_SITE_KEY` — pair registered for the
   deployment domains.
 - `REDIS_URL`, or the explicitly approved rate-limit storage configuration.
+- `HALL_PASS_QUEUE_REDIS_URL`, or `REDIS_URL`, reachable by every worker:
+  pending hall-pass requests live there and fail closed (503) without it.
 - `CSRF_SECRET_KEY` where the security configuration requires it.
 - `SUPPORT_EMAIL`, `MARKETING_SITE_URL`, `EXTERNAL_DOCS_BASE_URL`, and the
   status/operations URLs.
@@ -451,3 +470,10 @@ Revisions require incrementing the version, updating the effective date, and
 populating the Supersedes field. A claim about codebase behavior in this
 document must be verifiable against the release artifact at the time of
 revision; where they disagree, the code wins and this document is corrected.
+
+### Revision History
+
+| Version | Date | Change |
+|---------|------|--------|
+| 2.6 | 2026-10-01 | §VII: production runs one worker, reverted 2026-10-01 after pending hall-pass requests held in per-process memory failed under two. More than one worker is permitted only when no request or workflow state is held in process memory (enforced by `tests/test_process_local_state_guard.py`). Two workers may be restored after the Redis-backed hall-pass queue is deployed and verified. §VIII: `HALL_PASS_QUEUE_REDIS_URL` or `REDIS_URL` added to the environment checklist. |
+| 2.5 | 2026-10-01 | §VII: more than one worker permitted; production to run two (operator ruling after incident OPS-DB-001). Scheduler ownership by advisory lock; verification query. |

@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from dateutil.relativedelta import relativedelta
 
-from flask import Blueprint, request, jsonify, session, current_app, g
+from flask import Blueprint, request, jsonify, session, current_app, g, render_template
 from sqlalchemy import func, or_
 import sqlalchemy as sa
 from sqlalchemy.orm import aliased
@@ -74,11 +74,14 @@ from app.services.hall_pass_status_service import (
     resolve_hall_pass_lifecycle_status,
 )
 from app.services.hall_pass_request_queue import (
+    HallPassQueueUnavailable,
     PendingHallPassRequest,
+    claim_pending_hall_pass_request,
     clear_pending_hall_pass_requests_for_seat,
     enqueue_hall_pass_request,
     get_pending_hall_pass_request,
     pop_pending_hall_pass_request,
+    restore_pending_hall_pass_request,
 )
 from app.utils.economy_policy import resolve_class_scope, resolve_feature_class, resolve_feature_class_for_class
 from app.utils.canonical_temporal_resolver import (
@@ -134,6 +137,23 @@ def handle_api_context_resolution_error(e):
     if isinstance(e, (ContextForbidden, ContextMismatch)):
         return jsonify({"status": "error", "message": "Not Found", "error": "Not Found"}), 404
     return jsonify({"status": "error", "message": "Class context required", "error": "Class context required"}), 401
+
+
+@api_bp.app_errorhandler(HallPassQueueUnavailable)
+def _hall_pass_queue_unavailable(error):
+    """The shared pending-request store is down: fail closed, for every worker.
+
+    Registered app-wide because teacher pages and the student status poll read
+    the queue too. There is deliberately no worker-local fallback — a
+    per-process queue is the defect this store replaced.
+    """
+    current_app.logger.error("Hall-pass request queue unavailable")
+    if request.path.startswith('/api/') or request.accept_mimetypes.best == 'application/json':
+        return jsonify({
+            "status": "error",
+            "message": "Hall passes are temporarily unavailable. Please try again.",
+        }), 503
+    return render_template('error_503.html'), 503
 
 
 
@@ -699,7 +719,10 @@ def cancel_pending_hall_pass_request(request_id):
     """Cancel the current student's ephemeral pending hall-pass request."""
     context = getattr(g, "canonical_context", None)
     student = db.session.get(Seat, context.seat_id) if context else None
-    pending_request = get_pending_hall_pass_request(request_id)
+    pending_request = (
+        get_pending_hall_pass_request(request_id, class_id=context.class_id)
+        if context else None
+    )
     if (
         not context
         or not student
@@ -709,7 +732,9 @@ def cancel_pending_hall_pass_request(request_id):
     ):
         return jsonify({"status": "error", "message": "Pending request not found."}), 404
 
-    pop_pending_hall_pass_request(request_id)
+    if pop_pending_hall_pass_request(request_id, class_id=context.class_id) is None:
+        # A teacher resolved it between the read and the removal.
+        return jsonify({"status": "error", "message": "Pending request not found."}), 404
     return jsonify({"status": "success", "message": "Hall pass request cancelled."})
 
 
@@ -718,20 +743,35 @@ def cancel_pending_hall_pass_request(request_id):
 def handle_pending_hall_pass_request(request_id, action):
     """Approve or reject an ephemeral hall-pass request."""
     ctx = g.canonical_context
-    pending_request = get_pending_hall_pass_request(request_id)
+    if action not in ("approve", "reject"):
+        return jsonify({"status": "error", "message": "Unsupported hall pass action."}), 400
+
+    # Claim before any durable write. The take is atomic across every worker,
+    # so of two teachers (or two tabs, or a double-click landing on two
+    # workers) exactly one proceeds; the other gets 404. The FEAT's
+    # idempotency key below is NOT a deduplication guard — nothing refuses a
+    # second write carrying the same key — so the claim is what makes a
+    # duplicate approval impossible.
+    pending_request, remaining_ttl_ms = claim_pending_hall_pass_request(
+        request_id, class_id=ctx.class_id,
+    )
     if not pending_request or pending_request.class_id != ctx.class_id:
         return jsonify({"status": "error", "message": "Pending request not found."}), 404
 
     if action == "reject":
-        pop_pending_hall_pass_request(request_id)
         return jsonify({"status": "success", "message": "Hall pass request rejected."})
-
-    if action != "approve":
-        return jsonify({"status": "error", "message": "Unsupported hall pass action."}), 400
 
     requested_seat = db.session.get(Seat, pending_request.requested_by_seat_id)
     if not requested_seat or requested_seat.class_id != ctx.class_id:
         return jsonify({"status": "error", "message": "Pending request not found."}), 404
+
+    def _hand_back():
+        # A refused or failed approval leaves the request pending, as it was
+        # before the claim; it keeps only the lifetime it had left.
+        try:
+            restore_pending_hall_pass_request(pending_request, remaining_ttl_ms)
+        except HallPassQueueUnavailable:
+            current_app.logger.error("Hall pass request could not be restored after a failed approval")
 
     idempotency_key = f"hall_pass_approve:{ctx.class_id}:{request_id}"
     try:
@@ -755,9 +795,9 @@ def handle_pending_hall_pass_request(request_id, action):
             reason="teacher_approved",
             idempotency_key=idempotency_key,
         )
-        pop_pending_hall_pass_request(request_id)
         return jsonify({"status": "success", "message": "Hall pass issued."})
     except ValueError as exc:
+        _hand_back()
         _log_api_client_error("handle_pending_hall_pass_request", exc, extra=f"request_id={request_id}")
         return jsonify({"status": "error", "message": "Hall pass request cannot be approved."}), 400
     except FEATContextError as exc:
@@ -767,9 +807,11 @@ def handle_pending_hall_pass_request(request_id, action):
         current_app.logger.error(
             "Hall pass approval violated FEAT context rules: %s", exc, exc_info=True
         )
+        _hand_back()
         return jsonify({"status": "error", "message": "Hall pass could not be issued."}), 500
     except SQLAlchemyError as exc:
         current_app.logger.error("Hall pass approval failed: %s", exc, exc_info=True)
+        _hand_back()
         return jsonify({"status": "error", "message": "Database error."}), 500
 
 

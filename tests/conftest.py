@@ -5,6 +5,7 @@ import statistics
 import subprocess
 import sys
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from dotenv import dotenv_values, load_dotenv
@@ -729,28 +730,33 @@ def create_class_scope(app):
     return _factory
 
 
-@pytest.fixture(scope='session', autouse=True)
-def volatile_student_setup_store():
-    """Use the real memory-only backend on an isolated socket, started on demand."""
+@contextmanager
+def _isolated_redis(module, config_key, label):
+    """Point ``module._connection`` at a private redis-server, started on demand.
+
+    The server listens only on a Unix socket in a fresh temporary directory, with
+    RDB/AOF and the slow log disabled, so tests never reach a shared or
+    production Redis. It starts the first time ``module`` connects, and stops at
+    session end.
+    """
     import shutil
     import tempfile
     import time
     from unittest.mock import patch
-    from app.services import student_setup
 
-    with tempfile.TemporaryDirectory(prefix='cth-setup-', dir='/tmp') as directory:
+    with tempfile.TemporaryDirectory(prefix=f'cth-{label}-', dir='/tmp') as directory:
         socket = str(Path(directory) / 'redis.sock')
         url = 'unix://' + socket
-        original = student_setup._connection
+        original = module._connection
         processes = []
-        previous = flask_app.config.get('STUDENT_SETUP_REDIS_URL')
-        flask_app.config['STUDENT_SETUP_REDIS_URL'] = url
+        previous = flask_app.config.get(config_key)
+        flask_app.config[config_key] = url
 
         def connection(requested_url):
             if requested_url == url and not processes:
                 binary = shutil.which('redis-server')
                 if not binary:
-                    pytest.fail('Student setup tests require redis-server (memory-only, isolated test instance).')
+                    pytest.fail(f'{label} tests require redis-server (memory-only, isolated test instance).')
                 process = subprocess.Popen([
                     binary, '--port', '0', '--unixsocket', socket,
                     '--save', '', '--appendonly', 'no', '--slowlog-log-slower-than', '-1',
@@ -761,21 +767,44 @@ def volatile_student_setup_store():
                     if Path(socket).exists():
                         break
                     if process.poll() is not None:
-                        pytest.fail('Isolated student setup Redis failed to start.')
+                        pytest.fail(f'Isolated {label} Redis failed to start.')
                     time.sleep(0.01)
                 else:
-                    pytest.fail('Isolated student setup Redis did not create its socket.')
+                    pytest.fail(f'Isolated {label} Redis did not create its socket.')
             return original(requested_url)
 
         try:
-            with patch.object(student_setup, '_connection', connection):
-                yield
+            with patch.object(module, '_connection', connection):
+                yield url
         finally:
-            flask_app.config['STUDENT_SETUP_REDIS_URL'] = previous
+            flask_app.config[config_key] = previous
             for process in processes:
                 process.terminate()
                 process.wait(timeout=5)
             original.cache_clear()
+
+
+@pytest.fixture(scope='session', autouse=True)
+def volatile_student_setup_store():
+    """Use the real memory-only backend on an isolated socket, started on demand."""
+    from app.services import student_setup
+
+    with _isolated_redis(student_setup, 'STUDENT_SETUP_REDIS_URL', 'setup'):
+        yield
+
+
+@pytest.fixture(scope='session', autouse=True)
+def hall_pass_request_queue_store():
+    """The shared pending hall-pass queue, on its own isolated Redis.
+
+    Separate from the setup store's server, as in production the two stores are
+    separate. Yields the socket URL so a test can hand it to a second worker
+    process.
+    """
+    from app.services import hall_pass_request_queue
+
+    with _isolated_redis(hall_pass_request_queue, 'HALL_PASS_QUEUE_REDIS_URL', 'hall-pass-queue') as url:
+        yield url
 
 
 @pytest.fixture(autouse=True)
