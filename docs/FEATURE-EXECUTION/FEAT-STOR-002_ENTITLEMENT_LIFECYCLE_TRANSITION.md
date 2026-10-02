@@ -2,7 +2,9 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-STOR-002 | 2.1 | 2026-09-24 | 2.0 | Normative |
+| FEAT-STOR-002 | 2.2 | 2026-10-01 | 2.1 | Normative |
+
+*Revision 2.2 (2026-10-01; for owner ratification): adds §X.A, submission of a pending hall-pass request as a covered pending action (DOM-STORE-001 5.3 §IX).*
 
 ## I. Purpose
 
@@ -202,6 +204,26 @@ The transaction SHALL:
 3. commit the purchase, grant, and consumption atomically.
 
 If another domain owns the immediate exercise, that domain's authoritative exercise event replaces the Store-owned `CONSUMED` write.
+
+## X.A Hall-Pass Request Submission
+
+A hall-pass entitlement whose exercise requires approval supports a pending action (`DOM-STORE-001` §VIII.E.6, §IX). This FEAT submits it; the exercise itself belongs to `FEAT-PROD-002` (§VII).
+
+Required context: the requesting student's `CanonicalContext` (`class_id`, `seat_id`). Callers SHALL have verified the student's credential and active work session before entering.
+
+The FEAT SHALL, in one transaction:
+
+1. resolve a hall-pass entitlement available to the seat in the class, and fail closed when there is none;
+2. delete the seat's earlier pending hall-pass request in that class, if any. A student's new request is their cancellation of the earlier one, and it happens here rather than as a separate step;
+3. write one `pending_actions` row with:
+   - `class_id` and `seat_id` from context;
+   - `entitlement_id` — the available entitlement resolved in step 1, the lifecycle acted upon;
+   - `correlation_id` — `hall_pass_request:{class_id}:{pending_action_id}`;
+   - `authoritative_feat = FEAT-PROD-002`;
+   - `payload` — exactly the typed envelope `{kind: "hall_pass_request", requested_by_seat_id, destination}`. These are the inputs `FEAT-PROD-002` takes when it records the pass; the envelope SHALL NOT carry names or other identity material;
+   - `submitted_at` — the request instant in class canonical time (`canonical_temporal_resolver`, current time). It is authoritative and SHALL NOT be rewritten.
+
+Submission writes no entitlement event and no `hall_pass_logs` row. It does not consume the pass, and the `entitlement_id` it records does not reserve that entitlement: approval consumes whichever pass is available when it is approved.
 
 ## XI. Idempotency
 
