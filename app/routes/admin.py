@@ -196,7 +196,7 @@ from app.utils.seat_scope import seat_scoped_filter, transaction_scope_filter
 from app.feats.identity_feat import remove_pending_student_seat
 from app.feats.prod import record_attendance_session, record_payroll_event, record_payroll_reversal
 from app.feats.complete_payroll_cycle import complete_payroll_cycle
-from app.services.payroll.settlement import NoPayableAttendanceError
+from app.services.payroll.settlement import NoPayableAttendanceError, PayrollNotConfiguredError
 from app.services.payroll.corrections import (
     CORRECTED,
     NEEDS_REVIEW,
@@ -7273,6 +7273,16 @@ def _run_payroll():
             return jsonify(status="error", message=message), 409
         flash(message, "warning")
         return redirect(url_for('admin.payroll'))
+    except PayrollNotConfiguredError:
+        db.session.rollback()
+        message = (
+            "Payroll isn't set up yet. Save your payroll settings first, "
+            "then run payroll."
+        )
+        if is_json:
+            return jsonify(status="error", message=message), 409
+        flash(message, "warning")
+        return redirect(url_for('admin.payroll'))
     except (SQLAlchemyError, Exception) as e:
         db.session.rollback()
         is_db_error = isinstance(e, SQLAlchemyError)
@@ -7451,6 +7461,9 @@ def payroll():
     current_setting = current_payroll_setting(selected_class_id, as_of=now_utc)
     pending_settings = pending_payroll_settings(selected_class_id, as_of=now_utc)
     show_setup_banner = current_setting is None
+    # The manual run settles only when a payroll setting exists; settlement
+    # refuses otherwise, so the page offers the run under the same condition.
+    can_run_payroll = class_has_payroll_settings(selected_class_id)
     unpaid_work_notice = build_unpaid_work_notice_view(selected_class_id)
     # The form starts from the setting the next save would follow: the latest
     # pending one if any, else the one in force.
@@ -7704,6 +7717,7 @@ def payroll():
         display_first_pay_date=display_first_pay_date,
         display_first_pay_date_iso=display_first_pay_date_iso,
         show_setup_banner=show_setup_banner,
+        can_run_payroll=can_run_payroll,
         # DOM-PROD-001 §XV.6: composed by the view model from the owning domains.
         unpaid_work_notice=unpaid_work_notice,
         # Students tab (using pre-formatted view models per Phase 1)

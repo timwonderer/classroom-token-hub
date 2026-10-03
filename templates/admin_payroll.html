@@ -177,9 +177,16 @@
           </div>
         </div>
         <hr>
+        {% if can_run_payroll %}
         <button type="button" id="runPayrollBtn" class="btn btn-primary w-100">
           <span class="material-symbols-outlined me-2" aria-hidden="true">play_circle</span>Run Payroll Now
         </button>
+        {% else %}
+        <button type="button" id="runPayrollBtn" class="btn btn-primary w-100" disabled aria-describedby="runPayrollHint">
+          <span class="material-symbols-outlined me-2" aria-hidden="true">play_circle</span>Run Payroll Now
+        </button>
+        <p id="runPayrollHint" class="text-muted small mt-2 mb-0">Save your payroll settings first, then run payroll.</p>
+        {% endif %}
       </div>
     </div>
     <!-- Recent Payroll Activity -->
