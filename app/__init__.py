@@ -384,6 +384,39 @@ def create_app():
     def ensure_request_id():
         g.request_id = _get_request_id()
 
+    # Registered before capture_correlation_context: Flask runs before_request
+    # hooks in registration order, and correlation must read the principal this
+    # request is admitted as, not one a superseded cookie still names. Otherwise
+    # a revoked sysadmin cookie carrying class_id logs a false
+    # TLCP-INVARIANT-VIOLATION, a revoked student or teacher cookie logs a
+    # surface/principal mismatch, and the request is traced to the revoked actor.
+    @app.before_request
+    def validate_canonical_session_nonce():
+        if request.path.startswith("/static/"):
+            return None
+        if request.endpoint in {"main.health_check"}:
+            return None
+
+        from app.models import User
+        from app.utils.user_ids import session_user_id
+        if not session.get("user_id"):
+            return None
+        # A session naming no valid principal, such as one from before users.id
+        # became a UUID, is ended rather than queried.
+        user_id = session_user_id(session)
+        session_nonce = session.get("current_session_nonce")
+        if user_id is None:
+            session.clear()
+            return None
+        user = db.session.get(User, user_id)
+        if not user:
+            session.clear()
+            return None
+        if not session_nonce or user.current_session_nonce != session_nonce:
+            session.clear()
+            return None
+        return None
+
     @app.before_request
     def capture_correlation_context():
         if request.path == "/metrics":
@@ -413,37 +446,12 @@ def create_app():
         try:
             from app.services.tlcp import record_surface_principal_mismatch
 
-            record_surface_principal_mismatch(getattr(g, "tlcp_observation", None))
+            record_surface_principal_mismatch(
+                getattr(g, "tlcp_observation", None), response.status_code,
+            )
         except Exception:
             app.logger.warning("Failed to record TLCP surface/principal observation", exc_info=True)
         return response
-
-    @app.before_request
-    def validate_canonical_session_nonce():
-        if request.path.startswith("/static/"):
-            return None
-        if request.endpoint in {"main.health_check"}:
-            return None
-
-        from app.models import User
-        from app.utils.user_ids import session_user_id
-        if not session.get("user_id"):
-            return None
-        # A session naming no valid principal, such as one from before users.id
-        # became a UUID, is ended rather than queried.
-        user_id = session_user_id(session)
-        session_nonce = session.get("current_session_nonce")
-        if user_id is None:
-            session.clear()
-            return None
-        user = db.session.get(User, user_id)
-        if not user:
-            session.clear()
-            return None
-        if not session_nonce or user.current_session_nonce != session_nonce:
-            session.clear()
-            return None
-        return None
 
     @app.after_request
     def attach_request_id_header(response):

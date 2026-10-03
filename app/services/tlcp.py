@@ -151,9 +151,22 @@ VERDICT_SURFACE_PRINCIPAL_MISMATCH = "surface_principal_mismatch"
 
 SURFACE_PRINCIPAL_MISMATCH_TOKEN = "TLCP-SURFACE-PRINCIPAL-MISMATCH"
 
-OUTCOME_SYSADMIN_SESSION_ESTABLISHED = "sysadmin_session_established"
-OUTCOME_DENIED = "denied"
-OUTCOME_NOT_SUBMITTED = "not_submitted"
+# The closed outcome vocabulary of SPEC-OPS-003 §VI. No TLCP-local labels:
+# SUCCESS            -- the route completed its operation;
+# EXPECTED_DENIAL    -- the route deliberately rejected the request under an
+#                       authorization or validation rule;
+# SYSTEM_FAILURE     -- the route could not complete (an unhandled failure).
+OUTCOME_SUCCESS = "SUCCESS"
+OUTCOME_EXPECTED_DENIAL = "EXPECTED_DENIAL"
+OUTCOME_SYSTEM_FAILURE = "SYSTEM_FAILURE"
+
+# Endpoints whose operation is to make the caller a sysadmin principal: they
+# complete only when the session names a sysadmin afterwards.
+_SIGN_IN_ENDPOINTS = frozenset({"sysadmin.login", "sysadmin.passkey_auth_finish"})
+# Endpoints that complete for any caller. ``GET /sysadmin/logout`` clears the
+# session's principal whoever holds it (a tracked follow-up, unchanged here),
+# so for a student or teacher it is a completed operation, not a denial.
+_COMPLETES_FOR_ANY_PRINCIPAL = frozenset({"sysadmin.logout"})
 _SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
 
@@ -180,23 +193,46 @@ def classify_request(*, surface: str, principal: str, class_context_present: boo
     return None
 
 
-def classify_outcome(*, surface: str, method: str, principal_after: str) -> str:
-    """What became of a non-sysadmin principal's request to a sysadmin surface.
+def classify_outcome(
+    *,
+    surface: str,
+    endpoint: str | None,
+    method: str,
+    status_code: int | None,
+    principal_after: str,
+) -> str:
+    """Classify a non-sysadmin principal's sysadmin-surface request. Pure.
 
-    Read after the response, from the principal the session then names:
+    Uses the SPEC-OPS-003 §VI vocabulary, read after the view ran, per the
+    contract of the route that owns the outcome (§VII):
 
-    - ``sysadmin_session_established``: the session now names a sysadmin;
-    - ``not_submitted``: a GET/HEAD/OPTIONS of a sign-in endpoint that left the
-      principal unchanged; nothing was submitted, so nothing was denied;
-    - ``denied``: the request ended without a sysadmin principal. On the
-      sign-in surface that is a refused sign-in; on the console it is refused
-      admission.
+    - an unhandled failure (the app's 5xx error handler)    -> SYSTEM_FAILURE
+    - ``sysadmin.logout``: completes for any principal       -> SUCCESS
+    - password or passkey sign-in: the session now names a
+      sysadmin                                               -> SUCCESS
+      ...a GET/HEAD/OPTIONS that only rendered the form      -> SUCCESS
+      ...a submission that left no sysadmin principal        -> EXPECTED_DENIAL
+    - other sign-in endpoints (passkey start, the Grafana
+      auth check) answer a refusal with their own 4xx        -> EXPECTED_DENIAL
+      and otherwise complete                                 -> SUCCESS
+    - the console admits only a sysadmin, so a student or
+      teacher is refused admission                           -> EXPECTED_DENIAL
     """
+    if status_code is not None and status_code >= 500:
+        return OUTCOME_SYSTEM_FAILURE
+    if endpoint in _COMPLETES_FOR_ANY_PRINCIPAL:
+        return OUTCOME_SUCCESS
     if principal_after == PRINCIPAL_SYSADMIN:
-        return OUTCOME_SYSADMIN_SESSION_ESTABLISHED
-    if surface == SURFACE_SYSADMIN_AUTHENTICATION and (method or "").upper() in _SAFE_METHODS:
-        return OUTCOME_NOT_SUBMITTED
-    return OUTCOME_DENIED
+        return OUTCOME_SUCCESS
+    if surface == SURFACE_SYSADMIN_CONSOLE:
+        return OUTCOME_EXPECTED_DENIAL
+    if endpoint in _SIGN_IN_ENDPOINTS:
+        if (method or "").upper() in _SAFE_METHODS:
+            return OUTCOME_SUCCESS
+        return OUTCOME_EXPECTED_DENIAL
+    if status_code is not None and 400 <= status_code < 500:
+        return OUTCOME_EXPECTED_DENIAL
+    return OUTCOME_SUCCESS
 
 
 def _principal_user(context):
@@ -268,6 +304,7 @@ def observe_request(context) -> dict | None:
         "principal": principal,
         "class_context_present": class_context_present,
         "class_id": class_id,
+        "endpoint": request.endpoint,
         "method": request.method,
         "verdict": classify_request(
             surface=surface,
@@ -277,15 +314,16 @@ def observe_request(context) -> dict | None:
     }
 
 
-def record_surface_principal_mismatch(observation: dict | None) -> None:
+def record_surface_principal_mismatch(observation: dict | None, status_code: int | None = None) -> None:
     """Log a non-sysadmin principal's request to a sysadmin surface, at INFO.
 
     Called after the response, so the outcome is read rather than guessed. It
     is not a violation: the sysadmin surface is reachable by anyone, and
     admission there keys off the principal (``system_admin_required``). A
-    refused sign-in is an expected denial, which is evidence that the rule was
-    enforced (SPEC-OPS-003 §VI), so it is recorded at INFO, not WARNING or
-    ERROR. No username or name is recorded; the actor fields carry the seat's
+    refused sign-in is an ``EXPECTED_DENIAL``, which is evidence that the rule
+    was enforced (SPEC-OPS-003 §VI), so it is recorded at INFO, not WARNING or
+    ERROR. ``principal_after`` shows a sign-in that changed who the session
+    names. No username or name is recorded; the actor fields carry the seat's
     ``public_id`` and ``class_id`` as every TLCP line does.
     """
     if not observation or observation.get("verdict") != VERDICT_SURFACE_PRINCIPAL_MISMATCH:
@@ -293,7 +331,9 @@ def record_surface_principal_mismatch(observation: dict | None) -> None:
     principal_after = _principal_role(_principal_user(None))
     outcome = classify_outcome(
         surface=observation["surface"],
+        endpoint=observation.get("endpoint"),
         method=observation["method"],
+        status_code=status_code,
         principal_after=principal_after,
     )
     fields = {
@@ -301,14 +341,16 @@ def record_surface_principal_mismatch(observation: dict | None) -> None:
         "tlcp_principal": observation["principal"],
         "tlcp_class_context": "present" if observation["class_context_present"] else "absent",
         "tlcp_outcome": outcome,
+        "tlcp_principal_after": principal_after,
     }
     current_app.logger.info(
-        "%s: surface=%s principal=%s class_context=%s outcome=%s method=%s",
+        "%s: surface=%s principal=%s class_context=%s outcome=%s principal_after=%s method=%s",
         SURFACE_PRINCIPAL_MISMATCH_TOKEN,
         fields["tlcp_surface"],
         fields["tlcp_principal"],
         fields["tlcp_class_context"],
         fields["tlcp_outcome"],
+        fields["tlcp_principal_after"],
         observation["method"],
         extra=fields,
     )

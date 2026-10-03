@@ -82,12 +82,15 @@ def test_INV_ARC_019__student_at_sysadmin_login_is_a_mismatch_not_a_violation(cl
         assert record.tlcp_surface == "sysadmin_authentication"
         assert record.tlcp_principal == "student"
         assert record.tlcp_class_context == "present"
-    assert get_line.tlcp_outcome == "not_submitted"
+    # SPEC-OPS-003 §VI: rendering the form completed; the refused submission is
+    # a deliberate rejection.
+    assert get_line.tlcp_outcome == "SUCCESS"
     assert "method=GET" in get_line.getMessage()
-    assert post_line.tlcp_outcome == "denied"
+    assert post_line.tlcp_outcome == "EXPECTED_DENIAL"
+    assert post_line.tlcp_principal_after == "student"
     assert "method=POST" in post_line.getMessage()
     assert (
-        "surface=sysadmin_authentication principal=student class_context=present outcome=denied"
+        "surface=sysadmin_authentication principal=student class_context=present outcome=EXPECTED_DENIAL"
         in post_line.getMessage()
     )
 
@@ -118,7 +121,7 @@ def test_INV_ARC_019__student_at_sysadmin_console_is_a_denied_mismatch(client, a
     (line,) = _records(caplog, MISMATCH)
     assert line.tlcp_surface == "sysadmin_console"
     assert line.tlcp_principal == "student"
-    assert line.tlcp_outcome == "denied"
+    assert line.tlcp_outcome == "EXPECTED_DENIAL"
 
 
 def test_INV_ARC_019__teacher_at_sysadmin_login_is_a_mismatch_not_a_violation(client, app, caplog):
@@ -132,7 +135,7 @@ def test_INV_ARC_019__teacher_at_sysadmin_login_is_a_mismatch_not_a_violation(cl
     assert line.tlcp_surface == "sysadmin_authentication"
     assert line.tlcp_principal == "teacher"
     assert line.tlcp_class_context == "present"
-    assert line.tlcp_outcome == "not_submitted"
+    assert line.tlcp_outcome == "SUCCESS"
 
 
 def test_INV_ARC_019__anonymous_at_sysadmin_login_records_nothing(client, caplog):
@@ -281,13 +284,84 @@ def test_INV_ARC_019__classify_request_uses_both_dimensions(surface, principal, 
 
 
 @pytest.mark.parametrize(
-    "surface, method, after, outcome",
+    "surface, endpoint, method, status, after, outcome",
     [
-        ("sysadmin_authentication", "GET", "student", "not_submitted"),
-        ("sysadmin_authentication", "POST", "student", "denied"),
-        ("sysadmin_authentication", "POST", "sysadmin", "sysadmin_session_established"),
-        ("sysadmin_console", "GET", "student", "denied"),
+        ("sysadmin_authentication", "sysadmin.login", "GET", 200, "student", "SUCCESS"),
+        ("sysadmin_authentication", "sysadmin.login", "POST", 302, "student", "EXPECTED_DENIAL"),
+        ("sysadmin_authentication", "sysadmin.login", "POST", 302, "sysadmin", "SUCCESS"),
+        ("sysadmin_authentication", "sysadmin.passkey_auth_finish", "POST", 401, "teacher", "EXPECTED_DENIAL"),
+        ("sysadmin_authentication", "sysadmin.passkey_auth_start", "POST", 401, "teacher", "EXPECTED_DENIAL"),
+        ("sysadmin_authentication", "sysadmin.passkey_auth_start", "POST", 200, "teacher", "SUCCESS"),
+        ("sysadmin_authentication", "sysadmin.grafana_auth_check", "GET", 401, "student", "EXPECTED_DENIAL"),
+        # Logout completes for any principal (its behaviour is a separate follow-up).
+        ("sysadmin_authentication", "sysadmin.logout", "GET", 302, "anonymous", "SUCCESS"),
+        ("sysadmin_console", "sysadmin.dashboard", "GET", 302, "student", "EXPECTED_DENIAL"),
+        ("sysadmin_authentication", "sysadmin.login", "POST", 500, "student", "SYSTEM_FAILURE"),
     ],
 )
-def test_INV_ARC_019__classify_outcome(surface, method, after, outcome):
-    assert tlcp.classify_outcome(surface=surface, method=method, principal_after=after) == outcome
+def test_SPEC_OPS_003__classify_outcome_uses_the_closed_vocabulary(surface, endpoint, method, status, after, outcome):
+    assert tlcp.classify_outcome(
+        surface=surface, endpoint=endpoint, method=method, status_code=status, principal_after=after,
+    ) == outcome
+    assert outcome in {tlcp.OUTCOME_SUCCESS, tlcp.OUTCOME_EXPECTED_DENIAL, tlcp.OUTCOME_SYSTEM_FAILURE}
+
+
+def test_SPEC_OPS_003__student_at_sysadmin_logout_is_a_successful_mismatch(client, app, caplog):
+    """GET /sysadmin/logout completes for any principal, so it is not a denial."""
+    initialize_as_student("chemistry_p1", client, app)
+    with _capture(caplog):
+        response = client.get("/sysadmin/logout")
+
+    assert response.status_code == 302
+    assert _records(caplog, VIOLATION) == []
+    (line,) = _records(caplog, MISMATCH)
+    assert line.tlcp_surface == "sysadmin_authentication"
+    assert line.tlcp_principal == "student"
+    assert line.tlcp_outcome == "SUCCESS"
+
+
+# -------------------- a revoked cookie is not a principal --------------------
+#
+# validate_canonical_session_nonce must run before capture_correlation_context:
+# a superseded cookie names no principal for this request.
+
+
+def _revoke(client):
+    with client.session_transaction() as sess:
+        sess["current_session_nonce"] = "superseded-by-a-later-sign-in"
+
+
+def test_INV_CORE_000__revoked_sysadmin_cookie_with_class_id_is_not_a_violation(client, app, caplog):
+    classroom, _ = _sysadmin_with_session_class_id(client, app, "chemistry_p1")
+    _revoke(client)
+
+    with _capture(caplog):
+        client.get("/sysadmin/dashboard")
+
+    assert _records(caplog, VIOLATION) == []
+    assert _records(caplog, MISMATCH) == []
+    with client.session_transaction() as sess:
+        assert "user_id" not in sess
+
+
+def test_INV_ARC_019__revoked_student_cookie_at_sysadmin_login_records_no_mismatch(client, app, caplog):
+    initialize_as_student("chemistry_p1", client, app)
+    _revoke(client)
+
+    with _capture(caplog):
+        assert client.get("/sysadmin/login").status_code == 200
+
+    assert _records(caplog, MISMATCH) == []
+    assert _records(caplog, VIOLATION) == []
+
+
+def test_INV_CORE_000__valid_sysadmin_cookie_with_class_id_is_still_a_violation(client, app, caplog):
+    """The control for the two tests above: the same session, nonce intact."""
+    classroom, _ = _sysadmin_with_session_class_id(client, app, "chemistry_p1")
+
+    with _capture(caplog):
+        client.get("/sysadmin/dashboard")
+
+    (line,) = _records(caplog, VIOLATION)
+    assert line.levelno == logging.ERROR
+    assert line.class_id == classroom.class_id
