@@ -36,10 +36,6 @@ class StoreItemForm(FlaskForm):
     is_long_term_goal = BooleanField('Long-Term Goal Item (exclude from CWI balance checks)', default=False)
     bypass_cwi_warnings = BooleanField('Bypass CWI Warnings', default=False)
 
-    # Bundle settings
-    is_bundle = BooleanField('This is a Bundled Item', default=False)
-    bundle_quantity = IntegerField('Bundle Quantity (number of items in bundle)', validators=[Optional()])
-
     # Bulk discount settings
     bulk_discount_enabled = BooleanField('Enable Bulk Discount', default=False)
     bulk_discount_quantity = IntegerField('Minimum Quantity for Discount', validators=[Optional()])
@@ -100,12 +96,6 @@ class StoreItemForm(FlaskForm):
             require_positive(
                 self.rent_linked_quantity,
                 'Quantity is required and must be greater than 0 for a rent-linked item.',
-            )
-
-        if self.is_bundle.data:
-            require_positive(
-                self.bundle_quantity,
-                'Bundle quantity is required and must be greater than 0 when creating a bundled item.',
             )
 
         if self.bulk_discount_enabled.data:

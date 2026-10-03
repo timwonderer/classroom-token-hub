@@ -25,7 +25,7 @@ This section groups all teacher economy tools in one place.
 
 ## Store
 - [Store Items](store-items.md)
-- [Bundles, Bulk Discounts, and Collective Goals](store-bundles-goals.md)
+- [Bulk Discounts and Collective Goals](store-bulk-goals.md)
 - [Store Redemptions](store-redemptions.md)
 - [Store Pricing Strategy](store-pricing.md)
 

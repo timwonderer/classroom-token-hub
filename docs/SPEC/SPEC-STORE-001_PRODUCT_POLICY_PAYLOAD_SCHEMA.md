@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Authority Level |
 |------------------|---------|----------------|-----------------|
-| SPEC-STORE-001 | 1.4 | 2026-09-30 | Normative |
+| SPEC-STORE-001 | 1.5 | 2026-10-03 | Normative |
 
 ## I. Purpose
 
@@ -102,7 +102,6 @@ COLLECTIVE_GOAL   - Threshold/deadline purchase (group goal completion)
   "description": <string | null>,
   "bypass_cwi_warnings": <boolean>,
   "is_long_term_goal": <boolean>,
-  "bundle_quantity": <integer | null>,
   "bulk_discount_quantity": <integer | null>,
   "bulk_discount_percentage": <float | null>,
   "collective_goal_type": <string | null>,
@@ -130,10 +129,9 @@ COLLECTIVE_GOAL   - Threshold/deadline purchase (group goal completion)
 | `description` | string \| null | Product description (UI only) | Informational only |
 | `bypass_cwi_warnings` | boolean | Override CWI balance warnings? | Default: false |
 | `is_long_term_goal` | boolean | Exclude from CWI balance checks? | Default: false |
-| `bundle_quantity` | int \| null | Items in bundle | If set, must be > 1; DELAYED_USE and HALL_PASS only; mutually exclusive with collective_goal |
 | `bulk_discount_quantity` | int \| null | Min quantity for discount | If set, must be > 1; IMMEDIATE_USE, DELAYED_USE, and HALL_PASS may use bulk discounts |
 | `bulk_discount_percentage` | float \| null | Discount percentage | Range: 0-100; paired with bulk_discount_quantity |
-| `collective_goal_type` | string \| null | Goal threshold type | Values: "fixed" or "whole_class"; mutually exclusive with bundle fields |
+| `collective_goal_type` | string \| null | Goal threshold type | Values: "fixed" or "whole_class"; mutually exclusive with bulk-discount fields |
 | `collective_goal_target` | int \| null | Required purchases for goal | If set, must be > 0; requires collective_goal_type and collective_goal_expires_at |
 | `collective_goal_expires_at` | datetime \| null | Deadline for goal completion | ISO8601 format; required if collective_goal_type is set |
 
@@ -164,17 +162,16 @@ align the two.
 
 ### A. Type-Specific Rules
 
-Bundling is the narrowest of these rules, so it is stated once rather than
-repeated per type: **only DELAYED_USE and HALL_PASS may be bundled.** A bundle
-grants `bundle_quantity` independent entitlement lifecycles from one charge, so
-it is only meaningful for a type that can hold more than one unexercised unit.
+There are no bundles. Several units of a product are bought as a purchase
+`quantity`, and a bulk discount prices that quantity; a pack of N is a purchase
+of N at the bulk price. A purchase of `quantity` writes `quantity` `GRANTED`
+events, each its own lifecycle, all sharing the purchase's `correlation_id`.
 IMMEDIATE_USE is exercised at the moment of sale and PRIVILEGE is a single
-standing state, so neither has units to hold; COLLECTIVE_GOAL is excluded for a
-different reason, given below.
+standing state, so neither is bought more than one at a time (`FEAT-STOR-001`).
 
 **IMMEDIATE_USE:**
 - `auto_expiry_days` MUST be null (or will be ignored)
-- Cannot be bundled or part of collective goal
+- Cannot be part of a collective goal
 - MAY use a bulk discount; the discount changes the price of a single immediate-use transaction
 
 **Acquisition and holding rules:**
@@ -195,15 +192,13 @@ different reason, given below.
 
 **DELAYED_USE:**
 - `auto_expiry_days` optional but recommended (null = perpetual entitlement)
-- MAY be bundled; a purchase of `quantity` writes `quantity × bundle_quantity`
-  `GRANTED` events, each its own lifecycle, all sharing the purchase's
-  `correlation_id`. The debit is per pack, not per unit.
+- MAY be bought in a quantity above one, priced by any bulk discount
 - Cannot be part of a collective goal
 
 **HALL_PASS:**
 - `supports_direct_grants` MUST be true
 - `auto_expiry_days` optional
-- MAY be bundled, on the same terms as DELAYED_USE
+- MAY be bought in a quantity above one, on the same terms as DELAYED_USE
 - Cannot be part of a collective goal
 
 **PRIVILEGE:**
@@ -211,7 +206,7 @@ different reason, given below.
 - rent grants expire at the applicable rent-cycle boundary
 - holding limit is hard-set to 1
 - `supports_direct_grants` MUST be true
-- Cannot be bundled or part of collective goal
+- Cannot use a bulk discount or be part of a collective goal
 
 **INSURANCE:**
 - Recurring premium product
@@ -220,23 +215,22 @@ different reason, given below.
 - Additional insurance-specific fields (see SPEC-OBL-001)
 - **Not sold through the store.** Enrollment is purchased through the insurance
   interface under FEAT-CLASS-003, not through the store purchase command, so
-  the store's bundle and bulk-discount rules never reach it.
+  the store's bulk-discount rules never reach it.
 
 **COLLECTIVE_GOAL:**
 - `collective_goal_type` MUST be set ("fixed" or "whole_class")
 - `collective_goal_target` MUST be > 0
 - `collective_goal_expires_at` MUST be valid future datetime
-- Bundle fields MUST all be null
-- Cannot coexist with bundle/bulk discount
+- Bulk-discount fields MUST all be null
 
 ### B. Mutual Exclusion Rules
 
-1. **Bundle XOR Collective Goal**
-   - If any of `bundle_quantity`, `bulk_discount_quantity`, `bulk_discount_percentage` is set, all collective_goal fields MUST be null
-   - If any collective_goal field is set, all bundle fields MUST be null
-   - A goal is a shared pot with a deadline. Bundling and quantity discounts
-     describe one student's individual purchase, so they have no meaning
-     against it — a goal is its own category with its own rules.
+1. **Bulk Discount XOR Collective Goal**
+   - If either of `bulk_discount_quantity`, `bulk_discount_percentage` is set, all collective_goal fields MUST be null
+   - If any collective_goal field is set, both bulk-discount fields MUST be null
+   - A goal is a shared pot with a deadline. A quantity discount describes one
+     student's individual purchase, so it has no meaning against it — a goal
+     is its own category with its own rules.
 
 2. **Collective Goal Completeness**
    - If `collective_goal_type` is set, both `collective_goal_target` and `collective_goal_expires_at` MUST be set
@@ -249,12 +243,11 @@ different reason, given below.
 3. **item_type:** MUST be exactly one of `immediate`, `delayed`, `hall_pass`, `privilege`, `collective`
 4. **inventory_total:** If set, must be > 0
 5. **auto_expiry_days:** If set, must be > 0
-6. **bundle_quantity:** If set, must be > 1
-7. **bulk_discount_quantity:** If set, must be > 1
-8. **bulk_discount_percentage:** If set, must be in range [0, 100]
-9. **Bulk discounts:** If either bulk-discount field is set, `entitlement_type` MUST be `IMMEDIATE_USE`, `DELAYED_USE`, or `HALL_PASS`. Privilege and collective-goal products cannot use bulk discounts.
-10. **collective_goal_target:** If set, must be > 0
-11. **collective_goal_expires_at:** If set, must be a valid future datetime
+6. **bulk_discount_quantity:** If set, must be > 1
+7. **bulk_discount_percentage:** If set, must be in range [0, 100]
+8. **Bulk discounts:** If either bulk-discount field is set, `entitlement_type` MUST be `IMMEDIATE_USE`, `DELAYED_USE`, or `HALL_PASS`. Privilege and collective-goal products cannot use bulk discounts.
+9. **collective_goal_target:** If set, must be > 0
+10. **collective_goal_expires_at:** If set, must be a valid future datetime
 
 ### D. Teacher-facing creation sequence and gates
 
@@ -276,11 +269,11 @@ REQUIRED: item type
         |
         v
 ITEM TYPE GATE
-  immediate  -> no redemption prompt, expiry, bundle, or goal; bulk discount allowed
+  immediate  -> no redemption prompt, expiry, or goal; bulk discount allowed
   delayed    -> redemption prompt and expiry become available
   hall_pass  -> delayed-style holding settings; grant lifecycle applies
-  privilege  -> holding limit hard-set to 1; no bundle or goal
-  collective -> goal settings become available; bundle/bulk settings disappear
+  privilege  -> holding limit hard-set to 1; no bulk discount or goal
+  collective -> goal settings become available; bulk settings disappear
         |
         v
 RENT LINK GATE
@@ -437,6 +430,7 @@ If any validation step fails, raise an exception immediately. Do not attempt rec
 | 1.1 | 2026-09-13 | Retired the Store pricing tier. Added required `economic_role` (`necessity`, `convenience`, `add_on`) per SPEC-ECON-003 §4.7 |
 | 1.2 | 2026-09-13 | Declared the persisted fields Section V.D already depended on (`item_type`, `inventory_total`, `activation_at`, `auto_delist_date`, `redemption_prompt`), closing a Section III.A governance gap. Added Section IV.D distinguishing persisted inputs from derived projections and fixing `economic_role` as advisory per DOM-STORE-001 §XII. Replaced the stale `is_active` reference with the `availability_state` projection. Added `economic_role` to Examples 2-4 and corrected malformed JSON in Example 2. Renumbered Section V.C and restored A/B/C/D section order |
 | 1.3 | 2026-09-14 | `price` is nullable: required when `direct_purchase_allowed` is true and null for a grant-only product, which is not purchasable and is excluded from the student purchase catalog. Aligns Sections IV.A, V.A and V.C with the grant-only product the acquisition rules already permitted |
+| 1.5 | 2026-10-03 | Removed bundles (`bundle_quantity`). A bundle and a bulk purchase already stored the same way, as N entitlements under one charge, and the verdicts of DOM-STORE-001 §VIII.E.4 move no money for either, so a bundle added a concept with no distinct behavior; a pack of N is a purchase of N at a bulk price. Bulk discount now pairs with collective goal in Section V.B. Migration: production held no bundle product on 2026-10-03 (no row with the bundle flag set or a bundle quantity), so no policy needs upgrading; payloads carrying the field are rejected as unknown |
 
 ## IX. Amendment Process
 

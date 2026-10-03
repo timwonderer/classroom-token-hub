@@ -2469,7 +2469,6 @@ def shop():
             status=derive_display_status(entry["entitlement_id"]),
             purchase_date=datetime.fromisoformat(entry["timestamp"]),
             expiry_date=None,
-            is_from_bundle=False,
         ))
 
     # Check if student has paid rent this month using canonical rent settings only.

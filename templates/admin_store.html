@@ -19,9 +19,7 @@
     {% if req.acquisition_type == 'GRANT' %}Given by you{% elif req.acquisition_type == 'PERK' %}Came with rent{% else %}Bought{% endif %}
     {%- if req.purchased_at %} {{ req.purchased_at|fmt_timestamp }}{% endif %}
     {%- if req.acquisition_type == 'PURCHASE' and req.price_paid is not none %}
-      {%- if req.bundle_size > 1 %}, one use from a bundle of {{ req.bundle_size }}{% endif %}
-      {%- set purchases = (req.units_in_purchase // req.bundle_size) if req.bundle_size > 1 else req.units_in_purchase %}
-      {%- if purchases > 1 %}, {{ purchases }} bought together for ${{ "%.2f"|format(req.price_paid) }} total
+      {%- if req.units_in_purchase > 1 %}, {{ req.units_in_purchase }} bought together for ${{ "%.2f"|format(req.price_paid) }} total
       {%- else %} for ${{ "%.2f"|format(req.price_paid) }}{% endif %}
     {%- endif %}
   </dd>
@@ -94,8 +92,7 @@
 
 {% call help.topic('store-advanced', 'tune', 'Advanced Options') %}
 <ul class="mb-3">
-  <li><strong>Bundles:</strong> Set quantity per purchase for multi-use items.</li>
-  <li><strong>Bulk discount:</strong> Lower price when students buy in larger quantities.</li>
+  <li><strong>Bulk discount:</strong> Lower price when students buy in larger quantities. For a pack (say, 3 for a set price), use a bulk discount at that quantity.</li>
   <li><strong>Collective goal:</strong> Require class-wide progress before redemption.</li>
   <li><strong>Auto delist/expiry:</strong> Remove items after a date or number of days.</li>
   <li><strong>Redemption prompt:</strong> Collect details from students at checkout.</li>
@@ -344,9 +341,6 @@
                     {% elif item.economic_role == 'convenience' %}bg-primary
                     {% elif item.economic_role == 'add_on' %}bg-warning text-dark
                     {% endif %}">{{ item.economic_role|replace('_', '-')|title }}</span>
-                {% endif %}
-                {% if item.is_bundle %}
-                  <span class="badge bg-warning text-dark">{{ item.bundle_quantity }} bundle</span>
                 {% endif %}
                 {% if item.bulk_discount_enabled %}
                   <span class="badge bg-success">{{ item.bulk_discount_percentage }}% off {{ item.bulk_discount_quantity }}+</span>

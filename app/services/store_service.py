@@ -73,7 +73,7 @@ AVAILABILITY_STATES = frozenset({IN_USE, HIDDEN, RETIRED})
 _DEFINITION_FIELDS = frozenset({
     "name", "description", "price", "economic_role", "item_type", "inventory_total",
     "holding_limit", "direct_purchase_allowed", "available_with_overdue_obligations", "activation_at", "auto_delist_date", "auto_expiry_days",
-    "is_long_term_goal", "bypass_cwi_warnings", "is_bundle", "bundle_quantity",
+    "is_long_term_goal", "bypass_cwi_warnings",
     "bulk_discount_enabled", "bulk_discount_quantity", "bulk_discount_percentage",
     "collective_goal_type", "collective_goal_target", "collective_goal_expires_at",
     "collective_goal_instance_code", "redemption_prompt",
@@ -113,10 +113,9 @@ def _reject_unknown_fields(fields: dict) -> None:
         )
 
 
-# Bundles create multiple held units, while a bulk discount only changes the
-# price of one immediate-use transaction. They therefore have different type
-# contracts.
-_BUNDLE_ITEM_TYPES = frozenset({'delayed', 'hall_pass'})
+# A bulk discount prices a purchase of several units; each unit is its own
+# entitlement. There are no bundles (SPEC-STORE-001): a pack of N is N units
+# bought at a bulk price.
 _BULK_DISCOUNT_ITEM_TYPES = frozenset({'immediate', 'delayed', 'hall_pass'})
 
 # Types with no post-purchase window to expire.
@@ -141,7 +140,6 @@ def item_type_field_rules() -> dict[str, dict[str, bool]]:
     """
     return {
         item_type: {
-            'multi_unit': item_type in _BUNDLE_ITEM_TYPES,
             'bulk_discountable': item_type in _BULK_DISCOUNT_ITEM_TYPES,
             'expiring': item_type in {'delayed', 'privilege', 'hall_pass'},
             'collective': item_type == 'collective',
@@ -157,7 +155,7 @@ def _validate_definition(definition: dict) -> None:
 
     These rules used to live in the JSON payload parser, which the single-table
     consolidation retired — leaving them enforced nowhere, so a form post could
-    persist a bundled immediate-use item or a collective goal with no deadline.
+    persist a discounted privilege or a collective goal with no deadline.
     They belong here rather than in a route because publication is the only way
     a definition reaches the database, and a rule enforced at one call site is a
     rule the next call site forgets.
@@ -184,8 +182,8 @@ def _validate_definition(definition: dict) -> None:
             raise InvalidDefinition("privilege holding_limit is fixed at one")
         if definition.get('inventory_total') is not None:
             raise InvalidDefinition("privileges do not use Store inventory")
-        if definition.get('is_bundle') or definition.get('bulk_discount_enabled'):
-            raise InvalidDefinition("privileges cannot be bundled or bulk discounted")
+        if definition.get('bulk_discount_enabled'):
+            raise InvalidDefinition("privileges cannot be bulk discounted")
         if definition.get('redemption_prompt'):
             raise InvalidDefinition("privileges do not use redemption prompts")
         # The resolved flag, not the raw key: an omitted key means directly purchasable.
@@ -224,18 +222,8 @@ def _validate_definition(definition: dict) -> None:
         if auto_expiry_days <= 0:
             raise InvalidDefinition("auto_expiry_days must be greater than zero if set")
 
-    if definition.get('is_bundle') and item_type not in _BUNDLE_ITEM_TYPES:
-        raise InvalidDefinition(
-            f"{item_type} items cannot be bundled — only delayed-use and hall-pass "
-            "items can hold multiple bundled units"
-        )
     if definition.get('bulk_discount_enabled') and item_type not in _BULK_DISCOUNT_ITEM_TYPES:
         raise InvalidDefinition(f"{item_type} items cannot be given a bulk discount")
-
-    if definition.get('is_bundle'):
-        bundle_quantity = definition.get('bundle_quantity')
-        if not bundle_quantity or bundle_quantity <= 1:
-            raise InvalidDefinition("a bundle must grant more than one unit")
 
     if definition.get('bulk_discount_enabled'):
         quantity = definition.get('bulk_discount_quantity')
@@ -264,8 +252,8 @@ def _validate_definition(definition: dict) -> None:
             raise InvalidDefinition("collective_goal_target must be above zero if set")
         if not definition.get('collective_goal_expires_at'):
             raise InvalidDefinition("a collective goal must have a deadline")
-        # Bundle and bulk settings are refused above, with the rest of the types
-        # that cannot hold multiple units.
+        # Bulk settings are refused above, with the rest of the types that
+        # cannot take a bulk discount.
     else:
         for field in ('collective_goal_type', 'collective_goal_target',
                       'collective_goal_expires_at'):
