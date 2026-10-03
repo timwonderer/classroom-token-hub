@@ -26,7 +26,10 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
 
+import sqlalchemy as sa
 from sqlalchemy.orm import joinedload
+
+from app.extensions import db
 
 from app.models import EntitlementEvent, PendingAction, Seat, Transaction
 from app.services import store_service
@@ -79,56 +82,68 @@ class RedemptionRequestView:
         return self.outcome is None
 
 
-def _covering_purchase(grant: EntitlementEvent) -> Transaction | None:
-    """The purchase transaction that paid for this grant.
-
-    Matched on correlation, class, seat and type together, the same join the
-    collective-goal refund uses: correlation alone is a shared key, not a
-    promise of scope.
-    """
-    if grant.acquisition_type != "PURCHASE" or not grant.correlation_id:
-        return None
-    return (
-        Transaction.query.filter(
-            Transaction.correlation_id == grant.correlation_id,
-            Transaction.class_id == grant.class_id,
-            Transaction.seat_id == grant.target_seat_id,
-            Transaction.type == "purchase",
-        )
-        .order_by(Transaction.id.asc())
-        .first()
-    )
-
-
-def _units_in_purchase(grant: EntitlementEvent) -> int:
-    """How many entitlements the purchase behind this grant produced.
-
-    A bundle, or a quantity above one, is several lifecycles under one charge
-    (``store_purchase_feat``).
-    """
-    if grant.acquisition_type != "PURCHASE" or not grant.correlation_id:
-        return 1
-    return (
-        EntitlementEvent.query.filter(
-            EntitlementEvent.class_id == grant.class_id,
-            EntitlementEvent.target_seat_id == grant.target_seat_id,
-            EntitlementEvent.correlation_id == grant.correlation_id,
-            EntitlementEvent.event_type == "GRANTED",
-        ).count()
-        or 1
-    )
-
-
-def _bundle_size(grant: EntitlementEvent) -> int:
-    """Uses per purchase of the product version this grant was bought under.
+def _bundle_size(product) -> int:
+    """Uses per purchase of the product version a grant was bought under.
 
     Read the way the purchase read it (``store_policy_resolver``): a bundle
     size counts only on a product marked as a bundle.
     """
-    product = store_service.resolve_entitlement_product(grant)
     if product is None or not product.is_bundle:
         return 1
     return max(1, int(product.bundle_quantity or 1))
+
+
+def _purchase_context(grants) -> tuple[dict, dict]:
+    """For every purchase behind these grants: its transaction and unit count.
+
+    Two queries for the whole list, keyed by (seat, correlation). The join
+    is on correlation, class, seat and type together, the same join the
+    collective-goal refund uses: correlation alone is a shared key, not a
+    promise of scope. A bundle, or a quantity above one, is several
+    lifecycles under one charge (``store_purchase_feat``).
+    """
+    purchases = [
+        grant for grant in grants
+        if grant is not None and grant.acquisition_type == "PURCHASE" and grant.correlation_id
+    ]
+    if not purchases:
+        return {}, {}
+    class_id = purchases[0].class_id
+    seat_ids = {grant.target_seat_id for grant in purchases}
+    correlations = {grant.correlation_id for grant in purchases}
+
+    transactions = {}
+    for row in (
+        Transaction.query.filter(
+            Transaction.class_id == class_id,
+            Transaction.seat_id.in_(seat_ids),
+            Transaction.correlation_id.in_(correlations),
+            Transaction.type == "purchase",
+        )
+        .order_by(Transaction.id.asc())
+        .all()
+    ):
+        transactions.setdefault((row.seat_id, row.correlation_id), row)
+
+    units = {
+        (seat_id, correlation_id): count
+        for seat_id, correlation_id, count in (
+            db.session.query(
+                EntitlementEvent.target_seat_id,
+                EntitlementEvent.correlation_id,
+                sa.func.count(EntitlementEvent.event_id),
+            )
+            .filter(
+                EntitlementEvent.class_id == class_id,
+                EntitlementEvent.target_seat_id.in_(seat_ids),
+                EntitlementEvent.correlation_id.in_(correlations),
+                EntitlementEvent.event_type == "GRANTED",
+            )
+            .group_by(EntitlementEvent.target_seat_id, EntitlementEvent.correlation_id)
+            .all()
+        )
+    }
+    return transactions, units
 
 
 def _student_names(seat_ids: set[int]) -> dict[int, str]:
@@ -172,9 +187,11 @@ def _parse_instant(value) -> datetime | None:
         return None
 
 
-def _base_fields(grant: EntitlementEvent | None, *, names, seat_id: int) -> dict:
+def _base_fields(grant: EntitlementEvent | None, *, names, seat_id: int, context) -> dict:
+    transactions, units = context
     product = store_service.resolve_entitlement_product(grant) if grant is not None else None
-    transaction = _covering_purchase(grant) if grant is not None else None
+    key = (grant.target_seat_id, grant.correlation_id) if grant is not None else None
+    transaction = transactions.get(key) if key else None
     return {
         "seat_id": seat_id,
         "student_name": names.get(seat_id, "Unknown student"),
@@ -184,8 +201,8 @@ def _base_fields(grant: EntitlementEvent | None, *, names, seat_id: int) -> dict
         "acquisition_type": grant.acquisition_type if grant is not None else "PURCHASE",
         "purchased_at": grant.timestamp if grant is not None else None,
         "price_paid": abs(Decimal(transaction.amount or 0)) if transaction is not None else None,
-        "units_in_purchase": _units_in_purchase(grant) if grant is not None else 1,
-        "bundle_size": _bundle_size(grant) if grant is not None else 1,
+        "units_in_purchase": (units.get(key) or 1) if key else 1,
+        "bundle_size": _bundle_size(product),
     }
 
 
@@ -202,18 +219,19 @@ def get_pending_redemption_count(class_id: str) -> int:
     return _waiting_requests(class_id).count()
 
 
-def list_pending_redemptions(class_id: str) -> list[RedemptionRequestView]:
-    """Every request in the class still waiting for a decision, oldest first.
+def list_pending_redemptions(class_id: str, *, limit: int | None = None) -> list[RedemptionRequestView]:
+    """Requests in the class still waiting for a decision, oldest first.
 
-    Oldest first because that is the order a fair queue is worked in.
+    Oldest first because that is the order a fair queue is worked in. With
+    ``limit``, only the oldest that many are built.
     """
-    rows = (
-        _waiting_requests(class_id)
-        .order_by(PendingAction.submitted_at.asc(), PendingAction.pending_action_id.asc())
-        .all()
+    query = _waiting_requests(class_id).order_by(
+        PendingAction.submitted_at.asc(), PendingAction.pending_action_id.asc()
     )
+    rows = (query.limit(limit) if limit else query).all()
     grants = _grants_by_entitlement(class_id, {row.entitlement_id for row in rows})
     names = _student_names({row.seat_id for row in rows})
+    context = _purchase_context(grants.values())
 
     views = []
     for row in rows:
@@ -228,7 +246,7 @@ def list_pending_redemptions(class_id: str) -> list[RedemptionRequestView]:
             entitlement_id=row.entitlement_id,
             student_note=(payload.get("details") or "").strip() or None,
             submitted_at=row.submitted_at,
-            **_base_fields(grant, names=names, seat_id=row.seat_id),
+            **_base_fields(grant, names=names, seat_id=row.seat_id, context=context),
         ))
     return views
 
@@ -263,6 +281,7 @@ def list_resolved_redemptions(class_id: str, *, limit: int = 100) -> list[Redemp
     names = _student_names(
         {event.target_seat_id for event in events} | {row.seat_id for row in legacy}
     )
+    context = _purchase_context(grants.values())
 
     views = []
     for event in events:
@@ -276,7 +295,7 @@ def list_resolved_redemptions(class_id: str, *, limit: int = 100) -> list[Redemp
             outcome=APPROVED if approved else DENIED,
             decided_at=event.timestamp,
             decision_note=(payload.get("decision_note") or "").strip() or None,
-            **_base_fields(grants.get(event.entitlement_id), names=names, seat_id=event.target_seat_id),
+            **_base_fields(grants.get(event.entitlement_id), names=names, seat_id=event.target_seat_id, context=context),
         ))
 
     # Approvals already wrote a CONSUMED event that the query above found, so a
@@ -293,7 +312,7 @@ def list_resolved_redemptions(class_id: str, *, limit: int = 100) -> list[Redemp
             outcome=DENIED,
             decided_at=_parse_instant(payload.get("resolved_at")) or row.submitted_at,
             is_legacy=True,
-            **_base_fields(grants.get(row.entitlement_id), names=names, seat_id=row.seat_id),
+            **_base_fields(grants.get(row.entitlement_id), names=names, seat_id=row.seat_id, context=context),
         ))
 
     _earliest = datetime.min.replace(tzinfo=timezone.utc)
@@ -302,23 +321,31 @@ def list_resolved_redemptions(class_id: str, *, limit: int = 100) -> list[Redemp
 
 
 
-def list_pending_acknowledgements(class_id: str) -> list[RedemptionRequestView]:
+def _waiting_acknowledgements(class_id: str):
+    return PendingAction.query.filter(
+        PendingAction.class_id == class_id,
+        PendingAction.authoritative_feat == REDEMPTION_FEAT,
+        PendingAction.payload["kind"].as_string() == ACKNOWLEDGEMENT_KIND,
+    )
+
+
+def get_pending_acknowledgement_count(class_id: str) -> int:
+    return _waiting_acknowledgements(class_id).count()
+
+
+def list_pending_acknowledgements(class_id: str, *, limit: int | None = None) -> list[RedemptionRequestView]:
     """Immediate-use purchases waiting for the teacher to mark them complete.
 
     Oldest first. The entitlement is already ``CONSUMED``; the row only reminds
     the teacher to deliver the item (DOM-STORE-001 §VIII.E.3).
     """
-    rows = (
-        PendingAction.query.filter(
-            PendingAction.class_id == class_id,
-            PendingAction.authoritative_feat == REDEMPTION_FEAT,
-            PendingAction.payload["kind"].as_string() == ACKNOWLEDGEMENT_KIND,
-        )
-        .order_by(PendingAction.submitted_at.asc(), PendingAction.pending_action_id.asc())
-        .all()
+    query = _waiting_acknowledgements(class_id).order_by(
+        PendingAction.submitted_at.asc(), PendingAction.pending_action_id.asc()
     )
+    rows = (query.limit(limit) if limit else query).all()
     grants = _grants_by_entitlement(class_id, {row.entitlement_id for row in rows})
     names = _student_names({row.seat_id for row in rows})
+    context = _purchase_context(grants.values())
     views = []
     for row in rows:
         grant = grants.get(row.entitlement_id)
@@ -330,6 +357,6 @@ def list_pending_acknowledgements(class_id: str) -> list[RedemptionRequestView]:
             student_note=None,
             submitted_at=row.submitted_at,
             is_acknowledgement=True,
-            **_base_fields(grant, names=names, seat_id=row.seat_id),
+            **_base_fields(grant, names=names, seat_id=row.seat_id, context=context),
         ))
     return views

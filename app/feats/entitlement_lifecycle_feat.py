@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import sqlalchemy as sa
+
 from app.extensions import db
 from app.feats.base import requires_feat_context
 from app.models import PendingAction
@@ -80,9 +82,33 @@ def _request_facts(pending_action: PendingAction) -> dict[str, Any]:
     }
 
 
-def _ensure_unresolved(pending_action: PendingAction, entitlement: Any) -> None:
+def _lock_pending_action(pending_action: PendingAction) -> PendingAction:
+    """Re-select and lock a pending action inside this FEAT's transaction.
+
+    A lock the route took is gone by now: FEAT entry discards the route's
+    read-only autobegin transaction (``is_discardable_read_autobegin``) to own
+    a real top-level one. So the row is selected again here, by primary key
+    and ``FOR UPDATE``, and a concurrent decision on the same request waits on
+    it and then finds nothing left. The key is read from the instance's
+    identity, so a row deleted meanwhile is not reloaded to learn it.
+    """
+    identity = sa.inspect(pending_action).identity
+    pending_action_id = identity[0] if identity else pending_action.pending_action_id
+    locked = (
+        PendingAction.query.filter(PendingAction.pending_action_id == pending_action_id)
+        .populate_existing()
+        .with_for_update()
+        .first()
+    )
+    if locked is None:
+        raise ValueError("This pending action has already been resolved")
+    return locked
+
+
+def _lock_unresolved(pending_action: PendingAction, entitlement: Any) -> PendingAction:
+    pending_action = _lock_pending_action(pending_action)
     payload = pending_action.payload or {}
-    if payload.get("outcome"):
+    if payload.get("outcome") or payload.get("kind"):
         raise ValueError("Redemption request has already been resolved")
     if (
         pending_action.entitlement_id != entitlement.entitlement_id
@@ -90,6 +116,7 @@ def _ensure_unresolved(pending_action: PendingAction, entitlement: Any) -> None:
         or pending_action.seat_id != entitlement.target_seat_id
     ):
         raise ValueError("Redemption request does not belong to this entitlement")
+    return pending_action
 
 
 @requires_feat_context("FEAT-STOR-002")
@@ -112,7 +139,7 @@ def execute_approve_redemption(
     from app.services.entitlement_service import consume_entitlement
     from app.services.redemption_query_service import APPROVAL_SOURCE
 
-    _ensure_unresolved(pending_action, entitlement)
+    pending_action = _lock_unresolved(pending_action, entitlement)
     if store_item.item_type == "hall_pass":
         # A hall pass is exercised by Productivity through hall_pass_logs, never
         # by a Store-owned CONSUMED (FEAT-STOR-002 §VII), and its requests are
@@ -166,7 +193,7 @@ def execute_deny_redemption(
     from app.services.entitlement_service import revoke_entitlement
     from app.services.redemption_query_service import DENIAL_SOURCE
 
-    _ensure_unresolved(pending_action, entitlement)
+    pending_action = _lock_unresolved(pending_action, entitlement)
     if store_item.item_type == "hall_pass":
         raise ValueError("Hall-pass requests are resolved from the Hall Passes page.")
 
@@ -210,7 +237,7 @@ def execute_return_redemption(
     the pending action on resolution. A returned request therefore leaves no
     durable record of its own.
     """
-    _ensure_unresolved(pending_action, entitlement)
+    pending_action = _lock_unresolved(pending_action, entitlement)
     db.session.delete(pending_action)
     db.session.flush()
 
@@ -264,6 +291,7 @@ def execute_complete_immediate_use(
     §VIII.E.3). It writes no entitlement event, because the entitlement was
     already ``CONSUMED`` at purchase.
     """
+    pending_action = _lock_pending_action(pending_action)
     if (pending_action.payload or {}).get("kind") != IMMEDIATE_USE_ACKNOWLEDGEMENT:
         raise ValueError("This is not an immediate-use purchase.")
     if pending_action.class_id != ctx.class_id:

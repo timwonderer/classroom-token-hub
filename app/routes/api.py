@@ -518,9 +518,10 @@ def _load_redemption_for_decision(data):
     Accepts the request id (``request_id``, the pending action) or the
     entitlement it acts on (``entitlement_id``). Either way the request must be
     unresolved and in the teacher's active class: a class the teacher owns is
-    not enough, because ownership spans every period they teach. The pending
-    row is locked, so a second decision arriving at the same moment waits and
-    then finds nothing left to decide.
+    not enough, because ownership spans every period they teach. This is a
+    read; the FEAT re-selects and locks the row in its own transaction, so a
+    second decision arriving at the same moment waits and then finds nothing
+    left to decide.
     """
     ctx = g.canonical_context
     try:
@@ -547,7 +548,7 @@ def _load_redemption_for_decision(data):
         query = query.filter(PendingAction.pending_action_id == request_id)
     if entitlement_id:
         query = query.filter(PendingAction.entitlement_id == entitlement_id)
-    pending_action = query.with_for_update().first()
+    pending_action = query.first()
     if pending_action is None:
         raise _RedemptionDecisionRefused(
             "This request has already been decided, or it is not in this class.", 409
@@ -713,7 +714,6 @@ def complete_immediate_use():
             PendingAction.authoritative_feat == "FEAT-STOR-002",
             PendingAction.payload["kind"].as_string() == "immediate_use_acknowledgement",
         )
-        .with_for_update()
         .first()
     )
     if pending_action is None:

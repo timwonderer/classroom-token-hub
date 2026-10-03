@@ -490,3 +490,43 @@ def test_store_and_dashboard_show_the_reminder(app, client, immediate):
     dashboard = client.get("/admin/").get_data(as_text=True)
     assert "Sit Anywhere Today" in dashboard
     assert "1 store item<" in dashboard
+
+
+def test_a_verdict_relocks_the_row_inside_its_own_transaction(app, client, requested):
+    """A lock the route takes does not survive FEAT entry, so the FEAT re-locks.
+
+    Simulates the race: the route read the pending action, then a concurrent
+    Return resolved it before this Accept's FEAT ran. The Accept must find
+    nothing to decide rather than write a terminal event.
+    """
+    from app.feats.entitlement_lifecycle_feat import (
+        execute_approve_redemption,
+        execute_return_redemption,
+    )
+    from app.services import store_service
+    from app.services.context_resolver import CanonicalContext
+    from app.services.entitlement_read_service import latest_entitlement_grant
+
+    classroom = requested["classroom"]
+    with app.app_context():
+        ctx = CanonicalContext(
+            user_id=classroom.teacher_user_id, class_id=classroom.class_id,
+            seat_id=classroom.teacher_seat_id, actor_role="teacher",
+        )
+        stale = db.session.get(PendingAction, requested["request_id"])
+        entitlement = latest_entitlement_grant(requested["entitlement_id"])
+        store_item = store_service.resolve_entitlement_product(entitlement)
+
+        execute_return_redemption(
+            entitlement=entitlement, pending_action=stale, ctx=ctx,
+            idempotency_key=f"t:return:{requested['request_id']}",
+        )
+        assert db.session.get(PendingAction, requested["request_id"]) is None
+
+        with pytest.raises(ValueError):
+            execute_approve_redemption(
+                entitlement=entitlement, store_item=store_item, pending_action=stale, ctx=ctx,
+                idempotency_key=f"t:approve:{requested['request_id']}",
+            )
+        db.session.rollback()
+        assert _terminal(requested["entitlement_id"]) == []

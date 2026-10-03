@@ -2298,12 +2298,16 @@ def dashboard():
     # Pending actions - count all types of pending approvals (scoped by class_id)
     # Oldest first, the order the queue is worked in. The same reader backs
     # the Store page's Redemptions tab, so the two can never disagree.
-    pending_redemptions = redemption_query_service.list_pending_redemptions(active_class_id)
-    pending_acknowledgements = redemption_query_service.list_pending_acknowledgements(active_class_id)
     # Both wait on the teacher, so both count: a redemption to decide, or an
     # immediate-use purchase to deliver and mark complete (DOM-STORE-001
-    # §VIII.E.3). They share the dashboard's Redemptions list.
-    pending_redemptions_count = len(pending_redemptions) + len(pending_acknowledgements)
+    # §VIII.E.3). They share the dashboard's Redemptions list, which shows the
+    # five oldest, so only those are built; the totals are counts.
+    pending_redemptions = redemption_query_service.list_pending_redemptions(active_class_id, limit=5)
+    pending_acknowledgements = redemption_query_service.list_pending_acknowledgements(active_class_id, limit=5)
+    pending_redemptions_count = (
+        redemption_query_service.get_pending_redemption_count(active_class_id)
+        + redemption_query_service.get_pending_acknowledgement_count(active_class_id)
+    )
     pending_hall_pass_requests = list_pending_hall_pass_requests_for_class(ctx.class_id)
     pending_hall_passes_count = len(pending_hall_pass_requests)
     pending_insurance_claims = (

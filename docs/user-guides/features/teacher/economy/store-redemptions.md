@@ -68,7 +68,7 @@ Its only button is **Mark as complete**. Click it once, then **Confirm complete*
 | --- | --- |
 | **Purchased** | Paid for, not used yet |
 | **Processing** | The student asked to use it, and the request is waiting for you |
-| **Redeemed** / **Completed** | Used |
+| **Consumed** | Used: you accepted the request, or it was an immediate-use item |
 | **Expired** | Its time ran out before it was used (from **Item Expiry in Days**) |
 | **Denied** | You denied the student's request |
 | **Revoked** | You voided the item before the student asked to use it |
