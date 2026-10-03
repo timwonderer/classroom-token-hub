@@ -8547,8 +8547,10 @@ def bulk_adjust_hall_pass_entitlements():
 
             updated.append(student.identity_profile.full_name if student.identity_profile else str(student.id))
             new_value = get_hall_pass_balance(student.id, student.class_id)
+            # Seat and class ids only: names are PII and stay out of logs (INV-ARC-005 §V).
             current_app.logger.info(
-                f"Admin adjusted hall pass entitlements for student {student.id} ({student.identity_profile.full_name if student.identity_profile else 'unknown'}): {update_type} {value}, new value: {new_value}"
+                "Admin adjusted hall pass entitlements seat_id=%s class_id=%s: %s %s, new value: %s",
+                student.id, student.class_id, update_type, value, new_value,
             )
 
         # Commit all updates
