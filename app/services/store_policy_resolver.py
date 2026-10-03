@@ -79,7 +79,6 @@ class StorePolicyConfig:
     description: Optional[str] = None
     bypass_cwi_warnings: bool = False
     is_long_term_goal: bool = False
-    bundle_quantity: Optional[int] = None
     bulk_discount_quantity: Optional[int] = None
     bulk_discount_percentage: Optional[float] = None
     collective_goal_type: Optional[str] = None
@@ -164,11 +163,6 @@ class StorePolicyResolver:
             description=product.description,
             bypass_cwi_warnings=bool(product.bypass_cwi_warnings),
             is_long_term_goal=bool(product.is_long_term_goal),
-            bundle_quantity=(
-                product.bundle_quantity
-                if product.is_bundle and (product.bundle_quantity or 0) > 1
-                else None
-            ),
             bulk_discount_quantity=(
                 product.bulk_discount_quantity if product.bulk_discount_enabled else None
             ),

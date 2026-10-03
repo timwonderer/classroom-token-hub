@@ -15,7 +15,7 @@ related:
 
 ## Overview
 
-Every store price in the app is measured against one number: your **Classroom Wage Index**, or CWI. This guide is about choosing the number you type into the **Price** field. The mechanics of the form — item types, bundles, inventory — are in [Store Items](store-items.md).
+Every store price in the app is measured against one number: your **Classroom Wage Index**, or CWI. This guide is about choosing the number you type into the **Price** field. The mechanics of the form — item types, bulk discounts, inventory — are in [Store Items](store-items.md).
 
 ## Step-by-step instructions
 

@@ -1,4 +1,4 @@
-"""Behavioral tests for the three store sale mechanics.
+"""Behavioral tests for the store sale mechanics.
 
 ``TestPublicationValidation`` in ``tests/test_store_policy_resolver.py`` proves
 these three settings cannot be *misconfigured*. That is a different claim from
@@ -6,7 +6,8 @@ proving they *execute*, and all three defects lived precisely in the gap: each
 was published, stored, and displayed to the student correctly, and then ignored
 at purchase time.
 
-* #30 bundle — the item card promised N units, the purchase granted one.
+* #30 multi-unit grant — a purchase promised N units and granted one. Bundles
+  are gone (SPEC-STORE-001 1.5); the claim now holds for a purchase quantity.
 * #31 bulk discount — the card quoted a discounted price, the ledger charged
   the full one.
 * #32 collective goal deadline — the date was displayed and never consulted, so
@@ -120,27 +121,24 @@ def _checking(buyer):
     return checking
 
 
-class TestBundleGrantsEveryUnit:
-    """Defect #30: a bundle charges once and must grant every unit it sold.
+class TestQuantityGrantsEveryUnit:
+    """Defect #30: one charge for several units must grant every unit it sold.
 
-    DOM-STORE-001 forbids storing a remaining-units counter, so a bundle is not
-    one entitlement that decrements — it is N independent entitlement
-    lifecycles created by one purchase. Counting rows is therefore the only
-    honest way to ask whether the student got what they paid for.
+    DOM-STORE-001 forbids storing a remaining-units counter, so several units
+    are not one entitlement that decrements — they are N independent
+    entitlement lifecycles created by one purchase. Counting rows is therefore
+    the only honest way to ask whether the student got what they paid for.
     """
 
-    def test_bundle_of_three_grants_three_units_for_one_charge(self, app, buyer):
+    def test_quantity_of_three_grants_three_units_for_one_charge(self, app, buyer):
         with app.app_context():
-            product = _publish(
-                buyer, "Snack Pack", price="10.00",
-                is_bundle=True, bundle_quantity=3,
-            )
+            product = _publish(buyer, "Snack", price="5.00")
             before = _checking(buyer)
 
             result = execute_store_purchase(
                 canonical_context=buyer["context"],
                 policy_uuid=product.policy_uuid,
-                quantity=1,
+                quantity=3,
             )
 
             assert result.success is True
@@ -151,42 +149,44 @@ class TestBundleGrantsEveryUnit:
             assert len({e.correlation_id for e in events}) == 1
             # ...but three distinct entitlements, each independently usable.
             assert len({e.entitlement_id for e in events}) == 3
-            # Priced per bundle, not per unit: 10.00, not 30.00.
-            assert before - _checking(buyer) == Decimal("10.00")
+            assert before - _checking(buyer) == Decimal("15.00")
 
-    def test_buying_two_bundles_grants_six_units_and_charges_twice(self, app, buyer):
+    def test_a_pack_is_a_bulk_discount_at_the_pack_size(self, app, buyer):
+        """The recipe the guide gives for a 3-pack: 5 each, 3+ for 20% off."""
         with app.app_context():
             product = _publish(
-                buyer, "Snack Pack Double", price="10.00",
-                is_bundle=True, bundle_quantity=3,
+                buyer, "Homework Pass", price="5.00",
+                bulk_discount_enabled=True, bulk_discount_quantity=3, bulk_discount_percentage=20,
             )
             before = _checking(buyer)
 
             result = execute_store_purchase(
                 canonical_context=buyer["context"],
                 policy_uuid=product.policy_uuid,
-                quantity=2,
+                quantity=3,
             )
 
-            assert result.success is True
-            assert result.quantity_granted == 6
-            assert len(_granted_units(buyer, product)) == 6
-            assert before - _checking(buyer) == Decimal("20.00")
+            assert result.quantity_granted == 3
+            assert len(_granted_units(buyer, product)) == 3
+            assert before - _checking(buyer) == Decimal("12.00")
 
-    def test_non_bundle_grants_one_unit_per_purchase(self, app, buyer):
-        """The control case — the bundle multiplier must not leak into ordinary items."""
+    def test_one_unit_of_a_pack_is_still_sold_alone(self, app, buyer):
+        """Below the pack size the student buys one, at the plain price."""
         with app.app_context():
-            product = _publish(buyer, "Single Snack", price="10.00")
+            product = _publish(
+                buyer, "Homework Pass Single", price="5.00",
+                bulk_discount_enabled=True, bulk_discount_quantity=3, bulk_discount_percentage=20,
+            )
             before = _checking(buyer)
 
             result = execute_store_purchase(
                 canonical_context=buyer["context"],
                 policy_uuid=product.policy_uuid,
-                quantity=2,
+                quantity=1,
             )
 
-            assert result.quantity_granted == 2
-            assert before - _checking(buyer) == Decimal("20.00")
+            assert result.quantity_granted == 1
+            assert before - _checking(buyer) == Decimal("5.00")
 
 
 class TestSingleUnitPurchaseRules:

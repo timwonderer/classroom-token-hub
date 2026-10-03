@@ -4238,8 +4238,6 @@ def _store_definition_from_form(form) -> dict:
         'auto_expiry_days': form.auto_expiry_days.data if form.item_type.data in {'delayed', 'privilege', 'hall_pass'} else None,
         'is_long_term_goal': bool(form.is_long_term_goal.data),
         'bypass_cwi_warnings': bool(form.bypass_cwi_warnings.data),
-        'is_bundle': False if form.item_type.data in {'immediate', 'privilege', 'collective'} else bool(form.is_bundle.data),
-        'bundle_quantity': form.bundle_quantity.data if form.is_bundle.data else None,
         'bulk_discount_enabled': False if form.item_type.data in {'privilege', 'collective'} else bool(form.bulk_discount_enabled.data),
         'bulk_discount_quantity': (
             form.bulk_discount_quantity.data if form.bulk_discount_enabled.data else None
@@ -4505,7 +4503,6 @@ def store_management():
             purchased_at=entitlement.timestamp,
             purchase_date=entitlement.timestamp,
             quantity=quantity_total,
-            is_from_bundle=item.is_bundle,
         ))
 
     collective_progress_by_item = {}

@@ -3,10 +3,10 @@ title: Store Items
 category: features
 subcategory: teacher-economy
 roles: [teacher]
-description: Create, price, and retire store items — including bundles, bulk discounts, collective goals, and the difference between deactivating and deleting.
-keywords: [store, items, pricing, tier, inventory, bundle, bulk discount, collective goal, deactivate, delete, rent perk, CWI]
+description: Create, price, and retire store items — including bulk discounts and packs, collective goals, and the difference between deactivating and deleting.
+keywords: [store, items, pricing, tier, inventory, pack, bulk discount, collective goal, deactivate, delete, rent perk, CWI]
 related:
-  - user-guides/features/teacher/economy/store-bundles-goals
+  - user-guides/features/teacher/economy/store-bulk-goals
   - user-guides/features/teacher/economy/store-pricing
   - user-guides/features/teacher/economy/store-redemptions
   - user-guides/features/teacher/economy/economic-engine
@@ -19,7 +19,7 @@ related:
 
 **Economy > Store** opens **Store Management**, a five-tab page. Two of those tabs belong to items: **Manage Items** is your catalogue, and **Add New Item** is the form that fills it.
 
-An item is worth building carefully. Price is only one of its dials — item type decides whether a student gets the thing instantly or waits for you, and the bundle, discount, and collective-goal settings change what a single purchase even means.
+An item is worth building carefully. Price is only one of its dials — item type decides whether a student gets the thing instantly or waits for you, and the discount and collective-goal settings change what a single purchase even means.
 
 ## Step-by-step instructions
 
@@ -57,17 +57,11 @@ The four **Pricing Tier** options are **Basic**, **Standard**, **Premium**, and 
 - **Inventory** — total redemptions available across everyone. Leave blank for unlimited.
 - **Purchase Limit per Student** — caps one student's repeat buys. Leave blank for no limit.
 
-#### Bundle Settings
-
-Tick **This is a Bundled Item** and set **Bundle Quantity**. The form describes this as *Bundled items give students multiple uses that can be redeemed separately*; the quantity is required and must be greater than 1 once the box is ticked.
-
-One purchase is charged once and delivers that many separately redeemable items. Available on **Delayed Use** and **Hall Pass** items only — those are the two types that can sit unredeemed in an inventory. See [Bundles, Bulk Discounts, and Collective Goals](store-bundles-goals.md).
-
 #### Bulk Discount Settings
 
 Tick **Enable Bulk Discount**, then set **Minimum Quantity for Discount** and **Discount Percentage (%)**. Both are required once enabled; the percentage cannot exceed 100.
 
-This is distinct from a bundle: a bundle changes what one purchase contains, a bulk discount changes the price when a student buys several. At or above the threshold the discount applies to the whole order, not only to the units past it. See [Bundles, Bulk Discounts, and Collective Goals](store-bundles-goals.md).
+At or above the threshold the discount applies to the whole order, not only to the units past it. To sell a pack (say, three for a set price), set the discount at the pack size; each unit the student buys is still a separate item. See [Bulk Discounts and Collective Goals](store-bulk-goals.md).
 
 Bulk discounts are available on **Delayed Use** and **Hall Pass** items only. Those types can hold several independent, unredeemed units. **Immediate Use** items are single-unit purchases, and a **Collective Goal** is a shared class pot rather than a student's multi-unit order.
 
@@ -95,7 +89,7 @@ Finish with **Save Item**.
 
 - Name, price, and item type
 - **Active** or **Inactive**
-- Tier badge, a *n bundle* badge, and a *n% off n+* badge where those apply
+- Tier badge and a *n% off n+* badge where those apply
 - **Inventory** and **Limit per student** (**Unlimited** / **None** when unset)
 - **Active In** — the class badges, or **All Classes**
 - For collective items: a per-class progress bar reading *count/target*, plus **Deadline** if one is set
@@ -136,14 +130,14 @@ Two checkboxes opt an item out of that scrutiny, and they are not the same thing
 > **Rent-linked items are ordinary store items carrying a toggle.** They are built here, not in Rent Settings. You build one like any other item and tick the rent-link option; a change to the rent-linked set takes effect on the *next* rent cycle, so adding or removing one never disturbs a cycle already open.
 
 > [!WARNING]
-> **Meeting a collective goal is not automatic.** The deadline is enforced — the item stops selling once it passes — but reaching the target unlocks nothing on its own. A goal that lapses *unmet* refunds itself; a goal that was *reached* is yours to fulfil. Read [Bundles, Bulk Discounts, and Collective Goals](store-bundles-goals.md) before you build one.
+> **Meeting a collective goal is not automatic.** The deadline is enforced — the item stops selling once it passes — but reaching the target unlocks nothing on its own. A goal that lapses *unmet* refunds itself; a goal that was *reached* is yours to fulfil. Read [Bulk Discounts and Collective Goals](store-bulk-goals.md) before you build one.
 
 > [!TIP]
 > Use **Delayed Use** with a **Redemption Prompt** for anything that costs you classroom time — seating changes, homework passes, music choice. The prompt collects the details when the student asks, instead of leaving you to chase them.
 
 ## Related guides
 
-- [Bundles, Bulk Discounts, and Collective Goals](store-bundles-goals.md)
+- [Bulk Discounts and Collective Goals](store-bulk-goals.md)
 - [Store Pricing Strategy](store-pricing.md)
 - [Store Redemptions](store-redemptions.md)
 - [Economic Engine](economic-engine.md)

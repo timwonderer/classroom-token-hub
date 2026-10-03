@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DB-002 | 2.0 | 2026-09-28 | 1.2 | Normative |
+| SOP-DB-002 | 2.1 | 2026-10-03 | 2.0 | Normative |
 
 ## I. Purpose
 
@@ -56,7 +56,9 @@ Normative (SOP Tier). Subordinate to INV-CORE-000, INV-ARC-019 and DOM-CORE-002.
 ## VI. Enforced Deprecated Symbols
 
 The v1 identity layer and the v1 balance cache were contracted during the v1→v2 migration. None of
-these exists as a model or a table (INV-ARC-019; DOM-CORE-002).
+these exists as a model or a table (INV-ARC-019; DOM-CORE-002). Store bundles were contracted on
+2026-10-03 (SPEC-STORE-001): their model attributes are gone, and their two `store_products` columns
+remain only until the CONTRACT (DATABASE) migration drops them.
 
 | Symbol | Replaced by | Status |
 |--------|-------------|--------|
@@ -65,6 +67,8 @@ these exists as a model or a table (INV-ARC-019; DOM-CORE-002).
 | `TeacherBlock` | `ClassEconomy` (`classes`); `section` is display metadata only (INV-ARC-014) | Enforced |
 | `StudentBlock` | `Seat`, scoped by `class_id` | Enforced |
 | `BalanceCache` | `LedgerBalanceSnapshot` via `ledger_balance_query_service` (DOM-LED-001) | Enforced |
+| `is_bundle` | A quantity bought at a bulk price (`bulk_discount_*`, SPEC-STORE-001) | Enforced |
+| `bundle_quantity` | The purchase `quantity` (SPEC-STORE-001) | Enforced |
 
 ## VII. Retired Symbols Not Enforceable by Literal Scan
 

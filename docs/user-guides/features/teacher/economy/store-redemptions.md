@@ -48,7 +48,7 @@ Asking to redeem an item counts as using it. Decide each request by your own cla
 | **Deny** | The student doesn't get it, and the item is still used up. Nothing is refunded. |
 | **Return** | The request is closed and the item goes back to the student unused. They can ask again later. |
 
-These work the same however the student got the item: bought on its own, bought several at once, as one use from a bundle, given by you, or with rent.
+These work the same however the student got the item: bought on its own, bought several at once, given by you, or with rent.
 
 When you deny, you can add a note. It stays with the record, and you can read it later from the **Decided** list.
 

@@ -12,3 +12,8 @@ StudentTeacher
 TeacherBlock
 StudentBlock
 BalanceCache
+
+# Store bundles, contracted 2026-10-03 (SPEC-STORE-001): a pack is a quantity at a bulk price.
+# Code removed in the CONTRACT (CODE ONLY) PR; the columns are dropped in a later CONTRACT (DATABASE) PR.
+is_bundle
+bundle_quantity

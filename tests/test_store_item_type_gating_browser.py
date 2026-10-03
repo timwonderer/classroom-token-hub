@@ -130,15 +130,13 @@ def test_a_value_made_illegal_by_a_type_change_is_cleared_and_not_submitted(clie
     _load_form(page, client.get("/admin/store").get_data(as_text=True))
 
     page.select_option('[name="item_type"]', "delayed")
-    page.check('[name="is_bundle"]')
-    page.fill('[name="bundle_quantity"]', "3")
+    page.fill('[name="auto_expiry_days"]', "7")
     page.select_option('[name="item_type"]', "immediate")
 
-    assert page.is_disabled('[name="is_bundle"]')
-    assert not page.is_checked('[name="is_bundle"]')
-    assert page.input_value('[name="bundle_quantity"]') == ""
+    assert page.is_disabled('[name="auto_expiry_days"]')
+    assert page.input_value('[name="auto_expiry_days"]') == ""
     submitted = page.evaluate(_READ_STATE)["submitted"]
-    assert "is_bundle" not in submitted and "bundle_quantity" not in submitted
+    assert "auto_expiry_days" not in submitted
 
 
 def test_a_dependency_toggle_hides_without_discarding_the_value(client, page):
@@ -147,15 +145,15 @@ def test_a_dependency_toggle_hides_without_discarding_the_value(client, page):
     _load_form(page, client.get("/admin/store").get_data(as_text=True))
 
     page.select_option('[name="item_type"]', "delayed")
-    page.check('[name="is_bundle"]')
-    page.fill('[name="bundle_quantity"]', "3")
-    page.uncheck('[name="is_bundle"]')
+    page.check('[name="bulk_discount_enabled"]')
+    page.fill('[name="bulk_discount_quantity"]', "3")
+    page.uncheck('[name="bulk_discount_enabled"]')
 
-    assert page.is_disabled('[name="bundle_quantity"]')
-    assert page.input_value('[name="bundle_quantity"]') == "3"
-    page.check('[name="is_bundle"]')
-    assert page.is_enabled('[name="bundle_quantity"]')
-    assert page.input_value('[name="bundle_quantity"]') == "3"
+    assert page.is_disabled('[name="bulk_discount_quantity"]')
+    assert page.input_value('[name="bulk_discount_quantity"]') == "3"
+    page.check('[name="bulk_discount_enabled"]')
+    assert page.is_enabled('[name="bulk_discount_quantity"]')
+    assert page.input_value('[name="bulk_discount_quantity"]') == "3"
 
 
 def test_edit_form_applies_the_contract_and_keeps_persisted_values(client, page):
@@ -166,8 +164,9 @@ def test_edit_form_applies_the_contract_and_keeps_persisted_values(client, page)
             entitlement_type="DELAYED_USE",
             name="Snack Pack",
             price="25.00",
-            is_bundle=True,
-            bundle_quantity=3,
+            bulk_discount_enabled=True,
+            bulk_discount_quantity=3,
+            bulk_discount_percentage=20,
         )
 
     contracts = _load_form(
@@ -175,11 +174,14 @@ def test_edit_form_applies_the_contract_and_keeps_persisted_values(client, page)
     )
     state = page.evaluate(_READ_STATE)
 
-    expected = sorted(set(_unconditional_legal_fields(contracts["delayed|0|1"])) | {"bundle_quantity"})
+    expected = sorted(
+        set(_unconditional_legal_fields(contracts["delayed|0|1"]))
+        | {"bulk_discount_quantity", "bulk_discount_percentage"}
+    )
     assert state["shown"] == expected
     assert state["enabledWhileHidden"] == []
     assert state["disabledWhileShown"] == []
     assert page.input_value('[name="name"]') == "Snack Pack"
     assert float(page.input_value('[name="price"]')) == 25.0
-    assert page.is_checked('[name="is_bundle"]')
-    assert page.input_value('[name="bundle_quantity"]') == "3"
+    assert page.is_checked('[name="bulk_discount_enabled"]')
+    assert page.input_value('[name="bulk_discount_quantity"]') == "3"

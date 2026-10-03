@@ -294,8 +294,8 @@ def _execute_store_purchase_impl(
     # Immediate-use and privilege products cannot hold multiple unexercised
     # units.  Quantity greater than one is therefore not a larger purchase of
     # the same product; it would manufacture inventory the product type cannot
-    # represent.  Bundles remain lawful only for types that hold independent
-    # unredeemed units (DELAYED_USE and HALL_PASS).
+    # represent.  A quantity above one is lawful only for types that hold
+    # independent unredeemed units.
     if policy_config.entitlement_type in {'IMMEDIATE_USE', 'PRIVILEGE'} and quantity != 1:
         return StorePurchaseResult(
             success=False,
@@ -324,14 +324,11 @@ def _execute_store_purchase_impl(
                 error_message="This collective goal has passed its deadline and is closed to new purchases",
             )
 
-    # A bundle grants several units for one purchase. DOM-STORE-001 forbids
-    # persisting `bundle_remaining` or any other mutable balance (§lines 70,
-    # 137, 430), so a bundle is not one entitlement with a counter — it is N
-    # independent entitlement lifecycles, which is exactly what FEAT-STOR-001
-    # §VII.E already requires ("each purchased unit creates one entitlement
-    # lifecycle"). Buying is priced per bundle; granting is per unit.
-    units_per_purchase = policy_config.bundle_quantity or 1
-    units_to_grant = quantity * units_per_purchase
+    # Each purchased unit is its own entitlement lifecycle (FEAT-STOR-001
+    # §VII.E); DOM-STORE-001 forbids a remaining-units counter. There are no
+    # bundles (SPEC-STORE-001): several units are bought as a quantity, priced
+    # by any bulk discount.
+    units_to_grant = quantity
 
     from app.services.entitlement_service import HoldingLimitExceeded, ensure_within_holding_limit
     try:
@@ -372,8 +369,8 @@ def _execute_store_purchase_impl(
         debit_amount=debit_amount,
         # Human-facing only. The void path used to parse the item name and the
         # (xN) back out of this string, which tied reversal correctness to
-        # wording and — because N counts purchases, not granted units — left
-        # bundles partially reversible. It now resolves the grants through this
+        # wording and — because N could disagree with the granted units — left
+        # multi-unit purchases partially reversible. It now resolves the grants through this
         # transaction's correlation_id instead, so the description is free to
         # read however it reads best.
         description=f"Purchase: {policy_config.name or policy_config.product_id} (x{quantity})",
@@ -461,7 +458,7 @@ def _execute_store_purchase_impl(
         # quantity, remaining balance, mutable redemption status, or display
         # metadata."
         #
-        # So a bundle records nothing about its size here. Each unit is its own
+        # So a purchase records nothing about its unit count here. Each unit is its own
         # entitlement lifecycle (FEAT-STOR-001 §VII.E), and the count of units is
         # recovered by counting rows sharing this correlation_id — a derived
         # quantity, which is exactly why it must not be stored. Likewise the

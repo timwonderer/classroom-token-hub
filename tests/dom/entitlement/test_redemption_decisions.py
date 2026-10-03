@@ -256,25 +256,6 @@ def test_any_request_can_be_denied_bulk_item(app, client):
         _assert_denied_without_refund(classroom, student, grants, request_id, before)
 
 
-def test_any_request_can_be_denied_bundle_use(app, client):
-    with app.app_context():
-        classroom = provision_classroom("chemistry_p1")
-        student = classroom.students[0]
-        _fund(classroom, student)
-        product = _publish_delayed(classroom, "Homework 3-Pack", price="30.00", is_bundle=True, bundle_quantity=3)
-        grants = _buy(classroom, student, product, quantity=1)
-        assert len(grants) == 3
-        request_id = _request(client, student, grants[0].entitlement_id).pending_action_id
-        before = _checking(classroom, student)
-
-        (view,) = list_pending_redemptions(classroom.class_id)
-        assert view.bundle_size == 3
-
-        login_teacher(client, classroom)
-        assert _deny(client, request_id).status_code == 200
-        _assert_denied_without_refund(classroom, student, grants, request_id, before)
-
-
 def test_same_teacher_other_period_cannot_decide(app, client):
     """Owning both classes is not scope: the request is decided from its own class."""
     with app.app_context():
