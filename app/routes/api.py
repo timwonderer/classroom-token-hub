@@ -564,6 +564,14 @@ def _load_redemption_for_decision(data):
     store_item = store_service.resolve_entitlement_product(entitlement)
     if not store_item or store_item.class_id != active_class_id:
         raise _RedemptionDecisionRefused("Invalid item.", 404)
+    if store_item.item_type == "hall_pass":
+        # Exercised by Productivity through hall_pass_logs and resolved by
+        # FEAT-PROD-002, never by a Store verdict (FEAT-STOR-002 §VII). The
+        # FEAT refuses too; refusing here gives the teacher a fixed message
+        # rather than the FEAT's exception text.
+        raise _RedemptionDecisionRefused(
+            "Hall-pass requests are resolved from the Hall Passes page.", 409
+        )
     return ctx, pending_action, entitlement, store_item
 
 
@@ -598,7 +606,7 @@ def approve_redemption():
         )
         return jsonify({
             "status": "error",
-            "message": str(e) if isinstance(e, ValueError) else "Redemption request could not be approved.",
+            "message": "Redemption request could not be approved.",
         }), 409
 
     return jsonify({"status": "success", "message": f"Approved {store_item.name}."})
@@ -637,7 +645,7 @@ def reject_redemption():
         )
         return jsonify({
             "status": "error",
-            "message": str(e) if isinstance(e, ValueError) else "Redemption request could not be denied.",
+            "message": "Redemption request could not be denied.",
         }), 409
 
     return jsonify({"status": "success", "message": f"Denied {store_item.name}."})
@@ -673,7 +681,7 @@ def return_redemption():
         )
         return jsonify({
             "status": "error",
-            "message": str(e) if isinstance(e, ValueError) else "Redemption request could not be returned.",
+            "message": "Redemption request could not be returned.",
         }), 409
 
     return jsonify({
