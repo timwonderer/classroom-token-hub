@@ -342,15 +342,28 @@ def create_app():
             '"message":"%(message)s"}'
         )
 
+    # The handlers live on the root logger, not on app.logger. A root logger
+    # with no handlers is configured implicitly by the first module-level
+    # logging.debug()/info() call anywhere in the process — the passwordless
+    # SDK makes one on every API request — and from then on every app record
+    # was written twice: once here and once as "INFO:app:...". With a handler
+    # on root, that implicit basicConfig() is a no-op. Root's level is left at
+    # WARNING so third-party DEBUG/INFO (passwordless logs request headers at
+    # DEBUG) stays dropped; app.logger's own level admits its INFO records.
+    root_logger = logging.getLogger()
+    for handler in [h for h in root_logger.handlers if getattr(h, "_cth_handler", False)]:
+        root_logger.removeHandler(handler)
+        handler.close()
+
     stream_handler = logging.StreamHandler()
     stream_handler.setLevel(log_level)
     stream_handler.setFormatter(logging.Formatter(log_format))
     stream_handler.addFilter(RequestIdFilter())
+    stream_handler._cth_handler = True
 
     app.logger.setLevel(log_level)
-    # Prevent duplicate log entries by clearing handlers first
     app.logger.handlers.clear()
-    app.logger.addHandler(stream_handler)
+    root_logger.addHandler(stream_handler)
 
     if os.getenv("FLASK_ENV", app.config.get("ENV")) == "production":
         log_file = os.getenv("LOG_FILE", "app.log")
@@ -358,7 +371,8 @@ def create_app():
         file_handler.setLevel(log_level)
         file_handler.setFormatter(logging.Formatter(log_format))
         file_handler.addFilter(RequestIdFilter())
-        app.logger.addHandler(file_handler)
+        file_handler._cth_handler = True
+        root_logger.addHandler(file_handler)
 
     # -------------------- DATABASE SAFETY GUARDS --------------------
     # Prevent accidental connection to the wrong database environment
