@@ -190,6 +190,9 @@ against this tracker, the archived launch trackers and the live-test RESUME reco
       teacher cookie with class feature state instead of a sign-in redirect;
     - TLCP request traces and error events, which attribute the request to the revoked actor;
     - `login_required`, which sets `g.canonical_context` before its expiry check.
+  - **Status (2026-10-02).** #1469 registers `validate_canonical_session_nonce` before
+    `capture_correlation_context`, so a revoked cookie no longer reaches `g.canonical_context`, the TLCP trace, or
+    `admin_bp.before_request`. The `login_required` expiry ordering and the repeated resolution remain open.
   - **Impact.** No cross-class leak was found.
   - **Target design.** One resolution in a `before_request` that runs after nonce validation. Auth decorators only
     check its result, and a structural guard with a mutation proof flags any other call. Do not normalise the
@@ -319,6 +322,17 @@ against this tracker, the archived launch trackers and the live-test RESUME reco
   - Move Loki's storage out of `/tmp`. The retention period waits on the owner's review of what Loki retains.
   - `GET /sysadmin/login` must not destroy another browser context. The fix is added to #1446.
   - **Follow-up:** `admin.login` has the same GET-time session pop (`app/routes/admin.py:2573`).
+- [x] **TLCP misclassified a student at the operator sign-in page as an invariant violation (fixed in #1469).**
+  On 2026-10-02 (17:20–17:21 UTC) a student's Chromebook followed the landing page's operator sign-in button to
+  `/sysadmin/login`. It loaded the page and submitted it twice, with no sysadmin session created, and the app logged
+  8 `TLCP-INVARIANT-VIOLATION` lines at ERROR. TLCP named the request "sysadmin" from its URL. Owner ruling 2026-10-02:
+  keep both dimensions, the surface (URL) and the principal (who authenticated) (INV-ARC-019 §V, §XIII).
+  - The ERROR now fires when the principal is a sysadmin and the request carries class context, on any URL. The old
+    rule never caught that case.
+  - A student or teacher on a sysadmin surface logs `TLCP-SURFACE-PRINCIPAL-MISMATCH` at INFO, with surface,
+    principal, class context and outcome.
+  - **Follow-up:** `GET /sysadmin/logout` signs out any principal, not just a sysadmin. It is the same GET-time session
+    pop as `admin.login` above.
 - [ ] **Simple interest does not conform to SPEC-ECON-001 §4.1.** Credited interest joins the earning balance for
   every calculation type. `simple` prevents compounding within one payout window, but each window's credit then
   earns interest in later windows, so simple interest compounds across payout windows. Tracked and deferred by the

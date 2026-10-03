@@ -384,21 +384,12 @@ def create_app():
     def ensure_request_id():
         g.request_id = _get_request_id()
 
-    @app.before_request
-    def capture_correlation_context():
-        if request.path == "/metrics":
-            g.canonical_context = None
-            g.correlation_context = None
-            return None
-        from app.services.context_resolver import resolve_canonical_context, ContextResolutionError
-        from app.services.tlcp import resolve_actor_context
-
-        try:
-            g.canonical_context = resolve_canonical_context()
-        except ContextResolutionError:
-            g.canonical_context = None
-        g.correlation_context = resolve_actor_context(getattr(g, "canonical_context", None))
-
+    # Registered before capture_correlation_context: Flask runs before_request
+    # hooks in registration order, and correlation must read the principal this
+    # request is admitted as, not one a superseded cookie still names. Otherwise
+    # a revoked sysadmin cookie carrying class_id logs a false
+    # TLCP-INVARIANT-VIOLATION, a revoked student or teacher cookie logs a
+    # surface/principal mismatch, and the request is traced to the revoked actor.
     @app.before_request
     def validate_canonical_session_nonce():
         if request.path.startswith("/static/"):
@@ -425,6 +416,42 @@ def create_app():
             session.clear()
             return None
         return None
+
+    @app.before_request
+    def capture_correlation_context():
+        if request.path == "/metrics":
+            g.canonical_context = None
+            g.correlation_context = None
+            return None
+        from app.services.context_resolver import resolve_canonical_context, ContextResolutionError
+        from app.services.tlcp import resolve_actor_context
+
+        from app.services.tlcp import observe_request
+
+        try:
+            g.canonical_context = resolve_canonical_context()
+        except ContextResolutionError:
+            g.canonical_context = None
+        # Both dimensions, once: the surface the URL asked for and the
+        # principal the session authenticated (INV-ARC-019 §V, §XIII).
+        g.tlcp_observation = observe_request(g.canonical_context)
+        g.correlation_context = resolve_actor_context(
+            g.canonical_context, observation=g.tlcp_observation,
+        )
+
+    @app.after_request
+    def record_tlcp_surface_principal_mismatch(response):
+        # Read after the view, so a sign-in's outcome is observed, not guessed.
+        # Diagnostic only: a failure here must never change the response.
+        try:
+            from app.services.tlcp import record_surface_principal_mismatch
+
+            record_surface_principal_mismatch(
+                getattr(g, "tlcp_observation", None), response.status_code,
+            )
+        except Exception:
+            app.logger.warning("Failed to record TLCP surface/principal observation", exc_info=True)
+        return response
 
     @app.after_request
     def attach_request_id_header(response):

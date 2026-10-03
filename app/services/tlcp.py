@@ -89,7 +89,13 @@ def _is_noise_endpoint(endpoint: str | None) -> bool:
     return any(endpoint.startswith(prefix) for prefix in _noise_endpoint_prefixes())
 
 
-def _log_invariant_violation(message: str, *, context: CanonicalContext | None = None) -> None:
+def _log_invariant_violation(
+    message: str,
+    *,
+    context: CanonicalContext | None = None,
+    actor_type: str | None = None,
+    class_id: str | None = None,
+) -> None:
     extra = {
         "actor_type": "-",
         "actor_public_id": "-",
@@ -102,10 +108,255 @@ def _log_invariant_violation(message: str, *, context: CanonicalContext | None =
             actor_type=context.actor_role,
             class_id=context.class_id,
         )
+    if actor_type:
+        extra["actor_type"] = actor_type
+    if class_id:
+        extra["class_id"] = class_id
     current_app.logger.error(f"TLCP-INVARIANT-VIOLATION: {message}", extra=extra)
 
 
-def resolve_actor_context(context: CanonicalContext | None) -> dict | None:
+# -------------------- SURFACE AND PRINCIPAL --------------------
+#
+# A request answers two questions that must not be conflated (INV-ARC-019 §V:
+# "No identifier answers more than its assigned question"; §XIII: the
+# authenticated principal and the active classroom context remain separate):
+#
+#   surface   -- what was requested. Read from the URL's endpoint.
+#   principal -- who authenticated. Read from ``users.user_role`` of the
+#                principal the session names, with or without class context.
+#
+# Until 2026-10-02 TLCP named a request a "sysadmin request" by its endpoint
+# alone, and logged any class context on such a request as an invariant
+# violation. A student whose Chromebook followed the landing page's operator
+# sign-in link to /sysadmin/login therefore logged eight ERROR lines although
+# no sysadmin principal existed. The invariant concerns the principal: a
+# system administrator holds no class context (INV-CORE-000 §III.4; SPEC-OPS-004
+# §V), and that holds on every surface.
+
+SURFACE_APPLICATION = "application"
+# Sysadmin endpoints that admit a caller with no sysadmin session: sign-in,
+# sign-out, passkey sign-in, and the nginx auth check.
+SURFACE_SYSADMIN_AUTHENTICATION = "sysadmin_authentication"
+# Sysadmin endpoints admitted only by ``system_admin_required``.
+SURFACE_SYSADMIN_CONSOLE = "sysadmin_console"
+SYSADMIN_SURFACES = frozenset({SURFACE_SYSADMIN_AUTHENTICATION, SURFACE_SYSADMIN_CONSOLE})
+
+PRINCIPAL_ANONYMOUS = "anonymous"
+PRINCIPAL_STUDENT = "student"
+PRINCIPAL_TEACHER = "teacher"
+PRINCIPAL_SYSADMIN = "sysadmin"
+
+VERDICT_INVARIANT_VIOLATION = "invariant_violation"
+VERDICT_SURFACE_PRINCIPAL_MISMATCH = "surface_principal_mismatch"
+
+SURFACE_PRINCIPAL_MISMATCH_TOKEN = "TLCP-SURFACE-PRINCIPAL-MISMATCH"
+
+# The closed outcome vocabulary of SPEC-OPS-003 §VI. No TLCP-local labels:
+# SUCCESS            -- the route completed its operation;
+# EXPECTED_DENIAL    -- the route deliberately rejected the request under an
+#                       authorization or validation rule;
+# SYSTEM_FAILURE     -- the route could not complete (an unhandled failure).
+OUTCOME_SUCCESS = "SUCCESS"
+OUTCOME_EXPECTED_DENIAL = "EXPECTED_DENIAL"
+OUTCOME_SYSTEM_FAILURE = "SYSTEM_FAILURE"
+
+# Endpoints whose operation is to make the caller a sysadmin principal: they
+# complete only when the session names a sysadmin afterwards.
+_SIGN_IN_ENDPOINTS = frozenset({"sysadmin.login", "sysadmin.passkey_auth_finish"})
+# Endpoints that complete for any caller. ``GET /sysadmin/logout`` clears the
+# session's principal whoever holds it (a tracked follow-up, unchanged here),
+# so for a student or teacher it is a completed operation, not a denial.
+_COMPLETES_FOR_ANY_PRINCIPAL = frozenset({"sysadmin.logout"})
+_SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+
+def classify_surface(blueprint: str | None, view_function) -> str:
+    """Name the surface a request asked for. Pure; reads no request state."""
+    if blueprint != "sysadmin":
+        return SURFACE_APPLICATION
+    if getattr(view_function, "admits_only_system_admin", False):
+        return SURFACE_SYSADMIN_CONSOLE
+    return SURFACE_SYSADMIN_AUTHENTICATION
+
+
+def classify_request(*, surface: str, principal: str, class_context_present: bool) -> str | None:
+    """Classify one request from both dimensions. Pure.
+
+    sysadmin principal + class context, any surface -> invariant violation
+    student/teacher principal on a sysadmin surface -> surface/principal mismatch
+    anything else                                    -> nothing to record
+    """
+    if principal == PRINCIPAL_SYSADMIN and class_context_present:
+        return VERDICT_INVARIANT_VIOLATION
+    if surface in SYSADMIN_SURFACES and principal in (PRINCIPAL_STUDENT, PRINCIPAL_TEACHER):
+        return VERDICT_SURFACE_PRINCIPAL_MISMATCH
+    return None
+
+
+def classify_outcome(
+    *,
+    surface: str,
+    endpoint: str | None,
+    method: str,
+    status_code: int | None,
+    principal_after: str,
+) -> str:
+    """Classify a non-sysadmin principal's sysadmin-surface request. Pure.
+
+    Uses the SPEC-OPS-003 §VI vocabulary, read after the view ran, per the
+    contract of the route that owns the outcome (§VII):
+
+    - an unhandled failure (the app's 5xx error handler)    -> SYSTEM_FAILURE
+    - ``sysadmin.logout``: completes for any principal       -> SUCCESS
+    - password or passkey sign-in: the session now names a
+      sysadmin                                               -> SUCCESS
+      ...a GET/HEAD/OPTIONS that only rendered the form      -> SUCCESS
+      ...a submission that left no sysadmin principal        -> EXPECTED_DENIAL
+    - other sign-in endpoints (passkey start, the Grafana
+      auth check) answer a refusal with their own 4xx        -> EXPECTED_DENIAL
+      and otherwise complete                                 -> SUCCESS
+    - the console admits only a sysadmin, so a student or
+      teacher is refused admission                           -> EXPECTED_DENIAL
+    """
+    if status_code is not None and status_code >= 500:
+        return OUTCOME_SYSTEM_FAILURE
+    if endpoint in _COMPLETES_FOR_ANY_PRINCIPAL:
+        return OUTCOME_SUCCESS
+    if principal_after == PRINCIPAL_SYSADMIN:
+        return OUTCOME_SUCCESS
+    if surface == SURFACE_SYSADMIN_CONSOLE:
+        return OUTCOME_EXPECTED_DENIAL
+    if endpoint in _SIGN_IN_ENDPOINTS:
+        if (method or "").upper() in _SAFE_METHODS:
+            return OUTCOME_SUCCESS
+        return OUTCOME_EXPECTED_DENIAL
+    if status_code is not None and 400 <= status_code < 500:
+        return OUTCOME_EXPECTED_DENIAL
+    return OUTCOME_SUCCESS
+
+
+def _principal_user(context):
+    """The ``User`` the request authenticated as, or None.
+
+    A ``CanonicalContext`` carries the authenticated ``users.id`` (DOM-IDEN-006
+    §VII). Without one -- signed out, a sysadmin (who is refused class context),
+    or a context that failed to resolve -- the principal is the one the session
+    names, as ``resolve_canonical_context`` reads it.
+    """
+    from flask import session
+
+    from app.models import User
+    from app.utils.user_ids import parse_user_id, session_user_id
+
+    if isinstance(context, CanonicalContext):
+        user_id = parse_user_id(context.user_id)
+    else:
+        user_id = session_user_id(session)
+    if user_id is None:
+        return None
+    return db.session.get(User, user_id)
+
+
+def _principal_role(user) -> str:
+    if user is None:
+        return PRINCIPAL_ANONYMOUS
+    role = getattr(user.user_role, "value", user.user_role)
+    if role in (PRINCIPAL_STUDENT, PRINCIPAL_TEACHER, PRINCIPAL_SYSADMIN):
+        return role
+    return PRINCIPAL_ANONYMOUS
+
+
+def _carried_class_context(context, user) -> tuple[bool, str | None]:
+    """Whether this request carries class context, and the class id if known.
+
+    Any carrier counts: a resolved ``CanonicalContext``; the ``class_id`` the
+    session holds; or the principal's persisted ``last_active_class_id`` /
+    ``last_active_seat_id``, from which canonical context is resolved
+    (DOM-IDEN-006 §VIII). For a sysadmin the resolver refuses class context
+    outright, so only the raw carriers can show that one is attached.
+    """
+    from flask import session
+
+    if isinstance(context, CanonicalContext):
+        return True, context.class_id
+    session_class_id = session.get("class_id")
+    if session_class_id:
+        return True, str(session_class_id)
+    if user is not None:
+        if getattr(user, "last_active_class_id", None):
+            return True, str(user.last_active_class_id)
+        if getattr(user, "last_active_seat_id", None):
+            return True, None
+    return False, None
+
+
+def observe_request(context) -> dict | None:
+    """Record both dimensions of the current request, once, at the boundary."""
+    if not has_request_context():
+        return None
+    view_function = current_app.view_functions.get(request.endpoint) if request.endpoint else None
+    surface = classify_surface(request.blueprint, view_function)
+    user = _principal_user(context)
+    principal = _principal_role(user)
+    class_context_present, class_id = _carried_class_context(context, user)
+    return {
+        "surface": surface,
+        "principal": principal,
+        "class_context_present": class_context_present,
+        "class_id": class_id,
+        "endpoint": request.endpoint,
+        "method": request.method,
+        "verdict": classify_request(
+            surface=surface,
+            principal=principal,
+            class_context_present=class_context_present,
+        ),
+    }
+
+
+def record_surface_principal_mismatch(observation: dict | None, status_code: int | None = None) -> None:
+    """Log a non-sysadmin principal's request to a sysadmin surface, at INFO.
+
+    Called after the response, so the outcome is read rather than guessed. It
+    is not a violation: the sysadmin surface is reachable by anyone, and
+    admission there keys off the principal (``system_admin_required``). A
+    refused sign-in is an ``EXPECTED_DENIAL``, which is evidence that the rule
+    was enforced (SPEC-OPS-003 §VI), so it is recorded at INFO, not WARNING or
+    ERROR. ``principal_after`` shows a sign-in that changed who the session
+    names. No username or name is recorded; the actor fields carry the seat's
+    ``public_id`` and ``class_id`` as every TLCP line does.
+    """
+    if not observation or observation.get("verdict") != VERDICT_SURFACE_PRINCIPAL_MISMATCH:
+        return
+    principal_after = _principal_role(_principal_user(None))
+    outcome = classify_outcome(
+        surface=observation["surface"],
+        endpoint=observation.get("endpoint"),
+        method=observation["method"],
+        status_code=status_code,
+        principal_after=principal_after,
+    )
+    fields = {
+        "tlcp_surface": observation["surface"],
+        "tlcp_principal": observation["principal"],
+        "tlcp_class_context": "present" if observation["class_context_present"] else "absent",
+        "tlcp_outcome": outcome,
+        "tlcp_principal_after": principal_after,
+    }
+    current_app.logger.info(
+        "%s: surface=%s principal=%s class_context=%s outcome=%s principal_after=%s method=%s",
+        SURFACE_PRINCIPAL_MISMATCH_TOKEN,
+        fields["tlcp_surface"],
+        fields["tlcp_principal"],
+        fields["tlcp_class_context"],
+        fields["tlcp_outcome"],
+        fields["tlcp_principal_after"],
+        observation["method"],
+        extra=fields,
+    )
+
+
+def resolve_actor_context(context: CanonicalContext | None, *, observation: dict | None = None) -> dict | None:
     """Convert canonical request context into correlation logging fields.
 
     TLCP correlates requests; it does not decide authority. It runs in
@@ -127,33 +378,39 @@ def resolve_actor_context(context: CanonicalContext | None) -> dict | None:
 
     Only a context that is present and contradictory is a violation here:
 
+        Sysadmin principal + class context,     -> invariant violation, no trace
+          on any surface                           (INV-CORE-000 §III.4; see
+                                                   classify_request)
         Context present, seat exists            -> correlate
         Context present, seat missing           -> invariant violation, no trace
-        Context present on a sysadmin endpoint  -> invariant violation, no trace
-                                                   (INV-ARC-019: system
-                                                   administrators cannot
-                                                   possess class context)
         Context absent                          -> nothing to correlate
+
+    A student or teacher on a sysadmin surface is not a violation: the URL
+    names what was requested, not who requested it (INV-ARC-019 §V, §XIII).
+    It is correlated as usual and recorded once, after the response, as
+    ``TLCP-SURFACE-PRINCIPAL-MISMATCH`` (``record_surface_principal_mismatch``).
     """
     if not has_request_context():
         return None
 
-    endpoint = request.endpoint
-    is_sysadmin_endpoint = bool(endpoint and endpoint.startswith("sysadmin."))
+    if observation is None:
+        observation = observe_request(context)
 
-    if context is not None:
-        if is_sysadmin_endpoint:
-            _log_invariant_violation(
-                "sysadmin request unexpectedly carries canonical class context",
-                context=context,
-            )
-            return None
+    if observation and observation["verdict"] == VERDICT_INVARIANT_VIOLATION:
+        _log_invariant_violation(
+            "sysadmin principal carries canonical class context "
+            f"(surface={observation['surface']})",
+            actor_type=PRINCIPAL_SYSADMIN,
+            class_id=observation["class_id"],
+        )
+        return None
 
-        seat = db.session.get(Seat, context.seat_id)
-        if not seat:
-            _log_invariant_violation("missing canonical seat", context=context)
-            return None
-    else:
+    if context is None:
+        return None
+
+    seat = db.session.get(Seat, context.seat_id)
+    if not seat:
+        _log_invariant_violation("missing canonical seat", context=context)
         return None
 
     actor_type = seat.role

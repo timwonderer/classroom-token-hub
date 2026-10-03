@@ -278,6 +278,12 @@ def system_admin_required(f):
         g.canonical_context = ctx
         session['last_activity'] = now.isoformat()
         return f(*args, **kwargs)
+    # Marks the endpoint as part of the authenticated sysadmin console, so
+    # request correlation (app/services/tlcp.py) can name the surface a request
+    # asked for from the admission rule itself rather than from a hand-kept list.
+    # Diagnostic only: admission is the check above, which keys off the
+    # authenticated principal, never off the URL.
+    decorated_function.admits_only_system_admin = True
     return decorated_function
 
 
