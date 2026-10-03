@@ -45,8 +45,8 @@ Open the **Add New Item** tab. The form is five sections.
 
 | Type | What happens when a student buys |
 | --- | --- |
-| **Immediate Use** | The student gets it at once. It never enters your approval queue. |
-| **Delayed Use** | The purchase lands in **Pending Redemption Requests** and waits for you to approve or refund. |
+| **Immediate Use** | The student gets it at once. You don't approve it, but it appears on the **Redemptions** tab as a reminder to deliver it, until you mark it complete. |
+| **Delayed Use** | When the student asks to use it, the request lands on the **Redemptions** tab and waits for you to accept, deny or return it. |
 | **Collective Goal** | Nothing unlocks until the class hits the target you set. |
 | **Hall Pass** | Adds to the student's hall-pass balance rather than granting an object. |
 

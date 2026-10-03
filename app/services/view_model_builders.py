@@ -309,13 +309,12 @@ class StoreManagementView:
     # and must not be used to enumerate a teacher's classes.
     class_labels_by_block: dict[str, str]
 
-    # Redemption audit (owned by Store domain)
-    audit_rows: list[dict[str, Any]]
-    audit_total: int
-    audit_page: int
-    audit_total_pages: int
-    audit_class_options: list[str]
-    audit_filters: dict[str, Any] = field(default_factory=dict)
+    # Redemption requests already decided, newest first (owned by Store
+    # domain). The waiting ones are ``pending_redemptions``.
+    resolved_redemptions: list[Any] = field(default_factory=list)
+    # Immediate-use purchases waiting to be marked complete (DOM-STORE-001
+    # §VIII.E.3).
+    pending_acknowledgements: list[Any] = field(default_factory=list)
 
     # Feature scope (owned by Class Configuration domain)
     selected_scope: dict[str, Any] = field(default_factory=dict)
@@ -345,17 +344,9 @@ def build_store_management_view(
     # Keyed by product lineage: rent grants a *product*, not a version of one.
     rent_managed_item_ids: set[str],
     collective_progress_by_item: dict[str, list[dict]],
-    audit_rows: list[dict[str, Any]],
-    audit_total: int,
-    audit_page: int,
-    audit_total_pages: int,
-    audit_class_options: list[str],
+    resolved_redemptions: list[Any],
     economic: EconomicView | None = None,
-    audit_student: str = "",
-    audit_class: str = "",
-    audit_action: str = "",
-    audit_start_date: str = "",
-    audit_end_date: str = "",
+    pending_acknowledgements: list[Any] | None = None,
     selected_scope: dict[str, Any] | None = None,
     feature_options: list[dict[str, Any]] | None = None,
     form_contract: StoreFormContract | None = None,
@@ -376,18 +367,8 @@ def build_store_management_view(
         recent_purchases=recent_purchases,
         collective_progress_by_item=collective_progress_by_item,
         class_labels_by_block=class_labels_by_block,
-        audit_rows=audit_rows,
-        audit_total=audit_total,
-        audit_page=audit_page,
-        audit_total_pages=audit_total_pages,
-        audit_class_options=audit_class_options,
-        audit_filters={
-            "student": audit_student,
-            "class": audit_class,
-            "action": audit_action,
-            "start_date": audit_start_date,
-            "end_date": audit_end_date,
-        },
+        resolved_redemptions=resolved_redemptions,
+        pending_acknowledgements=pending_acknowledgements or [],
         selected_scope=selected_scope or {},
         feature_options=feature_options or [],
         economic=economic or EconomicView(

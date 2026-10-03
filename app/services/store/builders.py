@@ -306,6 +306,7 @@ def build_entitlement_card_view(
         "consumed": "Used",
         "expired": "Expired",
         "revoked": "Revoked",
+        "denied": "Denied",
     }
     display_status = status_labels.get(status, status.title())
 
@@ -341,6 +342,7 @@ def build_entitlement_card_view(
         "consumed": "bg-secondary",
         "expired": "bg-secondary",
         "revoked": "bg-danger",
+        "denied": "bg-secondary",
     }
     status_badge_class = status_badge_classes.get(status, "bg-secondary")
 

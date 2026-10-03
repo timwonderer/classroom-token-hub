@@ -2,9 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-STORE-001 | 5.3 | 2026-10-01 | 5.2 | Normative |
-
-*Revision 5.3 (2026-10-01, owner ruling; ratified by the owner 2026-10-01): §VII.B and §IX — a pending action is also deleted with its seat on lawful seat removal (membership by existence, INV-ARC-013). §IX — the hall-pass example is made concrete: a pending hall-pass request is a `pending_actions` row submitted under `FEAT-STOR-002` and resolved by `FEAT-PROD-002` (approve, reject, student cancel); a student's new request cancels their earlier one. Before 5.3 the implementation kept pending hall-pass requests in per-process memory, which failed once production ran two workers.*
+| DOM-STORE-001 | 5.4 | 2026-10-03 | 5.3 | Normative |
 
 ## I. Purpose
 
@@ -395,7 +393,11 @@ Immediate-use entitlements SHALL:
 
 - grant `GRANTED`;
 - immediately record `CONSUMED`;
-- not use `REVOKED`.
+- not use `REVOKED`;
+- create a pending action that the teacher explicitly acknowledges.
+
+> [!IMPORTANT]
+> The pending action for an immediate-use item is a reminder for the teacher, who may still need to deliver the item in class. It is created when the item is purchased. Its only resolution is **Mark as complete**, which deletes the pending action. Completing it writes no entitlement event, because the entitlement was already `CONSUMED` at purchase.
 
 #### 4. Delayed use
 
@@ -406,8 +408,17 @@ Delayed-use entitlements SHALL:
 - grant `GRANTED`;
 - support a pending action before resolution;
 - record `CONSUMED` on successful redemption;
-- record `REVOKED` when redemption is rejected and the entitlement is returned/refunded through the lawful reversal path;
+- record `REVOKED` when redemption is denied, which spends the entitlement without a refund;
 - record `EXPIRED` when the configured expiration boundary is reached without lawful exercise.
+
+> [!IMPORTANT]
+> While a delayed-use redemption request is waiting, it exists only as a pending action. No terminal entitlement event is written until the teacher resolves it with one of three verdicts:
+>
+> 1. **Accept**: the redemption is accepted, and the entitlement is `CONSUMED`.
+> 2. **Deny**: the redemption is rejected, and the entitlement is `REVOKED`.
+> 3. **Return**: the redemption is cancelled, no terminal entitlement event is written, and the student keeps the entitlement unused.
+>
+> Each verdict is final for that request and moves no money.
 
 #### 5. Collective goal
 

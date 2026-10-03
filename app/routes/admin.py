@@ -21,7 +21,7 @@ import hashlib
 from types import SimpleNamespace, MappingProxyType
 from calendar import monthrange
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from app.utils.canonical_temporal_resolver import (
     utc_now,
     ensure_utc,
@@ -37,7 +37,6 @@ from flask import (
 )
 from urllib.parse import urlparse
 from sqlalchemy import desc, text, or_, and_, func
-from sqlalchemy.orm import joinedload
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 import sqlalchemy as sa
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
@@ -65,7 +64,7 @@ from app.models import (
     LedgerBalanceSnapshot, User, UserRole, _quantize_currency,
     ObligationAssessment,
     AttendanceReasonCode, IdentityProfile, PayrollEvent,
-    EntitlementEvent, InsuranceClaim, InsurancePolicy, PendingAction,
+    EntitlementEvent, InsuranceClaim, InsurancePolicy,
 )
 from app.auth import (
     admin_required,
@@ -128,7 +127,7 @@ from app.services.classroom_setup import (
     create_teacher,
     delete_seat_with_profile,
 )
-from app.services import store_service
+from app.services import redemption_query_service, store_service
 from app.services.entitlement_read_service import derive_display_status
 from app.services.hall_pass_status_service import (
     HALL_PASS_STATUS_LEFT,
@@ -2297,23 +2296,14 @@ def dashboard():
     avg_balance = total_balance / total_students if total_students > 0 else 0
 
     # Pending actions - count all types of pending approvals (scoped by class_id)
-    pending_redemptions_count = (
-        PendingAction.query
-        .join(
-            EntitlementEvent,
-            sa.and_(
-                EntitlementEvent.entitlement_id == PendingAction.entitlement_id,
-                EntitlementEvent.class_id == PendingAction.class_id,
-            ),
-        )
-        .filter(
-            PendingAction.class_id == active_class_id,
-            PendingAction.authoritative_feat == "FEAT-STOR-002",
-            PendingAction.payload["outcome"].as_string().is_(None),
-            EntitlementEvent.event_type == "GRANTED",
-        )
-        .count()
-    )
+    # Oldest first, the order the queue is worked in. The same reader backs
+    # the Store page's Redemptions tab, so the two can never disagree.
+    pending_redemptions = redemption_query_service.list_pending_redemptions(active_class_id)
+    pending_acknowledgements = redemption_query_service.list_pending_acknowledgements(active_class_id)
+    # Both wait on the teacher, so both count: a redemption to decide, or an
+    # immediate-use purchase to deliver and mark complete (DOM-STORE-001
+    # §VIII.E.3). They share the dashboard's Redemptions list.
+    pending_redemptions_count = len(pending_redemptions) + len(pending_acknowledgements)
     pending_hall_pass_requests = list_pending_hall_pass_requests_for_class(ctx.class_id)
     pending_hall_passes_count = len(pending_hall_pass_requests)
     pending_insurance_claims = (
@@ -2333,7 +2323,6 @@ def dashboard():
     )
 
     # Get recent items for each pending type (limited for display)
-    recent_redemptions = []
     recent_hall_passes = [
         SimpleNamespace(
             id=pending_request.request_id,
@@ -2354,48 +2343,10 @@ def dashboard():
         for claim in pending_insurance_claims[:5]
     ]
 
-    # The product is resolved per row rather than joined. A product now has one
-    # row per version and ``EntitlementEvent.product_id`` names the lineage, so
-    # a SQL join on it would fan out to every version the teacher has ever
-    # saved. ``resolve_entitlement_product`` picks the single version the
-    # entitlement was actually created under.
-    # Same join and predicates as pending_redemptions_count above. Without the
-    # class_id term the join crosses the isolation boundary, and without the
-    # GRANTED term an entitlement that also holds a CONSUMED or REVOKED event
-    # produces one joined row per event — the same pending redemption rendered
-    # several times, and a count that disagrees with the list it labels.
-    pending_redemptions = (
-        db.session.query(PendingAction, EntitlementEvent)
-        .join(
-            EntitlementEvent,
-            sa.and_(
-                EntitlementEvent.entitlement_id == PendingAction.entitlement_id,
-                EntitlementEvent.class_id == PendingAction.class_id,
-            ),
-        )
-        .filter(
-            PendingAction.class_id == active_class_id,
-            PendingAction.authoritative_feat == "FEAT-STOR-002",
-            PendingAction.payload["outcome"].as_string().is_(None),
-            EntitlementEvent.event_type == "GRANTED",
-        )
-        .order_by(PendingAction.submitted_at.desc())
-        .limit(10)
-        .all()
-    )
-    pending_redemptions = [
-        SimpleNamespace(
-            id=pending.pending_action_id,
-            seat_id=ent.target_seat_id,
-            store_item=store_service.resolve_entitlement_product(ent),
-            class_id=pending.class_id,
-            purchased_at=pending.submitted_at,
-            status='processing',
-            redemption_details=(pending.payload or {}).get('redemption_details', ''),
-        )
-        for pending, ent in pending_redemptions
-    ]
-    recent_redemptions = pending_redemptions[:5]
+    recent_redemptions = sorted(
+        pending_redemptions + pending_acknowledgements,
+        key=lambda view: ensure_utc(view.submitted_at) if view.submitted_at else datetime.min.replace(tzinfo=timezone.utc),
+    )[:5]
 
     # Recent transactions (limited to 5 for display)
     # Claimed seats only, like every other figure on this page. `seats` above is
@@ -4507,55 +4458,12 @@ def store_management():
         .count()
     )
 
-    # Get pending redemption requests from the canonical pending-action workflow.
-    pending_redemption_events = (
-        PendingAction.query.filter(
-            PendingAction.class_id == selected_scope['class_id'],
-            PendingAction.authoritative_feat == "FEAT-STOR-002",
-            PendingAction.payload["outcome"].as_string().is_(None),
-        )
-        .order_by(PendingAction.submitted_at.desc())
-        .limit(10)
-        .all()
-    )
-    pending_redemptions = []
-    if pending_redemption_events:
-        entitlement_ids = [e.entitlement_id for e in pending_redemption_events]
-        grants = EntitlementEvent.query.filter(
-            EntitlementEvent.class_id == selected_scope["class_id"],
-            EntitlementEvent.entitlement_id.in_(entitlement_ids),
-            EntitlementEvent.event_type == 'GRANTED'
-        ).all()
-        grants_dict = {}
-        for grant in grants:
-            if grant.entitlement_id not in grants_dict or grant.timestamp > grants_dict[grant.entitlement_id].timestamp:
-                grants_dict[grant.entitlement_id] = grant
-
-        # Resolve to the version each entitlement was bought under, so a
-        # redemption row shows the terms the student agreed to rather than
-        # whatever the teacher has since edited the product into.
-        store_items_by_entitlement = {
-            entitlement_id: store_service.resolve_entitlement_product(grant)
-            for entitlement_id, grant in grants_dict.items()
-        }
-
-        for event in pending_redemption_events:
-            # Enforce class_id validation: seat must belong to the selected class
-            seat = db.session.get(Seat, event.seat_id)
-            if not seat or seat.class_id != selected_scope['class_id']:
-                continue
-            profile = seat.identity_profile if seat else None
-            store_item = store_items_by_entitlement.get(event.entitlement_id)
-
-
-            pending_redemptions.append(SimpleNamespace(
-                id=event.entitlement_id,
-                student_name=profile.full_name if profile else 'Unknown',
-                store_item=store_item,
-                class_id=event.class_id,
-                purchased_at=event.submitted_at,
-                status='processing',
-            ))
+    # Redemption requests: waiting ones as a queue, decided ones as history.
+    # One reader owns both, because a decided request lives on the entitlement
+    # event its decision wrote, not in pending_actions (DOM-STORE-001 §VII.B).
+    pending_redemptions = redemption_query_service.list_pending_redemptions(selected_scope['class_id'])
+    resolved_redemptions = redemption_query_service.list_resolved_redemptions(selected_scope['class_id'])
+    pending_acknowledgements = redemption_query_service.list_pending_acknowledgements(selected_scope['class_id'])
 
     # Get recent purchases (all statuses, ordered by purchase date)
     recent_purchases = []
@@ -4644,134 +4552,6 @@ def store_management():
                 })
             collective_progress_by_item[item.product_lineage_uuid] = per_class
 
-    # -------------------- Redemption Audit --------------------
-    audit_student = request.args.get('audit_student', '').strip()
-    audit_class = request.args.get('audit_class', '').strip()
-    audit_action = request.args.get('audit_action', '').strip()
-    audit_start_date = request.args.get('audit_start_date', '').strip()
-    audit_end_date = request.args.get('audit_end_date', '').strip()
-    audit_page = max(1, request.args.get('audit_page', 1, type=int))
-    audit_per_page = 25
-
-    parsed_audit_action = audit_action.upper() if audit_action else None
-
-    # Seat is selected here and must therefore be joined. Without the ON clause
-    # SQLAlchemy emits a cross join, so every pending action was paired with
-    # every seat in the database — the duplicated rows the tab was known for,
-    # each carrying an arbitrary seat's id and class.
-    live_query = (
-        db.session.query(
-            PendingAction.pending_action_id.label("id"),
-            PendingAction.entitlement_id.label("entitlement_id"),
-            Seat.id.label("seat_id"),
-            Seat.class_id.label("class_id"),
-            PendingAction.payload["action"].as_string().label("action"),
-            PendingAction.payload["outcome"].as_string().label("outcome"),
-            PendingAction.payload.label("notes"),
-            PendingAction.submitted_at.label("timestamp"),
-            sa.literal("LIVE").label("source"),
-        )
-        .join(
-            Seat,
-            sa.and_(
-                Seat.id == PendingAction.seat_id,
-                Seat.class_id == PendingAction.class_id,
-            ),
-        )
-        .filter(
-            PendingAction.class_id == selected_scope['class_id'],
-            PendingAction.authoritative_feat == "FEAT-STOR-002",
-        )
-    )
-    if audit_class:
-        live_query = live_query.join(ClassEconomy, ClassEconomy.class_id == PendingAction.class_id).filter(
-            ClassEconomy.display_name == audit_class
-        )
-    if parsed_audit_action:
-        if parsed_audit_action == "REQUEST":
-            live_query = live_query.filter(PendingAction.payload["outcome"].as_string().is_(None))
-        elif parsed_audit_action in {"APPROVED", "REJECTED"}:
-            live_query = live_query.filter(PendingAction.payload["outcome"].as_string() == parsed_audit_action)
-    if audit_start_date:
-        try:
-            start_day = datetime.strptime(audit_start_date, '%Y-%m-%d').date()
-            _sb = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="evaluation_day_boundaries", evaluation_date=start_day)
-            live_query = live_query.filter(PendingAction.submitted_at >= _sb.boundary_start_utc)
-        except ValueError:
-            flash("Invalid audit start date format. Please use YYYY-MM-DD.", "warning")
-    if audit_end_date:
-        try:
-            end_day = datetime.strptime(audit_end_date, '%Y-%m-%d').date()
-            _eb = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="evaluation_day_boundaries", evaluation_date=end_day)
-            end_dt = _eb.boundary_end_utc + timedelta(seconds=1)
-            live_query = live_query.filter(PendingAction.submitted_at < end_dt)
-        except ValueError:
-            flash("Invalid audit end date format. Please use YYYY-MM-DD.", "warning")
-
-    live_rows = live_query.order_by(PendingAction.submitted_at.desc()).limit(5000).all()
-
-    # Up to 5000 rows reach this point, and both the name filter below and the
-    # serialization loop further down need the same display name per row. Load
-    # the distinct seats (and their profiles) once and index them, rather than
-    # issuing two db.session.get() calls per row.
-    display_names_by_seat_id = {}
-    seat_ids = {row.seat_id for row in live_rows if row.seat_id is not None}
-    if seat_ids:
-        seats = (
-            Seat.query
-            .options(joinedload(Seat.identity_profile))
-            .filter(Seat.id.in_(seat_ids))
-            .all()
-        )
-        display_names_by_seat_id = {
-            seat.id: (seat.identity_profile.full_name if seat.identity_profile else "Unknown")
-            for seat in seats
-        }
-
-    def _audit_display_name(row):
-        return display_names_by_seat_id.get(row.seat_id, "Unknown")
-
-    if audit_student:
-        audit_student_lower = audit_student.lower()
-        live_rows = [
-            row for row in live_rows
-            if audit_student_lower in _audit_display_name(row).lower()
-        ]
-    live_keys = {
-        (row.id, row.action.value if hasattr(row.action, 'value') else row.action)
-        for row in live_rows
-    }
-    inferred_rows = []
-
-    live_serialized = []
-    for row in live_rows:
-        live_serialized.append({
-            'student_item_id': row.entitlement_id,
-            'student_display_name': _audit_display_name(row),
-            'class_display_label': selected_scope.get('join_code') or selected_scope.get('block') or "Unknown",
-            'action': (
-                (row.outcome.value if hasattr(row.outcome, 'value') else row.outcome)
-                or 'REQUEST'
-            ),
-            'notes': row.notes,
-            'timestamp': row.timestamp,
-            'source': row.source.value if hasattr(row.source, 'value') else row.source,
-        })
-
-    audit_rows_all = live_serialized + inferred_rows
-    _UTC_MIN = datetime.min.replace(tzinfo=timezone.utc)
-    audit_rows_all.sort(key=lambda r: ensure_utc(r['timestamp']) if r['timestamp'] else _UTC_MIN, reverse=True)
-
-    audit_total = len(audit_rows_all)
-    audit_total_pages = max(1, math.ceil(audit_total / audit_per_page)) if audit_total else 1
-    if audit_page > audit_total_pages:
-        audit_page = audit_total_pages
-    audit_start_idx = (audit_page - 1) * audit_per_page
-    audit_end_idx = audit_start_idx + audit_per_page
-    audit_rows = audit_rows_all[audit_start_idx:audit_end_idx]
-
-    audit_class_options = sorted(set(class_labels_by_block.values()))
-
     # Which products this class's rent currently grants on payment. Read from
     # the rent policy, which is where the linkage lives now — the product no
     # longer carries a flag, because a flag there would be a live read into
@@ -4814,17 +4594,9 @@ def store_management():
         class_labels_by_block=class_labels_by_block,
         rent_managed_item_ids=rent_managed_item_ids,
         collective_progress_by_item=collective_progress_by_item,
-        audit_rows=audit_rows,
-        audit_total=audit_total,
-        audit_page=audit_page,
-        audit_total_pages=audit_total_pages,
-        audit_class_options=audit_class_options,
+        resolved_redemptions=resolved_redemptions,
+        pending_acknowledgements=pending_acknowledgements,
         economic=economic_view,
-        audit_student=audit_student,
-        audit_class=audit_class,
-        audit_action=audit_action,
-        audit_start_date=audit_start_date,
-        audit_end_date=audit_end_date,
         selected_scope=selected_scope,
         feature_options=feature_options,
         form_contract=StoreFormContract(

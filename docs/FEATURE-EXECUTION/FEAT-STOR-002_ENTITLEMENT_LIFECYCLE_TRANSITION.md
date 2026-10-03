@@ -2,9 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-STOR-002 | 2.2 | 2026-10-01 | 2.1 | Normative |
-
-*Revision 2.2 (2026-10-01; ratified by the owner 2026-10-01): adds §X.A, submission of a pending hall-pass request as a covered pending action (DOM-STORE-001 5.3 §IX).*
+| FEAT-STOR-002 | 2.3 | 2026-10-03 | 2.2 | Normative |
 
 ## I. Purpose
 
@@ -201,9 +199,24 @@ The transaction SHALL:
 
 1. create the entitlement grant event;
 2. create the `CONSUMED` event for that exact entitlement lifecycle;
-3. commit the purchase, grant, and consumption atomically.
+3. create one pending action per consumed entitlement, as a reminder for the teacher (`DOM-STORE-001` §VIII.E.3);
+4. commit the purchase, grant, consumption, and reminder atomically.
 
 If another domain owns the immediate exercise, that domain's authoritative exercise event replaces the Store-owned `CONSUMED` write.
+
+The reminder is a `pending_actions` row with `authoritative_feat = FEAT-STOR-002` and the typed payload `{kind: "immediate_use_acknowledgement", product_id, policy_uuid}`. This FEAT resolves it in one way only: the teacher marks it complete, which deletes the row and writes no entitlement event, because the entitlement is already `CONSUMED`.
+
+## X.B Delayed-Use Redemption Verdicts
+
+A delayed-use redemption request is a `pending_actions` row with no `kind`, submitted by the student and resolved by this FEAT with one of the three verdicts of `DOM-STORE-001` §VIII.E.4. No terminal event is written while the request waits. The resolution SHALL, in one transaction:
+
+- **Accept**: record `CONSUMED`;
+- **Deny**: record `REVOKED`;
+- **Return**: record no entitlement event;
+
+and delete the pending action. A verdict moves no money and is final for that request. After a return, the student still holds the entitlement and may submit a new request.
+
+Accept and deny carry the request's facts (the student's note and the submission time) onto the terminal event's payload, because the pending action they came from is deleted.
 
 ## X.A Hall-Pass Request Submission
 

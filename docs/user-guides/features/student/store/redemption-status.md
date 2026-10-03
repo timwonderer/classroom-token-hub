@@ -4,7 +4,7 @@ category: features
 subcategory: student-store
 roles: [student]
 description: Read the six statuses in My Items, use what you own, and know which button appears when.
-keywords: [store, my items, redemption, status, ready to use, pending approval, processing, used, expired, revoked, PIN]
+keywords: [store, my items, redemption, status, ready to use, pending approval, processing, used, denied, expired, revoked, PIN]
 related:
   - user-guides/features/student/store/browse-buy
   - user-guides/diagnostics/student/store
@@ -24,12 +24,13 @@ Every item carries one of six status badges:
 
 | Badge | What it means |
 | --- | --- |
-| **Ready to Use** | Yours. Use it whenever you want. |
+| **Ready to Use** | Yours. Use it whenever you want. If your teacher returns a request, the item comes back here and you can ask again. |
 | **Pending Approval** | You asked to use it. Your teacher has not answered yet. |
 | **Processing** | In progress. Nothing for you to do. |
 | **Used** | You already used it. |
 | **Expired** | Its time ran out before you used it. |
-| **Revoked** | Your teacher withdrew it. |
+| **Denied** | Your teacher said no to your request. Asking counts as using the item, so it is used up and nothing is refunded. |
+| **Revoked** | Your teacher voided the item before you asked to use it. |
 
 Each item also shows its type, the date you bought it, and — if it has one — an expiry date. Watch that date. **Expired** is not something your teacher did to you; it is what happens when the window closes on an unused item.
 

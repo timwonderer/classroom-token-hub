@@ -505,122 +505,227 @@ def use_item():
     return jsonify({"status": "success", "message": f"You have requested to use {store_item.name}. Awaiting admin approval."})
 
 
+class _RedemptionDecisionRefused(Exception):
+    def __init__(self, message, status):
+        super().__init__(message)
+        self.message = message
+        self.status = status
+
+
+def _load_redemption_for_decision(data):
+    """Resolve and lock the waiting request a teacher is deciding.
+
+    Accepts the request id (``request_id``, the pending action) or the
+    entitlement it acts on (``entitlement_id``). Either way the request must be
+    unresolved and in the teacher's active class: a class the teacher owns is
+    not enough, because ownership spans every period they teach. The pending
+    row is locked, so a second decision arriving at the same moment waits and
+    then finds nothing left to decide.
+    """
+    ctx = g.canonical_context
+    try:
+        active_class_id = ctx.class_id
+    except AttributeError:
+        active_class_id = None
+    if not active_class_id or not _admin_has_class_scope(ctx, active_class_id):
+        raise _RedemptionDecisionRefused("Select a class first.", 403)
+
+    request_id = str(data.get('request_id') or '').strip()
+    entitlement_id = str(data.get('entitlement_id') or '').strip()
+    if not request_id and not entitlement_id:
+        raise _RedemptionDecisionRefused("Missing redemption request.", 400)
+
+    query = PendingAction.query.filter(
+        PendingAction.class_id == active_class_id,
+        PendingAction.authoritative_feat == "FEAT-STOR-002",
+        PendingAction.payload["outcome"].as_string().is_(None),
+        # A redemption request carries no kind; an immediate-use reminder
+        # (DOM-STORE-001 §VIII.E.3) is resolved only by marking it complete.
+        PendingAction.payload["kind"].as_string().is_(None),
+    )
+    if request_id:
+        query = query.filter(PendingAction.pending_action_id == request_id)
+    if entitlement_id:
+        query = query.filter(PendingAction.entitlement_id == entitlement_id)
+    pending_action = query.with_for_update().first()
+    if pending_action is None:
+        raise _RedemptionDecisionRefused(
+            "This request has already been decided, or it is not in this class.", 409
+        )
+
+    entitlement = latest_entitlement_grant(pending_action.entitlement_id)
+    if (
+        entitlement is None
+        or entitlement.class_id != active_class_id
+        or entitlement.target_seat_id != pending_action.seat_id
+    ):
+        raise _RedemptionDecisionRefused("Invalid item.", 404)
+
+    store_item = store_service.resolve_entitlement_product(entitlement)
+    if not store_item or store_item.class_id != active_class_id:
+        raise _RedemptionDecisionRefused("Invalid item.", 404)
+    return ctx, pending_action, entitlement, store_item
+
+
 @api_bp.route('/approve-redemption', methods=['POST'])
 @admin_required
 def approve_redemption():
-    """
-    Approve a pending redemption request.
+    """Approve a waiting redemption request. The decision is final.
 
-    Validation and scope checks run as pure reads in the route body; the actual
-    state mutation is delegated to FEAT-STOR-002. The FEAT shell owns the
-    transaction boundary — any exception raised below this point will trigger
-    a rollback at the shell. Infrastructure errors are NOT swallowed here;
-    they propagate to Flask's error handler.
+    Scope checks run here as reads; the mutation is FEAT-STOR-002, whose shell
+    owns the transaction. A refusal from the FEAT leaves the request waiting.
     """
     data = request.get_json(silent=True) or {}
-    entitlement_id = data.get('entitlement_id')
-
-    if not entitlement_id:
-        return jsonify({"status": "error", "message": "Missing entitlement ID."}), 400
-
-    entitlement = latest_entitlement_grant(entitlement_id)
-    if not entitlement:
-        return jsonify({"status": "error", "message": "Invalid item."}), 404
-
-    # Verify an unresolved REQUEST exists (no APPROVED/REJECTED follow-up)
-    display_status = derive_display_status(entitlement.entitlement_id)
-    if display_status != 'processing':
-        return jsonify({"status": "error", "message": "Invalid or already processed item."}), 404
-
-    user_id = g.canonical_context.user_id
-
-    has_membership = _admin_has_class_scope(g.canonical_context, entitlement.class_id)
-    if not has_membership:
-        return jsonify({"status": "error", "message": "You do not have access to this class."}), 403
-
-    store_item = store_service.resolve_entitlement_product(entitlement)
-    if not store_item or not store_item.class_id or store_item.class_id != entitlement.class_id:
-        return jsonify({"status": "error", "message": "Unauthorized."}), 403
-    if not _admin_has_class_scope(g.canonical_context, store_item.class_id):
-        return jsonify({"status": "error", "message": "Unauthorized."}), 403
+    try:
+        ctx, pending_action, entitlement, store_item = _load_redemption_for_decision(data)
+    except _RedemptionDecisionRefused as refused:
+        return jsonify({"status": "error", "message": refused.message}), refused.status
 
     try:
-        pending_action = pending_action_for_entitlement(entitlement.entitlement_id)
-        if not pending_action:
-            return jsonify({"status": "error", "message": "Redemption request is no longer pending and cannot be approved."}), 409
-
-        ctx = g.canonical_context
         from app.feats.entitlement_lifecycle_feat import execute_approve_redemption
         execute_approve_redemption(
             entitlement=entitlement,
             store_item=store_item,
             pending_action=pending_action,
             ctx=ctx,
-            idempotency_key=f"feat:stor:appr_req:{entitlement.entitlement_id}",
+            idempotency_key=f"feat:stor:appr_req:{pending_action.pending_action_id}",
         )
     except (SQLAlchemyError, ValueError) as e:
         current_app.logger.info(
-            "Redemption approval failed for entitlement %s: %s",
-            entitlement_id,
+            "Redemption approval failed for request %s: %s",
+            pending_action.pending_action_id,
             e,
         )
         return jsonify({
             "status": "error",
-            "message": "Redemption request could not be approved.",
+            "message": str(e) if isinstance(e, ValueError) else "Redemption request could not be approved.",
         }), 409
 
-    return jsonify({"status": "success", "message": "Redemption request approved."})
+    return jsonify({"status": "success", "message": f"Approved {store_item.name}."})
 
 
 @api_bp.route('/reject-redemption', methods=['POST'])
 @admin_required
 def reject_redemption():
-    """Reject a pending redemption request without terminating the entitlement."""
+    """Deny a waiting redemption request. The decision is final.
+
+    A redemption request is a use: denying it ends the entitlement with no
+    refund and no void, by the teacher's own classroom norms (FEAT-STOR-002).
+    """
     data = request.get_json(silent=True) or {}
-    entitlement_id = data.get('entitlement_id')
-
-    if not entitlement_id:
-        return jsonify({"status": "error", "message": "Missing entitlement ID."}), 400
-
-    entitlement = latest_entitlement_grant(entitlement_id)
-    if not entitlement:
-        return jsonify({"status": "error", "message": "Invalid item."}), 404
-
-    # Verify an unresolved REQUEST exists
-    display_status = derive_display_status(entitlement.entitlement_id)
-    if display_status != 'processing':
-        return jsonify({"status": "error", "message": "Invalid or already processed item."}), 404
-
-    # SECURITY: Verify the current admin has class scope for this store item
-    user_id = g.canonical_context.user_id
-    store_item = store_service.resolve_entitlement_product(entitlement)
-    if not store_item or not store_item.class_id or store_item.class_id != entitlement.class_id:
-        return jsonify({"status": "error", "message": "Unauthorized."}), 403
-    if not _admin_has_class_scope(g.canonical_context, store_item.class_id):
-        return jsonify({"status": "error", "message": "Unauthorized."}), 403
-
     try:
-        pending_action = pending_action_for_entitlement(entitlement.entitlement_id)
-        if not pending_action:
-            return jsonify({"status": "error", "message": "Redemption request could not be rejected in its current state."}), 409
+        ctx, pending_action, entitlement, store_item = _load_redemption_for_decision(data)
+    except _RedemptionDecisionRefused as refused:
+        return jsonify({"status": "error", "message": refused.message}), refused.status
 
-        from app.feats.entitlement_lifecycle_feat import execute_reject_redemption
-        execute_reject_redemption(
+    note = str(data.get('note') or '').strip()
+    try:
+        from app.feats.entitlement_lifecycle_feat import execute_deny_redemption
+        execute_deny_redemption(
+            entitlement=entitlement,
+            store_item=store_item,
             pending_action=pending_action,
-            idempotency_key=f"feat:stor:rej_req:{entitlement.entitlement_id}",
+            ctx=ctx,
+            decision_note=note or None,
+            idempotency_key=f"feat:stor:deny_req:{pending_action.pending_action_id}",
         )
     except (SQLAlchemyError, ValueError) as e:
         current_app.logger.info(
-            "Redemption rejection failed for entitlement %s: %s",
-            entitlement_id,
+            "Redemption denial failed for request %s: %s",
+            pending_action.pending_action_id,
             e,
         )
         return jsonify({
             "status": "error",
-            "message": "Redemption request could not be rejected in its current state.",
+            "message": str(e) if isinstance(e, ValueError) else "Redemption request could not be denied.",
         }), 409
 
-    return jsonify({"status": "success", "message": "Redemption request rejected."})
+    return jsonify({"status": "success", "message": f"Denied {store_item.name}."})
+
+
+@api_bp.route('/return-redemption', methods=['POST'])
+@admin_required
+def return_redemption():
+    """Return a waiting redemption request: the student keeps the item unused.
+
+    The request is closed for good; the item is not, so the student may ask
+    again later (FEAT-STOR-002).
+    """
+    data = request.get_json(silent=True) or {}
+    try:
+        ctx, pending_action, entitlement, store_item = _load_redemption_for_decision(data)
+    except _RedemptionDecisionRefused as refused:
+        return jsonify({"status": "error", "message": refused.message}), refused.status
+
+    try:
+        from app.feats.entitlement_lifecycle_feat import execute_return_redemption
+        execute_return_redemption(
+            entitlement=entitlement,
+            pending_action=pending_action,
+            ctx=ctx,
+            idempotency_key=f"feat:stor:return_req:{pending_action.pending_action_id}",
+        )
+    except (SQLAlchemyError, ValueError) as e:
+        current_app.logger.info(
+            "Redemption return failed for request %s: %s",
+            pending_action.pending_action_id,
+            e,
+        )
+        return jsonify({
+            "status": "error",
+            "message": str(e) if isinstance(e, ValueError) else "Redemption request could not be returned.",
+        }), 409
+
+    return jsonify({
+        "status": "success",
+        "message": f"Returned {store_item.name}. The student still has it and can ask again.",
+    })
+
+
+@api_bp.route('/complete-immediate-use', methods=['POST'])
+@admin_required
+def complete_immediate_use():
+    """Mark an immediate-use purchase complete (DOM-STORE-001 §VIII.E.3)."""
+    data = request.get_json(silent=True) or {}
+    ctx = g.canonical_context
+    try:
+        active_class_id = ctx.class_id
+    except AttributeError:
+        active_class_id = None
+    if not active_class_id or not _admin_has_class_scope(ctx, active_class_id):
+        return jsonify({"status": "error", "message": "Select a class first."}), 403
+
+    request_id = str(data.get('request_id') or '').strip()
+    if not request_id:
+        return jsonify({"status": "error", "message": "Missing purchase."}), 400
+    pending_action = (
+        PendingAction.query.filter(
+            PendingAction.class_id == active_class_id,
+            PendingAction.pending_action_id == request_id,
+            PendingAction.authoritative_feat == "FEAT-STOR-002",
+            PendingAction.payload["kind"].as_string() == "immediate_use_acknowledgement",
+        )
+        .with_for_update()
+        .first()
+    )
+    if pending_action is None:
+        return jsonify({
+            "status": "error",
+            "message": "This purchase was already marked complete, or it is not in this class.",
+        }), 409
+
+    try:
+        from app.feats.entitlement_lifecycle_feat import execute_complete_immediate_use
+        execute_complete_immediate_use(
+            pending_action=pending_action,
+            ctx=ctx,
+            idempotency_key=f"feat:stor:complete_imm:{request_id}",
+        )
+    except (SQLAlchemyError, ValueError) as e:
+        current_app.logger.info("Immediate-use completion failed for %s: %s", request_id, e)
+        return jsonify({"status": "error", "message": "This purchase could not be marked complete."}), 409
+
+    return jsonify({"status": "success", "message": "Marked complete."})
 
 
 # -------------------- HALL PASS API --------------------
