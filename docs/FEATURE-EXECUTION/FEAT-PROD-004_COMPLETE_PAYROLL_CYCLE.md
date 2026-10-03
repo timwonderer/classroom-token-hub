@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-PROD-004 | 1.2 | 2026-09-30 | 1.1 | Normative |
+| FEAT-PROD-004 | 1.3 | 2026-10-03 | 1.2 | Normative |
 
 > [!NOTE]
 > **1.2 (2026-09-30), operator ruling.** The CLASS activation step is removed. It activated pending rows of the class-wide `policy_versions` / `policy_transitions` tables, which were never authorized as canonical and are retired (`DOM-CLASS-003` §V). A change saved for the next cycle is a row of its owning domain's table carrying its own effective date, in force from that date with nothing to activate (`DOM-CLASS-003` §VII). The run now coordinates PROD and ITR only.
@@ -20,11 +20,41 @@ Both payroll execution paths converge on this FEAT:
 - manual payroll initiated by the teacher, and
 - automatic payroll initiated by a scheduled run.
 
-This FEAT does not itself write `payroll_event` rows; it owns the run identity and the cross-domain choreography. Per-seat settlement writes remain owned by `FEAT-PROD-003`.
+This FEAT does not itself write `payroll_event` rows; it owns the run identity and the cross-domain choreography. Per-seat settlement is performed through PROD domain commands governed by `FEAT-PROD-003`; this orchestrator never executes another FEAT. Corrections do not close cycles.
 
 ---
 
-## II. Execution Context
+## II. Scope
+
+Class-level payroll completion only. Per-seat terminal interval correction and residual recovery are non-boundary operations; neither runs this completion orchestration.
+
+## III. Authority Level
+
+Normative, subordinate to INV-CORE-000 §III.1–6, INV-CORE-001 §III, VIII, DOM-PROD-001 §XV, INV-ARC-021 §V, VII, and FEAT-CORE-000 §II–V.
+
+## IV. Dependencies
+
+- `docs/DOMAIN/DOM-PROD-001_PRODUCTIVITY_AND_PAYROLL_DOMAIN.md`
+- `docs/FEATURE-EXECUTION/FEAT-PROD-003_RECORD_PAYROLL_EVENT.md`
+- `docs/DOMAIN/DOM-ITR-001_INTERPRETATION_DOMAIN.md`
+- [DOM-LED-001](../DOMAIN/DOM-LED-001_LEDGER_DOMAIN.md) §VII.1 — Ledger-owned amounts, reservations, and posting.
+- [DOM-IDEN-006](../DOMAIN/DOM-IDEN-006_CANONICAL_CONTEXT_RESOLUTION.md) §VII–XI — current canonical actor/target context.
+- [DOM-CLASS-001](../DOMAIN/DOM-CLASS-001_CLASS_CONFIGURATION_DOMAIN.md) §VII, X and [DOM-CLASS-002](../DOMAIN/DOM-CLASS-002_CLASS_ECONOMY_GOVERNANCE.md) §V, VII — configuration facts and shared funding contract.
+- [DOM-OPS-002](../DOMAIN/DOM-OPS-002_AUDIT_LINEAGE_INTEGRITY.md) §5 — protected audit evidence.
+- [FEAT-LED-000](FEAT-LED-000_CANONICAL_MONETARY_RESOLUTION_WORKFLOW.md) §VII, XI and [FEAT-LED-001](FEAT-LED-001_POST_LEDGER_TRANSACTION.md) — incorporated monetary domain-command resolution and posting contracts, never nested executors.
+- [SPEC-PROD-001](../SPEC/SPEC-PROD-001_ATTENDANCE_INTERVAL_ELIGIBILITY_AND_PAYROLL_CORRECTION.md) §V–VII and [SPEC-LED-002](../SPEC/SPEC-LED-002_COMMAND_IDEMPOTENCY_RESERVATION_AND_ENFORCEMENT.md) §III–VIII — incorporated settlement provenance, serialization, and monetary command reservation requirements.
+- `docs/FEATURE-EXECUTION/FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md`
+- `docs/DOMAIN/DOM-CLASS-003_ECONOMIC_POLICY.md`
+- `docs/INVARIANT/ARCHITECTURE/INV-ARC-015_TEMPORAL_MODEL_AND_BOUNDARY_ENFORCEMENT.md`
+- `docs/INVARIANT/ARCHITECTURE/INV-ARC-016_LAWFUL_EXISTENCE_AND_AUDIT_LINEAGE.md`
+- `docs/INVARIANT/ARCHITECTURE/INV-ARC-021_CROSS_DOMAIN_REFERENCE_AND_COORDINATION.md`
+- `docs/SPEC/SPEC-ECON-002_ECONOMIC_POLICY_VISIBILITY_AND_DISCLOSURE.md`
+- `app/services/context_resolver.py`
+- `docs/SPEC/SPEC-TIME-001_CANONICAL_TEMPORAL_RESOLVER.md`
+- `app/utils/canonical_temporal_resolver.py`
+
+
+## V. Execution Context
 
 ### 1. Required Inputs
 
@@ -50,16 +80,18 @@ This FEAT does not itself write `payroll_event` rows; it owns the run identity a
 
 ---
 
-## III. Orchestration Contract
+## VI. Orchestration Contract
 
-This FEAT coordinates two domains in a fixed, lawful order. Each cross-domain effect is a declared side effect of this contract, auditable via `request_id` and the originating FEAT code, and idempotent on replay (`INV-ARC-021` §V.8).
+This FEAT coordinates Identity, Class Configuration, Productivity, Ledger, Operations, and Interpretation through their owning queries/commands in a fixed, lawful order. Each cross-domain effect is a declared side effect of this contract, auditable via `request_id` and the originating FEAT code, and idempotent on replay (`INV-ARC-021` §V.8).
 
 ### Execution steps
 
 0. **Resolve replay (FIRST).** Consult the persistent completion anchor for `(class_id, idempotency_key)`. If a completed run resolves, return its original `payroll_cycle_id` immediately — before any configuration read, cycle-id allocation, timestamp resolution, eligible-seat query, `reference_configuration` capture, or ITR invocation. This step is the sole protection of the historical-configuration seam and MUST precede every other operation.
 1. **Open the cycle (new run only).** Confirm the actor is lawful for the class. Allocate a fresh `payroll_cycle_id` (UUID). Consume the caller-supplied lawful closed-cycle window / evaluation time (this FEAT does not derive boundary legality).
-2. **Settle the closing cycle (PROD).** For each eligible seat, invoke `FEAT-PROD-003` `record_payroll_event(...)` with `payroll_event_type = payroll`, supplying the run's `payroll_cycle_id` and `run_mechanism`. PROD prices each settled session by the payroll setting in force when that session closed (`DOM-PROD-001` §XV.3). The governing configuration is NOT re-read or re-interpreted after this step.
-3. **Materialize interpretation (ITR).** Invoke the Interpretation compute + materialize path (`FEAT-ITR-001` and its materialization contract) for the just-closed cycle, passing `class_id` and `payroll_cycle_id`. Interpretation produces one durable, immutable `interpretation_cycle_record` bound permanently to this `payroll_cycle_id` and the economic reference values in effect for the closed cycle (`DOM-ITR-001` §VIII–§IX). Interpretation is read-only over economic truth and MUST NOT mutate PROD, Ledger, or Policy state.
+2. **Settle the closing cycle (PROD + Ledger + Operations).** Resolve targets through Identity and consume Class Configuration facts through its queries. Serialize target seats in stable identifier order before eligibility evaluation, using the common target-seat → ClassEconomy → original-credit → pending/snapshot-source lock order. For each eligible seat, consume PROD's authoritative business/pricing inputs, including original setting shares and version-1 interval provenance (`DOM-PROD-001` §XV.3). Inside this same `FEAT-PROD-004` context, compose Ledger's `build_intended_ledger_plan`, `resolve_intended_ledger_plan`, and `apply_resolved_ledger_plan` / posting domain commands, invoke PROD's `record_payroll_event(...)` domain command with `payroll_event_type = payroll`, the run's `payroll_cycle_id` and `run_mechanism`, and emit all protected audit evidence through Operations commands. `FEAT-PROD-003` supplies the per-seat settlement contract only; no executor is invoked and PROD never calls Ledger. The governing configuration is NOT re-read or re-interpreted after this step.
+
+   Every per-seat monetary command uses `(class_id, FEAT-PROD-004, per_seat_intent_key)` as its Ledger reservation identity. The deterministic `per_seat_intent_key` is a versioned canonical encoding of the class-level run's `idempotency_key` and target seat identifier; it must distinguish every seat intent within the class without expanding Ledger's reservation identity tuple. Propagate `FEAT-PROD-004` as the active originating code and the key unchanged to its PROD event and Ledger reservation; never claim a nested `FEAT-PROD-003` execution. Reservation, all monetary effects, business records, and audit evidence share the run transaction; a failed run leaves no accepted per-seat command.
+3. **Materialize interpretation (ITR).** Invoke Interpretation domain compute + materialize commands governed by `FEAT-ITR-001` and its materialization contract, never its FEAT executor, for the just-closed cycle, passing `class_id` and `payroll_cycle_id`. Interpretation produces one durable, immutable `interpretation_cycle_record` bound permanently to this `payroll_cycle_id` and the economic reference values in effect for the closed cycle (`DOM-ITR-001` §VIII–§IX). Interpretation is read-only over economic truth and MUST NOT mutate PROD, Ledger, or Policy state.
 4. **Record completion (LAST before commit).** Write the persistent completion anchor for `(class_id, idempotency_key)` binding it to this run's `payroll_cycle_id`. This is the final step before commit: the anchor means "this entire economic-cycle transition completed", so it MUST NOT be written early as an in-progress marker. Because it is last and shares the one transaction, a completed-run identity survives **iff** settlement and interpretation both committed.
 5. **Commit.** The owning FEAT transaction commits exactly once. On any step failure, the whole run fails closed and no partial cross-domain state — including the completion anchor — is committed, so a retry is a genuinely fresh attempt under the still-current closing-cycle configuration.
 
@@ -70,7 +102,7 @@ This FEAT coordinates two domains in a fixed, lawful order. Each cross-domain ef
 
 ---
 
-## IV. Temporal Rules
+## VII. Temporal Rules
 
 - The class-level run uses a single class-local evaluation time resolved once at step 1 and reused for all seats in the run.
 - This FEAT does not reinterpret prior payroll boundaries; it consumes PROD's boundary derivation as-is.
@@ -78,7 +110,7 @@ This FEAT coordinates two domains in a fixed, lawful order. Each cross-domain ef
 
 ---
 
-## V. Invariants
+## VIII. Invariants
 
 1. `payroll_cycle_id` is generated exactly once per class-level run and stamped identically on every `payroll` event in the run.
 2. The FEAT is the sole cross-domain orchestrator for payroll completion; no domain calls Interpretation directly.
@@ -89,17 +121,6 @@ This FEAT coordinates two domains in a fixed, lawful order. Each cross-domain ef
 
 ---
 
-## VI. Dependencies
+## IX. Amendment
 
-- `docs/DOMAIN/DOM-PROD-001_PRODUCTIVITY_AND_PAYROLL_DOMAIN.md`
-- `docs/FEATURE-EXECUTION/FEAT-PROD-003_RECORD_PAYROLL_EVENT.md`
-- `docs/DOMAIN/DOM-ITR-001_INTERPRETATION_DOMAIN.md`
-- `docs/FEATURE-EXECUTION/FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md`
-- `docs/DOMAIN/DOM-CLASS-003_ECONOMIC_POLICY.md`
-- `docs/INVARIANT/ARCHITECTURE/INV-ARC-015_TEMPORAL_MODEL_AND_BOUNDARY_ENFORCEMENT.md`
-- `docs/INVARIANT/ARCHITECTURE/INV-ARC-016_LAWFUL_EXISTENCE_AND_AUDIT_LINEAGE.md`
-- `docs/INVARIANT/ARCHITECTURE/INV-ARC-021_CROSS_DOMAIN_REFERENCE_AND_COORDINATION.md`
-- `docs/SPEC/SPEC-ECON-002_ECONOMIC_POLICY_VISIBILITY_AND_DISCLOSURE.md`
-- `app/services/context_resolver.py`
-- `docs/SPEC/SPEC-TIME-001_CANONICAL_TEMPORAL_RESOLVER.md`
-- `app/utils/canonical_temporal_resolver.py`
+Version 1.3 (2026-10-03) supersedes the nested-FEAT wording of v1.2 with owning domain commands under FEAT-CORE-000 §V.1 and declares serialization shared with interval invalidation/recovery, including explicit Ledger/Identity/Class Configuration/Operations coordination and the actual originating monetary command namespace. Cycle completion authority and original historical configuration are preserved. Runtime implementation is not included. Revisions must increment version/date and preserve governing invariants.

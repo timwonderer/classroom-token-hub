@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001      | 3.11    | 2026-10-01     | 3.10       | Normative |
+| SOP-DOC-001      | 3.12    | 2026-10-03     | 3.11       | Normative |
 
 ---
 
@@ -127,6 +127,7 @@ Archived material is deliberately absent; see §VI.
 - [FEAT-PROD-002 — Record Hall Pass Log](../FEATURE-EXECUTION/FEAT-PROD-002_RECORD_HALL_PASS_LOG.md)
 - [FEAT-PROD-003 — Record Payroll Event](../FEATURE-EXECUTION/FEAT-PROD-003_RECORD_PAYROLL_EVENT.md)
 - [FEAT-PROD-004 — Complete Payroll Cycle](../FEATURE-EXECUTION/FEAT-PROD-004_COMPLETE_PAYROLL_CYCLE.md)
+- [FEAT-PROD-005 — Invalidate Attendance Interval](../FEATURE-EXECUTION/FEAT-PROD-005_INVALIDATE_ATTENDANCE_INTERVAL.md)
 - [FEAT-STOR-001 — Store Purchase and Entitlement Grant](../FEATURE-EXECUTION/FEAT-STOR-001_STORE_PURCHASE.md)
 - [FEAT-STOR-002 — Entitlement Lifecycle Transition](../FEATURE-EXECUTION/FEAT-STOR-002_ENTITLEMENT_LIFECYCLE_TRANSITION.md)
 - [FEAT-STOR-003 — Insurance Claim Lifecycle](../FEATURE-EXECUTION/FEAT-STOR-003_INSURANCE_CLAIM_LIFECYCLE.md)
@@ -152,6 +153,7 @@ Archived material is deliberately absent; see §VI.
 - [SPEC-OPS-004 — System Administration Console](../SPEC/SPEC-OPS-004_SYSTEM_ADMINISTRATION_CONSOLE.md)
 - [SPEC-OPS-005 — Feature Health Evidence (internal integrity)](../SPEC/SPEC-OPS-005_FEATURE_HEALTH_EVIDENCE.md)
 - [SPEC-OPS-006 — Public Request Monitoring](../SPEC/SPEC-OPS-006_PUBLIC_REQUEST_MONITORING.md) — v1.4 (ratified 2026-10-02): a Hall passes line; 404s on the hall-pass approve, reject and cancel routes count as failed requests at 3 or more and above 2%, on the card and the hero. v1.3: plain-language hero states and area labels, Under maintenance from the access-gate check.
+- [SPEC-PROD-001 — Attendance Interval Eligibility and Payroll Correction](../SPEC/SPEC-PROD-001_ATTENDANCE_INTERVAL_ELIGIBILITY_AND_PAYROLL_CORRECTION.md) — incorporated by DOM-PROD-001 and FEAT-PROD-003/005; documentation authorization, not runtime availability.
 - [SPEC-SEC-001 — Credentials and Identity Lookup Code Contract](../SPEC/SPEC-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_CODE_CONTRACT.md)
 - [SPEC-STORE-001 — Store Product Policy Payload Schema](../SPEC/SPEC-STORE-001_PRODUCT_POLICY_PAYLOAD_SCHEMA.md)
 - [SPEC-TEST-001 — Canonical Test Initializer](../SPEC/SPEC-TEST-001_CANONICAL_TEST_INITIALIZER.md)
@@ -269,6 +271,10 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.12 (2026-10-03):**
+- Registered `SPEC-PROD-001` and `FEAT-PROD-005` under the approved documentation-only attendance interval invalidation authority package. Canonical schema and audit registry authorization are updated separately; runtime implementation is not part of this registration.
+
 
 **Version 3.11 (2026-10-01):**
 - Registered `FEAT-CLASS-008` (Acknowledge the Unpaid-Work Notice), added under owner rulings 2026-10-01. `FEAT-CLASS-007` is left unassigned: the 2026-09-19 FEAT registry reconciliation proposes it for the successor of `FEAT-SETTINGS-001`.

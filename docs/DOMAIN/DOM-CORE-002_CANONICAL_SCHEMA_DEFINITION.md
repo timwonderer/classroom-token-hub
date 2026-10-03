@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-CORE-002     | 1.12    | 2026-09-30     | 1.11       | Constitutional |
+| DOM-CORE-002     | 1.13    | 2026-10-03     | 1.12       | Constitutional |
 
 ---
 
@@ -196,9 +196,20 @@ Policy definition tables — `rent_settings`, `payroll_settings`, `payroll_rewar
 **Tables:**
 
 - `attendance_sessions`
+- `attendance_interval_invalidation` — append-only terminal eligibility decisions owned by PROD, authorized through `FEAT-PROD-005`; registered in 1.13 as a future persistence contract, not an implemented table.
 - `hall_pass_logs`
 - `payroll_event`
 - `payroll_cycle_completion` — the persistent completion anchor for a class-level payroll run, resolved before any work on replay so a replay returns the original `payroll_cycle_id` (DOM-PROD-001 §XV; FEAT-PROD-004; registered in 1.10)
+
+---
+
+**Interval correction schema contract (1.13):**
+
+`attendance_interval_invalidation` requires `id`, `class_id`, `actor_seat_id`, `target_seat_id`, `opening_event_id`, `closing_event_id`, `recorded_at` (UTC), `reason_code`, `idempotency_key`, `correlation_id`, `receipt_json` (immutable nonmonetary accepted-command receipt), and `lineage_event_id`. Unique `(class_id, target_seat_id, opening_event_id, closing_event_id)` and `(class_id, idempotency_key)` enforce terminal decisions and FEAT-PROD-005 command replay. Reasons are `INVALID_ATTENDANCE`, `NON_WORK_ACTIVITY`, or `DUPLICATE_PARTICIPATION`; no free notes. Opening/closing references are within PROD; class/seat references use shared anchors. Target-seat/class destruction removes dependent business records, while actor provenance does not own another target's records.
+
+`payroll_event` additionally permits `payroll_event_type = correction`. Its protected `summary_json` carries original-event and correction-intent provenance and complete original settlement membership/pricing/allocation-version inputs, not monetary amounts. Original-payroll-event and invalidation IDs refer within PROD; Ledger and policy references are opaque non-FK locators. No persisted earnings cache or amount column is authorized. The incorporated `SPEC-PROD-001` contract is enforced through owning PROD commands and declared FEAT orchestration, never DOM-to-DOM calls.
+
+The protected-row `lineage_event_id` linkage is mandated narrowly by `INV-ARC-016` §V; it does not authorize arbitrary cross-domain internal-table FKs under `INV-ARC-021` §V.7. This schema amendment does not execute migrations or imply runtime availability.
 
 ---
 
@@ -228,6 +239,8 @@ Policy definition tables — `rent_settings`, `payroll_settings`, `payroll_rewar
 - `ledger_command_reservation`
 
 `ledger_command_reservation` is the physical representation currently in use for the Ledger command reservation defined in `DOM-LED-001` §VII.1: identity `(class_id, feat_code, idempotency_key)`, the replay fingerprint, and the effects it produced (`ledger_transaction.command_reservation_id`). `DOM-LED-001` §VII.1 defers the choice of representation; this entry registers the one that exists and does not settle that choice (registered in 1.10).
+
+**Compensation field registration (1.13):** `ledger_transaction` adds immutable Ledger-owned `compensation_origin_locator` (opaque original Ledger credit locator), `compensation_amount_cents` (nonnegative attributable recovery; protection transfer legs contribute zero), and `correction_intent_locator` (opaque originating intent). Ledger commands alone enforce the aggregate recovery cap and serialization. These locators encode no payroll business classification and introduce no FK into PROD internals. This is future canonical authorization, not a declaration that the runtime fields exist.
 
 **Constraints:**
 
@@ -360,6 +373,9 @@ No additional tables may be introduced without amendment to this document.
 ---
 
 ## VIII. Amendment
+
+Version 1.13 (2026-10-03) supersedes 1.12 for the explicit addition of interval invalidation, nonmonetary settlement/correction provenance, and Ledger compensation fields. Source authority is `INV-CORE-000` §III.1–6, `INV-CORE-001` §III/VIII, `INV-ARC-006` §V, `INV-ARC-016` §V/IX, and `INV-ARC-021` §V/VII. Writer authority is declared in `FEAT-PROD-003` and `FEAT-PROD-005`; no runtime implementation is part of this amendment.
+
 
 Any modification to the canonical schema requires:
 

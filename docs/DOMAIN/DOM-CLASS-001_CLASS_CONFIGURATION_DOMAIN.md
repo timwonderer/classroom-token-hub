@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-CLASS-001 | 3.6 | 2026-10-01 | 3.5 | Constitutional |
+| DOM-CLASS-001 | 3.7 | 2026-10-03 | 3.6 | Constitutional |
 
 ## I. Purpose
 
@@ -156,13 +156,11 @@ Rules:
 - Class creation and class deletion are class-level mutation workflows.
 - Disabling a feature changes access and display state for new use only; it does not rewrite downstream facts, and it does not remove the access needed to resolve surviving downstream state (for rent, `DOM-OBL-001` §IX.16).
 
-## X. Amendment
+## X. Shared Charge-Funding Configuration
 
-Revisions to this document must:
-1. Increment the version number.
-2. Update the Effective Date.
-3. Maintain consistency with `INV-CORE-000`.
+Class Configuration owns the class-scoped overdraft-protection setting and explicitly incorporates `SPEC-ECON-003` §4.5.1.1A for its shared charge-funding semantics. Under `INV-CORE-000` §III.3 and `INV-ARC-009` §V, configuration truth is exposed by pure scoped queries; this domain does not read Ledger balances, move money, or determine another domain's business eligibility. `FEAT-LED-000` coordinates the configuration query and Ledger monetary queries under `INV-ARC-021` §V, VII. Banking product rules remain outside this domain; the shared protection setting is a class-level economic configuration fact.
 
+**3.7 (2026-10-03)** supersedes 3.6 solely to incorporate the universal charge/deduction funding rule: cover the entire checking shortfall from savings or leave savings untouched. Own-account transfers retain sufficient-funds requirements. No runtime configuration or data changes are performed by this amendment.
 
 ## Terminal Roster Deletion
 
@@ -179,3 +177,10 @@ execution transaction. An outdated, narrower confirmation must be rejected.
 Unclaim retains the Seat and does not trigger this rule. Initial empty-class
 creation remains valid until roster setup; there is no empty-class or stale-class
 background inference.
+
+## XI. Amendment
+
+Revisions to this document must:
+1. Increment the version number.
+2. Update the Effective Date.
+3. Maintain consistency with `INV-CORE-000`.

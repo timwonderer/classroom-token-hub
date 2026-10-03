@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-LED-001 | 2.5 | 2026-09-10 | 2.4 | Constitutional |
+| DOM-LED-001 | 2.6 | 2026-10-03 | 2.5 | Constitutional |
 
 ---
 
@@ -57,7 +57,7 @@ No other domain may define fields or mutate these tables. Mutation is permitted 
 
 - **INV-LED-001: Class-Bound Transaction Scope**. All financial state shall be anchored to `class_id`, `target_seat_id`, and `actor_seat_id`. Isolation is not inferred from global seat uniqueness.
 - **INV-LED-002: Immutable Facts**. Once inserted, a transaction row's protected fields are immutable. No later lifecycle patching is allowed. Immutability is a rule about mutation of a **surviving** class universe; see §VII.2 for its boundary against lawful lifecycle destruction.
-- **INV-LED-003: Append-Only Corrections**. Reversals and voids must be recorded as **new** transactions linked through `correlation_id` and type, not by mutating the original row.
+- **INV-LED-003: Append-Only Corrections**. Authorized reversals and monetary corrections must be recorded as **new** transactions linked through immutable compensation provenance, `correlation_id`, and type, not by mutating the original row. VOID acts on grants, never on monetary transactions.
 - **INV-LED-004: Reconciliation-Derived Posting**. `PENDING` and `POSTED` are reconciliation semantics, not stored transaction state.
 - **INV-LED-005: Command-Scoped Idempotency**. Ledger idempotency belongs to
   command intent, not to an individual effect row. An accepted idempotent
@@ -113,6 +113,16 @@ The physical enforcement representation—reservation table, command record, or
 another structural mechanism—is intentionally deferred. The current
 `ledger_transaction` uniqueness constraint is transitional evidence and does
 not, by itself, define command-level idempotency.
+
+### VII.1A Bounded Compensation Authority
+
+Under `INV-CORE-000` §III.1,3–6, `INV-ARC-006` §V, `INV-ARC-009` §V, and `INV-ARC-016` §V, Ledger owns monetary compensation facts and exposes pure scoped queries for original credit, attributable recovered cents, and remaining recoverable cents. Ledger does not decide whether work was eligible or which work contributed to a payment. Originating FEATs supply a domain-authorized correction intent; Ledger accepts only its own authoritative monetary result.
+
+For a positive original credit of `C` cents, let `R` be the sum of committed compensation amounts attributable to that original. Committed compensation includes accepted pending and posted effects, independent of reconciliation state. Ledger MUST enforce `0 <= R <= C`; a new recovery `D` MUST satisfy `0 <= D <= C - R`. Compensation linkage is immutable and class/target-seat scoped. Every partial/residual recovery and exact payroll reversal MUST carry the origin locator, intent locator and attributable cents. Ledger derives attributable recovery as the absolute signed debit magnitude applied to the original credited account; the compensation cents MUST equal that magnitude and cannot be caller-chosen bookkeeping independent of the effect. Funding legs and fees MUST carry zero attributable cents. Missing or inconsistent lineage fails closed. An exact whole-transaction reversal is permitted only when `R = 0`, and contributes `C` to `R`. A partial or residual correction is a separately authorized fresh debit, never `REVERSAL` or `VOID`. A residual correction contributes exactly `C - R`. Once `R = C`, later eligibility invalidation has no additional monetary recovery. Transfer debit/credit legs and fees contribute zero to `R`; account funding is not recovery from the original credit. Zero recovery does not create a zero-amount correction row.
+
+All settlement, correction and full-reversal commands for the seat serialize through §VII INV-LED-015. Acquire the scoped seat lock first, then ClassEconomy, then the original Ledger transaction lock when compensation is involved, then pending transactions and snapshots in their existing deterministic order. An originating payroll settlement also acquires the seat lock before evaluating settlement eligibility, although it is a credit; its FEAT re-evaluates owning-domain evidence within that boundary. Check the cap and append all recovery effects inside the same transaction; previews cannot reserve recovery. Different command keys do not permit double recovery for the same correction intent. Ledger structurally enforces unique `(class_id, target_seat_id, compensation_origin_locator, correction_intent_locator)` recovery intent identity, independently of command reservations.
+
+`SPEC-LED-002` §§III–VIII is explicitly incorporated for permanent command reservations and effect linkage. The mathematical compensation constraints here are Ledger-owned; any interval allocation method is supplied by its owning domain and coordinated only by a FEAT under `INV-ARC-021` §V, VII. No new DOM-to-DOM dependency or FK to another domain's internal table is authorized.
 
 ### VII.2 Immutability Scope and Lifecycle Destruction
 
@@ -171,7 +181,10 @@ The canonical, immutable record of financial intent and execution.
 - `idempotency_key` (String; Command reservation key; required for canonical
   idempotent command paths)
 - `policy_id` (UUID; Frozen policy reference when applicable)
-- `type` (Text; Required)
+- `type` (Text; Required; proposed new canonical value `payroll_correction` for separately authorized partial/residual payroll recovery; this contract does not assert runtime enum availability)
+- `compensation_origin_locator` (Nullable opaque Ledger public locator identifying the original transaction; resolved only by Ledger within the same class/target-seat scope)
+- `compensation_amount_cents` (Nonnegative integer; attributable recovered cents, zero for non-recovery effects including funding-transfer legs)
+- `correction_intent_locator` (Nullable opaque originating-command intent locator; cannot reference or enforce another domain's internal table)
 - `lineage_event_id` (FK to audit_events.id; nullable only for pre-rollout rows)
 - `lineage_token` (Text)
 - `lineage_version` (Integer)
@@ -216,7 +229,11 @@ The inclusion and exclusion rules for posted, void, reversal, and other transact
 
 
 
-## X. Amendment
+## X. Change Notes
+
+**2.6 (2026-10-03)** supersedes 2.5 for append-only correction vocabulary, bounded compensation linkage and serialization. Incorporates permanent command reservations explicitly; retains domain blindness and lawful lifecycle destruction. This is documentation authority for later implementation, not a schema migration.
+
+## XI. Amendment
 
 Revisions to this document must:
 1. Increment the version number.

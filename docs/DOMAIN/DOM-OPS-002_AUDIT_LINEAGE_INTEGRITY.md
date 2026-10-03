@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |:---|:---|:---|:---|:---|
-| DOM-OPS-002 | 1.2 | 2026-09-30 | 1.1 | Constitutional |
+| DOM-OPS-002 | 1.3 | 2026-10-03 | 1.2 | Constitutional |
 
 ---
 
@@ -242,7 +242,19 @@ The event hash is `HMAC-SHA256(AUDIT_HMAC_KEY, message)` where `message` is pipe
 |---|---|
 | `transactions` | `amount`, `account_type`, `type`, `status`, `class_id`, `seat_id`, `description`, `correlation_id` |
 
-Additional tables shall be added to this registry in coordination with each Phase 3b migration.
+The `transactions` row above describes the historical surface; it does not substitute for the canonical V2 `ledger_transaction` registration below.
+
+| Canonical Table | Protected Fields |
+|---|---|
+| `attendance_interval_invalidation` | `id`, `class_id`, `actor_seat_id`, `target_seat_id`, `opening_event_id`, `closing_event_id`, `recorded_at`, `reason_code`, `idempotency_key`, `correlation_id`, `receipt_json` |
+| `payroll_event` | `id`, `class_id`, `payroll_cycle_id`, `actor_seat_id`, `target_seat_id`, `correlation_id`, `idempotency_key`, `policy_uuid`, `mechanism`, `payroll_event_type`, `recorded_at`, `summary_json` |
+| `ledger_transaction` | `id`, `class_id`, `actor_seat_id`, `target_seat_id`, `mechanism`, `amount_cents`, `timestamp`, `account_type`, `description`, `correlation_id`, `feat_code`, `idempotency_key`, `policy_id`, `type`, `posting_sequence`, `command_reservation_id`, `compensation_origin_locator`, `compensation_amount_cents`, `correction_intent_locator` |
+
+The entire `summary_json` is protected, including original interval source IDs, credited seconds, policy locators/rates, allocation version, scheduled-occurrence provenance, original payroll event, correction intent, invalidation ID, and opaque correction/monetary outcome locators. It stores no monetary amounts. The entire nonmonetary `receipt_json` is protected, including accepted preview identity, fingerprint version, intent digest, settlement disposition, and opaque original-outcome locators. Transient audit payload digests do not substitute for a durable command receipt.
+
+These are prospective canonical contracts authorized by the amended owning-domain and FEAT contracts; this documentation change does not modify runtime verifier registries or attest their coverage. Field parity under INV-OPS-019 is mandatory when implemented. Protected field changes use the lineage-version mechanism (§8.12) and must not retroactively reinterpret old signatures.
+
+Every new invalidation, correction payroll row, and compensation effect emits once after flush and before the single FEAT commit through the existing Operations command path (§6.1); emission failure rolls back the whole business action. `lineage_event_id` is assigned by that protocol rather than hashed circularly as its own payload. The mandatory audit pointer under `INV-ARC-016` §V is narrowly scoped and grants no general exception for other-domain internal FKs. Additional tables shall be registered before implementation, in coordination with owning domain authority and lawful FEAT execution.
 
 ### 5.5 Chain Scope Resolution
 
@@ -341,6 +353,9 @@ This taxonomy is defined as canonical in `INV-ARC-016`. The operational semantic
 ---
 
 ## 9. Amendment
+
+Version 1.3 (2026-10-03) supersedes 1.2's incomplete protected registry for interval and payroll correction execution. Authority derives from `INV-CORE-000` §III.1–6, `INV-ARC-006` §V, `INV-ARC-016` §V–VI/IX, and `INV-ARC-021` §V/VII. Operations owns emission/verification only; eligibility and monetary conclusions remain owned by their respective domains. No runtime registry change is included.
+
 
 Revisions must preserve the append-only guarantee for `audit_events`, the HMAC chain integrity algorithm, the `UNVERIFIED ≠ INVALID` distinction, and the two-path lawful write model. Any change to the canonical payload format or HMAC message structure shall increment `signature_version`.
 

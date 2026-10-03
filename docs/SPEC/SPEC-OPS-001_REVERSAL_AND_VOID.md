@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-OPS-001 | 1.2 | 2026-09-14 | 1.1 | Normative |
+| SPEC-OPS-001 | 1.3 | 2026-10-03 | 1.2 | Normative |
 
 ---
 ## I. Purpose
@@ -66,7 +66,7 @@ A **REVERSAL** is an atomic append-only corrective operation originating from an
 
 A lawful reversal:
 
-1. creates a compensating monetary transaction that counteracts the monetary effect of the original transaction; and
+1. creates a compensating monetary transaction that counteracts the exact integer-cent monetary effect of the original transaction; and
 2. invalidates eligible downstream grants whose authority derives from the reversed transaction, except where the governing domain has chosen the `REFUND` outcome of §3.1A.
 
 The original monetary transaction and all downstream grant history remain historical fact.
@@ -171,7 +171,7 @@ Reversal is not universally available to monetary transactions.
 A monetary transaction MAY be reversed only when:
 
 1. the governing domain explicitly permits reversal;
-2. the transaction has not already been reversed;
+2. the transaction has not already been reversed or partially/residually compensated;
 3. the transaction is not itself a reversal;
 4. the transaction has no obligation-related provenance;
 5. every downstream transaction-derived grant passes §3.4;
@@ -180,6 +180,10 @@ A monetary transaction MAY be reversed only when:
 Absence of prohibition MUST NOT be interpreted as authorization.
 
 ---
+
+### 3.8 Separately Authorized Payroll Correction
+
+This distinction is incorporated by `DOM-LED-001` §VII.1A and `FEAT-PROD-003`/`FEAT-PROD-005`. Interval invalidation is an append-only Productivity eligibility decision, not a grant VOID. Paid interval recovery and remaining-payment recovery are fresh `payroll_correction` debits with explicit origin and correction-intent provenance. They are neither partial REVERSAL nor monetary VOID. Ledger bounds combined attributable recovery by the original credit, including pending accepted effects, and exact whole reversal is permitted only before any compensation. After partial correction, an authorized residual correction recovers only the remainder; after full recovery, later invalidation adds no recovery. These operations preserve original financial facts and completed Interpretation observations. No partial Store-refund authority is created.
 
 ## IV. Void
 
@@ -553,3 +557,11 @@ Absence of prohibition is not authorization.
 Removed legacy correction mechanisms MUST NOT be recreated, relocated, aliased, wrapped, or otherwise resurrected merely to satisfy stale callers.
 
 Stale callers MUST be migrated to canonical semantics or removed where the former capability is no longer lawful.
+
+## XI. Change Notes
+
+**1.3 (2026-10-03)** supersedes 1.2's silence on prior partial compensation and distinguishes separately authorized payroll correction from exact reversal and grant void. All unrelated Store, grant and obligation finality rules remain in force.
+
+## XII. Amendment
+
+Increment version, date and supersedes metadata; preserve governing INV and DOM authority and immutable historical finality.
