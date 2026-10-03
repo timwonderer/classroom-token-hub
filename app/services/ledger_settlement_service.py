@@ -1,6 +1,6 @@
 """Ledger-owned class/seat settlement service.
 
-Settlement is the only path that assigns posting sequences and advances normalized
+Creation freezes posting sequences; settlement advances normalized
 balance snapshots. The caller owns the FEAT transaction boundary.
 """
 
@@ -39,13 +39,7 @@ def settle_pending_transaction_contexts(limit: int | None = None) -> dict[str, i
         .filter(
             Transaction.class_id.isnot(None),
             Transaction.seat_id.isnot(None),
-            db.or_(
-                Transaction.status == TransactionStatus.PENDING,
-                db.and_(
-                    Transaction.status == TransactionStatus.POSTED,
-                    Transaction.posted_at.is_(None),
-                ),
-            ),
+            Transaction.posting_state == TransactionStatus.PENDING,
         )
         .distinct()
         .order_by(Transaction.class_id.asc(), Transaction.seat_id.asc())
@@ -103,28 +97,21 @@ def _normalize_account_type(raw_account_type, transaction_id) -> str:
     )
 
 
-def _posted_history_cents(class_id: str, seat_id: int, account_type: str) -> int:
-    """Recompute one account's posted balance from ledger history (INV-LED-006).
-
-    Used only when a snapshot row is created lazily. Seeding at zero would be
-    correct only if a missing snapshot implied a seat with no posted history —
-    it does not. `get_posted_balance` falls back to aggregating the ledger
-    exactly while no snapshot exists; the moment settlement inserts a zero row
-    that fallback stops firing, and the seat's prior posted balance disappears
-    from every read. The snapshot is a projection (INV-LED-006), so a new row
-    must be born holding what the history already says.
-    """
+def _posted_history_cents(class_id: str, seat_id: int, account_type: str, boundary: int) -> int:
+    """Reconstruct cents through the explicit account admission boundary."""
+    if boundary is None:
+        return 0
     total = db.session.query(db.func.sum(Transaction.amount_cents)).filter(
         Transaction.class_id == class_id,
         Transaction.seat_id == seat_id,
         Transaction.account_type == account_type,
-        Transaction.status == TransactionStatus.POSTED,
+        Transaction.posting_sequence <= boundary,
     ).scalar()
     return int(total or 0)
 
 
 def settle_balances(seat_id: int, class_id: str) -> None:
-    """Atomically post one seat's pending Ledger effects into canonical snapshots."""
+    """Atomically admit immutable ordered effects through each scoped cursor."""
     if getattr(g, "read_only", False):
         raise RuntimeError("Settlement attempted during read-only request context")
     seat = db.session.get(Seat, int(seat_id))
@@ -144,9 +131,9 @@ def settle_balances(seat_id: int, class_id: str) -> None:
         Transaction.query.filter(
             Transaction.class_id == class_id,
             Transaction.seat_id == seat_id,
-            Transaction.status == TransactionStatus.PENDING,
+            Transaction.posting_state == TransactionStatus.PENDING,
         )
-        .order_by(Transaction.account_type.asc(), Transaction.id.asc())
+        .order_by(Transaction.account_type.asc(), Transaction.posting_sequence.asc())
         .with_for_update()
         .all()
     )
@@ -164,25 +151,24 @@ def settle_balances(seat_id: int, class_id: str) -> None:
         if snapshot is None:
             snapshot = LedgerBalanceSnapshot(
                 class_id=class_id, seat_id=seat_id, account_type=account_type,
-                posted_balance_cents=_posted_history_cents(class_id, seat_id, account_type),
+                posted_balance_cents=0,
                 reconciled_through_posting_sequence=None,
             )
             db.session.add(snapshot)
             db.session.flush()
         snapshots[account_type] = snapshot
 
-    next_sequence = db.session.query(db.func.coalesce(db.func.max(Transaction.posting_sequence), 0)).filter(
-        Transaction.class_id == class_id
-    ).scalar()
     now = utc_now()
     for tx in pending:
         account_type = _normalize_account_type(tx.account_type, tx.id)
-        next_sequence = int(next_sequence) + 1
-        tx.status = TransactionStatus.POSTED
         tx.posted_at = tx.posted_at or now
-        tx.posting_sequence = next_sequence
         snapshot = snapshots[account_type]
-        snapshot.posted_balance_cents += int(tx.amount_cents or 0)
-        snapshot.reconciled_through_posting_sequence = next_sequence
+        if tx.posting_sequence is None:
+            raise ValueError("Missing immutable Ledger creation sequence; historical admission is unprovable.")
+        snapshot.reconciled_through_posting_sequence = max(
+            int(snapshot.reconciled_through_posting_sequence or 0), int(tx.posting_sequence))
+    for account_type, snapshot in snapshots.items():
+        snapshot.posted_balance_cents = _posted_history_cents(
+            class_id, seat_id, account_type, snapshot.reconciled_through_posting_sequence)
         snapshot.last_settlement_at = now
         snapshot.updated_at = now

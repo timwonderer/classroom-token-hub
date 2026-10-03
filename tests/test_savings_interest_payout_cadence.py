@@ -232,7 +232,7 @@ def test_hourly_ticks_pay_a_window_once(client, app, monkeypatch):
 
     rows = _interest_rows(app, classroom, seat)
     assert len(rows) == 1
-    assert rows[0].status == TransactionStatus.POSTED
+    assert rows[0].posting_state == TransactionStatus.POSTED
 
 
 def test_money_posted_after_the_close_belongs_to_the_next_window(client, app, monkeypatch):

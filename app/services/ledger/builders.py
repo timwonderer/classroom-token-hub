@@ -16,7 +16,7 @@ from datetime import datetime
 from typing import Any
 
 from app.extensions import db
-from app.models import Transaction, TransactionStatus, Seat, ClassEconomy
+from app.models import Transaction, Seat, ClassEconomy
 
 
 @dataclass(frozen=True)
@@ -29,7 +29,7 @@ class TransactionListItemView:
     icon_class: str | None  # CSS class for icon selection, if any
     account_type: str  # 'checking' or 'savings'
     transaction_type: str  # Type of transaction
-    status: str  # 'posted', 'pending', 'void'
+    status: str  # Ledger-derived 'posted' or 'pending'
 
 
 @dataclass(frozen=True)
@@ -134,7 +134,7 @@ def build_transaction_list_view(
                 icon_class=icon_class,
                 account_type=txn.account_type or "checking",
                 transaction_type=txn.type or "transfer",
-                status=txn.status.value if txn.status else "unknown",
+                status=txn.posting_state.value,
             )
         )
 
@@ -212,13 +212,10 @@ def build_transaction_summary_view(
     total_outflow = Decimal("0.00")
     earliest = None
     latest = None
-    non_void_count = 0
+    transaction_count = 0
 
     for txn in transactions:
-        if txn.status == TransactionStatus.VOID:
-            continue
-
-        non_void_count += 1
+        transaction_count += 1
         amount = Decimal(str(txn.amount))
         if amount > 0:
             total_inflow += amount
@@ -242,7 +239,7 @@ def build_transaction_summary_view(
         net_activity_display = f"-${abs(net_activity):.2f}"
 
     return {
-        "total_count": non_void_count,
+        "total_count": transaction_count,
         "earliest_date": earliest.strftime("%b %d, %Y") if earliest else None,
         "latest_date": latest.strftime("%b %d, %Y") if latest else None,
         "total_inflow": f"${total_inflow:.2f}",

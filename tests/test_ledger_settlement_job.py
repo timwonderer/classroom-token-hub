@@ -2,7 +2,7 @@
 
 ``create_pending_transaction`` is the sole ledger write boundary and it creates
 every effect PENDING. ``settle_balances`` is the only thing that admits an effect
-to posted history — it assigns ``posting_sequence`` and advances
+to posted history — it admits the immutable creation ``posting_sequence`` and advances
 ``LedgerBalanceSnapshot``. Between them sat the defect: nothing in the running
 application ever called settlement, so no transaction ever posted, no snapshot
 row was ever created, and every posted-balance read answered zero permanently.
@@ -59,8 +59,8 @@ def test_ledger_effects_stay_unposted_until_the_settlement_job_runs(client, app)
               account_type="checking", key=f"settle-job-pre:{seat_id}")
 
         tx = Transaction.query.filter_by(seat_id=seat_id, class_id=class_id).one()
-        assert tx.status == TransactionStatus.PENDING
-        assert tx.posting_sequence is None
+        assert tx.posting_state == TransactionStatus.PENDING
+        assert tx.posting_sequence > 0
         assert LedgerBalanceSnapshot.query.filter_by(
             seat_id=seat_id, class_id=class_id
         ).count() == 0
@@ -82,7 +82,7 @@ def test_settlement_job_posts_pending_effects_and_advances_the_snapshot(client, 
 
     with app.app_context():
         tx = Transaction.query.filter_by(seat_id=seat_id, class_id=class_id).one()
-        assert tx.status == TransactionStatus.POSTED
+        assert tx.posting_state == TransactionStatus.POSTED
         assert tx.posting_sequence is not None
         assert tx.posted_at is not None
 
@@ -167,7 +167,7 @@ def test_savings_interest_job_settles_the_ledger_before_computing(client, app):
         seeded = Transaction.query.filter_by(
             seat_id=seat_id, class_id=class_id, account_type="savings", type="payroll"
         ).one()
-        assert seeded.status == TransactionStatus.POSTED, (
+        assert seeded.posting_state == TransactionStatus.POSTED, (
             "the savings-interest job computed against an unsettled ledger"
         )
         assert get_posted_balance(seat_id, class_id, "savings") == Decimal("200.00")

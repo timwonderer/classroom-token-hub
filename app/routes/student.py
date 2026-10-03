@@ -27,7 +27,7 @@ from dateutil.relativedelta import relativedelta
 from app.extensions import db, limiter
 from app.services import student_setup
 from app.models import (
-    Transaction, TransactionStatus, AttendanceSession, StoreItemVisibility,
+    Transaction, AttendanceSession, StoreItemVisibility,
     # StoreItemBlock removed — store_item_blocks unauthorized; use store_item_visibility (DOM-STORE-001)
     RentSettings,
     ClassFeature, Issue, Seat, User, UserRole, PendingAction,
@@ -416,7 +416,6 @@ def _get_total_earnings_for_seat(seat_id: int | None, *, class_id: str | None = 
     query = Transaction.query.filter(
         Transaction.seat_id == seat_id,
         Transaction.amount > 0,
-        Transaction.status != TransactionStatus.VOID,
         ~Transaction.description.startswith("Transfer"),
     )
     if class_id:
@@ -1349,12 +1348,12 @@ def dashboard():
     # FIX: Add null check to prevent decimal.InvalidOperation on corrupted data
     earnings_this_week = sum(
         (tx.amount for tx in transactions
-        if tx.amount is not None and tx.amount > Decimal('0') and _occurred_in_period(tx.timestamp, start=week_start, end=week_end) and tx.status != TransactionStatus.VOID),
+        if tx.amount is not None and tx.amount > Decimal('0') and _occurred_in_period(tx.timestamp, start=week_start, end=week_end)),
         Decimal('0.00')
     )
     earnings_this_month = sum(
         (tx.amount for tx in transactions
-        if tx.amount is not None and tx.amount > Decimal('0') and _occurred_in_period(tx.timestamp, start=month_start, end=now_utc) and tx.status != TransactionStatus.VOID),
+        if tx.amount is not None and tx.amount > Decimal('0') and _occurred_in_period(tx.timestamp, start=month_start, end=now_utc)),
         Decimal('0.00')
     )
 
@@ -1362,12 +1361,12 @@ def dashboard():
     # FIX: Add null check to prevent decimal.InvalidOperation on corrupted data
     spending_this_week = abs(sum(
         (tx.amount for tx in transactions
-        if tx.amount is not None and tx.amount < Decimal('0') and _occurred_in_period(tx.timestamp, start=week_start, end=week_end) and tx.status != TransactionStatus.VOID),
+        if tx.amount is not None and tx.amount < Decimal('0') and _occurred_in_period(tx.timestamp, start=week_start, end=week_end)),
         Decimal('0.00')
     ))
     spending_this_month = abs(sum(
         (tx.amount for tx in transactions
-        if tx.amount is not None and tx.amount < Decimal('0') and _occurred_in_period(tx.timestamp, start=month_start, end=now_utc) and tx.status != TransactionStatus.VOID),
+        if tx.amount is not None and tx.amount < Decimal('0') and _occurred_in_period(tx.timestamp, start=month_start, end=now_utc)),
         Decimal('0.00')
     ))
 
@@ -1673,7 +1672,6 @@ def transfer():
     transactions = Transaction.query.filter(
         Transaction.seat_id == context.seat_id,
         Transaction.class_id == context.class_id,
-        Transaction.status != TransactionStatus.VOID,
     ).order_by(Transaction.timestamp.desc()).all()
     checking_transactions = [t for t in transactions if t.account_type == 'checking']
     savings_transactions = [t for t in transactions if t.account_type == 'savings']

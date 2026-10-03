@@ -6,10 +6,20 @@ from app.models import Seat, Transaction, TransactionStatus, _quantize_currency
 from app.services.ledger_command_service import create_idempotent_transaction
 
 _TRANSACTION_AUDIT_FIELDS = [
-    "amount", "account_type", "type", "status", "class_id", "seat_id",
-    "target_seat_id", "actor_seat_id", "mechanism", "description",
-    "correlation_id",
+    "id", "class_id", "actor_seat_id", "target_seat_id", "mechanism", "amount_cents",
+    "timestamp", "account_type", "description", "correlation_id", "feat_code",
+    "idempotency_key", "policy_id", "type", "posting_sequence", "command_reservation_id",
 ]
+
+
+def allocate_creation_posting_sequence(seat_id, class_id):
+    """Allocate immutable class order before effect/audit creation; cursor admits later."""
+    from app.models import ClassEconomy
+    Seat.query.filter_by(id=seat_id, class_id=class_id).with_for_update().one()
+    ClassEconomy.query.filter_by(class_id=class_id).with_for_update().one()
+    return int(db.session.query(db.func.coalesce(db.func.max(Transaction.posting_sequence), 0))
+        .filter(Transaction.class_id == class_id).scalar()) + 1
+
 
 
 def create_pending_transaction(
@@ -56,10 +66,17 @@ def create_pending_transaction(
     # protects has already run above: all three seats are proven to belong to
     # `class_id`, the account is named, and any command reservation is scope-matched.
     # The idempotent path returns before reaching here.
+    from types import SimpleNamespace
+    from app.utils.canonical_temporal_resolver import CLASS_LEVEL_EVALUATION, canonical_temporal_resolver
+    created_at = canonical_temporal_resolver(CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=SimpleNamespace(class_id=class_id), primitive="current_time",
+        ).canonical_now_utc
     transaction = Transaction(  # FEAT-AUTHORIZED-DIRECT-TX
         seat_id=seat_id, target_seat_id=target_seat_id, actor_seat_id=actor_seat_id,
-        class_id=class_id, amount=_quantize_currency(amount),
-        account_type=account_type, status=TransactionStatus.PENDING,
+        class_id=class_id, amount=_quantize_currency(amount), timestamp=created_at,
+        account_type=account_type,
+        posting_sequence=allocate_creation_posting_sequence(seat_id, class_id),
+        idempotency_key=command_reservation.idempotency_key if command_reservation else None,
         mechanism=mechanism, type=type, description=description,
         original_transaction_id=original_transaction_id, policy_id=policy_id,
         compensation_subtype=compensation_subtype, correlation_id=correlation_id,
@@ -68,7 +85,7 @@ def create_pending_transaction(
     if command_reservation is not None:
         transaction.command_reservation = command_reservation
     db.session.flush()
-    audit_protected("ledger_transaction", transaction, "INSERT", _TRANSACTION_AUDIT_FIELDS)
+    audit_protected("ledger_transaction", transaction, "INSERT", _TRANSACTION_AUDIT_FIELDS, signature_version=2)
     return transaction
 
 

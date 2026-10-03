@@ -202,10 +202,10 @@ def test_DOM_PROD_001__run_stamps_the_closed_session_rule(app):
     assert event.summary_json["settlement_rule"] == CLOSED_SESSION_SETTLEMENT_RULE
 
 
-def test_DOM_PROD_001__legacy_run_during_a_session_is_not_paid_twice(app):
+def test_DOM_PROD_001__unproven_historical_partial_membership_blocks_new_settlement(app):
     """Transition: a pre-rule run paid an open session up to its own instant.
 
-    When that session closes, only the part after the legacy run is still owed.
+    New canonical source-pair settlement cannot manufacture partial membership.
     """
     classroom = initialize("chemistry_p1", app)
     cid = classroom.class_id
@@ -225,6 +225,10 @@ def test_DOM_PROD_001__legacy_run_during_a_session_is_not_paid_twice(app):
             summary_json={"source": "class_payroll_settlement"},
         )
         db.session.add(legacy)
+        db.session.flush()
+        from app.feats.base import audit_protected
+        from app.utils.audit_verifier import PROTECTED_FIELDS_BY_TABLE
+        audit_protected("payroll_event", legacy, "INSERT", PROTECTED_FIELDS_BY_TABLE["payroll_event"])
         create_pending_transaction(
             seat_id=seat_id, class_id=cid, target_seat_id=seat_id,
             actor_seat_id=classroom.teacher_seat_id, mechanism="teacher",
@@ -235,10 +239,10 @@ def test_DOM_PROD_001__legacy_run_during_a_session_is_not_paid_twice(app):
     assert "settlement_rule" not in legacy.summary_json
 
     _attendance(classroom, seat_id, ("inactive", _at(60)))
-    _run(cid, _at(70))
-
-    # 30 minutes paid by the legacy run + the 30 minutes after it, not 60 more.
-    assert _paid(cid, seat_id) == _pay_for(cid, 30) + _pay_for(cid, 30)
+    from app.services.payroll.settlement import ClassSettlementError
+    with pytest.raises(ClassSettlementError, match="Historical partial settlement"):
+        _run(cid, _at(70))
+    assert _paid(cid, seat_id) == _pay_for(cid, 30)
 
 
 def test_DOM_PROD_001__run_payroll_route_explains_a_refused_run(client):

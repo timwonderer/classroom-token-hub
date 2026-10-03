@@ -17,7 +17,6 @@ from typing import NamedTuple, Optional
 from app.extensions import db
 from app.models import (
     ObligationAssessment, BillCycle, LedgerMechanism, ObligationCommandReservation, Transaction,
-    TransactionStatus,
 )
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION, canonical_temporal_resolver, ensure_utc,
@@ -390,7 +389,7 @@ def payment_event_magnitude(event: ObligationAssessment) -> Decimal:
     if event.event_type != "PAYMENT" or not event.ledger_transaction_id:
         return Decimal("0.00")
     txn = db.session.get(Transaction, event.ledger_transaction_id)
-    if txn is None or txn.amount is None or txn.status == TransactionStatus.VOID:
+    if txn is None or txn.amount is None:
         return Decimal("0.00")
     return abs(Decimal(str(txn.amount)))
 
@@ -402,7 +401,6 @@ def get_paid_magnitude(correlation_id: str) -> Decimal:
     PAYMENT events sharing this correlation. Rent payments are posted as NEGATIVE
     debits, so the magnitude (abs) is applied toward the obligation. Multiple
     PAYMENT events (partial payments) accumulate here under one correlation.
-    A voided payment applies nothing: its money was reversed.
     """
     return sum(
         (payment_event_magnitude(event) for event in get_satisfaction_events(correlation_id)),

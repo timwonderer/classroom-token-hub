@@ -7,10 +7,10 @@
 {% block contextual_help_body %}
 {{ help.panel_lead("Everything one student has done in this class, in one place: balances, transactions, purchases, attendance, rent, payroll, and hall passes. This is where you go when a number needs explaining.") }}
 
-{% call help.topic('sdet-ledger', 'receipt_long', 'Transaction history and voiding') %}
+{% call help.topic('sdet-ledger', 'receipt_long', 'Transaction history and reversals') %}
 <ul class="ps-3 mb-0">
     <li class="mb-2"><strong>Transaction History is the evidence.</strong> Balances are a total; the ledger is the reason. When a student disputes an amount, start here and work backwards.</li>
-    <li class="mb-0"><strong>Voiding reverses an entry without erasing it.</strong> The original stays visible, marked void, and a reversing entry is posted. Use it for something you posted in error — not to settle a disagreement about whether a charge was fair.</li>
+    <li class="mb-0"><strong>Reversals preserve the original entry.</strong> A separate counter-entry records the correction. Use it for something you posted in error — not to settle a disagreement about whether a charge was fair.</li>
 </ul>
 {% endcall %}
 
@@ -29,6 +29,9 @@
 
 {% block extra_head %}
 <style>
+    .attendance-interval summary { cursor: pointer; padding: .25rem; }
+    .attendance-interval summary:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
+
     .stat-value {
         font-size: var(--text-3xl);
         font-weight: var(--weight-bold);
@@ -49,6 +52,21 @@
     }
 </style>
 {% endblock %}
+
+{% macro attendance_scans(events) %}
+<div class="table-responsive mt-3">
+    <table class="table table-sm mb-0">
+        <caption>Original attendance records</caption>
+        <thead><tr><th scope="col">Time</th><th scope="col">Action</th><th scope="col">Recorded by</th><th scope="col">Reason</th></tr></thead>
+        <tbody>{% for event in events %}<tr>
+            <td>{{ event.timestamp|fmt_timestamp }}</td>
+            <td>{{ 'Start work' if event.status == 'active' else 'Stop work' }} <span class="small">(#{{ event.id }})</span></td>
+            <td>{{ event.mechanism|replace('_', ' ')|title }}</td>
+            <td>{{ event.reason_code|replace('_', ' ')|title if event.reason_code else '—' }}</td>
+        </tr>{% endfor %}</tbody>
+    </table>
+</div>
+{% endmacro %}
 
 {% block content %}
 <!-- Header with Back Button and Edit -->
@@ -407,7 +425,7 @@
                         </thead>
                         <tbody>
                             {% for tx in transactions %}
-                            <tr {% if tx.status.value == 'void' %}class="table-secondary text-decoration-line-through" {% endif %}>
+                            <tr>
                                 <td>
                                     {% if tx.timestamp %}
                                     {{ tx.timestamp|fmt_timestamp }}
@@ -424,16 +442,12 @@
                                 </td>
                                 <td>{{ tx.description or 'N/A' }}</td>
                                 <td>
-                                    {% if tx.status.value == 'void' %}
-                                    <span class="badge bg-secondary">Voided</span>
-                                    {% else %}
-                                    <span class="badge bg-success">Active</span>
-                                    {% endif %}
+                                    <span class="badge bg-secondary">{{ tx.posting_state.value|title }}</span>
                                 </td>
                                 <td>
-                                    {% if tx.status.value != 'void' and tx.type != 'refund' %}
+                                    {% if tx.type != 'refund' %}
                                     <button type="button" class="btn btn-sm btn-outline-danger void-btn" data-id="{{ tx.id }}">
-                                        <span class="material-symbols-outlined" aria-hidden="true">cancel</span> Void
+                                        <span class="material-symbols-outlined" aria-hidden="true">cancel</span> Reverse
                                     </button>
                                     {% endif %}
                                 </td>
@@ -522,60 +536,62 @@
         </div>
     </div>
 
-    <!-- ATTENDANCE TAB -->
+    <!-- ATTENDANCE TAB: domain-derived pairs; original evidence remains inspectable. -->
     <div class="tab-pane fade" id="attendance" role="tabpanel" aria-labelledby="attendance-tab">
         <div class="card shadow">
-            <div class="card-header bg-warning text-dark">
-                <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">history</span>Attendance History</h5>
+            <div class="card-header">
+                <h2 class="h5 mb-0">Attendance work intervals</h2>
             </div>
             <div class="card-body">
-                {% set sorted_attendance_events = attendance_events|sort(attribute='timestamp', reverse=True) %}
-                {% if sorted_attendance_events %}
-                <div class="table-responsive">
-                    <table class="table table-striped table-hover js-sortable">
-                        <caption class="visually-hidden">Student attendance history</caption>
-                        <thead class="table-dark">
-                            <tr>
-                                <th scope="col">Timestamp</th>
-                                <th scope="col">Period</th>
-                                <th scope="col">Status</th>
-                                <th scope="col">Reason</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for tap in sorted_attendance_events[:50] %}
-                            <tr>
-                                <td>
-                                    {% if tap.timestamp %}
-                                    {{ tap.timestamp|fmt_timestamp }}
-                                    {% else %}
-                                    <span class="text-muted">N/A</span>
-                                    {% endif %}
-                                </td>
-                                <td><span class="badge bg-primary">{{ tap.period|upper }}</span></td>
-                                <td>
-                                    {% if tap.status == 'active' %}
-                                    <span class="badge bg-success">Active</span>
-                                    {% else %}
-                                    <span class="badge bg-secondary">Inactive</span>
-                                    {% endif %}
-                                </td>
-                                <td>{{ tap.reason or 'N/A' }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% if sorted_attendance_events|length > 50 %}
-                <p class="text-muted text-center mb-0">Showing most recent 50 records out of {{ sorted_attendance_events|length }}
-                    total</p>
+                <p>Times are shown in {{ display_timezone }}. Expand an interval to inspect its original attendance records and payroll evidence.</p>
+                {% if attendance_estimate_incomplete %}
+                <p>Some work overlaps historical payroll whose interval contribution cannot be proven. Unpaid earnings estimates exclude that work and are incomplete. Payroll settlement is blocked until the evidence can be resolved.</p>
                 {% endif %}
-                {% else %}
-                {% call cards.alert_card('info', 'No attendance records', icon='event_busy', body_class='mb-0') %}
-                    <p class="mb-0">No attendance records found for this
-                    student.</p>
-                {% endcall %}
+                {% if attendance_open_intervals %}
+                <h3 class="h6">Work awaiting a closing record</h3>
+                {% for interval in attendance_open_intervals %}
+                <details class="attendance-interval border rounded p-3 mb-3">
+                    <summary>Started {{ interval.opened_at|fmt_timestamp }} · {{ interval.duration_label }} observed · Closing record unavailable</summary>
+                    <p class="mt-3">This interval has no recorded closing event. Its observed duration is bounded by the class day; opening this page does not close work or create payroll.</p>
+                    {{ attendance_scans(interval.source_events) }}
+                </details>
+                {% endfor %}
                 {% endif %}
+                {% if attendance_intervals %}
+                <h3 class="h6">Completed work · {{ attendance_completed_count }} intervals</h3>
+                {% for interval in attendance_intervals %}
+                <details class="attendance-interval border rounded p-3 mb-3" id="attendance-interval-{{ interval.opening_event_id }}-{{ interval.closing_event_id }}">
+                    <summary>{{ interval.opened_at|fmt_timestamp }} – {{ interval.closed_at|fmt_timestamp }} · {{ interval.duration_label }} · {{ interval.settlement_label }}{% if interval.amount is not none %} · ${{ "%.2f"|format(interval.amount) }}{% endif %}</summary>
+                    <dl class="row mt-3 mb-2">
+                        <dt class="col-sm-4">Compensation eligibility</dt><dd class="col-sm-8">{{ interval.eligibility_label }}</dd>
+                        <dt class="col-sm-4">Credited duration</dt><dd class="col-sm-8">{{ interval.credited_seconds }} seconds</dd>
+                        <dt class="col-sm-4">Payroll evidence</dt><dd class="col-sm-8">{{ interval.evidence_message }}</dd>
+                        {% if interval.payroll_event_id %}
+                        <dt class="col-sm-4">Original payroll record</dt><dd class="col-sm-8">{% if interval.payroll_history_url %}<a href="{{ interval.payroll_history_url }}">Payroll #{{ interval.payroll_event_id }}</a>{% else %}Payroll #{{ interval.payroll_event_id }}{% endif %} · {{ interval.payroll_recorded_at|fmt_timestamp }}</dd>
+                        {% endif %}
+                    </dl>
+                    {% if interval.pricing_inputs %}
+                    <p>Original rate: ${{ interval.pricing_inputs.pay_rate_per_minute }} per minute. Allocation version {{ interval.pricing_inputs.allocation_version }}.</p>
+                    {% endif %}
+                    {{ attendance_scans(interval.source_events) }}
+                </details>
+                {% endfor %}
+                <nav aria-label="Attendance interval history" class="d-flex flex-wrap gap-3">
+                    {% if attendance_newest_url %}<a href="{{ attendance_newest_url }}" class="btn btn-outline-primary">Newest intervals</a>{% endif %}
+                    {% if attendance_older_url %}<a href="{{ attendance_older_url }}" class="btn btn-outline-primary">Older intervals</a>{% endif %}
+                </nav>
+                {% elif not attendance_open_intervals %}
+                <p>No completed work intervals on this page.</p>
+                {% if attendance_newest_url %}<a href="{{ attendance_newest_url }}">Newest intervals</a>{% endif %}
+                {% endif %}
+                {% if attendance_unpaired_events %}
+                <details class="attendance-interval border rounded p-3 mt-3">
+                    <summary>Other attendance records · {{ attendance_unpaired_events|length }} records</summary>
+                    <p class="mt-3">These original records are not the opening or closing events of a completed work interval.</p>
+                    {{ attendance_scans(attendance_unpaired_events) }}
+                </details>
+                {% endif %}
+                {% if not attendance_events %}<p>No attendance records found for this student.</p>{% endif %}
             </div>
         </div>
     </div>
@@ -660,6 +676,9 @@
                     </div>
                 </div>
 
+                {% if attendance_historical_evidence_limited %}
+                <p>Historical payroll does not contain complete interval evidence. Individual contributions are unavailable, and automatic partial correction is blocked for those payments.</p>
+                {% endif %}
                 <h6 class="mb-3">Recent Earnings</h6>
                 {% if payroll_event_history %}
                 <div class="table-responsive">
@@ -675,7 +694,7 @@
                         </thead>
                         <tbody>
                             {% for event in payroll_event_history[:20] %}
-                            <tr>
+                            <tr id="payroll-event-{{ event.payroll_event_id }}">
                                 <td>
                                     {% if event.timestamp %}
                                     {{ event.timestamp|fmt_timestamp }}
@@ -810,6 +829,20 @@
 {% endblock %}
 
 {% block extra_scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const requestedTab = new URLSearchParams(window.location.search).get('tab');
+        const target = requestedTab === 'payroll' ? 'payroll' :
+            (requestedTab === 'attendance' || window.location.hash === '#attendance' ? 'attendance' : null);
+        const tab = target && document.getElementById(target + '-tab');
+        if (tab && window.bootstrap) {
+            bootstrap.Tab.getOrCreateInstance(tab).show();
+            if (target === 'payroll' && /^#payroll-event-\d+$/.test(window.location.hash)) {
+                document.getElementById(window.location.hash.slice(1))?.scrollIntoView();
+            }
+        }
+    });
+</script>
 <!-- Void Transaction AJAX -->
 <script>
     function showToast(message, isError = false) {
@@ -838,7 +871,7 @@
     }
 
     function voidTransaction(id) {
-        if (!confirm('Are you sure you want to void this transaction?')) return;
+        if (!confirm('Are you sure you want to reverse this transaction?')) return;
 
         fetch(`/admin/void-transaction/${id}`, {
             method: 'POST',
@@ -855,7 +888,7 @@
                     showToast(data.message);
                     setTimeout(() => location.reload(), 1000);
                 } else {
-                    showToast(data.message || 'Error voiding transaction', true);
+                    showToast(data.message || 'Error reversing transaction', true);
                 }
             })
             .catch(() => {

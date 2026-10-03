@@ -223,52 +223,130 @@ def _day_end_utc(ctx, timestamp):
     ).boundary_end_utc
 
 
-def _split_sessions(rows, *, ctx, as_of_utc):
-    """Pair the timeline into closed sessions plus at most one open session.
+@dataclass(frozen=True)
+class AttendanceInterval:
+    opening_event_id: int
+    closing_event_id: int | None
+    opened_at: object
+    closed_at: object
+    credited_seconds: int
+    opening_mechanism: str
+    closing_mechanism: str | None
 
-    An ``active`` row opens a session and the next ``inactive`` row closes it. A
-    further ``active`` row while a session is open continues that session rather
-    than restarting it, so no elapsed time is dropped. DOM-PROD-001 §VI.1
-    terminates every session at the end of its class-local day, so a session whose
-    day has ended is closed at that boundary even if the ``done_for_day`` row has
-    not been written yet, and a later-dated row cannot extend it overnight.
-    """
-    closed = []
-    open_start = None
-    open_day_end = None
+    def __iter__(self):
+        return iter((self.opened_at, self.closed_at))
+
+    def as_evidence(self):
+        if self.closing_event_id is None:
+            raise ValueError("Settlement requires a persisted closing event.")
+        return {"opening_event_id": self.opening_event_id,
+                "closing_event_id": self.closing_event_id,
+                "opening_timestamp": ensure_utc(self.opened_at).isoformat(),
+                "closing_timestamp": ensure_utc(self.closed_at).isoformat(),
+                "credited_seconds": self.credited_seconds}
+
+
+def list_attendance_interval_evidence(seat_id, class_id, *, ctx, as_of_utc=None):
+    """Pure PROD canonical pair projection; system closes are first-class evidence."""
+    if ctx.class_id != class_id:
+        raise ValueError("Attendance context does not authorize this class.")
+    if as_of_utc is None:
+        as_of_utc = canonical_temporal_resolver(CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=ctx, primitive="current_time").canonical_now_utc
+    as_of_utc = ensure_utc(as_of_utc)
+    rows = AttendanceSession.query.filter_by(class_id=class_id, target_seat_id=seat_id).order_by(
+        AttendanceSession.timestamp.asc(), AttendanceSession.id.asc()).all()
+    intervals, opening = [], None
+    consumed_closings = set()
     for row in rows:
+        if row.id in consumed_closings:
+            continue
         timestamp = ensure_utc(row.timestamp)
         if timestamp > as_of_utc:
             break
-        if open_start is not None and timestamp >= open_day_end:
-            closed.append((open_start, open_day_end))
-            open_start = None
         if row.status == "active":
-            if open_start is None:
-                open_start = timestamp
-                open_day_end = _day_end_utc(ctx, timestamp)
-        elif row.status == "inactive" and open_start is not None:
-            closed.append((open_start, timestamp))
-            open_start = None
+            if opening is None:
+                opening = row
+            elif timestamp >= _day_end_utc(ctx, opening.timestamp):
+                # An unrecorded day-end remains unproven; do not invent an ID.
+                end = _day_end_utc(ctx, opening.timestamp)
+                boundary_close = next((candidate for candidate in rows
+                    if candidate.id not in consumed_closings and candidate.status == "inactive"
+                    and ensure_utc(candidate.timestamp) == end
+                    and candidate.mechanism == "system"
+                    and candidate.reason_code == AttendanceReasonCode.DONE_FOR_DAY.value), None)
+                intervals.append(AttendanceInterval(opening.id, boundary_close.id if boundary_close else None,
+                    ensure_utc(opening.timestamp), end,
+                    _elapsed_seconds(ctx, [(ensure_utc(opening.timestamp), end)]), opening.mechanism,
+                    boundary_close.mechanism if boundary_close else None))
+                if boundary_close is not None:
+                    consumed_closings.add(boundary_close.id)
+                opening = row
+        elif row.status == "inactive" and opening is not None:
+            start = ensure_utc(opening.timestamp)
+            if timestamp < start or timestamp > _day_end_utc(ctx, start):
+                end = _day_end_utc(ctx, start)
+                intervals.append(AttendanceInterval(opening.id, None, start, end,
+                    _elapsed_seconds(ctx, [(start, end)]), opening.mechanism, None))
+                opening = None
+                continue
+            intervals.append(AttendanceInterval(opening.id, row.id, start, timestamp,
+                _elapsed_seconds(ctx, [(start, timestamp)]), opening.mechanism, row.mechanism))
+            opening = None
+    if opening is not None:
+        start = ensure_utc(opening.timestamp)
+        end = min(as_of_utc, _day_end_utc(ctx, start))
+        intervals.append(AttendanceInterval(opening.id, None, start, end,
+            _elapsed_seconds(ctx, [(start, end)]), opening.mechanism, None))
+    return tuple(rows), tuple(intervals)
 
-    in_progress = None
-    if open_start is not None:
-        if open_day_end <= as_of_utc:
-            closed.append((open_start, open_day_end))
-        else:
-            in_progress = (open_start, as_of_utc)
-    return closed, in_progress
+
+def list_attendance_intervals(seat_id, class_id, *, ctx, as_of_utc=None):
+    """Pure canonical pairs from one scoped source snapshot."""
+    return list_attendance_interval_evidence(seat_id, class_id, ctx=ctx, as_of_utc=as_of_utc)[1]
 
 
-def _legacy_paid_through(legacy_times, session_end):
-    """Latest legacy payroll instant strictly inside a session, else ``None``.
+def lock_attendance_seat(seat_id, class_id):
+    """Shared serialization point for all attendance and settlement writers."""
+    seat = Seat.query.filter_by(id=seat_id, class_id=class_id).with_for_update().first()
+    if seat is None:
+        raise ValueError("Attendance target seat must belong to the canonical class.")
+    return seat
 
-    A payroll event settled before the closed-session rule paid a session that was
-    open at that instant up to the instant itself. That part is already paid, so a
-    session closing afterwards is settled only from the latest such instant.
-    """
-    earlier = [instant for instant in legacy_times if instant < session_end]
-    return max(earlier) if earlier else None
+
+def close_due_attendance_intervals(*, ctx, seat_id, as_of_utc):
+    """PROD command: append due system closures within the caller's FEAT transaction."""
+    from app.feats.prod import _record_attendance_session_impl
+    from app.services.payroll.settings import current_daily_limit_seconds
+    lock_attendance_seat(seat_id, ctx.class_id)
+    now = ensure_utc(as_of_utc)
+    intervals = list_attendance_intervals(seat_id, ctx.class_id, ctx=ctx, as_of_utc=now)
+    created = []
+    for interval in intervals:
+        if interval.closing_event_id is not None:
+            continue
+        limit = current_daily_limit_seconds(ctx.class_id, as_of=interval.opened_at)
+        day_end = _day_end_utc(ctx, interval.opened_at)
+        due = day_end
+        if limit:
+            bounds = canonical_temporal_resolver(CLASS_LEVEL_EVALUATION,
+                canonical_execution_context=ctx, primitive="evaluation_day_boundaries",
+                reference_time_utc=interval.opened_at)
+            previous = sum(i.credited_seconds for i in intervals
+                if i.closing_event_id is not None and bounds.boundary_start_utc <= i.opened_at < interval.opened_at)
+            remaining = max(0, int(limit) - previous)
+            capped = canonical_temporal_resolver(CLASS_LEVEL_EVALUATION,
+                canonical_execution_context=ctx, primitive="shift_timestamp",
+                timestamp=interval.opened_at, elapsed_seconds=remaining,
+                reference_time_utc=now).shifted_timestamp_utc
+            due = min(due, capped)
+        if due <= now:
+            result = _record_attendance_session_impl(ctx=ctx, status="inactive", target_seat_id=seat_id,
+                mechanism="system", reason_code=AttendanceReasonCode.DONE_FOR_DAY,
+                reference_time_utc=due,
+                idempotency_key=f"system-close:{interval.opening_event_id}:{due.isoformat()}")
+            created.append(result.session)
+    return tuple(created)
 
 
 @dataclass(frozen=True)
@@ -278,11 +356,13 @@ class SeatPayrollIntervals:
     ``payable`` holds the closed, unpaid part of each session a run at that
     instant settles; each interval ends when its session closed, which is the
     instant that decides the setting that prices it (DOM-PROD-001 §XV.3).
-    ``in_progress`` is the still-open session, if any.
+    ``in_progress`` is the still-open session, if any. ``unprovable`` identifies
+    historical overlaps excluded from estimates and blocked for settlement.
     """
 
     payable: tuple
     in_progress: tuple
+    unprovable: tuple = ()
 
 
 def calculate_seat_payroll_intervals(
@@ -307,11 +387,9 @@ def calculate_seat_payroll_intervals(
         ).canonical_now_utc
     as_of_utc = ensure_utc(as_of_utc)
 
-    rows = AttendanceSession.query.filter(
-        AttendanceSession.target_seat_id == seat_id,
-        AttendanceSession.class_id == class_id,
-    ).order_by(AttendanceSession.timestamp.asc(), AttendanceSession.id.asc()).all()
-    closed, in_progress = _split_sessions(rows, ctx=ctx, as_of_utc=as_of_utc)
+    identified = list_attendance_intervals(seat_id, class_id, ctx=ctx, as_of_utc=as_of_utc)
+    closed = [i for i in identified if i.closing_event_id is not None]
+    in_progress = next((i for i in reversed(identified) if i.closing_event_id is None), None)
 
     payroll_events = (
         PayrollEvent.query.with_entities(PayrollEvent.recorded_at, PayrollEvent.summary_json)
@@ -323,33 +401,62 @@ def calculate_seat_payroll_intervals(
         )
         .all()
     )
-    paid_through = max((ensure_utc(e.recorded_at) for e in payroll_events), default=None)
-    legacy_times = [
-        ensure_utc(e.recorded_at)
-        for e in payroll_events
-        if (e.summary_json or {}).get("settlement_rule") != CLOSED_SESSION_SETTLEMENT_RULE
-    ]
+    historical, settled_pairs, legacy_times = [], set(), []
+    invalid_evidence = False
+    pair_evidence = {(i.opening_event_id, i.closing_event_id): i.as_evidence()
+        for i in closed}
+    for event in payroll_events:
+        summary = event.summary_json
+        if not isinstance(summary, dict):
+            invalid_evidence = True
+            continue
+        if type(summary.get("allocation_version")) is not int or summary.get("allocation_version") != 1:
+            historical.append(event)
+            if summary.get("settlement_rule") != CLOSED_SESSION_SETTLEMENT_RULE:
+                legacy_times.append(ensure_utc(event.recorded_at))
+            continue
+        try:
+            shares = summary["pricing"]
+            if not isinstance(shares, list) or not shares:
+                raise ValueError("Missing frozen pricing shares.")
+            for share in shares:
+                sources = share["intervals"]
+                if not isinstance(sources, list) or not sources or sum(i["credited_seconds"] for i in sources) != share["seconds"]:
+                    raise ValueError("Invalid frozen membership.")
+                for source in sources:
+                    key = (source["opening_event_id"], source["closing_event_id"])
+                    if key in settled_pairs or pair_evidence.get(key) != source:
+                        raise ValueError("Unprovable frozen source pair.")
+                    settled_pairs.add(key)
+        except (KeyError, TypeError, ValueError, AttributeError):
+            invalid_evidence = True
+    paid_through = max((ensure_utc(e.recorded_at) for e in historical), default=None)
+    if invalid_evidence:
+        return SeatPayrollIntervals(payable=(), in_progress=(), unprovable=tuple(identified))
 
-    payable = []
-    for start, end in closed:
+    payable, unprovable = [], []
+    for interval in closed:
+        start, end = interval
+        if (interval.opening_event_id, interval.closing_event_id) in settled_pairs:
+            continue
         if paid_through is not None and end <= paid_through:
             continue
-        legacy = _legacy_paid_through(legacy_times, end)
-        if legacy is not None and legacy > start:
-            start = legacy
+        if any(start < instant < end for instant in legacy_times):
+            unprovable.append(interval)
+            continue
         if end > start:
-            payable.append((start, end))
+            payable.append(interval)
 
     open_intervals = []
     if in_progress is not None:
         start, end = in_progress
-        legacy = _legacy_paid_through(legacy_times, end)
-        if legacy is not None and legacy > start:
-            start = legacy
+        if any(start < instant < end for instant in legacy_times):
+            unprovable.append(in_progress)
+            start = end
         if end > start:
             open_intervals.append((start, end))
 
-    return SeatPayrollIntervals(payable=tuple(payable), in_progress=tuple(open_intervals))
+    return SeatPayrollIntervals(payable=tuple(payable), in_progress=tuple(open_intervals), unprovable=tuple(unprovable))
 
 
 def elapsed_attendance_seconds(ctx, intervals) -> int:

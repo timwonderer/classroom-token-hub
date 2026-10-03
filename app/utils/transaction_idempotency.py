@@ -136,11 +136,7 @@ def _command_fingerprint(*, target_seat_id, actor_seat_id, amount, account_type,
     return hashlib.sha256(encoded).hexdigest()
 
 
-_TRANSACTION_AUDIT_FIELDS = [
-    "amount", "account_type", "type", "status",
-    "class_id", "seat_id", "target_seat_id", "actor_seat_id",
-    "mechanism", "description", "correlation_id",
-]
+
 
 
 def create_idempotent_transaction(
@@ -215,6 +211,7 @@ def create_idempotent_transaction(
         replay_fingerprint=fingerprint,
         fingerprint_version=FINGERPRINT_VERSION,
     )
+    from app.services.ledger_posting_service import allocate_creation_posting_sequence, _TRANSACTION_AUDIT_FIELDS
     new_txn = Transaction(
         idempotency_key=idempotency_key,
         feat_code=feat_code,
@@ -225,7 +222,7 @@ def create_idempotent_transaction(
         class_id=class_id,
         amount=amount,
         account_type=account_type,
-        status=TransactionStatus.PENDING,
+        posting_sequence=allocate_creation_posting_sequence(seat_id, class_id),
         type=type,
         description=description,
         original_transaction_id=original_transaction_id,
@@ -237,7 +234,7 @@ def create_idempotent_transaction(
         db.session.add(new_txn)
         db.session.flush()
         # Emit audit event after successful creation (id is now populated)
-        audit_protected("ledger_transaction", new_txn, "INSERT", _TRANSACTION_AUDIT_FIELDS)
+        audit_protected("ledger_transaction", new_txn, "INSERT", _TRANSACTION_AUDIT_FIELDS, signature_version=2)
         return new_txn, True
     except IntegrityError:
         db.session.rollback()

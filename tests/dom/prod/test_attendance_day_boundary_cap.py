@@ -58,9 +58,11 @@ def test_DOM_PROD_001__open_active_session_caps_at_end_of_day(client):
     # Payroll evaluates the NEXT day.
     current_time = datetime(2026, 8, 27, 18, 0, tzinfo=timezone.utc)
 
-    seconds = calculate_seat_payroll_attendance(
+    attendance = calculate_seat_payroll_attendance(
         student.seat.id, classroom.class_id, ctx=ctx, as_of_utc=current_time
-    ).payable_seconds
+    )
+    assert attendance.payable_seconds == 0
+    seconds = attendance.in_progress_seconds
 
     # Expected: capped at end-of-day of the active entry's canonical class day,
     # derived through the same canonical resolver production uses.

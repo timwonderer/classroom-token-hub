@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-PROD-003 | 1.4 | 2026-10-03 | 1.3 | Normative |
+| FEAT-PROD-003 | 1.5 | 2026-10-03 | 1.4 | Normative |
 
 ## I. Purpose
 
@@ -78,3 +78,7 @@ Targeted contract scenarios: positive payroll retains exact allocation inputs; t
 ## IX. Amendment
 
 Version 1.4 (2026-10-03) supersedes v1.3's exclusive payroll writer, whole-event-only recovery, and pre-command-reservation execution wording. This amendment authorizes domain-command writes coordinated by FEAT-PROD-003 and FEAT-PROD-005, exact uncompensated reversal, and residual correction. Runtime implementation is not included. Revisions must increment version/date, identify superseded rules, and preserve governing INV and DOM contracts.
+
+### Version 1.5: prospective provenance foundation (2026-10-03)
+
+Supersedes 1.4's exclusive writer wording only for canonical due system closure. Incorporates DOM-PROD-001 §XV.7–8 and [SPEC-PROD-001](../SPEC/SPEC-PROD-001_ATTENDANCE_INTERVAL_ELIGIBILITY_AND_PAYROLL_CORRECTION.md) §VI: preserve pair IDs, freeze version-1 settlement inputs, protect complete payroll summaries, and expose pure evidence queries. Every attendance writer locks its class/target seat before selection. New payroll composes `close_due_attendance_intervals` within one FEAT transaction before pricing; class completion resolves completed-run replay first and locks eligible seats in stable order. Audit linkage initializes once within creation and cannot change after commit. No nested FEAT, historical backfill, or correction button is authorized by this foundation.

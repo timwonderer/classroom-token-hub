@@ -13,6 +13,7 @@ Both tests verify:
 
 import pytest
 from decimal import Decimal
+from tests.helpers.ledger import record_ledger_fixture
 from app.extensions import db
 from app.models import ObligationAssessment, RentSettings, Transaction
 from app.utils.canonical_temporal_resolver import utc_now
@@ -175,7 +176,7 @@ class TestA1StudentRentSurface:
                 db.session.flush()
 
                 # Create PAYMENT event linked to Ledger (DOM-OBL-001 + DOM-LED-001)
-                txn = Transaction(
+                txn = record_ledger_fixture(
                     seat_id=seat_id,
                     target_seat_id=seat_id,
                     actor_seat_id=seat_id,
@@ -275,7 +276,7 @@ class TestA1StudentRentSurface:
                 assessment_id = assessment.id
 
                 # Create Ledger transactions (DOM-LED-001 authority)
-                txn1 = Transaction(
+                txn1 = record_ledger_fixture(
                     seat_id=seat_id,
                     target_seat_id=seat_id,
                     actor_seat_id=seat_id,
@@ -288,7 +289,7 @@ class TestA1StudentRentSurface:
                 db.session.add(txn1)
                 db.session.flush()
 
-                txn2 = Transaction(
+                txn2 = record_ledger_fixture(
                     seat_id=seat_id,
                     target_seat_id=seat_id,
                     actor_seat_id=seat_id,

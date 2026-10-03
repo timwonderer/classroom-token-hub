@@ -84,7 +84,6 @@ class AttendanceReasonCode(str, enum.Enum):
 class TransactionStatus(str, enum.Enum):
     PENDING = 'pending'
     POSTED = 'posted'
-    VOID = 'void'
 
 class AccountType(str, enum.Enum):
     CHECKING = 'checking'
@@ -515,12 +514,6 @@ class Transaction(db.Model):
     account_type = db.Column(db.String(20), default='checking')
 
     # Ledger Fields
-    status = db.Column(
-        db.Enum(TransactionStatus),
-        default=TransactionStatus.POSTED,
-        nullable=False,
-        server_default=TransactionStatus.POSTED.name,
-    )
     amount_cents = db.Column(db.Integer, nullable=False)  # Signed integer (e.g. 100 = $1.00)
     posted_at = db.Column(db.DateTime(timezone=True), nullable=True)
     effective_at = db.Column(db.DateTime(timezone=True), default=utc_now)
@@ -549,7 +542,7 @@ class Transaction(db.Model):
     # NULL means the row predates lineage rollout (UNVERIFIED state, not INVALID).
     lineage_event_id = db.Column(db.Integer, db.ForeignKey('audit_events.id'), nullable=True, index=True)
     lineage_token    = db.Column(db.String(64), nullable=True)
-    lineage_version  = db.Column(db.Integer, nullable=True, default=1)
+    lineage_version  = db.Column(db.Integer, nullable=True)
     # Canonical posted-ledger order. Nullable only for historical/pre-rollout rows.
     posting_sequence = db.Column(db.BigInteger, nullable=True, index=True)
     command_reservation_id = db.Column(
@@ -559,6 +552,25 @@ class Transaction(db.Model):
         index=True,
     )
 
+    @hybrid_property
+    def posting_state(self):
+        """Read-only scoped reconciliation classification (DOM-LED-001 VII.4)."""
+        if self.posting_sequence is None:
+            return TransactionStatus.PENDING
+        cursor = db.session.query(LedgerBalanceSnapshot.reconciled_through_posting_sequence).filter_by(
+            class_id=self.class_id, seat_id=self.seat_id, account_type=self.account_type).scalar()
+        return TransactionStatus.POSTED if cursor is not None and self.posting_sequence <= cursor else TransactionStatus.PENDING
+
+    @posting_state.expression
+    def posting_state(cls):
+        reconciled = sa.exists().where(sa.and_(
+            LedgerBalanceSnapshot.class_id == cls.class_id,
+            LedgerBalanceSnapshot.seat_id == cls.seat_id,
+            LedgerBalanceSnapshot.account_type == cls.account_type,
+            cls.posting_sequence.isnot(None),
+            cls.posting_sequence <= LedgerBalanceSnapshot.reconciled_through_posting_sequence))
+        return sa.case((reconciled, TransactionStatus.POSTED.value), else_=TransactionStatus.PENDING.value)
+
     # Relationship to track which actor and target seat the transaction binds to
     seat = db.relationship('Seat', backref=db.backref('transactions', lazy='dynamic'), foreign_keys=[seat_id])
     target_seat = db.relationship('Seat', foreign_keys=[target_seat_id], post_update=True)
@@ -566,11 +578,11 @@ class Transaction(db.Model):
     command_reservation = db.relationship("LedgerCommandReservation", back_populates="effects")
 
     __table_args__ = (
-        db.Index('ix_transaction_seat_ledger', 'join_code', 'seat_id', 'status', 'account_type'),
+        db.Index('ix_transaction_seat_ledger', 'join_code', 'seat_id', 'account_type'),
         db.Index('ix_transaction_class_scope', 'class_id', 'target_seat_id', 'actor_seat_id', 'account_type'),
         db.Index(
             'ix_ledger_transaction_reconstruction_scope',
-            'class_id', 'seat_id', 'account_type', 'posting_sequence', 'status',
+            'class_id', 'seat_id', 'account_type', 'posting_sequence',
         ),
         db.UniqueConstraint('class_id', 'posting_sequence', name='uq_ledger_transaction_class_posting_sequence'),
     )
@@ -588,6 +600,9 @@ def _enforce_transaction_integrity(_mapper, _connection, target):
     """
     from app.feats.base import is_feat_active, get_correlation_id, get_active_feat_name, FEAT_REGISTRY, validate_id_format
 
+    if (sa.inspect(target).transient or sa.inspect(target).pending) and target.posting_sequence is None:
+        raise ValueError("New Ledger effects require an immutable posting sequence allocated by the Ledger command.")
+
     # 1. Sync amount_cents
     if target.amount is not None:
         target.amount_cents = int(_quantize_currency(target.amount) * 100)
@@ -601,7 +616,8 @@ def _enforce_transaction_integrity(_mapper, _connection, target):
     # 2. FEAT Context Enforcement
     if is_feat_active():
         feat_name = get_active_feat_name()
-        target.feat_code = feat_name
+        if sa.inspect(target).transient or sa.inspect(target).pending:
+            target.feat_code = feat_name
 
         # Auto-propagate correlation_id if not explicitly set
         if not target.correlation_id:
@@ -726,57 +742,28 @@ _LEDGER_IMMUTABLE_FIELDS = frozenset({
     'account_type', 'effective_at', 'date_funds_available', 'description',
     'correlation_id', 'original_transaction_id',
     'policy_id', 'type', 'compensation_subtype', 'command_reservation_id',
+    'posting_sequence', 'idempotency_key', 'feat_code',
 })
 
-# Fields the lawful post-insert paths populate exactly once: settlement assigns
-# `posting_sequence`/`posted_at` (INV-LED-007), correction links
-# `reversal_transaction_id` (INV-LED-013), `create_reserved_effects` stamps
-# `idempotency_key` on its effects once the reservation is held, and the audit
-# emitter stamps lineage after the row has an id. NULL -> value is the
+# Fields the lawful post-insert paths populate exactly once: settlement records
+# informational `posted_at`, correction links
+# `reversal_transaction_id` (INV-LED-013), and the audit emitter stamps lineage
+# after the row has an id. Creation freezes reservation identity before INSERT. NULL -> value is the
 # assignment; value -> value' is a rewrite of a settled fact and is rejected on
 # the same grounds as the set above.
 _LEDGER_WRITE_ONCE_FIELDS = frozenset({
-    'posting_sequence', 'posted_at', 'reversal_transaction_id',
-    'idempotency_key', 'lineage_event_id', 'lineage_token', 'lineage_version',
+    'posted_at', 'reversal_transaction_id',
+    'lineage_event_id', 'lineage_token', 'lineage_version',
 })
 
 
 _LEDGER_GUARDED_FIELDS = tuple(sorted(_LEDGER_IMMUTABLE_FIELDS | _LEDGER_WRITE_ONCE_FIELDS))
-
-# `status` cannot sit in either set above: settlement genuinely does rewrite it.
-# But it is a one-way street, not a free column. `ledger_settlement_service` is
-# the only post-insert writer and it only ever moves PENDING to POSTED, and
-# INV-LED-003 requires a void to arrive as a new linked row rather than as an
-# edit to the original — so POSTED -> PENDING, anything -> VOID, and a revived
-# VOID are all rewrites of a settled fact wearing a lifecycle costume.
-_LEDGER_LAWFUL_STATUS_TRANSITIONS = frozenset({
-    (TransactionStatus.PENDING.name, TransactionStatus.POSTED.name),
-})
-
 
 def _ledger_comparable(value):
     """Flatten a value to something comparable across ORM and driver types."""
     if isinstance(value, enum.Enum):
         return value.value
     return value
-
-
-def _ledger_status_name(value):
-    """Normalize a status to the label PostgreSQL actually stores.
-
-    `status` is a native enum declared as `db.Enum(TransactionStatus)` with no
-    `values_callable`, so SQLAlchemy persists the member **name** — the labels in
-    `transactionstatus` are `PENDING` / `POSTED` / `VOID`, not the lowercase
-    `.value` strings. `_ledger_comparable` returns `.value`, which is right for
-    `mechanism` (whose labels *are* its values) and wrong here: comparing
-    `'posted'` to a stored `'POSTED'` would make every update look like a status
-    change and reject the settlement path outright.
-    """
-    if isinstance(value, TransactionStatus):
-        return value.name
-    if value is None:
-        return None
-    return str(value).upper()
 
 
 @sa.event.listens_for(Transaction, "before_update")
@@ -791,35 +778,22 @@ def _guard_ledger_immutability(_mapper, connection, target):
     is expired, so a genuine rewrite presents no prior value at all. The row
     itself is unambiguous in both cases.
 
-    `status` is guarded by transition rather than by equality — settlement moves
-    PENDING to POSTED and nothing else may move it at all. `feat_code` is the one
-    genuinely unguarded column: `_enforce_transaction_integrity` restamps it with
-    the FEAT performing the lawful update. Everything else on a persisted row is
-    history.
+    Originating FEAT, command identity and posting sequence freeze at creation.
+    Settlement advances only the scoped reconciliation cursor, plus informational
+    write-once posted_at. Monetary facts never change.
     """
     if target.id is None:
         return
 
     stored = connection.execute(
         sa.text(
-            f"SELECT status, {', '.join(_LEDGER_GUARDED_FIELDS)} "
+            f"SELECT {', '.join(_LEDGER_GUARDED_FIELDS)} "
             "FROM ledger_transaction WHERE id = :id"
         ),
         {"id": target.id},
     ).mappings().first()
     if stored is None:
         return
-
-    previous_status = _ledger_status_name(stored['status'])
-    next_status = _ledger_status_name(getattr(target, 'status', None))
-    if next_status != previous_status and (
-        (previous_status, next_status) not in _LEDGER_LAWFUL_STATUS_TRANSITIONS
-    ):
-        raise ValueError(
-            f"ledger_transaction status may not move {previous_status} -> {next_status}. "
-            "Settlement advances PENDING to POSTED; every other change of standing "
-            "is recorded as a new linked transaction."
-        )
 
     violations = []
     for field in _LEDGER_GUARDED_FIELDS:
@@ -976,6 +950,13 @@ class PayrollEvent(db.Model):
     payroll_cycle_id = db.Column(db.String(36), nullable=True, index=True)
     summary_json = db.Column(db.JSON, nullable=True)
 
+    # Operations-owned opaque locators, initialized only before this row's
+    # creating transaction commits. NULL remains lawful coverage history for
+    # pre-rollout rows; it is not permission to attach lineage to them later.
+    lineage_event_id = db.Column(db.Integer, nullable=True, index=True)
+    lineage_token = db.Column(db.String(64), nullable=True)
+    lineage_version = db.Column(db.Integer, nullable=True)
+
     __table_args__ = (
         db.UniqueConstraint('class_id', 'target_seat_id', 'correlation_id', 'idempotency_key', 'payroll_event_type', name='uq_payroll_event_replay_guard'),
         db.CheckConstraint(
@@ -983,6 +964,104 @@ class PayrollEvent(db.Model):
             name='ck_payroll_event_payroll_policy',
         ),
     )
+
+
+_PAYROLL_LINEAGE_FIELDS = ('lineage_event_id', 'lineage_token', 'lineage_version')
+
+
+def _validate_payroll_lineage(connection, stored):
+    from app.services.audit_service import _compute_payload_digest
+    from app.utils.audit_verifier import PROTECTED_FIELDS_BY_TABLE
+
+    if any(stored[f] is None for f in _PAYROLL_LINEAGE_FIELDS):
+        raise ValueError('New payroll_event requires complete audit lineage before commit.')
+    linked = connection.execute(
+        sa.select(AuditEvent.__table__).where(AuditEvent.id == stored['lineage_event_id'])
+    ).mappings().first()
+    expected = _compute_payload_digest(
+        'payroll_event', str(stored['id']), 'INSERT', stored['class_id'],
+        {f: stored[f] for f in PROTECTED_FIELDS_BY_TABLE['payroll_event']},
+    )
+    if linked is None or any((
+        linked['table_name'] != 'payroll_event',
+        linked['row_pk'] != str(stored['id']),
+        linked['class_id'] != stored['class_id'],
+        linked['chain_scope'] != f"class:{stored['class_id']}",
+        linked['operation'] != 'INSERT',
+        linked['hmac_signature'] != stored['lineage_token'],
+        linked['signature_version'] != stored['lineage_version'],
+        linked['payload_digest'] != expected,
+        not (
+            linked['feat_id'] in {'FEAT-PROD-003', 'FEAT-PROD-004', 'FEAT-PROD-005'}
+            or (linked['feat_id'] == 'FEAT-STOR-003' and stored['payroll_event_type'] == 'manual_credit')
+        ),
+    )):
+        raise ValueError('Payroll audit lineage must match the frozen payroll payload.')
+
+
+@event.listens_for(PayrollEvent, 'before_insert')
+def _begin_payroll_creation(_mapper, _connection, target):
+    if any(getattr(target, f) is not None for f in _PAYROLL_LINEAGE_FIELDS):
+        raise ValueError('Payroll lineage must be initialized after INSERT, before commit.')
+    session = sa.orm.object_session(target)
+    target._payroll_creating_transaction = session.get_transaction()
+
+
+@event.listens_for(PayrollEvent, 'after_insert')
+def _track_payroll_creation(_mapper, _connection, target):
+    sa.orm.object_session(target).info.setdefault('_new_payroll_events', {})[target.id] = target
+
+
+@event.listens_for(PayrollEvent, 'before_update')
+def _guard_payroll_immutability(_mapper, connection, target):
+    stored = connection.execute(
+        sa.select(PayrollEvent.__table__).where(PayrollEvent.id == target.id)
+    ).mappings().first()
+    session = sa.orm.object_session(target)
+    candidate = {c.name: getattr(target, c.name) for c in PayrollEvent.__table__.columns}
+    business_fields = set(candidate) - set(_PAYROLL_LINEAGE_FIELDS)
+    from app.services.audit_service import _compute_payload_digest
+    original_digest = _compute_payload_digest(
+        'payroll_event', str(target.id), 'INSERT', stored['class_id'],
+        {f: stored[f] for f in business_fields},
+    )
+    candidate_digest = _compute_payload_digest(
+        'payroll_event', str(target.id), 'INSERT', candidate['class_id'],
+        {f: candidate[f] for f in business_fields},
+    )
+    if candidate_digest != original_digest:
+        raise ValueError('payroll_event business fields are immutable.')
+    if (
+        getattr(target, '_payroll_creating_transaction', None) is not session.get_transaction()
+        or any(stored[f] is not None for f in _PAYROLL_LINEAGE_FIELDS)
+        or any(candidate[f] is None for f in _PAYROLL_LINEAGE_FIELDS)
+    ):
+        raise ValueError('payroll_event lineage initializes once in its creating transaction only.')
+    _validate_payroll_lineage(connection, candidate)
+
+
+@event.listens_for(Session, 'before_commit')
+def _require_payroll_lineage_before_commit(session):
+    if any(isinstance(row, PayrollEvent) for row in session.new):
+        session.flush()
+    created = session.info.get('_new_payroll_events', {})
+    if not created:
+        return
+    session.flush()
+    connection = session.connection()
+    for row_id in created:
+        stored = connection.execute(
+            sa.select(PayrollEvent.__table__).where(PayrollEvent.id == row_id)
+        ).mappings().first()
+        # Seat/class destruction in this transaction lawfully removes the row.
+        if stored is not None:
+            _validate_payroll_lineage(connection, stored)
+
+
+@event.listens_for(Session, 'after_transaction_end')
+def _clear_payroll_creation_tracking(session, transaction):
+    if transaction.parent is None:
+        session.info.pop('_new_payroll_events', None)
 
 
 class PayrollCycleCompletion(db.Model):

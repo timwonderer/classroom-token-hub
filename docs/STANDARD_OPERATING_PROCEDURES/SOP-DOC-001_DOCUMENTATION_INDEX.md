@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001      | 3.12    | 2026-10-03     | 3.11       | Normative |
+| SOP-DOC-001      | 3.14    | 2026-10-03     | 3.13       | Normative |
 
 ---
 
@@ -271,6 +271,12 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.14 (2026-10-03):**
+- Registers the bounded reconciliation-derived Ledger status repair: DOM-LED-001 v2.7, FEAT-LED-001 v1.4, DOM-OPS-002 v1.5 and SPEC-LED-001 v1.1. Immutable creation sequence/signature version 2 and explicit independent proof boundaries replace stored lifecycle state. Historical signatures and correction execution remain outside this cutover.
+
+**Version 3.13 (2026-10-03):**
+- Registers the attendance details/prospective settlement foundation amendments: DOM-PROD-001 v1.9, FEAT-PROD-001 v1.5, FEAT-PROD-003 v1.5, FEAT-PROD-004 v1.4, DOM-OPS-002 v1.4, and DOM-CORE-002 v1.14. These incorporate persisted system closures and immutable payroll creation lineage; interval invalidation remains a subsequent operation.
 
 **Version 3.12 (2026-10-03):**
 - Registered `SPEC-PROD-001` and `FEAT-PROD-005` under the approved documentation-only attendance interval invalidation authority package. Canonical schema and audit registry authorization are updated separately; runtime implementation is not part of this registration.

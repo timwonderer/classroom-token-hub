@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from decimal import Decimal
 
+from tests.helpers.ledger import record_ledger_fixture
 from app.extensions import db
 from app.feats.base import FEATContext
 from app.models import IdentityProfile, Issue, IssueCategory, Seat, Transaction, TransactionStatus
@@ -238,7 +239,7 @@ def issue_reverse_scope_mismatch_state(client, app):
 
     with FEATContext("FEAT-LED-001", idempotency_key="issue_reverse_mismatch:posted_tx"):
         # Transaction is owned by other_student's seat, NOT the submitter's.
-        tx = Transaction(
+        tx = record_ledger_fixture(
             class_id=classroom.class_id,
             seat_id=other_student.seat.id,
             target_seat_id=other_student.seat.id,
@@ -246,7 +247,7 @@ def issue_reverse_scope_mismatch_state(client, app):
             mechanism="self",
             amount=Decimal("30.00"),
             account_type="checking",
-            status=TransactionStatus.POSTED,
+            posted=True,
             type="deposit",
             description="Posted deposit (other student)",
         )

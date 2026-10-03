@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-PROD-004 | 1.3 | 2026-10-03 | 1.2 | Normative |
+| FEAT-PROD-004 | 1.4 | 2026-10-03 | 1.3 | Normative |
 
 > [!NOTE]
 > **1.2 (2026-09-30), operator ruling.** The CLASS activation step is removed. It activated pending rows of the class-wide `policy_versions` / `policy_transitions` tables, which were never authorized as canonical and are retired (`DOM-CLASS-003` §V). A change saved for the next cycle is a row of its owning domain's table carrying its own effective date, in force from that date with nothing to activate (`DOM-CLASS-003` §VII). The run now coordinates PROD and ITR only.
@@ -124,3 +124,7 @@ This FEAT coordinates Identity, Class Configuration, Productivity, Ledger, Opera
 ## IX. Amendment
 
 Version 1.3 (2026-10-03) supersedes the nested-FEAT wording of v1.2 with owning domain commands under FEAT-CORE-000 §V.1 and declares serialization shared with interval invalidation/recovery, including explicit Ledger/Identity/Class Configuration/Operations coordination and the actual originating monetary command namespace. Cycle completion authority and original historical configuration are preserved. Runtime implementation is not included. Revisions must increment version/date and preserve governing invariants.
+
+### Version 1.4: prospective provenance foundation (2026-10-03)
+
+Supersedes 1.3's exclusive writer wording only for canonical due system closure. Incorporates DOM-PROD-001 §XV.7–8 and [SPEC-PROD-001](../SPEC/SPEC-PROD-001_ATTENDANCE_INTERVAL_ELIGIBILITY_AND_PAYROLL_CORRECTION.md) §VI: preserve pair IDs, freeze version-1 settlement inputs, protect complete payroll summaries, and expose pure evidence queries. Every attendance writer locks its class/target seat before selection. New payroll composes `close_due_attendance_intervals` within one FEAT transaction before pricing; class completion resolves completed-run replay first and locks eligible seats in stable order. Audit linkage initializes once within creation and cannot change after commit. No nested FEAT, historical backfill, or correction button is authorized by this foundation.

@@ -19,7 +19,7 @@ time rounding (operator ruling 2026-09-30; DOM-PROD-001 §XV.3).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_EVEN
 
 from app.services.attendance_service import (
     calculate_seat_payroll_intervals,
@@ -51,6 +51,7 @@ class SettingShare:
     pay_rate_per_minute: Decimal
     seconds: int
     last_closed_at: object
+    intervals: tuple = ()
 
     @property
     def amount(self) -> Decimal:
@@ -62,6 +63,7 @@ class SettingShare:
             "policy_uuid": self.policy_uuid,
             "seconds": self.seconds,
             "pay_rate_per_minute": str(self.pay_rate_per_minute),
+            "intervals": [i.as_evidence() for i in self.intervals],
         }
 
 
@@ -90,8 +92,9 @@ class PricedAttendance:
 
 def amount_for(seconds: int, pay_rate_per_minute) -> Decimal:
     """Money for ``seconds`` at a per-minute rate, to the cent."""
-    rate_per_second = Decimal(str(pay_rate_per_minute)) / Decimal("60")
-    return (Decimal(seconds) * rate_per_second).quantize(CENT)
+    return (Decimal(seconds) * Decimal(str(pay_rate_per_minute)) / Decimal("60")).quantize(
+        CENT, rounding=ROUND_HALF_EVEN
+    )
 
 
 def amount_from_summary(pricing: list[dict]) -> Decimal:
@@ -110,7 +113,8 @@ def _price_intervals(class_id: str, ctx, intervals, *, estimate: bool = False) -
     """
     groups: dict[str | None, list] = {}
     rates: dict[str | None, Decimal] = {}
-    for start, closed_at in intervals:
+    for interval in intervals:
+        start, closed_at = interval
         setting = payroll_setting_governing_work(class_id, closed_at)
         if setting is None:
             if not estimate:
@@ -118,10 +122,10 @@ def _price_intervals(class_id: str, ctx, intervals, *, estimate: bool = False) -
                     f"Class {class_id} has no payroll setting to price attendance with."
                 )
             rates[None] = DEFAULT_PAY_RATE_PER_MINUTE
-            groups.setdefault(None, []).append((start, closed_at))
+            groups.setdefault(None, []).append(interval)
             continue
         rates[setting.policy_uuid] = Decimal(str(setting.pay_rate))
-        groups.setdefault(setting.policy_uuid, []).append((start, closed_at))
+        groups.setdefault(setting.policy_uuid, []).append(interval)
     shares = []
     for policy_uuid, grouped in groups.items():
         seconds = elapsed_attendance_seconds(ctx, grouped)
@@ -132,6 +136,7 @@ def _price_intervals(class_id: str, ctx, intervals, *, estimate: bool = False) -
             pay_rate_per_minute=rates[policy_uuid],
             seconds=int(seconds),
             last_closed_at=max(ensure_utc(end) for _start, end in grouped),
+            intervals=tuple(i for i in grouped if hasattr(i, "as_evidence")),
         ))
     shares.sort(key=lambda share: share.last_closed_at)
     return PricedAttendance(shares=tuple(shares))
@@ -140,6 +145,8 @@ def _price_intervals(class_id: str, ctx, intervals, *, estimate: bool = False) -
 def price_payable_attendance(seat_id: int, class_id: str, *, ctx, as_of_utc) -> PricedAttendance:
     """What a payroll run at ``as_of_utc`` pays the seat: closed, unpaid work."""
     intervals = calculate_seat_payroll_intervals(seat_id, class_id, ctx=ctx, as_of_utc=as_of_utc)
+    if intervals.unprovable:
+        raise ValueError("Historical partial settlement has no provable interval membership.")
     return _price_intervals(class_id, ctx, intervals.payable)
 
 

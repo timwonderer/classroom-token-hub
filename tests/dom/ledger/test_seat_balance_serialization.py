@@ -132,8 +132,8 @@ def test_INV_LED_015__settlement_waits_for_a_debit_holding_the_seat_lock(app):
 
         _settle(seat_id, class_id)
         still_pending = Transaction.query.filter_by(
-            seat_id=seat_id, class_id=class_id, status=TransactionStatus.PENDING
-        ).count()
+            seat_id=seat_id, class_id=class_id
+        ).filter(Transaction.posting_state == TransactionStatus.PENDING).count()
         assert still_pending == 0
         assert get_posted_balance(seat_id, class_id, "checking") == Decimal("105.00")
 

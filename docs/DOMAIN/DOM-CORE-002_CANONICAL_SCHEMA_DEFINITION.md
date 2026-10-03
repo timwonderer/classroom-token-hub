@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-CORE-002     | 1.13    | 2026-10-03     | 1.12       | Constitutional |
+| DOM-CORE-002     | 1.14    | 2026-10-03     | 1.13       | Constitutional |
 
 ---
 
@@ -209,6 +209,8 @@ Policy definition tables — `rent_settings`, `payroll_settings`, `payroll_rewar
 
 `payroll_event` additionally permits `payroll_event_type = correction`. Its protected `summary_json` carries original-event and correction-intent provenance and complete original settlement membership/pricing/allocation-version inputs, not monetary amounts. Original-payroll-event and invalidation IDs refer within PROD; Ledger and policy references are opaque non-FK locators. No persisted earnings cache or amount column is authorized. The incorporated `SPEC-PROD-001` contract is enforced through owning PROD commands and declared FEAT orchestration, never DOM-to-DOM calls.
 
+`payroll_event` carries nullable `lineage_event_id`, `lineage_token` (64 characters), and `lineage_version` metadata. The event ID is an opaque Operations locator, not an internal cross-domain FK. New rows begin with empty linkage and initialize all three fields exactly once through Operations within their creating FEAT transaction; committed business and linkage fields are permanently immutable (DOM-PROD-001 §XI.3, DOM-OPS-002 §6.1). Deferred database and application guards reject missing or mismatched creation evidence. Historical NULL linkage remains untouched and UNVERIFIED; no backfill is authorized.
+
 The protected-row `lineage_event_id` linkage is mandated narrowly by `INV-ARC-016` §V; it does not authorize arbitrary cross-domain internal-table FKs under `INV-ARC-021` §V.7. This schema amendment does not execute migrations or imply runtime availability.
 
 ---
@@ -382,3 +384,6 @@ Any modification to the canonical schema requires:
 - Version increment
 - Updated Effective Date
 - Explicit justification tied to domain authority
+
+
+Version 1.14 (2026-10-03) registers payroll creation lineage metadata and its narrow, atomic initialization protocol, superseding an unqualified UPDATE prohibition only before the creating transaction commits.

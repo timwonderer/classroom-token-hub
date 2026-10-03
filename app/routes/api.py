@@ -22,7 +22,7 @@ from app.hash_utils import verify_password
 
 from app.extensions import db, limiter, student_status_seat_limit_key
 from app.models import (
-    Transaction, TransactionStatus, AttendanceSession,
+    Transaction, AttendanceSession,
     AttendanceReasonCode, HallPassLog, HallPassSettings,
     # Legacy tap models are unauthorized; use attendance_sessions (DOM-PROD-001).
     # StoreItemBlock removed — store_item_blocks unauthorized; use store_item_visibility (DOM-STORE-001)

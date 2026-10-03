@@ -34,7 +34,7 @@ from app.models import AttendanceSession, PayrollEvent, Seat, Transaction
 from app.services.attendance_service import (
     CLOSED_SESSION_SETTLEMENT_RULE,
     _day_end_utc,
-    _split_sessions,
+    list_attendance_intervals,
 )
 from app.services.context_resolver import CanonicalContext
 from app.services.payroll.settings import pay_rate_per_second, payroll_setting_governing_work
@@ -155,8 +155,10 @@ def _worked_seconds_in_window(ctx, rows, *, since_utc, run_at_utc) -> int:
     Sessions are paired by the current rule (a repeated ``active`` continues the
     session; a session ends at the end of its class day) and clipped to the window.
     """
-    closed, in_progress = _split_sessions(rows, ctx=ctx, as_of_utc=run_at_utc)
-    sessions = closed + ([in_progress] if in_progress else [])
+    if not rows:
+        return 0
+    sessions = list_attendance_intervals(rows[0].target_seat_id, ctx.class_id,
+        ctx=ctx, as_of_utc=run_at_utc)
     intervals = []
     for start, end in sessions:
         if since_utc is not None and start < since_utc:

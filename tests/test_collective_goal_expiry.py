@@ -208,7 +208,7 @@ class TestUnmetGoalIsExpiredAndRefunded:
             db.session.refresh(purchase)
             # The original charge stands as historical fact; only the link
             # forward is added (SPEC-OPS-001 §3.2, INV-OPS-001).
-            assert purchase.status == TransactionStatus.POSTED
+            assert purchase.posting_state == TransactionStatus.POSTED
             assert purchase.reversal_transaction_id is not None
             reversal = db.session.get(Transaction, purchase.reversal_transaction_id)
             # FEAT-LED-002 §III.2.1: the ledger type is REVERSAL. The business
@@ -272,7 +272,7 @@ class TestUnmetGoalIsExpiredAndRefunded:
                 .filter_by(class_id=room.class_id, seat_id=student.seat_id, type="purchase")
                 .one()
             )
-            assert purchase.status == TransactionStatus.POSTED
+            assert purchase.posting_state == TransactionStatus.POSTED
             assert purchase.reversal_transaction_id is not None
 
 

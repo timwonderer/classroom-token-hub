@@ -427,3 +427,12 @@ these two cases:
 Amend this file when an item changes state, and record each closure with its commit SHA. Dated
 snapshots of finished work belong in `docs/archive/v2-tracking-2026/` (archived material). Release
 and audit records belong in `docs/ops/audits/`.
+
+
+## Attendance Provenance Foundation — Ledger Proof Gate (2026-10-03)
+
+**Bounded reconciliation-status repair in local implementation/review; production readiness is not certified.** DOM-LED-001 v2.7, FEAT-LED-001 v1.4 and DOM-OPS-002 v1.5 authorize creation-time immutable posting sequence and command metadata, signature version 2 over sixteen implemented fields, and cursor-derived PENDING/POSTED. Settlement changes account reconciliation projections and may initialize informational `posted_at`; it never rewrites signed effect fields or creation hashes. The three future compensation fields and atomic interval recovery remain a later implementation.
+
+This supersedes the former broad Ledger-block description for the approved bounded cutover. The original conflict was persisted lifecycle `status` mutated after its creation signature; the repair removes stored status rather than preserving a parallel authority or synthesizing an original payload. Historical version 1 signatures remain unchanged and strict proof remains unavailable where retired inputs or original membership cannot be proven. Prospective verified contributions require successful independent runtime evidence before this item is closed.
+
+Migration preflight must fail closed on unsupported historical state, missing canonical sequence, VOID state, or mismatched reconciliation evidence. No automatic production drain, backfill, sequence inference from IDs, historical signature replacement, or monetary-history rewrite is authorized. The old status-mutating drain is the pre-existing authority conflict and is not labeled a lawful remedy. A blocked preflight requires a separately reviewed historical disposition. No production drain or deployment was performed in this foundation.

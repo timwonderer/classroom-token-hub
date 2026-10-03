@@ -26,14 +26,20 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 PROTECTED_FIELDS_BY_TABLE: dict[str, list[str]] = {
+    "payroll_event": [
+        "id", "class_id", "payroll_cycle_id", "actor_seat_id", "target_seat_id",
+        "correlation_id", "idempotency_key", "policy_uuid", "mechanism",
+        "payroll_event_type", "recorded_at", "summary_json",
+    ],
     # Keep both names during the Wave 5 table rename transition.
     "transaction": [
         "amount", "account_type", "type", "status",
         "class_id", "seat_id", "description", "correlation_id",
     ],
     "ledger_transaction": [
-        "amount", "account_type", "type", "status",
-        "class_id", "seat_id", "description", "correlation_id",
+        "id", "class_id", "actor_seat_id", "target_seat_id", "mechanism", "amount_cents",
+        "timestamp", "account_type", "description", "correlation_id", "feat_code",
+        "idempotency_key", "policy_id", "type", "posting_sequence", "command_reservation_id",
     ],
 }
 
@@ -267,6 +273,12 @@ def verify_row_lineage(
                 detail=f"AuditEvent id={lineage_event_id} not found — deleted or never created",
             )
 
+        if table_name == "ledger_transaction" and event.signature_version != 2:
+            return RowVerificationResult(table_name=table_name, row_pk=row_pk_str,
+                state=LineageState.DEGRADED, lineage_event_id=lineage_event_id,
+                failure_type="VERIFIER_COVERAGE_UNAVAILABLE",
+                detail="Historical Ledger signature uses a retired stored-state payload; current canonical coverage is unavailable.")
+
         protected_fields = PROTECTED_FIELDS_BY_TABLE.get(table_name)
         if protected_fields is None:
             return RowVerificationResult(
@@ -278,10 +290,11 @@ def verify_row_lineage(
                 detail=f"No protected field definition for table '{table_name}'",
             )
 
-        current_values = {
-            f: getattr(model_instance, f, None)
-            for f in protected_fields
-        }
+        if any(not hasattr(model_instance, field) for field in protected_fields):
+            return RowVerificationResult(table_name=table_name, row_pk=row_pk_str,
+                state=LineageState.DEGRADED, lineage_event_id=lineage_event_id,
+                failure_type="VERIFIER_COVERAGE_UNAVAILABLE", detail="Required protected field is unavailable.")
+        current_values = {f: getattr(model_instance, f) for f in protected_fields}
         current_digest = _compute_payload_digest(
             event.table_name,
             event.row_pk,
@@ -381,3 +394,34 @@ def record_integrity_verification(results: list[VerificationResult]) -> None:
     ]
     if failed:
         logger.warning("Invariant check failures: %s", json.dumps(failed))
+
+
+def verify_record_creation_lineage(table, row, class_id, *, required_fields=()):
+    """Pure Operations proof: scoped creation pointer, payload, coverage and complete chain.
+
+    Required field coverage fails closed when an owner needs evidence its runtime
+    protected-field registration does not yet provide. It never substitutes old
+    field values or repairs historical evidence.
+    """
+    from app.services.audit_service import LineageState
+    from app.models import AuditEvent, ChainHead
+    if not set(required_fields).issubset(PROTECTED_FIELDS_BY_TABLE.get(table, ())):
+        return False
+    pointer = getattr(row, "lineage_event_id", None)
+    if pointer is None:
+        return False
+    event = db.session.get(AuditEvent, pointer)
+    if event is None or event.table_name != table or event.row_pk != str(row.id) or event.class_id != class_id:
+        return False
+    if event.chain_scope != f"class:{class_id}" or event.operation != "INSERT":
+        return False
+    if row.lineage_token != event.hmac_signature or row.lineage_version != event.signature_version:
+        return False
+    head = db.session.get(ChainHead, event.chain_scope)
+    if head is None or event.sequence_number > head.latest_sequence:
+        return False
+    verification = verify_chain(event.chain_scope, limit=head.latest_sequence + 1)
+    if (verification.state != LineageState.VERIFIED or verification.event_count != head.latest_sequence
+            or verification.last_good_hash != head.latest_hash or head.event_count != verification.event_count):
+        return False
+    return verify_row_lineage(table, row.id, row).state == LineageState.VERIFIED

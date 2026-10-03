@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-PROD-001 | 1.8 | 2026-10-03 | 1.7 | Constitutional |
+| DOM-PROD-001 | 1.9 | 2026-10-03 | 1.8 | Constitutional |
 
 ---
 
@@ -218,7 +218,7 @@ The only lawful write operations for this domain are the following.
 
 ### 1. `record_attendance_session(...)`
 
-Owned by `FEAT-PROD-001`.
+Owned by `FEAT-PROD-001` for attendance ingress. `FEAT-PROD-003` and `FEAT-PROD-004` may compose the narrow `close_due_attendance_intervals` PROD command for system closing events, in their existing atomic context; no nested FEAT executes.
 
 Writes a new row to `attendance_sessions`.
 
@@ -443,10 +443,11 @@ Key fields:
 - `payroll_event_type` — `payroll` | `manual_credit` | `reversal` | `correction`
 - `recorded_at` — UTC; display in class canonical time
 - `summary_json` — structured payroll summary and settlement metadata, including the pricing inputs of a `payroll` event (§XV.3) and, for a `SYSTEM` `payroll` event, the scheduled occurrence it settled (§XV.5)
+- `lineage_event_id`, `lineage_token`, `lineage_version` — opaque Operations audit linkage initialized together during creation (§XV.8); historical null linkage remains unverified.
 
 Rules:
 
-- `payroll_event` is append-only and permanent for as long as its seat exists. A payroll event belongs to its `target_seat_id`; `actor_seat_id` is a provenance reference and does not own it. The database refuses every UPDATE. It refuses every DELETE except (a) one removing an event whose target seat no longer exists, reachable only through the foreign-key cascade of that seat's own deletion (lawful seat removal, `FEAT-IDEN-006`), or (b) one inside a transaction that has declared class-universe destruction (`FEAT-CLASS-006`, `FEAT-IDEN-007`). This is membership by existence (`INV-ARC-013`, `INV-CORE-000` §III.6): an entry anchored to `seat_id` or `class_id` ceases with its anchor, the same lifecycle boundary §VII.1.a states for attendance. Deleting the events of a seat that still exists is refused regardless of caller, and deleting an actor seat does not license deleting the events it recorded.
+- `payroll_event` is append-only and permanent for as long as its seat exists. A payroll event belongs to its `target_seat_id`; `actor_seat_id` is a provenance reference and does not own it. The database refuses every business-field UPDATE and every post-commit linkage UPDATE; only complete one-time linkage initialization within the creating transaction is allowed (§XV.8). It refuses every DELETE except (a) one removing an event whose target seat no longer exists, reachable only through the foreign-key cascade of that seat's own deletion (lawful seat removal, `FEAT-IDEN-006`), or (b) one inside a transaction that has declared class-universe destruction (`FEAT-CLASS-006`, `FEAT-IDEN-007`). This is membership by existence (`INV-ARC-013`, `INV-CORE-000` §III.6): an entry anchored to `seat_id` or `class_id` ceases with its anchor, the same lifecycle boundary §VII.1.a states for attendance. Deleting the events of a seat that still exists is refused regardless of caller, and deleting an actor seat does not license deleting the events it recorded.
 - Each row records one payroll business event for one class.
 - Each row records one payroll business event for one affected seat.
 - `payroll` events are the only boundary-bearing event type.
@@ -652,7 +653,20 @@ While a class is in that state, its teacher is told once. This is a one-time boo
 
 **Acknowledgement.** The teacher dismisses the notice with an explicit POST, executed by `FEAT-CLASS-008`. Acknowledgement and resolution are independent. An acknowledgement records only that the class's teacher saw the notice. It does not assert that the condition still holds, it does not alter, exclude or pre-empt any productivity fact, and it does not stop the first payroll run from paying earlier work. A dismissal submitted after the class's first setting exists (for example, from a tab left open) is recorded like any other.
 
+### 7. Due System Closure and Read Projections
+
+`close_due_attendance_intervals` locks the target seat before timeline selection and appends only missing system `inactive` / `done_for_day` events when the originating canonical day-end or daily limit has been reached. A system event ID is as valid as a human scan ID. The daily limit is resolved from the effective-dated setting in force at the interval opening, never a future wall-clock setting. Prior completed work in that same day reduces the remaining limit. Every attendance writer and payroll settlement shares seat serialization; multi-seat settlement acquires seats in ascending ID order before monetary effects. Commands neither modify original rows nor manufacture source IDs. Closures and the invoking payroll roll back together on failure. Completed-run replay is resolved before closure or pricing.
+
+Pure interval queries expose original pair IDs, UTC timestamps, credited seconds, mechanism and unclosed evidence. Pairing precedes pagination. Pure settlement-membership queries verify frozen source evidence against the canonical pair; historical timestamps do not prove original membership. New version-1 settlement exclusion follows recorded pair membership, not an event timestamp cutoff, so a later-recorded backdated system close is not silently dropped. An unresolved historical partial payment blocks new settlement of its overlapping interval; no compatibility clipping is authorized. Read queries never emit closures, audits, or payroll writes.
+
+### 8. Payroll Audit Linkage Initialization
+
+Under INV-ARC-016 and DOM-OPS-002 §5.4, every new payroll event carries complete protected-field audit lineage. The business fields, including the full summary, are fixed at insertion. The three audit-linkage fields may move together exactly once from all-null to complete solely within that row's creating transaction, with a matching signed AuditEvent for its class, table and row ID. This initialization completes creation; it does not authorize amendment of a committed record. Commit without required valid lineage fails, replacement and post-commit attachment fail, and failures roll back the row and audit together. Historical null linkage stays unverified and is never backfilled. Lifecycle destruction remains the sole deletion exception.
+
 ## XVI. Amendment
+
+**Version 1.9 (2026-10-03)** supersedes the exclusive attendance-writer declaration for due system closure only, and defines the narrow payroll audit-linkage creation phase. Authorizes interval-detail/prospective provenance implementation; no historical reconstruction or monetary correction UI is included.
+
 
 **Version 1.8 (2026-10-03)** supersedes the v1.7 whole-payroll-only correction rule. Authorizes terminal completed-interval invalidation and partial/residual payroll correction; incorporates SPEC-PROD-001. The new surface is authorized, not runtime implemented. Existing immutable attendance, settlement boundaries, and lifecycle rules remain binding.
 

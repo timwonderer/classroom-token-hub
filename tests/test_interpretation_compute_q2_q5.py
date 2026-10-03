@@ -23,9 +23,11 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from app.extensions import db
-from app.feats.base import FEATContext
+from app.feats.base import FEATContext, audit_protected
+from app.utils.audit_verifier import PROTECTED_FIELDS_BY_TABLE
 from app.models import PayrollEvent, Transaction, TransactionStatus
 from app.services.payroll.settings import first_payroll_setting
+from app.services.ledger_settlement_service import settle_balances
 from app.services.interpretation.compute import compute_partial_payload
 from app.services.interpretation.economic_activity import compute_q2
 from app.services.interpretation.income_composition import compute_q5
@@ -300,13 +302,16 @@ def _seed_q5_window(classroom):
     # for corroboration to succeed — exactly as a real payroll FEAT would, since
     # both writes occur under the same context.
     with FEATContext("FEAT-PROD-003", correlation_id="q5:labor", idempotency_key="q5:labor"):
-        db.session.add(PayrollEvent(
+        event = PayrollEvent(
             class_id=cid, target_seat_id=sA.seat_id,
             actor_seat_id=teacher_seat_id, correlation_id="corr_q5:labor",
             idempotency_key="q5:labor:evt",
             policy_uuid=policy.policy_uuid, mechanism="TEACHER",
             payroll_event_type="payroll", recorded_at=now,
-        ))
+        )
+        db.session.add(event)
+        db.session.flush()
+        audit_protected("payroll_event", event, "INSERT", PROTECTED_FIELDS_BY_TABLE["payroll_event"])
         create_pending_transaction(
             seat_id=sA.seat_id, class_id=cid, target_seat_id=sA.seat_id,
             actor_seat_id=teacher_seat_id, mechanism="system",
@@ -316,13 +321,16 @@ def _seed_q5_window(classroom):
 
     # cat 3 — teacher/admin: manual_credit corroborated by a PayrollEvent.
     with FEATContext("FEAT-PROD-003", correlation_id="q5:manual", idempotency_key="q5:manual"):
-        db.session.add(PayrollEvent(
+        event = PayrollEvent(
             class_id=cid, target_seat_id=sB.seat_id,
             actor_seat_id=teacher_seat_id, correlation_id="corr_q5:manual",
             idempotency_key="q5:manual:evt",
             policy_uuid=policy.policy_uuid, mechanism="TEACHER",
             payroll_event_type="manual_credit", recorded_at=now,
-        ))
+        )
+        db.session.add(event)
+        db.session.flush()
+        audit_protected("payroll_event", event, "INSERT", PROTECTED_FIELDS_BY_TABLE["payroll_event"])
         create_pending_transaction(
             seat_id=sB.seat_id, class_id=cid, target_seat_id=sB.seat_id,
             actor_seat_id=teacher_seat_id, mechanism="teacher",
@@ -345,11 +353,9 @@ def _seed_q5_window(classroom):
     # Income composition counts *settled* income: get_inbound_ledger_rows reads
     # POSTED rows only. Settle the seeded inbound rows so this window reflects
     # realized income (create_pending_transaction writes PENDING rows).
-    with FEATContext("FEAT-BYPASS-LEGACY", correlation_id="q5:settle"):
-        Transaction.query.filter_by(class_id=cid).update(
-            {Transaction.status: TransactionStatus.POSTED}, synchronize_session=False
-        )
-        db.session.flush()
+    with FEATContext("FEAT-LED-003", correlation_id="q5:settle", idempotency_key="q5:settle"):
+        for seat_id, in db.session.query(Transaction.seat_id).filter_by(class_id=cid).distinct():
+            settle_balances(seat_id, cid)
 
     return cid, window_start, window_end
 

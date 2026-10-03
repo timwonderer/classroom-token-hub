@@ -48,7 +48,7 @@ def test_DOM_SUP_001__sysadmin_resolve_issue_issues_bug_reward_transaction(clien
     assert reward_tx is not None
     assert reward_tx.amount == Decimal("4.50")
     assert reward_tx.account_type == "checking"
-    assert reward_tx.status == TransactionStatus.PENDING
+    assert reward_tx.posting_state == TransactionStatus.PENDING
     assert "Issue" in (reward_tx.description or "")
 
     reward_action = IssueResolutionAction.query.filter_by(

@@ -244,7 +244,6 @@ def _savings_ledger(seat_id, class_id, cadence):
             Transaction.seat_id == seat_id,
             Transaction.class_id == class_id,
             Transaction.account_type == "savings",
-            Transaction.status != TransactionStatus.VOID,
         )
         .all()
     )
@@ -260,7 +259,7 @@ def _savings_ledger(seat_id, class_id, cadence):
             if paid_through is None or window.end_utc > paid_through:
                 paid_through = window.end_utc
             history.append((window.end_utc, row.amount_cents))
-        elif row.status == TransactionStatus.POSTED and row.posted_at is not None:
+        elif row.posting_state == TransactionStatus.POSTED and row.posted_at is not None:
             history.append((ensure_utc(row.posted_at), row.amount_cents))
     history.sort(key=lambda entry: entry[0])
     return _SavingsLedger(history, paid_keys, paid_through)

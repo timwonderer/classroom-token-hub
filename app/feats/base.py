@@ -560,6 +560,7 @@ def audit_protected(
     *,
     actor_type: str | None = None,
     actor_id_hash: str | None = None,
+    signature_version: int = 1,
 ) -> None:
     """Emit an AuditEvent for a protected row write and attach lineage fields.
 
@@ -598,6 +599,7 @@ def audit_protected(
             seat_id=getattr(row, "seat_id", None),
             actor_type=actor_type,
             actor_id_hash=actor_id_hash,
+            signature_version=signature_version,
         )
         if hasattr(row, "lineage_event_id"):
             row.lineage_event_id = event.id

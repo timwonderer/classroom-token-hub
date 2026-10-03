@@ -57,34 +57,6 @@ def enforce_daily_limits_job():
         checked_count = 0
         closed_count = 0
 
-        def _active_intervals_for_day(rows, *, day_start_utc, horizon_utc):
-            """Paid intervals inside ONE canonical class day, bounded by ``horizon_utc``.
-
-            ``horizon_utc`` is the end of that day, or the canonical now when the
-            day is still running. Clamping the interval END — not just the start —
-            is what stops a session that outlived its own day from being re-read as
-            a session that began at the following midnight (DOM-PROD-001 §312).
-            """
-            intervals = []
-            active_start = None
-            for row in rows:
-                if row.timestamp > horizon_utc:
-                    break
-                if row.status == "active":
-                    active_start = row.timestamp
-                    continue
-                if row.status == "inactive" and active_start is not None:
-                    interval_start = max(active_start, day_start_utc)
-                    interval_end = min(row.timestamp, horizon_utc)
-                    if interval_end >= interval_start:
-                        intervals.append((interval_start, interval_end))
-                    active_start = None
-            if active_start is not None:
-                interval_start = max(active_start, day_start_utc)
-                if horizon_utc >= interval_start:
-                    intervals.append((interval_start, horizon_utc))
-            return intervals
-
         for class_id, class_events in rows_by_class_id.items():
             class_row = ClassEconomy.query.filter_by(class_id=class_id).first()
             if class_row is None:
@@ -137,117 +109,9 @@ def enforce_daily_limits_job():
                         if seat is None:
                             continue
 
-                        # The open session is evaluated in the canonical day of
-                        # its OWN `active` row, never in today's. Anchoring on
-                        # today is what let a session survive a server outage
-                        # across midnight and be re-read as one that began at
-                        # today's 00:00 — which both lost the prior day's
-                        # end-of-day row and dated the closing row to today,
-                        # locking the student out of working (the `done_today`
-                        # gate in app/feats/prod.py).
-                        day_bounds = canonical_temporal_resolver(
-                            CLASS_LEVEL_EVALUATION,
-                            canonical_execution_context=ctx,
-                            primitive="evaluation_day_boundaries",
-                            reference_time_utc=latest_event.timestamp,
-                        )
-                        day_end_utc = day_bounds.boundary_end_utc
-                        # No session accrues past the end of its own day (§312),
-                        # and none accrues into the future.
-                        day_is_over = day_end_utc <= now_utc
-                        horizon_utc = day_end_utc if day_is_over else now_utc
-
-                        intervals = _active_intervals_for_day(
-                            rows_by_scope[(class_id, seat_id)],
-                            day_start_utc=day_bounds.boundary_start_utc,
-                            horizon_utc=horizon_utc,
-                        )
-                        if not intervals:
-                            continue
-
-                        close_at_utc = None
-                        reason = None
-
-                        if daily_limit:
-                            total_evaluation = canonical_temporal_resolver(
-                                CLASS_LEVEL_EVALUATION,
-                                canonical_execution_context=ctx,
-                                primitive="elapsed_duration",
-                                reference_time_utc=now_utc,
-                                intervals=intervals,
-                            )
-                            if total_evaluation.elapsed_seconds >= daily_limit:
-                                # DOM-PROD-001 §314: correct the closing timestamp
-                                # so the accumulated time equals the limit exactly.
-                                accumulated_before_active = 0
-                                active_start, _active_end = intervals[-1]
-                                if len(intervals) > 1:
-                                    prior_evaluation = canonical_temporal_resolver(
-                                        CLASS_LEVEL_EVALUATION,
-                                        canonical_execution_context=ctx,
-                                        primitive="elapsed_duration",
-                                        reference_time_utc=now_utc,
-                                        intervals=intervals[:-1],
-                                    )
-                                    accumulated_before_active = prior_evaluation.elapsed_seconds
-
-                                remaining_seconds = int(daily_limit) - int(accumulated_before_active)
-                                close_at_utc = active_start
-                                if remaining_seconds > 0:
-                                    close_evaluation = canonical_temporal_resolver(
-                                        CLASS_LEVEL_EVALUATION,
-                                        canonical_execution_context=ctx,
-                                        primitive="shift_timestamp",
-                                        reference_time_utc=now_utc,
-                                        timestamp=active_start,
-                                        elapsed_seconds=remaining_seconds,
-                                    )
-                                    close_at_utc = close_evaluation.shifted_timestamp_utc
-                                reason = f"Daily limit reached ({daily_limit / 3600:.1f}h)"
-
-                        if close_at_utc is None and day_is_over:
-                            # DOM-PROD-001 §312: terminate at end of day in the
-                            # canonical class timezone, dated to the same day as
-                            # the originating `active` entry. Unconditional — it
-                            # does not require a configured daily limit.
-                            close_at_utc = day_end_utc
-                            reason = "Automatically closed at end of day"
-
-                        if close_at_utc is None:
-                            # Still inside its own day and under the limit.
-                            continue
-
-                        reached_at_or_before_now = canonical_temporal_resolver(
-                            CLASS_LEVEL_EVALUATION,
-                            canonical_execution_context=ctx,
-                            primitive="later_than",
-                            reference_time_utc=now_utc,
-                            candidate=now_utc,
-                            reference=close_at_utc,
-                        )
-                        if not reached_at_or_before_now.is_later and now_utc != close_at_utc:
-                            continue
-
-                        _record_attendance_session_impl(
-                            ctx=ctx,
-                            target_seat_id=seat_id,
-                            actor_seat_id=actor_seat_id,
-                            mechanism="system",
-                            status="inactive",
-                            reason=reason,
-                            reason_code=AttendanceReasonCode.DONE_FOR_DAY,
-                            idempotency_key=f"daily_limit:{class_id}:{seat_id}:{secrets.token_hex(12)}",
-                            reference_time_utc=close_at_utc,
-                        )
-
-                        closed_count += 1
-                        logger.info(
-                            "Closed attendance session for seat %s in class %s at %s (%s)",
-                            seat_id,
-                            class_id,
-                            close_at_utc,
-                            reason,
-                        )
+                        from app.services.attendance_service import close_due_attendance_intervals
+                        closures = close_due_attendance_intervals(ctx=ctx, seat_id=seat_id, as_of_utc=now_utc)
+                        closed_count += len(closures)
                 except FEATContextError:
                     # A constitutional violation is never per-seat noise. Swallowing
                     # it here is how this job reported success while closing zero

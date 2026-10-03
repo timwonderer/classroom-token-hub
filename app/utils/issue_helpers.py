@@ -18,7 +18,6 @@ from app.models import (
     IssueStatusHistory,
     IssueResolutionAction,
     Transaction,
-    TransactionStatus,
     ClassEconomy,
     Seat,
     IdentityProfile,
@@ -100,7 +99,7 @@ def create_context_snapshot(actor, class_id, related_transaction_id=None, relate
                 'description': transaction.description,
                 'type': transaction.type,
                 'timestamp': transaction.timestamp.isoformat() if transaction.timestamp else None,
-                'is_void': transaction.status == TransactionStatus.VOID
+                'posting_state': transaction.posting_state.value
             }
 
     # Get recent transaction history (last 10 transactions for context)

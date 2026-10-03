@@ -22,7 +22,7 @@ def disclosed_snapshot(issue):
     result = {key: deepcopy(source[key]) for key in TECHNICAL_FIELDS if key in source}
     allowed = {
         'balances': ('checking', 'savings', 'total'),
-        'transaction': ('id', 'amount', 'account_type', 'description', 'type', 'timestamp', 'is_void'),
+        'transaction': ('id', 'amount', 'account_type', 'description', 'type', 'timestamp', 'posting_state'),
         'recent_transactions': ('id', 'amount', 'description', 'timestamp'),
     }
     for category, fields in allowed.items():

@@ -143,3 +143,31 @@ def apply_ledger_overdraft_fee_if_needed(seat, *, force: bool = False, idempoten
 
 def settle_ledger_balances(seat_id: int, class_id: str) -> None:
     settle_balances(seat_id, class_id)
+
+
+def record_ledger_fixture(*, seat_id, class_id, amount, account_type="checking", type="Deposit",
+                          description="Ledger fixture", target_seat_id=None, actor_seat_id=None,
+                          mechanism="self", timestamp=None, posted=False,
+                          original_transaction_id=None):
+    """Create immutable evidence through Ledger; reconcile explicitly if needed.
+
+    This fixture accepts no persisted lifecycle field. Historical event times
+    enter the canonical creation command before INSERT, never through patches.
+    """
+    from contextlib import ExitStack
+    from unittest.mock import patch
+    from app.utils.canonical_temporal_resolver import ensure_utc
+    with ExitStack() as clocks:
+        if timestamp is not None:
+            instant = ensure_utc(timestamp)
+            clocks.enter_context(patch("app.utils.canonical_temporal_resolver.utc_now", return_value=instant))
+            clocks.enter_context(patch("app.services.ledger_settlement_service.utc_now", return_value=instant))
+        transaction = create_pending_transaction(
+            seat_id=seat_id, class_id=class_id, amount=amount, account_type=account_type,
+            type=type, description=description, target_seat_id=target_seat_id or seat_id,
+            actor_seat_id=actor_seat_id or seat_id, mechanism=mechanism,
+            original_transaction_id=original_transaction_id,
+        )
+        if posted:
+            settle_balances(seat_id, class_id)
+        return transaction

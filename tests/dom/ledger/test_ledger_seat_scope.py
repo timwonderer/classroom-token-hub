@@ -2,6 +2,7 @@ from decimal import Decimal
 
 import pytest
 
+from tests.helpers.ledger import record_ledger_fixture
 from app import db
 from app.feats.base import FEATContext
 from app.models import Transaction, TransactionStatus
@@ -15,7 +16,7 @@ def test_DOM_LED_001__transaction_autofills_seat_id_from_student_and_class_scope
     student = classroom.students[0].seat
 
     with FEATContext("FEAT-LED-001", idempotency_key="ledger-seat-scope:test-transaction"):
-        tx = Transaction(
+        tx = record_ledger_fixture(
             class_id=student.class_id,
             seat_id=student.id,
             target_seat_id=student.id,
@@ -23,7 +24,7 @@ def test_DOM_LED_001__transaction_autofills_seat_id_from_student_and_class_scope
             mechanism="self",
             amount=Decimal("5.00"),
             account_type="checking",
-            status=TransactionStatus.PENDING,
+            posted=False,
             description="seat scoped test",
         )
         db.session.add(tx)
@@ -37,20 +38,18 @@ def test_DOM_LED_001__transaction_rejects_missing_explicit_class_scope(client, a
     student = classroom.students[0].seat
 
     with FEATContext("FEAT-LED-001", idempotency_key="ledger-seat-scope:missing-class"):
-        tx = Transaction(
-            class_id=None,
-            seat_id=student.id,
-            target_seat_id=student.id,
-            actor_seat_id=student.id,
-            mechanism="self",
-            amount=Decimal("5.00"),
-            account_type="checking",
-            status=TransactionStatus.PENDING,
-            description="missing class scope test",
-        )
-        db.session.add(tx)
-        with pytest.raises(ValueError, match="requires explicit class_id"):
-            db.session.flush()
+        with pytest.raises(ValueError, match="requires seat_id.*class_id"):
+            tx = record_ledger_fixture(
+                class_id=None,
+                seat_id=student.id,
+                target_seat_id=student.id,
+                actor_seat_id=student.id,
+                mechanism="self",
+                amount=Decimal("5.00"),
+                account_type="checking",
+                posted=False,
+                description="missing class scope test",
+            )
 
 
 def test_DOM_LED_001__posting_rejects_cross_class_actor_or_target(client, app):

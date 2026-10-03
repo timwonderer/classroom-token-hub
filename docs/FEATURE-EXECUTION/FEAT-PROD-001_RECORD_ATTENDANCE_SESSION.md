@@ -2,13 +2,13 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-PROD-001 | 1.4 | 2026-10-03 | 1.3 | Normative |
+| FEAT-PROD-001 | 1.5 | 2026-10-03 | 1.4 | Normative |
 
 ---
 
 ## I. Purpose
 
-This FEAT is the sole lawful mutation path for `attendance_sessions`.
+This FEAT owns attendance ingress. FEAT-PROD-003/004 may compose only the due-system-closure PROD command authorized by DOM-PROD-001 §XV.7 inside their own atomic context.
 
 It records attendance-session rows for the Productivity and Payroll domain and
 replaces any other FEAT or route path that would otherwise write to that table.
@@ -65,7 +65,7 @@ The FEAT MUST NOT infer class or seat authority from any legacy identity source.
 
 ### `record_attendance_session(...)`
 
-This is the only lawful mutation path for `attendance_sessions`.
+Attendance ingress uses this FEAT; due system closure may be composed by FEAT-PROD-003/004 under DOM-PROD-001 §XV.7.
 
 Canonical business actions:
 
@@ -142,7 +142,7 @@ Failure conditions:
 
 ## VIII. Write Authority
 
-`FEAT-PROD-001` is the exclusive writer for `attendance_sessions`.
+The PROD attendance command is the sole writer for `attendance_sessions`; FEAT-PROD-001 owns ingress and FEAT-PROD-003/004 may compose its narrow due-system-closure operation.
 
 No other FEAT, route, background job, service, or migration logic may write to
 `attendance_sessions` directly.
@@ -160,10 +160,14 @@ Other attendance writers MUST compose this domain command under the declared exe
 5. Hall-pass attendance rows must carry the same consumed entitlement instance `entitlement_id` recorded as `hall_pass_logs.hall_pass_id`.
 6. The FEAT must fail closed if `ctx.class_id` or `ctx.seat_id` cannot be established.
 7. The FEAT must not mutate hall-pass entitlement state.
-8. The FEAT must be the only writer to `attendance_sessions`.
+8. All attendance writes use the PROD command under a declared FEAT coordinator; the system-closure exception is limited by DOM-PROD-001 §XV.7.
 
 ---
 
 ## X. Amendment
 
 Version 1.4 (2026-10-03) supersedes v1.3's whole-payroll-only correction wording; it preserves attendance immutability and identifies the separate interval-invalidation contract. This amendment implements documentation authority only. Revisions must increment version/date, identify superseded rules, and preserve governing invariants.
+
+### Version 1.5: prospective provenance foundation (2026-10-03)
+
+Supersedes 1.4's exclusive writer wording only for canonical due system closure. Incorporates DOM-PROD-001 §XV.7–8 and [SPEC-PROD-001](../SPEC/SPEC-PROD-001_ATTENDANCE_INTERVAL_ELIGIBILITY_AND_PAYROLL_CORRECTION.md) §VI: preserve pair IDs, freeze version-1 settlement inputs, protect complete payroll summaries, and expose pure evidence queries. Every attendance writer locks its class/target seat before selection. New payroll composes `close_due_attendance_intervals` within one FEAT transaction before pricing; class completion resolves completed-run replay first and locks eligible seats in stable order. Audit linkage initializes once within creation and cannot change after commit. No nested FEAT, historical backfill, or correction button is authorized by this foundation.

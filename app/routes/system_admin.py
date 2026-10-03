@@ -26,7 +26,7 @@ from app.extensions import db, limiter
 from app.feats.base import get_idempotency_key, requires_feat_context
 from app.models import (
     Seat, PasskeyCredential,
-    Transaction, TransactionStatus, HallPassLog,
+    Transaction, HallPassLog,
     # Legacy tap models are unauthorized; use attendance_sessions (DOM-PROD-001).
     FeatureSettings, RentSettings,
     HallPassSettings, ClassEconomy, User, UserRole,

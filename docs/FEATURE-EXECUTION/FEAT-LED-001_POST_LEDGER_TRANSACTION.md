@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-LED-001 | 1.3 | 2026-10-03 | 1.2 | Normative |
+| FEAT-LED-001 | 1.4 | 2026-10-03 | 1.3 | Normative |
 
 ## I. Purpose
 
@@ -11,6 +11,8 @@ Define the canonical Ledger posting domain-command contract for resolved monetar
 ## II. Scope
 
 All class-scoped monetary movements, including payroll, purchases, fines, corrections and internal transfers. Posting does not decide business eligibility or transform intended monetary plans.
+
+Independent monetary verification incorporates [SPEC-LED-001](../SPEC/SPEC-LED-001_LEDGER_VERIFICATION_PROOF_SURFACES.md) §III–V, including explicit account reconciliation boundaries for both reconstruction surfaces and unavailable outcomes for missing proof inputs. This read contract does not authorize settlement during a proof query.
 
 ## III. Authority Level
 
@@ -35,7 +37,7 @@ The required command reservation identity is `(class_id, feat_code, idempotency_
 1. Resolve or create the permanent command reservation within the originating FEAT transaction. On a reservation conflict, compare the fingerprint and version. An exact replay returns the accepted command outcome and its effects; a mismatch returns `REPLAY_MISMATCH` with no new effect. A read-only preview cannot reserve a command.
 2. Validate account targets, shared anchors and all effects within `class_id`. Balance-dependent commands hold the seat lock, then ClassEconomy, then any compensation-origin lock, then pending rows/snapshots in the existing deterministic order through commit. Payroll settlement uses the same seat lock when eligibility and compensation can race.
 3. Require the resolved plan to remain valid under current domain authority. Revalidate bounded recovery under the original-transaction lock; sum attributable compensation across exact reversals and partial/residual corrections, excluding funding-transfer legs and fees. Do not reinterpret owning-domain interval evidence.
-4. Append immutable Ledger effects linked structurally to their reservation; assign posting sequences and reconcile snapshots only through the lawful Ledger settlement contract. All required effects and settlement changes commit or roll back together. Pending/posted state remains reconciliation-derived; do not mutate original transaction lifecycle fields.
+4. Allocate each effect's immutable class-scoped posting sequence through the Ledger effect-creation command before INSERT. Freeze reservation linkage, command key, initiating FEAT and all protected inputs; append the effects for the single creation audit in step 5. The lawful Ledger settlement command reconciles account snapshots/cursors and may initialize the informational UTC `posted_at` receipt; it never patches signed transaction fields or persisted status. All required effects and settlement changes commit or roll back together. Pending/posted state remains reconciliation-derived; do not mutate original transaction lifecycle fields.
 5. Invoke the Operations audit command in the same FEAT context and transaction. No direct Ledger-to-Operations domain invocation is permitted.
 
 ## VII. Constraints and Replay
@@ -53,6 +55,8 @@ Operations records class/actor/target seat anchors, initiating FEAT, reservation
 ## IX. Change Notes
 
 **1.3 (2026-10-03)** supersedes 1.2's transaction-row key lookup, global key uniqueness, FEAT-to-FEAT execution language, two-account-only input shape and transaction-type-based checking nonnegativity. Establishes permanent command reservations and bounded compensation posting under the higher-authority Ledger contracts. This is a documentation change; existing callers and runtime behavior are not certified by it.
+
+**1.4 (2026-10-03)** supersedes step VI.4's ambiguous settlement-time sequence assignment. Creation allocates the immutable sequence before signing; settlement advances account-scoped reconciliation projections only. Historical signatures remain unchanged.
 
 ## X. Amendment
 

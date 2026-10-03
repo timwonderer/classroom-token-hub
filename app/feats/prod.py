@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from app.extensions import db
-from app.feats.base import requires_feat_context, get_correlation_id
+from app.feats.base import requires_feat_context, get_correlation_id, audit_protected
 from app.models import (
     AttendanceReasonCode,
     AttendanceSession,
@@ -15,7 +15,7 @@ from app.models import (
     Seat,
     Transaction,
 )
-from app.services.attendance_service import CLOSED_SESSION_SETTLEMENT_RULE
+from app.services.attendance_service import (CLOSED_SESSION_SETTLEMENT_RULE, lock_attendance_seat, close_due_attendance_intervals)
 from app.services.context_resolver import CanonicalContext
 from app.services.entitlement_service import (
     consume_hall_pass,
@@ -194,7 +194,7 @@ def _record_attendance_session_impl(
     if mechanism not in {"self", "teacher", "system"}:
         raise ValueError("Attendance mechanism must be 'self', 'teacher', or 'system'.")
 
-    target_seat = db.session.get(Seat, resolved_target_seat_id)
+    target_seat = lock_attendance_seat(resolved_target_seat_id, ctx.class_id)
     if target_seat is None or target_seat.class_id != ctx.class_id:
         raise ValueError("Attendance target seat must belong to the canonical class.")
     # Attendance is paid time, so recording it against an unclaimed seat is what
@@ -528,6 +528,7 @@ def _record_payroll_event_impl(
         # by the setting in force when it closed, never by the one in force now
         # (DOM-PROD-001 §XV.3), and the pricing inputs are recorded so the
         # amount is reproducible without storing it (INV-CORE-000 §III.3).
+        close_due_attendance_intervals(ctx=ctx, seat_id=target_seat_id, as_of_utc=recorded_at)
         priced = price_payable_attendance(
             target_seat_id, ctx.class_id, ctx=ctx, as_of_utc=recorded_at
         )
@@ -538,6 +539,7 @@ def _record_payroll_event_impl(
         summary_json = {
             **(summary_json or {}),
             "settlement_rule": CLOSED_SESSION_SETTLEMENT_RULE,
+            "allocation_version": 1,
             SUMMARY_PRICING_KEY: priced.summary(),
         }
     elif payroll_event_type == "manual_credit" and amount is None:
@@ -586,6 +588,8 @@ def _record_payroll_event_impl(
     if target_seat.claimed_at is None or target_seat.user_id is None:
         raise ValueError("A payroll event target seat must be claimed.")
 
+    lock_attendance_seat(target_seat_id, ctx.class_id)
+    ClassEconomy.query.filter_by(class_id=ctx.class_id).with_for_update().one()
     event = PayrollEvent(
         class_id=ctx.class_id,
         actor_seat_id=ctx.seat_id,
@@ -601,6 +605,8 @@ def _record_payroll_event_impl(
     )
     db.session.add(event)
     db.session.flush()
+    from app.utils.audit_verifier import PROTECTED_FIELDS_BY_TABLE
+    audit_protected('payroll_event', event, 'INSERT', PROTECTED_FIELDS_BY_TABLE['payroll_event'])
 
     if amount is not None and amount != Decimal("0.00"):
         tx = create_pending_transaction(

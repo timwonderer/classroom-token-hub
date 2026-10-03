@@ -51,7 +51,7 @@ from app.feats.base import requires_feat_context, FEATContext, InvariantViolatio
 from app.access.scope import Scope
 from app.access import AccessScopeDenied, resolve_scope
 from app.models import (
-    ClassEconomy, Transaction, TransactionStatus, AttendanceSession, StoreProduct, StoreItemVisibility,
+    ClassEconomy, Transaction, AttendanceSession, StoreProduct, StoreItemVisibility,
     # Legacy tap table removed; use attendance_sessions (DOM-PROD-001).
     # StudentItem removed — student_items unauthorized; use store_purchases + redemption_events (DOM-STORE-001)
     # StoreItemBlock removed — store_item_blocks unauthorized; use store_item_visibility (DOM-STORE-001)
@@ -1369,6 +1369,53 @@ def _read_student_detail_nav_token(token: str) -> dict | None:
     return payload if isinstance(payload, dict) else None
 
 
+def _attendance_interval_page(intervals, *, seat_id, class_id, actor_public_id):
+    """Paginate completed PROD projections, never a truncated scan timeline.
+
+    The signed chronological cursor is bound to the same principal and target
+    as student navigation. Newly recorded attendance cannot shift older pages.
+    """
+    serializer = URLSafeTimedSerializer(
+        current_app.config["SECRET_KEY"], salt="cth-attendance-detail-page-v1"
+    )
+    scope = {
+        "user_id": str(g.canonical_context.user_id),
+        "class_id": str(class_id), "seat_id": int(seat_id),
+    }
+    cursor = request.args.get("attendance_cursor")
+    boundary = None
+    if cursor:
+        try:
+            payload = serializer.loads(cursor, max_age=3600)
+            if not isinstance(payload, dict) or any(payload.get(k) != v for k, v in scope.items()):
+                abort(404)
+            key = payload.get("before")
+            if not isinstance(key, list) or len(key) != 3:
+                abort(404)
+            boundary = (ensure_utc(datetime.fromisoformat(key[0])), int(key[1]), int(key[2]))
+        except (BadSignature, SignatureExpired, ValueError, TypeError, OverflowError):
+            abort(404)
+
+    def interval_key(interval):
+        return (ensure_utc(interval.closed_at), interval.opening_event_id, interval.closing_event_id)
+
+    completed = sorted(
+        (interval for interval in intervals if interval.closing_event_id is not None),
+        key=interval_key, reverse=True,
+    )
+    remaining = [interval for interval in completed if boundary is None or interval_key(interval) < boundary]
+    page = remaining[:50]
+    nav = _issue_student_detail_nav_token(actor_public_id=actor_public_id, class_id=class_id)
+    base_args = {"actor_public_id": actor_public_id, "nav": nav, "tab": "attendance"}
+    older_url = None
+    if len(remaining) > 50:
+        last_key = interval_key(page[-1])
+        token = serializer.dumps({**scope, "before": [last_key[0].isoformat(), last_key[1], last_key[2]]})
+        older_url = url_for("admin.student_detail_public", **base_args, attendance_cursor=token, _anchor="attendance")
+    newest_url = url_for("admin.student_detail_public", **base_args, _anchor="attendance") if cursor else None
+    return page, older_url, newest_url, len(completed)
+
+
 def _resolve_student_detail_seat(actor_public_id: str) -> Seat | None:
     selected_class_id = (getattr(getattr(g, "canonical_context", None), "class_id", None) or "").strip()
     # No class scope, no answer. The class filter used to be conditional, so a
@@ -2405,7 +2452,6 @@ def dashboard():
         Transaction.query
         .filter(Transaction.class_id == active_class_id)
         .filter(Transaction.seat_id.in_(claimed_seat_ids) if claimed_seat_ids else sa.false())
-        .filter(Transaction.status != TransactionStatus.VOID)
         .order_by(Transaction.timestamp.desc())
         .limit(5)
         .all()
@@ -2420,8 +2466,7 @@ def dashboard():
         .filter(Transaction.seat_id.in_(claimed_seat_ids) if claimed_seat_ids else sa.false())
         .filter(
             Transaction.timestamp >= today_start_db,
-            Transaction.status != TransactionStatus.VOID,
-        )
+            )
         .count()
     )
 
@@ -3302,6 +3347,8 @@ def student_detail_public(actor_public_id):
     """View detailed information for a specific student via public-id URL."""
     user_id = g.canonical_context.user_id
     current_class_id = g.canonical_context.class_id
+    if not current_class_id:
+        abort(404)
     nav_payload = _read_student_detail_nav_token(request.args.get('nav', ''))
     if not nav_payload:
         abort(404)
@@ -3343,10 +3390,6 @@ def student_detail_public(actor_public_id):
         abort(404)
 
     tx_scope = sa.and_(Transaction.seat_id == seat_id, Transaction.class_id == class_id)
-    att_scope = sa.and_(
-        AttendanceSession.target_seat_id == seat_id,
-        AttendanceSession.class_id == class_id,
-    )
 
     # Attendance context uses the canonical PROD session backend.
     # Rent is a class feature; its status comes from recorded rent assessments,
@@ -3391,12 +3434,15 @@ def student_detail_public(actor_public_id):
         )
         for ent in _entitlements_raw
     ]
-    attendance_rows = (
-        AttendanceSession.query.filter(att_scope)
-        .order_by(AttendanceSession.timestamp.desc(), AttendanceSession.id.desc())
-        .limit(50)
-        .all()
+    from app.services.attendance_service import (
+        list_attendance_interval_evidence, calculate_seat_payroll_intervals,
     )
+    attendance_rows, interval_projections = list_attendance_interval_evidence(
+        seat_id, class_id, ctx=g.canonical_context,
+    )
+    attendance_estimate_incomplete = bool(calculate_seat_payroll_intervals(
+        seat_id, class_id, ctx=g.canonical_context,
+    ).unprovable)
     class_section = (
         scoped_seat.class_economy.section
         if scoped_seat and scoped_seat.class_economy and scoped_seat.class_economy.section
@@ -3412,7 +3458,85 @@ def student_detail_public(actor_public_id):
         )
         for row in attendance_rows
     ]
-    latest_attendance_event = attendance_display_rows[0] if attendance_display_rows else None
+    latest_attendance_event = attendance_display_rows[-1] if attendance_display_rows else None
+    # INV-ARC-007 / DOM-PROD-001: reads compose authoritative domain queries;
+    # this route only formats their conclusions and original evidence.
+    from app.services.payroll_interval_provenance import (
+        payroll_interval_memberships, payroll_provenance_history_limitations,
+    )
+    from app.services.ledger_payroll_allocation import payroll_allocation_proof
+    from app.services.ledger_balance_query_service import get_account_posting_boundary
+    from app.utils.audit_verifier import verify_record_creation_lineage
+    interval_page, attendance_older_url, attendance_newest_url, attendance_completed_count = _attendance_interval_page(
+        interval_projections, seat_id=seat_id, class_id=class_id, actor_public_id=actor_public_id,
+    )
+    memberships = payroll_interval_memberships(seat_id, class_id, ctx=g.canonical_context)
+    proofs = {}
+    source_events_by_id = {row.id: row for row in attendance_rows}
+    paired_source_ids = set()
+
+    def interval_sources(interval):
+        # Only PROD-selected endpoint IDs prove this pair. Other original scans
+        # remain visible separately; temporal proximity cannot assign them to it.
+        ids = [interval.opening_event_id]
+        if interval.closing_event_id is not None:
+            ids.append(interval.closing_event_id)
+        return [source_events_by_id[event_id] for event_id in ids]
+
+    for interval in interval_projections:
+        paired_source_ids.update(row.id for row in interval_sources(interval))
+
+    def display_interval(interval):
+        minutes, seconds = divmod(interval.credited_seconds, 60)
+        hours, minutes = divmod(minutes, 60)
+        duration_label = f"{hours}h {minutes}m {seconds}s" if hours else f"{minutes}m {seconds}s"
+        membership = memberships.get((interval.opening_event_id, interval.closing_event_id), {})
+        status = membership.get("status", "unpaid")
+        event = membership.get("event")
+        amount = pricing_inputs = None
+        # Temporal proximity is an evidence limitation, never proven membership.
+        if status == "historical_unavailable":
+            event = None
+        if status == "recorded":
+            if event.id not in proofs:
+                if verify_record_creation_lineage("payroll_event", event, class_id):
+                    proofs[event.id] = payroll_allocation_proof(class_id=class_id, target_seat_id=seat_id,
+                        correlation_id=event.correlation_id, idempotency_key=event.idempotency_key,
+                        allocation_version=(event.summary_json or {}).get("allocation_version"),
+                        pricing=membership["pricing"], originating_actor_seat_id=event.actor_seat_id,
+                        originating_mechanism=event.mechanism,
+                        through_posting_sequence=get_account_posting_boundary(seat_id, class_id, "checking"))
+                else:
+                    proofs[event.id] = {"status": "provenance_unavailable", "allocations": {}}
+            proof = proofs[event.id]
+            status = proof["status"]
+            if status == "verified":
+                amount = Decimal(proof["allocations"][(interval.opening_event_id, interval.closing_event_id)]) / 100
+                share = next(share for share in membership["pricing"] if any(
+                    source["opening_event_id"] == interval.opening_event_id and source["closing_event_id"] == interval.closing_event_id
+                    for source in share["intervals"]))
+                pricing_inputs = {"pay_rate_per_minute": share["pay_rate_per_minute"], "allocation_version": 1}
+        labels = {
+            "unpaid": ("Unpaid", "Eligible", "Earnings will be confirmed at payroll; no settled contribution is recorded."),
+            "historical_unavailable": ("Historical contribution unavailable", "Historical settlement cannot be proven", "Historical payroll lacks complete interval evidence. Automatic partial correction is blocked; no contribution is inferred."),
+            "provenance_unavailable": ("Contribution unavailable", "Settlement evidence requires review", "Original settlement evidence cannot be verified. Automatic partial correction is blocked."),
+            "pending": ("Payroll recorded · Pending posting", "Included in recorded payroll", "Payroll is recorded but its credit has not posted. A paid contribution is not yet available."),
+            "verified": ("Paid", "Historically settled", "This contribution is proven from the original attendance, frozen pricing, and posted payroll credit."),
+        }
+        label, eligibility, message = labels[status]
+        return SimpleNamespace(**interval.__dict__, duration_label=duration_label,
+            source_events=interval_sources(interval), amount=amount, settlement_label=label,
+            eligibility_label=eligibility, evidence_message=message, pricing_inputs=pricing_inputs,
+            payroll_event_id=event.id if event else None, payroll_recorded_at=event.recorded_at if event else None,
+            payroll_history_url=None)
+
+    attendance_intervals = [display_interval(interval) for interval in interval_page]
+    attendance_open_intervals = [display_interval(interval) for interval in interval_projections if interval.closing_event_id is None]
+    attendance_unpaired_events = [row for row in attendance_rows if row.id not in paired_source_ids]
+    attendance_historical_evidence_limited = (
+        payroll_provenance_history_limitations(seat_id, class_id, ctx=g.canonical_context)
+        or any(value["status"] == "historical_unavailable" for value in memberships.values())
+    )
 
     scoped_seat = (
         Seat.query
@@ -3505,6 +3629,20 @@ def student_detail_public(actor_public_id):
         payroll_events=payroll_events,
         class_label=class_display_label,
     )
+    # A verified interval link must lead to the same Ledger-proven credit,
+    # rather than the older payroll display's correlation-only heuristic.
+    for row in payroll_event_history:
+        proof = proofs.get(row["payroll_event_id"])
+        if proof and proof["status"] == "verified":
+            row["amount"] = Decimal(proof["transaction"].amount)
+            row["display_amount"] = f"${row['amount']:.2f}"
+    visible_payroll_ids = {row["payroll_event_id"] for row in payroll_event_history[:20]}
+    for interval in attendance_intervals:
+        if interval.settlement_label == "Paid" and interval.payroll_event_id in visible_payroll_ids:
+            interval.payroll_history_url = url_for("admin.student_detail_public",
+                actor_public_id=actor_public_id,
+                nav=_issue_student_detail_nav_token(actor_public_id=actor_public_id, class_id=class_id),
+                tab="payroll", _anchor=f"payroll-event-{interval.payroll_event_id}")
     scoped_total_earnings = float(
         sum(
             Decimal(row.get("amount") or 0)
@@ -3542,6 +3680,14 @@ def student_detail_public(actor_public_id):
                          entitlements=store_purchases,
                          latest_attendance_event=latest_attendance_event,
                          attendance_events=attendance_display_rows,
+                         attendance_intervals=attendance_intervals,
+                         attendance_open_intervals=attendance_open_intervals,
+                         attendance_unpaired_events=attendance_unpaired_events,
+                         attendance_completed_count=attendance_completed_count,
+                         attendance_older_url=attendance_older_url,
+                         attendance_newest_url=attendance_newest_url,
+                         attendance_historical_evidence_limited=attendance_historical_evidence_limited,
+                         attendance_estimate_incomplete=attendance_estimate_incomplete,
                          active_insurance=active_insurance,
                          scoped_checking_balance=scoped_checking_balance,
                          scoped_savings_balance=scoped_savings_balance,
@@ -6367,9 +6513,6 @@ def void_transaction(transaction_id):
     if tx is None:
         abort(404)
 
-    if tx.status == TransactionStatus.VOID:
-        return _void_error("Transaction is already voided.")
-
     try:
         ctx = g.canonical_context
         if tx.class_id != ctx.class_id:
@@ -8720,7 +8863,7 @@ def banking():
             'account_type': tx.account_type,
             'description': tx.description,
             'type': tx.type,
-            'is_void': tx.status == TransactionStatus.VOID,
+            'posting_state': tx.posting_state.value,
         })
 
     transaction_types = sorted(
@@ -10632,7 +10775,6 @@ def resolve_issue(issue_ref):
                 or transaction.class_id != class_id
                 or not submitter_seat
                 or transaction.seat_id != submitter_seat.id
-                or transaction.status == TransactionStatus.VOID
             ):
                 flash("The related transaction could not be resolved for this issue.", "error")
                 return redirect(url_for('admin.view_issue', issue_ref=issue_ref))

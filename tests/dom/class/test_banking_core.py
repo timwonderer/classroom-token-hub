@@ -3,6 +3,7 @@ from decimal import Decimal
 import importlib.util
 from pathlib import Path
 import pytest
+from tests.helpers.ledger import record_ledger_fixture
 from app.feats.base import FEATContext
 from app.models import LedgerBalanceSnapshot as BalanceCache, Transaction, TransactionStatus
 from app.extensions import db
@@ -33,7 +34,7 @@ def test_DOM_CLASS_001__ledger_flow_posts_pending_transaction(client, app):
         class_id, seat_id = classroom.class_id, seat.id
 
     with FEATContext("FEAT-LED-001", idempotency_key="banking-core:test-ledger-flow"):
-        tx = Transaction(
+        tx = record_ledger_fixture(
             class_id=class_id,
             seat_id=seat.id,
             target_seat_id=seat.id,
@@ -41,13 +42,13 @@ def test_DOM_CLASS_001__ledger_flow_posts_pending_transaction(client, app):
             mechanism="self",
             amount=Decimal("10.50"),
             account_type="checking",
-            status=TransactionStatus.PENDING,
+            posted=False,
             description="Initial deposit",
         )
         db.session.add(tx)
         db.session.flush()
 
-        assert tx.status == TransactionStatus.PENDING
+        assert tx.posting_state == TransactionStatus.PENDING
         assert tx.posted_at is None
 
         bal_checking, _ = get_available_balances(seat_id, class_id)
@@ -58,7 +59,7 @@ def test_DOM_CLASS_001__ledger_flow_posts_pending_transaction(client, app):
 
         db.session.expire_all()
         tx = db.session.get(Transaction, tx.id)
-        assert tx.status == TransactionStatus.POSTED
+        assert tx.posting_state == TransactionStatus.POSTED
         assert tx.posted_at is not None
         assert tx.posting_sequence is not None
 
@@ -76,7 +77,7 @@ def test_DOM_LED_001__posting_sequence_is_class_scoped_across_seats(client, app)
         second = classroom.students[1].seat
 
         for seat, amount in ((first, Decimal("3.00")), (second, Decimal("4.00"))):
-            tx = Transaction(
+            tx = record_ledger_fixture(
                 class_id=classroom.class_id,
                 seat_id=seat.id,
                 target_seat_id=seat.id,
@@ -84,7 +85,7 @@ def test_DOM_LED_001__posting_sequence_is_class_scoped_across_seats(client, app)
                 mechanism="self",
                 amount=amount,
                 account_type="checking",
-                status=TransactionStatus.PENDING,
+                posted=False,
                 description="class sequence test",
             )
             db.session.add(tx)
@@ -93,7 +94,7 @@ def test_DOM_LED_001__posting_sequence_is_class_scoped_across_seats(client, app)
 
         posted = (
             Transaction.query
-            .filter_by(class_id=classroom.class_id, status=TransactionStatus.POSTED)
+            .filter_by(class_id=classroom.class_id).filter(Transaction.posting_state == TransactionStatus.POSTED)
             .order_by(Transaction.posting_sequence.asc())
             .all()
         )
@@ -111,14 +112,14 @@ def test_DOM_CLASS_001__pending_transaction_settles_without_void_filter(client, 
         class_id, seat_id = classroom.class_id, seat.id
 
     with FEATContext("FEAT-LED-001", idempotency_key="banking-core:test-void-pending"):
-        tx = Transaction(
+        tx = record_ledger_fixture(
             class_id=class_id,
             seat_id=seat.id,
             target_seat_id=seat.id,
             actor_seat_id=seat.id,
             mechanism="self",
             amount=Decimal("50.00"),
-            status=TransactionStatus.PENDING,
+            posted=False,
         )
         db.session.add(tx)
         db.session.flush()
@@ -134,7 +135,7 @@ def test_DOM_CLASS_001__pending_transaction_settles_without_void_filter(client, 
 
         db.session.expire_all()
         tx = db.session.get(Transaction, tx.id)
-        assert tx.status == TransactionStatus.POSTED
+        assert tx.posting_state == TransactionStatus.POSTED
 
         cache = _snapshot(seat_id, class_id)
         if cache:
@@ -150,14 +151,14 @@ def test_DOM_CLASS_001__void_posted_transaction_creates_reversal(client, app):
         class_id, seat_id = classroom.class_id, seat.id
 
     with FEATContext("FEAT-LED-001", idempotency_key="banking-core:test-void-posted"):
-        tx = Transaction(
+        tx = record_ledger_fixture(
             class_id=class_id,
             seat_id=seat.id,
             target_seat_id=seat.id,
             actor_seat_id=seat.id,
             mechanism="self",
             amount=Decimal("100.00"),
-            status=TransactionStatus.PENDING,
+            posted=False,
         )
         db.session.add(tx)
         db.session.flush()
@@ -167,16 +168,16 @@ def test_DOM_CLASS_001__void_posted_transaction_creates_reversal(client, app):
 
         db.session.expire_all()
         tx = db.session.get(Transaction, tx.id)
-        assert tx.status == TransactionStatus.POSTED
+        assert tx.posting_state == TransactionStatus.POSTED
 
-        reversal = Transaction(
+        reversal = record_ledger_fixture(
             class_id=class_id,
             seat_id=seat.id,
             target_seat_id=seat.id,
             actor_seat_id=seat.id,
             mechanism="self",
             amount=-tx.amount,
-            status=TransactionStatus.PENDING,
+            posted=False,
             original_transaction_id=tx.id,
         )
         db.session.add(reversal)
@@ -190,7 +191,7 @@ def test_DOM_CLASS_001__void_posted_transaction_creates_reversal(client, app):
 
         db.session.expire_all()
         reversal = db.session.get(Transaction, reversal.id)
-        assert reversal.status == TransactionStatus.POSTED
+        assert reversal.posting_state == TransactionStatus.POSTED
 
         cache = _snapshot(seat_id, class_id)
         assert cache.posted_balance_cents == 0
@@ -218,7 +219,7 @@ def test_DOM_CLASS_001__settlement_sweep_processes_each_pending_context_once(cli
 
     with FEATContext("FEAT-LED-001", idempotency_key="banking-core:test-settlement-sweep"):
         db.session.add_all([
-            Transaction(
+            record_ledger_fixture(
                 class_id=class_id_one,
                 seat_id=student_one_seat_id,
                 target_seat_id=student_one_seat_id,
@@ -226,11 +227,11 @@ def test_DOM_CLASS_001__settlement_sweep_processes_each_pending_context_once(cli
                 mechanism="self",
                 amount=Decimal("12.34"),
                 account_type="checking",
-                status=TransactionStatus.PENDING,
+                posted=False,
                 type="deposit",
                 description="Pending A",
             ),
-            Transaction(
+            record_ledger_fixture(
                 class_id=class_id_one,
                 seat_id=student_one_seat_id,
                 target_seat_id=student_one_seat_id,
@@ -238,11 +239,11 @@ def test_DOM_CLASS_001__settlement_sweep_processes_each_pending_context_once(cli
                 mechanism="self",
                 amount=Decimal("1.66"),
                 account_type="savings",
-                status=TransactionStatus.PENDING,
+                posted=False,
                 type="deposit",
                 description="Pending A savings",
             ),
-            Transaction(
+            record_ledger_fixture(
                 class_id=class_id_two,
                 seat_id=student_two_seat_id,
                 target_seat_id=student_two_seat_id,
@@ -250,7 +251,7 @@ def test_DOM_CLASS_001__settlement_sweep_processes_each_pending_context_once(cli
                 mechanism="self",
                 amount=Decimal("9.99"),
                 account_type="checking",
-                status=TransactionStatus.PENDING,
+                posted=False,
                 type="deposit",
                 description="Pending B",
             ),
@@ -266,7 +267,7 @@ def test_DOM_CLASS_001__settlement_sweep_processes_each_pending_context_once(cli
     # --- Assert: settlement is durably persisted (survives beyond the sweep) ---
     db.session.expire_all()
     posted_statuses = {
-        (tx.seat_id, tx.class_id, tx.account_type): tx.status
+        (tx.seat_id, tx.class_id, tx.account_type): tx.posting_state
         for tx in Transaction.query.all()
     }
     assert posted_statuses[(student_one_seat_id, class_id_one, "checking")] == TransactionStatus.POSTED
@@ -291,7 +292,7 @@ def test_DOM_CLASS_001__settlement_sweep_processes_each_pending_context_once(cli
     assert _snapshot(student_one_seat_id, class_id_one).posted_balance_cents == 1234
     assert _snapshot(student_two_seat_id, class_id_two).posted_balance_cents == 999
     for tx in Transaction.query.all():
-        assert tx.status == TransactionStatus.POSTED
+        assert tx.posting_state == TransactionStatus.POSTED
 
 
 def test_DOM_CLASS_001__settlement_script_returns_nonzero_when_failures(monkeypatch):

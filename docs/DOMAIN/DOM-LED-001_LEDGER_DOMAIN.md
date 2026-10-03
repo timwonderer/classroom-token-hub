@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-LED-001 | 2.6 | 2026-10-03 | 2.5 | Constitutional |
+| DOM-LED-001 | 2.7 | 2026-10-03 | 2.6 | Constitutional |
 
 ---
 
@@ -33,6 +33,7 @@ Tier 1 — Constitutional. This document defines structural enforcement mechanis
 - `DOM-CORE-000_DOMAIN_FOUNDATION.md`
 - `docs/INVARIANT/ARCHITECTURE/INV-ARC-006_COMMAND_BOUNDARY_FOR_MUTATION.md`
 - `docs/INVARIANT/ARCHITECTURE/INV-ARC-009_DOMAIN_AUTHORITY_FOR_STATE.md`
+- [SPEC-LED-001](../SPEC/SPEC-LED-001_LEDGER_VERIFICATION_PROOF_SURFACES.md) §III–V — incorporated pure, bounded reconstruction proof; see §IX.1.
 
 ## V. Schema Authority Declaration
 
@@ -68,7 +69,7 @@ No other domain may define fields or mutate these tables. Mutation is permitted 
   matches; a mismatch MUST fail closed. The reservation remains permanent and
   MUST NOT be released by VOID, reversal, or any later correction.
 - **INV-LED-006: Snapshot Fallback**. The `Posted Balance Snapshot` is a projection. If the snapshot is missing or inconsistent, the balance MUST be rebuildable from ledger history.
-- **INV-LED-007: Canonical Posting Sequence**. Every transaction admitted to canonical posted-ledger history receives one immutable `posting_sequence` assigned by the lawful Ledger posting/settlement path. The sequence is monotonically increasing within one `class_id` and is unique within that class. It does not replace business or provenance timestamps.
+- **INV-LED-007: Canonical Posting Sequence**. Every accepted transaction receives one immutable `posting_sequence` allocated by the lawful Ledger effect-creation posting command before INSERT; reconciliation alone establishes admission to posted-ledger history. The sequence is monotonically increasing within one `class_id` and is unique within that class. It does not replace business or provenance timestamps.
 - **INV-LED-008: Snapshot Reconciliation Cursor**. A balance snapshot records `reconciled_through_posting_sequence`, meaning that its posted balance has considered all canonical posted-ledger transactions for its `(class_id, seat_id, account_type)` scope whose `posting_sequence` is less than or equal to that cursor.
 - **INV-LED-009: Atomic Seat Settlement**. A settlement affecting one `(class_id, seat_id)` MUST lock all applicable account snapshot rows in deterministic account order, reconcile them against one settlement boundary, assign posting sequences within the same transaction, and commit or roll back the complete seat-level settlement atomically.
 - **INV-LED-015: Seat Balance Serialization**. Every operation that reads a seat's available balance to decide whether, or how much, to debit MUST acquire an exclusive lock on the scoped `seats` row before that read and hold it through the debit write. Every settlement for that seat MUST acquire the same lock. The lock order is deterministic: the `seats` row first, then the scoped `ClassEconomy` row, then pending transactions and balance snapshots. An available-balance read MUST evaluate its posted and pending terms within a single statement, so that no settlement commit can land between them. A credit that reads no balance does not need the seat lock. The seat row is thereby the single serialization point for a seat's money.
@@ -193,7 +194,11 @@ The canonical, immutable record of financial intent and execution.
 
 - `posting_sequence` (Integer; required for canonical posted transactions; immutable)
 
-`posting_sequence` is assigned only by the lawful Ledger posting/settlement path. It is monotonically increasing and unique within `class_id`. It is not derived from `id`, `timestamp`, `effective_at`, or `posted_at`, and it does not replace any of those fields.
+`posting_sequence` is allocated by the lawful Ledger effect-creation command, under the class sequence-allocation lock, before INSERT and the creation audit signature. Reservation linkage, command key, initiating FEAT, and every protected business field are likewise fixed before INSERT. Settlement does not attach or replace this sequence or rewrite the initiating FEAT. It is monotonically increasing and unique within `class_id`. It is not derived from `id`, `timestamp`, `effective_at`, or `posted_at`, and it does not replace any of those fields.
+
+`posted_at` may be initialized once by the lawful settlement command as an informational UTC settlement receipt. It is not a protected monetary input, a status flag, or an independent proof boundary; no reader may derive standing from its presence. It never changes signed fields or requires a replacement creation signature.
+
+PENDING/POSTED is determined for `(class_id, seat_id, account_type)` by comparing this immutable sequence with that exact account scope's reconciliation cursor. A missing account cursor means the effect has not been reconciled. Sequence allocation alone does not prove posting. Settlement advances scoped snapshot balances/cursors atomically and may initialize the informational receipt described above. It SHALL NOT skip an earlier unreconciled effect in the same account scope, patch transaction status, or refresh its creation signature.
 
 ### 2. `ledger_balance_snapshot`
 
@@ -229,9 +234,15 @@ The inclusion and exclusion rules for posted, void, reversal, and other transact
 
 
 
+### IX.1 Incorporated Independent Proof Boundary
+
+SPEC-LED-001 §III–V governs Ledger's independent reconstruction queries. With an explicitly supplied canonical `through_posting_sequence`, reconstruct scoped cents from immutable Ledger rows through that boundary without reading snapshots. If no independent reconciliation boundary can be established when the caller omits it, return UNAVAILABLE; do not infer posting from the highest allocated sequence, a transaction ID, wall-clock time, or a snapshot. An explicit boundary proves the sum at that requested boundary, not that a projection currently asserts it. Historical rows lacking required sequence, reservation, or version-specific protected evidence remain unavailable for strict monetary proof. No signatures or historical monetary facts are rewritten.
+
 ## X. Change Notes
 
 **2.6 (2026-10-03)** supersedes 2.5 for append-only correction vocabulary, bounded compensation linkage and serialization. Incorporates permanent command reservations explicitly; retains domain blindness and lawful lifecycle destruction. This is documentation authority for later implementation, not a schema migration.
+
+**2.7 (2026-10-03)** specifies immutable posting-sequence allocation at effect creation and cursor-only reconciliation. Supersedes lifecycle assignment of signed fields; explicitly incorporates SPEC-LED-001 with fail-closed independent boundary defaults.
 
 ## XI. Amendment
 

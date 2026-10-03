@@ -8,10 +8,6 @@ from app.models import LedgerMechanism, Transaction, TransactionStatus, _quantiz
 from app.utils.canonical_temporal_resolver import ensure_utc
 
 
-def _non_void_filter():
-    return Transaction.status != TransactionStatus.VOID
-
-
 # --- Ledger provenance classifier (SPEC-ITR-001 §6.3) ----------------------
 #
 # The Interpretation domain classifies ledger rows by origin without ever
@@ -49,7 +45,6 @@ def _student_originated_filter():
     return db.and_(
         Transaction.mechanism == LedgerMechanism.SELF,
         Transaction.original_transaction_id.is_(None),
-        Transaction.status != TransactionStatus.VOID,
         db.or_(
             Transaction.feat_code.is_(None),
             Transaction.feat_code.notin_(SYSTEM_ORIGINATED_FEAT_CODES),
@@ -186,7 +181,7 @@ def get_inbound_ledger_rows(
             Transaction.timestamp >= ensure_utc(window_start),
             Transaction.timestamp < ensure_utc(window_end),
             Transaction.amount_cents > 0,
-            Transaction.status == TransactionStatus.POSTED,
+            Transaction.posting_state == TransactionStatus.POSTED,
         )
         .all()
     )
@@ -265,8 +260,7 @@ def get_posted_balances_as_of(
             Transaction.class_id == class_id,
             Transaction.account_type == account_type,
             Transaction.timestamp < ensure_utc(as_of),
-            Transaction.status == TransactionStatus.POSTED,
-            _non_void_filter(),
+            Transaction.posting_state == TransactionStatus.POSTED,
         )
         .group_by(Transaction.seat_id)
         .all()

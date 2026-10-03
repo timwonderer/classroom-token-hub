@@ -38,7 +38,7 @@ def test_DOM_SUP_001__issue_reverse_transaction_creates_reversal_for_unused_purc
     and the teacher's active class matches the issue's class, so the reversal
     succeeds and the item is revoked."""
     classroom, student, issue, tx = issue_reverse_success_state(client, app)
-    status_before = tx.status
+    status_before = tx.posting_state
 
     issue_ref = make_opaque_ref("issue", issue.id)
     page = client.get(f"/admin/issues/{issue_ref}").get_data(as_text=True)
@@ -56,7 +56,7 @@ def test_DOM_SUP_001__issue_reverse_transaction_creates_reversal_for_unused_purc
     # The original stays a standing historical fact. A reversal may not present
     # it as never having occurred (SPEC-OPS-001 §3.2), and money is not voided
     # at all (INV-OPS-001) — only the link forward to the reversal is added.
-    assert tx.status == status_before
+    assert tx.posting_state == status_before
     assert tx.reversal_transaction_id is not None
 
     reversal = db.session.get(Transaction, tx.reversal_transaction_id)

@@ -114,8 +114,6 @@ def create_reserved_effects(*, class_id: str, feat_code: str, idempotency_key: s
         return effects, False
     from app.services.ledger_posting_service import create_pending_transaction
     created = [create_pending_transaction(command_reservation=reservation, **effect) for effect in effects]
-    for transaction in created:
-        transaction.idempotency_key = idempotency_key
     db.session.flush()
     return created, True
 

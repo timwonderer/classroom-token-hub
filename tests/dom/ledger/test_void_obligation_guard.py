@@ -12,6 +12,7 @@ from decimal import Decimal
 
 import pytest
 
+from tests.helpers.ledger import record_ledger_fixture
 from app import db
 from app.feats.base import FEATContext
 from app.models import Transaction, TransactionStatus
@@ -29,10 +30,10 @@ from tests.helpers.ledger import provision_ledger_classroom
 
 
 def _create_transaction(seat, *, type, amount, description, idempotency_key,
-                        status=TransactionStatus.POSTED):
+                        posted=True):
     """Create a ledger transaction row through the canonical FEAT boundary."""
     with FEATContext("FEAT-LED-001", idempotency_key=idempotency_key):
-        tx = Transaction(
+        tx = record_ledger_fixture(
             class_id=seat.class_id,
             seat_id=seat.id,
             target_seat_id=seat.id,
@@ -40,7 +41,7 @@ def _create_transaction(seat, *, type, amount, description, idempotency_key,
             mechanism="self",
             amount=amount,
             account_type="checking",
-            status=status,
+            posted=posted,
             type=type,
             description=description,
         )
@@ -158,7 +159,7 @@ def test_DOM_OPS_001__rejection_makes_no_ledger_mutation(client, app):
     assert Transaction.query.filter_by(class_id=seat.class_id).count() == tx_count_before
     db.session.refresh(tx)
     assert tx.reversal_transaction_id is None
-    assert tx.status != TransactionStatus.VOID
+    assert tx.posting_state == TransactionStatus.POSTED
 
 
 def test_DOM_OPS_001__non_obligation_transaction_still_voids_lawfully(client, app):
@@ -177,7 +178,7 @@ def test_DOM_OPS_001__non_obligation_transaction_still_voids_lawfully(client, ap
         amount=Decimal('-5.00'),
         description='teacher adjustment',
         idempotency_key='void-guard:d:paytx',
-        status=TransactionStatus.PENDING,
+        posted=False,
     )
 
     # Must not raise: non-obligation transactions are not blocked by the guard.
@@ -195,7 +196,7 @@ def test_DOM_OPS_001__non_obligation_transaction_still_voids_lawfully(client, ap
     # reversal may not represent the original as never having occurred
     # (SPEC-OPS-001 §3.2) — so the original keeps its own status and the only
     # thing added is the link forward.
-    assert tx.status == TransactionStatus.PENDING
+    assert tx.posting_state == TransactionStatus.PENDING
     assert tx.reversal_transaction_id is not None
     reversal = db.session.get(Transaction, tx.reversal_transaction_id)
     assert reversal.amount == Decimal('5.00')

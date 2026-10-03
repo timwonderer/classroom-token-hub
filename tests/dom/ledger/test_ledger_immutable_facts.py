@@ -6,9 +6,8 @@ corrections arrive as new linked rows, never as edits — so an in-place rewrite
 `amount` would destroy the history the ledger exists to keep, and would do it
 silently.
 
-The lawful post-insert writes must keep working: settlement stamps
-`posting_sequence`/`posted_at`, correction links `reversal_transaction_id`, the
-audit emitter stamps lineage. Those are write-once, not free.
+Creation assigns the immutable ordering sequence and audit linkage. Settlement
+advances the account snapshot cursor; posting is a derived view of those facts.
 """
 
 from decimal import Decimal
@@ -26,27 +25,14 @@ from app.models import (
     _LEDGER_IMMUTABLE_FIELDS,
     _LEDGER_WRITE_ONCE_FIELDS,
 )
-from tests.helpers.ledger import provision_ledger_classroom
+from tests.helpers.ledger import provision_ledger_classroom, record_ledger_fixture
+from app.services.ledger_settlement_service import settle_balances
 
 
-def _posted_transaction(
-    seat, *, idempotency_key, amount=Decimal("25.00"), status=TransactionStatus.POSTED
-):
+def _posted_transaction(seat, *, idempotency_key, amount=Decimal("25.00"), posted=True):
     with FEATContext("FEAT-LED-001", idempotency_key=idempotency_key):
-        tx = Transaction(
-            class_id=seat.class_id,
-            seat_id=seat.id,
-            target_seat_id=seat.id,
-            actor_seat_id=seat.id,
-            mechanism="self",
-            amount=amount,
-            account_type="checking",
-            status=status,
-            type="Deposit",
-            description="Immutability fixture",
-        )
-        db.session.add(tx)
-        db.session.flush()
+        tx = record_ledger_fixture(seat_id=seat.id, class_id=seat.class_id,
+            amount=amount, posted=posted, description="Immutability fixture")
     db.session.commit()
     return tx
 
@@ -111,78 +97,40 @@ def test_INV_LED_002__amount_cents_cannot_drift_from_a_frozen_amount(client, app
     assert tx.amount_cents == 2500
 
 
-def test_INV_LED_007__posting_sequence_is_assignable_once_then_frozen(client, app):
-    """Settlement may stamp a sequence on a NULL column; it may not restamp one."""
+def test_INV_LED_007__posting_sequence_is_assigned_at_creation_and_frozen(client, app):
     classroom = provision_ledger_classroom("chemistry_p1", app)
     seat = classroom.students[0].seat
     tx = _posted_transaction(seat, idempotency_key="inv-led-007:seq")
-    assert tx.posting_sequence is None
-
-    with FEATContext("FEAT-LED-003", idempotency_key="inv-led-007:seq:assign"):
-        tx.posting_sequence = 1
-        db.session.flush()
-    db.session.commit()
-    assert tx.posting_sequence == 1
-
+    assert tx.posting_sequence > 0
     with pytest.raises(ValueError, match="posting_sequence"):
         with FEATContext("FEAT-LED-003", idempotency_key="inv-led-007:seq:restamp"):
-            tx.posting_sequence = 2
+            tx.posting_sequence += 1
             db.session.flush()
     db.session.rollback()
 
 
-def test_INV_LED_002__status_still_advances_through_settlement(client, app):
-    """The guard must not freeze the lifecycle it exists to protect the facts of.
-
-    Settlement is the one lawful post-insert status write, and it runs in exactly
-    this direction: a pending row becomes posted. Asserting the reverse would
-    prove the guard permits the rewrite it is supposed to reject.
-    """
+def test_INV_LED_002__posting_view_advances_only_through_account_reconciliation(client, app):
     classroom = provision_ledger_classroom("chemistry_p1", app)
     seat = classroom.students[0].seat
-    tx = _posted_transaction(
-        seat,
-        idempotency_key="inv-led-002:status",
-        status=TransactionStatus.PENDING,
-    )
-    assert tx.status == TransactionStatus.PENDING
-
-    with FEATContext("FEAT-LED-003", idempotency_key="inv-led-002:status:settle"):
-        tx.status = TransactionStatus.POSTED
-        db.session.flush()
+    tx = _posted_transaction(seat, idempotency_key="inv-led-002:posting", posted=False)
+    facts = {field: getattr(tx, field) for field in _LEDGER_IMMUTABLE_FIELDS}
+    assert tx.posting_state == TransactionStatus.PENDING
+    with FEATContext("FEAT-LED-003", idempotency_key="inv-led-002:posting:settle"):
+        settle_balances(seat.id, seat.class_id)
     db.session.commit()
+    assert tx.posting_state == TransactionStatus.POSTED
+    assert {field: getattr(tx, field) for field in _LEDGER_IMMUTABLE_FIELDS} == facts
 
-    assert tx.status == TransactionStatus.POSTED
 
-
-@pytest.mark.parametrize(
-    "seeded, attempted",
-    [
-        (TransactionStatus.POSTED, TransactionStatus.PENDING),
-        (TransactionStatus.POSTED, TransactionStatus.VOID),
-        (TransactionStatus.PENDING, TransactionStatus.VOID),
-        (TransactionStatus.VOID, TransactionStatus.POSTED),
-    ],
-)
-def test_INV_LED_002__status_moves_only_forward_through_settlement(
-    client, app, seeded, attempted
-):
-    """Every status write that is not PENDING -> POSTED is rejected.
-
-    INV-LED-003 requires a void or reversal to arrive as a new linked row. An
-    in-place standing change is that correction with its history deleted, so the
-    guard refuses it even inside a valid FEAT context.
-    """
+@pytest.mark.parametrize("posted", [False, True])
+@pytest.mark.parametrize("attempted", [TransactionStatus.PENDING, TransactionStatus.POSTED])
+def test_INV_LED_002__posting_view_cannot_be_assigned(client, app, posted, attempted):
     classroom = provision_ledger_classroom("chemistry_p1", app)
-    seat = classroom.students[0].seat
-    key = f"inv-led-002:status:{seeded.value}:{attempted.value}"
-    tx = _posted_transaction(seat, idempotency_key=key, status=seeded)
-
-    with pytest.raises(ValueError, match="status may not move"):
-        with FEATContext("FEAT-LED-003", idempotency_key=f"{key}:patch"):
-            tx.status = attempted
-            db.session.flush()
-    db.session.rollback()
+    tx = _posted_transaction(classroom.students[0].seat,
+        idempotency_key=f"inv-led-002:readonly:{posted}:{attempted.value}", posted=posted)
+    with pytest.raises(AttributeError):
+        tx.posting_state = attempted
+    assert "status" not in Transaction.__table__.columns
 
 
 # ---------------------------------------------------------------------------
@@ -217,7 +165,7 @@ def test_INV_LED_002__database_rejects_a_raw_sql_rewrite_of_a_frozen_amount(clie
     tx = _posted_transaction(seat, idempotency_key="inv-led-002:raw-amount")
     row_id = tx.id
 
-    with pytest.raises(sa.exc.DBAPIError, match="amount is immutable"):
+    with pytest.raises(sa.exc.DBAPIError, match="Immutable Ledger field: amount"):
         _raw_update("amount", Decimal("999.00"), row_id)
     db.session.rollback()
 
@@ -238,7 +186,7 @@ def test_INV_LED_002__database_rejects_a_raw_sql_backdate(client, app):
     seat = classroom.students[0].seat
     tx = _posted_transaction(seat, idempotency_key="inv-led-002:raw-backdate")
 
-    with pytest.raises(sa.exc.DBAPIError, match="timestamp is immutable"):
+    with pytest.raises(sa.exc.DBAPIError, match="Immutable Ledger field: timestamp"):
         db.session.execute(
             sa.text(
                 "UPDATE ledger_transaction "
@@ -249,50 +197,19 @@ def test_INV_LED_002__database_rejects_a_raw_sql_backdate(client, app):
     db.session.rollback()
 
 
-def test_INV_LED_002__database_rejects_a_raw_sql_void_of_a_posted_row(client, app):
-    """A void must arrive as a new linked row (INV-LED-003), not as a status patch."""
+def test_INV_LED_002__database_has_no_mutable_status_column(client, app):
     classroom = provision_ledger_classroom("chemistry_p1", app)
-    seat = classroom.students[0].seat
-    tx = _posted_transaction(seat, idempotency_key="inv-led-002:raw-void")
-
-    with pytest.raises(sa.exc.DBAPIError, match="status may not move"):
-        _raw_update("status", "VOID", tx.id)
+    tx = _posted_transaction(classroom.students[0].seat, idempotency_key="inv-led-002:no-status")
+    with pytest.raises(sa.exc.DBAPIError, match="column .*status.* does not exist"):
+        _raw_update("status", "POSTED", tx.id)
     db.session.rollback()
 
 
-def test_INV_LED_002__database_still_permits_settlement_through_raw_sql(client, app):
-    """The trigger must not freeze the one transition settlement depends on.
-
-    A guard that rejected everything would pass every rejection test above while
-    breaking the ledger, so the lawful direction is asserted in the same layer.
-    """
+def test_INV_LED_007__database_freezes_creation_posting_sequence(client, app):
     classroom = provision_ledger_classroom("chemistry_p1", app)
-    seat = classroom.students[0].seat
-    tx = _posted_transaction(
-        seat, idempotency_key="inv-led-002:raw-settle", status=TransactionStatus.PENDING
-    )
-    row_id = tx.id
-
-    _raw_update("status", "POSTED", row_id)
-    db.session.commit()
-
-    assert db.session.execute(
-        sa.text("SELECT status FROM ledger_transaction WHERE id = :id"), {"id": row_id}
-    ).scalar() == "POSTED"
-
-
-def test_INV_LED_007__database_allows_one_posting_sequence_stamp_then_freezes_it(client, app):
-    """Write-once means NULL -> value exactly once, at every layer."""
-    classroom = provision_ledger_classroom("chemistry_p1", app)
-    seat = classroom.students[0].seat
-    tx = _posted_transaction(seat, idempotency_key="inv-led-007:raw-seq")
-    row_id = tx.id
-
-    _raw_update("posting_sequence", 1, row_id)
-    db.session.commit()
-
-    with pytest.raises(sa.exc.DBAPIError, match="posting_sequence is write-once"):
-        _raw_update("posting_sequence", 2, row_id)
+    tx = _posted_transaction(classroom.students[0].seat, idempotency_key="inv-led-007:raw-seq")
+    with pytest.raises(sa.exc.DBAPIError, match="Immutable Ledger field: posting_sequence"):
+        _raw_update("posting_sequence", tx.posting_sequence + 1, tx.id)
     db.session.rollback()
 
 
@@ -311,12 +228,12 @@ def test_INV_LED_002__database_guard_covers_exactly_the_fields_the_orm_guard_doe
         Path(__file__).resolve().parents[3]
         / "migrations"
         / "versions"
-        / "c7a7b8c9d0e1_seat_owned_records.py"
+        / "e7c2a9d4f610_derive_ledger_posting_from_reconciliation.py"
     )
     assert path.exists(), f"migration not found at {path}"
     spec = spec_from_file_location("_ledger_immutability_migration", path)
     migration = module_from_spec(spec)
     spec.loader.exec_module(migration)
 
-    assert set(migration._IMMUTABLE_COLUMNS) == set(_LEDGER_IMMUTABLE_FIELDS)
-    assert set(migration._WRITE_ONCE_COLUMNS) == set(_LEDGER_WRITE_ONCE_FIELDS)
+    assert set(migration.IMMUTABLE) == set(_LEDGER_IMMUTABLE_FIELDS)
+    assert set(migration.WRITE_ONCE) == set(_LEDGER_WRITE_ONCE_FIELDS)
