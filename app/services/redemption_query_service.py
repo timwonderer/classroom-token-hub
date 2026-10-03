@@ -67,7 +67,6 @@ class RedemptionRequestView:
     purchased_at: datetime | None
     price_paid: Decimal | None
     units_in_purchase: int
-    bundle_size: int
     submitted_at: datetime | None
     # Decided requests only.
     outcome: str | None = None
@@ -82,25 +81,14 @@ class RedemptionRequestView:
         return self.outcome is None
 
 
-def _bundle_size(product) -> int:
-    """Uses per purchase of the product version a grant was bought under.
-
-    Read the way the purchase read it (``store_policy_resolver``): a bundle
-    size counts only on a product marked as a bundle.
-    """
-    if product is None or not product.is_bundle:
-        return 1
-    return max(1, int(product.bundle_quantity or 1))
-
-
 def _purchase_context(grants) -> tuple[dict, dict]:
     """For every purchase behind these grants: its transaction and unit count.
 
     Two queries for the whole list, keyed by (seat, correlation). The join
     is on correlation, class, seat and type together, the same join the
     collective-goal refund uses: correlation alone is a shared key, not a
-    promise of scope. A bundle, or a quantity above one, is several
-    lifecycles under one charge (``store_purchase_feat``).
+    promise of scope. A quantity above one is several lifecycles under one
+    charge (``store_purchase_feat``).
     """
     purchases = [
         grant for grant in grants
@@ -202,7 +190,6 @@ def _base_fields(grant: EntitlementEvent | None, *, names, seat_id: int, context
         "purchased_at": grant.timestamp if grant is not None else None,
         "price_paid": abs(Decimal(transaction.amount or 0)) if transaction is not None else None,
         "units_in_purchase": (units.get(key) or 1) if key else 1,
-        "bundle_size": _bundle_size(product),
     }
 
 

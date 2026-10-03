@@ -60,7 +60,6 @@
 
     [type, rent, direct,
       form.querySelector('[name="bulk_discount_enabled"]'),
-      form.querySelector('[name="is_bundle"]'),
       form.querySelector('[name="redemption_prompt_enabled"]'),
       form.querySelector('[name="collective_goal_type"]'),
     ].filter(Boolean).forEach(function (field) {

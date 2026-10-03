@@ -62,7 +62,7 @@
         <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
             {% for item in items %}
             <div class="col">
-                <div class="card h-100 {% if item.is_bundle or item.bulk_discount_enabled %}border-primary{% endif %} {% if item.is_rent_covered %}opacity-50{% endif %}">
+                <div class="card h-100 {% if item.bulk_discount_enabled %}border-primary{% endif %} {% if item.is_rent_covered %}opacity-50{% endif %}">
                     <div class="card-body d-flex flex-column">
                         <h2 class="h5 card-title">{{ item.name }}</h2>
                         {% if item.is_rent_covered %}
@@ -94,15 +94,7 @@
                             {% endif %}
                         </div>
 
-                        <!-- Bundle and Discount Badges -->
-                        {% if item.is_bundle %}
-                        <div class="mb-2">
-                            <span class="badge bg-warning text-dark">
-                                <span class="material-symbols-outlined" aria-hidden="true">inventory_2</span> Bundle: {{ item.bundle_quantity }} items
-                            </span>
-                        </div>
-                        {% endif %}
-
+                        <!-- Discount Badge -->
                         {% if item.bulk_discount_enabled %}
                         <div class="mb-2">
                             <span class="badge bg-success">
@@ -166,8 +158,6 @@
                                     data-policy-uuid="{{ item.policy_uuid or '' }}"
                                     data-rent-perk-message="{{ item.display_rent_perk_message or '' }}"
                                     data-item-type="{{ item.item_type }}"
-                                    data-is-bundle="{{ 'true' if item.is_bundle else 'false' }}"
-                                    data-bundle-quantity="{{ item.bundle_quantity if item.is_bundle else 0 }}"
                                     data-bulk-discount-enabled="{{ 'true' if item.bulk_discount_enabled else 'false' }}"
                                     data-bulk-discount-quantity="{{ item.bulk_discount_quantity if item.bulk_discount_enabled else 0 }}"
                                     data-bulk-discount-percentage="{{ item.bulk_discount_percentage if item.bulk_discount_enabled else 0 }}"
@@ -299,9 +289,6 @@
                         <strong>Rent Perk:</strong> You already hold free uses of this item — redeem them from
                         <em>My Items</em> at no cost. Buying here is an additional purchase at the price above.<br>
                     </span>
-                    <span id="modalBundleInfo" class="shop-modal-block" hidden>
-                        <strong>Bundle:</strong> <span id="modalBundleQuantity"></span> items per bundle<br>
-                    </span>
                     <span id="modalDiscountInfo" class="shop-modal-block" hidden>
                         <strong>Bulk Discount:</strong> <span id="modalDiscountPercentage"></span>% off when buying <span id="modalDiscountQuantity"></span>+
                     </span>
@@ -314,7 +301,6 @@
                 <form id="buyItemForm">
                     <input type="hidden" id="modalItemId" name="policy_uuid">
                     <input type="hidden" id="modalItemType" name="item_type">
-                    <input type="hidden" id="modalIsBundle" name="is_bundle">
                     <input type="hidden" id="modalBulkDiscountEnabled" name="bulk_discount_enabled">
                     <input type="hidden" id="modalBulkDiscountQuantity" name="bulk_discount_quantity">
                     <input type="hidden" id="modalBulkDiscountPercentage" name="bulk_discount_percentage">
@@ -449,8 +435,6 @@
             // true after the last free unit is consumed, so the modal and the
             // quantity hint went on promising free uses the student no longer had.
             rentPerkMessage: button.getAttribute('data-rent-perk-message') || '',
-            isBundle: button.getAttribute('data-is-bundle') === 'true',
-            bundleQuantity: parseInt(button.getAttribute('data-bundle-quantity')) || 0,
             bulkDiscountEnabled: button.getAttribute('data-bulk-discount-enabled') === 'true',
             bulkDiscountQuantity: parseInt(button.getAttribute('data-bulk-discount-quantity')) || 0,
             bulkDiscountPercentage: parseFloat(button.getAttribute('data-bulk-discount-percentage')) || 0,
@@ -462,7 +446,6 @@
         document.getElementById('modalItemId').value = currentItemData.policyUuid;
         document.getElementById('modalItemType').value = currentItemData.itemType;
         document.getElementById('modalItemPrice').textContent = currentItemData.basePrice.toFixed(2);
-        document.getElementById('modalIsBundle').value = currentItemData.isBundle;
         document.getElementById('modalBulkDiscountEnabled').value = currentItemData.bulkDiscountEnabled;
         document.getElementById('modalBulkDiscountQuantity').value = currentItemData.bulkDiscountQuantity;
         document.getElementById('modalBulkDiscountPercentage').value = currentItemData.bulkDiscountPercentage;
@@ -470,14 +453,6 @@
         document.getElementById('modalInventory').value = currentItemData.inventory;
         const rentPerkModalNote = document.getElementById('rentPerkModalNote');
         rentPerkModalNote.hidden = !currentItemData.rentPerkMessage;
-
-        // Show bundle info
-        if (currentItemData.isBundle) {
-            document.getElementById('modalBundleInfo').hidden = false;
-            document.getElementById('modalBundleQuantity').textContent = currentItemData.bundleQuantity;
-        } else {
-            document.getElementById('modalBundleInfo').hidden = true;
-        }
 
         // Show discount info
         if (currentItemData.bulkDiscountEnabled) {
@@ -605,11 +580,6 @@
         let hint = '';
         if (currentItemData.rentPerkMessage) {
             hint = `${currentItemData.rentPerkMessage} — this buys more.`;
-        }
-        if (currentItemData.isBundle) {
-            const totalItems = quantity * currentItemData.bundleQuantity;
-            hint += hint ? ' • ' : '';
-            hint += `You will get ${totalItems} total uses (${quantity} bundle${quantity > 1 ? 's' : ''})`;
         }
         if (currentItemData.bulkDiscountEnabled) {
             if (quantity >= currentItemData.bulkDiscountQuantity) {

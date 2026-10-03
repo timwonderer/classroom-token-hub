@@ -1188,9 +1188,10 @@ class StoreProduct(db.Model):
     is_long_term_goal = db.Column(db.Boolean, default=False, nullable=False) # if true, exclude from CWI balance checks
     bypass_cwi_warnings = db.Column(db.Boolean, default=False, nullable=False)
 
-    # Bundle settings
-    is_bundle = db.Column(db.Boolean, default=False, nullable=False)
-    bundle_quantity = db.Column(db.Integer, nullable=True) # number of items in bundle (e.g., 5)
+    # Bundles are removed (SPEC-STORE-001): several units are a quantity at a
+    # bulk price. The two bundle columns remain in the database until the
+    # CONTRACT (DATABASE) migration drops them (SOP-DB-003). The flag column
+    # defaults to false there, so inserts that omit it stay valid.
 
     # Bulk discount settings
     bulk_discount_enabled = db.Column(db.Boolean, default=False, nullable=False)
@@ -1284,7 +1285,7 @@ _STORE_PRODUCT_IMMUTABLE_FIELDS = frozenset({
     'policy_uuid', 'product_lineage_uuid', 'class_id', 'name',
     'description', 'price', 'economic_role', 'item_type', 'inventory_total',
     'holding_limit', 'direct_purchase_allowed', 'available_with_overdue_obligations', 'activation_at', 'auto_delist_date', 'auto_expiry_days',
-    'is_long_term_goal', 'bypass_cwi_warnings', 'is_bundle', 'bundle_quantity',
+    'is_long_term_goal', 'bypass_cwi_warnings',
     'bulk_discount_enabled', 'bulk_discount_quantity', 'bulk_discount_percentage',
     'collective_goal_type', 'collective_goal_target', 'collective_goal_expires_at',
     'collective_goal_instance_code', 'redemption_prompt', 'created_at',
