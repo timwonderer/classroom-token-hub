@@ -51,6 +51,15 @@ class ClassSettlementError(Exception):
     payroll policy, or no resolvable teacher actor for the class)."""
 
 
+class PayrollNotConfiguredError(ClassSettlementError):
+    """Raised when the class has no payroll setting, so no rate governs the run.
+
+    Settlement fails closed rather than pricing work under an invented policy.
+    The teacher resolves it by saving payroll settings, so callers report it as
+    a precondition, not a server fault.
+    """
+
+
 class NoPayableAttendanceError(ClassSettlementError):
     """Raised when no seat in the class has a closed, unpaid session.
 
@@ -159,7 +168,7 @@ def settle_class_payroll_cycle(
     if run_mechanism == "SYSTEM" and scheduled_occurrence is None:
         raise ValueError("A SYSTEM payroll run must name the scheduled occurrence it settles.")
     if not class_has_payroll_settings(class_id):
-        raise ClassSettlementError(
+        raise PayrollNotConfiguredError(
             f"Class {class_id} has no payroll settings; cannot settle a payroll cycle."
         )
     ctx = actor_ctx or _build_teacher_context(class_id)
