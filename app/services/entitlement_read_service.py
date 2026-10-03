@@ -26,6 +26,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
+import sqlalchemy as sa
+
 from app.extensions import db
 from app.models import EntitlementEvent
 from app.utils.canonical_temporal_resolver import ensure_utc
@@ -731,7 +733,11 @@ def entitlement_terminal_event(entitlement_id: str):
 
 
 def pending_action_for_entitlement(entitlement_id: str):
-    """Return the latest unresolved PendingAction for an entitlement lineage."""
+    """Return the latest unresolved PendingAction for an entitlement lineage.
+
+    An immediate-use purchase's reminder is not an action on the entitlement
+    (DOM-STORE-001 §VIII.E.3): the item is already used, so it is excluded.
+    """
     from app.models import PendingAction
 
     return (
@@ -739,6 +745,10 @@ def pending_action_for_entitlement(entitlement_id: str):
         .filter(
             PendingAction.entitlement_id == entitlement_id,
             PendingAction.payload["outcome"].as_string().is_(None),
+            sa.or_(
+                PendingAction.payload["kind"].as_string().is_(None),
+                PendingAction.payload["kind"].as_string() != "immediate_use_acknowledgement",
+            ),
         )
         .order_by(PendingAction.submitted_at.desc(), PendingAction.pending_action_id.desc())
         .first()
@@ -754,8 +764,13 @@ def derive_display_status(entitlement_id: str) -> str:
     """
     if pending_action_for_entitlement(entitlement_id):
         return "processing"
-    if entitlement_terminal_event(entitlement_id):
-        return "consumed"
+    terminal = entitlement_terminal_event(entitlement_id)
+    if terminal is not None:
+        # A denied redemption and a voided item are both REVOKED, and a lapsed
+        # one EXPIRED; "used" would misdescribe each.
+        if terminal.event_type == "REVOKED" and (terminal.payload or {}).get("outcome") == "DENIED":
+            return "denied"
+        return {"REVOKED": "revoked", "EXPIRED": "expired"}.get(terminal.event_type, "consumed")
     if latest_entitlement_grant(entitlement_id):
         return "purchased"
     return "unknown"

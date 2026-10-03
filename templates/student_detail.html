@@ -495,6 +495,8 @@
                                     <span class="badge bg-danger">Expired</span>
                                     {% elif ent.status == 'revoked' %}
                                     <span class="badge bg-dark">Revoked</span>
+                                    {% elif ent.status == 'denied' %}
+                                    <span class="badge bg-secondary">Denied</span>
                                     {% elif ent.status == 'used' %}
                                     <span class="badge bg-success">Used</span>
                                     {% elif ent.status == 'approved' %}

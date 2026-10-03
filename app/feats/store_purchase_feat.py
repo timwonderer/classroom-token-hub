@@ -524,12 +524,22 @@ def _execute_store_purchase_impl(
 
         db.session.flush()
 
-    # No pending action is written here, for any entitlement type. FEAT-STOR-001
-    # §II excludes "pending request storage" from this FEAT's authority, and a
-    # `pending_actions` row asserts that a request was *submitted* and awaits
-    # resolution (DOM-STORE-001 §IX) — acquiring an item is not submitting one.
-    # The lawful writer is FEAT-STOR-002 `execute_use_item_request`, reached when
-    # the student acts on the item.
+        # DOM-STORE-001 §VIII.E.3: each immediate-use unit is also queued for
+        # the teacher, who may still have to deliver it in class. The row is
+        # written by FEAT-STOR-002's domain command, in this transaction, the
+        # way §X has this FEAT coordinate the instant-use CONSUMED above.
+        # Nothing else here writes a pending action: acquiring a delayed item
+        # is not submitting a request (DOM-STORE-001 §IX).
+        from app.feats.entitlement_lifecycle_feat import record_immediate_use_acknowledgement
+        for entitlement_id in entitlement_ids:
+            record_immediate_use_acknowledgement(
+                class_id=canonical_context.class_id,
+                seat_id=canonical_context.seat_id,
+                entitlement_id=entitlement_id,
+                product_id=policy_config.product_id,
+                policy_uuid=policy_config.policy_uuid,
+            )
+        db.session.flush()
 
     return StorePurchaseResult(
         success=True,

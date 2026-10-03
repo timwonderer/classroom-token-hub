@@ -3,8 +3,8 @@ title: Store Redemptions
 category: features
 subcategory: teacher-economy
 roles: [teacher]
-description: Work the pending redemption queue, read purchase statuses, and search the Redemption Audit trail for what happened.
-keywords: [store, redemptions, approve, refund, purchase history, audit log, entitlement status]
+description: Review redemption requests one at a time, accept, deny or return them, mark immediate-use purchases complete, and look back at what you decided.
+keywords: [store, redemptions, accept, deny, return, immediate use, mark as complete, purchase history, entitlement status]
 related:
   - user-guides/features/teacher/economy/store-items
   - user-guides/features/teacher/classroom/student-detail
@@ -15,81 +15,74 @@ related:
 
 ## Overview
 
-Buying and receiving are two separate events for **Delayed Use** items. The student pays when they buy; they receive when you approve. Three of the five tabs on **Economy > Store** cover the gap between those moments: **Overview** holds the live queue, **Purchase History** is the full record of purchases, and **Redemption Audit** is the searchable trail of requests and what you decided about them.
+With a **Delayed Use** item, buying and getting the item happen at different times. The student pays when they buy it. When they want to use it, they send you a request, and you decide.
+
+All requests are on the **Redemptions** tab of **Economy > Store**. The red number on the tab shows how many are waiting.
 
 ## Step-by-step instructions
 
-### Working the queue
+### Reviewing a request
 
-The **Overview** tab opens on **Store Statistics** — **Total Items**, **Active Items**, **Total Purchases** — with **Quick Actions** shortcuts to **Add New Item** and **View Purchase History** beside it.
+The **Redemptions** tab has two lists:
 
-Below those sits **Pending Redemption Requests**, the part you act on:
+- **Waiting for your decision**: requests you haven't answered, oldest first. Each row shows the student, the item, when they asked, and the start of anything they wrote.
+- **Decided**: requests you've already answered, newest first, each marked **Accepted** or **Denied**.
 
-| Column | What it shows |
+Click a request to open it. You'll see:
+
+- the student and the item;
+- how they got it: bought (with the date and price), given by you, or included with rent;
+- what the item is, from its description;
+- the question your **Redemption Prompt** asked, and what the student answered;
+- what each decision will do.
+
+The **Dashboard** lists waiting requests under **Pending Actions → Redemptions**. **Review** opens the same request here.
+
+### Deciding a request
+
+Asking to redeem an item counts as using it. Decide each request by your own class rules. There are three choices, and each asks you to confirm first.
+
+| Decision | What happens |
 | --- | --- |
-| Student | Who asked |
-| Item | What they bought |
-| Requested | When the purchase happened |
-| Details | Currently always shows a dash — see the warning below |
-| Action | The refund and approve controls |
+| **Accept** | The student gets what they asked for. The item is used. |
+| **Deny** | The student doesn't get it, and the item is still used up. Nothing is refunded. |
+| **Return** | The request is closed and the item goes back to the student unused. They can ask again later. |
 
-Each row offers two things. The green **Approve** button hands the item over and closes the request. The outlined cancel icon is labelled *Refund and remove* — it returns the money and takes the request off the queue.
+These work the same however the student got the item: bought on its own, bought several at once, as one use from a bundle, given by you, or with rent.
 
-If the item had a **Redemption Prompt**, the student's answer does not appear in this table. Read it on your **Dashboard** approval queue or on the student's detail page instead.
+When you deny, you can add a note. It stays with the record, and you can read it later from the **Decided** list.
 
-Beneath the queue, **Recent Purchases** lists Student, Item, Price, Purchased, and Status. When nothing has been bought yet it reads *No purchases yet*.
+Refunds and voids are separate, and they apply only to items the student hasn't asked to use yet.
 
-### Reading a purchase status
+### Immediate-use purchases to deliver
 
-Purchases carry one of seven states, and they are not all things you caused:
+An **Immediate Use** item is used the moment a student buys it, but you may still have something to hand over in class. Each purchase appears under **Immediate-use purchases to deliver** on the **Redemptions** tab, and on your **Dashboard** under **Pending Actions**, until you deal with it.
+
+Its only button is **Mark as complete**. Click it once, then **Confirm complete**, and the purchase leaves the list. Nothing else changes: the student already has the item, and no money moves.
+
+### Purchase statuses
+
+**Recent Purchases** on the **Overview** tab, and the **Purchase History** tab, show each item's status:
 
 | Badge | Meaning |
 | --- | --- |
-| **Purchased** | Paid for, not yet acted on |
-| **Pending** | Waiting in your redemption queue |
-| **Processing** | Mid-flight |
-| **Redeemed** | The student has used it |
-| **Completed** | Finished |
-| **Expired** | The item's expiry window ran out before it was used |
-| **Revoked** | Withdrawn |
-
-**Expired** is the one worth watching. It comes from the **Item Expiry in Days** setting on the item, not from anything you did — a student who buys a delayed-use item and never redeems it will eventually land here.
-
-### Purchase History
-
-The **Purchase History** tab is the complete record: **All Purchases**, showing Student, Item, Purchase Date, Status, and Quantity. Immediate-use items appear here directly, having never touched the queue.
-
-### Redemption Audit
-
-The **Redemption Audit** tab is the searchable history of redemption requests and what happened to them.
-
-The controls are a filter bar — **Student**, **Class**, **Action** (**Request**, **Approved**, **Rejected**, **All actions**), and **From** / **To** dates — over a paginated table of Student, Class, Date, Action, and Notes, with **Apply Filters** and **Clear**. Empty it reads *No audit records found.*
-
-A request stays on file after you resolve it. **Request** finds the ones still waiting, and **Approved** and **Rejected** find the ones you have already decided, so an empty table means nothing matched the filters you set — not that nothing has ever happened.
-
-Two limits are worth knowing before you spend time here:
-
-- **Class** cannot widen the search. The tab only ever shows the class you have selected, whatever the dropdown says.
-- **Notes** shows the request's raw stored data rather than readable prose.
-
-For the purchase behind a request — what was paid, and when — use **Purchase History**.
+| **Purchased** | Paid for, not used yet |
+| **Processing** | The student asked to use it, and the request is waiting for you |
+| **Consumed** | Used: you accepted the request, or it was an immediate-use item |
+| **Expired** | Its time ran out before it was used (from **Item Expiry in Days**) |
+| **Denied** | You denied the student's request |
+| **Revoked** | You voided the item before the student asked to use it |
 
 ## Important notes
 
-> [!WARNING]
-> **Approve from the Dashboard when the item asks students a question.** The **Details** column on this page always renders a dash, so a redemption prompt's answer is invisible here. The same queue on your **Dashboard** shows the answer, as does the student's detail page.
-
 > [!IMPORTANT]
-> **Refunding is the only way to reverse a request.** There is no "undo approve." Once you approve, the entitlement is handed over and the queue row is gone.
+> **Decisions are final.** After you accept or deny a request, it moves to **Decided** and can't be changed, and the item is used up. A returned request is closed too, but the item isn't: the student can send a new request. Returned requests don't appear under **Decided**.
 
 > [!NOTE]
-> **Immediate-use items never reach you.** They are granted at purchase and appear only in Purchase History. If you want a say in when a student gets something, it has to be a **Delayed Use** item.
+> **Immediate-use items don't need a decision.** They are used up at purchase. If you want to decide when a student gets something, make it a **Delayed Use** item.
 
 > [!NOTE]
-> **Redemption Audit keeps the outcome.** It includes open requests plus requests you approved or rejected, with the requested action and resolution visible. An empty table means there is no matching history for the selected filters.
-
-> [!TIP]
-> When a student insists they bought something they never received, check **Redemption Audit** for the request and outcome, then use **Purchase History** for the underlying purchase and current entitlement status.
+> **Requests denied before October 2026 work differently.** Back then a denial gave the item back, the way Return does now. Those requests show under **Decided** with a note saying the student kept the item.
 
 ## Related guides
 
