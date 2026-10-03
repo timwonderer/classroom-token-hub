@@ -127,6 +127,51 @@ def test_detector_reports_format_calls_and_last_initial():
     assert len(find_pii_in_log_calls(source)) == 1
 
 
+def test_detector_reports_a_name_held_in_a_local_of_any_spelling():
+    """Taint follows the assignment, not the variable's name — including a chain."""
+    source = (
+        "who = student.identity_profile.full_name\n"
+        "label = f'{who} ({seat.id})'\n"
+        "logger.info('adjusted %s', label)\n"
+    )
+    violations = find_pii_in_log_calls(source)
+    assert [(v.line, v.field) for v in violations] == [(3, "label")]
+
+
+def test_detector_reports_a_logger_bound_to_an_arbitrary_name():
+    source = (
+        "import logging\n"
+        "audit = logging.getLogger('cth.audit')\n"
+        "def f(seat):\n"
+        "    audit.info('seat %s %s', seat.id, seat.identity_profile.first_name)\n"
+    )
+    assert [v.line for v in find_pii_in_log_calls(source)] == [4]
+
+
+def test_detector_reports_a_logger_method_bound_to_a_name():
+    """The shape app/services/operational_event_service.py really uses."""
+    source = (
+        "log_fn = current_app.logger.warning if severe else current_app.logger.info\n"
+        "log_fn('OPERATIONAL_EVENT %s', profile.last_name)\n"
+    )
+    assert [v.line for v in find_pii_in_log_calls(source)] == [2]
+
+
+def test_detector_resolves_the_real_logger_method_alias():
+    """SOP-TEST-003 §IX.A(4): the alias in app/ is still resolved, so a name
+    injected into the real ``log_fn(...)`` call is reported."""
+    path = APP_ROOT / "services" / "operational_event_service.py"
+    source = path.read_text(encoding="utf-8")
+    real_call = 'log_fn("OPERATIONAL_EVENT %s", payload)'
+    assert real_call in source, "the alias this proof mutates has moved; update the proof"
+    assert find_pii_in_log_calls(source) == []
+
+    mutated = source.replace(
+        real_call, 'log_fn("OPERATIONAL_EVENT %s %s", payload, seat.identity_profile.full_name)'
+    )
+    assert len(find_pii_in_log_calls(mutated)) == 1
+
+
 def test_detector_is_quiet_on_lawful_log_lines():
     source = '''
 current_app.logger.info(
@@ -137,5 +182,7 @@ logger.info("class %s renamed", class_row.display_name)
 logger.exception("Unhandled exception", extra={"route": request.path})
 updated.append(student.identity_profile.full_name)
 flash(f"Updated {profile.full_name}")
+audit = logging.getLogger("cth.audit")
+audit.info("seat %s class %s", seat.id, class_id)
 '''
     assert find_pii_in_log_calls(source) == []
