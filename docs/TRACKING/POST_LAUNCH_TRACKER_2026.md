@@ -190,6 +190,9 @@ against this tracker, the archived launch trackers and the live-test RESUME reco
       teacher cookie with class feature state instead of a sign-in redirect;
     - TLCP request traces and error events, which attribute the request to the revoked actor;
     - `login_required`, which sets `g.canonical_context` before its expiry check.
+  - **Status (2026-10-02).** #1469 registers `validate_canonical_session_nonce` before
+    `capture_correlation_context`, so a revoked cookie no longer reaches `g.canonical_context`, the TLCP trace, or
+    `admin_bp.before_request`. The `login_required` expiry ordering and the repeated resolution remain open.
   - **Impact.** No cross-class leak was found.
   - **Target design.** One resolution in a `before_request` that runs after nonce validation. Auth decorators only
     check its result, and a structural guard with a mutation proof flags any other call. Do not normalise the
