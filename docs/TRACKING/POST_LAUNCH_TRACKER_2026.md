@@ -316,6 +316,9 @@ against this tracker, the archived launch trackers and the live-test RESUME reco
     - baseline health is reported as CURRENT, or STALE/DEGRADED.
   - **Before any normative text or implementation:** a failure-mode review of this model is under way.
   - The pre-release dump for #1449 is an interim measure. It is not the settled architecture.
+  - **Proposal (2026-10-04, not installed):** [DATABASE_BACKUP_PLAN.md](../ops/DATABASE_BACKUP_PLAN.md) and
+    `infra/db-backup/`. It implements the direction above for review and lists the failure-mode questions it raises
+    (§8). It also covers a one-off pre-release backup and restore check from the operator's Mac (§6).
 - [ ] **Security and ops decisions taken 2026-09-30.**
   - Disable Grafana anonymous Admin, then validate authenticated access.
   - Disable Tempo and set `OTEL_TRACES_ENABLED=false`.

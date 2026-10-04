@@ -1,0 +1,10 @@
+[Unit]
+Description=Check every 15 minutes whether a protected destruction needs a replacement baseline
+
+[Timer]
+OnCalendar=*:0/15
+Persistent=true
+Unit=cth-db-backup-check.service
+
+[Install]
+WantedBy=timers.target
