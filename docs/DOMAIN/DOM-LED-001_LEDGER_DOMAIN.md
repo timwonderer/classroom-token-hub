@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-LED-001 | 2.10 | 2026-10-03 | 2.9 | Constitutional |
+| DOM-LED-001 | 2.11 | 2026-10-03 | 2.10 | Constitutional |
 
 ---
 
@@ -248,7 +248,18 @@ Ledger incorporates SPEC-PROD-001 §VI.1 and SPEC-PROD-002 §VI.1 only for its o
 
 For independently proven original whole-pair shares, preserve exact original pricing descriptor/order/precision/quantization and derive historical attribution version 1 by rational largest remainder with canonical close-time/open-ID/close-ID ties. Each share's allocated cents equals its original quantized cents; shares sum to the uniquely identified original payroll credit. These are newly derived read results, never historically recorded allocations. Inconsistent cents or ambiguous original credit fail closed. Pending credit cannot supply posted-credit proof. This contract enables no new runtime API or integration. A positive business proof or allocation calculation neither satisfies §VII.1A/§IX.1 nor proves zero compensation; original lawful creation, posting and complete compensation gates remain unchanged. Historical v1 gaps remain unavailable.
 
+### IX.4 Conditional Historical Graph Attribution Read Contract
+
+Ledger separately incorporates SPEC-PROD-001 §VI.2 and SPEC-PROD-002 §VI.2 for a future pure calculation composed by FEAT-PROD-006; §IX.3's single-credit shape is unchanged. FEAT supplies immutable scoped original business graph inputs, original setting evidence and canonical Operations evidence. Ledger owns unique original positive credit binding, proven per-credit share partition, exact original per-window/share pricing and truncation replay, historical graph attribution version 1, conservation and complete prior recovery conclusions. It never pairs scans, selects policy, discovers incident membership, verifies another domain's internals or persists business amounts.
+
+Group contributions of the same canonical pair before largest remainder. Ordinary shares use exact selected-duration weights while preserving original whole-second aggregate/truncation and quantization. Proven incident top-ups allocate each independently proven original positive window delta over uniquely established nonnegative exact worked-minus-replay-paid duration weights; preserve original separate quantization of worked/paid prices and never reprice aggregate unpaid time. Zero weights receive zero; positive cents with zero total weight, negative/ambiguous loss, missing original inputs or failed per-share/window/credit conservation denies. Positive top-ups are independent original credits, not compensation of another origin; legitimate contributions across multiple credits remain recoverable exactly once per origin.
+
+The complete graph includes every relevant original credit and interval connected through its original source/share/top-up evidence. Every origin must independently satisfy §VII.1A and §IX.1 and unchanged version-specific creation/posting/compensation requirements. Unknown prior recovery cannot become zero. Proven full/residual recovery makes that origin's remaining interval contribution zero; partial recovery requires unique contribution attribution and conservation, otherwise interval recovery is unavailable even if an aggregate cap is known. Keep per-origin caps, principal/intent uniqueness and pending-plus-posted accounting. Future multi-origin commands must lock all origins in stable Ledger locator order inside the existing target/ClassEconomy/source order; an aggregate graph total never replaces individual caps. No new monetary proof interface, signature registry, schema, recovery writer or runtime integration is introduced; current v1 gaps still block execution.
+
 ## X. Change Notes
+
+**2.11 (2026-10-03)** separately incorporates pure graph attribution (§IX.4) and per-origin conservation while preserving §IX.3 and every strict monetary gate. Supersedes graph future-only design scope, not runtime, signature or mutation authority.
+
 
 **2.10 (2026-10-03)** incorporates conditional historical attribution read authority (§IX.3), preserving original arithmetic and all strict monetary proof gates. Supersedes no execution or signature rule; no runtime change is claimed.
 

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-POL-001 | 2.6 | 2026-10-03 | 2.5 | Constitutional |
+| DOM-POL-001 | 2.7 | 2026-10-03 | 2.6 | Constitutional |
 
 ## I. Purpose
 
@@ -248,7 +248,14 @@ Policies incorporates SPEC-PROD-002 §VI.1 only for a future pure original-setti
 
 Policies neither assigns attendance pairs to shares, computes monetary amounts, verifies Operations internals nor queries another domain. PROD owns original per-pair setting assignment and Ledger owns arithmetic; FEAT coordinates those conclusions. No current setting selection, policy write, proof cache, migration, signature repair or historical recovery is enabled. Existing protected policy lawful-lineage requirements remain unchanged.
 
+### X.3 Conditional graph-setting evidence contribution
+
+Policies separately incorporates SPEC-PROD-002 §VI.2 for its future pure contribution to FEAT-PROD-006's graph evaluation. Each original fragment/remainder/top-up window needs independently proven original immutable setting inputs, creation/effective visibility and complete boundary-relevant history; §X.2's original-evidence requirements apply cumulatively. The exact original writer may select rates differently across legacy windows, so current closing-time selection or the latest retained rate cannot substitute. FEAT supplies canonical original Operations evidence; this domain does not call Operations, PROD or Ledger. It does not assign selected attendance subsegments, compute top-up deltas, sum credits or allocate cents. No implemented API, policy write, new schema, cache, proof adoption or selection fallback is introduced.
+
 ## XI. Amendment
+
+Version 2.7 (2026-10-03) separately incorporates original graph-setting evidence contribution (§X.3). Supersedes no policy selection, diagnostic or original-lawfulness rule and enables no runtime or recovery.
+
 
 Version 2.6 (2026-10-03) adds conditional original-setting evidence contribution (§X.2), superseding no retained-input diagnostic or policy execution rule. It changes documentation authority only, not runtime.
 

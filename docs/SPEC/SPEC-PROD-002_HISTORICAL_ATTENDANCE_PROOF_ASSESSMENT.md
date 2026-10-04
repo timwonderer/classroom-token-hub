@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| SPEC-PROD-002 | 1.1 | 2026-10-03 | 1.0 | Normative |
+| SPEC-PROD-002 | 1.2 | 2026-10-03 | 1.1 | Normative |
 
 ## I. Purpose
 
@@ -67,6 +67,16 @@ Two distinct source sets A/B with equal credited seconds and reproduced cents de
 
 Verification for a later implementation must prove positive original evidence and each missing-evidence denial, same-total/different-membership denial, swapped-share denial, exact rational ties independent of query order, original divide-first replay, per-share/payment conservation, original signatures unchanged, scoped pure reads, evidence-change detection and no current recovery fallback. Genuine original evidence fixtures must be distinguished from synthetic assumptions. This documentation phase implements no new query or proof adapter.
 
+### VI.2 Separate conditional multi-payment graph evaluation
+
+SPEC-PROD-001 §VI.2 supplies the technical graph contract separately incorporated by PROD §XV.10, Ledger §IX.4, Policies §X.3 and FEAT-PROD-006 §VI.2. The §VI.1 initial priced/single-credit shape remains unchanged. A future pure read evaluates completed canonical intervals connected to all original fragments, remainders, positive incident top-up loss components, business/zero-event boundaries and original credits. Every §VI.1 original source-set/creation-visibility, lawful protected business input, per-record writer, original setting and exact pricing prerequisite applies to every relevant graph component, with complete graph evidence before page slicing. Original credit uniqueness becomes independently proven complete per-credit identity/partition, never a guessed split of an aggregate payment.
+
+The result separates PROD-owned original graph identity/membership, Policies-owned original setting proof, Ledger-owned per-credit monetary replay/allocations/conservation and prior compensation attribution, Operations-owned original coverage, and execution eligibility. It identifies all scoped source/event/window/policy/rule/origin evidence locators and historical graph attribution version 1; immutable owning-domain objects pass only through the FEAT. Original whole-second pricing aggregates and newly derived exact rational component weights remain distinct. Missing/ambiguous original loss components or partial-compensation contribution identity is unavailable, not zero or pro-rata guess. Proven complete full/residual origin recovery contributes zero further recovery only through Ledger's independent proof.
+
+Positive top-ups remain original credits, unrelated manual credits remain unsupported, and zero payroll events remain boundaries without invented credits. Graph completeness unavailable, top-up attribution unavailable, original credit partition unavailable and prior compensation attribution unavailable must be separately explainable; actual contradictory lawful evidence/integrity failures retain Operations' canonical taxonomy. Current Phase 1 runtime continues to report unsupported graph attribution and blocked execution. No graph API, persistence, historical signature, enrollment, fallback or recovery integration is introduced. The observed 79 incident references and other discovered cohorts remain diagnostic candidates, never automatically qualified.
+
+Later implementation must verify all SPEC-PROD-001 §VI.2.D examples: genuine restart/while-open/remainder source selection, zero-event boundary retention, exact aggregate truncation versus rational weights, per-window top-up deltas and multiple intervals/credits, split-component grouping, equal-total different graphs, missing original proof, partial/full/residual prior compensation and conservation at every origin. Pure reads, original signature bytes, current v2/v3 proof and current monetary gates remain unchanged. These are future runtime obligations; this design performs documentation checks only.
+
 ## VII. Audit diagnostics and monetary boundary
 
 Operations diagnoses the linked original event's scope, envelope HMAC and continuous complete chain/head within budget, independently of row-payload coverage. A verified prefix is insufficient. Scalar head observations before and after the complete walk must agree; concurrent legitimate advancement returns unavailable EVIDENCE_CHANGED_DURING_READ, never a false integrity failure. No row locks or transaction mutation are used. Batch diagnostics walk one bounded complete class chain once per invocation; no caller proof input or persisted cache is allowed. Unsupported per-record source assignment is rejected rather than accepted through an arbitrary descriptor argument. Missing linkage is a coverage gap; wrong scope, invalid envelope or broken chain are integrity failures; unavailable infrastructure or over-budget chain is unavailable. Diagnostics must not write canonical integrity status.
@@ -82,6 +92,9 @@ The assessment cannot authorize execution. Historical results remain blocked unl
 Targeted verification covers scope, malformed bounds, cap exhaustion, exact pairs/repeated-active/day-end/DST; tied boundaries and backdated visibility ambiguity; missing/invalid/stale setting evidence; exact replay with incorrect membership; zero runs; eleven-versus-eight coverage; valid envelope with incomplete protected values; unsupported per-record emitter assignment; bounded chain completeness; pure reads and unchanged current v2/v3 proof. Synthetic fixtures must not fabricate old signatures as genuine historical proof; genuine predecessor-runtime evidence is distinguished explicitly.
 
 ## IX. Amendment
+
+Version 1.2 (2026-10-03) separately specifies conditional pure multi-payment graph evaluation (§VI.2), superseding future-only graph design scope without widening §VI.1 or changing runtime, persistence or monetary authority.
+
 
 Version 1.1 (2026-10-03) conditionally defines original priced whole-pair business proof for later pure evaluation. It supersedes diagnostic-only scope solely at the documentation contract level; Phase 1 runtime and all monetary execution gates remain unchanged. No incomplete source evidence becomes proof.
 

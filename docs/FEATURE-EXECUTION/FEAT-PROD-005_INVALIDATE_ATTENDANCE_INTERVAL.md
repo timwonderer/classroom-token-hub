@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-PROD-005 | 1.2 | 2026-10-03 | 1.1 | Normative |
+| FEAT-PROD-005 | 1.3 | 2026-10-03 | 1.2 | Normative |
 
 ## I. Purpose
 
@@ -62,6 +62,12 @@ SPEC-PROD-001 §VI.1 is incorporated only as the conditional original-business e
 
 Original source-set completeness/visibility, per-event writer and original setting/quantization must independently satisfy the conditional contract. A positive business mapping or newly derived historical attribution does not establish original lawful monetary creation/posting or complete compensation. Existing §VI.4 paid evidence requirements remain cumulative; v1 gaps, unsigned reversal linkage and unknown compensation still deny the entire paid command without eligibility-only commit. The current 153 priced candidates remain diagnostic, and no new writer, proof adoption, preview fallback, API or runtime enablement is authorized here.
 
+### VI.2 Historical graph integration remains separately gated
+
+SPEC-PROD-001 §VI.2 is incorporated as the separate conditional multi-payment evidence/allocation standard only. DOM-PROD-001 §XV.10, DOM-LED-001 §IX.4 and FEAT-PROD-006 §VI.2 define future pure graph evaluation; this FEAT executes none of them as another FEAT. The later integration must compose PROD, Policies, Ledger, Operations, Identity and Class Configuration interfaces directly within one FEAT context and declare implemented dependencies before activation. No current preview, receipt/writer schema or recovery path is expanded by this amendment.
+
+All original fragment/remainder/top-up credits require independently proven graph membership, original source visibility/writer/settings, exact allocation and lawful monetary creation/posting and complete compensation. Positive top-up credit is additional original money; do not count it as prior recovery or omit its legitimate allocation. Ambiguous prior partial recovery attribution denies the whole paid action. A fully recovered or zero-cent graph still requires complete proof before eligibility-only invalidation. Future atomic recovery locks every origin in stable Ledger locator order after target seat and ClassEconomy and before monetary sources, revalidates complete preview/compensation, and uses one reservation for all recovery/funding legs. Each origin preserves its individual cap and recovery-intent uniqueness. Any missing origin or failure leaves no eligibility, correction, reservation, audit or partial funding result. Original receipts must bind the complete graph/attribution and all opaque outcome locators under a separately reviewed schema/protocol extension; do not silently fit a graph into the current single-original-event receipt. This documentation authorizes no such persistence extension or activation.
+
 ## VII. Funding, History, and Lifecycle
 
 Enabled protection transfers the entire checking shortfall from savings only if savings can fund it entirely; otherwise savings is untouched and checking takes the full deduction below zero. Disabled protection transfers nothing. Own-account transfers retain sufficient-funds rules. Payroll corrections incur no NSF fee, obligation, or deferred deduction.
@@ -75,6 +81,9 @@ Stable outcomes: `UNAUTHORIZED_SCOPE`, `INCOMPLETE_INTERVAL`, `INVALID_REASON`, 
 Verify SPEC-PROD-001 worked examples: unpaid exclusion with intact scans; exact-cent paid recovery; multi-interval conservation; partial then residual recovery; prior full recovery with no new debit; same-key/different-key duplicates; concurrent payroll; insufficient/sufficient/disabled protection; cross-class denial; unavailable historical evidence; whole-transaction rollback; lifecycle destruction. Targeted checks only; no full test suite belongs to this documentation step.
 
 ## IX. Amendment
+
+1.3 (2026-10-03) incorporates a separately gated historical graph standard (§VI.2) only; current single-origin receipts, writers, runtime and monetary proof remain unchanged. Supersedes no atomic execution or signature rule.
+
 
 1.2 (2026-10-03) records the conditional historical business standard and explicit later integration gate; it supersedes no current paid-proof or atomic command rule.
 

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-PROD-001 | 1.12 | 2026-10-03 | 1.11 | Constitutional |
+| DOM-PROD-001 | 1.13 | 2026-10-03 | 1.12 | Constitutional |
 
 ---
 
@@ -676,7 +676,15 @@ The permitted positive conclusion is original business membership proven, distin
 
 This narrowly qualifies §XV.7's timestamp-gap rejection only if independent original evidence proves the complete original selection. It does not install a membership fallback or change unpaid selection, paid preview, correction command, cycle boundaries or Interpretation records. The initial shape is one priced positive payroll event settling only complete original pairs with one unique original credit. The observed 153-event cohort remains diagnostic because original source visibility/completeness, per-record writer assignment and business lineage gaps have not been closed. Unpriced, fragment/remainder, manual/top-up, zero-run and multi-credit shapes remain outside this proof contract. Monetary recovery still requires every separate existing Ledger and Operations gate; no writer, migration, signature or compatibility path is authorized.
 
+### 10. Conditional multi-payment settlement graph
+
+This domain separately incorporates SPEC-PROD-001 §VI.2 and SPEC-PROD-002 §VI.2 for a future pure graph contribution through FEAT-PROD-006; §XV.9 remains the priced whole-pair/single-credit contract. PROD owns original canonical-pair membership, fragment/remainder subsegments, incident positive-top-up source/loss component identity, original payroll windows including zero events, complete original source visibility, per-record writer/rule assignment and original policy assignment. Each graph node is scoped to one class and target; all connected source contributions and original business events must be proven complete before pagination. Exact original timestamp/selection/truncation facts remain separate from raw canonical duration and new rational allocation weights. Present totals or incident source IDs alone cannot establish membership.
+
+Ledger receives this domain's immutable proven graph facts only through FEAT and owns all cents, credit identity, conservation and compensation. PROD stores no derived graph amounts, adds no new table/field, and uses only same-domain source identities and opaque non-FK Ledger locators. The 79 incident source references are observed candidates; unrelated manual credits are not attributed work. Missing/ambiguous graph evidence denies the entire conditional result. No original scan/summary, policy, signature, cycle, receipt or current selection is changed; no proof enrollment, new writer, historical adapter or correction execution is enabled. Existing lifecycle destruction (§VII.1.a) removes the owning business facts; no derived graph persistence or surviving archive is introduced.
+
 ## XVI. Amendment
+
+**Version 1.13 (2026-10-03)** separately incorporates conditional pure multi-payment graph business authority (§XV.10). It supersedes the blanket future-only graph scope only for this design; §XV.9 single-credit scope and all original-evidence, runtime and recovery gates remain unchanged. No persistence or writer is added.
 
 **Version 1.12 (2026-10-03)** conditionally qualifies §XV.7 for a future pure proven priced whole-pair membership contract (§XV.9), incorporating SPEC-PROD-002 §VI.1 and SPEC-PROD-001 §VI.1. Supersedes no immutable-history, current runtime or monetary proof rule; current production candidates remain diagnostic.
 

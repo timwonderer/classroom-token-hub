@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-PROD-003 | 1.6 | 2026-10-03 | 1.5 | Normative |
+| FEAT-PROD-003 | 1.7 | 2026-10-03 | 1.6 | Normative |
 
 ## I. Purpose
 
@@ -61,6 +61,13 @@ Recovery additionally requires `original_payroll_event_id` and `expected_preview
 
 Ledger determines remaining recovery as original credited cents minus prior attributable compensation cents and enforces the aggregate cap. Protection transfer legs carry no attributable compensation. If remaining recovery is zero, deny `ALREADY_RECOVERED` without a new correction or debit; exact replay of a prior successful command still returns its original result. Partial interval corrections followed by residual correction recover exactly the original credit, never more.
 
+### Historical graph interaction boundary
+
+SPEC-PROD-001 §VI.2 is incorporated for the interaction of independently proven historical graph attribution with existing full/residual recovery only. A top-up is a distinct positive original credit with its own cap; it is not negative compensation of a source payroll credit. Full/residual recovery remains scoped to its uniquely proven original business event and Ledger origin under the existing command contract. This amendment neither aggregates several historical originals into an unchecked whole-payment reversal nor changes the current input/receipt/writer schema.
+
+Future interval graph integration must serialize all involved origins against these same commands and include accepted pending and posted compensation. Exact full reversal needs zero prior compensation on its origin. Residual recovery is precisely that origin's proven original credit minus all proven prior compensation; it does not reprice work, reallocate surviving intervals or silently include another origin. Fully recovered origins contribute zero to subsequent proven interval recovery. If only an aggregate partial recovery is proven, it cannot establish which interval has remaining contribution; the graph paid invalidation denies unknown attribution. A separate residual command still needs its own complete aggregate monetary proof and unchanged business authority. No incomplete graph enables a new recovery, historical adapter or signature repair.
+
+
 ### Funding
 
 For a charge/deduction leaving checking negative, protection enabled plus sufficient savings transfers the entire shortfall atomically. Insufficient savings remains untouched; the full deduction posts and checking may become negative. Disabled protection transfers nothing. Own-account transfers retain their sufficient-funds rule. Payroll corrections incur no NSF fee and create no obligation or deferred deduction.
@@ -76,6 +83,9 @@ Deny unauthorized context/scope, missing target/original event, unavailable orig
 Targeted contract scenarios: positive payroll retains exact allocation inputs; teacher manual credit needs no policy; $45 payment with $15 attributable interval recovery permits only $30 residual recovery; full reversal before invalidation leaves later eligibility invalidation with no debit; same-key replay returns original recovery and different-key recovery cannot exceed the cap; concurrent payroll/invalidation serializes; cross-class and unprovable-history commands fail closed. Verify funding examples through SPEC-PROD-001 and preserve lifecycle destruction under DOM-PROD-001 §VII.1.a.
 
 ## IX. Amendment
+
+Version 1.7 (2026-10-03) defines historical graph interaction with per-origin exact/residual recovery while preserving existing inputs, receipts, writers and caps. It supersedes no mutation authority and enables no historical runtime path.
+
 
 Version 1.4 (2026-10-03) supersedes v1.3's exclusive payroll writer, whole-event-only recovery, and pre-command-reservation execution wording. This amendment authorizes domain-command writes coordinated by FEAT-PROD-003 and FEAT-PROD-005, exact uncompensated reversal, and residual correction. Runtime implementation is not included. Revisions must increment version/date, identify superseded rules, and preserve governing INV and DOM contracts.
 

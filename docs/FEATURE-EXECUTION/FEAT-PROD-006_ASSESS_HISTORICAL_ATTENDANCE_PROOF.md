@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-PROD-006 | 1.1 | 2026-10-03 | 1.0 | Normative |
+| FEAT-PROD-006 | 1.2 | 2026-10-03 | 1.1 | Normative |
 
 ## I. Purpose
 
@@ -22,11 +22,11 @@ Normative, subordinate to INV-CORE-000/001 and the owning-domain authorities bel
 - [INV-ARC-006](../INVARIANT/ARCHITECTURE/INV-ARC-006_COMMAND_BOUNDARY_FOR_MUTATION.md) §V; [INV-ARC-007](../INVARIANT/ARCHITECTURE/INV-ARC-007_GET_MUST_BE_PURE.md) §V; [INV-ARC-009](../INVARIANT/ARCHITECTURE/INV-ARC-009_DOMAIN_AUTHORITY_FOR_STATE.md) §V; [INV-ARC-016](../INVARIANT/ARCHITECTURE/INV-ARC-016_LAWFUL_EXISTENCE_AND_AUDIT_LINEAGE.md) §V–VI, VIII–IX; [INV-ARC-021](../INVARIANT/ARCHITECTURE/INV-ARC-021_CROSS_DOMAIN_REFERENCE_AND_COORDINATION.md) §V, VII.
 - [DOM-CLASS-001](../DOMAIN/DOM-CLASS-001_CLASS_CONFIGURATION_DOMAIN.md) §V, VIII: pure current teacher/class owner binding through `verify_teacher_owns_class`; class authority is not inferred from historic actors.
 - [DOM-IDEN-006](../DOMAIN/DOM-IDEN-006_CANONICAL_CONTEXT_RESOLUTION.md): current canonical teacher authority and target scope.
-- [DOM-PROD-001](../DOMAIN/DOM-PROD-001_PRODUCTIVITY_AND_PAYROLL_DOMAIN.md) §XIII.9, XV.9: pair, conditional original business proof, payroll boundary, original business evidence and historical descriptors.
-- [DOM-POL-001](../DOMAIN/DOM-POL-001_POLICIES_DOMAIN.md) §X.1–2: bounded retained original payroll-setting input DTOs and conditional original-setting evidence contribution.
-- [DOM-LED-001](../DOMAIN/DOM-LED-001_LEDGER_DOMAIN.md) §IX.2–3: conditional historical attribution, monetary identity, arithmetic replay and compensation diagnostic conclusions.
+- [DOM-PROD-001](../DOMAIN/DOM-PROD-001_PRODUCTIVITY_AND_PAYROLL_DOMAIN.md) §XIII.9, XV.9–10: pair, conditional original business proof, payroll boundary, original business evidence and historical descriptors.
+- [DOM-POL-001](../DOMAIN/DOM-POL-001_POLICIES_DOMAIN.md) §X.1–3: bounded retained original payroll-setting input DTOs and conditional original-setting evidence contribution.
+- [DOM-LED-001](../DOMAIN/DOM-LED-001_LEDGER_DOMAIN.md) §IX.2–4: conditional historical attribution, monetary identity, arithmetic replay and compensation diagnostic conclusions.
 - [DOM-OPS-002](../DOMAIN/DOM-OPS-002_AUDIT_LINEAGE_INTEGRITY.md) §6.1–6.2: unchanged canonical original creation/coverage evidence for conditional proof; §6.2A: separate envelope/coverage diagnostics only.
-- [SPEC-PROD-002](../SPEC/SPEC-PROD-002_HISTORICAL_ATTENDANCE_PROOF_ASSESSMENT.md) §V–VIII, incorporated in full; [SPEC-PROD-001](../SPEC/SPEC-PROD-001_ATTENDANCE_INTERVAL_ELIGIBILITY_AND_PAYROLL_CORRECTION.md) §VI–VI.1 incorporates conditional priced whole-pair business proof and derived attribution while retaining execution proof gates.
+- [SPEC-PROD-002](../SPEC/SPEC-PROD-002_HISTORICAL_ATTENDANCE_PROOF_ASSESSMENT.md) §V–VIII, incorporated in full; [SPEC-PROD-001](../SPEC/SPEC-PROD-001_ATTENDANCE_INTERVAL_ELIGIBILITY_AND_PAYROLL_CORRECTION.md) §VI–VI.2 incorporates conditional priced whole-pair business proof and derived attribution while retaining execution proof gates.
 
 ## V. Inputs and domain interfaces
 
@@ -53,6 +53,14 @@ Only original priced positive payroll events consisting wholly of completed cano
 
 No original scan, summary, signature, reservation, sequence, policy row, cycle or completed Interpretation record is modified. No historical signing, adoption, proof cache, compatibility adapter, correction preview integration, route or UI is authorized. Even a positive original-business result leaves automatic recovery unavailable until original monetary creation/posting and complete compensation are independently proven under unchanged governing contracts and a later scoped integration is authorized. The observed 153-event candidate cohort remains diagnostic; unpriced events, zero runs, fragments/remainders and manual/top-up attribution remain separate future scopes.
 
+### VI.2 Future conditional graph orchestration
+
+This FEAT separately incorporates SPEC-PROD-001 §VI.2 and SPEC-PROD-002 §VI.2 under DOM-PROD-001 §XV.10, DOM-LED-001 §IX.4 and DOM-POL-001 §X.3. Identity, Class Configuration and Operations dependencies already declared in §IV remain cumulative; all cross-domain coordination stays here under INV-ARC-021 §V/VII. §VI.1's initial single-credit shape remains unchanged. The existing runtime and named APIs in §V remain diagnostic; this is a future pure contract, not an implemented graph interface.
+
+Resolve current teacher/class/target scope before target evidence. Compose complete bounded original graph/business/source/boundary evidence from PROD, original settings from Policies, canonical original version-specific creation/coverage from Operations and unique credit, replay, graph allocations and compensation from Ledger. Each domain validates explicit class/target/source binding to its owned facts; no caller proof flags, domain-to-domain calls or FEAT monetary arithmetic are permitted. All connected contributions and every original credit require complete original proof, including zero-value payroll boundaries and the original positive incident top-up's complete source windows. Missing/changed evidence denies the entire graph qualification while preserving separate diagnostic findings.
+
+Return domain-owned original source facts and newly derived graph attribution version separately, including independent per-origin conservation and prior compensation attribution dispositions. Ambiguous same-total graphs, unknown original writer/visibility, incomplete window/policy source selection, a guessed credit split, unavailable loss components, pending original credits or unknown partial recovery attribution cannot yield a positive graph result. No read locks, reconciliation, flush, commit, audit emission, new signature, graph cache or proof enrollment occurs. No correction preview, command, route or UI is enabled. Positive business/graph results never substitute for existing Ledger/Operations monetary proof or FEAT-PROD-005's separately gated later atomic integration.
+
 ## VII. Denials and verification
 
 Reject malformed/overlarge selection and unauthorized scope before target evidence. Return explicit unavailable/unsupported/mismatch observations for missing source assignment, pricing, credit identity, coverage, compensation, visibility or bounds; separate actual integrity failures from unverified historical gaps. Avoid names or other PII in diagnostics.
@@ -60,6 +68,9 @@ Reject malformed/overlarge selection and unauthorized scope before target eviden
 Verify SPEC-PROD-002 §VIII with targeted tests and consult prior pytest_result first. Current FEAT-PROD-005/003 proof gates, v2/v3 verification, original records and signature bytes must remain unchanged.
 
 ## VIII. Amendment
+
+Version 1.2 (2026-10-03) separately incorporates future conditional pure graph composition (§VI.2). Supersedes future-only graph design scope, preserving §VI.1, implemented diagnostics, all proof gates and no-write authority.
+
 
 Version 1.1 (2026-10-03) authorizes future conditional original priced whole-pair business proof composition, superseding diagnostic-only contract scope solely for §VI.1. Existing diagnostic runtime, canonical evidence and recovery gates are unchanged.
 
