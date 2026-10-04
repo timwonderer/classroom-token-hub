@@ -16,7 +16,9 @@ and run sheet.
 
 Run as root. Replace every `CHANGE_ME` and `<live-db>`.
 
-1. **Packages.** `pg_dump` must be at least the server's major version (14 today).
+1. **Packages.** `pg_dump` and `pg_restore` must be the **same** major version as the server and the verify
+   database (14 today). A newer `pg_dump` writes settings an older server rejects (17's `SET transaction_timeout`
+   fails on 14), and verification then fails.
 
    ```bash
    apt-get install age rclone python3-psycopg2 postgresql-client
@@ -98,7 +100,7 @@ explains why the application is stopped first.
 
 ```bash
 # once: tools
-brew install age libpq          # libpq provides pg_dump / pg_restore; add its bin to PATH
+brew install age postgresql@14  # pg_dump / pg_restore matching the server's major; add its bin to PATH
 python3 -m venv ~/cth-backup-venv && ~/cth-backup-venv/bin/pip install psycopg2-binary
 
 # throwaway Postgres whose data lives in memory, so restored plaintext never reaches the disk

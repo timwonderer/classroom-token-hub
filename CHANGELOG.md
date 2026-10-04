@@ -8,9 +8,12 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
-## [2.1.1] - Not yet released — Attendance correction, store redemption decisions, no student names in logs
+### Fixed
+- **Backup tool install sheet names the wrong `pg_dump` version.** `infra/db-backup/README.md` said `pg_dump` must be at least the server's major version. A newer one fails verification: `pg_dump` 17 writes `SET transaction_timeout`, which the PostgreSQL 14 verify database rejects, as the first v2.1.1 pre-release backup attempt showed. It now requires the same major version, and the Mac install line uses `postgresql@14`.
 
-Everything merged to `main` since v2.1.0, including #1477 and its four migrations, the sysadmin logout change (#1482), the backup proposal (#1481, not installed) and the performance fixes for #1478 and #1479 (#1483). It includes the untagged production release of 2026-10-03 (`ad9574334`, #1466-#1470). The release SHA is the tip of `main` chosen at release; the date, the tag and the release record (`docs/ops/audits/DEPLOY_<date>_<sha>.md`, drafted as `DEPLOY_PENDING_v2.1.1.md`) are filled in when the operator deploys. Three of the four migrations cannot be downgraded: rollback past them is a database restore, not a redeploy.
+## [2.1.1] - 2026-10-04 — Attendance correction, store redemption decisions, no student names in logs
+
+Everything merged to `main` since v2.1.0, including #1477 and its four migrations, the sysadmin logout change (#1482), the backup proposal (#1481, not installed) and the performance fixes for #1478 and #1479 (#1483). It includes the untagged production release of 2026-10-03 (`ad9574334`, #1466-#1470). Released to production as `2bdfac65e` on 2026-10-04; record: `docs/ops/audits/DEPLOY_2026-10-04_2bdfac65e.md`. Three of the four migrations cannot be downgraded: rollback past them is a database restore, not a redeploy.
 
 ### Testing
 - Full-suite fixtures now create immutable payroll sources with real audit lineage, build historical migration inputs forward from pinned predecessors, and preserve historical monetary evidence. The full-suite workflow installs Chromium for browser checks; balance verification prints the canonical posting-state value across Python versions.
