@@ -178,7 +178,11 @@ The release's specific checks, as planned:
 `ledger_transaction.status`. Under SOP-DEP-001 §XIV the operator chooses, on verified evidence, between:
 
 - **Fix forward:** a reviewed forward migration or code fix on `main`, released the same way.
-- **Restore:** stop the application, restore backup point B (`cth-db-20261004T203352Z-manual`, §VI), and release `4c2fc4bc4` or `ad9574334`.
+- **Restore:** stop the application, restore backup point B (`cth-db-20261004T203352Z-manual`, §VI), and release `ad9574334` or `4c2fc4bc4`.
+  Neither adds a migration, so both match backup B's schema (Alembic `a4b50fee84c3`). `ad9574334` is on `main` and
+  releases as is. `4c2fc4bc4` (adds the login page notice, #1476) is off `main`, so `release-v2.yml` refuses it
+  until `V2_RELEASE_LINEAGE_REF` is set to `claude/project-thread-nhpx6y`, as it was at 18:21 UTC; restore it to
+  `main` afterwards.
   Anything written after the release (payroll, purchases, attendance) is lost and must be re-entered.
 
 ## Host maintenance in the same window
