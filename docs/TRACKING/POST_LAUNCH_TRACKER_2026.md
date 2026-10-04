@@ -5,7 +5,7 @@
 | Status | **ACTIVE — canonical tracker** |
 | Opened | 2026-09-28, after the v2.0.1 release |
 | Baseline commit | `c42f882` (`main`) |
-| Production | v2.1.0 = `5ac05ea6f`, deployed 2026-10-02 ([record](../ops/audits/DEPLOY_2026-10-02_5ac05ea6f.md)). Latest tag `v2.1.0` |
+| Production | v2.1.1 = `2bdfac65e`, deployed 2026-10-04 ([record](../ops/audits/DEPLOY_2026-10-04_2bdfac65e.md)). Latest tag `v2.1.1` |
 | Supersedes | `PRODUCTION_READINESS_2026-09.md`, the pre-launch ship tracker, archived at `docs/archive/v2-tracking-2026/` once launch closed its purpose |
 
 This file carries the open work that survived launch. Every item was checked against the code on
@@ -28,22 +28,30 @@ authority stays with `INV-*`, `DOM-*`, `FEAT-*`, `SPEC-*` and `SOP-*`.
 | (untagged) | `29b99b14` (#1442) | 2026-09-29 | None yet |
 | (untagged) | `00166e56` (#1443) | 2026-09-29 | None yet |
 | (untagged) | `314158d53` (#1438, #1449, #1451) | 2026-09-30 | [DEPLOY_2026-09-30_314158d53.md](../ops/audits/DEPLOY_2026-09-30_314158d53.md) |
-| v2.1.0 | `5ac05ea6f` (#1464) | 2026-10-02 | [DEPLOY_2026-10-02_5ac05ea6f.md](../ops/audits/DEPLOY_2026-10-02_5ac05ea6f.md); production runs this commit |
+| v2.1.0 | `5ac05ea6f` (#1464) | 2026-10-02 | [DEPLOY_2026-10-02_5ac05ea6f.md](../ops/audits/DEPLOY_2026-10-02_5ac05ea6f.md) |
+| (untagged) | `ad9574334` (#1470) | 2026-10-03 | [DEPLOY_2026-10-03_ad9574334.md](../ops/audits/DEPLOY_2026-10-03_ad9574334.md) |
+| (untagged hotfix, off `main`) | `4c2fc4bc4` (#1476) | 2026-10-04 | Described in the v2.1.1 record |
+| v2.1.1 | `2bdfac65e` | 2026-10-04 | [DEPLOY_2026-10-04_2bdfac65e.md](../ops/audits/DEPLOY_2026-10-04_2bdfac65e.md); production runs this commit |
 
 ---
 
 ## II. Operator follow-ups from the v2.0.1 release
 
-- [ ] **Lift the Cloudflare Access window** and post the resolved status update. The update should
-  say that everyone was signed out once and that passkeys must be registered again. Passkey
-  registration and sign-in are verified, so nothing blocks this.
+- [x] **Lift the Cloudflare Access window** and post the resolved status update. Done: the app has been
+  in daily use since, and each later window was lifted the same way, most recently 2026-10-04 after v2.1.1
+  (`2bdfac65e`).
 - [x] **Publish the security advisory.** Published 2026-09-28 as
   [GHSA-5v6c-mw3v-fmf2](https://github.com/timwonderer/classroom-token-hub/security/advisories/GHSA-5v6c-mw3v-fmf2)
   (critical; CVSS v4.0 9.2; CWE-304 with CWE-386 and CWE-459). Linked from the `[2.0.1]` section of
   `CHANGELOG.md` in `05951375d` (#1464).
 - [ ] **Check public routes** once the window lifts. They were not verified at release because the
-  gate was in place.
-- [ ] **Finish verifying the student-setup memory store.** Production has run the username-retention check
+  gate was in place. On 2026-10-04, after the v2.1.1 window, `/student/login` answered 200 from outside with no
+  Access redirect; the other public routes are still unchecked.
+- [x] **Finish verifying the student-setup memory store.** Done 2026-10-04 in the v2.1.1 (`2bdfac65e`) window ([record](../ops/audits/DEPLOY_2026-10-04_2bdfac65e.md),
+  §VI): no persistence, no slow log, no replicas, every listed command refused with `NOPERM`, and `LimitCORE=0` and
+  `MemorySwapMax=0` on both units. The store is outside the backup design, which dumps only Postgres. Two follow-ups
+  from that check are in the record: the host runs Redis 6.0.16 while the README says 7+, and the app runs as
+  `root`. Original item: Production has run the username-retention check
   (#1442; FEAT-IDEN-002 1.5, SPEC-IDEN-001, INV-ARC-018 §IX) since release `29b99b14` on 2026-09-29, so the
   dedicated Redis is in place: the app refuses student setup unless `STUDENT_SETUP_REDIS_URL` answers with no
   RDB/AOF, no slow log, and a primary with no replicas. The app does not check the rest of
@@ -254,7 +262,7 @@ against this tracker, the archived launch trackers and the live-test RESUME reco
     and jobs paid 15 minutes worked at $1/min as $150.00 after a save of $10/min.
   - **Production.** Not yet exercised: each class has exactly one payroll settings row and one payroll version, and
     `policy_transitions` is empty. It is reachable by any teacher's next rate save.
-  - **Status (2026-09-30).** Fixed in #1450, which is not yet deployed. `payroll_settings` becomes append-only and
+  - **Status (2026-09-30).** Fixed in #1450, released in v2.1.0 (`5ac05ea6f`, 2026-10-02). `payroll_settings` becomes append-only and
     effective-dated. The owner's rulings are implemented: a monthly schedule is the anchored calendar month
     (SPEC-TIME-001 §IX.12), pay frequency is derived rather than stored, and the only schedules are weekly, biweekly
     and monthly. `first_pay_date` is required.
@@ -291,23 +299,26 @@ against this tracker, the archived launch trackers and the live-test RESUME reco
   - **Status (2026-10-02).** #1446 is released in v2.1.0: `GET /sysadmin/login` no longer signs anyone out. Its
     nginx snippet (`infra/grafana-auth/README.md`) is an operator step and has not been applied, so the Grafana
     loop is still open. Loki and Tempo are unchanged by the release.
-  - **Loki.** Loki stores chunks under `/tmp/loki/chunks`, which is emptied at boot, and has no retention period
-    set. Local app logs rotate at 1 MB × 6.
-  - **Tempo.** Tempo is still crash-looping (live-test finding 18, `RESUME_2026-09-22.md`): about 117,000 restarts,
-    roughly 390,000 journal lines a day into Loki, and the app's OTLP trace export (`OTEL_TRACES_ENABLED=true`)
-    targets it.
+  - **Loki.** *Resolved by 2026-10-04 (read-only host check in the v2.1.1 `2bdfac65e` window; a host change, so no
+    repository commit):* Loki stores chunks under `/var/lib/loki` with a
+    336 h (14-day) retention, and `/tmp/loki` no longer exists. Previously it used `/tmp/loki/chunks`, emptied at
+    boot, with no retention. Local app logs rotate at 1 MB × 6.
+  - **Tempo.** *Stopped by 2026-10-04:* `tempo` and `alloy` are disabled and inactive, with no restarts since the
+    2026-10-04 reboot, and both are on apt hold with `grafana`. Previously it was crash-looping (live-test finding 18,
+    `RESUME_2026-09-22.md`). Whether the app's `OTEL_TRACES_ENABLED` is now `false` was not checked.
 - [ ] **Leftover v1 data on the host.**
   - The owner deleted the 2025-07 and 2025-11 v1 database dumps on 2026-09-30.
-  - Still on disk: 333 MB of orphaned v1-era Loki log chunks under `/var/lib/loki/chunks`, dated 2025-12-22 to
-    2026-04-12. Loki has read from `/tmp/loki/chunks` since April, so nothing reaches these chunks.
+  - *Resolved by 2026-10-04:* the 333 MB of orphaned v1-era Loki chunks are gone. `/var/lib/loki/chunks` now holds
+    54 MB of live chunks dated 2026-09-26 to 2026-10-04.
   - Still on disk: the live-test database dumps and env-file copies. They are waiting on the owner confirming the
     keys are stored off the droplet.
 - [x] **PROD-PAY-001 incident record merged (#1441, 2026-10-01).**
   `docs/ops/audits/INCIDENT_2026-09-28_PROD-PAY-001.md`. Checked against production (read-only, 2026-10-01): 79
   `manual_credit` payroll events recorded between 04:21:32 and 04:25:47 UTC on 2026-09-29, matching the record's
   04:21–04:25 window and 79 students. Release records for the 2026-09-29 releases are tracked in §II.
-- [ ] **No database backup of any kind exists.** The owner confirmed on 2026-09-30 that DigitalOcean droplet backups
-  are off. There is also no scheduled dump and no WAL archiving.
+- [ ] **No scheduled database backup or WAL archiving exists.** The owner confirmed on 2026-09-30 that DigitalOcean
+  droplet backups are off, and there is no scheduled dump and no WAL archiving. The only recovery points are manual
+  pre-release dumps; the two from 2026-10-04 are the first proven to restore (below).
   - **Direction (owner, 2026-09-30).** Scheduled encrypted off-host backups, with a replacement baseline after each
     protected destruction:
     - seat, class or teacher-account deletion is a protected destruction;
@@ -316,13 +327,15 @@ against this tracker, the archived launch trackers and the live-test RESUME reco
     - baseline health is reported as CURRENT, or STALE/DEGRADED.
   - **Before any normative text or implementation:** a failure-mode review of this model is under way.
   - The pre-release dump for #1449 is an interim measure. It is not the settled architecture.
+  - **2026-10-04:** the v2.1.1 window took two manual points (A and B) with `infra/db-backup/cth_db_backup.py` from
+    the operator's Mac; both restored and verified, the first dumps ever proven to restore. Nothing is scheduled yet.
   - **Proposal (2026-10-04, not installed):** [DATABASE_BACKUP_PLAN.md](../ops/DATABASE_BACKUP_PLAN.md) and
     `infra/db-backup/`. It implements the direction above for review and lists the failure-mode questions it raises
     (§8). It also covers a one-off pre-release backup and restore check from the operator's Mac (§6).
 - [ ] **Security and ops decisions taken 2026-09-30.**
   - Disable Grafana anonymous Admin, then validate authenticated access.
-  - Disable Tempo and set `OTEL_TRACES_ENABLED=false`.
-  - Move Loki's storage out of `/tmp`. The retention period waits on the owner's review of what Loki retains.
+  - Disable Tempo and set `OTEL_TRACES_ENABLED=false`. Tempo is disabled (2026-10-04); the `.env` setting is unverified.
+  - Move Loki's storage out of `/tmp`. Done by 2026-10-04: `/var/lib/loki`, 336 h retention.
   - `GET /sysadmin/login` must not destroy another browser context. The fix is added to #1446.
   - **Follow-up:** `admin.login` has the same GET-time session pop (`app/routes/admin.py:2573`).
 - [x] **TLCP misclassified a student at the operator sign-in page as an invariant violation (fixed in #1469).**

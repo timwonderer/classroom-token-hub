@@ -15,7 +15,10 @@ Tooling: [`infra/db-backup/`](../../infra/db-backup/README.md).
 - DigitalOcean droplet backups are off. There is no scheduled dump and no WAL archiving.
 - The only recovery points are manual, `age`-encrypted pre-release dumps taken from the operator's Mac
   ([DEPLOY_2026-09-30_314158d53.md](audits/DEPLOY_2026-09-30_314158d53.md),
-  [DEPLOY_2026-10-02_5ac05ea6f.md](audits/DEPLOY_2026-10-02_5ac05ea6f.md)). The newest is 2026-10-02 04:44:28Z.
+  [DEPLOY_2026-10-02_5ac05ea6f.md](audits/DEPLOY_2026-10-02_5ac05ea6f.md),
+  [DEPLOY_2026-10-04_2bdfac65e.md](audits/DEPLOY_2026-10-04_2bdfac65e.md)). The newest is 2026-10-04 20:33:52Z
+  (point B of the v2.1.1 release). The two 2026-10-04 points are the first that were restored and verified with
+  `infra/db-backup/cth_db_backup.py` (§6).
 - `scripts/backup-database.sh` and `scripts/restore-database.sh` were v1-era and never scheduled. They wrote
   plaintext gzip dumps to the droplet's own disk and restored over the live database with a stale service name. This
   change removes them.
