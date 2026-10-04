@@ -97,6 +97,7 @@ a dated observation; the record itself requires a fresh preflight before deploym
 | CI on the release commit | *To record at release.* Push CI on `66343d1` (merge of #1477): Policy Guardrails, Lint Workflows, Check Database Migrations, Deploy GitHub Pages Site and Documentation Link Checks passed. |
 | **Backup** | *To record at release.* **Required:** a fresh encrypted dump taken after the application is stopped and before dispatch, verified restorable, as for v2.1.0. It is the only rollback. |
 | Application stopped before dispatch | *To record at release.* Required: the running code maps `ledger_transaction.status`, which `e7c2a9d4f610` drops, and the scheduler must not post during the migration. |
+| **Pre-release balance baseline** | *To record at release.* After the application is stopped and before dispatch, read per-class checking and savings totals in `BEGIN READ ONLY` and record them here (class ids only, no names). §VIII compares against this read; once the forward-only migrations run, the baseline is recoverable only from the backup. |
 | Timing | Outside the school day, and not on the 2026-10-10 payday. |
 
 ## Release run
@@ -109,7 +110,7 @@ a dated observation; the record itself requires a fresh preflight before deploym
 this release has these specific checks:
 
 - **Database revision** is `f9a3c7d1e620`; `ledger_transaction` has no `status` column.
-- **Balances unchanged:** checking and savings totals per class match the pre-release read.
+- **Balances unchanged:** checking and savings totals per class match the §VI pre-release balance baseline.
 - **#1472:** service journal lines appear once each, with no `INFO:app:` duplicates after the first passkey sign-in.
 - **#1473:** Economy > Store shows the Redemptions tab; a waiting redemption in a real class can be decided without
   a 500.
