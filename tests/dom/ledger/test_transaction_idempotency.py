@@ -35,6 +35,8 @@ def test_DOM_LED_001__idempotent_transaction_types_are_explicit():
         "refund",
         "overdraft_fee",
         "payroll",
+        # FEAT-PROD-005 interval recovery and FEAT-PROD-003 residual recovery.
+        "payroll_correction",
         "manual_payment",
         "bug_reward",
         "issue_reversal",

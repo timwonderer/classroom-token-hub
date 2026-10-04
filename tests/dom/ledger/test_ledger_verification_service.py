@@ -12,17 +12,27 @@ def test_class_verification_requires_authorized_work_item():
 
 def test_class_verification_aggregates_ledger_proofs_without_scope_output():
     transfer = TransferProofResult("PASS", 2, True, True, True, True, True)
-    with patch("app.services.ledger_verification_service.verify_posted_balance",
-               return_value=LedgerProofResult("PASS", 100, 3)), \
+    with patch("app.services.ledger_verification_service.get_account_posting_boundary",
+               return_value=3) as account_boundary, \
+         patch("app.services.ledger_verification_service.verify_posted_balance",
+               return_value=LedgerProofResult("PASS", 100, 3)) as posted_proof, \
          patch("app.services.ledger_verification_service.verify_available_balance",
                return_value=LedgerProofResult("PASS", 100, 3)), \
+         patch("app.services.ledger_verification_service.get_transfer_posting_boundaries",
+               return_value={"checking": 3, "savings": 4}) as transfer_boundary, \
          patch("app.services.ledger_verification_service.verify_transfer",
-               return_value=transfer):
+               return_value=transfer) as transfer_proof:
         result = verify_class_ledger(
             class_id="class-internal", balance_scopes=((7, "checking"),),
             transfer_correlations=("corr_transfer",),
         )
 
+    account_boundary.assert_called_once_with(7, "class-internal", "checking")
+    posted_proof.assert_called_once_with("class-internal", 7, "checking", 3)
+    transfer_boundary.assert_called_once_with("class-internal", "corr_transfer")
+    transfer_proof.assert_called_once_with(
+        "class-internal", "corr_transfer", {"checking": 3, "savings": 4},
+    )
     assert result.state == "AVAILABLE"
     assert [check.check for check in result.checks] == [
         "posted_balance_reconciliation", "available_balance_constraint",
@@ -32,11 +42,16 @@ def test_class_verification_aggregates_ledger_proofs_without_scope_output():
 
 
 def test_class_verification_maps_unavailable_proof_to_unknown():
-    with patch("app.services.ledger_verification_service.verify_posted_balance",
+    with patch("app.services.ledger_verification_service.get_account_posting_boundary",
+               return_value=3) as account_boundary, \
+         patch("app.services.ledger_verification_service.verify_posted_balance",
                return_value=LedgerProofResult("UNAVAILABLE", complete=False, code="missing_snapshot")), \
          patch("app.services.ledger_verification_service.verify_available_balance",
                return_value=LedgerProofResult("PASS", 100, 3)):
         result = verify_class_ledger(
             class_id="class-internal", balance_scopes=((7, "checking"),),
         )
+    account_boundary.assert_called_once_with(7, "class-internal", "checking")
     assert result.state == "UNKNOWN"
+    assert [check.outcome for check in result.checks] == ["UNAVAILABLE", "PASS"]
+    assert result.checks[0].code == "missing_snapshot"

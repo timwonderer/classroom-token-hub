@@ -8,6 +8,7 @@ import sqlalchemy as sa
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 
+from tests.helpers.payroll_fixture import record_payroll_source_fixture
 from app import db
 from app.feats.base import FEATContext
 from app.models import AttendanceSession, PayrollEvent, Seat, Transaction, User
@@ -37,7 +38,7 @@ def test_detaching_last_principal_preserves_seat_and_financial_productivity_fact
     classroom = initialize('chemistry_p1', client.application)
     seat = classroom.students[0].seat
     seat_id, user_id = seat.id, seat.user_id
-    with FEATContext('FEAT-TEST-SETUP', idempotency_key='seat-history:setup'):
+    with FEATContext('FEAT-PROD-003', idempotency_key='seat-history:setup'):
         transaction = create_pending_transaction(
             seat_id=seat_id, target_seat_id=seat_id, actor_seat_id=seat_id,
             class_id=classroom.class_id, mechanism='self', amount=Decimal('4.00'),
@@ -46,11 +47,11 @@ def test_detaching_last_principal_preserves_seat_and_financial_productivity_fact
             class_id=classroom.class_id, status='active', reason_code='start_work')
         db.session.add(attendance); db.session.flush()
         setting = current_payroll_setting(classroom.class_id)
-        payroll = PayrollEvent(class_id=classroom.class_id, target_seat_id=seat_id,
+        payroll = record_payroll_source_fixture(class_id=classroom.class_id, target_seat_id=seat_id,
             actor_seat_id=classroom.teacher_seat.id, correlation_id='seat-history',
             idempotency_key='seat-history', policy_uuid=setting.policy_uuid,
             payroll_event_type='manual_credit')
-        db.session.add(payroll); db.session.flush()
+        db.session.flush()
         record_ids = transaction.id, attendance.id, payroll.id
     with FEATContext('FEAT-TEST-SETUP', idempotency_key='seat-history:detach'):
         seat.user_id = None

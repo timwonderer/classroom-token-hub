@@ -225,21 +225,15 @@ def test_DOM_IDEN_002__recovery_preserves_balance_and_transactions(client, recov
     seat = recovery_data["seat"]
     join_code = recovery_data["join_code"]
 
-    tx = Transaction(
-        seat_id=seat.id,
-        class_id=recovery_data["class_id"],
-        target_seat_id=seat.id,
-        actor_seat_id=seat.id,
-        mechanism="self",
-        amount=200.0,
-        type="deposit",
-        description="Initial deposit",
-        account_type="checking",
-        join_code=join_code,
-    )
+    from tests.helpers.ledger import record_ledger_fixture
+
     with FEATContext("FEAT-LED-001", idempotency_key="recovery:preserve_transactions"):
-        db.session.add(tx)
-        db.session.flush()
+        tx = record_ledger_fixture(
+            seat_id=seat.id, class_id=recovery_data["class_id"],
+            target_seat_id=seat.id, actor_seat_id=seat.id, mechanism="self",
+            amount=200.0, type="deposit", description="Initial deposit",
+            account_type="checking", posted=True,
+        )
 
     tx_count_before = Transaction.query.filter_by(seat_id=seat.id, class_id=recovery_data["class_id"]).count()
 

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-001      | 2.6     | 2026-10-01     | 2.5 | Normative |
+| SOP-DEP-001      | 2.7     | 2026-10-04     | 2.6 | Normative |
 
 ## I. Purpose
 
@@ -416,9 +416,16 @@ output is advisory only and is **not** independent verification authority.
    from classroom facts, and rebinding cannot reconstruct which principal a
    seat previously carried. `c1a1b2d3e4f5` (claim-artifact cleanup) downgrades
    to a no-op for the same reason — erased claim material is not recoverable.
-   Rolling back past either revision means restoring the database snapshot
-   taken in step 6, not walking the chain backwards. Confirm that snapshot
-   exists before applying them.
+   Three attendance/payroll recovery revisions also reject every downgrade,
+   including on empty tables: `e7c2a9d4f610` (derive Ledger posting from
+   reconciliation; restoring mutable status would weaken immutable audit
+   evidence), `f8b2d6e0a410` (immutable compensation provenance), and
+   `f9a3c7d1e620` (terminal attendance invalidation evidence). Their schema
+   protections must not be removed through a backward migration.
+   Rolling back past any of these revisions requires restoring the database
+   snapshot taken in step 6; otherwise use a separately reviewed forward fix.
+   Confirm that snapshot exists before applying them. *Version 2.7 supersedes
+   2.6's incomplete revision list; the fix-forward/restore policy is unchanged.*
 6. Confirm a recoverable snapshot of the target database exists before the test
    window opens.
 7. Reopen traffic only after the decision is recorded.
@@ -474,5 +481,6 @@ revision; where they disagree, the code wins and this document is corrected.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.7 | 2026-10-04 | §XIV: register the three attendance/payroll recovery revisions that reject all downgrades; preserve snapshot restore or reviewed fix-forward recovery. |
 | 2.6 | 2026-10-01 | §VII: production runs one worker, reverted 2026-10-01 after pending hall-pass requests held in per-process memory failed under two. More than one worker is permitted only when no request or workflow state is held in process memory (enforced by `tests/test_process_local_state_guard.py`). Two workers may be restored after pending hall-pass requests, now `pending_actions` rows, are deployed and verified. |
 | 2.5 | 2026-10-01 | §VII: more than one worker permitted; production to run two (operator ruling after incident OPS-DB-001). Scheduler ownership by advisory lock; verification query. |

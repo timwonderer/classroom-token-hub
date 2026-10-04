@@ -29,10 +29,10 @@ from datetime import timedelta, timezone
 from app import db
 from app.feats.base import FEATContext
 from app.feats.prod import record_attendance_session
-from app.models import AttendanceReasonCode, AttendanceSession
+from app.models import AttendanceReasonCode, AttendanceSession, PayrollSettings
 from app.scheduled_tasks import enforce_daily_limits_job
 from app.services.context_resolver import CanonicalContext
-from tests.helpers.class_domain import put_payroll_setting_in_force
+from app.services.payroll.settings import append_payroll_setting, current_payroll_setting
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
     canonical_temporal_resolver,
@@ -101,11 +101,17 @@ def _tap_in(classroom, seat, *, at):
     db.session.commit()
 
 
-def _configure_daily_limit(class_id, *, daily_limit_hours, idempotency_key):
-    """Set the class daily limit, enabling the DOM-PROD-001 §314 path."""
-    put_payroll_setting_in_force(
-        class_id, max_time_per_day=daily_limit_hours, max_time_per_day_unit="hours", pay_rate=0.25,
-    )
+def _configure_daily_limit(class_id, *, daily_limit_hours, idempotency_key, recorded_at):
+    """Record the fixture policy before the work it is intended to govern."""
+    current = current_payroll_setting(class_id)
+    data = {field: getattr(current, field) for field in PayrollSettings.SETTING_FIELDS}
+    data.update(max_time_per_day=daily_limit_hours, max_time_per_day_unit="hours", pay_rate=0.25)
+    with FEATContext("FEAT-TEST-SETUP", idempotency_key=idempotency_key):
+        append_payroll_setting(
+            class_id=class_id, settings_data=data,
+            effective_date=recorded_at, created_at=recorded_at,
+        )
+    db.session.commit()
 
 
 def _aware(ts):
@@ -160,12 +166,13 @@ def test_DOM_PROD_001__stale_session_limit_applies_within_its_own_day(client):
     seat = classroom.students[0].seat
     daily_limit_hours = 1.0
 
+    tap_in_at = _stale_tap_in_at(classroom)
     _configure_daily_limit(
         classroom.class_id,
         daily_limit_hours=daily_limit_hours,
         idempotency_key="stale_sweep:limit",
+        recorded_at=tap_in_at - timedelta(seconds=1),
     )
-    tap_in_at = _stale_tap_in_at(classroom)
     _tap_in(classroom, seat, at=tap_in_at)
 
     enforce_daily_limits_job()
@@ -189,12 +196,13 @@ def test_DOM_PROD_001__stale_closure_does_not_block_working_today(client):
 
     # A limit is configured so the §314 path is live: the pre-fix job reached it,
     # clamped the interval to TODAY's midnight, and dated the closure to today.
+    tap_in_at = _stale_tap_in_at(classroom)
     _configure_daily_limit(
         classroom.class_id,
         daily_limit_hours=1.0,
         idempotency_key="stale_sweep:blocks_today",
+        recorded_at=tap_in_at - timedelta(seconds=1),
     )
-    tap_in_at = _stale_tap_in_at(classroom)
     _tap_in(classroom, seat, at=tap_in_at)
 
     enforce_daily_limits_job()
@@ -228,14 +236,15 @@ def test_DOM_PROD_001__session_opened_today_and_under_limit_is_left_open(client)
     classroom = initialize("chemistry_p1", client.application)
     seat = classroom.students[0].seat
 
+    now_utc = _now_utc(classroom)
+    # Anchored to today's boundary so the seed stays "earlier today" at any hour.
+    tap_in_at = max(now_utc - timedelta(minutes=30), _day_bounds(classroom, now_utc).boundary_start_utc)
     _configure_daily_limit(
         classroom.class_id,
         daily_limit_hours=8.0,
         idempotency_key="stale_sweep:generous_limit",
+        recorded_at=tap_in_at - timedelta(seconds=1),
     )
-    now_utc = _now_utc(classroom)
-    # Anchored to today's boundary so the seed stays "earlier today" at any hour.
-    tap_in_at = max(now_utc - timedelta(minutes=30), _day_bounds(classroom, now_utc).boundary_start_utc)
     _tap_in(classroom, seat, at=tap_in_at)
 
     enforce_daily_limits_job()

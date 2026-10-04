@@ -2481,3 +2481,8 @@ body.error-page {
         flex-direction: column;
     }
 }
+
+/* Preserve authored line breaks in Store redemption request notes. */
+.redemption-student-note {
+    white-space: pre-wrap;
+}
