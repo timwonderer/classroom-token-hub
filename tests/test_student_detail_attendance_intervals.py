@@ -89,20 +89,21 @@ def test_open_work_shows_source_without_creating_closure(app, client):
     assert AttendanceSession.query.count() == before
 
 
-def test_historical_missing_contribution_is_explained_and_never_shown_as_zero(app, client, monkeypatch):
+@pytest.mark.parametrize('membership_status',['historical_unavailable','recorded'])
+def test_historical_missing_contribution_is_explained_and_never_shown_as_zero(app, client, monkeypatch,membership_status):
     classroom = initialize_as_teacher('chemistry_p1', client, app)
     pair = _attendance(classroom)[0]
     url = _detail_url(client, classroom.students[0].seat.public_id)
     import app.services.payroll_interval_provenance as provenance
     monkeypatch.setattr(provenance, 'payroll_interval_memberships',
-        lambda *args, **kwargs: {pair: {'status': 'historical_unavailable', 'event': None, 'pricing': None}})
+        lambda *args, **kwargs: {pair: {'status':membership_status,'event':None,'pricing':None,'requires_reconstruction':True}})
     html = client.get(url).get_data(as_text=True)
     attendance = html.split('<!-- ATTENDANCE TAB:')[1].split('<!-- RENT TAB')[0]
     assert 'Historical contribution unavailable' in attendance
-    assert 'Automatic partial correction is blocked' in attendance
+    assert 'Review its source records before correcting this interval.' in attendance
     assert '$0.00' not in attendance
     assert 'Original payroll record' not in attendance
-    assert 'Historical payroll does not contain complete interval evidence.' in html
+    assert 'Historical contributions are reconstructed from attendance, payroll windows' in html
     assert 'Invalidate' not in attendance
 
 
@@ -158,7 +159,7 @@ def test_payroll_history_evidence_notice_does_not_require_an_attendance_pair(app
     import app.services.payroll_interval_provenance as provenance
     monkeypatch.setattr(provenance, 'payroll_provenance_history_limitations', lambda *args, **kwargs: True)
     html = client.get(url).get_data(as_text=True)
-    assert 'Historical payroll does not contain complete interval evidence.' in html
+    assert 'Historical contributions are reconstructed from attendance, payroll windows' in html
     assert 'No attendance records found for this student.' in html
 
 
@@ -236,3 +237,29 @@ def test_unknown_historical_work_discloses_incomplete_estimate(app, client):
     assert 'Unpaid earnings estimates exclude that work and are incomplete.' in html
     assert 'Payroll settlement is blocked until the evidence can be resolved.' in html
     assert 'Historical contribution unavailable' in html
+
+
+@pytest.mark.parametrize('membership_status',['historical_unavailable','recorded'])
+def test_validated_historical_detail_exposes_contribution_originals_and_teacher_control(app,client,monkeypatch,membership_status):
+    from types import SimpleNamespace
+    classroom=initialize_as_teacher('chemistry_p1',client,app)
+    pair=_attendance(classroom)[0]
+    url=_detail_url(client,classroom.students[0].seat.public_id)
+    import app.services.payroll_interval_provenance as provenance
+    import app.feats.attendance_interval_invalidation_feat as feat
+    monkeypatch.setattr(provenance,'payroll_interval_memberships',lambda *a,**k:{pair:{
+        'status':membership_status,'event':SimpleNamespace(id=103) if membership_status=='recorded' else None,
+        'pricing':None,'requires_reconstruction':True}})
+    at=datetime(2026,8,3,18,tzinfo=timezone.utc)
+    monkeypatch.setattr(feat,'historical_attendance_interval_details',lambda **k:{pair:{
+        'allocated_cents':125,'status':'verified','allocation_version':'historical-reconstruction-v1',
+        'original_events':(SimpleNamespace(event_id=101,recorded_at=at),SimpleNamespace(event_id=102,recorded_at=at)),}})
+    counts=tuple(model.query.count() for model in (AttendanceSession,PayrollEvent,Transaction))
+    response=client.get(url)
+    assert response.status_code==200
+    html=response.get_data(as_text=True)
+    attendance=html.split('<!-- ATTENDANCE TAB:')[1].split('<!-- RENT TAB')[0]
+    assert '$1.25' in attendance and 'Paid' in attendance
+    assert 'Payroll #101' in attendance and 'Payroll #102' in attendance
+    assert 'Invalidate work interval' in attendance and 'data-attendance-correction' in attendance
+    assert counts==tuple(model.query.count() for model in (AttendanceSession,PayrollEvent,Transaction))

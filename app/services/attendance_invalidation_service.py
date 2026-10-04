@@ -29,6 +29,7 @@ class IntervalEligibility:
     settlement_status: str
     payroll_event: object | None
     pricing: object | None
+    requires_reconstruction: bool = False
 
 
 def _scope(ctx, target_seat_id):
@@ -52,7 +53,8 @@ def interval_eligibility(*, ctx, target_seat_id, opening_event_id, closing_event
     membership = payroll_interval_memberships(target_seat_id, ctx.class_id, ctx=ctx).get((opening_event_id, closing_event_id))
     if membership is None:
         raise AttendanceCorrectionDenied('INCOMPLETE_INTERVAL')
-    return IntervalEligibility(interval, decision, membership['status'], membership.get('event'), membership.get('pricing'))
+    return IntervalEligibility(interval, decision, membership['status'], membership.get('event'), membership.get('pricing'),
+        membership.get('requires_reconstruction',False))
 
 
 def _validate_receipt(receipt):
@@ -66,11 +68,16 @@ def _validate_receipt(receipt):
         raise ValueError('Invalid nonmonetary command receipt.')
     patterns={'ledger_origin':r'ledger-credit:v1:[1-9][0-9]*','ledger_effects':r'ledger-effect:v1:[1-9][0-9]*',
         'correction_intent':r'prod-recovery:v1:(?:interval|payment):[a-f0-9]{64}',
-        'original_payroll_event':r'prod-payroll:v1:[1-9][0-9]*'}
+        'original_payroll_event':r'prod-payroll:v1:[1-9][0-9]*',
+        'ledger_origins':r'ledger-credit:v1:[1-9][0-9]*',
+        'original_payroll_events':r'prod-payroll:v1:[1-9][0-9]*'}
     for key,value in receipt['opaque_outcome_locators'].items():
         if key not in patterns:
             raise ValueError('Invalid nonmonetary command receipt.')
-        values=value if key=='ledger_effects' and isinstance(value,list) else [value] if key!='ledger_effects' else [None]
+        list_keys={'ledger_effects','ledger_origins','original_payroll_events'}
+        values=value if key in list_keys and isinstance(value,list) else [value] if key not in list_keys else [None]
+        if key in list_keys and isinstance(value,list) and (len(set(value)) != len(value) if all(isinstance(v,str) for v in value) else True):
+            raise ValueError('Duplicate opaque outcome locator.')
         if any(not isinstance(item,str) or re.fullmatch(patterns[key],item) is None for item in values):
             raise ValueError('Invalid opaque outcome locator.')
 
@@ -93,7 +100,7 @@ def _recovery_locators(intent,result,origin=None):
 
 
 def record_interval_invalidation(*, ctx, target_seat_id, opening_event_id, closing_event_id,
-                                reason_code, idempotency_key, recorded_at, receipt):
+                                reason_code, idempotency_key, recorded_at, receipt, reconstruction_graph=None):
     """Append one complete immutable terminal decision inside FEAT-PROD-005."""
     if get_active_feat_name() != 'FEAT-PROD-005':
         raise ValueError('Attendance invalidation requires FEAT-PROD-005.')
@@ -106,7 +113,14 @@ def record_interval_invalidation(*, ctx, target_seat_id, opening_event_id, closi
     _validate_receipt(receipt)
     disposition=receipt['original_settlement_disposition']
     outcomes=receipt['opaque_outcome_locators']
-    if eligibility.settlement_status == 'unpaid':
+    if reconstruction_graph is not None:
+        from app.services.historical_payroll_reconstruction import reconstructed_pair_events
+        members = reconstructed_pair_events(reconstruction_graph,ctx=ctx,target_seat_id=target_seat_id,
+            opening_event_id=opening_event_id,closing_event_id=closing_event_id)
+        if (not members or disposition not in {'PAID','RECOVERED','ZERO_CENT'}
+                or outcomes.get('original_payroll_event') not in {f'prod-payroll:v1:{i}' for i in members}):
+            raise AttendanceCorrectionDenied('INTEGRITY_FAILURE')
+    elif eligibility.settlement_status == 'unpaid':
         if disposition != 'UNPAID' or outcomes:
             raise AttendanceCorrectionDenied('INTEGRITY_FAILURE')
     elif eligibility.settlement_status == 'recorded' and eligibility.payroll_event is not None:
@@ -125,7 +139,7 @@ def record_interval_invalidation(*, ctx, target_seat_id, opening_event_id, closi
 
 
 def record_payroll_business_correction(*, ctx, original, correction_intent, correction_intent_locator,
-                                       invalidation_id=None, opening_event_id=None, closing_event_id=None, ledger_origin_locator=None, ledger_result_locator, recorded_at):
+                                       invalidation_id=None, opening_event_id=None, closing_event_id=None, ledger_origin_locator=None, ledger_result_locator, recorded_at, reconstruction_graph=None):
     """PROD-only correction writer; amounts and effects are supplied by no caller."""
     if get_active_feat_name() not in {'FEAT-PROD-005', 'FEAT-PROD-003'}:
         raise ValueError('Payroll correction requires its declared FEAT.')
@@ -138,8 +152,13 @@ def record_payroll_business_correction(*, ctx, original, correction_intent, corr
         decision=AttendanceIntervalInvalidation.query.filter_by(id=invalidation_id,class_id=ctx.class_id,
             target_seat_id=original.target_seat_id,opening_event_id=opening_event_id,closing_event_id=closing_event_id).first()
         membership=payroll_interval_memberships(original.target_seat_id,ctx.class_id,ctx=ctx).get((opening_event_id,closing_event_id),{})
-        if (decision is None or original.payroll_event_type != 'payroll' or membership.get('status') != 'recorded'
-            or membership.get('event') is not original or ledger_origin_locator is None):
+        admitted = (original.payroll_event_type == 'payroll' and membership.get('status') == 'recorded'
+            and membership.get('event') is original)
+        if reconstruction_graph is not None:
+            from app.services.historical_payroll_reconstruction import reconstructed_pair_events
+            admitted = original.id in reconstructed_pair_events(reconstruction_graph,ctx=ctx,
+                target_seat_id=original.target_seat_id,opening_event_id=opening_event_id,closing_event_id=closing_event_id)
+        if decision is None or not admitted or ledger_origin_locator is None:
             raise AttendanceCorrectionDenied('INTEGRITY_FAILURE')
     summary = {'original_payroll_event_id': original.id, 'correction_intent': correction_intent,
         'correction_intent_locator': correction_intent_locator, 'ledger_result_locator': ledger_result_locator}

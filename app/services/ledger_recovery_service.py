@@ -43,6 +43,227 @@ class CreditRecoveryPlan:
     material: tuple
 
 
+@dataclass(frozen=True)
+class ReconstructedRecoveryPlan:
+    settlement: object
+    recovery_kind: str
+    correction_intent_locator: str
+    allocated_cents: int
+    resolved_plan: object
+    material: tuple
+    principals: tuple
+    audit_observations: tuple
+    business_creation_evidence: tuple
+
+
+def resolve_reconstructed_recovery(
+    *,
+    settlement,
+    interval_key=None,
+    event_id=None,
+    banking_directive,
+    actor_seat_id,
+    mechanism,
+    correction_intent_locator,
+    audit_observations,
+    business_creation_evidence=(),
+):
+    """One aggregate charge, preserving an individual cap for every origin."""
+    principals = []
+    for origin in settlement.origins:
+        proof = origin.proof
+        if event_id is not None and origin.event_id != event_id:
+            continue
+        if interval_key is not None and tuple(interval_key) not in dict(
+            origin.allocations
+        ):
+            continue
+        if proof.status == "PENDING":
+            raise RecoveryIntegrityError("PAYROLL_PENDING")
+        if proof.status != "VERIFIED":
+            raise RecoveryIntegrityError("PROVENANCE_UNAVAILABLE")
+        if interval_key is None:
+            cents = proof.remaining_cents
+            kind = "EXACT_REVERSAL" if proof.recovered_cents == 0 else "RESIDUAL"
+        else:
+            kind = "INTERVAL"
+            cents = (
+                0
+                if proof.remaining_cents == 0
+                else dict(origin.allocations)[tuple(interval_key)]
+                - dict(origin.recovered_intervals).get(tuple(interval_key), 0)
+            )
+        if not 0 <= cents <= proof.remaining_cents:
+            raise RecoveryIntegrityError("INTEGRITY_FAILURE")
+        if cents:
+            import hashlib
+
+            intent = (
+                correction_intent_locator.rsplit(":", 1)[0]
+                + ":"
+                + hashlib.sha256(
+                    f"{correction_intent_locator}:{proof.origin_locator}".encode()
+                ).hexdigest()
+            )
+            if len(intent) > 128:
+                raise RecoveryIntegrityError("INTEGRITY_FAILURE")
+            principals.append(
+                (origin.event_id, proof.origin_locator, cents, intent, kind)
+            )
+    selected = [
+        o for o in settlement.origins if event_id is None or o.event_id == event_id
+    ]
+    if event_id is not None and len(selected) != 1:
+        raise RecoveryIntegrityError("PROVENANCE_UNAVAILABLE")
+    if not selected and event_id is not None:
+        raise RecoveryIntegrityError("PROVENANCE_UNAVAILABLE")
+    original = selected[0].proof.original if selected else None
+    total = sum(p[2] for p in principals)
+    kind = principals[0][4] if event_id is not None and principals else "INTERVAL"
+    intended = build_intended_ledger_plan(
+        seat_id=settlement.graph.target_seat_id,
+        class_id=settlement.graph.class_id,
+        debit_amount=Decimal(total) / 100,
+        description="Payroll correction",
+        transaction_type="payroll_correction",
+        actor_seat_id=actor_seat_id,
+        target_seat_id=settlement.graph.target_seat_id,
+        mechanism=mechanism,
+    )
+    resolved = (
+        resolve_intended_ledger_plan(
+            plan=intended, banking_directive=banking_directive, fee_authority="NONE"
+        )
+        if total
+        else None
+    )
+    material = (settlement.material, tuple(principals)) + (
+        (
+            resolved.directive_identity,
+            str(resolved.checking_before),
+            str(resolved.savings_before),
+            str(resolved.recovery_transfer_amount),
+        )
+        if resolved
+        else ()
+    )
+    return ReconstructedRecoveryPlan(
+        settlement,
+        kind,
+        correction_intent_locator,
+        total,
+        resolved,
+        material,
+        tuple(principals),
+        tuple(audit_observations),
+        tuple(business_creation_evidence),
+    )
+
+
+def apply_reconstructed_recovery(*, ctx, plan, idempotency_key):
+    """Revalidate under all origin locks and reserve every leg together."""
+    from app.feats.base import get_active_feat_name
+    from app.services.ledger_historical_reconstruction import (
+        validate_historical_settlement,
+    )
+    from app.services.ledger_command_service import create_reserved_effects
+    from app.services.ledger_balance_query_service import get_available_balances
+
+    graph = plan.settlement.graph
+    for origin in sorted(plan.settlement.origins, key=lambda o: o.proof.original.id):
+        lock_recovery_scope(
+            graph.class_id, graph.target_seat_id, origin.proof.origin_locator
+        )
+    evidence = plan.settlement.creation_evidence
+    fresh = validate_historical_settlement(
+        ctx=ctx,
+        graph=graph,
+        audit_observations=plan.audit_observations,
+        creation_evidence=evidence,
+        business_creation_evidence=plan.business_creation_evidence,
+    )
+    if fresh.material != plan.settlement.material:
+        raise RecoveryIntegrityError("PREVIEW_CHANGED")
+    if not plan.principals:
+        return {"effect_locators": (), "principals": ()}
+    checking, savings = get_available_balances(graph.target_seat_id, graph.class_id)
+    resolved = plan.resolved_plan
+    if (checking, savings) != (resolved.checking_before, resolved.savings_before):
+        raise RecoveryIntegrityError("PREVIEW_CHANGED")
+    common = dict(
+        class_id=graph.class_id,
+        seat_id=graph.target_seat_id,
+        target_seat_id=graph.target_seat_id,
+        actor_seat_id=resolved.intended_plan.actor_seat_id,
+        mechanism=resolved.intended_plan.mechanism,
+    )
+    effects = []
+    if resolved.recovery_transfer_amount:
+        import hashlib
+
+        correlation = (
+            "corr_funding_"
+            + hashlib.sha256(
+                f"{graph.class_id}:{get_active_feat_name()}:{idempotency_key}:funding".encode()
+            ).hexdigest()[:32]
+        )
+        for account, sign, kind in [
+            ("savings", -1, "Withdrawal"),
+            ("checking", 1, "Deposit"),
+        ]:
+            effects.append(
+                dict(
+                    common,
+                    account_type=account,
+                    amount=sign * resolved.recovery_transfer_amount,
+                    type=kind,
+                    description="Overdraft protection transfer",
+                    correlation_id=correlation,
+                )
+            )
+    indexes = []
+    originals = {o.proof.origin_locator: o.proof for o in fresh.origins}
+    for event_id, locator, cents, intent, kind in plan.principals:
+        proof = originals.get(locator)
+        if proof is None or cents > proof.remaining_cents:
+            raise RecoveryIntegrityError("INTEGRITY_FAILURE")
+        indexes.append((event_id, locator, intent, len(effects), kind))
+        principal_fields = dict(common)
+        if kind == "EXACT_REVERSAL":
+            principal_fields["correlation_id"] = proof.original.correlation_id
+        effects.append(
+            dict(
+                principal_fields,
+                account_type=proof.original.account_type,
+                amount=-Decimal(cents) / 100,
+                type="REVERSAL" if kind == "EXACT_REVERSAL" else "payroll_correction",
+                description="Payroll correction",
+                compensation_origin_locator=locator,
+                compensation_amount_cents=cents,
+                correction_intent_locator=intent,
+                original_transaction_id=(
+                    proof.original.id if kind == "EXACT_REVERSAL" else None
+                ),
+            )
+        )
+    if not effects:
+        return {"effect_locators": (), "principals": ()}
+    rows, created = create_reserved_effects(
+        class_id=graph.class_id,
+        feat_code=get_active_feat_name(),
+        idempotency_key=idempotency_key,
+        effects=effects,
+        canonical_intent=plan.material,
+    )
+    return {
+        "effect_locators": tuple(ledger_effect_locator(r) for r in rows),
+        "principals": tuple(
+            (event_id, locator, intent, ledger_effect_locator(rows[index]), kind)
+            for event_id, locator, intent, index, kind in indexes
+        ),
+        "created": created,
+    }
+
 def ledger_origin_locator(transaction):
     return f"ledger-credit:v1:{transaction.id}"
 

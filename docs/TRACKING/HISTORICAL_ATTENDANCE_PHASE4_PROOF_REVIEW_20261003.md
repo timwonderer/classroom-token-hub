@@ -1,5 +1,8 @@
 # Historical attendance Phase 4: original proof and integration gate review
 
+
+**Historical decision record:** the observations below remain a dated read-only investigation. Its blanket no-reconstruction conclusion is superseded by the later user-authorized immutable-source reconstruction contracts summarized in the [current decision package](HISTORICAL_ATTENDANCE_PROOF_DECISION_PACKAGE_20261003.md#current-ruling--immutable-source-reconstruction-and-lawful-new-correction). Original signatures, canonical coverage classifications and actual integrity-failure denials are not superseded. This report does not certify current production or authorize deployment.
+
 Date: October 3, 2026 (America/Los_Angeles). Classification: **informative working review** under SOP-DOC-000 §V–VI. Status: **proof-gap review complete; historical integration gate not satisfied**. This review grants no authority, changes no normative contract, and certifies no production signature. It neither introduces a proof policy nor implements Phase 2/3's conditional interfaces.
 
 ## Decision and scope

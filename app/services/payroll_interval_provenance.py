@@ -7,6 +7,7 @@ from app.utils.canonical_temporal_resolver import ensure_utc
 def payroll_interval_memberships(seat_id, class_id, *, ctx, as_of_utc=None):
     intervals = list_attendance_intervals(seat_id, class_id, ctx=ctx, as_of_utc=as_of_utc)
     pairs = {(i.opening_event_id, i.closing_event_id): i for i in intervals if i.closing_event_id is not None}
+    historical_candidates = set()
     result = {key: {"status": "unpaid", "event": None, "pricing": None} for key in pairs}
     events = PayrollEvent.query.filter_by(class_id=class_id, target_seat_id=seat_id,
         payroll_event_type="payroll").order_by(PayrollEvent.recorded_at.asc(), PayrollEvent.id.asc()).all()
@@ -14,7 +15,11 @@ def payroll_interval_memberships(seat_id, class_id, *, ctx, as_of_utc=None):
         summary = event.summary_json if isinstance(event.summary_json, dict) else {}
         if type(summary.get("allocation_version")) is not int or summary.get("allocation_version") != 1:
             for key, interval in pairs.items():
-                if interval.opened_at < ensure_utc(event.recorded_at):
+                closed_rule = summary.get('settlement_rule') == 'closed_sessions'
+                potentially_selected = (interval.closed_at <= ensure_utc(event.recorded_at) if closed_rule
+                    else interval.opened_at < ensure_utc(event.recorded_at))
+                if potentially_selected:
+                    historical_candidates.add(key)
                     result[key] = {"status": "historical_unavailable", "event": None, "pricing": None}
             continue
         shares = summary.get("pricing", [])
@@ -45,6 +50,8 @@ def payroll_interval_memberships(seat_id, class_id, *, ctx, as_of_utc=None):
         for key in mentioned:
             if key in result:
                 result[key] = {"status": "recorded", "event": event, "pricing": shares}
+    for key,membership in result.items():
+        membership['requires_reconstruction'] = key in historical_candidates
     return result
 
 

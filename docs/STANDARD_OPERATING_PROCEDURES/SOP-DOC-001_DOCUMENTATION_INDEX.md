@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001      | 3.18 | 2026-10-03     | 3.17 | Normative |
+| SOP-DOC-001 | 3.19 | 2026-10-03 | 3.18 | Normative |
 
 ---
 
@@ -154,8 +154,8 @@ Archived material is deliberately absent; see §VI.
 - [SPEC-OPS-004 — System Administration Console](../SPEC/SPEC-OPS-004_SYSTEM_ADMINISTRATION_CONSOLE.md)
 - [SPEC-OPS-005 — Feature Health Evidence (internal integrity)](../SPEC/SPEC-OPS-005_FEATURE_HEALTH_EVIDENCE.md)
 - [SPEC-OPS-006 — Public Request Monitoring](../SPEC/SPEC-OPS-006_PUBLIC_REQUEST_MONITORING.md) — v1.4 (ratified 2026-10-02): a Hall passes line; 404s on the hall-pass approve, reject and cancel routes count as failed requests at 3 or more and above 2%, on the card and the hero. v1.3: plain-language hero states and area labels, Under maintenance from the access-gate check.
-- [SPEC-PROD-001 — Attendance Interval Eligibility and Payroll Correction](../SPEC/SPEC-PROD-001_ATTENDANCE_INTERVAL_ELIGIBILITY_AND_PAYROLL_CORRECTION.md) — incorporated by DOM-PROD-001 and FEAT-PROD-003/005/006 and, for conditional historical monetary attribution only, DOM-LED-001; §VI.2 separately defines conditional multi-payment graph attribution; documentation authorization, not runtime availability.
-- [SPEC-PROD-002 — Historical Attendance Proof Assessment](../SPEC/SPEC-PROD-002_HISTORICAL_ATTENDANCE_PROOF_ASSESSMENT.md) — incorporated by owning DOM-PROD-001/DOM-LED-001/DOM-OPS-002/DOM-POL-001 and FEAT-PROD-006 for pure diagnostics; §VI.1 is conditionally incorporated by PROD/Ledger/Policies and FEAT-PROD-006 for future priced whole-pair business evaluation, without recovery enablement; §VI.2 is separately incorporated by PROD/Ledger/Policies and FEAT-PROD-006 for future complete graph evaluation.
+- [SPEC-PROD-001 — Attendance Interval Eligibility and Payroll Correction](../SPEC/SPEC-PROD-001_ATTENDANCE_INTERVAL_ELIGIBILITY_AND_PAYROLL_CORRECTION.md) — incorporated by DOM-PROD-001/DOM-LED-001 and FEAT-PROD-003/005/006 for canonical interval eligibility, exact historical reconstruction/graph attribution and atomic correction.
+- [SPEC-PROD-002 — Historical Attendance Proof Assessment](../SPEC/SPEC-PROD-002_HISTORICAL_ATTENDANCE_PROOF_ASSESSMENT.md) — incorporated by owning PROD/Ledger/Operations/Policies contracts and FEAT-PROD-006/005/003: pure assessment, distinct immutable-source historical reconstruction and existing atomic correction; original canonical lineage remains separately reported.
 - [SPEC-SEC-001 — Credentials and Identity Lookup Code Contract](../SPEC/SPEC-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_CODE_CONTRACT.md)
 - [SPEC-STORE-001 — Store Product Policy Payload Schema](../SPEC/SPEC-STORE-001_PRODUCT_POLICY_PAYLOAD_SCHEMA.md)
 - [SPEC-TEST-001 — Canonical Test Initializer](../SPEC/SPEC-TEST-001_CANONICAL_TEST_INITIALIZER.md)
@@ -273,6 +273,10 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.19 (2026-10-03):**
+- Registers the immutable-source historical reconstruction ruling: DOM-PROD-001 v1.14, DOM-LED-001 v2.12, DOM-OPS-002 v1.8, DOM-POL-001 v2.8, FEAT-PROD-003 v1.8, FEAT-PROD-005 v1.4, FEAT-PROD-006 v1.3, SPEC-PROD-001 v1.4 and SPEC-PROD-002 v1.3. Supersedes blanket legacy missing-modern-field/visibility denials, preserving exact modern creation proof, actual integrity rejection and current audit on new writes. No invariant, original record, signature, schema or historical backfill changes.
+
 
 **Version 3.18 (2026-10-03):**
 - Registers Phase 3 separate conditional multi-payment graph design: DOM-PROD-001 v1.13, DOM-LED-001 v2.11, DOM-POL-001 v2.7, SPEC-PROD-001 v1.3, SPEC-PROD-002 v1.2, FEAT-PROD-003 v1.7, FEAT-PROD-005 v1.3 and FEAT-PROD-006 v1.2. Complete original source/writer/visibility and per-origin monetary proof remain mandatory; no new schema, protected registry, writer, implemented API or historical recovery is added.

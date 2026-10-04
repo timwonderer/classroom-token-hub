@@ -20,6 +20,8 @@ class HistoricalAttendanceAssessment:
     money: tuple
     audit_coverage: tuple
     current_execution_eligibility: str = 'BLOCKED_DIAGNOSTIC_ONLY'
+    reconstruction: object | None = None
+    reconstruction_reason: str | None = None
 
 
 def assess_historical_attendance_proof(*, ctx, target_seat_id, payroll_event_ids=None, limit=50):
@@ -57,4 +59,38 @@ def assess_historical_attendance_proof(*, ctx, target_seat_id, payroll_event_ids
             money.append((event.event_id,assess_historical_payroll_money(ctx=ctx,class_id=ctx.class_id,
                 target_seat_id=target_seat_id,business_input=inputs,records=records,
                 audit_observations=diagnostics)))
-        return HistoricalAttendanceAssessment(business,tuple(money),diagnostics)
+        # A newly derived reconstruction is independent of original audit
+        # coverage. It never changes the diagnostic's canonical lineage state.
+        from app.services.historical_payroll_reconstruction import (
+            reconstruct_historical_payroll_graph, get_historical_reconstruction_business_records,
+        )
+        from app.services.ledger_historical_reconstruction import validate_historical_settlement
+        from app.services.ledger_evidence import LedgerCreationEvidence
+        from app.utils.audit_verifier import verified_creation_evidence
+        reconstruction,reason = None,None
+        try:
+            graph = reconstruct_historical_payroll_graph(ctx=ctx,target_seat_id=target_seat_id,
+                setting_inputs=settings,as_of_utc=at)
+            business_proofs=[]
+            for row in get_historical_reconstruction_business_records(ctx=ctx,target_seat_id=target_seat_id):
+                summary=row.summary_json or {}
+                if row.lineage_event_id is not None or summary.get('allocation_version')==1 or 'correction_intent_locator' in summary or 'command_receipt' in summary:
+                    proof=verified_creation_evidence('payroll_event',row,ctx.class_id)
+                    if proof is None:
+                        raise ValueError('INTEGRITY_FAILURE' if row.lineage_event_id is not None else 'PROVENANCE_UNAVAILABLE')
+                    business_proofs.append(LedgerCreationEvidence(proof.table_name,proof.row_pk,proof.class_id,
+                        proof.lineage_event_id,proof.lineage_token,proof.signature_version,proof.protected_fields,proof.protected_values))
+            credit_proofs=[]
+            for row in records:
+                if row.lineage_version in (2,3):
+                    proof=verified_creation_evidence('ledger_transaction',row,ctx.class_id)
+                    if proof is not None:
+                        credit_proofs.append(LedgerCreationEvidence(proof.table_name,proof.row_pk,proof.class_id,
+                            proof.lineage_event_id,proof.lineage_token,proof.signature_version,proof.protected_fields,proof.protected_values))
+            reconstruction=validate_historical_settlement(ctx=ctx,graph=graph,audit_observations=diagnostics,
+                creation_evidence=tuple(credit_proofs),business_creation_evidence=tuple(business_proofs))
+        except ValueError as exc:
+            reason=str(exc)
+        status='RECONSTRUCTION_VALIDATED' if reconstruction is not None and all(
+            o.proof.status=='VERIFIED' for o in reconstruction.origins) else 'PROVENANCE_UNAVAILABLE'
+        return HistoricalAttendanceAssessment(business,tuple(money),diagnostics,status,reconstruction,reason)

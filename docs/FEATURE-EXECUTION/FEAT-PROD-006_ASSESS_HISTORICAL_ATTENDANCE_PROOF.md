@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-PROD-006 | 1.2 | 2026-10-03 | 1.1 | Normative |
+| FEAT-PROD-006 | 1.3 | 2026-10-03 | 1.2 | Normative |
 
 ## I. Purpose
 
@@ -10,7 +10,7 @@ Authorize a teacher's pure bounded historical attendance assessment, preserving 
 
 ## II. Scope
 
-One canonical class and target student seat. This is a read FEAT composed beneath existing teacher/student-detail scope; this phase creates no HTTP route or teacher controls. No mutation FEAT context, reservation, audit observation write, adoption, migration or monetary action is authorized.
+One canonical class and target student seat. This is a read FEAT composed beneath existing teacher/student-detail scope; this phase creates no HTTP route or teacher controls. This assessment uses no mutation FEAT context, reservation, audit observation write, adoption, migration or monetary action. Its pure reconstruction interfaces are also composed directly by the separately authorized correction FEATs; this read FEAT is never nested.
 
 ## III. Authority Level
 
@@ -39,35 +39,30 @@ Policies `get_historical_payroll_setting_inputs` supplies bounded immutable reta
 1. Resolve current Class Configuration owner binding and Identity scope/capability and validate bounded inputs before reading target evidence.
 2. Obtain bounded Policies original-setting inputs and bounded complete PROD evidence and Ledger candidate requirements through their domain interfaces. A source cap produces unavailable evidence, not clipped canonical pairing.
 3. Obtain Operations batch diagnostics for required original rows/events with one bounded complete class-chain walk per invocation and pass immutable scoped observations to Ledger for its diagnostic monetary conclusion. Do not pass a boolean proof override or convert diagnostics into typed creation evidence.
-4. Return separate reconstruction, business replay/membership, pricing provenance, scoped monetary comparison, signed coverage, compensation completeness and current execution-eligibility observations with reasons and locators. Recovery eligibility is blocked unless existing independent proof gates qualify; diagnostic arithmetic success alone never qualifies.
+4. Return separate reconstruction, business replay/membership, pricing provenance, scoped monetary comparison, signed coverage, compensation completeness and current execution-eligibility observations with reasons and locators. Recovery eligibility requires independently validated complete reconstruction or modern exact proof under §VI.1–2; diagnostic arithmetic alone never qualifies.
 
-Every query runs without autoflush, locking, commit, reconciliation, closure emission, audit or integrity-status writes. A bounded complete snapshot yields observations of surviving records now; it does not attest historical visibility. No present-day pricing fallback, historical membership override, signature reinterpretation or new proof cache is permitted.
+Every query runs without autoflush, locking, commit, reconciliation, closure emission, audit or integrity-status writes. A bounded complete snapshot yields observations of surviving records now; it does not attest historical visibility. No present-day pricing fallback, client membership override, signature reinterpretation or new proof cache is permitted.
 
-### VI.1 Future conditional business-proof orchestration
+### VI.1 Historical reconstruction composition
 
-The separate future pure evaluation contract in DOM-PROD-001 §XV.9 is coordinated solely by this FEAT, incorporating SPEC-PROD-002 §VI.1 and SPEC-PROD-001 §VI.1. This amendment supplies authority for later implementation design; the current `assess_historical_attendance_proof` runtime remains diagnostic and no new API is claimed. Its fixed server-owned scopes/bounds, no-autoflush and complete-read requirements remain in force.
+This FEAT incorporates SPEC-PROD-002 §V–VIII and SPEC-PROD-001 §VI.1–2 under DOM-PROD-001 §XIII.9/XV.9–10, DOM-POL-001 §X.1–3 and DOM-LED-001 §IX.3–4. Current Identity/Class Configuration capability precedes scoped source access. Policies supplies complete retained original immutable settings; PROD `reconstruct_historical_payroll_graph` supplies complete original-window pairs, selected fragments/remainders/top-up components and original rules. Operations supplies canonical modern creation evidence and separate original audit observations; Ledger `validate_historical_settlement` returns its distinct immutable reconstruction evidence, exact original-credit aggregate replay, derived allocations and complete prior recovery. FEAT never computes cents, selects policies or pairs scans itself.
 
-Identity and Class Configuration establish current teacher/target authority before evidence access. PROD supplies original payroll/source/boundary facts and validates canonical membership; Policies supplies independently proven original setting creation/effective visibility and immutable pricing inputs; Operations supplies original canonical protected-payload and complete-chain evidence through unchanged interfaces, keeping historical diagnostic envelopes separate. Ledger supplies unique scoped original-credit evidence, exact original share arithmetic and derived historical attribution. FEAT composes these owned results only; no domain calls another or interprets another's internal rows. Retained setting DTOs without original visibility proof and candidate emitter descriptors are insufficient. Any unavailable required proof returns its specific reason and preserves reconstruction observations.
+Recognized legacy immutable-source inputs can qualify despite missing post-rollout allocation fields, original business lineage or signed source visibility. These are visible coverage observations, not an upgrade of original lawfulness. Actual integrity contradictions, ambiguous input/graph/credit identity, unavailable source budget or cryptographic infrastructure, unsupported versions, pending originals or unassociated prior recovery deny. Modern frozen business/monetary sources retain strict version-specific creation proof and cannot fall through to legacy reconstruction. The immutable result binds complete class/target/source/settings/rule/origin/compensation identities; changed relevant evidence is unavailable. No audit, reconciliation, reservation or proof-cache write occurs.
 
-Only original priced positive payroll events consisting wholly of completed canonical pairs and one unique original credit qualify for this conditional evaluation. The immutable read result must identify class/target/original business event, complete original source/boundary evidence, per-share original source/policy/rule provenance, independent scoped credit locator and each prerequisite's disposition. Ledger-owned derived cents and historical attribution version are separate from PROD-owned membership. Neither result is `VerifiedCreationEvidence`, a canonical lineage state, a durable enrollment record or correction authority. Ambiguous membership, swapped equal-second policy shares, missing original visibility, unproven protected business lineage, pending/ambiguous credit or changed evidence deny a positive result.
+### VI.2 Correction boundary
 
-No original scan, summary, signature, reservation, sequence, policy row, cycle or completed Interpretation record is modified. No historical signing, adoption, proof cache, compatibility adapter, correction preview integration, route or UI is authorized. Even a positive original-business result leaves automatic recovery unavailable until original monetary creation/posting and complete compensation are independently proven under unchanged governing contracts and a later scoped integration is authorized. The observed 153-event candidate cohort remains diagnostic; unpriced events, zero runs, fragments/remainders and manual/top-up attribution remain separate future scopes.
-
-### VI.2 Future conditional graph orchestration
-
-This FEAT separately incorporates SPEC-PROD-001 §VI.2 and SPEC-PROD-002 §VI.2 under DOM-PROD-001 §XV.10, DOM-LED-001 §IX.4 and DOM-POL-001 §X.3. Identity, Class Configuration and Operations dependencies already declared in §IV remain cumulative; all cross-domain coordination stays here under INV-ARC-021 §V/VII. §VI.1's initial single-credit shape remains unchanged. The existing runtime and named APIs in §V remain diagnostic; this is a future pure contract, not an implemented graph interface.
-
-Resolve current teacher/class/target scope before target evidence. Compose complete bounded original graph/business/source/boundary evidence from PROD, original settings from Policies, canonical original version-specific creation/coverage from Operations and unique credit, replay, graph allocations and compensation from Ledger. Each domain validates explicit class/target/source binding to its owned facts; no caller proof flags, domain-to-domain calls or FEAT monetary arithmetic are permitted. All connected contributions and every original credit require complete original proof, including zero-value payroll boundaries and the original positive incident top-up's complete source windows. Missing/changed evidence denies the entire graph qualification while preserving separate diagnostic findings.
-
-Return domain-owned original source facts and newly derived graph attribution version separately, including independent per-origin conservation and prior compensation attribution dispositions. Ambiguous same-total graphs, unknown original writer/visibility, incomplete window/policy source selection, a guessed credit split, unavailable loss components, pending original credits or unknown partial recovery attribution cannot yield a positive graph result. No read locks, reconciliation, flush, commit, audit emission, new signature, graph cache or proof enrollment occurs. No correction preview, command, route or UI is enabled. Positive business/graph results never substitute for existing Ledger/Operations monetary proof or FEAT-PROD-005's separately gated later atomic integration.
+Complete graph reconstruction includes zero payroll boundaries, original fragment/remainder/top-up credits and relevant prior compensation. Ledger returns newly derived graph attribution version separately from original recorded facts and original canonical lineage. A positive result is an internally validated correction input, not an executable permission or fake CreationEvidence. FEAT-PROD-005/003 compose these owning-domain interfaces directly inside their existing commands; they never execute this FEAT. Their signed preview, locks, replay, one-reservation/new-lineage and all-or-nothing requirements govern correction. No new route, teacher control, migration, historical signing or original-record enrollment is authorized by this read contract.
 
 ## VII. Denials and verification
 
 Reject malformed/overlarge selection and unauthorized scope before target evidence. Return explicit unavailable/unsupported/mismatch observations for missing source assignment, pricing, credit identity, coverage, compensation, visibility or bounds; separate actual integrity failures from unverified historical gaps. Avoid names or other PII in diagnostics.
 
-Verify SPEC-PROD-002 §VIII with targeted tests and consult prior pytest_result first. Current FEAT-PROD-005/003 proof gates, v2/v3 verification, original records and signature bytes must remain unchanged.
+Verify SPEC-PROD-002 §VIII with targeted tests and consult prior pytest_result first. Current FEAT-PROD-005/003 modern proof and new-write gates, v2/v3 verification, original records and signature bytes remain unchanged. Historical reconstruction acceptance follows the separately incorporated current contracts.
 
 ## VIII. Amendment
+
+Version 1.3 (2026-10-03) supersedes v1.0–1.2 diagnostic-only/future graph restrictions for explicit immutable-source reconstruction composition. The assessment stays pure; modern proof and actual integrity rejection remain binding. Correction executes only through FEAT-PROD-005/003.
+
 
 Version 1.2 (2026-10-03) separately incorporates future conditional pure graph composition (§VI.2). Supersedes future-only graph design scope, preserving §VI.1, implemented diagnostics, all proof gates and no-write authority.
 

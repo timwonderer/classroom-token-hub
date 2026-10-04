@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-PROD-003 | 1.7 | 2026-10-03 | 1.6 | Normative |
+| FEAT-PROD-003 | 1.8 | 2026-10-03 | 1.7 | Normative |
 
 ## I. Purpose
 
@@ -22,12 +22,14 @@ Normative; subordinate to INV-CORE-000 §III.1–6, INV-CORE-001 §III, VIII, DO
 - [DOM-LED-001](../DOMAIN/DOM-LED-001_LEDGER_DOMAIN.md) — monetary amounts, balances, compensation linkage, and aggregate recovery cap.
 - [DOM-IDEN-006](../DOMAIN/DOM-IDEN-006_CANONICAL_CONTEXT_RESOLUTION.md) §VII–XI — canonical context and scoped actor/target resolution.
 - [DOM-CLASS-001](../DOMAIN/DOM-CLASS-001_CLASS_CONFIGURATION_DOMAIN.md) §VII, X and [DOM-CLASS-002](../DOMAIN/DOM-CLASS-002_CLASS_ECONOMY_GOVERNANCE.md) §V, VII — authoritative configuration and funding applicability.
-- [DOM-OPS-002](../DOMAIN/DOM-OPS-002_AUDIT_LINEAGE_INTEGRITY.md) §5 — protected mutation lineage.
+- [DOM-POL-001](../DOMAIN/DOM-POL-001_POLICIES_DOMAIN.md) §X.1–3 — retained original setting inputs composed by this FEAT for historical recovery.
+- [DOM-OPS-002](../DOMAIN/DOM-OPS-002_AUDIT_LINEAGE_INTEGRITY.md) §5–6 — protected mutation lineage, canonical modern creation proof and separate original legacy audit observations.
 - [DOM-ITR-001](../DOMAIN/DOM-ITR-001_INTERPRETATION_DOMAIN.md) §VIII–IX — preserve completed observations; no Interpretation command is executed by a correction.
 - [FEAT-CORE-000](FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md) §II–V — single orchestration and transaction.
 - [FEAT-LED-000](FEAT-LED-000_CANONICAL_MONETARY_RESOLUTION_WORKFLOW.md) §VII, XI and [FEAT-LED-001](FEAT-LED-001_POST_LEDGER_TRANSACTION.md) — incorporated domain-command resolution and posting contracts, never second FEAT execution.
 - [FEAT-LED-002](FEAT-LED-002_VOID_REVERSE_TRANSACTION.md) — exact full reversal contract; partial/residual corrections are separately authorized here.
 - [SPEC-PROD-001](../SPEC/SPEC-PROD-001_ATTENDANCE_INTERVAL_ELIGIBILITY_AND_PAYROLL_CORRECTION.md) — incorporated settlement membership, pricing provenance, and correction interaction contract.
+- [SPEC-PROD-002](../SPEC/SPEC-PROD-002_HISTORICAL_ATTENDANCE_PROOF_ASSESSMENT.md) §V–VIII — incorporated immutable-source reconstruction for historical original-credit and complete recovery evidence.
 - [SPEC-LED-001](../SPEC/SPEC-LED-001_LEDGER_VERIFICATION_PROOF_SURFACES.md) §III–V and [SPEC-LED-002](../SPEC/SPEC-LED-002_COMMAND_IDEMPOTENCY_RESERVATION_AND_ENFORCEMENT.md) §III–VIII — incorporated monetary proof, reservation, replay, and concurrency requirements.
 - [SPEC-ECON-003](../SPEC/SPEC-ECON-003_ECONOMIC_ENGINE_CALCULATION_AND_REFERENCE_SPECIFICATION.md) §4.5.1.1 — incorporated funding rule; payroll corrections incur no NSF fee.
 - [SPEC-OPS-001](../SPEC/SPEC-OPS-001_REVERSAL_AND_VOID.md) §II (2.3), III, X — artifact-specific correction, not generic undo.
@@ -61,12 +63,13 @@ Recovery additionally requires `original_payroll_event_id` and `expected_preview
 
 Ledger determines remaining recovery as original credited cents minus prior attributable compensation cents and enforces the aggregate cap. Protection transfer legs carry no attributable compensation. If remaining recovery is zero, deny `ALREADY_RECOVERED` without a new correction or debit; exact replay of a prior successful command still returns its original result. Partial interval corrections followed by residual correction recover exactly the original credit, never more.
 
-### Historical graph interaction boundary
+### Historical reconstruction and graph interaction
 
-SPEC-PROD-001 §VI.2 is incorporated for the interaction of independently proven historical graph attribution with existing full/residual recovery only. A top-up is a distinct positive original credit with its own cap; it is not negative compensation of a source payroll credit. Full/residual recovery remains scoped to its uniquely proven original business event and Ledger origin under the existing command contract. This amendment neither aggregates several historical originals into an unchecked whole-payment reversal nor changes the current input/receipt/writer schema.
+`recover_payroll_payment` and its pure signed preview may directly compose the immutable-source reconstruction interfaces under DOM-PROD-001 §XV.9–10 and DOM-LED-001 §IX.3–4; no nested FEAT-PROD-006 execution occurs. Recognized legacy original credits use distinct validated reconstruction evidence; modern business/monetary effects keep exact creation evidence. Missing new fields alone is not historical denial, and known authenticated integrity contradictions always deny. Original pending credit denies PAYROLL_PENDING without forcing reconciliation.
 
-Future interval graph integration must serialize all involved origins against these same commands and include accepted pending and posted compensation. Exact full reversal needs zero prior compensation on its origin. Residual recovery is precisely that origin's proven original credit minus all proven prior compensation; it does not reprice work, reallocate surviving intervals or silently include another origin. Fully recovered origins contribute zero to subsequent proven interval recovery. If only an aggregate partial recovery is proven, it cannot establish which interval has remaining contribution; the graph paid invalidation denies unknown attribution. A separate residual command still needs its own complete aggregate monetary proof and unchanged business authority. No incomplete graph enables a new recovery, historical adapter or signature repair.
+Full reversal applies only with zero prior attributable compensation. After partial recovery, residual correction recovers exactly the selected original credit's complete remaining amount, including validated legacy reversals and all accepted pending/posted modern recovery. One graph origin's recovery never implicitly recovers another; subsequent interval invalidation sees each independently. Ambiguous partial interval attribution blocks paid interval correction; residual may proceed only when its own complete aggregate credit/recovery identity is proven. Fully recovered origins permit no new recovery; exact accepted retries return their original outcome before fresh calculations.
 
+Preview binds complete original graph/credit/recovery, banking and balance evidence. Confirmation revalidates under target seat → ClassEconomy → stable origin → monetary-source locks and shares the same cap/serialization with interval recovery. Use one command reservation for all effects, current complete audits and the existing protected business receipt; never modify or re-sign an original. No correction advances original windows, occurrences or cycles.
 
 ### Funding
 
@@ -83,6 +86,9 @@ Deny unauthorized context/scope, missing target/original event, unavailable orig
 Targeted contract scenarios: positive payroll retains exact allocation inputs; teacher manual credit needs no policy; $45 payment with $15 attributable interval recovery permits only $30 residual recovery; full reversal before invalidation leaves later eligibility invalidation with no debit; same-key replay returns original recovery and different-key recovery cannot exceed the cap; concurrent payroll/invalidation serializes; cross-class and unprovable-history commands fail closed. Verify funding examples through SPEC-PROD-001 and preserve lifecycle destruction under DOM-PROD-001 §VII.1.a.
 
 ## IX. Amendment
+
+Version 1.8 (2026-10-03) supersedes v1.7 historical future-only and blanket original-creation coverage denial for recognized immutable-source reconstruction. Full/residual cap and replay remain shared with interval correction; original records and modern/new-write lineage remain protected.
+
 
 Version 1.7 (2026-10-03) defines historical graph interaction with per-origin exact/residual recovery while preserving existing inputs, receipts, writers and caps. It supersedes no mutation authority and enables no historical runtime path.
 

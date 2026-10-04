@@ -93,6 +93,7 @@ const config = {
             "TRACKING/POST_LAUNCH_TRACKER_2026.md",
             "TRACKING/HISTORICAL_ATTENDANCE_PROOF_DECISION_PACKAGE_20261003.md",
             "TRACKING/HISTORICAL_ATTENDANCE_PHASE4_PROOF_REVIEW_20261003.md",
+            "TRACKING/HISTORICAL_ATTENDANCE_RECONSTRUCTION_IMPLEMENTATION_20261003.md",
           ],
           sidebarPath: require.resolve("./sidebars.js"),
           // Function form, not a string: the plugin reads from `../docs`, so a

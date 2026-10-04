@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-POL-001 | 2.7 | 2026-10-03 | 2.6 | Constitutional |
+| DOM-POL-001 | 2.8 | 2026-10-03 | 2.7 | Constitutional |
 
 ## I. Purpose
 
@@ -240,19 +240,20 @@ This means Class Configuration decides whether a capability exists in the class,
 
 ### X.1 Bounded historical payroll-setting inputs
 
-Policies owns `get_historical_payroll_setting_inputs(*, ctx, class_id, limit=500)`, exposed only through the existing payroll-setting domain query boundary. This pure bounded query returns immutable retained class/policy identity, effective/created UTC instants and original rate inputs with availability limitations; no current/default rate or missing field is synthesized. FEAT-PROD-006 supplies these owned DTOs to PROD for candidate historical setting selection. Policies incorporates [SPEC-PROD-002](../SPEC/SPEC-PROD-002_HISTORICAL_ATTENDANCE_PROOF_ASSESSMENT.md) §V–VI for bounds, pure reads, original configuration and descriptor limitations. Retained values and dates alone do not attest original visibility, original writer assignment or lawful historical creation. No policy write, active selection behavior or deletion rule changes.
+Policies owns `get_historical_payroll_setting_inputs(*, ctx, class_id, limit=500)`, exposed through the existing payroll-setting domain query boundary. This pure bounded query returns immutable retained class/policy identity, effective/created UTC instants and original rate inputs with availability limitations; no current/default rate or missing field is synthesized. FEAT-PROD-006/005/003 supply these owned DTOs to PROD for candidate historical setting selection. Policies incorporates [SPEC-PROD-002](../SPEC/SPEC-PROD-002_HISTORICAL_ATTENDANCE_PROOF_ASSESSMENT.md) §V–VI for bounds, pure reads, original configuration and descriptor limitations. Retained values and dates supply historical configuration for §X.2–3; they do not establish canonical signed-field coverage or lawful historical creation. No policy write, active selection behavior or deletion rule changes.
 
-### X.2 Conditional original payroll-setting evidence contract
+### X.2 Original payroll-setting reconstruction inputs
 
-Policies incorporates SPEC-PROD-002 §VI.1 only for a future pure original-setting evidence contribution through FEAT-PROD-006. This contract designation does not claim an implemented API or promote §X.1's retained DTOs to proof. Required inputs are canonical context, explicit class, original payroll-execution identity/boundary, relevant retained setting identities and FEAT-supplied canonical original creation evidence from Operations. Policies establishes the original immutable inputs, creation/effective visibility and completeness of boundary-relevant setting history from independently verifiable original evidence. Present dates, current settings, candidate writer descriptors, fresh signatures or caller proof flags cannot supply unavailable original facts. Source scope and complete bounded reads are mandatory; missing evidence returns unavailable.
+Policies incorporates SPEC-PROD-002 §VI.1 through FEAT-PROD-006/005/003. Its existing bounded immutable setting inputs support original rule-based selection for historical windows. Separate original signed visibility proof is not an additional requirement when complete retained immutable versioned settings determine that selection. Missing, malformed, foreign or tied ambiguous settings deny; use the exact original effective-date/bootstrap selection rule. Return raw `rate_per_minute` separately from `legacy_rate_per_minute`, which encodes only the pinned original falsy-rate $0.25/minute rule; modern pricing never adopts that legacy behavior. Today's active/latest rate cannot reprice history. Operations retains canonical lineage and coverage separately; actual protected-payload or chain contradictions reject, while absent old linkage alone is an explicit coverage gap. No setting is amended, signed or backfilled.
 
-Policies neither assigns attendance pairs to shares, computes monetary amounts, verifies Operations internals nor queries another domain. PROD owns original per-pair setting assignment and Ledger owns arithmetic; FEAT coordinates those conclusions. No current setting selection, policy write, proof cache, migration, signature repair or historical recovery is enabled. Existing protected policy lawful-lineage requirements remain unchanged.
+### X.3 Graph-setting contribution
 
-### X.3 Conditional graph-setting evidence contribution
-
-Policies separately incorporates SPEC-PROD-002 §VI.2 for its future pure contribution to FEAT-PROD-006's graph evaluation. Each original fragment/remainder/top-up window needs independently proven original immutable setting inputs, creation/effective visibility and complete boundary-relevant history; §X.2's original-evidence requirements apply cumulatively. The exact original writer may select rates differently across legacy windows, so current closing-time selection or the latest retained rate cannot substitute. FEAT supplies canonical original Operations evidence; this domain does not call Operations, PROD or Ledger. It does not assign selected attendance subsegments, compute top-up deltas, sum credits or allocate cents. No implemented API, policy write, new schema, cache, proof adoption or selection fallback is introduced.
+Policies incorporates SPEC-PROD-002 §VI.2 for retained original inputs covering every fragment/remainder/top-up window. Legacy windows select the original rate at their historical execution boundary; closed sessions select the setting in force at close under their original descriptor. FEAT supplies the immutable DTOs to PROD. Policies does not assign scans to pairs, compute cents/top-up deltas, verify Operations internals or query another domain. No new persistence, default-rate bridge or policy selection fallback is authorized.
 
 ## XI. Amendment
+
+Version 2.8 (2026-10-03) supersedes v2.6–2.7 independently signed original-setting visibility requirements for the immutable retained configuration reconstruction contract. Scope, original rates, policy immutability and actual integrity denial remain binding.
+
 
 Version 2.7 (2026-10-03) separately incorporates original graph-setting evidence contribution (§X.3). Supersedes no policy selection, diagnostic or original-lawfulness rule and enables no runtime or recovery.
 

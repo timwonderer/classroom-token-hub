@@ -53,7 +53,7 @@ with app.app_context():
 '''
 
 
-def test_genuine_v1_envelope_survives_forward_migration_but_never_admits_paid_correction(app,tmp_path):
+def test_genuine_v1_envelope_survives_and_reconstruction_validates_without_upgrading_lineage(app,tmp_path):
     source=tmp_path/'predecessor';source.mkdir()
     archive=tmp_path/'predecessor.tar'
     with archive.open('wb') as stream:
@@ -75,7 +75,8 @@ def test_genuine_v1_envelope_survives_forward_migration_but_never_admits_paid_co
     result=assess_historical_attendance_proof(ctx=ctx,target_seat_id=record['target'])
     assert result.business.source_ids==tuple(record['source'])
     assert result.business.events[0].rule.record_writer_attribution=='UNAVAILABLE'
-    assert result.current_execution_eligibility=='BLOCKED_DIAGNOSTIC_ONLY'
+    assert result.current_execution_eligibility=='RECONSTRUCTION_VALIDATED'
+    assert result.reconstruction.origins[0].proof.original_cents==int(credit.amount*100)
     diagnostic=next(d for d in result.audit_coverage if d.row_pk==str(credit.id))
     assert diagnostic.envelope_status=='AUTHENTICATED' and diagnostic.chain_status=='COMPLETE'
     assert len(diagnostic.candidate_protected_fields)==11 and not diagnostic.confirmed_protected_fields

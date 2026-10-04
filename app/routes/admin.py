@@ -3473,6 +3473,14 @@ def student_detail_public(actor_public_id):
     )
     memberships = payroll_interval_memberships(seat_id, class_id, ctx=g.canonical_context)
     proofs = {}
+    historical_details = {}
+    historical_denial = None
+    if any(m.get('status') == 'historical_unavailable' or m.get('requires_reconstruction') for m in memberships.values()):
+        from app.feats.attendance_interval_invalidation_feat import historical_attendance_interval_details
+        try:
+            historical_details = historical_attendance_interval_details(ctx=g.canonical_context,target_seat_id=seat_id)
+        except ValueError as exc:
+            historical_denial = getattr(exc,'evidence_reason',str(exc))
     source_events_by_id = {row.id: row for row in attendance_rows}
     paired_source_ids = set()
 
@@ -3498,9 +3506,19 @@ def student_detail_public(actor_public_id):
         status = membership.get("status", "unpaid")
         event = membership.get("event")
         amount = pricing_inputs = None
+        original_records = ()
         # Temporal proximity is an evidence limitation, never proven membership.
-        if status == "historical_unavailable":
+        if status == "historical_unavailable" or membership.get("requires_reconstruction"):
+            status = "historical_unavailable"
             event = None
+            reconstructed = historical_details.get((interval.opening_event_id,interval.closing_event_id))
+            if reconstructed:
+                status = reconstructed['status']
+                amount = Decimal(reconstructed['allocated_cents'])/100
+                originals = reconstructed['original_events']
+                original_records = originals
+                event = SimpleNamespace(id=originals[0].event_id,recorded_at=originals[0].recorded_at) if originals else None
+                pricing_inputs = {'allocation_version':reconstructed['allocation_version'], 'pay_rate_per_minute':None}
         if status == "recorded":
             if event.id not in proofs:
                 if verify_record_creation_lineage("payroll_event", event, class_id):
@@ -3524,28 +3542,48 @@ def student_detail_public(actor_public_id):
                 pricing_inputs = {"pay_rate_per_minute": share["pay_rate_per_minute"], "allocation_version": 1}
         labels = {
             "unpaid": ("Unpaid", "Eligible", "Earnings will be confirmed at payroll; no settled contribution is recorded."),
-            "historical_unavailable": ("Historical contribution unavailable", "Historical settlement cannot be proven", "Historical payroll lacks complete interval evidence. Automatic partial correction is blocked; no contribution is inferred."),
+            "historical_unavailable": ("Historical contribution unavailable", "Settlement evidence requires review", "The historical payroll reconstruction could not be validated. Review its source records before correcting this interval."),
             "provenance_unavailable": ("Contribution unavailable", "Settlement evidence requires review", "Original settlement evidence cannot be verified. Automatic partial correction is blocked."),
             "pending": ("Payroll recorded · Pending posting", "Included in recorded payroll", "Payroll is recorded but its credit has not posted. A paid contribution is not yet available."),
-            "verified": ("Paid", "Historically settled", "This contribution is proven from the original attendance, frozen pricing, and posted payroll credit."),
+            "zero_cent": ("Recorded · $0.00", "Recorded payroll contribution", "This interval belongs to an original payroll record whose reproduced amount is zero."),
+            "verified": ("Paid", "Historically settled", "This contribution is validated against the original attendance, historical pricing, and posted payroll credit."),
         }
         label, eligibility, message = labels[status]
+        if status == 'historical_unavailable':
+            explanations = {
+                'INTEGRITY_FAILURE':'The payroll amount or financial evidence disagrees with the reconstructed attendance. No automatic correction is available.',
+                'PRIOR_RECOVERY_UNAVAILABLE':'An earlier payroll recovery cannot be assigned unambiguously to its payment. Review that recovery before correcting this interval.',
+                'AMBIGUOUS_SETTING':'The payroll setting used for this work cannot be selected unambiguously.',
+                'MISSING_SETTING':'The payroll setting used for this work is unavailable.',
+                'MISSING_OR_AMBIGUOUS_SETTING':'The payroll setting used for this work cannot be selected unambiguously.',
+                'RECORDED_PRICING_MISMATCH':'The retained pricing inputs disagree with the attendance selected for this payroll window.',
+                'RECORDED_MEMBERSHIP_MISMATCH':'The retained work-session membership disagrees with the original payroll window.',
+                'TOPUP_MEMBERSHIP_UNAVAILABLE':'The attendance covered by an earlier payroll correction cannot be established.',
+                'COMPENSATION_MEMBERSHIP_UNAVAILABLE':'An earlier payroll recovery cannot be assigned to its original payment.',
+                'UNKNOWN_SETTLEMENT_RULE':'The original payroll calculation rule cannot be identified.',
+                'TIED_PAYROLL_BOUNDARY':'Two payroll records have the same boundary; the original window cannot be selected unambiguously.',
+                'CONFLICTING_SELECTION':'The attendance sources do not form an unambiguous historical payroll window.',
+                'EVIDENCE_LIMIT_EXCEEDED':'This attendance history exceeds the automatic reconstruction limit.',
+            }
+            message = explanations.get(historical_denial,message)
         is_invalidated = (interval.opening_event_id,interval.closing_event_id) in invalidated_pairs
         if is_invalidated:
             eligibility = "Ineligible · Invalidated"
-        action_url = url_for("admin.attendance_interval_invalidation", actor_public_id=actor_public_id, nav=request.args.get("nav")) if interval.closing_event_id and not is_invalidated and status in {"unpaid","verified"} else None
+        action_url = url_for("admin.attendance_interval_invalidation", actor_public_id=actor_public_id, nav=request.args.get("nav")) if interval.closing_event_id and not is_invalidated and status in {"unpaid","verified","zero_cent"} else None
         return SimpleNamespace(**interval.__dict__, duration_label=duration_label,
             source_events=interval_sources(interval), amount=amount, settlement_label=label,
             eligibility_label=eligibility, evidence_message=message, pricing_inputs=pricing_inputs,
             payroll_event_id=event.id if event else None, payroll_recorded_at=event.recorded_at if event else None,
-            payroll_history_url=None, correction_url=action_url)
+            payroll_history_url=None, original_payroll_records=original_records, correction_url=action_url)
 
     attendance_intervals = [display_interval(interval) for interval in interval_page]
     attendance_open_intervals = [display_interval(interval) for interval in interval_projections if interval.closing_event_id is None]
     attendance_unpaired_events = [row for row in attendance_rows if row.id not in paired_source_ids]
     attendance_historical_evidence_limited = (
-        payroll_provenance_history_limitations(seat_id, class_id, ctx=g.canonical_context)
-        or any(value["status"] == "historical_unavailable" for value in memberships.values())
+        historical_denial is not None
+        or any((value['status']=='historical_unavailable' or value.get('requires_reconstruction')) and key not in historical_details
+            for key,value in memberships.items())
+        or (not memberships and payroll_provenance_history_limitations(seat_id,class_id,ctx=g.canonical_context))
     )
 
     scoped_seat = (

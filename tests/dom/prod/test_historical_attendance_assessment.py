@@ -48,9 +48,12 @@ def _business_snapshot(app,monkeypatch,change=None,events=None):
 
 def test_current_assessment_is_pure_preserves_creation_proof_and_returns_frozen_dtos(app,monkeypatch):
     _,ctx,target,pairs,event=_paid_sources(app)
-    from app.utils.audit_verifier import verified_creation_evidence
+    from app.utils.audit_verifier import verified_creation_evidence, diagnose_historical_audit_coverages
+    from app.services.ledger_evidence import LedgerCreationEvidence
+    from app.services.ledger_historical_reconstruction import ReconstructedSettlement
     credit=Transaction.query.filter_by(idempotency_key=event.idempotency_key).one()
     proof=verified_creation_evidence('ledger_transaction',credit,ctx.class_id)
+    coverage=diagnose_historical_audit_coverages('ledger_transaction',(credit,),ctx.class_id)
     counts=tuple(model.query.count() for model in (AttendanceSession,AuditEvent,PayrollEvent,Transaction))
     signature=(credit.lineage_event_id,credit.lineage_token,credit.lineage_version)
     # Even an unrelated pending object cannot make this assessment flush.
@@ -62,7 +65,13 @@ def test_current_assessment_is_pure_preserves_creation_proof_and_returns_frozen_
     first=assess_historical_attendance_proof(ctx=ctx,target_seat_id=target)
     second=assess_historical_attendance_proof(ctx=ctx,target_seat_id=target)
     assert first==second and first.business.events[0].membership_completeness=='UNAVAILABLE'
-    assert first.current_execution_eligibility=='BLOCKED_DIAGNOSTIC_ONLY'
+    assert first.current_execution_eligibility=='RECONSTRUCTION_VALIDATED'
+    assert isinstance(first.reconstruction,ReconstructedSettlement)
+    assert not isinstance(first.reconstruction,LedgerCreationEvidence)
+    assert first.reconstruction_reason is None
+    assert tuple(o.event_id for o in first.reconstruction.origins)==(event.id,)
+    assert tuple(o for o in first.audit_coverage if o.row_pk==str(credit.id))==coverage
+    with pytest.raises(FrozenInstanceError):first.reconstruction.material=()
     assert dict(first.money)[event.id].arithmetic_comparison=='MATCH'
     assert dict(first.money)[event.id].observed_credit_cents==credit.amount_cents
     assert pending in db.session.new

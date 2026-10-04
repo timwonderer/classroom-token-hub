@@ -567,12 +567,14 @@
                         <dt class="col-sm-4">Compensation eligibility</dt><dd class="col-sm-8">{{ interval.eligibility_label }}</dd>
                         <dt class="col-sm-4">Credited duration</dt><dd class="col-sm-8">{{ interval.credited_seconds }} seconds</dd>
                         <dt class="col-sm-4">Payroll evidence</dt><dd class="col-sm-8">{{ interval.evidence_message }}</dd>
-                        {% if interval.payroll_event_id %}
+                        {% if interval.original_payroll_records %}
+                        <dt class="col-sm-4">Original payroll records</dt><dd class="col-sm-8">{% for original in interval.original_payroll_records %}<div>Payroll #{{ original.event_id }} · {{ original.recorded_at|fmt_timestamp }}</div>{% endfor %}</dd>
+                        {% elif interval.payroll_event_id %}
                         <dt class="col-sm-4">Original payroll record</dt><dd class="col-sm-8">{% if interval.payroll_history_url %}<a href="{{ interval.payroll_history_url }}">Payroll #{{ interval.payroll_event_id }}</a>{% else %}Payroll #{{ interval.payroll_event_id }}{% endif %} · {{ interval.payroll_recorded_at|fmt_timestamp }}</dd>
                         {% endif %}
                     </dl>
                     {% if interval.pricing_inputs %}
-                    <p>Original rate: ${{ interval.pricing_inputs.pay_rate_per_minute }} per minute. Allocation version {{ interval.pricing_inputs.allocation_version }}.</p>
+                    {% if interval.pricing_inputs.pay_rate_per_minute is not none %}<p>Original rate: ${{ interval.pricing_inputs.pay_rate_per_minute }} per minute.</p>{% else %}<p>Calculated from the attendance and payroll settings used for these payments.</p>{% endif %}
                     {% endif %}
                     {{ attendance_scans(interval.source_events) }}
                     {% if interval.correction_url %}<button type="button" class="btn btn-outline-danger mt-2" data-attendance-correction data-preview="{{ interval.correction_url }}" data-post="{{ interval.correction_url }}" data-opening="{{ interval.opening_event_id }}" data-closing="{{ interval.closing_event_id }}">Invalidate work interval</button>{% endif %}
@@ -679,7 +681,7 @@
                 </div>
 
                 {% if attendance_historical_evidence_limited %}
-                <p>Historical payroll does not contain complete interval evidence. Individual contributions are unavailable, and automatic partial correction is blocked for those payments.</p>
+                <p>Historical contributions are reconstructed from attendance, payroll windows and the settings used at payment. A correction is available when that reconstruction matches the original payment; unresolved evidence is shown on the interval.</p>
                 {% endif %}
                 <h6 class="mb-3">Recent Earnings</h6>
                 {% if payroll_event_history %}

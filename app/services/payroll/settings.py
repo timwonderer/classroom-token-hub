@@ -249,6 +249,7 @@ class HistoricalPayrollSettingInput:
     effective_at: object
     created_at: object
     rate_per_minute: str
+    legacy_rate_per_minute: str | None = None
 
 
 def get_historical_payroll_setting_inputs(*, ctx, class_id, limit=500):
@@ -265,4 +266,5 @@ def get_historical_payroll_setting_inputs(*, ctx, class_id, limit=500):
     if len(rows) > limit:
         raise ValueError('EVIDENCE_LIMIT_EXCEEDED')
     return tuple(HistoricalPayrollSettingInput(row.class_id,row.policy_uuid,
-        ensure_utc(row.effective_date),ensure_utc(row.created_at),str(row.pay_rate)) for row in rows)
+        ensure_utc(row.effective_date),ensure_utc(row.created_at),str(row.pay_rate),
+        str(row.pay_rate or Decimal('0.25'))) for row in rows)
