@@ -352,53 +352,55 @@ def _backup(cfg, reason, forced_baseline):
 
     try:
         src = psycopg2.connect(cfg.source_url)
-        src.set_session(isolation_level="REPEATABLE READ", readonly=True)
-        with src.cursor() as cur:
-            cur.execute("SELECT pg_export_snapshot(), now(), current_setting('server_version')")
-            snapshot_id, taken_at, server_version = cur.fetchone()
-            counts = table_counts(cur)
-            revision = alembic_revision(cur)
-            ids = identity_sets(cur)
+        try:
+            src.set_session(isolation_level="REPEATABLE READ", readonly=True)
+            with src.cursor() as cur:
+                cur.execute("SELECT pg_export_snapshot(), now(), current_setting('server_version')")
+                snapshot_id, taken_at, server_version = cur.fetchone()
+                counts = table_counts(cur)
+                revision = alembic_revision(cur)
+                ids = identity_sets(cur)
 
-            previous = state.get("newest_point")
-            gone = missing_identities(previous["identities"], ids) if previous else {}
-            # No record of the previous point's identities while points exist
-            # (state lost): treat as a baseline so nothing older can survive it.
-            unknown_history = previous is None and bool(
-                points_from_names(os.listdir(cfg.points_dir))
-                or (cfg.remote and points_from_names(remote_names(cfg))))
-            is_baseline = forced_baseline or bool(gone) or unknown_history
-            if is_baseline:
-                reason = "baseline" if reason == "scheduled" else reason
-                log(f"protected destruction detected since last point ({gone or 'history unknown'}); "
-                    "this point becomes the replacement baseline")
+                previous = state.get("newest_point")
+                gone = missing_identities(previous["identities"], ids) if previous else {}
+                # No record of the previous point's identities while points exist
+                # (state lost): treat as a baseline so nothing older can survive it.
+                unknown_history = previous is None and bool(
+                    points_from_names(os.listdir(cfg.points_dir))
+                    or (cfg.remote and points_from_names(remote_names(cfg))))
+                is_baseline = forced_baseline or bool(gone) or unknown_history
+                if is_baseline:
+                    reason = "baseline" if reason == "scheduled" else reason
+                    log(f"protected destruction detected since last point ({gone or 'history unknown'}); "
+                        "this point becomes the replacement baseline")
 
-            stem = f"cth-db-{stamp(taken_at.astimezone(dt.timezone.utc))}-{reason}"
-            artifact = cfg.points_dir / f"{stem}.dump.age"
-            tmp_artifact = artifact.with_suffix(".age.partial")
+                stem = f"cth-db-{stamp(taken_at.astimezone(dt.timezone.utc))}-{reason}"
+                artifact = cfg.points_dir / f"{stem}.dump.age"
+                tmp_artifact = artifact.with_suffix(".age.partial")
 
-            wipe_public_schema(cfg.verify_url)
-            try:
-                with tempfile.TemporaryDirectory(dir=cfg.state_dir) as err_dir:
-                    dump_encrypt_and_verify(cfg, snapshot_id, tmp_artifact, Path(err_dir))
-                manifest = {
-                    "format": 1,
-                    "stem": stem,
-                    "reason": reason,
-                    "baseline": is_baseline,
-                    "taken_at": taken_at.astimezone(dt.timezone.utc).isoformat(),
-                    "server_version": server_version,
-                    "alembic_revision": revision,
-                    "excluded_table_data": cfg.exclude_table_data,
-                    "table_counts": counts,
-                    "identity_counts": {k: len(v) for k, v in ids.items()},
-                }
-                problems = compare_restored(cfg.verify_url, manifest, cfg.exclude_table_data)
-            finally:
-                # The scratch database held plaintext; it never outlives the run.
                 wipe_public_schema(cfg.verify_url)
-        src.commit()  # release the snapshot only after pg_dump has finished with it
-        src.close()
+                try:
+                    with tempfile.TemporaryDirectory(dir=cfg.state_dir) as err_dir:
+                        dump_encrypt_and_verify(cfg, snapshot_id, tmp_artifact, Path(err_dir))
+                    manifest = {
+                        "format": 1,
+                        "stem": stem,
+                        "reason": reason,
+                        "baseline": is_baseline,
+                        "taken_at": taken_at.astimezone(dt.timezone.utc).isoformat(),
+                        "server_version": server_version,
+                        "alembic_revision": revision,
+                        "excluded_table_data": cfg.exclude_table_data,
+                        "table_counts": counts,
+                        "identity_counts": {k: len(v) for k, v in ids.items()},
+                    }
+                    problems = compare_restored(cfg.verify_url, manifest, cfg.exclude_table_data)
+                finally:
+                    # The scratch database held plaintext; it never outlives the run.
+                    wipe_public_schema(cfg.verify_url)
+            src.commit()  # release the snapshot only after pg_dump has finished with it
+        finally:
+            src.close()
 
         if problems:
             tmp_artifact.unlink(missing_ok=True)
@@ -612,7 +614,11 @@ def cmd_status(cfg, offline=False):
 # --------------------------------------------------------------------------- restore
 
 
-def cmd_restore(cfg, artifact, manifest_path, identity, target_url, live_url):
+def cmd_restore(cfg, artifact, manifest_path, identity, target_url, live_url, live_database_lost=False):
+    if not live_url and not live_database_lost:
+        raise SystemExit("refusing: without --live-url nothing can show that this point holds no destroyed seat, "
+                         "class or user. Pass --live-url, or --live-database-lost when the live database no "
+                         "longer exists (see DATABASE_BACKUP_PLAN.md §5.2, F6)")
     manifest = json.loads(Path(manifest_path).read_text())
     digest = sha256_file(artifact)
     if digest != manifest["artifact_sha256"]:
@@ -655,8 +661,8 @@ def cmd_restore(cfg, artifact, manifest_path, identity, target_url, live_url):
                              "Drop the restored database.")
         log("no destroyed seat, class or user would be resurrected")
     else:
-        log("live database not given: confirm this is the newest point and that no destruction followed it "
-            "before cutting over")
+        log("UNVERIFIED: the live database is gone, so this point was not checked for destroyed identities. "
+            "Nothing available here can prove it holds none; cutover is the owner's decision (plan F6)")
     return 0
 
 
@@ -677,6 +683,8 @@ def main(argv=None):
     r.add_argument("--identity", required=True, help="age identity file (owner's key, never on the droplet)")
     r.add_argument("--target-url", required=True, help="an EMPTY database to restore into")
     r.add_argument("--live-url", help="live database, for the no-resurrection check")
+    r.add_argument("--live-database-lost", action="store_true",
+                   help="the live database no longer exists; restore without the no-resurrection check")
     args = ap.parse_args(argv)
     cfg = Config()
 
@@ -687,7 +695,8 @@ def main(argv=None):
     if args.cmd == "status":
         return cmd_status(cfg, offline=args.offline)
     if args.cmd == "restore":
-        return cmd_restore(cfg, args.artifact, args.manifest, args.identity, args.target_url, args.live_url)
+        return cmd_restore(cfg, args.artifact, args.manifest, args.identity, args.target_url, args.live_url,
+                           args.live_database_lost)
     return 2
 
 

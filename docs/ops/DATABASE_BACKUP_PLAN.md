@@ -157,9 +157,11 @@ enabling the timers.
    ```
 
    It checks the SHA-256 against the manifest, decrypts, restores, compares every table count and the revision, and,
-   when the live database still exists, refuses if the restored data holds any seat, class or user that the live
-   database has since destroyed. If the live database is gone, the tool says so: confirm from `status` or the bucket
-   listing that the point is the newest one and that no destruction followed it.
+   refuses if the restored data holds any seat, class or user that the live database has since destroyed. Without
+   `--live-url` it refuses to run. When the live database no longer exists, `--live-database-lost` lets it restore
+   without that check and marks the result UNVERIFIED. Nothing then available, including `status` and the bucket
+   listing, can prove that no destruction followed the point: a deletion in the last minutes before the loss may not
+   have reached a baseline. Cutting over in that case is the owner's decision (F6).
 6. Cut over: `ALTER DATABASE <live-db> RENAME TO <live-db>_replaced_<date>;` then
    `ALTER DATABASE classroom_economy_restored RENAME TO <live-db>;`
 7. Start the application, check `/health` on `127.0.0.1:8000`, and run the SOP-DEP-002 smoke checks.
@@ -208,9 +210,9 @@ pre-release dumps were stored.
 | F1 | Droplet root compromise | Attacker reads the env file: database passwords, bucket key, `age` recipient. Cannot decrypt any point. **Can delete every off-host point**, because the baseline rule needs delete. | Accept, or move the purge to a credential held off the droplet (the host then writes only, and an off-host job deletes)? That makes the purge depend on a second machine. |
 | F2 | Baseline fails after a destruction | Older points kept, health STALE, retried every 15 minutes. Meanwhile pre-destruction PII exists in backups, which INV-ARC-018 §VII.4 forbids beyond the record's retention. | The owner's "superseded only after a verified baseline" was chosen over deleting first. Confirm, and set how long STALE may last before someone acts. |
 | F3 | Destruction to purge window | Up to 15 minutes plus a run. | Acceptable? The application could trigger the check directly after a destruction instead. |
-| F4 | Deletions that are not seat, class or user | Not detected. Rows removed by other retention (expired recovery codes, for example) stay in points up to 14 days. | Is 14 days within each such record's retention window? |
+| F4 | Deletions that are not seat, class or user | Not detected. Rows removed by other retention (expired recovery codes, for example), and identity data cleared in place while the seat row survives (claim-name hashes, roster fingerprint), stay in points up to 14 days. | Is 14 days within each such record's retention window, or should some of these also count as protected destructions? |
 | F5 | Silent failure | Nothing pages anyone today. | See §7.3. |
-| F6 | Restoring a pre-destruction point | Purged after a baseline. Before the purge, and only then, such a point exists; `restore --live-url` refuses it while the live database exists. With the live database gone, the operator has to check. | Is the operator check enough for that case? |
+| F6 | Restoring a pre-destruction point | Purged after a baseline. Before the purge, and only then, such a point exists; `restore --live-url` refuses it while the live database exists. With the live database gone, nothing can establish that the newest point is safe, and the tool restores only with `--live-database-lost`, marked UNVERIFIED. | Accept that risk for a total loss, or refuse to cut over without some durable record of destructions kept outside the database? |
 | F7 | Owner identity lost | Every point is unreadable. | Second recipient (§7.4). |
 | F8 | Application secrets lost | Restored database is unusable (names unreadable, no sign-in). | Confirm `ENCRYPTION_KEY`, `PEPPER_KEY`, `AUDIT_HMAC_KEY` are stored off the droplet. |
 | F9 | Plaintext in the scratch database | Exists for seconds per run, on the same cluster as the source. A crash leaves it until the next 15-minute check empties it. | Acceptable on the source host? |
@@ -234,6 +236,7 @@ seeded with 2 classes, 30 users and 30 seats. Not run against production.
 | Seat and user deleted, then `status` | STALE, naming 1 seat and 1 user. |
 | `check` after that deletion | Baseline taken and verified, then all 3 older points deleted off-host and on the host. Health CURRENT. |
 | Restore of a pre-destruction point with `--live-url` | Restored, then REFUSE CUTOVER naming 1 seat and 1 user. |
+| Restore with neither `--live-url` nor `--live-database-lost` | Refused before restoring. |
 | Seat deleted, then the nightly run | That run became the baseline and purged the older points. |
 | Off-host artifact altered | Next run failed its re-hash; health DEGRADED. |
 | `age` given a bad recipient | Run failed; no artifact left; scratch database empty. |
