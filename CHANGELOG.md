@@ -8,6 +8,10 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+## [2.1.1] - Not yet released — Attendance correction, store redemption decisions, no student names in logs
+
+Everything merged to `main` since v2.1.0, including #1477 and its four migrations, the sysadmin logout change (#1482), the backup proposal (#1481, not installed) and the performance fixes for #1478 and #1479 (#1483). It includes the untagged production release of 2026-10-03 (`ad9574334`, #1466-#1470). The release SHA is the tip of `main` chosen at release; the date, the tag and the release record (`docs/ops/audits/DEPLOY_<date>_<sha>.md`, drafted as `DEPLOY_PENDING_v2.1.1.md`) are filled in when the operator deploys. Three of the four migrations cannot be downgraded: rollback past them is a database restore, not a redeploy.
+
 ### Testing
 - Full-suite fixtures now create immutable payroll sources with real audit lineage, build historical migration inputs forward from pinned predecessors, and preserve historical monetary evidence. The full-suite workflow installs Chromium for browser checks; balance verification prints the canonical posting-state value across Python versions.
 
