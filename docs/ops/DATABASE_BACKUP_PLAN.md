@@ -80,7 +80,8 @@ When the check, or the nightly run, sees one:
 3. If the baseline fails, the older points are kept (the owner's "superseded only after a new verified baseline
    exists") and health is STALE until a baseline succeeds. Every 15-minute check retries.
 
-`baseline_at` is persisted, so an interrupted purge is finished by the next run.
+`baseline_at` is persisted, so an interrupted purge is finished by the next 15-minute check, not left for the next
+nightly run. The check holds the same lock as the nightly run for its whole duration, so the two never overlap.
 
 ### 3.4 Retention
 
@@ -239,4 +240,7 @@ seeded with 2 classes, 30 users and 30 seats. Not run against production.
 | Local-only run (`CTH_BACKUP_REMOTE` unset) | Verified point on disk; health DEGRADED, "no off-host copy". |
 | `check` while a backup holds the lock | Exits 0 without running. |
 | `check` with a table left in the scratch database | Emptied it. |
+| Baseline taken, then the purge failed | DEGRADED, older points listed; the next 15-minute `check` finished the purge. Health CURRENT. |
+| Manifest upload failed after the artifact uploaded | The off-host artifact was removed; no incomplete point left. |
+| Artifact without a manifest found off-host | Removed by the next run before retention was counted. |
 | State file lost while points exist | Next run treated itself as a baseline and deleted every older point once verified. |

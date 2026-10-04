@@ -150,6 +150,10 @@ def save_state(cfg, state):
     os.replace(tmp, path)
 
 
+class LockBusy(SystemExit):
+    """Another run holds the lock. A SystemExit, so an unhandled one exits non-zero."""
+
+
 @contextlib.contextmanager
 def run_lock(cfg):
     cfg.state_dir.mkdir(parents=True, exist_ok=True)
@@ -157,7 +161,7 @@ def run_lock(cfg):
         try:
             fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
-            raise SystemExit("cth-db-backup: another run holds the lock")
+            raise LockBusy("cth-db-backup: another run holds the lock")
         yield
 
 
@@ -413,7 +417,13 @@ def _backup(cfg, reason, forced_baseline):
             rclone(cfg, "copyto", str(artifact), f"{cfg.remote}/{artifact.name}")
             if remote_sha256(cfg, artifact.name) != manifest["artifact_sha256"]:
                 raise RuntimeError(f"{artifact.name}: off-host copy does not match local hash")
-            rclone(cfg, "copyto", str(manifest_path), f"{cfg.remote}/{manifest_path.name}")
+            try:
+                rclone(cfg, "copyto", str(manifest_path), f"{cfg.remote}/{manifest_path.name}")
+            except Exception:
+                # An artifact without its manifest is never a complete point.
+                with contextlib.suppress(Exception):
+                    rclone(cfg, "deletefile", f"{cfg.remote}/{artifact.name}")
+                raise
             log(f"{stem}: off-host copy verified")
         else:
             log(f"{stem}: CTH_BACKUP_REMOTE unset, local-only point")
@@ -465,6 +475,14 @@ def apply_retention(cfg, state):
         return out
 
     remote_points = points_from_names(remote_names(cfg)) if cfg.remote else {}
+    # A point missing its manifest or artifact (an interrupted upload or
+    # deletion) is not a recovery point: remove it before counting retention.
+    for stem, p in list(remote_points.items()):
+        if len(p["files"]) != 2 and stem != newest:
+            for name in sorted(p["files"], key=lambda n: n.endswith(".manifest.json")):
+                rclone(cfg, "deletefile", f"{cfg.remote}/{name}")
+            log(f"{stem}: removed incomplete off-host point")
+            del remote_points[stem]
     for p in doomed(remote_points, cfg.keep_remote):
         # Artifact first, manifest last, so a half-deleted point is never "complete".
         for name in sorted(p["files"], key=lambda n: n.endswith(".manifest.json")):
@@ -512,6 +530,16 @@ def live_identities(cfg):
 
 
 def cmd_check(cfg):
+    """Runs entirely under the run lock, so it cannot race the nightly backup."""
+    try:
+        with run_lock(cfg):
+            return _check(cfg)
+    except LockBusy:
+        log("a backup is running; it performs the same check")
+        return 0
+
+
+def _check(cfg):
     # A run that crashed may have left plaintext in the scratch database.
     if public_table_count(cfg.verify_url):
         log("scratch database not empty (an earlier run was interrupted); emptying it")
@@ -520,13 +548,30 @@ def cmd_check(cfg):
     previous = state.get("newest_point")
     if previous is None:
         log("no verified point yet; taking one")
-        return cmd_backup(cfg, reason="baseline", forced_baseline=True)
+        return _backup(cfg, "baseline", True)
     gone = missing_identities(previous["identities"], live_identities(cfg))
-    if not gone:
-        log("no protected destruction since the newest point")
+    if gone:
+        log(f"protected destruction detected ({gone}); taking a replacement baseline")
+        return _backup(cfg, "baseline", True)
+    if state.get("last_error"):
+        # The newest point is verified, but the run that made it may have
+        # stopped before its purge or audit finished. Finish them now rather than
+        # leaving pre-destruction points off-host until the next nightly run.
+        log("previous run did not finish; retrying retention and the off-host audit")
+        try:
+            apply_retention(cfg, state)
+            if cfg.remote:
+                audit_remote(cfg)
+        except Exception as exc:
+            state["last_error"] = {"at": utcnow().isoformat(), "error": str(exc)[:2000]}
+            save_state(cfg, state)
+            raise
+        state.pop("last_error", None)
+        save_state(cfg, state)
+        log("retention and audit completed")
         return 0
-    log(f"protected destruction detected ({gone}); taking a replacement baseline")
-    return cmd_backup(cfg, reason="baseline", forced_baseline=True)
+    log("no protected destruction since the newest point")
+    return 0
 
 
 def compute_health(cfg, state, live=None):
@@ -638,12 +683,6 @@ def main(argv=None):
     if args.cmd == "backup":
         return cmd_backup(cfg, reason=args.reason, forced_baseline=args.reason == "baseline")
     if args.cmd == "check":
-        try:
-            with run_lock(cfg):
-                pass
-        except SystemExit:
-            log("a backup is running; it performs the same check")
-            return 0
         return cmd_check(cfg)
     if args.cmd == "status":
         return cmd_status(cfg, offline=args.offline)
