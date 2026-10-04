@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| SPEC-PROD-002 | 1.0 | 2026-10-03 | N/A | Normative |
+| SPEC-PROD-002 | 1.1 | 2026-10-03 | 1.0 | Normative |
 
 ## I. Purpose
 
@@ -41,6 +41,32 @@ A separately labelled candidate reconstruction may replay the exact historical c
 
 No reconstructed interval allocation becomes original recorded allocation. No paid membership fallback is installed in current payroll selection or correction preview. Existing SPEC-PROD-001 proof requirements remain unchanged.
 
+### VI.1 Conditional original business proof contract
+
+This subsection specifies a future pure evaluation; the Phase 1 runtime remains diagnostic. A positive result is PROD-owned **original business membership proven**, not a lineage state or financial permission. The initial supported shape is one positive priced `payroll` business event settling only completed canonical whole pairs, with complete per-setting source membership and exactly one scoped original credit. The October 3 count of 153 events/160 pair occurrences is a candidate discovery result, not an authoritative record list. No current production event is certified by this amendment.
+
+All requirements below are cumulative. Each fact must be grounded in independently verifiable surviving evidence from the original execution, with immutable source locators and scope. A caller boolean, matching replay, present deployment revision, current row set or a newly signed observation cannot supply a missing fact.
+
+| Required fact | Owning conclusion and minimum evidence |
+|---|---|
+| Original payroll business event and inputs | PROD identifies the original class, target, event identity, execution boundary, summary and original retained pricing inputs. Operations supplies canonical original protected-payload/complete-chain evidence wherever the source is protected. A currently unverified summary is not promoted by consistent arithmetic. |
+| Complete original source set | PROD establishes the entire source set seen by that execution and earlier relevant payroll boundaries, including omitted, repeated-active, inactive and then-open events that could affect pairing or selection. Authentic original snapshot/selection evidence must prove absence of additional eligible sources; a current bounded scan or retained endpoint list alone cannot. Cap exhaustion, gaps and tied ambiguous boundaries deny completeness. |
+| Creation visibility and stability | Evidence must establish each source's original creation/visibility relative to payroll and absence of later insertion into that original set. Event timestamps and present UPDATE/DELETE guards cannot prove when a backdated source became visible. Original immutable execution evidence must bind the source set and ordering; new attestations cannot retrospectively establish visibility. |
+| Original writer and temporal rules | PROD establishes the per-event writer/rule assignment from original execution evidence tied to exact source revision/path/function, with original pairing, prior-settlement exclusion, canonical day/time inputs and elapsed-seconds rules. A candidate descriptor, signature version or timestamp alone does not assign a writer. No retrospective invocation of a retired writer is permitted. |
+| Original setting selection | Policies supplies independently proven original setting inputs and their creation/effective visibility. PROD proves each pair's original governing policy and per-share assignment from the original rule, including all boundary-relevant settings. Opaque policy identifiers and settings supplied through FEAT do not permit PROD to query Policies. Equal-second shares with swapped source assignments deny. |
+| Original pricing and quantization | Proven original per-share rate and seconds, exact arithmetic operation order, decimal precision, rounding and quantization contract must be established. Ledger validates finite nonnegative rates/cents and original share arithmetic. Today's defaults or a descriptor selected because it reproduces the amount do not prove original assignment. |
+| Unique original monetary identity | Ledger independently identifies exactly one original positive payroll credit with original class/target, account, mechanism/actor and original business-event linkage. Temporal proximity, correlation-only guessing or a manual top-up cannot establish uniqueness. Missing, ambiguous, pending or inconsistent credit evidence blocks the result. Business scope must agree with Ledger-owned locators; no internal cross-domain FK is introduced. |
+
+The FEAT must assemble these domain-owned immutable evidence objects from owning-domain queries, never accept them as client authority or reduce them to caller-selected verified flags. Domain consumers must validate explicit class/target/event binding and the proof's complete evidence identity. Where original snapshot or creation-visibility evidence is unavailable, the query returns **unavailable**, retaining diagnostic reconstruction separately; it must not infer completeness from no detected discrepancy. Changed evidence during a read is unavailable, never a new proof. No historical proof cache or decision record is introduced.
+
+For proven whole-pair membership, Ledger alone derives historical attribution version 1 under SPEC-PROD-001 §VI.1. Preserve original per-share cents and divide-first pricing when that exact original descriptor is independently assigned; use rational largest remainder over original full share seconds, canonical ties, and exact share/payment conservation. Return original source/pricing/rule evidence identity and attribution version separately; do not claim newly computed cents were historically persisted or add amounts to PROD records.
+
+Required unavailable reasons distinguish SOURCE_SET_COMPLETENESS_UNAVAILABLE, SOURCE_CREATION_VISIBILITY_UNAVAILABLE, ORIGINAL_WRITER_UNAVAILABLE, ORIGINAL_SETTING_SELECTION_UNAVAILABLE, ORIGINAL_QUANTIZATION_UNAVAILABLE, ORIGINAL_BUSINESS_LINEAGE_UNAVAILABLE and ORIGINAL_CREDIT_UNAVAILABLE. Ambiguous membership/credit or contradictory lawful evidence returns mismatch/integrity evidence as appropriate, preserving Operations' canonical taxonomy. Unsupported shapes remain diagnostic: unpriced events, partial/open fragments, clipped remainders, zero-value runs, incident/manual credits, top-ups and multi-credit attribution need later separate authority. Prior compensation and original monetary creation/posting evidence remain separately required, never assumed zero or derived from business proof.
+
+Two distinct source sets A/B with equal credited seconds and reproduced cents deny unique membership unless independent original source-set evidence selects exactly one. For three equal 20-second pairs whose proven original share is 5 cents, attribution is 2/2/1 in canonical tie order; totals conserve all 5 cents. Swapping two equal-duration pairs between different original policy shares denies original setting assignment even when the payment total matches. Missing visibility evidence denies a 153-cohort candidate despite perfect arithmetic.
+
+Verification for a later implementation must prove positive original evidence and each missing-evidence denial, same-total/different-membership denial, swapped-share denial, exact rational ties independent of query order, original divide-first replay, per-share/payment conservation, original signatures unchanged, scoped pure reads, evidence-change detection and no current recovery fallback. Genuine original evidence fixtures must be distinguished from synthetic assumptions. This documentation phase implements no new query or proof adapter.
+
 ## VII. Audit diagnostics and monetary boundary
 
 Operations diagnoses the linked original event's scope, envelope HMAC and continuous complete chain/head within budget, independently of row-payload coverage. A verified prefix is insufficient. Scalar head observations before and after the complete walk must agree; concurrent legitimate advancement returns unavailable EVIDENCE_CHANGED_DURING_READ, never a false integrity failure. No row locks or transaction mutation are used. Batch diagnostics walk one bounded complete class chain once per invocation; no caller proof input or persisted cache is allowed. Unsupported per-record source assignment is rejected rather than accepted through an arbitrary descriptor argument. Missing linkage is a coverage gap; wrong scope, invalid envelope or broken chain are integrity failures; unavailable infrastructure or over-budget chain is unavailable. Diagnostics must not write canonical integrity status.
@@ -56,5 +82,7 @@ The assessment cannot authorize execution. Historical results remain blocked unl
 Targeted verification covers scope, malformed bounds, cap exhaustion, exact pairs/repeated-active/day-end/DST; tied boundaries and backdated visibility ambiguity; missing/invalid/stale setting evidence; exact replay with incorrect membership; zero runs; eleven-versus-eight coverage; valid envelope with incomplete protected values; unsupported per-record emitter assignment; bounded chain completeness; pure reads and unchanged current v2/v3 proof. Synthetic fixtures must not fabricate old signatures as genuine historical proof; genuine predecessor-runtime evidence is distinguished explicitly.
 
 ## IX. Amendment
+
+Version 1.1 (2026-10-03) conditionally defines original priced whole-pair business proof for later pure evaluation. It supersedes diagnostic-only scope solely at the documentation contract level; Phase 1 runtime and all monetary execution gates remain unchanged. No incomplete source evidence becomes proof.
 
 Initial 1.0 (2026-10-03) defines diagnostic assessment only. Later proof adoption or recovery requires separate owning-domain and FEAT authority; no rule here supersedes the unchanged correction proof gates.

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-LED-001 | 2.9 | 2026-10-03 | 2.8 | Constitutional |
+| DOM-LED-001 | 2.10 | 2026-10-03 | 2.9 | Constitutional |
 
 ---
 
@@ -242,7 +242,15 @@ SPEC-LED-001 §III–V governs Ledger's independent reconstruction queries. With
 
 Ledger exposes `get_historical_payroll_credit_records(*, ctx, class_id, target_seat_id, limit=1000)` to provide scoped bounded source records for FEAT-to-Operations composition only; it does not provide an unscoped table read or resolve business membership. Ledger owns `assess_historical_payroll_money(*, ctx, class_id, target_seat_id, business_input, records, audit_observations=(), creation_evidence=())`: a pure bounded query through FEAT-PROD-006 that resolves uniquely scoped credit locators, compares original recorded monetary amounts with explicit original-rule replay inputs, identifies unsupported compensation evidence and reports current strict proof eligibility separately. Business inputs and audit observations are immutable FEAT-supplied data, never cross-domain calls or verification booleans. This domain incorporates [SPEC-PROD-002](../SPEC/SPEC-PROD-002_HISTORICAL_ATTENDANCE_PROOF_ASSESSMENT.md) §V–VIII for diagnostic arithmetic/monetary boundaries only. Preserve exact historical arithmetic order; no current price substitution, invented allocation, persisted earnings, default-zero compensation or signature-version override is authorized. Diagnostic v1 coverage never satisfies §VII.1A or §IX.1. Existing v2/v3 proof and recovery APIs remain unchanged.
 
+### IX.3 Conditional Historical Attribution Read Contract
+
+Ledger incorporates SPEC-PROD-001 §VI.1 and SPEC-PROD-002 §VI.1 only for its owned future pure original-credit identity, exact original monetary replay and historical attribution calculation through FEAT-PROD-006. The FEAT supplies PROD-owned proven whole-pair share inputs, Policies-owned original setting evidence and Operations-owned canonical evidence as immutable scoped objects. Ledger must not pair attendance, select settings, verify another domain's internals or accept a client boolean as proof. No DOM-to-DOM dependency is created.
+
+For independently proven original whole-pair shares, preserve exact original pricing descriptor/order/precision/quantization and derive historical attribution version 1 by rational largest remainder with canonical close-time/open-ID/close-ID ties. Each share's allocated cents equals its original quantized cents; shares sum to the uniquely identified original payroll credit. These are newly derived read results, never historically recorded allocations. Inconsistent cents or ambiguous original credit fail closed. Pending credit cannot supply posted-credit proof. This contract enables no new runtime API or integration. A positive business proof or allocation calculation neither satisfies §VII.1A/§IX.1 nor proves zero compensation; original lawful creation, posting and complete compensation gates remain unchanged. Historical v1 gaps remain unavailable.
+
 ## X. Change Notes
+
+**2.10 (2026-10-03)** incorporates conditional historical attribution read authority (§IX.3), preserving original arithmetic and all strict monetary proof gates. Supersedes no execution or signature rule; no runtime change is claimed.
 
 **2.9 (2026-10-03)** adds §IX.2's historical read diagnostics; supersedes no execution-proof or compensation-cap rule. Read agreement is not monetary authorization.
 

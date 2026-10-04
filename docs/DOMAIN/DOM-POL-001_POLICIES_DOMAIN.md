@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-POL-001 | 2.5 | 2026-10-03 | 2.4 | Constitutional |
+| DOM-POL-001 | 2.6 | 2026-10-03 | 2.5 | Constitutional |
 
 ## I. Purpose
 
@@ -242,7 +242,15 @@ This means Class Configuration decides whether a capability exists in the class,
 
 Policies owns `get_historical_payroll_setting_inputs(*, ctx, class_id, limit=500)`, exposed only through the existing payroll-setting domain query boundary. This pure bounded query returns immutable retained class/policy identity, effective/created UTC instants and original rate inputs with availability limitations; no current/default rate or missing field is synthesized. FEAT-PROD-006 supplies these owned DTOs to PROD for candidate historical setting selection. Policies incorporates [SPEC-PROD-002](../SPEC/SPEC-PROD-002_HISTORICAL_ATTENDANCE_PROOF_ASSESSMENT.md) §V–VI for bounds, pure reads, original configuration and descriptor limitations. Retained values and dates alone do not attest original visibility, original writer assignment or lawful historical creation. No policy write, active selection behavior or deletion rule changes.
 
+### X.2 Conditional original payroll-setting evidence contract
+
+Policies incorporates SPEC-PROD-002 §VI.1 only for a future pure original-setting evidence contribution through FEAT-PROD-006. This contract designation does not claim an implemented API or promote §X.1's retained DTOs to proof. Required inputs are canonical context, explicit class, original payroll-execution identity/boundary, relevant retained setting identities and FEAT-supplied canonical original creation evidence from Operations. Policies establishes the original immutable inputs, creation/effective visibility and completeness of boundary-relevant setting history from independently verifiable original evidence. Present dates, current settings, candidate writer descriptors, fresh signatures or caller proof flags cannot supply unavailable original facts. Source scope and complete bounded reads are mandatory; missing evidence returns unavailable.
+
+Policies neither assigns attendance pairs to shares, computes monetary amounts, verifies Operations internals nor queries another domain. PROD owns original per-pair setting assignment and Ledger owns arithmetic; FEAT coordinates those conclusions. No current setting selection, policy write, proof cache, migration, signature repair or historical recovery is enabled. Existing protected policy lawful-lineage requirements remain unchanged.
+
 ## XI. Amendment
+
+Version 2.6 (2026-10-03) adds conditional original-setting evidence contribution (§X.2), superseding no retained-input diagnostic or policy execution rule. It changes documentation authority only, not runtime.
 
 Version 2.5 (2026-10-03) adds §X.1's bounded original-setting input query. It supersedes no policy mutation/selection rule and authorizes no historical recovery.
 

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-PROD-001 | 1.11 | 2026-10-03 | 1.10 | Constitutional |
+| DOM-PROD-001 | 1.12 | 2026-10-03 | 1.11 | Constitutional |
 
 ---
 
@@ -668,7 +668,17 @@ Pure interval queries expose original pair IDs, UTC timestamps, credited seconds
 
 Under INV-ARC-016 and DOM-OPS-002 §5.4, every new payroll event carries complete protected-field audit lineage. The business fields, including the full summary, are fixed at insertion. The three audit-linkage fields may move together exactly once from all-null to complete solely within that row's creating transaction, with a matching signed AuditEvent for its class, table and row ID. This initialization completes creation; it does not authorize amendment of a committed record. Commit without required valid lineage fails, replacement and post-commit attachment fail, and failures roll back the row and audit together. Historical null linkage stays unverified and is never backfilled. Lifecycle destruction remains the sole deletion exception.
 
+### 9. Conditional Pure Historical Business Membership Evaluation
+
+PROD authorizes a future pure **evaluate proven historical membership** query contract through FEAT-PROD-006 only, incorporating SPEC-PROD-002 §VI.1 and SPEC-PROD-001 §VI.1. This is a contract designation, not a claim that an implemented API exists. Required inputs are canonical context, explicit class/target and original payroll-event identity, complete original PROD source/boundary evidence, and immutable original setting, audit and scoped credit evidence supplied by the coordinating FEAT. Inputs are obtained from owning-domain interfaces, never client proof claims. PROD validates source completeness/creation visibility, original writer/temporal selection, whole-pair identity and per-policy source assignment; it neither computes money nor verifies another domain's proof internally. Scope, bounds and purity requirements of §XIII.9 remain binding.
+
+The permitted positive conclusion is original business membership proven, distinct from canonical lawful-lineage state and independent monetary authorization. It requires every SPEC-PROD-002 §VI.1 prerequisite. A current scan set, matching seconds/cents, frozen rate alone, timestamp cutoff or post-hoc signing cannot meet original visibility/completeness requirements. Historical source ambiguity remains unavailable. Original protected business evidence must meet INV-ARC-016 §V; this query cannot manufacture it.
+
+This narrowly qualifies §XV.7's timestamp-gap rejection only if independent original evidence proves the complete original selection. It does not install a membership fallback or change unpaid selection, paid preview, correction command, cycle boundaries or Interpretation records. The initial shape is one priced positive payroll event settling only complete original pairs with one unique original credit. The observed 153-event cohort remains diagnostic because original source visibility/completeness, per-record writer assignment and business lineage gaps have not been closed. Unpriced, fragment/remainder, manual/top-up, zero-run and multi-credit shapes remain outside this proof contract. Monetary recovery still requires every separate existing Ledger and Operations gate; no writer, migration, signature or compatibility path is authorized.
+
 ## XVI. Amendment
+
+**Version 1.12 (2026-10-03)** conditionally qualifies §XV.7 for a future pure proven priced whole-pair membership contract (§XV.9), incorporating SPEC-PROD-002 §VI.1 and SPEC-PROD-001 §VI.1. Supersedes no immutable-history, current runtime or monetary proof rule; current production candidates remain diagnostic.
 
 **Version 1.11 (2026-10-03)** supersedes v1.9's exclusion of historical reconstruction only for the bounded diagnostic read in §XIII.9. It preserves the exclusion of reconstructed history from settlement/recovery truth and authorizes no historical monetary execution or write.
 

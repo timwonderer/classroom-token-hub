@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-PROD-001 | 1.1 | 2026-10-03 | 1.0 | Normative technical contract; incorporated authority only |
+| SPEC-PROD-001 | 1.2 | 2026-10-03 | 1.1 | Normative technical contract; incorporated authority only |
 
 ## I. Purpose
 
@@ -56,6 +56,14 @@ Allocation sums must equal each original setting share, and setting shares must 
 
 Historical payment correction is allowed only when PROD can prove exact original membership and frozen pricing inputs, and Ledger can prove the original credit, quantization, allocations, and compensation history. Existing lawful immutable evidence may establish these facts; proximity in time, matching totals, or current rates cannot. Missing provenance denies the whole paid invalidation action without committing eligibility alone. No historical row is rewritten, no command reservation or lineage is fabricated, and no compatibility bridge is authorized.
 
+### VI.1 Conditional historical business membership, priced complete pairs only
+
+DOM-PROD-001 §XV.9 incorporates SPEC-PROD-002 §VI.1 for a future pure historical membership evaluation. Its positive business result requires independently established original source completeness and visibility, original rule/writer assignment, original setting selection and lawful protected business evidence. Equal seconds or cents do not meet those conditions. The dated 153 priced closed-event cohort is only an initial candidate population, never an allowlist or proof criterion. Unpriced events, clipped remainders, open-at-settlement fragments, manual credits and top-ups are outside this contract.
+
+For proven original whole-pair setting shares, Ledger may derive **historical attribution version 1** as a present-day pure calculation; it is not an allocation recorded by the original writer and is distinct from prospective settlement `allocation_version = 1`. Retain each share's independently established original quantized cents, produced by its proven original arithmetic descriptor. In particular, the ad957 descriptor divides the rate by 60 at decimal precision 28 with ROUND_HALF_EVEN, then multiplies by integer seconds and quantizes once; the modern multiply-first expression must not replace it. Using those original share cents, apply the exact rational largest-remainder allocation and ascending closing UTC/opening ID/closing ID tie order above. Require exact conservation per share and for the uniquely identified original credit. No correction causes reallocation.
+
+Business membership is not lawful Ledger creation, original posting or compensation proof. No historical attribution output, new audit event, teacher confirmation or diagnostic envelope supplies those missing facts. This amendment enables no recovery fallback, writer, schema, migration, signing, adoption or current preview integration. Independent existing Ledger/Operations gates remain mandatory and must be satisfied separately before any later implementation is authorized.
+
 ## VII. Compensation, Replay, and Concurrency
 
 An unpaid interval produces only its invalidation and audit record. A paid interval produces its invalidation, a `correction` payroll business event when money is recovered, Ledger compensation effects/reservation, and audit lineage atomically. Correction summary carries same-domain `original_payroll_event_id`, `correction_intent = INTERVAL_INVALIDATION`, invalidation ID, source-event IDs, and opaque `correction_intent_locator` and Ledger origin locator; no financial amount is stored there.
@@ -105,6 +113,8 @@ Target-seat destruction removes its invalidations and source business records un
 | Target seat or class is lawfully destroyed | Remove dependent business records under existing lifecycle authority; no retained earnings archive. |
 
 ## X. Amendment
+
+Version 1.2 (2026-10-03) defines conditional historical priced whole-pair business proof and distinct derived historical attribution. It supersedes no monetary proof gate and does not claim original allocation was recorded.
 
 Version 1.1 (2026-10-03) completes the invalidation linkage schema/protocol without changing the terminal eligibility or recovery rules.
 

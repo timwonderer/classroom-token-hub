@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-PROD-005 | 1.1 | 2026-10-03 | 1.0 | Normative |
+| FEAT-PROD-005 | 1.2 | 2026-10-03 | 1.1 | Normative |
 
 ## I. Purpose
 
@@ -56,6 +56,12 @@ The invalidation creation command freezes its eleven protected business fields a
 
 The immutable protected `receipt_json` on the invalidation record contains `expected_preview_identity`, `fingerprint_version`, `canonical_intent_digest`, `original_settlement_disposition`, and `opaque_outcome_locators` (no amounts or balances). It preserves unpaid/previously recovered/zero-cent outcomes even when no Ledger reservation exists. Monetary effects use Ledger's command reservation; all protection legs belong to that same command. Ledger owns `compensation_origin_locator`, nonnegative attributable recovery, and correction intent linkage; transfer legs contribute zero to recovery. The sum of exact reversal, interval corrections, and residual recovery cannot exceed the original credit.
 
+### VI.1 Historical business-proof integration gate
+
+SPEC-PROD-001 §VI.1 is incorporated only as the conditional original-business evidence standard for a later integration. DOM-PROD-001 §XV.9 and FEAT-PROD-006 §VI.1 define the separate future pure historical evaluation. This FEAT does not execute another FEAT, substitute diagnostic replay for original membership, or enable a historical fallback through this amendment. Any later approved integration must compose the owning PROD, Policies, Ledger and Operations interfaces inside this FEAT and declare its full implementation dependencies before activation.
+
+Original source-set completeness/visibility, per-event writer and original setting/quantization must independently satisfy the conditional contract. A positive business mapping or newly derived historical attribution does not establish original lawful monetary creation/posting or complete compensation. Existing §VI.4 paid evidence requirements remain cumulative; v1 gaps, unsigned reversal linkage and unknown compensation still deny the entire paid command without eligibility-only commit. The current 153 priced candidates remain diagnostic, and no new writer, proof adoption, preview fallback, API or runtime enablement is authorized here.
+
 ## VII. Funding, History, and Lifecycle
 
 Enabled protection transfers the entire checking shortfall from savings only if savings can fund it entirely; otherwise savings is untouched and checking takes the full deduction below zero. Disabled protection transfers nothing. Own-account transfers retain sufficient-funds rules. Payroll corrections incur no NSF fee, obligation, or deferred deduction.
@@ -69,6 +75,8 @@ Stable outcomes: `UNAUTHORIZED_SCOPE`, `INCOMPLETE_INTERVAL`, `INVALID_REASON`, 
 Verify SPEC-PROD-001 worked examples: unpaid exclusion with intact scans; exact-cent paid recovery; multi-interval conservation; partial then residual recovery; prior full recovery with no new debit; same-key/different-key duplicates; concurrent payroll; insufficient/sufficient/disabled protection; cross-class denial; unavailable historical evidence; whole-transaction rollback; lifecycle destruction. Targeted checks only; no full test suite belongs to this documentation step.
 
 ## IX. Amendment
+
+1.2 (2026-10-03) records the conditional historical business standard and explicit later integration gate; it supersedes no current paid-proof or atomic command rule.
 
 1.1 (2026-10-03) incorporates the complete invalidation creation-linkage contract and guarded one-time initialization; business decisions remain terminal.
 
