@@ -76,11 +76,12 @@ def class_has_claimed_student_work(class_id: str) -> bool:
     ).scalar()
 
 
-def _current_evaluation_day_bounds(ctx):
+def _current_evaluation_day_bounds(ctx, *, reference_time_utc=None):
     evaluation = canonical_temporal_resolver(
         CLASS_LEVEL_EVALUATION,
         canonical_execution_context=ctx,
         primitive="evaluation_day_boundaries",
+        reference_time_utc=reference_time_utc,
     )
     return evaluation.boundary_start_utc, evaluation.boundary_end_utc
 
@@ -558,7 +559,7 @@ def calculate_worked_attendance_seconds_today(seat_id: int, class_id: str, *, ct
     return _elapsed_seconds(ctx, intervals)
 
 
-def is_done_for_day(seat_id: int, class_id: str, *, ctx) -> bool:
+def is_done_for_day(seat_id: int, class_id: str, *, ctx, reference_time_utc=None) -> bool:
     """Whether the seat has already recorded ``done_for_day`` in the current
     class-local day.
 
@@ -570,7 +571,9 @@ def is_done_for_day(seat_id: int, class_id: str, *, ctx) -> bool:
     which previously computed attendance facts independently and never
     surfaced this one at all.
     """
-    day_start_utc, day_end_utc = _current_evaluation_day_bounds(ctx)
+    day_start_utc, day_end_utc = _current_evaluation_day_bounds(
+        ctx, reference_time_utc=reference_time_utc
+    )
     rows = AttendanceSession.query.filter(
         AttendanceSession.target_seat_id == seat_id,
         AttendanceSession.class_id == class_id,
@@ -578,8 +581,23 @@ def is_done_for_day(seat_id: int, class_id: str, *, ctx) -> bool:
         AttendanceSession.reason_code == AttendanceReasonCode.DONE_FOR_DAY.value,
         AttendanceSession.timestamp >= day_start_utc,
         AttendanceSession.timestamp < day_end_utc,
-    ).first()
-    return rows is not None
+    ).all()
+    if not rows:
+        return False
+    if any(ensure_utc(row.timestamp) != day_start_utc for row in rows):
+        return True
+    # The prior day's exact end is today's start. Its persisted closing event
+    # belongs to the originating pair, not today's terminal state (§XV.7).
+    # Exclude only proven prior-day pairs; orphan/current-day closures still deny.
+    prior_day_closings = {
+        interval.closing_event_id
+        for interval in list_attendance_intervals(
+            seat_id, class_id, ctx=ctx, as_of_utc=day_start_utc
+        )
+        if interval.opened_at < day_start_utc
+    }
+    return any(row.id not in prior_day_closings for row in rows)
+
 
 
 def get_class_attendance_status(student, *, class_id: str, ctx=None):

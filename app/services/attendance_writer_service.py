@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from app.extensions import db
 from app.models import AttendanceSession, AttendanceReasonCode, Seat
 from app.services.context_resolver import CanonicalContext
-from app.services.attendance_service import lock_attendance_seat
+from app.services.attendance_service import is_done_for_day, lock_attendance_seat
 from app.utils.canonical_temporal_resolver import CLASS_LEVEL_EVALUATION, canonical_temporal_resolver
 
 @dataclass(frozen=True)
@@ -81,22 +81,10 @@ def record_attendance_session_command(
             raise ValueError("Attendance actor seat must belong to the canonical class.")
 
     if status == "active":
-        day_bounds = canonical_temporal_resolver(
-            CLASS_LEVEL_EVALUATION,
-            canonical_execution_context=ctx,
-            primitive="evaluation_day_boundaries",
+        if is_done_for_day(
+            resolved_target_seat_id, ctx.class_id, ctx=ctx,
             reference_time_utc=event_time,
-        )
-
-        # Reject if student already has done_for_day for this class today
-        done_today = AttendanceSession.query.filter(
-            AttendanceSession.target_seat_id == resolved_target_seat_id,
-            AttendanceSession.class_id == ctx.class_id,
-            AttendanceSession.reason_code == AttendanceReasonCode.DONE_FOR_DAY.value,
-            AttendanceSession.timestamp >= day_bounds.boundary_start_utc,
-            AttendanceSession.timestamp < day_bounds.boundary_end_utc,
-        ).first()
-        if done_today:
+        ):
             raise ValueError("Student is done for the day and cannot start work again until the next canonical day.")
 
         # Close any existing active session with done_for_day
