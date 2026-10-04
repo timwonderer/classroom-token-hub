@@ -1,0 +1,10 @@
+{#- Operator notice posted by the "Login page notice" GitHub Action (app/utils/login_notice.py). -#}
+{% import "macros/cards.html" as cards %}
+{% macro login_notice() %}
+{% set _notice = get_login_notice() %}
+{% if _notice %}
+{% call cards.alert_card('info', 'Scheduled maintenance', icon='construction', body_class='login-notice mb-4', role='status', id='loginNotice', heading_tag='h2') %}
+    <p class="mb-0 login-notice-message">{{ _notice }}</p>
+{% endcall %}
+{% endif %}
+{% endmacro %}
