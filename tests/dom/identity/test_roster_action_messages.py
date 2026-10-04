@@ -1,6 +1,6 @@
 """Roster import and unclaim echo only vetted messages to the teacher (CodeQL py/stack-trace-exposure)."""
+import ast
 import inspect
-import re
 
 import pytest
 
@@ -9,11 +9,25 @@ from app.feats.identity_feat import ROSTER_ACTION_MESSAGES, roster_action_messag
 from tests.helpers.classroom_initializer import initialize_as_teacher
 
 LEAK = "internal detail: relation seats violates constraint"
-_RAISE_LITERAL = re.compile(r'raise ValueError\(\s*"((?:[^"\\]|\\.)*)"\s*\)')
 
 
 def _raised_literals(source):
-    return set(_RAISE_LITERAL.findall(source))
+    """Constant messages of every direct ``raise ValueError(...)`` in ``source``.
+
+    Parsed rather than pattern-matched so single-quoted, adjacent and multiline
+    literals are all seen; a non-constant message is a failure, not a skip.
+    """
+    raised = set()
+    for node in ast.walk(ast.parse(source)):
+        error = node.exc if isinstance(node, ast.Raise) else None
+        if not (isinstance(error, ast.Call) and isinstance(error.func, ast.Name)
+                and error.func.id == "ValueError"):
+            continue
+        assert len(error.args) == 1, ast.dump(error)
+        message = error.args[0]
+        assert isinstance(message, ast.Constant) and isinstance(message.value, str), ast.dump(error)
+        raised.add(message.value)
+    return raised
 
 
 def test_roster_action_message_returns_vetted_text_for_known_messages():
@@ -34,9 +48,14 @@ def test_feat_value_errors_are_all_vetted_messages():
 
 
 def test_raise_detector_reports_a_near_miss_message():
-    synthetic = 'def f():\n    raise ValueError("A brand new teacher message.")\n'
+    synthetic = ("def f():\n    raise ValueError('A brand new '\n                     'teacher message.')\n")
     assert _raised_literals(synthetic) == {"A brand new teacher message."}
     assert not _raised_literals(synthetic) <= ROSTER_ACTION_MESSAGES
+
+
+def test_raise_detector_rejects_a_non_constant_message():
+    with pytest.raises(AssertionError):
+        _raised_literals("def f(detail):\n    raise ValueError(f'bad {detail}')\n")
 
 
 def test_upload_students_keeps_a_vetted_validation_message(client, app):
