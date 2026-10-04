@@ -203,6 +203,50 @@ def missing_identities(previous, current):
     return gone
 
 
+PG_CLIENT_TOOLS = ("pg_dump", "pg_restore")
+
+
+def parse_pg_major(version_text):
+    """Major version from ``pg_dump --version`` style output, e.g. 14 from
+    ``pg_dump (PostgreSQL) 14.24 (Ubuntu 14.24-0ubuntu0.22.04.1)``."""
+    m = re.search(r"\(PostgreSQL\)\s+(\d+)", version_text)
+    if not m:
+        raise ValueError(f"unrecognised PostgreSQL version output: {version_text.strip()[:200]!r}")
+    return int(m.group(1))
+
+
+def client_version_mismatches(client_majors, server_majors):
+    """Every (client, server) pair whose majors differ. A newer client writes
+    settings an older server rejects (pg_dump 17 emits ``SET transaction_timeout``,
+    which 14 refuses), so verification would fail after the dump; an older client
+    may not read a newer server at all. Only an exact match is accepted."""
+    return [f"{tool} is PostgreSQL {cmaj}, {label} is {smaj}"
+            for tool, cmaj in sorted(client_majors.items())
+            for label, smaj in sorted(server_majors.items())
+            if cmaj != smaj]
+
+
+def server_major(url):
+    conn = psycopg2.connect(url)
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SHOW server_version_num")
+            return int(cur.fetchone()[0]) // 10000
+    finally:
+        conn.close()
+
+
+def require_matching_clients(servers):
+    """Refuse before any dump or restore unless pg_dump and pg_restore have the
+    same major version as every database named in ``servers`` ({label: url})."""
+    clients = {tool: parse_pg_major(subprocess.run([tool, "--version"], capture_output=True, text=True,
+                                                   check=True).stdout)
+               for tool in PG_CLIENT_TOOLS}
+    problems = client_version_mismatches(clients, {label: server_major(url) for label, url in servers.items()})
+    if problems:
+        raise RuntimeError("refusing: PostgreSQL client and server majors differ: " + "; ".join(problems))
+
+
 def wipe_public_schema(url):
     conn = psycopg2.connect(url)
     try:
@@ -352,6 +396,7 @@ def _backup(cfg, reason, forced_baseline):
     save_state(cfg, state)
 
     try:
+        require_matching_clients({"source database": cfg.source_url, "verify database": cfg.verify_url})
         src = psycopg2.connect(cfg.source_url)
         try:
             src.set_session(isolation_level="REPEATABLE READ", readonly=True)
@@ -628,6 +673,10 @@ def cmd_restore(cfg, artifact, manifest_path, identity, target_url, live_url, li
         raise SystemExit("refusing: target is the live database")
     if public_table_count(target_url) != 0:
         raise SystemExit("refusing: target database is not empty (restore only into a fresh database)")
+    try:
+        require_matching_clients({"target database": target_url})
+    except RuntimeError as exc:
+        raise SystemExit(str(exc))
 
     age = subprocess.Popen(["age", "--decrypt", "-i", identity, artifact], stdout=subprocess.PIPE)
     restore = subprocess.run(["pg_restore", "--no-owner", "--no-privileges", "--exit-on-error",

@@ -18,11 +18,12 @@ Run as root. Replace every `CHANGE_ME` and `<live-db>`.
 
 1. **Packages.** `pg_dump` and `pg_restore` must be the **same** major version as the server and the verify
    database (14 today). A newer `pg_dump` writes settings an older server rejects (17's `SET transaction_timeout`
-   fails on 14), and verification then fails.
+   fails on 14), and verification then fails. The tool checks this before every backup and restore and refuses on a
+   mismatch. Install the client package for the server's major, not the unversioned `postgresql-client`:
 
    ```bash
-   apt-get install age rclone python3-psycopg2 postgresql-client
-   pg_dump --version
+   apt-get install age rclone python3-psycopg2 postgresql-client-14
+   pg_dump --version   # must report 14.x
    ```
 
 2. **System user.**

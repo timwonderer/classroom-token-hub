@@ -73,7 +73,7 @@ Chain from production's `a4b50fee84c3`, in order:
 
 `e7c2a9d4f610` aborts (`Ledger posting migration blocked`) if any ledger row has a missing or nonpositive
 `posting_sequence`, is `VOID`, or disagrees with its snapshot's `reconciled_through_posting_sequence` (a `POSTED`
-row beyond the cursor, or a `PENDING` row at or before it). Read-only preflights on 2026-10-03 found none of these
+row with no cursor or beyond it, or a `PENDING` row at or before it). Read-only preflights on 2026-10-03 found none of these
 among 854 rows, and no `REVERSAL` rows or duplicate original locators
 ([implementation record](../../TRACKING/HISTORICAL_ATTENDANCE_RECONSTRUCTION_IMPLEMENTATION_20261003.md)). That is
 a dated observation; the record itself requires a fresh preflight before deployment.

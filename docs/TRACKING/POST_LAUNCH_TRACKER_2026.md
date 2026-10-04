@@ -38,7 +38,8 @@ authority stays with `INV-*`, `DOM-*`, `FEAT-*`, `SPEC-*` and `SOP-*`.
 ## II. Operator follow-ups from the v2.0.1 release
 
 - [x] **Lift the Cloudflare Access window** and post the resolved status update. Done: the app has been
-  in daily use since, and each later window was lifted the same way, most recently 2026-10-04 after v2.1.1.
+  in daily use since, and each later window was lifted the same way, most recently 2026-10-04 after v2.1.1
+  (`2bdfac65e`).
 - [x] **Publish the security advisory.** Published 2026-09-28 as
   [GHSA-5v6c-mw3v-fmf2](https://github.com/timwonderer/classroom-token-hub/security/advisories/GHSA-5v6c-mw3v-fmf2)
   (critical; CVSS v4.0 9.2; CWE-304 with CWE-386 and CWE-459). Linked from the `[2.0.1]` section of
@@ -46,7 +47,7 @@ authority stays with `INV-*`, `DOM-*`, `FEAT-*`, `SPEC-*` and `SOP-*`.
 - [ ] **Check public routes** once the window lifts. They were not verified at release because the
   gate was in place. On 2026-10-04, after the v2.1.1 window, `/student/login` answered 200 from outside with no
   Access redirect; the other public routes are still unchecked.
-- [x] **Finish verifying the student-setup memory store.** Done 2026-10-04 ([v2.1.1 record](../ops/audits/DEPLOY_2026-10-04_2bdfac65e.md),
+- [x] **Finish verifying the student-setup memory store.** Done 2026-10-04 in the v2.1.1 (`2bdfac65e`) window ([record](../ops/audits/DEPLOY_2026-10-04_2bdfac65e.md),
   §VI): no persistence, no slow log, no replicas, every listed command refused with `NOPERM`, and `LimitCORE=0` and
   `MemorySwapMax=0` on both units. The store is outside the backup design, which dumps only Postgres. Two follow-ups
   from that check are in the record: the host runs Redis 6.0.16 while the README says 7+, and the app runs as
@@ -298,7 +299,8 @@ against this tracker, the archived launch trackers and the live-test RESUME reco
   - **Status (2026-10-02).** #1446 is released in v2.1.0: `GET /sysadmin/login` no longer signs anyone out. Its
     nginx snippet (`infra/grafana-auth/README.md`) is an operator step and has not been applied, so the Grafana
     loop is still open. Loki and Tempo are unchanged by the release.
-  - **Loki.** *Resolved by 2026-10-04 (read-only host check):* Loki stores chunks under `/var/lib/loki` with a
+  - **Loki.** *Resolved by 2026-10-04 (read-only host check in the v2.1.1 `2bdfac65e` window; a host change, so no
+    repository commit):* Loki stores chunks under `/var/lib/loki` with a
     336 h (14-day) retention, and `/tmp/loki` no longer exists. Previously it used `/tmp/loki/chunks`, emptied at
     boot, with no retention. Local app logs rotate at 1 MB × 6.
   - **Tempo.** *Stopped by 2026-10-04:* `tempo` and `alloy` are disabled and inactive, with no restarts since the
@@ -314,8 +316,9 @@ against this tracker, the archived launch trackers and the live-test RESUME reco
   `docs/ops/audits/INCIDENT_2026-09-28_PROD-PAY-001.md`. Checked against production (read-only, 2026-10-01): 79
   `manual_credit` payroll events recorded between 04:21:32 and 04:25:47 UTC on 2026-09-29, matching the record's
   04:21–04:25 window and 79 students. Release records for the 2026-09-29 releases are tracked in §II.
-- [ ] **No database backup of any kind exists.** The owner confirmed on 2026-09-30 that DigitalOcean droplet backups
-  are off. There is also no scheduled dump and no WAL archiving.
+- [ ] **No scheduled database backup or WAL archiving exists.** The owner confirmed on 2026-09-30 that DigitalOcean
+  droplet backups are off, and there is no scheduled dump and no WAL archiving. The only recovery points are manual
+  pre-release dumps; the two from 2026-10-04 are the first proven to restore (below).
   - **Direction (owner, 2026-09-30).** Scheduled encrypted off-host backups, with a replacement baseline after each
     protected destruction:
     - seat, class or teacher-account deletion is a protected destruction;

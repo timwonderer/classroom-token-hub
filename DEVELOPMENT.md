@@ -50,7 +50,7 @@ Run once after clone:
 `hooks/post-checkout` rewrites `DATABASE_URL` in `.env` on every checkout. Check it before relying
 on a custom database URL.
 
-## Current State (2026-10-02)
+## Current State (2026-10-04)
 
 ### In production
 

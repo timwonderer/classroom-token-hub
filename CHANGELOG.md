@@ -9,9 +9,11 @@ and this project follows semantic versioning principles.
 ## [Unreleased]
 
 ### Fixed
-- **Backup tool install sheet names the wrong `pg_dump` version.** `infra/db-backup/README.md` said `pg_dump` must be at least the server's major version. A newer one fails verification: `pg_dump` 17 writes `SET transaction_timeout`, which the PostgreSQL 14 verify database rejects, as the first v2.1.1 pre-release backup attempt showed. It now requires the same major version, and the Mac install line uses `postgresql@14`. The tool's own docstring (`cth_db_backup.py`) said the same and now matches.
+
+- **Backup tool install sheet names the wrong `pg_dump` version.** `infra/db-backup/README.md` said `pg_dump` must be at least the server's major version. A newer one fails verification: `pg_dump` 17 writes `SET transaction_timeout`, which the PostgreSQL 14 verify database rejects, as the first v2.1.1 pre-release backup attempt showed. It now requires the same major version, and the Mac install line uses `postgresql@14`. The tool's own docstring (`cth_db_backup.py`) said the same and now matches. The tool also refuses, before any `backup` or `restore`, when `pg_dump` or `pg_restore` has a different major version from the source, verify or target database (`require_matching_clients`), and the host install line pins `postgresql-client-14`. Tests: `tests/test_db_backup_client_versions.py` (a 17-against-14 pair is refused; confirmed red with the check loosened to accept newer clients).
 
 ### Changed
+
 - **Version references point at v2.1.1.** README, SECURITY.md, DEVELOPMENT.md and the post-launch tracker named v2.1.0 as the production release. The tracker's release table gains the 2026-10-03 and 2026-10-04 releases, and its items made stale by the 2026-10-04 window are updated from read-only host checks: the student-setup store checks are done, Loki is out of `/tmp` with a 14-day retention, Tempo and Alloy are stopped, the orphaned v1 Loki chunks are gone, and the first restore-verified backups exist. `docs/ops/DATABASE_BACKUP_PLAN.md` §1 names the newest recovery point.
 
 ## [2.1.1] - 2026-10-04 — Attendance correction, store redemption decisions, no student names in logs
