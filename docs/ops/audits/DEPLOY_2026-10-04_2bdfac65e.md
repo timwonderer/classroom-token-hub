@@ -13,8 +13,8 @@ only rollback is a database restore.
 
 | | |
 |---|---|
-| Release SHA | `2bdfac65e9251e1451f29454c18de1aaac947f57` (tip of `main`); tag `v2.1.1` *not yet created* |
-| GitHub release | *Not yet published* |
+| Release SHA | `2bdfac65e9251e1451f29454c18de1aaac947f57` (tip of `main`); tag `v2.1.1` |
+| GitHub release | [v2.1.1](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.1.1), published 2026-10-04 |
 | Branch / lineage | `main` (`lineage_ref=main`) |
 | Previous deployed SHA | `4c2fc4bc40bf411243c1eafd2f6e377b41d7fa5d`, an untagged hotfix released at 18:21 UTC the same day: #1476 cherry-picked onto `ad9574334` from branch `claude/project-thread-nhpx6y`, released with `V2_RELEASE_LINEAGE_REF` set to that branch, then restored to `main`. Alembic revision `a4b50fee84c3`. Before it: `ad9574334`, record [DEPLOY_2026-10-03_ad9574334.md](DEPLOY_2026-10-03_ad9574334.md) |
 | Release run | [37232860617](https://github.com/timwonderer/classroom-token-hub/actions/runs/37232860617), 20:38:16Z → 20:38:43Z, success |
@@ -201,7 +201,6 @@ the repository.
 
 ## Follow-ups
 
-- Create tag `v2.1.1` on `2bdfac6` and its GitHub release; date the `[2.1.1]` CHANGELOG section.
 - Lift the Cloudflare Access window once the operator browser checks pass, and post the resolved status update.
 - Delete droplet snapshot `app-server-1791144850804`.
 - First automatic payday, 2026-10-10, now runs under #1477's payroll lineage triggers.
