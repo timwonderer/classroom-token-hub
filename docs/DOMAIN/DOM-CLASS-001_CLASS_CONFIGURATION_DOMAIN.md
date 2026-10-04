@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-CLASS-001 | 3.7 | 2026-10-03 | 3.6 | Constitutional |
+| DOM-CLASS-001 | 3.8 | 2026-10-03 | 3.7 | Constitutional |
 
 ## I. Purpose
 
@@ -160,6 +160,9 @@ Rules:
 
 Class Configuration owns the class-scoped overdraft-protection setting and explicitly incorporates `SPEC-ECON-003` §4.5.1.1A for its shared charge-funding semantics. Under `INV-CORE-000` §III.3 and `INV-ARC-009` §V, configuration truth is exposed by pure scoped queries; this domain does not read Ledger balances, move money, or determine another domain's business eligibility. `FEAT-LED-000` coordinates the configuration query and Ledger monetary queries under `INV-ARC-021` §V, VII. Banking product rules remain outside this domain; the shared protection setting is a class-level economic configuration fact.
 
+`get_banking_directive(class_id, effective_at?, include_fees=False)` is a pure Class-owned query returning an immutable `BankingDirective`: canonical `class_id`, opaque `version_locator`, boolean `protection_enabled`, optional decimal `flat_fee`, nullable immutable `progressive_fee` tier/rate pairs, optional decimal `cwi`, and optional UTC `fee_period_start` derived from canonical class-local period evaluation. These fields project the effective Class economic configuration; they do not establish business fee applicability, read account balances, move money or resolve Identity. The initiating FEAT passes the directive to Ledger. By default (`include_fees=False`) the query returns no fee/CWI/period inputs and performs no fee/CWI/period evaluation; corrections use this mode. Only an initiating FEAT with independent fee applicability asks for fee inputs. Missing banking configuration means disabled protection and absent fee configuration, never invented monetary authority. `progressive_fee` is `()` when absent or not requested, a tuple of canonical tier/rate pairs when available, and `None` when configured progressive-fee evidence is unavailable or malformed. This preserves uncertainty without inventing a zero fee. Ledger rejects unavailable/malformed fee evidence only when that fee is independently applicable; `NONE` authority and fully funded charges do not consult irrelevant progressive-fee inputs. Unsupported/malformed configuration needed by an applicable fee fails closed.
+
+
 **3.7 (2026-10-03)** supersedes 3.6 solely to incorporate the universal charge/deduction funding rule: cover the entire checking shortfall from savings or leave savings untouched. Own-account transfers retain sufficient-funds requirements. No runtime configuration or data changes are performed by this amendment.
 
 ## Terminal Roster Deletion
@@ -179,6 +182,9 @@ creation remains valid until roster setup; there is no empty-class or stale-clas
 background inference.
 
 ## XI. Amendment
+
+**3.8 (2026-10-03)** authorizes the immutable scoped banking-directive projection for FEAT-coordinated Ledger resolution, superseding direct configuration lookup inside Ledger commands without changing charge, transfer or fee applicability.
+
 
 Revisions to this document must:
 1. Increment the version number.

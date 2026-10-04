@@ -134,7 +134,7 @@ def check_reversal_authorization(actor_seat_id, transaction) -> None:
 
 def reverse_transaction(
     transaction, *, description: str, compensation_type: str = "refund",
-    idempotency_key: str | None = None, actor_seat_id: int | None = None,
+    idempotency_key: str | None = None, actor_seat_id: int | None = None, banking_directive=None, creation_evidence=(), mechanism: str = "teacher",
 ):
     """Counteract a monetary transaction by appending a compensating one.
 
@@ -155,6 +155,9 @@ def reverse_transaction(
     """
     if not idempotency_key:
         raise ValueError("Ledger corrections require a command idempotency reservation.")
+
+    if transaction.amount_cents > 0 and actor_seat_id is None:
+        raise ReversalNotAuthorized("Positive-credit recovery requires the current acting seat.")
 
     check_reversal_authorization(
         actor_seat_id if actor_seat_id is not None else transaction.actor_seat_id,
@@ -185,6 +188,20 @@ def reverse_transaction(
             f"Transaction #{transaction.id} was already reversed by "
             f"transaction #{existing_id}."
         )
+
+    if transaction.amount_cents > 0:
+        if banking_directive is None:
+            raise ReversalNotAuthorized('Positive-credit reversal requires Class-owned funding directive.')
+        from app.services.ledger_recovery_service import lock_recovery_scope,ledger_origin_locator,get_credit_compensation_proof,resolve_credit_recovery,apply_credit_recovery
+        from app.services.ledger_balance_query_service import get_account_posting_boundary
+        locator=ledger_origin_locator(transaction)
+        lock_recovery_scope(transaction.class_id,transaction.seat_id,locator)
+        proof=get_credit_compensation_proof(class_id=transaction.class_id,target_seat_id=transaction.seat_id,
+            origin_locator=locator,through_posting_sequence=get_account_posting_boundary(transaction.seat_id,transaction.class_id,transaction.account_type) or 0,creation_evidence=creation_evidence)
+        plan=resolve_credit_recovery(proof=proof,recovery_kind='EXACT_REVERSAL',
+            correction_intent_locator=f'ledger-reversal:v1:{transaction.id}',banking_directive=banking_directive,
+            actor_seat_id=actor_seat_id or transaction.actor_seat_id,mechanism=mechanism,description=description)
+        return apply_credit_recovery(plan=plan,idempotency_key=idempotency_key)['principal']
 
     compensation_amount = _quantize_currency(-(transaction.amount or Decimal("0.00")))
     kwargs = dict(

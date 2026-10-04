@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001      | 3.14    | 2026-10-03     | 3.13       | Normative |
+| SOP-DOC-001      | 3.15    | 2026-10-03     | 3.14       | Normative |
 
 ---
 
@@ -271,6 +271,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.15 (2026-10-03):**
+- Registers the interval invalidation/correction runtime authority amendments: DOM-PROD-001 v1.10, SPEC-PROD-001 v1.1, FEAT-PROD-005 v1.1, FEAT-PROD-003 v1.6, DOM-CORE-002 v1.15, DOM-OPS-002 v1.6, DOM-LED-001 v2.8, FEAT-LED-000 v0.4, FEAT-LED-001 v1.5, SPEC-LED-002 v1.2, DOM-CLASS-001 v3.8, FEAT-OBL-003 v1.1, FEAT-OBL-004 v0.2 and FEAT-STOR-007 v1.1. Complete invalidation creation linkage, exact Ledger v3/v2 payload coverage and typed FEAT-supplied funding authority preserve immutable historical evidence.
 
 **Version 3.14 (2026-10-03):**
 - Registers the bounded reconciliation-derived Ledger status repair: DOM-LED-001 v2.7, FEAT-LED-001 v1.4, DOM-OPS-002 v1.5 and SPEC-LED-001 v1.1. Immutable creation sequence/signature version 2 and explicit independent proof boundaries replace stored lifecycle state. Historical signatures and correction execution remain outside this cutover.

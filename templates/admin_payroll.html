@@ -284,7 +284,7 @@
                   {{ entry.student_name }}
                   {% endif %}
                 </td>
-                <td class="{% if entry.amount > 0 %}text-success{% else %}text-danger{% endif %} fw-bold">
+                <td class="{% if entry.amount is none %}text-muted{% elif entry.amount > 0 %}text-success{% else %}text-danger{% endif %} fw-bold">
                   {{ entry.display_amount }}
                   {% if entry.is_reversal %}
                   <span class="badge bg-secondary ms-1">REVERSAL</span>
@@ -292,23 +292,12 @@
                 </td>
                 <td>{{ entry.notes }}</td>
                 <td>
-                  {# DOM-PROD-001 §185/§187: an attendance row is never corrected,
-                     so reversing the payroll it produced is the only remedy. The
-                     original entry and its reversal both stay in the history --
-                     a compensating entry, never a deletion. #}
                   {% if entry.can_reverse %}
-                  <form method="POST"
-                        action="{{ url_for('admin.reverse_payroll_event', payroll_event_id=entry.payroll_event_id) }}"
-                        onsubmit="return confirm('Reverse this payroll entry for {{ entry.student_name }}? {{ entry.display_amount }} will be returned. Both the original entry and the reversal stay in the history.');">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="btn btn-outline-danger btn-sm">
-                      <span class="material-symbols-outlined icon-xs icon-text-bottom me-1" aria-hidden="true">undo</span>Reverse
-                    </button>
-                  </form>
+                  <button type="button" class="btn btn-outline-danger btn-sm" data-attendance-correction data-preview="{{ url_for('admin.payroll_recovery_preview', payroll_event_id=entry.payroll_event_id) }}" data-post="{{ url_for('admin.reverse_payroll_event', payroll_event_id=entry.payroll_event_id) }}">Recover payment</button>
                   {% elif entry.is_reversal %}
                   <span class="text-muted small">—</span>
                   {% else %}
-                  <span class="text-muted small">Reversed</span>
+                  <span class="text-muted small">—</span>
                   {% endif %}
                 </td>
               </tr>
@@ -778,6 +767,7 @@
 
 
 <!-- JavaScript -->
+{% include '_attendance_correction_modal.html' %}
 <script>
   // Utility: Debounce function (used across multiple DOMContentLoaded handlers)
   function debounce(fn, delay = 400) {

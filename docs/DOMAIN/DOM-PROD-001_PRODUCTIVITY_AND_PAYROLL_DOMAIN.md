@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-PROD-001 | 1.9 | 2026-10-03 | 1.8 | Constitutional |
+| DOM-PROD-001 | 1.10 | 2026-10-03 | 1.9 | Constitutional |
 
 ---
 
@@ -216,9 +216,9 @@ Append-only, protected terminal decision that a completed interval does not qual
 
 The only lawful write operations for this domain are the following.
 
-### 1. `record_attendance_session(...)`
+### 1. `record_attendance_session_command(...)`
 
-Owned by `FEAT-PROD-001` for attendance ingress. `FEAT-PROD-003` and `FEAT-PROD-004` may compose the narrow `close_due_attendance_intervals` PROD command for system closing events, in their existing atomic context; no nested FEAT executes.
+The PROD-owned command `record_attendance_session_command` is implemented in the same-domain attendance writer service. `record_attendance_session` is FEAT-PROD-001 ingress and composes this command; the domain writer does not import a FEAT executor. `FEAT-PROD-003` and `FEAT-PROD-004` may compose the narrow `close_due_attendance_intervals` PROD command for system closing events, in their existing atomic context; no nested FEAT executes.
 
 Writes a new row to `attendance_sessions`.
 
@@ -296,14 +296,14 @@ Rules:
 - MUST set `payroll_event_type` to `payroll`, `manual_credit`, `reversal`, or `correction`
 - MUST derive payroll amount from authoritative productivity facts or manual credit intent, but MUST not store the amount on the table
 - MUST use the same `correlation_id` as the original event when writing a reversal
-- MUST write the compensating amount to Ledger with the same correlation linkage
+- MUST preserve original business correlation for exact reversal while its Ledger effect carries the new command correlation and explicit original-credit/compensation locators
 - MUST not store payroll period boundaries as persisted fields
 
-### 4. `record_payroll_reversal(...)`
+### 4. `record_payroll_business_recovery(...)`
 
 Owned by `FEAT-PROD-003`.
 
-Writes a compensating `payroll_event` row and coordinates the matching Ledger reversal.
+Writes the full or residual recovery business record after the owning FEAT establishes Ledger recovery. This PROD command does not call Ledger or calculate money.
 
 Use cases:
 
@@ -312,31 +312,32 @@ Use cases:
 
 Rules:
 
-- MUST create a new `payroll_event` row with `payroll_event_type = reversal`
-- MUST reuse the original event's `correlation_id`
+- MUST create `payroll_event_type = reversal` for `EXACT_REVERSAL` or `correction` for `RESIDUAL`, with the protected command receipt (§XI.3)
+- MUST reuse the original event's business `correlation_id` for exact reversal; residual recovery uses its new command correlation
 - MUST not mutate the original payroll row
-- MUST calculate the compensating ledger amount as the negative of the original ledger amount
+- MUST retain the FEAT-supplied opaque Ledger result and correction-intent locators; Ledger alone establishes exact or residual cents
 - MUST fail closed if the original event cannot be established
 - MUST require zero prior attributable compensation for exact reversal; after any partial compensation, only the separately authorized residual correction is lawful (§VIII.6)
 
 ---
 
-### 5. `record_attendance_interval_invalidation(...)`
+### 5. `record_interval_invalidation(...)`
 
 Owned by this domain and coordinated exclusively by `FEAT-PROD-005`.
 
 - Require a canonical completed pair, class-bound teacher actor, target seat, structured reason, command identity, UTC timestamp, correlation, and lawful audit lineage (§XI.4).
 - Append one terminal decision; no restore, replace, edit, delete, or freeform-note command is authorized while its target seat/class exists.
 - Exclude the interval from future compensation eligibility. Preserve the scans and all derived factual attendance duration.
+- Validate the nonmonetary receipt against PROD-owned membership: unpaid work requires `UNPAID` and no outcome locators; recorded work requires `PAID`, `RECOVERED`, or `ZERO_CENT` and the exact original payroll-event locator. Other/unprovable membership fails closed. This checks business provenance without inferring Ledger amounts; the FEAT remains responsible for verified monetary effects and atomicity.
 - Serialize with payroll settlement and all recovery commands for the same `(class_id, target_seat_id)` before resolving eligibility or settlement membership. Use the shared order: target seat, ClassEconomy, original credit, then pending/snapshot monetary sources; a multi-seat run locks seats in stable identifier order. No successful race can both pay work as eligible after committed invalidation and omit its required compensation.
 - Paid work requires provable original settlement membership and pricing. The FEAT must append invalidation and any required recovery atomically; unprovable lineage denies the entire action.
 - Exact replay returns the original result before recalculating eligibility or money. A different key for an invalidated pair denies `ALREADY_INVALIDATED` and never recovers again.
 
-### 6. `record_payroll_correction(...)`
+### 6. `record_payroll_business_correction(...)`
 
 Owned by this domain; coordinated by `FEAT-PROD-005` for `INTERVAL_INVALIDATION` or `FEAT-PROD-003` for `RESIDUAL_RECOVERY`.
 
-Append a `correction` business event through `record_payroll_event`, identifying the original event and correction intent. Monetary recovery is supplied by Ledger's domain-owned resolution, not calculated from Ledger internals by PROD. Require original business authority and preservation of policy provenance. No monetary amounts are persisted on PROD rows. The correction uses a new correlation for its command and opaque Ledger source locator; the original event and its correlation remain unchanged.
+Append a `correction` business event through this domain writer, identifying the original event and correction intent. Monetary recovery is supplied by Ledger's domain-owned resolution, not calculated from Ledger internals by PROD. Require original business authority and preservation of policy provenance. No monetary amounts are persisted on PROD rows. The correction uses a new correlation for its command and opaque Ledger source locator; the original event and its correlation remain unchanged.
 
 Partial correction leaves the original settlement intact. Residual recovery compensates only the remaining original credit after attributable compensation. Once fully recovered, further interval invalidation appends the eligibility decision with no new monetary event. Corrected or reversed work stays settled and never becomes payable again. Recovery never advances payroll windows, scheduled occurrences, or economic-cycle boundaries.
 
@@ -467,14 +468,14 @@ Rules:
 
 ### 4. `attendance_interval_invalidation`
 
-Fields: `id`, `class_id`, `actor_seat_id`, `target_seat_id`, `opening_event_id`, `closing_event_id`, `recorded_at` (UTC), `reason_code`, `idempotency_key`, `correlation_id`, `receipt_json`, `lineage_event_id`.
+Fields: `id`, `class_id`, `actor_seat_id`, `target_seat_id`, `opening_event_id`, `closing_event_id`, `recorded_at` (UTC), `reason_code`, `idempotency_key`, `correlation_id`, `receipt_json`, `lineage_event_id`, `lineage_token` (String(64)), `lineage_version` (Integer).
 
 - `reason_code`: `INVALID_ATTENDANCE`, `NON_WORK_ACTIVITY`, or `DUPLICATE_PARTICIPATION`; no unrestricted personal notes.
-- All fields are immutable and protected. Class/seat are shared anchors. Both attendance IDs are same-domain references that must prove the canonical pair belongs to the same class and target seat. `lineage_event_id` is an opaque audit locator, not a FK to another domain's internal table.
+- All business fields are immutable and protected before INSERT. Class/seat are shared anchors. Both attendance IDs are same-domain references that must prove the canonical pair belongs to the same class and target seat. The three audit-linkage fields are opaque Operations metadata with no internal cross-domain FK; they are excluded from their own signed payload. They begin all-null and initialize together exactly once within the creating FEAT-PROD-005 transaction through Operations. Commit requires matching complete creation evidence; replacement, partial initialization and post-commit attachment fail closed. After commit every field is immutable. Application payload verification and deferred database structural verification follow DOM-OPS-002 §6.1; no historical backfill or general UPDATE path is authorized.
 - One row per `(class_id, target_seat_id, opening_event_id, closing_event_id)` and one accepted command per `(class_id, FEAT-PROD-005, idempotency_key)` are structurally unique. The target, pair, reason, actor, and expected preview identity define immutable replay intent; `receipt_json` retains `expected_preview_identity`, `fingerprint_version`, `canonical_intent_digest`, `original_settlement_disposition`, and `opaque_outcome_locators`. This immutable protected receipt permits exact replay, including unpaid or previously recovered work, without monetary values.
 - No amount, balance, mutable eligibility flag, or earnings cache is authorized. The row is destroyed only with its owning target seat or class (§VII.1.a).
 
-`payroll_event.summary_json` for new settlements retains allocation-version 1, exact interval IDs, credited seconds, and original pricing inputs under SPEC-PROD-001. A correction retains `original_payroll_event_id` (same-domain reference), `correction_intent` (`INTERVAL_INVALIDATION` or `RESIDUAL_RECOVERY`), invalidation ID where relevant, original policy provenance, and opaque Ledger locators. It stores no original, allocated, recovered, or remaining monetary amount. A correction retains the original `payroll_cycle_id` as lineage where present and never opens/closes a cycle.
+`payroll_event.summary_json` for new settlements retains allocation-version 1, exact interval IDs, credited seconds, and original pricing inputs under SPEC-PROD-001. A correction retains `original_payroll_event_id` (same-domain reference), `correction_intent` (`INTERVAL_INVALIDATION` or `RESIDUAL_RECOVERY`), invalidation ID where relevant, original policy provenance, and opaque Ledger locators. It stores no original, allocated, recovered, or remaining monetary amount. Full/residual recovery business events also retain a protected nonmonetary `command_receipt` containing `expected_preview_identity`, `fingerprint_version`, `canonical_intent_digest`, `original_settlement_disposition`, and `opaque_outcome_locators`, permitting exact accepted-command replay without repricing or a second recovery. A correction retains the original `payroll_cycle_id` as lineage where present and never opens/closes a cycle.
 
 ## XII. Cross-Domain Rules
 
@@ -617,7 +618,7 @@ The change is an effective-dated append to `payroll_settings` whose `effective_d
 
 ### 4. Interaction with `record_payroll_event`
 
-`record_payroll_event` (§VIII.3) remains the sole domain command writing `payroll_event` rows; `FEAT-PROD-003`, `FEAT-PROD-004` (class-level settlement), and `FEAT-PROD-005` (interval correction) are its declared coordinators. When invoked as part of a class-level run orchestrated by `FEAT-PROD-004`, the caller supplies the run's `payroll_cycle_id`; `record_payroll_event` stamps it unchanged onto each `payroll` row. `record_payroll_event` does not generate `payroll_cycle_id` and does not itself orchestrate any cross-domain side effect. Class-level cycle completion orchestration is exclusively `FEAT-PROD-004`'s responsibility; correction orchestration is declared separately by `FEAT-PROD-003` and `FEAT-PROD-005`.
+`record_payroll_event` (§VIII.3) writes only `payroll` and `manual_credit` under FEAT-PROD-003 or class settlement FEAT-PROD-004; the approved FEAT-STOR-003 productivity-insurance payout may compose its manual-credit domain path. `record_payroll_business_correction` (§VIII.6) writes interval/correction business events under FEAT-PROD-005 or FEAT-PROD-003. `record_payroll_business_recovery` (§VIII.4) exclusively writes signed full/residual recovery business records under FEAT-PROD-003. No generic type parameter bypasses these declarations. When invoked as part of a class-level run orchestrated by `FEAT-PROD-004`, the caller supplies the run's `payroll_cycle_id`; `record_payroll_event` stamps it unchanged onto each `payroll` row. `record_payroll_event` does not generate `payroll_cycle_id` and does not itself orchestrate any cross-domain side effect. Class-level cycle completion orchestration is exclusively `FEAT-PROD-004`'s responsibility; correction orchestration is declared separately by `FEAT-PROD-003` and `FEAT-PROD-005`.
 
 ### 5. The next payroll date is derived, never stored
 
@@ -664,6 +665,8 @@ Pure interval queries expose original pair IDs, UTC timestamps, credited seconds
 Under INV-ARC-016 and DOM-OPS-002 §5.4, every new payroll event carries complete protected-field audit lineage. The business fields, including the full summary, are fixed at insertion. The three audit-linkage fields may move together exactly once from all-null to complete solely within that row's creating transaction, with a matching signed AuditEvent for its class, table and row ID. This initialization completes creation; it does not authorize amendment of a committed record. Commit without required valid lineage fails, replacement and post-commit attachment fail, and failures roll back the row and audit together. Historical null linkage stays unverified and is never backfilled. Lifecycle destruction remains the sole deletion exception.
 
 ## XVI. Amendment
+
+**Version 1.10 (2026-10-03)** registers the complete one-time invalidation creation-linkage protocol, superseding the incomplete single-pointer field list. It authorizes no mutable eligibility or business record.
 
 **Version 1.9 (2026-10-03)** supersedes the exclusive attendance-writer declaration for due system closure only, and defines the narrow payroll audit-linkage creation phase. Authorizes interval-detail/prospective provenance implementation; no historical reconstruction or monetary correction UI is included.
 

@@ -5,11 +5,13 @@ from app.feats.base import audit_protected
 from app.models import Seat, Transaction, TransactionStatus, _quantize_currency
 from app.services.ledger_command_service import create_idempotent_transaction
 
-_TRANSACTION_AUDIT_FIELDS = [
+_TRANSACTION_AUDIT_FIELDS_V2 = [
     "id", "class_id", "actor_seat_id", "target_seat_id", "mechanism", "amount_cents",
     "timestamp", "account_type", "description", "correlation_id", "feat_code",
     "idempotency_key", "policy_id", "type", "posting_sequence", "command_reservation_id",
 ]
+_TRANSACTION_AUDIT_FIELDS = _TRANSACTION_AUDIT_FIELDS_V2 + ["compensation_origin_locator", "compensation_amount_cents", "correction_intent_locator"]
+
 
 
 def allocate_creation_posting_sequence(seat_id, class_id):
@@ -28,7 +30,8 @@ def create_pending_transaction(
     type: str, description: str, original_transaction_id: int | None = None,
     policy_id: int | None = None, idempotency_key: str | None = None,
     command_reservation=None, compensation_subtype: str | None = None,
-    correlation_id: str | None = None,
+    correlation_id: str | None = None, compensation_origin_locator=None,
+    compensation_amount_cents=0, correction_intent_locator=None,
 ) -> Transaction:
     """Create one pending Ledger effect inside the caller-owned FEAT.
 
@@ -46,6 +49,8 @@ def create_pending_transaction(
             account_type=account_type, type=type, description=description,
             original_transaction_id=original_transaction_id, policy_id=policy_id,
             compensation_subtype=compensation_subtype, correlation_id=correlation_id,
+            compensation_origin_locator=compensation_origin_locator, compensation_amount_cents=compensation_amount_cents,
+            correction_intent_locator=correction_intent_locator,
         )
         return transaction
     if not class_id or not seat_id or not target_seat_id or not actor_seat_id:
@@ -80,12 +85,14 @@ def create_pending_transaction(
         mechanism=mechanism, type=type, description=description,
         original_transaction_id=original_transaction_id, policy_id=policy_id,
         compensation_subtype=compensation_subtype, correlation_id=correlation_id,
+        compensation_origin_locator=compensation_origin_locator, compensation_amount_cents=compensation_amount_cents,
+        correction_intent_locator=correction_intent_locator,
     )
     db.session.add(transaction)
     if command_reservation is not None:
         transaction.command_reservation = command_reservation
     db.session.flush()
-    audit_protected("ledger_transaction", transaction, "INSERT", _TRANSACTION_AUDIT_FIELDS, signature_version=2)
+    audit_protected("ledger_transaction", transaction, "INSERT", _TRANSACTION_AUDIT_FIELDS, signature_version=3)
     return transaction
 
 

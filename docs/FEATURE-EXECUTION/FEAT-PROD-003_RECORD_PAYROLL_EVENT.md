@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-PROD-003 | 1.5 | 2026-10-03 | 1.4 | Normative |
+| FEAT-PROD-003 | 1.6 | 2026-10-03 | 1.5 | Normative |
 
 ## I. Purpose
 
@@ -10,7 +10,7 @@ Record append-only payroll business events and compose their monetary effects th
 
 ## II. Scope
 
-Covers attendance-based payroll credits, manual credits, exact whole-event reversal, and residual recovery after prior compensation. Interval invalidation is coordinated by FEAT-PROD-005; both FEATs may invoke PROD's `record_payroll_event` command. Class-level settlement under FEAT-PROD-004 likewise composes that domain command and the monetary/audit commands inside its own transaction and command namespace, consuming this contract without executing this FEAT. This document does not authorize direct persistence writes or nested FEAT execution.
+Covers attendance-based payroll credits, manual credits, exact whole-event reversal, and residual recovery after prior compensation. Interval invalidation is coordinated by FEAT-PROD-005; each composes its declared PROD business writer. Class-level settlement under FEAT-PROD-004 likewise composes that domain command and the monetary/audit commands inside its own transaction and command namespace, consuming this contract without executing this FEAT. This document does not authorize direct persistence writes or nested FEAT execution.
 
 ## III. Authority Level
 
@@ -49,15 +49,15 @@ Recovery additionally requires `original_payroll_event_id` and `expected_preview
 3. For a new command, serialize with payroll, interval invalidation, and all recovery on `(class_id, target_seat_id)`. Lock target seat first, then ClassEconomy, original credit, then pending/snapshot monetary sources under the common Ledger order. Multi-seat runs lock target seats in stable identifier order. Requery authority after serialization.
 4. Resolve canonical time once. For payroll, PROD establishes eligible, completed, not previously settled intervals, original settings, exact seconds, and allocation-version 1 inputs. Preserve per-setting aggregate quantization once; retain interval IDs, credited seconds, original rates, and policy identifiers in `summary_json` under SPEC-PROD-001. Persist no monetary totals or earnings cache in PROD.
 5. For recovery, establish original business permission through PROD and obtain Ledger's proven original amount and compensation total. Revalidate preview identity against current authoritative facts. A changed preview denies before any business or monetary effect.
-6. Compose intended, resolved, and applied monetary plans through Ledger domain commands. Append the PROD payroll event through `record_payroll_event` (and its specialized recovery commands). All business records, reservations, protection legs, monetary effects, protected audit evidence, and correlation bindings commit together exactly once. Any failure rolls back every effect.
+6. Compose intended, resolved, and applied monetary plans through Ledger domain commands. Append the PROD payroll event through `record_payroll_event` for credit or `record_payroll_business_recovery` for exact/residual recovery. Interval correction uses `record_payroll_business_correction` under FEAT-PROD-005. All business records, reservations, protection legs, monetary effects, protected audit evidence, and correlation bindings commit together exactly once. Any failure rolls back every effect.
 
 ### Exact reversal
 
-`record_payroll_reversal` appends `payroll_event_type = reversal`, reuses the original `correlation_id` and original policy/cycle lineage, and posts the exact negative of the original credit through the whole-entry reversal contract. It is lawful only if Ledger proves zero previous attributable compensation. It never mutates the original row or attendance.
+`record_payroll_business_recovery(recovery_kind=EXACT_REVERSAL)` appends `payroll_event_type = reversal`, reuses the original `correlation_id` and original policy/cycle lineage, and records opaque effect provenance after Ledger posts the exact negative of the original credit through the whole-entry reversal contract. It is lawful only if Ledger proves zero previous attributable compensation. It never mutates the original row or attendance.
 
 ### Residual correction
 
-`record_payroll_correction` appends `payroll_event_type = correction` with `original_payroll_event_id` and `correction_intent = RESIDUAL_RECOVERY` in `summary_json`, retaining policy/cycle provenance and opaque Ledger locators. It uses a new correction correlation and a Ledger-owned payroll-correction effect, not a partial `REVERSAL` or `VOID`.
+`record_payroll_business_recovery(recovery_kind=RESIDUAL)` appends `payroll_event_type = correction` with `original_payroll_event_id` and `correction_intent = RESIDUAL_RECOVERY` in `summary_json`, retaining policy/cycle provenance and opaque Ledger locators. It uses a new correction correlation and a Ledger-owned payroll-correction effect, not a partial `REVERSAL` or `VOID`.
 
 Ledger determines remaining recovery as original credited cents minus prior attributable compensation cents and enforces the aggregate cap. Protection transfer legs carry no attributable compensation. If remaining recovery is zero, deny `ALREADY_RECOVERED` without a new correction or debit; exact replay of a prior successful command still returns its original result. Partial interval corrections followed by residual correction recover exactly the original credit, never more.
 
@@ -82,3 +82,7 @@ Version 1.4 (2026-10-03) supersedes v1.3's exclusive payroll writer, whole-event
 ### Version 1.5: prospective provenance foundation (2026-10-03)
 
 Supersedes 1.4's exclusive writer wording only for canonical due system closure. Incorporates DOM-PROD-001 §XV.7–8 and [SPEC-PROD-001](../SPEC/SPEC-PROD-001_ATTENDANCE_INTERVAL_ELIGIBILITY_AND_PAYROLL_CORRECTION.md) §VI: preserve pair IDs, freeze version-1 settlement inputs, protect complete payroll summaries, and expose pure evidence queries. Every attendance writer locks its class/target seat before selection. New payroll composes `close_due_attendance_intervals` within one FEAT transaction before pricing; class completion resolves completed-run replay first and locks eligible seats in stable order. Audit linkage initializes once within creation and cannot change after commit. No nested FEAT, historical backfill, or correction button is authorized by this foundation.
+
+### Version 1.6: canonical recovery writers (2026-10-03)
+
+Supersedes obsolete `record_payroll_reversal`/`record_payroll_correction` command names and generic payroll-event recovery writes. `recover_payroll_payment` is the FEAT-PROD-003 coordinator: pure signed preview, complete Operations evidence mapped to Ledger-owned proof inputs, scope/original locking, accepted receipt replay before repricing, bounded recovery, and protected business evidence commit atomically. Business writers retain opaque Ledger result locators and never import Ledger to infer money. Ledger v3 covers all nineteen immutable creation fields; retained v2 covers its original sixteen only (DOM-OPS-002 §5.4).

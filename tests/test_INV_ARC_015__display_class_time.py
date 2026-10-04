@@ -31,7 +31,7 @@ from app.utils.canonical_temporal_resolver import (
     canonical_temporal_resolver,
     utc_now,
 )
-from app.utils.transaction_idempotency import create_idempotent_transaction
+from app.services.ledger_command_service import create_idempotent_transaction
 from tests.helpers.class_domain import enable_class_feature
 from tests.helpers.classroom_initializer import initialize_as_student, initialize_as_teacher
 from tests.helpers.store_products import publish_store_product

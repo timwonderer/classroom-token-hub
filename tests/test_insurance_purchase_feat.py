@@ -29,7 +29,7 @@ from app.feats.class_configuration import (
 )
 from app.feats.purchase_insurance_feat import execute_purchase_insurance
 from app.services import insurance_definition_service as insurance_defs
-from app.utils.transaction_idempotency import create_idempotent_transaction
+from app.services.ledger_command_service import create_idempotent_transaction
 from tests.helpers.classroom_initializer import initialize
 from tests.helpers.class_domain import enable_class_feature
 
@@ -190,17 +190,20 @@ def test_same_idempotency_key_retry_no_duplicates(app):
 # --------------------------------------------------------------------------- #
 
 
-def test_insufficient_funds_writes_nothing(app):
+def test_authorized_purchase_uses_shared_funding(app):
     classroom, policy_uuid = _setup(app, fund="5.00")  # premium is 10.00
     with app.app_context():
         result = execute_purchase_insurance(
             canonical_context=_student_ctx(classroom),
             policy_uuid=policy_uuid, idempotency_key="buy:1")
         db.session.commit()
-        assert not result.success
-        assert result.error_code == "INSUFFICIENT_FUNDS"
+        assert result.success
         assert _counts(classroom, policy_uuid) == dict(
-            grants=0, assessments=0, payments=0, cycles=0, premium_txns=0)
+            grants=1, assessments=1, payments=1, cycles=1, premium_txns=1)
+        from app.services.ledger_balance_query_service import get_available_balances
+        checking, savings = get_available_balances(classroom.students[0].seat.id, classroom.class_id)
+        assert checking == Decimal("-5.00")
+        assert savings == Decimal("0.00")
 
 
 def test_unavailable_policy_writes_nothing(app):

@@ -25,7 +25,7 @@ import pytest
 from app import db
 from app.feats.base import FEATContext
 from app.models import Transaction, TransactionStatus, Seat, User
-from app.services.ledger_correction_service import reverse_transaction
+from tests.helpers.ledger import compensate_ledger_posted_transaction as reverse_transaction
 from app.services.ledger_settlement_service import settle_balances
 from app.utils.student_deletion import remove_student_from_teacher_scope
 from tests.helpers.ledger import (

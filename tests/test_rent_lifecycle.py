@@ -455,8 +455,8 @@ class TestRentPayment:
             assert payment_count_after == payment_count_before == 1
             assert len(_active_perk_hall_passes(classroom.class_id, seat_id)) == perks_before
 
-    def test_pay_rent_refuses_to_overdraft(self, app):
-        """An unfunded seat cannot pay rent (no overdraft on principal)."""
+    def test_authorized_rent_debit_can_overdraw_checking(self, app):
+        """Authorized rent uses shared funding and can debit checking below zero."""
         classroom = initialize("chemistry_p1", app)
         with app.app_context():
             _setup_rent_class(classroom)
@@ -471,13 +471,13 @@ class TestRentPayment:
                 idempotency_key=f"rent-pay:{correlation_id}:cmd",
             )
 
-            assert result.success is False
-            assert result.error_code == "INSUFFICIENT_FUNDS"
-            # No PAYMENT event and no PERK grants on refusal.
+            assert result.success is True
+            assert result.amount_paid > 0
+            # The authorized principal records its PAYMENT and satisfaction perks.
             assert ObligationAssessment.query.filter_by(
                 correlation_id=correlation_id, event_type="PAYMENT"
-            ).first() is None
-            assert len(_active_perk_hall_passes(classroom.class_id, seat_id)) == 0
+            ).first() is not None
+            assert len(_active_perk_hall_passes(classroom.class_id, seat_id)) > 0
 
 
 def _late_fee_assessments(class_id, seat_id):
@@ -907,3 +907,39 @@ class TestRentBillGroupPayment:
             ).count()
             assert payments_after == payments_before
             assert len(_active_perk_hall_passes(classroom.class_id, seat_id)) == perks_before
+
+
+def test_funded_rent_replay_preserves_original_principal_and_perks(app):
+    from app.feats.class_configuration.feat_class_005_economic_engine_evolution import execute_evolve_economic_engine
+    from app.services.context_resolver import CanonicalContext
+    from app.models import Transaction
+    from tests.helpers.ledger import record_ledger_fixture
+    classroom = initialize('chemistry_p1', app)
+    _setup_rent_class(classroom)
+    seat_id = classroom.students[0].seat.id
+    teacher_ctx = CanonicalContext(user_id=classroom.teacher_user.id, class_id=classroom.class_id,
+        seat_id=classroom.teacher_seat.id, actor_role='teacher')
+    assert execute_evolve_economic_engine(canonical_context=teacher_ctx, class_id=classroom.class_id,
+        updates={'overdraft_protection_enabled': True}, feature_list=['banking'],
+        idempotency_key='rent:protected').success
+    execute_reconcile_rent(classroom.class_id, reference_time_utc=_T_INITIAL)
+    correlation_id = f'rent:{classroom.class_id}:{seat_id}:cycle:1'
+    with FEATContext('FEAT-LED-001', idempotency_key='rent:funded-seed'):
+        record_ledger_fixture(seat_id=seat_id, class_id=classroom.class_id, amount=Decimal('2.00'))
+        record_ledger_fixture(seat_id=seat_id, class_id=classroom.class_id,
+            account_type='savings', amount=Decimal('100.00'))
+    db.session.commit()
+    key = 'rent:funded-replay'
+    first = execute_rent_payment(classroom.class_id, seat_id, correlation_id, idempotency_key=key)
+    assert first.success and first.passes_awarded == 2
+    ledger_key = f'rent-payment:{key}:principal'
+    ids = [row.id for row in Transaction.query.filter_by(idempotency_key=ledger_key).all()]
+    assert len(ids) == 3
+    execute_evolve_economic_engine(canonical_context=teacher_ctx, class_id=classroom.class_id,
+        updates={'overdraft_protection_enabled': False}, feature_list=['banking'],
+        idempotency_key='rent:unprotected')
+    replay = execute_rent_payment(classroom.class_id, seat_id, correlation_id, idempotency_key=key)
+    assert replay.success and replay.transaction_id == first.transaction_id
+    assert replay.amount_paid == first.amount_paid and replay.passes_awarded == 0
+    assert len(_active_perk_hall_passes(classroom.class_id, seat_id)) == 2
+    assert [row.id for row in Transaction.query.filter_by(idempotency_key=ledger_key).all()] == ids

@@ -533,6 +533,10 @@ class Transaction(db.Model):
     # Operations — an issue reversal and an issue compensating entry are answered
     # differently — so it lives here rather than displacing the ledger vocabulary.
     compensation_subtype = db.Column(db.String(50), nullable=True, index=True)
+    compensation_origin_locator = db.Column(db.String(128), nullable=True, index=True)
+    compensation_amount_cents = db.Column(db.Integer, nullable=True)
+    correction_intent_locator = db.Column(db.String(128), nullable=True)
+
     # All times stored as UTC
     date_funds_available = db.Column(db.DateTime(timezone=True), default=utc_now)
 
@@ -585,6 +589,8 @@ class Transaction(db.Model):
             'class_id', 'seat_id', 'account_type', 'posting_sequence',
         ),
         db.UniqueConstraint('class_id', 'posting_sequence', name='uq_ledger_transaction_class_posting_sequence'),
+        db.CheckConstraint("compensation_amount_cents IS NULL OR (compensation_amount_cents >= 0 AND (compensation_amount_cents = 0 OR (amount_cents = -compensation_amount_cents AND compensation_origin_locator IS NOT NULL AND correction_intent_locator IS NOT NULL)))", name='ck_ledger_attributable_recovery'),
+        db.Index('uq_ledger_recovery_intent', 'class_id', 'target_seat_id', 'compensation_origin_locator', 'correction_intent_locator', unique=True, postgresql_where=sa.text('compensation_amount_cents > 0')),
     )
 
 
@@ -602,6 +608,12 @@ def _enforce_transaction_integrity(_mapper, _connection, target):
 
     if (sa.inspect(target).transient or sa.inspect(target).pending) and target.posting_sequence is None:
         raise ValueError("New Ledger effects require an immutable posting sequence allocated by the Ledger command.")
+
+    if (sa.inspect(target).transient or sa.inspect(target).pending):
+        if type(target.compensation_amount_cents) is not int or target.compensation_amount_cents < 0:
+            raise ValueError('New Ledger effects require explicit nonnegative attributable recovery.')
+        if target.compensation_amount_cents == 0 and (target.compensation_origin_locator or target.correction_intent_locator):
+            raise ValueError('Non-recovery effect cannot claim compensation lineage.')
 
     # 1. Sync amount_cents
     if target.amount is not None:
@@ -642,14 +654,30 @@ def _enforce_transaction_integrity(_mapper, _connection, target):
                 {"id": target.original_transaction_id},
             ).scalar()
             is_compensating_effect = linked_corr == target.correlation_id
+        is_funding_effect = False
+        if _is_new_insert and target.command_reservation_id and target.type in {"Withdrawal", "Deposit"}:
+            import hashlib
+            reservation = _connection.execute(sa.text(
+                "SELECT class_id, feat_code, idempotency_key FROM ledger_command_reservation WHERE id = :id"
+            ), {"id": target.command_reservation_id}).mappings().first()
+            if (reservation and reservation["class_id"] == target.class_id
+                    and reservation["feat_code"] == feat_name
+                    and reservation["idempotency_key"] == target.idempotency_key):
+                identity = f"{target.class_id}:{reservation['feat_code']}:{reservation['idempotency_key']}:funding"
+                expected = "corr_funding_" + hashlib.sha256(identity.encode()).hexdigest()[:32]
+                is_funding_effect = (target.correlation_id == expected
+                    and ((target.account_type == "savings" and target.type == "Withdrawal" and target.amount < 0)
+                         or (target.account_type == "checking" and target.type == "Deposit" and target.amount > 0))
+                    and target.target_seat_id == target.seat_id
+                    and target.compensation_amount_cents == 0)
         if session and _is_new_insert:
             active_corr = session.info.get("active_correlation_id")
-            if active_corr and target.correlation_id != active_corr and not is_compensating_effect:
+            if active_corr and target.correlation_id != active_corr and not is_compensating_effect and not is_funding_effect:
                 raise ValueError(f"FATAL: Mixed correlation in flush. Context={active_corr}, Object={target.correlation_id}")
             # The session tracks the active operation's correlation. A
             # compensating row carries historical provenance, so it must not
             # become the yardstick for the rows that follow it in this flush.
-            if not is_compensating_effect:
+            if not is_compensating_effect and not is_funding_effect:
                 session.info["active_correlation_id"] = target.correlation_id
     else:
         from app.feats.base import FEATContextError
@@ -718,7 +746,7 @@ def _enforce_transaction_integrity(_mapper, _connection, target):
          # Firing this on UPDATE made every cross-FEAT ledger mutation (settlement
          # under FEAT-LED-003, void under FEAT-LED-002, reversal linkage)
          # impossible; that contradiction was previously masked by FEATBypass.
-         if is_new and not is_compensating_effect and target.correlation_id != get_correlation_id():
+         if is_new and not is_compensating_effect and not is_funding_effect and target.correlation_id != get_correlation_id():
               raise ValueError(f"FATAL: Correlation mismatch in {feat_name}. Record={target.correlation_id}, Context={get_correlation_id()}")
 
          # 2. Assert Identity Anchors (seat_id + class_id are the clean-break authority)
@@ -743,6 +771,7 @@ _LEDGER_IMMUTABLE_FIELDS = frozenset({
     'correlation_id', 'original_transaction_id',
     'policy_id', 'type', 'compensation_subtype', 'command_reservation_id',
     'posting_sequence', 'idempotency_key', 'feat_code',
+    'compensation_origin_locator', 'compensation_amount_cents', 'correction_intent_locator',
 })
 
 # Fields the lawful post-insert paths populate exactly once: settlement records
@@ -1062,6 +1091,94 @@ def _require_payroll_lineage_before_commit(session):
 def _clear_payroll_creation_tracking(session, transaction):
     if transaction.parent is None:
         session.info.pop('_new_payroll_events', None)
+
+
+class AttendanceIntervalInvalidation(db.Model):
+    """Terminal PROD eligibility decision (DOM-PROD-001 XI.4)."""
+    __tablename__ = 'attendance_interval_invalidation'
+    id = db.Column(db.Integer, primary_key=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('classes.class_id', ondelete='CASCADE'), nullable=False, index=True)
+    target_seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='CASCADE'), nullable=False, index=True)
+    actor_seat_id = db.Column(db.Integer, nullable=False, index=True)
+    opening_event_id = db.Column(db.Integer, db.ForeignKey('attendance_sessions.id', ondelete='CASCADE'), nullable=False)
+    closing_event_id = db.Column(db.Integer, db.ForeignKey('attendance_sessions.id', ondelete='CASCADE'), nullable=False)
+    recorded_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    reason_code = db.Column(db.String(32), nullable=False)
+    idempotency_key = db.Column(db.String(128), nullable=False)
+    correlation_id = db.Column(db.String(100), nullable=False)
+    receipt_json = db.Column(db.JSON, nullable=False)
+    lineage_event_id = db.Column(db.Integer, nullable=True)
+    lineage_token = db.Column(db.String(64), nullable=True)
+    lineage_version = db.Column(db.Integer, nullable=True)
+    __table_args__ = (
+        db.UniqueConstraint('class_id', 'target_seat_id', 'opening_event_id', 'closing_event_id', name='uq_attendance_invalidation_interval'),
+        db.UniqueConstraint('class_id', 'idempotency_key', name='uq_attendance_invalidation_command'),
+        db.CheckConstraint("reason_code IN ('INVALID_ATTENDANCE','NON_WORK_ACTIVITY','DUPLICATE_PARTICIPATION')", name='ck_attendance_invalidation_reason'),
+    )
+
+
+def _validate_invalidation_lineage(connection, stored):
+    from app.services.audit_service import _compute_payload_digest
+    from app.utils.audit_verifier import PROTECTED_FIELDS_BY_TABLE
+    if any(stored[f] is None for f in _PAYROLL_LINEAGE_FIELDS):
+        raise ValueError('New attendance invalidation requires complete creation audit lineage.')
+    linked = connection.execute(sa.select(AuditEvent.__table__).where(AuditEvent.id == stored['lineage_event_id'])).mappings().first()
+    expected = _compute_payload_digest('attendance_interval_invalidation', str(stored['id']), 'INSERT', stored['class_id'],
+        {f: stored[f] for f in PROTECTED_FIELDS_BY_TABLE['attendance_interval_invalidation']})
+    if linked is None or any((linked['table_name'] != 'attendance_interval_invalidation',
+        linked['row_pk'] != str(stored['id']), linked['class_id'] != stored['class_id'],
+        linked['chain_scope'] != f"class:{stored['class_id']}", linked['operation'] != 'INSERT',
+        linked['feat_id'] != 'FEAT-PROD-005', linked['hmac_signature'] != stored['lineage_token'],
+        linked['signature_version'] != stored['lineage_version'], linked['payload_digest'] != expected)):
+        raise ValueError('Attendance invalidation lineage must match its frozen receipt and business fields.')
+
+
+@event.listens_for(AttendanceIntervalInvalidation, 'before_insert')
+def _begin_invalidation_creation(_mapper, _connection, target):
+    if any(getattr(target, f) is not None for f in _PAYROLL_LINEAGE_FIELDS):
+        raise ValueError('Invalidation lineage initializes after INSERT only.')
+    target._invalidation_creating_transaction = sa.orm.object_session(target).get_transaction()
+
+
+@event.listens_for(AttendanceIntervalInvalidation, 'after_insert')
+def _track_invalidation_creation(_mapper, _connection, target):
+    sa.orm.object_session(target).info.setdefault('_new_attendance_invalidations', {})[target.id] = target
+
+
+@event.listens_for(AttendanceIntervalInvalidation, 'before_update')
+def _guard_invalidation_immutability(_mapper, connection, target):
+    from app.services.audit_service import _compute_payload_digest
+    stored = connection.execute(sa.select(AttendanceIntervalInvalidation.__table__).where(AttendanceIntervalInvalidation.id == target.id)).mappings().first()
+    candidate = {c.name: getattr(target, c.name) for c in AttendanceIntervalInvalidation.__table__.columns}
+    business = set(candidate) - set(_PAYROLL_LINEAGE_FIELDS)
+    if _compute_payload_digest('attendance_interval_invalidation', str(target.id), 'INSERT', stored['class_id'], {f:stored[f] for f in business}) != _compute_payload_digest('attendance_interval_invalidation', str(target.id), 'INSERT', candidate['class_id'], {f:candidate[f] for f in business}):
+        raise ValueError('Attendance invalidation business fields and receipt are immutable.')
+    if (getattr(target, '_invalidation_creating_transaction', None) is not sa.orm.object_session(target).get_transaction()
+        or any(stored[f] is not None for f in _PAYROLL_LINEAGE_FIELDS)
+        or any(candidate[f] is None for f in _PAYROLL_LINEAGE_FIELDS)):
+        raise ValueError('Invalidation lineage initializes once in its creating transaction only.')
+    _validate_invalidation_lineage(connection, candidate)
+
+
+@event.listens_for(Session, 'before_commit')
+def _require_invalidation_lineage_before_commit(session):
+    if any(isinstance(row, AttendanceIntervalInvalidation) for row in session.new):
+        session.flush()
+    created = session.info.get('_new_attendance_invalidations', {})
+    if not created:
+        return
+    session.flush()
+    connection = session.connection()
+    for row_id in created:
+        stored = connection.execute(sa.select(AttendanceIntervalInvalidation.__table__).where(AttendanceIntervalInvalidation.id == row_id)).mappings().first()
+        if stored is not None:
+            _validate_invalidation_lineage(connection, stored)
+
+
+@event.listens_for(Session, 'after_transaction_end')
+def _clear_invalidation_creation_tracking(session, transaction):
+    if transaction.parent is None:
+        session.info.pop('_new_attendance_invalidations', None)
 
 
 class PayrollCycleCompletion(db.Model):

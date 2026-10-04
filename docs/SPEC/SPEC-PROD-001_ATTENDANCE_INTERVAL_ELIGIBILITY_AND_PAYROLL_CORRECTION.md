@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-PROD-001 | 1.0 | 2026-10-03 | N/A | Normative technical contract; incorporated authority only |
+| SPEC-PROD-001 | 1.1 | 2026-10-03 | 1.0 | Normative technical contract; incorporated authority only |
 
 ## I. Purpose
 
@@ -38,7 +38,7 @@ PROD pairs one opening `active` event with its corresponding closing `inactive` 
 
 PROD derives credited seconds through canonical elapsed duration; invalidation changes only compensation eligibility. Original scans, credited duration evidence, and current attendance state are preserved and remain inspectable. Invalidation is terminal: it cannot be edited, reversed, deleted while its target exists, or converted into a new payable interval. Paid work remains historically settled, including after correction or reversal; it never re-enters unpaid work.
 
-`attendance_interval_invalidation` is the append-only PROD-owned decision record. Required fields are `id`, `class_id`, `actor_seat_id`, `target_seat_id`, `opening_event_id`, `closing_event_id`, `recorded_at` (UTC), `reason_code`, `idempotency_key`, `correlation_id`, `receipt_json`, and `lineage_event_id`. Reasons are exactly `INVALID_ATTENDANCE`, `NON_WORK_ACTIVITY`, or `DUPLICATE_PARTICIPATION`; no unrestricted notes are accepted or persisted. Unique interval identity prevents a second invalidation under any key. Command identity is `(class_id, FEAT-PROD-005, idempotency_key)`.
+`attendance_interval_invalidation` is the append-only PROD-owned decision record. Required fields are `id`, `class_id`, `actor_seat_id`, `target_seat_id`, `opening_event_id`, `closing_event_id`, `recorded_at` (UTC), `reason_code`, `idempotency_key`, `correlation_id`, `receipt_json`, `lineage_event_id`, `lineage_token` (64 characters), and `lineage_version`. Business fields are frozen at INSERT. Audit linkage is opaque and excluded from the protected payload; all three fields initialize together exactly once in the creating transaction, whose commit requires matching complete creation evidence. Late attachment, replacement, partial linkage and missing evidence fail closed under DOM-PROD-001 §XI.4 and the Operations creation protocol. Reasons are exactly `INVALID_ATTENDANCE`, `NON_WORK_ACTIVITY`, or `DUPLICATE_PARTICIPATION`; no unrestricted notes are accepted or persisted. Unique interval identity prevents a second invalidation under any key. Command identity is `(class_id, FEAT-PROD-005, idempotency_key)`.
 
 Source-event references are within PROD. `class_id` and seat references are shared anchors; other-domain internal rows are referenced only through opaque locators. The protected-row audit pointer is the narrowly mandated linkage of `INV-ARC-016`, not a general permission for cross-domain foreign keys.
 
@@ -105,5 +105,7 @@ Target-seat destruction removes its invalidations and source business records un
 | Target seat or class is lawfully destroyed | Remove dependent business records under existing lifecycle authority; no retained earnings archive. |
 
 ## X. Amendment
+
+Version 1.1 (2026-10-03) completes the invalidation linkage schema/protocol without changing the terminal eligibility or recovery rules.
 
 Version 1.0 establishes the incorporated contract authorized on 2026-10-03. It replaces the exclusive whole-payroll-reversal correction rule only through the amended governing DOM/FEAT contracts. Revisions increment version, effective date, and supersedes; preserve invariant hierarchy, original history, monetary ownership, and deterministic reproduction.

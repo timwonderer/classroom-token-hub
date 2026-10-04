@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-LED-001 | 1.4 | 2026-10-03 | 1.3 | Normative |
+| FEAT-LED-001 | 1.5 | 2026-10-03 | 1.4 | Normative |
 
 ## I. Purpose
 
@@ -61,3 +61,7 @@ Operations records class/actor/target seat anchors, initiating FEAT, reservation
 ## X. Amendment
 
 Increment the version and effective date, identify superseded rules, and preserve the governing INV and DOM hierarchy. Runtime implementation requires separate code and migration work.
+
+### Version 1.5: immutable accepted command replay (2026-10-03)
+
+Explicitly incorporates SPEC-LED-002 v1.2: version-4 effect-plan fingerprints bind the complete immutable vector and FEAT-established business intent, while the transfer family retains its exact two-leg serializer. Stored versions 1–3 remain interpreted under their original payload contracts. Replay resolves accepted effects before current prices, balances, fees, or protection and fails closed for changed canonical intent; no accepted history is re-signed or rewritten.

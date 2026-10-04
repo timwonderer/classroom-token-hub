@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-LED-002 | 1.1 | 2026-09-15 | 1.0 | Normative |
+| SPEC-LED-002 | 1.2 | 2026-10-03 | 1.1 | Normative |
 
 ## I. Purpose
 
@@ -172,3 +172,22 @@ be rewritten to infer a different command. The pre-launch seat-ownership migrati
 MUST refuse an existing version 1/2 multi-effect reservation that needs the removed
 principal material; a separate explicit data-disposition decision is required. Runtime
 accepts only seat/class effect plans and fails closed on those obsolete bulk serializers.
+
+### Version 1.2: effect plans and accepted business intent (2026-10-03)
+
+Fingerprint version 4 supersedes version 3 only for newly accepted commands. Each family has a fixed canonical serializer; the stored version and command family select that serializer on replay. Versions 1–3 retain their exact accepted encodings and amount-inclusion rules. No historical fingerprint, effect, or lineage is rewritten, and no compatibility execution path is introduced.
+
+For single or multiple effect-plan commands, version 4 hashes UTF-8 canonical JSON with SHA-256, sorted object keys, and no whitespace: `{"effects": [...], "intent": ...}`. The ordered effects include exactly `seat_id`, `target_seat_id`, `actor_seat_id`, `mechanism`, `amount`, `account_type`, `type`, `original_transaction_id`, `policy_id`, `compensation_origin_locator`, `compensation_amount_cents`, and `correction_intent_locator`. Monetary amounts use fixed two-decimal strings where the family fingerprints amount; the existing derived-amount exclusion remains explicit null. Mechanism uses its canonical scalar value. Non-recovery effects encode compensation cents as zero and its locators as null. This serialization rule does not backfill historical nullable fields. Effect order is the accepted creation order, recoverable from immutable effect identifiers.
+
+The `intent` value is null for commands whose immutable effect vector fully establishes equivalence. Shared charge commands additionally bind the originating FEAT's canonical business tuple:
+
+- Store: `("STORE_PURCHASE", policy_uuid, quantity)`.
+- Rent: `("RENT_PAYMENT", obligation_correlation, requested_payment_amount_or_null)`, with a requested amount normalized to two decimal places.
+- Manual insurance premium: `("INSURANCE_PREMIUM", entitlement_id, selected_obligation_correlation_or_null)`.
+- Explicit fee: `("OVERDRAFT_FEE", force_authority_boolean)`.
+
+These values are established by the owning FEAT and its domain authority; they are not caller-supplied serialized monetary plans. Generated request correlation is excluded from the effect vector; a selected existing obligation correlation is business identity and is therefore included in the applicable tuple. Class, originating FEAT, and key remain the reservation namespace, while scoped seat and actor are independently checked.
+
+`replay_reserved_charge` resolves the accepted reservation and its immutable complete effect vector before current balance, pricing, fee, or protection resolution. Ledger recomputes the stored-version fingerprint with the supplied canonical business tuple and validates the scoped principal. Exact replay returns the original effects even if current funding configuration or balances differ. Changed policy, quantity, selected obligation, requested partial payment, actor/seat, or explicit fee force authority fails closed. This does not grant new business eligibility or permit effects outside the accepted reservation.
+
+The internal-transfer family retains its existing canonical `_command_fingerprint` representation under version 4: account direction, scoped target/actor, requested amount, transfer type, and original/policy identity determine its digest. It remains exactly two linked effects and retains sufficient-funds eligibility. It does not acquire a charge-plan intent tuple or savings shortfall behavior.

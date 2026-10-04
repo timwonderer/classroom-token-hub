@@ -32,7 +32,8 @@ from app.services import insurance_definition_service, obligations_service
 from app.services.identity_service import resolve_teacher_seat_for_class
 from app.services.insurance_coverage_service import class_local_date, premium_lineage_ref
 from app.services.ledger_balance_query_service import get_available_balance
-from app.services.ledger_posting_service import create_pending_transaction_idempotent
+from app.services.class_configuration_query_service import get_banking_directive
+from app.services.ledger_resolution_service import build_intended_ledger_plan,resolve_intended_ledger_plan,apply_resolved_ledger_plan
 
 
 def premium_description(class_id: str, correlation_id: str) -> str:
@@ -68,6 +69,7 @@ def settle_insurance_premium(
     description: str | None = None,
     mechanism: str = "self",
     actor_seat_id: int | None = None,
+    canonical_intent: tuple | None = None,
 ) -> Transaction:
     """Debit ``amount`` toward one premium and record its ``PAYMENT``. Idempotent.
 
@@ -78,19 +80,14 @@ def settle_insurance_premium(
         raise ValueError("settle_insurance_premium requires a positive amount")
     if description is None:
         description = premium_description(class_id, correlation_id)
+    from app.services.ledger_recovery_service import lock_recovery_scope
+    lock_recovery_scope(class_id,seat_id)
     authority_seat_id = resolve_teacher_seat_for_class(class_id).id
-    transaction, _created = create_pending_transaction_idempotent(
-        idempotency_key=ledger_idempotency_key,
-        seat_id=seat_id,
-        class_id=class_id,
-        target_seat_id=authority_seat_id,
-        actor_seat_id=actor_seat_id if actor_seat_id is not None else seat_id,
-        mechanism=mechanism,
-        amount=-Decimal(amount),
-        account_type="checking",
-        type="insurance_premium",
-        description=description,
-    )
+    intended=build_intended_ledger_plan(seat_id=seat_id,class_id=class_id,debit_amount=amount,
+        transaction_type='insurance_premium',description=description,target_seat_id=authority_seat_id,
+        actor_seat_id=actor_seat_id if actor_seat_id is not None else seat_id,mechanism=mechanism, canonical_intent=canonical_intent)
+    resolved=resolve_intended_ledger_plan(plan=intended,banking_directive=get_banking_directive(class_id),fee_authority='NONE')
+    transaction=apply_resolved_ledger_plan(resolved_plan=resolved,idempotency_key=ledger_idempotency_key)['principal']
     satisfy_obligation(
         SatisfyObligationRequest(
             correlation_id=correlation_id,
@@ -141,6 +138,23 @@ def execute_insurance_premium_payment(
             error_code="NO_SEAT", error_message="Seat not found in class scope",
         )
 
+    from app.services.ledger_recovery_service import lock_recovery_scope
+    lock_recovery_scope(class_id,seat_id)
+
+    from app.services.ledger_command_service import replay_reserved_charge
+    canonical_intent = ("INSURANCE_PREMIUM", entitlement_id, correlation_id)
+    prior = replay_reserved_charge(class_id=class_id, feat_code="FEAT-OBL-003",
+        idempotency_key=f"insurance-premium-payment:{idempotency_key}", seat_id=seat_id,
+        actor_seat_id=seat_id, principal_type="insurance_premium", canonical_intent=canonical_intent)
+    if prior:
+        principal = prior["principal"]
+        payment = obligations_service.get_payment_event_by_ledger(principal.id)
+        state = obligations_service.get_obligation_state(payment.correlation_id) if payment else None
+        if state is None or state.class_id != class_id or state.seat_id != seat_id or state.internal_ref != lineage:
+            raise ValueError("Accepted premium payment evidence is unavailable.")
+        return InsurancePremiumPaymentResult(success=True, correlation_id=state.correlation_id,
+            transaction_id=principal.id, amount_paid=abs(Decimal(principal.amount)))
+
     if correlation_id is None:
         state = obligations_service.get_default_payment_target(class_id, lineage)
     else:
@@ -161,12 +175,6 @@ def execute_insurance_premium_payment(
         )
 
     amount = state.remaining_amount
-    if get_available_balance(seat_id, class_id, "checking") < amount:
-        return InsurancePremiumPaymentResult(
-            correlation_id=state.correlation_id,
-            error_code="INSUFFICIENT_FUNDS",
-            error_message=f"Checking balance is below the {amount} premium due",
-        )
 
     transaction = settle_insurance_premium(
         class_id=class_id,
@@ -174,6 +182,7 @@ def execute_insurance_premium_payment(
         correlation_id=state.correlation_id,
         amount=amount,
         ledger_idempotency_key=f"insurance-premium-payment:{idempotency_key}",
+        canonical_intent=canonical_intent,
     )
     return InsurancePremiumPaymentResult(
         success=True,

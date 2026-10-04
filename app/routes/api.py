@@ -55,7 +55,7 @@ from app.routes.student import (
 from app.services.context_resolver import resolve_canonical_context, ContextResolutionError
 from app.feats.base import FEATContext, FEATContextError
 from app.feats.store_purchase_feat import execute_store_purchase
-from app.feats.ledger_resolution_feat import build_intended_ledger_plan, resolve_intended_ledger_plan, apply_resolved_ledger_plan
+from app.services.ledger_resolution_service import build_intended_ledger_plan, resolve_intended_ledger_plan, apply_resolved_ledger_plan
 from app.services import store_service
 from app.services.entitlement_read_service import (
     derive_display_status,

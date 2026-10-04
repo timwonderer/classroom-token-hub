@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 PROTECTED_FIELDS_BY_TABLE: dict[str, list[str]] = {
+    "attendance_interval_invalidation": ["id", "class_id", "actor_seat_id", "target_seat_id", "opening_event_id", "closing_event_id", "recorded_at", "reason_code", "idempotency_key", "correlation_id", "receipt_json"],
     "payroll_event": [
         "id", "class_id", "payroll_cycle_id", "actor_seat_id", "target_seat_id",
         "correlation_id", "idempotency_key", "policy_uuid", "mechanism",
@@ -40,8 +41,24 @@ PROTECTED_FIELDS_BY_TABLE: dict[str, list[str]] = {
         "id", "class_id", "actor_seat_id", "target_seat_id", "mechanism", "amount_cents",
         "timestamp", "account_type", "description", "correlation_id", "feat_code",
         "idempotency_key", "policy_id", "type", "posting_sequence", "command_reservation_id",
-    ],
+        "compensation_origin_locator", "compensation_amount_cents", "correction_intent_locator"],
 }
+
+
+LEDGER_FIELDS_BY_VERSION = {
+    2: (
+        "id", "class_id", "actor_seat_id", "target_seat_id", "mechanism", "amount_cents",
+        "timestamp", "account_type", "description", "correlation_id", "feat_code",
+        "idempotency_key", "policy_id", "type", "posting_sequence", "command_reservation_id",
+    ),
+    3: (
+        "id", "class_id", "actor_seat_id", "target_seat_id", "mechanism", "amount_cents",
+        "timestamp", "account_type", "description", "correlation_id", "feat_code",
+        "idempotency_key", "policy_id", "type", "posting_sequence", "command_reservation_id",
+        "compensation_origin_locator", "compensation_amount_cents", "correction_intent_locator",
+    ),
+}
+
 
 
 # ---------------------------------------------------------------------------
@@ -273,13 +290,15 @@ def verify_row_lineage(
                 detail=f"AuditEvent id={lineage_event_id} not found — deleted or never created",
             )
 
-        if table_name == "ledger_transaction" and event.signature_version != 2:
+        if table_name == "ledger_transaction" and event.signature_version not in {2,3}:
             return RowVerificationResult(table_name=table_name, row_pk=row_pk_str,
                 state=LineageState.DEGRADED, lineage_event_id=lineage_event_id,
                 failure_type="VERIFIER_COVERAGE_UNAVAILABLE",
                 detail="Historical Ledger signature uses a retired stored-state payload; current canonical coverage is unavailable.")
 
         protected_fields = PROTECTED_FIELDS_BY_TABLE.get(table_name)
+        if table_name == "ledger_transaction":
+            protected_fields = LEDGER_FIELDS_BY_VERSION[event.signature_version]
         if protected_fields is None:
             return RowVerificationResult(
                 table_name=table_name,
@@ -405,13 +424,16 @@ def verify_record_creation_lineage(table, row, class_id, *, required_fields=()):
     """
     from app.services.audit_service import LineageState
     from app.models import AuditEvent, ChainHead
-    if not set(required_fields).issubset(PROTECTED_FIELDS_BY_TABLE.get(table, ())):
-        return False
     pointer = getattr(row, "lineage_event_id", None)
     if pointer is None:
         return False
     event = db.session.get(AuditEvent, pointer)
     if event is None or event.table_name != table or event.row_pk != str(row.id) or event.class_id != class_id:
+        return False
+    fields=PROTECTED_FIELDS_BY_TABLE.get(table, ())
+    if table == "ledger_transaction":
+        fields = LEDGER_FIELDS_BY_VERSION.get(event.signature_version, ())
+    if not set(required_fields).issubset(fields) or any(not hasattr(row,field) for field in fields):
         return False
     if event.chain_scope != f"class:{class_id}" or event.operation != "INSERT":
         return False
@@ -425,3 +447,45 @@ def verify_record_creation_lineage(table, row, class_id, *, required_fields=()):
             or verification.last_good_hash != head.latest_hash or head.event_count != verification.event_count):
         return False
     return verify_row_lineage(table, row.id, row).state == LineageState.VERIFIED
+
+
+@dataclass(frozen=True)
+class VerifiedCreationEvidence:
+    """Operations-owned immutable result supplied by an authorized FEAT.
+
+    Consumers match the complete scoped result against their own current
+    sources; this is never a client boolean or permission to omit a candidate.
+    """
+    table_name: str
+    row_pk: str
+    class_id: str
+    lineage_event_id: int
+    lineage_token: str
+    signature_version: int
+    protected_fields: tuple[str, ...]
+    protected_values: tuple[tuple[str, object], ...]
+
+
+def _freeze_evidence_value(value):
+    if isinstance(value, dict):
+        return tuple((key, _freeze_evidence_value(item)) for key, item in sorted(value.items()))
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze_evidence_value(item) for item in value)
+    return value
+
+
+def verified_creation_evidence(table, row, class_id, *, required_fields=()):
+    """Pure scoped Operations proof with exact linked-version coverage.
+
+    Returns None on any unavailable or failed proof. Ledger and other owners
+    receive this result through FEAT orchestration, never through domain calls.
+    """
+    if not verify_record_creation_lineage(table, row, class_id, required_fields=required_fields):
+        return None
+    from app.models import AuditEvent
+    event = db.session.get(AuditEvent, row.lineage_event_id)
+    fields = (LEDGER_FIELDS_BY_VERSION.get(event.signature_version, ())
+        if table == 'ledger_transaction' else tuple(PROTECTED_FIELDS_BY_TABLE.get(table, ())))
+    return VerifiedCreationEvidence(table, str(row.id), class_id, row.lineage_event_id,
+        row.lineage_token, event.signature_version, tuple(fields),
+        tuple((field, _freeze_evidence_value(getattr(row, field))) for field in fields))

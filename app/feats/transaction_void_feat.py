@@ -100,11 +100,18 @@ def _execute_void_transaction_impl(
     # transaction must not be voided (INV-OPS-001), and marking the original
     # void alongside its reversal used to drop an unsettled debit while the
     # credit still posted, returning money that was never taken.
+    recovery_inputs = {}
+    if tx.amount_cents > 0:
+        from app.feats.ledger_proof_inputs import positive_reversal_inputs
+        from app.services.identity_service import resolve_teacher_seat_for_class
+        actor_seat_id = actor_seat_id or resolve_teacher_seat_for_class(tx.class_id).id
+        recovery_inputs = positive_reversal_inputs(tx)
     reversal_tx = reverse_transaction(
         tx,
         idempotency_key=void_refund_key(tx.id),
         description=void_description,
         actor_seat_id=actor_seat_id or tx.actor_seat_id,
+        mechanism="teacher", **recovery_inputs,
     )
 
     return VoidTransactionResult(

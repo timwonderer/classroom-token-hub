@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from app.extensions import db
 from app.models import (
+    AttendanceIntervalInvalidation,
     AttendanceReasonCode,
     AttendanceSession,
     HallPassLog,
@@ -316,7 +317,7 @@ def lock_attendance_seat(seat_id, class_id):
 
 def close_due_attendance_intervals(*, ctx, seat_id, as_of_utc):
     """PROD command: append due system closures within the caller's FEAT transaction."""
-    from app.feats.prod import _record_attendance_session_impl
+    from app.services.attendance_writer_service import record_attendance_session_command
     from app.services.payroll.settings import current_daily_limit_seconds
     lock_attendance_seat(seat_id, ctx.class_id)
     now = ensure_utc(as_of_utc)
@@ -341,7 +342,7 @@ def close_due_attendance_intervals(*, ctx, seat_id, as_of_utc):
                 reference_time_utc=now).shifted_timestamp_utc
             due = min(due, capped)
         if due <= now:
-            result = _record_attendance_session_impl(ctx=ctx, status="inactive", target_seat_id=seat_id,
+            result = record_attendance_session_command(ctx=ctx, status="inactive", target_seat_id=seat_id,
                 mechanism="system", reason_code=AttendanceReasonCode.DONE_FOR_DAY,
                 reference_time_utc=due,
                 idempotency_key=f"system-close:{interval.opening_event_id}:{due.isoformat()}")
@@ -434,10 +435,11 @@ def calculate_seat_payroll_intervals(
     if invalid_evidence:
         return SeatPayrollIntervals(payable=(), in_progress=(), unprovable=tuple(identified))
 
+    invalidated_pairs = set(db.session.query(AttendanceIntervalInvalidation.opening_event_id, AttendanceIntervalInvalidation.closing_event_id).filter_by(class_id=class_id, target_seat_id=seat_id).all())
     payable, unprovable = [], []
     for interval in closed:
         start, end = interval
-        if (interval.opening_event_id, interval.closing_event_id) in settled_pairs:
+        if (interval.opening_event_id, interval.closing_event_id) in settled_pairs or (interval.opening_event_id, interval.closing_event_id) in invalidated_pairs:
             continue
         if paid_through is not None and end <= paid_through:
             continue
@@ -551,7 +553,7 @@ def is_done_for_day(seat_id: int, class_id: str, *, ctx) -> bool:
 
     A terminal state for the day (DOM-PROD-001): once true, a fresh
     ``start_work`` for this seat/class is refused server-side
-    (``_record_attendance_session_impl``) until the next canonical day. The
+    (``record_attendance_session_command``) until the next canonical day. The
     single computation shared by ``get_class_attendance_status`` (page render
     and the polling endpoint) and the tap route (``/api/tap``'s own response),
     which previously computed attendance facts independently and never

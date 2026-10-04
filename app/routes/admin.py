@@ -194,7 +194,7 @@ from app.utils.student_deletion import (
 )
 from app.utils.seat_scope import seat_scoped_filter, transaction_scope_filter
 from app.feats.identity_feat import remove_pending_student_seat
-from app.feats.prod import record_attendance_session, record_payroll_event, record_payroll_reversal
+from app.feats.prod import record_attendance_session, record_payroll_event
 from app.feats.complete_payroll_cycle import complete_payroll_cycle
 from app.services.payroll.settlement import NoPayableAttendanceError, PayrollNotConfiguredError
 from app.services.payroll.corrections import (
@@ -3464,7 +3464,8 @@ def student_detail_public(actor_public_id):
     from app.services.payroll_interval_provenance import (
         payroll_interval_memberships, payroll_provenance_history_limitations,
     )
-    from app.services.ledger_payroll_allocation import payroll_allocation_proof
+    from app.services.ledger_payroll_allocation import payroll_allocation_proof, get_payroll_credit_evidence_records
+    from app.feats.attendance_interval_invalidation_feat import ledger_creation_proofs
     from app.services.ledger_balance_query_service import get_account_posting_boundary
     from app.utils.audit_verifier import verify_record_creation_lineage
     interval_page, attendance_older_url, attendance_newest_url, attendance_completed_count = _attendance_interval_page(
@@ -3486,6 +3487,9 @@ def student_detail_public(actor_public_id):
     for interval in interval_projections:
         paired_source_ids.update(row.id for row in interval_sources(interval))
 
+    from app.models import AttendanceIntervalInvalidation
+    invalidated_pairs = {(r.opening_event_id,r.closing_event_id) for r in AttendanceIntervalInvalidation.query.filter_by(class_id=class_id,target_seat_id=seat_id).all()}
+
     def display_interval(interval):
         minutes, seconds = divmod(interval.credited_seconds, 60)
         hours, minutes = divmod(minutes, 60)
@@ -3505,7 +3509,9 @@ def student_detail_public(actor_public_id):
                         allocation_version=(event.summary_json or {}).get("allocation_version"),
                         pricing=membership["pricing"], originating_actor_seat_id=event.actor_seat_id,
                         originating_mechanism=event.mechanism,
-                        through_posting_sequence=get_account_posting_boundary(seat_id, class_id, "checking"))
+                        through_posting_sequence=get_account_posting_boundary(seat_id, class_id, "checking"),
+                        creation_evidence=ledger_creation_proofs(get_payroll_credit_evidence_records(class_id=class_id,
+                            target_seat_id=seat_id, correlation_id=event.correlation_id, idempotency_key=event.idempotency_key), class_id))
                 else:
                     proofs[event.id] = {"status": "provenance_unavailable", "allocations": {}}
             proof = proofs[event.id]
@@ -3524,11 +3530,15 @@ def student_detail_public(actor_public_id):
             "verified": ("Paid", "Historically settled", "This contribution is proven from the original attendance, frozen pricing, and posted payroll credit."),
         }
         label, eligibility, message = labels[status]
+        is_invalidated = (interval.opening_event_id,interval.closing_event_id) in invalidated_pairs
+        if is_invalidated:
+            eligibility = "Ineligible · Invalidated"
+        action_url = url_for("admin.attendance_interval_invalidation", actor_public_id=actor_public_id, nav=request.args.get("nav")) if interval.closing_event_id and not is_invalidated and status in {"unpaid","verified"} else None
         return SimpleNamespace(**interval.__dict__, duration_label=duration_label,
             source_events=interval_sources(interval), amount=amount, settlement_label=label,
             eligibility_label=eligibility, evidence_message=message, pricing_inputs=pricing_inputs,
             payroll_event_id=event.id if event else None, payroll_recorded_at=event.recorded_at if event else None,
-            payroll_history_url=None)
+            payroll_history_url=None, correction_url=action_url)
 
     attendance_intervals = [display_interval(interval) for interval in interval_page]
     attendance_open_intervals = [display_interval(interval) for interval in interval_projections if interval.closing_event_id is None]
@@ -3649,6 +3659,9 @@ def student_detail_public(actor_public_id):
             for row in payroll_event_history
         )
     )
+
+    if any(row.get('amount') is None for row in payroll_event_history):
+        scoped_total_earnings = None
 
     # CRITICAL: Fetch current class Join Code for Account Recovery display.
     join_codes = {}
@@ -7116,6 +7129,21 @@ def _build_payroll_event_display_rows(*, ctx, payroll_events, class_label=None):
         ledger_by_event_key[(tx.correlation_id, tx.target_seat_id)].append(tx)
 
     def _ledger_amount_for_event(event):
+        summary=event.summary_json if isinstance(event.summary_json,dict) else {}
+        if event.payroll_event_type == 'correction' or (event.payroll_event_type == 'reversal' and ('ledger_result_locator' in summary or 'command_receipt' in summary)):
+            from app.feats.attendance_interval_invalidation_feat import ledger_creation_proofs
+            from app.services.ledger_recovery_service import get_recovery_outcome_records,get_recovery_outcome,RecoveryIntegrityError
+            from app.utils.audit_verifier import verify_record_creation_lineage
+            if not summary.get('ledger_result_locator') or not verify_record_creation_lineage('payroll_event',event,ctx.class_id):
+                return None
+            locators=(summary['ledger_result_locator'],)
+            try:
+                records=get_recovery_outcome_records(class_id=ctx.class_id,target_seat_id=event.target_seat_id,effect_locators=locators)
+                outcome=get_recovery_outcome(class_id=ctx.class_id,target_seat_id=event.target_seat_id,
+                    effect_locators=locators,creation_evidence=ledger_creation_proofs(records,ctx.class_id))
+            except RecoveryIntegrityError:
+                return None
+            return -Decimal(outcome['recovered_cents'])/100
         linked = ledger_by_event_key.get((event.correlation_id, event.target_seat_id), [])
         if event.payroll_event_type == "reversal":
             reversal_tx = next((tx for tx in linked if Decimal(tx.amount or 0) < 0), None)
@@ -7139,7 +7167,7 @@ def _build_payroll_event_display_rows(*, ctx, payroll_events, class_label=None):
             # Not a claimed participant, so the event is not displayed. Rendering
             # it as "Unknown" would show a row the teacher cannot act on.
             continue
-        summary = event.summary_json or {}
+        summary = event.summary_json if isinstance(event.summary_json,dict) else {}
         ledger_amount = _ledger_amount_for_event(event)
         payroll_records.append({
             'id': event.id,
@@ -7154,130 +7182,130 @@ def _build_payroll_event_display_rows(*, ctx, payroll_events, class_label=None):
             'student_name': (seat.identity_profile.full_name if seat and seat.identity_profile else 'Unknown'),
             'student': None,
             'amount': ledger_amount,
-            'display_amount': f"${ledger_amount:.2f}",
+            'display_amount': f"${ledger_amount:.2f}" if ledger_amount is not None else 'Contribution unavailable',
             'account_type': "checking",
             'notes': summary.get("description") or event.payroll_event_type,
             'is_reversal': event.payroll_event_type == "reversal",
-            # DOM-PROD-001 §187 names payroll reversal as THE remedy for an
-            # attendance row that produced a wrong payroll outcome. It was
-            # hardcoded False, so the remedy had no surface: `record_payroll_
-            # reversal` appeared exactly once in the repository -- its own
-            # definition -- while this template already rendered a REVERSAL
-            # badge. The read side anticipated rows the write side never made.
+            # A scoped pure preview determines full/residual recovery authority.
             'can_reverse': (
-                event.payroll_event_type != "reversal"
-                and event.correlation_id not in reversed_correlation_ids
+                event.payroll_event_type in {"payroll", "manual_credit"}
             ),
         })
     return payroll_records
 
 
+def _correction_denial(exc):
+    code = getattr(exc, 'code', None) or (str(exc) if str(exc) in {'PREVIEW_CHANGED','PROVENANCE_UNAVAILABLE','REPLAY_MISMATCH'} else 'INTEGRITY_FAILURE')
+    pending = code == 'PAYROLL_PENDING'
+    if pending:
+        code = 'PROVENANCE_UNAVAILABLE'
+    messages = {'UNAUTHORIZED_SCOPE':'This student is unavailable in this class.',
+        'INCOMPLETE_INTERVAL':'Choose a completed work interval.', 'INVALID_REASON':'Choose a listed reason.',
+        'ALREADY_INVALIDATED':'This interval has already been invalidated.',
+        'ALREADY_RECOVERED':'This payment has already been fully recovered.',
+        'PREVIEW_CHANGED':'The attendance or financial facts changed. Review a fresh preview.',
+        'REPLAY_MISMATCH':'This command key belongs to a different request.',
+        'PROVENANCE_UNAVAILABLE':'Original payment evidence cannot be verified. No changes were made.',
+        'INTEGRITY_FAILURE':'The correction could not be verified. No changes were made.',
+        'INVALID_REQUEST':'The correction request is incomplete or contains unsupported fields.'}
+    status = 500 if code == 'INTEGRITY_FAILURE' else 403 if code == 'UNAUTHORIZED_SCOPE' else 400 if code in {'INVALID_REASON','INCOMPLETE_INTERVAL','INVALID_REQUEST'} else 409
+    return jsonify(status='denied', code=code, message='Payroll is pending.' if pending else messages.get(code,messages['INTEGRITY_FAILURE'])), status
+
+
+def _correction_source_id(value):
+    if isinstance(value,bool) or not (isinstance(value,int) or (isinstance(value,str) and value.isascii() and value.isdigit())):
+        from app.services.attendance_invalidation_service import AttendanceCorrectionDenied
+        raise AttendanceCorrectionDenied('INVALID_REQUEST')
+    result=int(value)
+    if not 0 < result <= 2147483647:
+        from app.services.attendance_invalidation_service import AttendanceCorrectionDenied
+        raise AttendanceCorrectionDenied('INVALID_REQUEST')
+    return result
+
+
+def _attendance_correction_target(actor_public_id):
+    ctx = g.canonical_context
+    nav = _read_student_detail_nav_token(request.args.get('nav',''))
+    if (not ctx.class_id or not nav or str(nav.get('user_id')) != str(ctx.user_id)
+        or nav.get('actor_public_id') != actor_public_id or nav.get('class_id') != ctx.class_id):
+        abort(404)
+    target = Seat.query.join(ClassEconomy, ClassEconomy.class_id == Seat.class_id).filter(
+        Seat.public_id == actor_public_id, Seat.class_id == ctx.class_id, Seat.role == 'student',
+        ClassEconomy.teacher_user_id == ctx.user_id).first()
+    if not target or not target.user_id:
+        abort(404)
+    return target
+
+
+@admin_bp.route('/students/<string:actor_public_id>/attendance/invalidation', methods=['GET','POST'])
+@admin_required
+def attendance_interval_invalidation(actor_public_id):
+    from app.feats.attendance_interval_invalidation_feat import preview_attendance_interval_invalidation, invalidate_attendance_interval
+    from app.services.attendance_invalidation_service import AttendanceCorrectionDenied
+    from app.services.ledger_recovery_service import RecoveryIntegrityError
+    target = _attendance_correction_target(actor_public_id)
+    data = request.args if request.method == 'GET' else request.get_json(silent=True) or request.form
+    try:
+        allowed = {'nav','opening_event_id','closing_event_id','reason_code'} if request.method == 'GET' else {'opening_event_id','closing_event_id','reason_code','idempotency_key','expected_preview_identity','csrf_token'}
+        if set(data) - allowed or (request.method == 'POST' and not all(isinstance(data.get(field),str) and data.get(field).strip() for field in ('idempotency_key','expected_preview_identity'))):
+            raise AttendanceCorrectionDenied('INVALID_REQUEST')
+        if request.method == 'POST' and len(data['idempotency_key']) > 128:
+            raise AttendanceCorrectionDenied('INVALID_REQUEST')
+        opening, closing = _correction_source_id(data.get('opening_event_id')), _correction_source_id(data.get('closing_event_id'))
+        args = dict(ctx=g.canonical_context, target_seat_id=target.id, opening_event_id=opening,
+            closing_event_id=closing, reason_code=data.get('reason_code'))
+        if request.method == 'GET':
+            return jsonify(status='preview', **preview_attendance_interval_invalidation(**args).public())
+        return jsonify(invalidate_attendance_interval(**args, idempotency_key=data.get('idempotency_key'),
+            expected_preview_identity=data.get('expected_preview_identity')))
+    except (AttendanceCorrectionDenied, RecoveryIntegrityError) as exc:
+        return _correction_denial(exc)
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Attendance correction failed')
+        return _correction_denial(AttendanceCorrectionDenied('INTEGRITY_FAILURE'))
+
+
+@admin_bp.route('/payroll/event/<int:payroll_event_id>/recovery-preview')
+@admin_required
+def payroll_recovery_preview(payroll_event_id):
+    from app.feats.attendance_interval_invalidation_feat import preview_payroll_recovery
+    from app.services.attendance_invalidation_service import AttendanceCorrectionDenied
+    from app.services.ledger_recovery_service import RecoveryIntegrityError
+    if PayrollEvent.query.filter_by(id=payroll_event_id,class_id=g.canonical_context.class_id).first() is None:
+        abort(404)
+    try:
+        return jsonify(status='preview', **preview_payroll_recovery(ctx=g.canonical_context,payroll_event_id=payroll_event_id).public())
+    except (AttendanceCorrectionDenied, RecoveryIntegrityError) as exc:
+        return _correction_denial(exc)
+    except Exception:
+        current_app.logger.exception('Payroll correction preview failed')
+        return _correction_denial(AttendanceCorrectionDenied('INTEGRITY_FAILURE'))
+
+
 @admin_bp.route('/payroll/event/<int:payroll_event_id>/reverse', methods=['POST'])
 @admin_required
 def reverse_payroll_event(payroll_event_id):
-    """Reverse a payroll event — the sole remedy for a wrong payroll outcome.
-
-    DOM-PROD-001 §185 forbids correcting payroll by mutating attendance history,
-    and §187 names this as the path instead. The path did not exist:
-    ``record_payroll_reversal`` appeared exactly once in the repository, in its
-    own definition, with no route, service or test reaching it — while the
-    payroll template already rendered a REVERSAL badge for rows nothing could
-    produce. A teacher wanting to make a student whole had to leave the dispute
-    and issue a manual credit, which records itself as ``manual_credit`` rather
-    than as a correction: the money moved and the business record did not say
-    why.
-
-    This surface is deliberately on Payroll rather than on the support ticket
-    that may have raised the dispute. A teacher can discover a payroll mistake
-    with no ticket in existence, and Support must not acquire a Productivity
-    remedy — cross-domain coordination belongs in the FEAT layer, not in another
-    domain's route. Support can deep-link here; it does not execute this.
-
-    No FEAT envelope is opened here. ``record_payroll_reversal`` carries
-    ``@requires_feat_context("FEAT-PROD-003")``, which OPENS a context, so a
-    route-level one would nest and fail — the defect this same batch fixed on
-    hall-pass approval. Driving the FEAT rather than the bare domain command is
-    what keeps the counter-entry and the payroll record one operation: the FEAT
-    inherits the original's ``policy_uuid`` and derives the amount as the
-    negation of the linked transaction, so the reversal is a compensating entry
-    with the provenance of what it compensates, never a deletion.
-    """
-    ctx = g.canonical_context
-    class_id = (getattr(ctx, "class_id", None) or "").strip()
-    if not class_id:
+    """Confirm a signed full/residual recovery through the owning FEAT."""
+    from app.feats.attendance_interval_invalidation_feat import recover_payroll_payment
+    from app.services.attendance_invalidation_service import AttendanceCorrectionDenied
+    from app.services.ledger_recovery_service import RecoveryIntegrityError
+    if PayrollEvent.query.filter_by(id=payroll_event_id,class_id=g.canonical_context.class_id).first() is None:
         abort(404)
-
-    event = PayrollEvent.query.filter_by(
-        id=payroll_event_id, class_id=class_id
-    ).first()
-    if event is None:
-        # Scoped by class: an event id belonging to another class is not found,
-        # not forbidden, so the response reveals nothing about other classes.
-        abort(404)
-
-    if event.payroll_event_type == "reversal":
-        flash("That entry is already a reversal and cannot itself be reversed.", "warning")
-        return redirect(url_for('admin.payroll_history'))
-
-    already_reversed = PayrollEvent.query.filter_by(
-        class_id=class_id,
-        correlation_id=event.correlation_id,
-        payroll_event_type="reversal",
-    ).first()
-    if already_reversed is not None:
-        flash("That payroll entry has already been reversed.", "warning")
-        return redirect(url_for('admin.payroll_history'))
-
-    reason = (request.form.get("reason") or "").strip()
-
+    data = request.get_json(silent=True) or request.form
     try:
-        record_payroll_reversal(
-            ctx=ctx,
-            target_seat_id=event.target_seat_id,
-            correlation_id=event.correlation_id,
-            idempotency_key=f"payroll_reversal:{class_id}:{event.id}",
-            mechanism="TEACHER",
-            summary_json={
-                "description": (
-                    f"Reversal of {event.payroll_event_type}"
-                    + (f": {reason}" if reason else "")
-                ),
-                "source": "admin_payroll_reversal",
-                "reversed_payroll_event_id": event.id,
-                "reason": reason or None,
-            },
-        )
-    except LookupError as exc:
-        # current_app.logger, not _log_api_client_error: that helper is defined in
-        # app/routes/api.py and this module neither defines nor imports it, so
-        # reaching either handler raised NameError and turned a handled refusal
-        # into an undiagnosed 500 -- an error path failing worse than the error it
-        # handles. Caught in review; the branch had no test exercising it.
-        current_app.logger.warning(
-            "Payroll reversal could not resolve its original entry: "
-            "event_id=%s class_id=%s error=%s",
-            event.id, class_id, exc,
-        )
-        flash(
-            "That payroll entry has no linked transaction to reverse, so there is "
-            "nothing to return.",
-            "warning",
-        )
-        return redirect(url_for('admin.payroll_history'))
-    except ValueError as exc:
-        current_app.logger.warning(
-            "Payroll reversal refused: event_id=%s class_id=%s error=%s",
-            event.id, class_id, exc,
-        )
-        flash("That payroll entry cannot be reversed.", "warning")
-        return redirect(url_for('admin.payroll_history'))
-
-    flash(
-        "Payroll entry reversed. The original entry and its reversal both remain "
-        "in the history, so the record shows what happened and why.",
-        "success",
-    )
-    return redirect(url_for('admin.payroll_history'))
+        if set(data) - {'idempotency_key','expected_preview_identity','csrf_token'} or not all(isinstance(data.get(field),str) and data.get(field).strip() for field in ('idempotency_key','expected_preview_identity')):
+            raise AttendanceCorrectionDenied('INVALID_REQUEST')
+        if len(data['idempotency_key']) > 128:
+            raise AttendanceCorrectionDenied('INVALID_REQUEST')
+        return jsonify(recover_payroll_payment(ctx=g.canonical_context,payroll_event_id=payroll_event_id,
+            idempotency_key=data.get('idempotency_key'),expected_preview_identity=data.get('expected_preview_identity')))
+    except (AttendanceCorrectionDenied, RecoveryIntegrityError) as exc:
+        return _correction_denial(exc)
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Payroll recovery failed')
+        return _correction_denial(AttendanceCorrectionDenied('INTEGRITY_FAILURE'))
 
 
 @admin_bp.route('/payroll-history')

@@ -1,0 +1,17 @@
+<div class="modal fade" id="attendanceCorrectionModal" tabindex="-1" aria-labelledby="attendanceCorrectionTitle" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+    <div class="modal-header"><h2 class="modal-title h5" id="attendanceCorrectionTitle">Review correction</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+    <div class="modal-body">
+      <div id="attendanceCorrectionReason"><label class="form-label" for="attendanceCorrectionReasonCode">Reason</label>
+        <select class="form-select" id="attendanceCorrectionReasonCode">
+          <option value="INVALID_ATTENDANCE">Invalid attendance</option><option value="NON_WORK_ACTIVITY">Non-work activity</option><option value="DUPLICATE_PARTICIPATION">Duplicate participation</option>
+        </select>
+      </div>
+      <p class="mt-3" id="attendanceCorrectionConsequence" role="status" aria-live="polite"></p>
+      <p class="text-danger" id="attendanceCorrectionError" role="alert"></p>
+      <p class="small text-muted" id="attendanceCorrectionPermanent">Original attendance and payment records remain in the history. Invalidation is permanent.</p>
+    </div>
+    <div class="modal-footer"><button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancel</button><button class="btn btn-outline-primary" type="button" id="attendanceCorrectionRefresh">Refresh preview</button><button class="btn btn-danger" type="button" id="attendanceCorrectionConfirm" disabled>Confirm correction</button></div>
+  </div></div>
+</div>
+<script src="{{ url_for('static',filename='js/attendance-correction.js') }}" defer></script>

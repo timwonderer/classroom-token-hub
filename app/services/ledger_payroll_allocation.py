@@ -54,7 +54,7 @@ def allocate_payroll_cents(pricing, *, original_credit, allocation_version):
     return allocations
 
 
-def payroll_allocation_proof(*, class_id, target_seat_id, correlation_id, idempotency_key, allocation_version, pricing, originating_actor_seat_id, originating_mechanism, through_posting_sequence=None):
+def payroll_allocation_proof(*, class_id, target_seat_id, correlation_id, idempotency_key, allocation_version, pricing, originating_actor_seat_id, originating_mechanism, through_posting_sequence=None,creation_evidence=()):
     """Receive PROD-proven membership; resolve one exact monetary effect, fail closed."""
     unavailable = {"status": "provenance_unavailable", "allocations": {}, "transaction": None}
     rows = Transaction.query.filter_by(class_id=class_id, target_seat_id=target_seat_id,
@@ -67,11 +67,10 @@ def payroll_allocation_proof(*, class_id, target_seat_id, correlation_id, idempo
             or str(mechanism).lower() != str(originating_mechanism).lower()
             or Decimal(credit.amount) < 0 or credit.account_type != "checking"):
         return unavailable
-    from app.utils.audit_verifier import verify_record_creation_lineage
+    from app.services.ledger_evidence import evidence_matches
     if credit.type != "payroll" or credit.original_transaction_id is not None or credit.feat_code not in {"FEAT-PROD-003", "FEAT-PROD-004"}:
         return unavailable
-    if not verify_record_creation_lineage("ledger_transaction", credit, class_id,
-            required_fields=("class_id", "actor_seat_id", "target_seat_id", "mechanism", "amount_cents",
+    if not evidence_matches(credit, class_id, creation_evidence, required_fields=("class_id", "actor_seat_id", "target_seat_id", "mechanism", "amount_cents",
                 "account_type", "correlation_id", "feat_code", "idempotency_key", "type",
                 "command_reservation_id", "posting_sequence")):
         return unavailable
@@ -92,3 +91,8 @@ def payroll_allocation_proof(*, class_id, target_seat_id, correlation_id, idempo
     except (KeyError, TypeError, ValueError, ArithmeticError):
         return unavailable
     return {"status": "verified", "allocations": allocations, "transaction": credit}
+
+
+def get_payroll_credit_evidence_records(*,class_id,target_seat_id,correlation_id,idempotency_key):
+    return tuple(Transaction.query.filter_by(class_id=class_id,target_seat_id=target_seat_id,
+        correlation_id=correlation_id,idempotency_key=idempotency_key).all())

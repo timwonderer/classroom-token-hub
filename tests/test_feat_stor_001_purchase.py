@@ -133,7 +133,7 @@ class TestStorePurchaseHappyPath:
             student_user_id = test_class_and_seat["student_user_id"]
             policy_uuid = test_class_and_seat["policy_uuid"]
 
-            provided_corr_id = "test_corr_123"
+            provided_corr_id = "corr_test_corr_123"
 
             ctx = CanonicalContext(
                 user_id=student_user_id,
@@ -539,3 +539,46 @@ class TestCrossClassIsolation:
             assert len(events_class2) == 3
             assert all(e.class_id == scope1.class_id for e in events_class1)
             assert all(e.class_id == scope2.class_id for e in events_class2)
+
+
+def test_funded_purchase_replays_original_grants_after_banking_and_balance_change(app_with_class, test_class_and_seat):
+    from tests.helpers.ledger import record_ledger_fixture
+    from app.models import Transaction
+    from app.feats.class_configuration.feat_class_005_economic_engine_evolution import execute_evolve_economic_engine
+    data = test_class_and_seat
+    class_id = data['class_id']
+    seat_id = data['student_seat_id']
+    teacher = db.session.get(Seat, data['teacher_seat_id'])
+    teacher_ctx = CanonicalContext(user_id=teacher.user_id, class_id=class_id,
+                                  seat_id=teacher.id, actor_role='teacher')
+    changed = execute_evolve_economic_engine(canonical_context=teacher_ctx, class_id=class_id,
+        updates={'overdraft_protection_enabled': True}, feature_list=['banking'],
+        idempotency_key='store-funded:protection')
+    assert changed.success
+    with FEATContext('FEAT-TEST-SETUP', idempotency_key='store-funded:policy'):
+        policy = publish_store_product(class_id=class_id, entitlement_type='DELAYED_USE',
+            name='Funded Purchase', price='10.00', created_by_seat_id=teacher.id)
+    with FEATContext('FEAT-LED-001', idempotency_key='store-funded:seed'):
+        record_ledger_fixture(seat_id=seat_id, class_id=class_id, amount=Decimal('2.00'))
+        record_ledger_fixture(seat_id=seat_id, class_id=class_id,
+                              account_type='savings', amount=Decimal('50.00'))
+    db.session.commit()
+    ctx = CanonicalContext(user_id=data['student_user_id'], class_id=class_id,
+                           seat_id=seat_id, actor_role='student')
+    first = execute_store_purchase(canonical_context=ctx, policy_uuid=policy.policy_uuid,
+                                  quantity=1, idempotency_key='store-funded:buy')
+    assert first.success
+    original_ids = [row.id for row in Transaction.query.filter_by(idempotency_key='store-funded:buy').all()]
+    assert len(original_ids) == 3
+    with FEATContext('FEAT-LED-001', idempotency_key='store-funded:other-debit'):
+        record_ledger_fixture(seat_id=seat_id, class_id=class_id, amount=Decimal('-1.00'))
+    execute_evolve_economic_engine(canonical_context=teacher_ctx, class_id=class_id,
+        updates={'overdraft_protection_enabled': False}, feature_list=['banking'],
+        idempotency_key='store-funded:protection-off')
+    replay = execute_store_purchase(canonical_context=ctx, policy_uuid=policy.policy_uuid,
+                                   quantity=1, idempotency_key='store-funded:buy')
+    assert replay.entitlement_ids == first.entitlement_ids
+    assert [row.id for row in Transaction.query.filter_by(idempotency_key='store-funded:buy').all()] == original_ids
+    with pytest.raises(ValueError, match='fingerprint'):
+        execute_store_purchase(canonical_context=ctx, policy_uuid=policy.policy_uuid,
+                               quantity=2, idempotency_key='store-funded:buy')

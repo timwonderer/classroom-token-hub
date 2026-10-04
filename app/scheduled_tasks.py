@@ -23,7 +23,6 @@ def enforce_daily_limits_job():
     # Compose the Productivity domain command, not the FEAT-PROD-001 entry —
     # this job already owns the envelope and exactly one FEAT executes per
     # invocation (INV-ARC-000 §VIII.2, INV-ARC-021 §V.2).
-    from app.feats.prod import _record_attendance_session_impl
     from app.extensions import db
     from app.models import AttendanceReasonCode, AttendanceSession, ClassEconomy, Seat
     from app.services.payroll.settings import current_daily_limit_seconds
