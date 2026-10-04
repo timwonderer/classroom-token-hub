@@ -7006,7 +7006,11 @@ def _build_payroll_event_display_rows(*, ctx, payroll_events, class_label=None):
 
 
 def _correction_denial(exc):
-    code = getattr(exc, 'code', None) or (str(exc) if str(exc) in {'PREVIEW_CHANGED','PROVENANCE_UNAVAILABLE','REPLAY_MISMATCH'} else 'INTEGRITY_FAILURE')
+    code = getattr(exc, 'code', None)
+    if code is None and isinstance(exc, ValueError) and exc.args and exc.args[0] in {'PREVIEW_CHANGED', 'PROVENANCE_UNAVAILABLE', 'REPLAY_MISMATCH'}:
+        code = exc.args[0]
+    if code is None:
+        code = 'INTEGRITY_FAILURE'
     pending = code == 'PAYROLL_PENDING'
     if pending:
         code = 'PROVENANCE_UNAVAILABLE'
@@ -7019,6 +7023,7 @@ def _correction_denial(exc):
         'PROVENANCE_UNAVAILABLE':'Original payment evidence cannot be verified. No changes were made.',
         'INTEGRITY_FAILURE':'The correction could not be verified. No changes were made.',
         'INVALID_REQUEST':'The correction request is incomplete or contains unsupported fields.'}
+    code = next((known for known in messages if known == code), 'INTEGRITY_FAILURE')
     status = 500 if code == 'INTEGRITY_FAILURE' else 403 if code == 'UNAUTHORIZED_SCOPE' else 400 if code in {'INVALID_REASON','INCOMPLETE_INTERVAL','INVALID_REQUEST'} else 409
     return jsonify(status='denied', code=code, message='Payroll is pending.' if pending else messages.get(code,messages['INTEGRITY_FAILURE'])), status
 

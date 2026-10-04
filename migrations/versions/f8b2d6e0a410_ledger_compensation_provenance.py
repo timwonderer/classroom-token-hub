@@ -13,42 +13,64 @@ down_revision = "e7c2a9d4f610"
 branch_labels = None
 depends_on = None
 
+def table_exists(table_name):
+    return sa.inspect(op.get_bind()).has_table(table_name)
+
+
+def column_exists(table_name, column_name):
+    return any(c['name'] == column_name for c in sa.inspect(op.get_bind()).get_columns(table_name))
+
+
+def index_exists(table_name, index_name):
+    return any(i['name'] == index_name for i in sa.inspect(op.get_bind()).get_indexes(table_name))
+
+
+def check_constraint_exists(table_name, constraint_name):
+    return any(c['name'] == constraint_name for c in sa.inspect(op.get_bind()).get_check_constraints(table_name))
+
+
 
 def upgrade():
-    op.add_column(
-        "ledger_transaction",
-        sa.Column("compensation_origin_locator", sa.String(128), nullable=True),
-    )
-    op.add_column(
-        "ledger_transaction",
-        sa.Column("compensation_amount_cents", sa.Integer(), nullable=True),
-    )
-    op.add_column(
-        "ledger_transaction",
-        sa.Column("correction_intent_locator", sa.String(128), nullable=True),
-    )
-    op.create_index(
-        "ix_ledger_transaction_compensation_origin_locator",
-        "ledger_transaction",
-        ["compensation_origin_locator"],
-    )
-    op.create_check_constraint(
-        "ck_ledger_attributable_recovery",
-        "ledger_transaction",
-        "compensation_amount_cents IS NULL OR (compensation_amount_cents >= 0 AND (compensation_amount_cents = 0 OR (amount_cents = -compensation_amount_cents AND compensation_origin_locator IS NOT NULL AND correction_intent_locator IS NOT NULL)))",
-    )
-    op.create_index(
-        "uq_ledger_recovery_intent",
-        "ledger_transaction",
-        [
-            "class_id",
-            "target_seat_id",
-            "compensation_origin_locator",
-            "correction_intent_locator",
-        ],
-        unique=True,
-        postgresql_where=sa.text("compensation_amount_cents > 0"),
-    )
+    if not column_exists("ledger_transaction", "compensation_origin_locator"):
+        op.add_column(
+            "ledger_transaction",
+            sa.Column("compensation_origin_locator", sa.String(128), nullable=True),
+        )
+    if not column_exists("ledger_transaction", "compensation_amount_cents"):
+        op.add_column(
+            "ledger_transaction",
+            sa.Column("compensation_amount_cents", sa.Integer(), nullable=True),
+        )
+    if not column_exists("ledger_transaction", "correction_intent_locator"):
+        op.add_column(
+            "ledger_transaction",
+            sa.Column("correction_intent_locator", sa.String(128), nullable=True),
+        )
+    if not index_exists("ledger_transaction", "ix_ledger_transaction_compensation_origin_locator"):
+        op.create_index(
+            "ix_ledger_transaction_compensation_origin_locator",
+            "ledger_transaction",
+            ["compensation_origin_locator"],
+        )
+    if not check_constraint_exists("ledger_transaction", "ck_ledger_attributable_recovery"):
+        op.create_check_constraint(
+            "ck_ledger_attributable_recovery",
+            "ledger_transaction",
+            "compensation_amount_cents IS NULL OR (compensation_amount_cents >= 0 AND (compensation_amount_cents = 0 OR (amount_cents = -compensation_amount_cents AND compensation_origin_locator IS NOT NULL AND correction_intent_locator IS NOT NULL)))",
+        )
+    if not index_exists("ledger_transaction", "uq_ledger_recovery_intent"):
+        op.create_index(
+            "uq_ledger_recovery_intent",
+            "ledger_transaction",
+            [
+                "class_id",
+                "target_seat_id",
+                "compensation_origin_locator",
+                "correction_intent_locator",
+            ],
+            unique=True,
+            postgresql_where=sa.text("compensation_amount_cents > 0"),
+        )
     if op.get_bind().dialect.name != "postgresql":
         return
     prior = import_module(
@@ -74,7 +96,7 @@ def upgrade():
     )
     op.execute(
         sa.text(
-            """CREATE FUNCTION enforce_ledger_recovery_cap() RETURNS TRIGGER AS $$
+            """CREATE OR REPLACE FUNCTION enforce_ledger_recovery_cap() RETURNS TRIGGER AS $$
     DECLARE origin ledger_transaction%ROWTYPE; recovered bigint;
     BEGIN
       IF NEW.compensation_amount_cents IS NULL OR NEW.compensation_amount_cents < 0 THEN
@@ -108,12 +130,12 @@ def upgrade():
     )
     op.execute(
         sa.text(
-            "CREATE TRIGGER ledger_recovery_cap BEFORE INSERT ON ledger_transaction FOR EACH ROW EXECUTE FUNCTION enforce_ledger_recovery_cap()"
+            "DROP TRIGGER IF EXISTS ledger_recovery_cap ON ledger_transaction; CREATE TRIGGER ledger_recovery_cap BEFORE INSERT ON ledger_transaction FOR EACH ROW EXECUTE FUNCTION enforce_ledger_recovery_cap()"
         )
     )
     op.execute(
         sa.text(
-            """CREATE FUNCTION require_ledger_v3_creation_lineage() RETURNS TRIGGER AS $$
+            """CREATE OR REPLACE FUNCTION require_ledger_v3_creation_lineage() RETURNS TRIGGER AS $$
     DECLARE saved ledger_transaction%ROWTYPE;
     BEGIN
       SELECT * INTO saved FROM ledger_transaction WHERE id=NEW.id;
@@ -129,7 +151,7 @@ def upgrade():
     )
     op.execute(
         sa.text(
-            "CREATE CONSTRAINT TRIGGER ledger_v3_creation_lineage_required AFTER INSERT ON ledger_transaction DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION require_ledger_v3_creation_lineage()"
+            "DROP TRIGGER IF EXISTS ledger_v3_creation_lineage_required ON ledger_transaction; CREATE CONSTRAINT TRIGGER ledger_v3_creation_lineage_required AFTER INSERT ON ledger_transaction DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION require_ledger_v3_creation_lineage()"
         )
     )
 

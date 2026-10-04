@@ -233,6 +233,7 @@ class AttendanceInterval:
     credited_seconds: int
     opening_mechanism: str
     closing_mechanism: str | None
+    bounded_at_day_end: bool = False
 
     def __iter__(self):
         return iter((self.opened_at, self.closed_at))
@@ -287,7 +288,7 @@ def list_attendance_interval_evidence(seat_id, class_id, *, ctx, as_of_utc=None,
                 intervals.append(AttendanceInterval(opening.id, boundary_close.id if boundary_close else None,
                     ensure_utc(opening.timestamp), end,
                     _elapsed_seconds(ctx, [(ensure_utc(opening.timestamp), end)]), opening.mechanism,
-                    boundary_close.mechanism if boundary_close else None))
+                    boundary_close.mechanism if boundary_close else None, bounded_at_day_end=True))
                 if boundary_close is not None:
                     consumed_closings.add(boundary_close.id)
                 opening = row
@@ -296,7 +297,8 @@ def list_attendance_interval_evidence(seat_id, class_id, *, ctx, as_of_utc=None,
             if timestamp < start or timestamp > _day_end_utc(ctx, start):
                 end = _day_end_utc(ctx, start)
                 intervals.append(AttendanceInterval(opening.id, None, start, end,
-                    _elapsed_seconds(ctx, [(start, end)]), opening.mechanism, None))
+                    _elapsed_seconds(ctx, [(start, end)]), opening.mechanism, None,
+                    bounded_at_day_end=(end == _day_end_utc(ctx, start))))
                 opening = None
                 continue
             intervals.append(AttendanceInterval(opening.id, row.id, start, timestamp,
@@ -306,7 +308,8 @@ def list_attendance_interval_evidence(seat_id, class_id, *, ctx, as_of_utc=None,
         start = ensure_utc(opening.timestamp)
         end = min(as_of_utc, _day_end_utc(ctx, start))
         intervals.append(AttendanceInterval(opening.id, None, start, end,
-            _elapsed_seconds(ctx, [(start, end)]), opening.mechanism, None))
+            _elapsed_seconds(ctx, [(start, end)]), opening.mechanism, None,
+            bounded_at_day_end=(end == _day_end_utc(ctx, start))))
     return tuple(rows), tuple(intervals)
 
 

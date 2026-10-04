@@ -27,14 +27,14 @@ def positive_reversal_inputs(transaction):
             raise ValueError("PROVENANCE_UNAVAILABLE")
         evidence.append(
             LedgerCreationEvidence(
-                table_name=verified.table_name,
-                row_pk=verified.row_pk,
-                class_id=verified.class_id,
-                lineage_event_id=verified.lineage_event_id,
-                lineage_token=verified.lineage_token,
-                signature_version=verified.signature_version,
-                protected_fields=verified.protected_fields,
-                field_values=verified.protected_values,
+                verified.table_name,
+                verified.row_pk,
+                verified.class_id,
+                verified.lineage_event_id,
+                verified.lineage_token,
+                verified.signature_version,
+                verified.protected_fields,
+                verified.protected_values,
             )
         )
     return {

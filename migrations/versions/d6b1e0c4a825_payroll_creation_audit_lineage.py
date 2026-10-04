@@ -16,6 +16,22 @@ down_revision = 'a4b50fee84c3'
 branch_labels = None
 depends_on = None
 
+def table_exists(table_name):
+    return sa.inspect(op.get_bind()).has_table(table_name)
+
+
+def column_exists(table_name, column_name):
+    return any(c['name'] == column_name for c in sa.inspect(op.get_bind()).get_columns(table_name))
+
+
+def index_exists(table_name, index_name):
+    return any(i['name'] == index_name for i in sa.inspect(op.get_bind()).get_indexes(table_name))
+
+
+def check_constraint_exists(table_name, constraint_name):
+    return any(c['name'] == constraint_name for c in sa.inspect(op.get_bind()).get_check_constraints(table_name))
+
+
 
 def upgrade():
     for column in (
@@ -23,10 +39,12 @@ def upgrade():
         sa.Column('lineage_token', sa.String(64), nullable=True),
         sa.Column('lineage_version', sa.Integer(), nullable=True),
     ):
-        op.add_column('payroll_event', column)
-    op.create_index('ix_payroll_event_lineage_event_id', 'payroll_event', ['lineage_event_id'])
+        if not column_exists('payroll_event', column.name):
+            op.add_column('payroll_event', column)
+    if not index_exists('payroll_event', 'ix_payroll_event_lineage_event_id'):
+        op.create_index('ix_payroll_event_lineage_event_id', 'payroll_event', ['lineage_event_id'])
     op.execute("""
-        CREATE FUNCTION payroll_creator_is_uncommitted(row_xid xid)
+        CREATE OR REPLACE FUNCTION payroll_creator_is_uncommitted(row_xid xid)
         RETURNS boolean AS $$
         DECLARE current_xid bigint := txid_current();
                 distance bigint;
@@ -63,7 +81,7 @@ def upgrade():
             RETURN NEW;
         END;
         $$ LANGUAGE plpgsql;
-        CREATE FUNCTION require_payroll_lineage_at_insert()
+        CREATE OR REPLACE FUNCTION require_payroll_lineage_at_insert()
         RETURNS TRIGGER AS $$
         BEGIN
             IF NEW.lineage_event_id IS NOT NULL OR NEW.lineage_token IS NOT NULL
@@ -73,10 +91,10 @@ def upgrade():
             RETURN NEW;
         END;
         $$ LANGUAGE plpgsql;
-        CREATE TRIGGER payroll_event_lineage_initially_empty
+        DROP TRIGGER IF EXISTS payroll_event_lineage_initially_empty ON payroll_event; CREATE TRIGGER payroll_event_lineage_initially_empty
         BEFORE INSERT ON payroll_event FOR EACH ROW
         EXECUTE FUNCTION require_payroll_lineage_at_insert();
-        CREATE FUNCTION require_payroll_lineage_at_commit()
+        CREATE OR REPLACE FUNCTION require_payroll_lineage_at_commit()
         RETURNS TRIGGER AS $$
         DECLARE final_row payroll_event%ROWTYPE;
         BEGIN
@@ -106,7 +124,7 @@ def upgrade():
             RETURN NULL;
         END;
         $$ LANGUAGE plpgsql;
-        CREATE CONSTRAINT TRIGGER payroll_event_creation_lineage_required
+        DROP TRIGGER IF EXISTS payroll_event_creation_lineage_required ON payroll_event; CREATE CONSTRAINT TRIGGER payroll_event_creation_lineage_required
         AFTER INSERT ON payroll_event DEFERRABLE INITIALLY DEFERRED
         FOR EACH ROW EXECUTE FUNCTION require_payroll_lineage_at_commit();
     """)

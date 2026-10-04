@@ -11,7 +11,7 @@ with app.app_context():
     tx_count = Transaction.query.count()
     print(f"Total Transactions: {tx_count}")
     
-    posted_tx_count = Transaction.query.filter(Transaction.status == TransactionStatus.POSTED).count()
+    posted_tx_count = Transaction.query.filter(Transaction.posting_state == TransactionStatus.POSTED).count()
     print(f"Posted Transactions: {posted_tx_count}")
     
     null_cents = Transaction.query.filter(Transaction.amount_cents.is_(None)).count()
@@ -19,6 +19,6 @@ with app.app_context():
     
     if tx_count > 0:
         sample = Transaction.query.first()
-        print(f"Sample Transaction: ID={sample.id}, Amount={sample.amount}, Cents={sample.amount_cents}, Status={sample.status}")
+        print(f"Sample Transaction: ID={sample.id}, Amount={sample.amount}, Cents={sample.amount_cents}, Status={sample.posting_state}")
         
     print("--- Verification Complete ---")

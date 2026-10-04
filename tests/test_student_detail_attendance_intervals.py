@@ -82,8 +82,10 @@ def test_open_work_shows_source_without_creating_closure(app, client):
     url = _detail_url(client, classroom.students[0].seat.public_id)
     before = AttendanceSession.query.count()
     html = client.get(url).get_data(as_text=True)
-    assert 'Work awaiting a closing record' in html
+    assert 'Work without a recorded closing event' in html
     assert 'This interval has no recorded closing event.' in html
+    assert 'Bounded at class day end' in html
+    assert 'not a completed canonical pair' in html
     assert f'(#{pairs[0][0]})' in html
     assert 'id="attendance-interval-' not in html
     assert AttendanceSession.query.count() == before
@@ -263,3 +265,19 @@ def test_validated_historical_detail_exposes_contribution_originals_and_teacher_
     assert 'Payroll #101' in attendance and 'Payroll #102' in attendance
     assert 'Invalidate work interval' in attendance and 'data-attendance-correction' in attendance
     assert counts==tuple(model.query.count() for model in (AttendanceSession,PayrollEvent,Transaction))
+
+
+def test_unclosed_projection_distinguishes_observation_from_day_boundary(app):
+    from app.services.attendance_service import list_attendance_intervals
+    classroom = initialize_as_teacher('chemistry_p1', app.test_client(), app)
+    pairs = _attendance(classroom, open_last=True)
+    opening = db.session.get(AttendanceSession, pairs[0][0])
+    ctx = CanonicalContext(user_id=classroom.teacher_user.id, class_id=classroom.class_id,
+        seat_id=classroom.teacher_seat.id, actor_role='teacher')
+    observed = list_attendance_intervals(classroom.students[0].seat.id, classroom.class_id,
+        ctx=ctx, as_of_utc=opening.timestamp + timedelta(seconds=30))[0]
+    bounded = list_attendance_intervals(classroom.students[0].seat.id, classroom.class_id,
+        ctx=ctx, as_of_utc=opening.timestamp + timedelta(days=2))[0]
+    assert observed.closing_event_id is None and not observed.bounded_at_day_end
+    assert bounded.closing_event_id is None and bounded.bounded_at_day_end
+    assert AttendanceSession.query.count() == 1

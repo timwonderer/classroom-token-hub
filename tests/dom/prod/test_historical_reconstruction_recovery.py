@@ -395,6 +395,46 @@ def test_genuine_historical_full_reversal_preserves_original_correlation_and_sig
     )
 
 
+@pytest.mark.parametrize("principal_count", [0, 2])
+def test_historical_payment_recovery_rejects_invalid_principal_count_atomically(
+    app, tmp_path, monkeypatch, principal_count
+):
+    import app.feats.attendance_interval_invalidation_feat as command
+    from app.models import PayrollEvent, LedgerCommandReservation
+
+    record = _create(app, tmp_path, scenario="paid")
+    arguments = _arguments(record)
+    preview = preview_payroll_recovery(
+        ctx=arguments["ctx"], payroll_event_id=record["event"]
+    )
+    models = (Transaction, PayrollEvent, AuditEvent, LedgerCommandReservation)
+    before = tuple(model.query.count() for model in models)
+    apply_recovery = command.apply_reconstructed_recovery
+
+    def malformed_result(**kwargs):
+        # Exercise rollback after real reservation/effect writes,
+        # rather than replacing the monetary command with a no-op.
+        result = apply_recovery(**kwargs)
+        assert len(result["principals"]) == 1
+        return dict(result, principals=result["principals"] * principal_count)
+
+    monkeypatch.setattr(command, "apply_reconstructed_recovery", malformed_result)
+    with pytest.raises(command.AttendanceCorrectionDenied) as denied:
+        recover_payroll_payment(
+            ctx=arguments["ctx"],
+            payroll_event_id=record["event"],
+            idempotency_key="historical-malformed-principals",
+            expected_preview_identity=preview.identity,
+        )
+    assert denied.value.code == "INTEGRITY_FAILURE"
+    assert tuple(model.query.count() for model in models) == before
+    original = db.session.get(Transaction, record["credit"])
+    assert original.reversal_transaction_id is None
+    assert [original.lineage_event_id, original.lineage_token, original.lineage_version] == record["lineage"]
+    audit = db.session.get(AuditEvent, original.lineage_event_id)
+    assert [audit.payload_digest, audit.event_hash, audit.signature_version] == record["audit"]
+
+
 @pytest.mark.parametrize("point", ["business", "audit", "reservation"])
 def test_genuine_historical_recovery_failure_rolls_back_all_effects(
     app, tmp_path, monkeypatch, point

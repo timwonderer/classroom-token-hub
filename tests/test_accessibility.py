@@ -231,7 +231,7 @@ def _render_page(template_path: Path, client) -> str:
     if name == "base.html" or name.startswith("layout_"):
         pytest.skip("Layout shell templates are not standalone pages; audit rendered pages instead.")
 
-    if name in {"admin_nav.html", "_class_setup_fields.html"}:
+    if name in {"admin_nav.html", "_class_setup_fields.html", "_attendance_correction_modal.html"}:
         pytest.skip("Shared fragments are audited through the final page that renders them.")
 
     if "components/" in template_path.as_posix():

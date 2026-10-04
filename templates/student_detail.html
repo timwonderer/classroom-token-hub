@@ -550,11 +550,11 @@
                 <p>Some work overlaps historical payroll whose interval contribution cannot be proven. Unpaid earnings estimates exclude that work and are incomplete. Payroll settlement is blocked until the evidence can be resolved.</p>
                 {% endif %}
                 {% if attendance_open_intervals %}
-                <h3 class="h6">Work awaiting a closing record</h3>
+                <h3 class="h6">Work without a recorded closing event</h3>
                 {% for interval in attendance_open_intervals %}
                 <details class="attendance-interval border rounded p-3 mb-3">
-                    <summary>Started {{ interval.opened_at|fmt_timestamp }} · {{ interval.duration_label }} observed · Closing record unavailable</summary>
-                    <p class="mt-3">This interval has no recorded closing event. Its observed duration is bounded by the class day; opening this page does not close work or create payroll.</p>
+                    <summary>Started {{ interval.opened_at|fmt_timestamp }} · {{ interval.duration_label }} observed · {% if interval.bounded_at_day_end %}Bounded at class day end{% else %}Work still open{% endif %}</summary>
+                    <p class="mt-3">This interval has no recorded closing event. {% if interval.bounded_at_day_end %}Its observed duration ends at the class day boundary; it is not a completed canonical pair and cannot be invalidated.{% else %}Work is still open and cannot be invalidated until a closing event is recorded.{% endif %} Opening this page does not close work or create payroll.</p>
                     {{ attendance_scans(interval.source_events) }}
 
                 </details>

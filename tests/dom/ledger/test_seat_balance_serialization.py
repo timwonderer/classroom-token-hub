@@ -251,8 +251,8 @@ def _is_insurance_replay_lookup(statement):
 
 
 def _is_rent_replay_lookup(statement):
-    """Return whether SQL looks up a rent debit by idempotency key."""
-    return "FROM ledger_transaction" in statement and "ledger_transaction.idempotency_key" in statement
+    """Return whether SQL resolves the canonical command reservation by key."""
+    return "FROM ledger_command_reservation" in statement and "ledger_command_reservation.idempotency_key" in statement
 
 
 def test_INV_LED_015__insurance_purchase_resolves_its_replay_under_the_seat_lock(app):

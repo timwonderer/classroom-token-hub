@@ -409,6 +409,8 @@ def recover_payroll_payment(*, ctx, payroll_event_id, idempotency_key, expected_
             raise AttendanceCorrectionDenied('PREVIEW_CHANGED')
         if isinstance(preview.plan,ReconstructedRecoveryPlan):
             result = _reconstruction_call(apply_reconstructed_recovery, ctx=ctx, plan=preview.plan, idempotency_key=idempotency_key)
+            if len(result['principals']) != 1:
+                raise AttendanceCorrectionDenied('INTEGRITY_FAILURE')
             event_id,origin,intent,principal,kind = result['principals'][0]
             result = dict(result,origin_locator=origin,principal_locator=principal)
         else:

@@ -146,7 +146,6 @@ def record_payroll_business_correction(*, ctx, original, correction_intent, corr
     _original_anchor(ctx,original)
     if original.class_id != ctx.class_id or correction_intent not in {'INTERVAL_INVALIDATION', 'RESIDUAL_RECOVERY'}:
         raise AttendanceCorrectionDenied('UNAUTHORIZED_SCOPE')
-    _original_anchor(ctx,original)
     _recovery_locators(correction_intent_locator,ledger_result_locator,ledger_origin_locator)
     if correction_intent == 'INTERVAL_INVALIDATION':
         decision=AttendanceIntervalInvalidation.query.filter_by(id=invalidation_id,class_id=ctx.class_id,
@@ -196,7 +195,6 @@ def record_payroll_business_recovery(*, ctx, original, recovery_kind, idempotenc
     _original_anchor(ctx,original)
     if original.class_id != ctx.class_id or recovery_kind not in {'EXACT_REVERSAL', 'RESIDUAL'}:
         raise AttendanceCorrectionDenied('UNAUTHORIZED_SCOPE')
-    _original_anchor(ctx,original)
     _validate_receipt(receipt)
     _recovery_locators(correction_intent_locator,ledger_result_locator)
     outcomes=receipt['opaque_outcome_locators']
