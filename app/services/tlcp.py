@@ -165,8 +165,9 @@ OUTCOME_SYSTEM_FAILURE = "SYSTEM_FAILURE"
 _SIGN_IN_ENDPOINTS = frozenset({"sysadmin.login", "sysadmin.passkey_auth_finish"})
 # Endpoints that complete for any caller. ``POST /sysadmin/logout`` clears the
 # session's principal whoever holds it, so for a student or teacher it is a
-# completed operation, not a denial. A refused request (a missing or stale CSRF
-# token) answers 4xx, changes nothing, and is an expected denial like any other.
+# completed operation, not a denial. A missing or forged CSRF token is refused
+# by Flask-WTF's before_request hook, which runs before correlation is
+# captured, so that refusal (like a GET, 405) records nothing here.
 _COMPLETES_FOR_ANY_PRINCIPAL = frozenset({"sysadmin.logout"})
 _SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
@@ -209,7 +210,6 @@ def classify_outcome(
 
     - an unhandled failure (the app's 5xx error handler)    -> SYSTEM_FAILURE
     - ``sysadmin.logout``: completes for any principal       -> SUCCESS
-      ...unless refused with a 4xx (CSRF)                    -> EXPECTED_DENIAL
     - password or passkey sign-in: the session now names a
       sysadmin                                               -> SUCCESS
       ...a GET/HEAD/OPTIONS that only rendered the form      -> SUCCESS
@@ -222,9 +222,7 @@ def classify_outcome(
     """
     if status_code is not None and status_code >= 500:
         return OUTCOME_SYSTEM_FAILURE
-    if endpoint in _COMPLETES_FOR_ANY_PRINCIPAL and not (
-        status_code is not None and 400 <= status_code < 500
-    ):
+    if endpoint in _COMPLETES_FOR_ANY_PRINCIPAL:
         return OUTCOME_SUCCESS
     if principal_after == PRINCIPAL_SYSADMIN:
         return OUTCOME_SUCCESS

@@ -293,9 +293,8 @@ def test_INV_ARC_019__classify_request_uses_both_dimensions(surface, principal, 
         ("sysadmin_authentication", "sysadmin.passkey_auth_start", "POST", 401, "teacher", "EXPECTED_DENIAL"),
         ("sysadmin_authentication", "sysadmin.passkey_auth_start", "POST", 200, "teacher", "SUCCESS"),
         ("sysadmin_authentication", "sysadmin.grafana_auth_check", "GET", 401, "student", "EXPECTED_DENIAL"),
-        # Logout completes for any principal; a CSRF refusal (400) changes nothing.
+        # Logout completes for any principal.
         ("sysadmin_authentication", "sysadmin.logout", "POST", 302, "anonymous", "SUCCESS"),
-        ("sysadmin_authentication", "sysadmin.logout", "POST", 400, "student", "EXPECTED_DENIAL"),
         ("sysadmin_console", "sysadmin.dashboard", "GET", 302, "student", "EXPECTED_DENIAL"),
         ("sysadmin_authentication", "sysadmin.login", "POST", 500, "student", "SYSTEM_FAILURE"),
     ],
@@ -376,6 +375,23 @@ def test_SPEC_OPS_003__student_get_at_sysadmin_logout_is_refused_and_keeps_the_s
         response = client.get("/sysadmin/logout")
 
     assert response.status_code == 405
+    assert _identity(client) == before
+    assert _records(caplog, VIOLATION) == []
+    assert _records(caplog, MISMATCH) == []
+
+
+def test_SPEC_OPS_003__student_logout_without_csrf_token_is_refused_before_correlation(
+    client, app, caplog, monkeypatch,
+):
+    """Flask-WTF refuses a tokenless POST (400) before TLCP captures the request:
+    the sign-in is kept and nothing is recorded, as for a GET."""
+    initialize_as_student("chemistry_p1", client, app)
+    monkeypatch.setitem(app.config, "WTF_CSRF_ENABLED", True)
+    before = _identity(client)
+    with _capture(caplog):
+        response = client.post("/sysadmin/logout")
+
+    assert response.status_code == 400
     assert _identity(client) == before
     assert _records(caplog, VIOLATION) == []
     assert _records(caplog, MISMATCH) == []
