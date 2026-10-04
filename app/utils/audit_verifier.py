@@ -13,6 +13,8 @@ import json
 import logging
 from dataclasses import dataclass
 
+import sqlalchemy as sa
+
 from app.extensions import db
 from app.utils.canonical_temporal_resolver import utc_now
 
@@ -489,6 +491,187 @@ def verified_creation_evidence(table, row, class_id, *, required_fields=()):
     return VerifiedCreationEvidence(table, str(row.id), class_id, row.lineage_event_id,
         row.lineage_token, event.signature_version, tuple(fields),
         tuple((field, _freeze_evidence_value(getattr(row, field))) for field in fields))
+
+
+# Server-owned ceilings for the batch creation-proof query (DOM-OPS-002 §6.2C).
+# Callers may ask for less, never more. Exceeding either returns unavailable
+# evidence for every row: a verified chain prefix is never a complete chain.
+CREATION_PROOF_MAX_CHAIN_EVENTS = 100_000
+CREATION_PROOF_MAX_ROWS = 2_000
+_CREATION_PROOF_STREAM_CHUNK = 2_000
+
+_CHAIN_WALK_COLUMNS = (
+    "id", "sequence_number", "previous_hash", "event_hash", "table_name", "row_pk",
+    "operation", "actor_type", "actor_id_hash", "feat_id", "correlation_id",
+    "payload_digest", "created_at_utc", "class_id", "chain_scope",
+    "signature_version", "hmac_signature",
+)
+
+
+@dataclass(frozen=True)
+class CreationEvidenceBatch:
+    """Operations-owned batch result: one entry per requested row, in order.
+
+    ``chain_status`` is COMPLETE when the whole class chain and its head were
+    verified once for this invocation; then a ``None`` entry is a row-specific
+    proof failure. UNAVAILABLE (budget, head changed during the read, missing
+    key or infrastructure) and INVALID (chain or head contradiction) make every
+    entry ``None``. Unavailable evidence grants no authority.
+    """
+    evidence: tuple
+    chain_status: str
+    reason: str | None = None
+
+
+def _creation_proof_fields(table, signature_version):
+    if table == "ledger_transaction":
+        return tuple(LEDGER_FIELDS_BY_VERSION.get(signature_version, ()))
+    return tuple(PROTECTED_FIELDS_BY_TABLE.get(table, ()))
+
+
+def _row_creation_evidence(table, row, class_id, event, latest_sequence, required_fields):
+    """Every row-specific check of §6.2, against an event from a verified walk.
+
+    Mirrors ``verify_record_creation_lineage`` followed by ``verify_row_lineage``:
+    scoped pointer and INSERT linkage, token and version, exact linked-version
+    field coverage (and the caller's required fields), then the current
+    protected payload digest. Returns ``VerifiedCreationEvidence`` or ``None``.
+    """
+    pointer = getattr(row, "lineage_event_id", None)
+    if pointer is None or event is None or event.id != pointer:
+        return None
+    if (event.table_name != table or event.row_pk != str(getattr(row, "id", None))
+            or event.class_id != class_id or event.chain_scope != f"class:{class_id}"
+            or event.operation != "INSERT"):
+        return None
+    if (getattr(row, "lineage_token", None) != event.hmac_signature
+            or getattr(row, "lineage_version", None) != event.signature_version):
+        return None
+    if event.sequence_number > latest_sequence:
+        return None
+    if table == "ledger_transaction" and event.signature_version not in {2, 3}:
+        return None
+    fields = _creation_proof_fields(table, event.signature_version)
+    if not fields or not set(required_fields).issubset(fields):
+        return None
+    if any(not hasattr(row, field) for field in fields):
+        return None
+    values = {field: getattr(row, field) for field in fields}
+    digest = _compute_payload_digest(event.table_name, event.row_pk, event.operation, event.class_id, values)
+    if digest != event.payload_digest:
+        return None
+    return VerifiedCreationEvidence(
+        table, str(row.id), class_id, pointer, row.lineage_token, event.signature_version,
+        fields, tuple((field, _freeze_evidence_value(values[field])) for field in fields),
+    )
+
+
+def _creation_evidence_batch(items, class_id, required_fields, max_chain_events):
+    from app.models import AuditEvent
+
+    def unavailable(status, reason):
+        return CreationEvidenceBatch(tuple(None for _ in items), status, reason)
+
+    pointers = {getattr(row, "lineage_event_id", None) for _table, row in items} - {None}
+    if not pointers:
+        # Nothing links to the chain, so nothing can be proven; no walk is needed.
+        return CreationEvidenceBatch(tuple(None for _ in items), "COMPLETE", None)
+    if not _SIGNING_KEY:
+        return unavailable("UNAVAILABLE", "AUDIT_KEY_UNAVAILABLE")
+    scope = f"class:{class_id}"
+    head = _historical_head_snapshot(scope)
+    if head is None:
+        return unavailable("UNAVAILABLE", "MISSING_CHAIN_HEAD")
+    if (not isinstance(head.latest_sequence, int) or head.latest_sequence < 0
+            or not isinstance(head.event_count, int) or head.event_count < 0
+            or not isinstance(head.latest_hash, str)):
+        return unavailable("INVALID", "MALFORMED_CHAIN_HEAD")
+    if head.latest_sequence > max_chain_events or head.event_count > max_chain_events:
+        return unavailable("UNAVAILABLE", "EVIDENCE_LIMIT_EXCEEDED")
+
+    columns = [getattr(AuditEvent, name) for name in _CHAIN_WALK_COLUMNS]
+    statement = (sa.select(*columns)
+                 .where(AuditEvent.chain_scope == scope)
+                 .order_by(AuditEvent.sequence_number.asc())
+                 .limit(max_chain_events + 1)
+                 .execution_options(yield_per=_CREATION_PROOF_STREAM_CHUNK))
+    linked = {}
+    previous = "genesis"
+    walked = 0
+    failure = None
+    result = db.session.execute(statement)
+    try:
+        for item in result:
+            walked += 1
+            if walked > max_chain_events:
+                failure = ("UNAVAILABLE", "EVIDENCE_LIMIT_EXCEEDED")
+                break
+            if item.sequence_number != walked or item.previous_hash != previous:
+                failure = ("INVALID", "CHAIN_CONTINUITY_MISMATCH")
+                break
+            expected = _compute_event_hash(
+                _SIGNING_KEY, previous, scope, item.sequence_number, item.table_name,
+                item.row_pk, item.operation, _rebuild_actor_context_json(item),
+                item.payload_digest, _utc_isoformat(item.created_at_utc),
+            )
+            if expected != item.event_hash:
+                failure = ("INVALID", "ENVELOPE_HMAC_MISMATCH")
+                break
+            if item.id in pointers:
+                linked[item.id] = item
+            previous = item.event_hash
+    finally:
+        result.close()
+
+    final_head = _historical_head_snapshot(scope)
+    if final_head != head:
+        # A legitimate concurrent append moves the head atomically: stale, not corrupt.
+        return unavailable("UNAVAILABLE", "EVIDENCE_CHANGED_DURING_READ")
+    if failure is not None:
+        return unavailable(*failure)
+    if walked != head.latest_sequence or walked != head.event_count or previous != head.latest_hash:
+        return unavailable("INVALID", "CHAIN_HEAD_MISMATCH")
+    return CreationEvidenceBatch(tuple(
+        _row_creation_evidence(table, row, class_id, linked.get(getattr(row, "lineage_event_id", None)),
+                               head.latest_sequence, required_fields)
+        for table, row in items
+    ), "COMPLETE", None)
+
+
+def verified_creation_evidences(items, class_id, *, required_fields=(),
+                                max_chain_events=CREATION_PROOF_MAX_CHAIN_EVENTS,
+                                max_rows=CREATION_PROOF_MAX_ROWS):
+    """Bounded batch form of ``verified_creation_evidence`` (DOM-OPS-002 §6.2C).
+
+    ``items`` is an iterable of ``(table, row)`` pairs, all in one class. The
+    class chain is walked and its head verified once for the invocation, within
+    an explicit event budget, between two independent scalar head reads; every
+    row then receives every row-specific §6.2 check against that walk. Reuse is
+    confined to this call: nothing is cached or persisted, no caller-supplied
+    verification result is accepted, and the read neither autoflushes nor writes.
+    """
+    from sqlalchemy.exc import SQLAlchemyError
+
+    for budget, ceiling in ((max_chain_events, CREATION_PROOF_MAX_CHAIN_EVENTS), (max_rows, CREATION_PROOF_MAX_ROWS)):
+        if not isinstance(budget, int) or isinstance(budget, bool) or not 1 <= budget <= ceiling:
+            raise ValueError("Invalid audit evidence bound.")
+    if not class_id:
+        raise ValueError("Unsupported audit evidence scope.")
+    with db.session.no_autoflush:
+        # Callers hold their scoped rows already; keep one result per request.
+        selected = tuple(items)
+        if any(not isinstance(item, tuple) or len(item) != 2 for item in selected):
+            raise ValueError("Creation evidence requests are (table, row) pairs.")
+        if len(selected) > max_rows:
+            return CreationEvidenceBatch(tuple(None for _ in selected), "UNAVAILABLE", "EVIDENCE_LIMIT_EXCEEDED")
+        if not selected:
+            return CreationEvidenceBatch((), "COMPLETE", None)
+        try:
+            return _creation_evidence_batch(selected, class_id, tuple(required_fields), max_chain_events)
+        except SQLAlchemyError:
+            logger.exception("Batch creation-evidence read failed for class scope")
+            return CreationEvidenceBatch(tuple(None for _ in selected), "UNAVAILABLE",
+                                         "AUDIT_INFRASTRUCTURE_UNAVAILABLE")
 
 
 # A source descriptor, not a per-record emitter assignment. The exact deployed

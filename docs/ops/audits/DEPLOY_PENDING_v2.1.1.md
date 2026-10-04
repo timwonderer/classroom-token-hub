@@ -1,13 +1,13 @@
 # Release record (draft): v2.1.1
 
 > **Draft, prepared before deployment.** Sections marked *To record at release* are empty on purpose: they hold
-> evidence that only exists once the operator deploys. The release SHA is the tip of `main` after the sysadmin
-> logout change merges. At release, fill in the open sections and rename this file to
+> evidence that only exists once the operator deploys. The release SHA is the tip of `main` chosen at release
+> (`98dc76b` when last synced, 2026-10-04). At release, fill in the open sections and rename this file to
 > `DEPLOY_<YYYY-MM-DD>_<sha9>.md`, matching the other records in this directory.
 
 **Type:** Tagged release under `SOP-DEP-002`, **with four migrations, three of them forward-only.** It tags as
 v2.1.1 everything merged to `main` since v2.1.0 and ships to production everything merged after the untagged
-2026-10-03 release (`ad9574334`): #1471-#1477 and the sysadmin logout change. Because one migration drops a column
+2026-10-03 release (`ad9574334`): #1471-#1483. Because one migration drops a column
 the running code reads, the application must be stopped before the release workflow runs, as for v2.1.0, and the
 only rollback is a database restore.
 
@@ -15,7 +15,7 @@ only rollback is a database restore.
 
 | | |
 |---|---|
-| Release SHA | *To record at release:* tip of `main` after the sysadmin logout change merges; to be tagged `v2.1.1` |
+| Release SHA | *To record at release:* tip of `main` (`98dc76b` when last synced); to be tagged `v2.1.1` |
 | GitHub release | *To record at release* |
 | Branch / lineage | `main` (`lineage_ref=main`) |
 | Previous deployed SHA | `ad9574334d72fd92cc93402e851ab0ebc22aaad9` (untagged), Alembic revision `a4b50fee84c3`; record [DEPLOY_2026-10-03_ad9574334.md](DEPLOY_2026-10-03_ad9574334.md) |
@@ -31,7 +31,7 @@ only rollback is a database restore.
   redemption through `/api/use-item`, answers 500 and the request stays waiting.
 - **Attendance correction (#1477).** Teachers can invalidate eligible completed attendance intervals, with paid
   contributions recovered atomically.
-- **Sysadmin logout by POST** (PR not yet merged): a stray link or prefetch can no longer sign an operator out.
+- **Sysadmin logout by POST (#1482):** a stray link or prefetch can no longer sign an operator out.
 
 ### Contents since `ad9574334`
 
@@ -46,7 +46,9 @@ Every PR below is merged unless marked, and its merge commit is an ancestor of `
 | #1475 | The payroll page renders one Run Payroll button, so its id is unique (INV-ARC-020). |
 | #1476 | Login page notice posted or cleared from the manual **Login page notice** workflow. |
 | #1477 | Attendance interval invalidation with atomic payroll recovery; immutable ledger and payroll creation lineage; ledger posting derived from scoped reconciliation cursors; historical attendance proof assessment. Four migrations (below). |
-| *pending* | Sysadmin logout requires POST with CSRF. *To record at release:* PR number. |
+| #1478, #1479 (via #1483) | Performance: transaction posting state is projected once per list, and batch creation proofs walk each class audit chain once. |
+| #1481 | Proposed encrypted off-host database backups (`infra/db-backup/`), **not installed**; removes the never-scheduled v1 `scripts/backup-database.sh` and `scripts/restore-database.sh`. |
+| #1482 | Signing out of the operator console takes a POST with a CSRF token; `GET /sysadmin/logout` answers 405 and changes nothing. |
 
 Commits outside a PR: `69bc370` adds `.codex/environments/environment.toml` and a `.gitignore` line (developer
 tooling, not deployed behavior), `7658d12` merges it, and `7e1189d` is a documentation edit committed directly to
@@ -55,7 +57,8 @@ tooling, not deployed behavior), `7658d12` merges it, and `7e1189d` is a documen
 Application paths changed: through #1476, 30 files under `app/`, `templates/` and `static/` (store, redemptions,
 logging, login notice); #1477 adds 64 more, across `app/feats/`, `app/services/ledger_*`, `app/services/payroll/`,
 attendance services, `app/models.py`, `app/routes/{admin,api,student,system_admin}.py`, `app/scheduled_tasks.py`
-and nine templates. `git diff --stat ad9574334 <release sha> -- app templates static` gives the full list at release.
+and nine templates; #1478-#1483 touch 14 files, including `app/routes/system_admin.py`, `app/services/tlcp.py`,
+`app/utils/audit_verifier.py` and `templates/layout_system_admin.html`. `git diff --stat ad9574334 <release sha> -- app templates static` gives the full list at release.
 Workflow added: `.github/workflows/login-notice.yml`.
 
 ### Migrations
@@ -86,11 +89,11 @@ a dated observation; the record itself requires a fresh preflight before deploym
 
 | Check | Result |
 |---|---|
-| Release SHA on `main`, descendant of the running release | *To record at release.* `ad9574334` is an ancestor of `main` as of `66343d1` (checked 2026-10-04). |
+| Release SHA on `main`, descendant of the running release | *To record at release.* `ad9574334` is an ancestor of `main` as of `98dc76b` (checked 2026-10-04). |
 | Running release before dispatch | *To record at release* (expected host `HEAD` `ad9574334`, Alembic `a4b50fee84c3`) |
-| Migrations changed since the running release | Four, listed above. Single head `f9a3c7d1e620` as of `66343d1`. |
+| Migrations changed since the running release | Four, listed above. Single head `f9a3c7d1e620` as of `98dc76b`; #1478-#1483 add none. |
 | **Fresh read-only migration preflight** | *To record at release.* Run in `BEGIN READ ONLY` immediately before dispatch: the `e7c2a9d4f610` predicate above returns 0, and zero `REVERSAL` rows or duplicate original locators. A nonzero count stops the release. |
-| `requirements.txt` changed | No (as of `66343d1`) |
+| `requirements.txt` changed | No (as of `98dc76b`) |
 | New configuration | `LOGIN_NOTICE_PATH` (optional; unset means `instance/login_notice.json`). Nothing to set. |
 | Student-setup memory store (§VI item 6) | *To record at release* |
 | Full suite on the release SHA | *To record at release.* #1477's own record lists large targeted runs and says no full suite ran. With forward-only ledger migrations, a full suite on the release SHA is expected before dispatch. |
@@ -117,7 +120,7 @@ this release has these specific checks:
 - **#1476:** the student and teacher login pages render with no notice file present.
 - **#1477:** the payroll page opens, and the attendance correction modal opens for a completed interval (no
   invalidation needs to be made to verify it).
-- **Logout:** `GET /sysadmin/logout` no longer signs the operator out; the console's sign-out button does.
+- **#1482:** `GET /sysadmin/logout` answers 405 and the operator stays signed in; the console's **Sign Out** button signs out.
 - **Carried over:** the first automatic payday, 2026-10-10, now runs under #1477's payroll lineage triggers;
   hall-pass reject and cancel in production; #1469's `TLCP-SURFACE-PRINCIPAL-MISMATCH` line not yet observed.
 

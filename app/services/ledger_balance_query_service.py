@@ -178,6 +178,69 @@ def get_batch_balances_by_class_seat(class_seat_pairs):
     return raw_balances
 
 
+def posting_scope_of(transaction) -> tuple[str, int, str] | None:
+    """The ``(class_id, seat_id, account_type)`` reconciliation scope of one effect.
+
+    ``None`` when any part is missing: such a row matches no snapshot cursor, so
+    the hybrid ``Transaction.posting_state`` expression classifies it PENDING.
+    """
+    if not transaction.class_id or transaction.seat_id is None or not transaction.account_type:
+        return None
+    return (str(transaction.class_id), int(transaction.seat_id), transaction.account_type)
+
+
+def resolve_reconciliation_cursors(scopes) -> dict[tuple[str, int, str], int | None]:
+    """Reconciliation cursors for a set of exact account scopes, in one pure read.
+
+    DOM-LED-001 §VIII: PENDING/POSTED is decided by comparing an effect's
+    immutable ``posting_sequence`` with the cursor of its exact
+    ``(class_id, seat_id, account_type)`` scope. A scope with no snapshot maps to
+    ``None`` (not reconciled). The read runs under ``no_autoflush`` and writes
+    nothing, so a list projection cannot flush pending session state.
+    """
+    wanted = {scope for scope in scopes if scope is not None}
+    cursors: dict[tuple[str, int, str], int | None] = dict.fromkeys(wanted)
+    if not wanted:
+        return cursors
+    snapshot_scope = tuple_(
+        LedgerBalanceSnapshot.class_id, LedgerBalanceSnapshot.seat_id, LedgerBalanceSnapshot.account_type,
+    )
+    with db.session.no_autoflush:
+        rows = db.session.query(
+            LedgerBalanceSnapshot.class_id, LedgerBalanceSnapshot.seat_id,
+            LedgerBalanceSnapshot.account_type, LedgerBalanceSnapshot.reconciled_through_posting_sequence,
+        ).filter(
+            LedgerBalanceSnapshot.class_id.in_(sorted({scope[0] for scope in wanted})),
+            LedgerBalanceSnapshot.seat_id.in_(sorted({scope[1] for scope in wanted})),
+            snapshot_scope.in_(sorted(wanted)),
+        ).all()
+    for row in rows:
+        cursors[(str(row.class_id), int(row.seat_id), row.account_type)] = row.reconciled_through_posting_sequence
+    return cursors
+
+
+def classify_posting_state(posting_sequence: int | None, cursor: int | None) -> TransactionStatus:
+    """In-memory twin of the hybrid ``Transaction.posting_state`` expression."""
+    if posting_sequence is not None and cursor is not None and posting_sequence <= cursor:
+        return TransactionStatus.POSTED
+    return TransactionStatus.PENDING
+
+
+def project_posting_states(transactions) -> list[TransactionStatus]:
+    """Posting states for a list of effects, aligned with the input order.
+
+    One cursor query per call however many rows share its account scopes,
+    replacing a ``posting_state`` getter query per row.
+    """
+    transactions = list(transactions)
+    scopes = [posting_scope_of(txn) for txn in transactions]
+    cursors = resolve_reconciliation_cursors(scopes)
+    return [
+        classify_posting_state(txn.posting_sequence, cursors.get(scope) if scope is not None else None)
+        for txn, scope in zip(transactions, scopes)
+    ]
+
+
 def reconstruct_posted_balance(class_id: str, seat_id: int, account_type: str, through_posting_sequence: int | None = None) -> LedgerProofResult:
     if not class_id or not seat_id or account_type not in {"checking", "savings"}:
         return LedgerProofResult("UNAVAILABLE", complete=False, code="invalid_scope")
@@ -267,7 +330,7 @@ def verify_transfer(class_id: str, correlation_id: str, through_posting_sequence
     return TransferProofResult("PASS" if passed else "FAIL", len(rows), scope_ok, pair_ok, magnitude_ok, zero_sum, posting_ok, None if passed else "transfer_contract_violation")
 
 
-__all__ = ["LedgerProofResult", "TransferProofResult", "get_posted_balance", "get_pending_balance_delta", "get_available_balance", "get_available_balances", "get_batch_balances_by_class_seat", "reconstruct_posted_balance", "reconstruct_available_balance", "verify_posted_balance", "verify_available_balance", "verify_transfer"]
+__all__ = ["LedgerProofResult", "TransferProofResult", "get_posted_balance", "get_pending_balance_delta", "get_available_balance", "get_available_balances", "get_batch_balances_by_class_seat", "posting_scope_of", "resolve_reconciliation_cursors", "classify_posting_state", "project_posting_states", "reconstruct_posted_balance", "reconstruct_available_balance", "verify_posted_balance", "verify_available_balance", "verify_transfer"]
 
 
 def get_account_posting_boundary(seat_id, class_id, account_type):

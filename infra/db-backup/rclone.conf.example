@@ -1,0 +1,8 @@
+# /etc/cth-db-backup/rclone.conf  (root:cth-backup, mode 0640)
+# Backblaze B2, native backend. hard_delete makes a deletion final instead of
+# hiding the file behind a new version, which the baseline rule needs.
+[cth-offsite]
+type = b2
+account = CHANGE_ME_KEY_ID
+key = CHANGE_ME_APPLICATION_KEY
+hard_delete = true

@@ -47,6 +47,9 @@ _SIGN_OUT_ENDPOINTS = {
     'teacher': 'admin.logout',
     'sysadmin': 'sysadmin.logout',
 }
+# Logouts that accept only POST (with a CSRF token). The page offers a form for
+# these, and a JSON caller, which can only navigate, is sent back to this page.
+_POST_SIGN_OUT_ENDPOINTS = frozenset({'sysadmin.logout'})
 
 
 def _signed_in_user():
@@ -73,7 +76,9 @@ def refuse_authenticated_identity_establishment():
     """Refuse every entry into the workflow while a principal is signed in.
 
     Runs before the view, so before Turnstile, seat resolution, any row lock
-    and any setup-store write. It writes nothing: no session key, no flash.
+    and any setup-store write. It writes no principal or establishment state
+    and no flash. The one session write it can cause is Flask-WTF minting a
+    CSRF token, if the session has none, for a sysadmin's sign-out form.
     """
     if request.endpoint not in IDENTITY_ESTABLISHMENT_ENDPOINTS:
         return None
@@ -83,12 +88,19 @@ def refuse_authenticated_identity_establishment():
 
     status = 200 if request.method in ('GET', 'HEAD') else 409
     role = getattr(user.user_role, 'value', user.user_role)
-    return_to_login_url = url_for(_SIGN_OUT_ENDPOINTS.get(role, 'student.logout'))
+    sign_out_endpoint = _SIGN_OUT_ENDPOINTS.get(role, 'student.logout')
+    return_to_login_url = url_for(sign_out_endpoint)
+    sign_out_by_post = sign_out_endpoint in _POST_SIGN_OUT_ENDPOINTS
     if request.accept_mimetypes.best == 'application/json':
-        return jsonify(verified=False, message=SIGNED_IN_MESSAGE, redirect=return_to_login_url), 409
+        # The client follows ``redirect`` with a GET. A POST-only logout would
+        # answer that with 405, so send it to this page, whose GET renders the
+        # sign-out form. Every establishment endpoint accepts GET.
+        redirect_url = request.path if sign_out_by_post else return_to_login_url
+        return jsonify(verified=False, message=SIGNED_IN_MESSAGE, redirect=redirect_url), 409
     return render_template(
         'identity_establishment_signed_in.html',
         heading=REFUSAL_HEADING,
         cancelled=REFUSAL_CANCELLED,
         return_to_login_url=return_to_login_url,
+        sign_out_by_post=sign_out_by_post,
     ), status

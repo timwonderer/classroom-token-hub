@@ -1,0 +1,21 @@
+[Unit]
+Description=CTH encrypted off-host database backup (one recovery point)
+Wants=network-online.target
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+User=cth-backup
+Group=cth-backup
+EnvironmentFile=/etc/cth-db-backup/env
+Environment=HOME=/var/lib/cth-db-backup
+ExecStart=/usr/bin/python3 /opt/cth-db-backup/cth_db_backup.py backup
+TimeoutStartSec=30min
+StateDirectory=cth-db-backup
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/etc/cth-db-backup
