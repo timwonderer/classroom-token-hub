@@ -97,6 +97,21 @@ def _assert_return_to_login_signs_out(client, page, logout_path, login_path):
     assert landed.status_code == 200
 
 
+def _assert_return_to_login_posts_sign_out(client, page, logout_path, login_path):
+    """A POST-only logout (sysadmin) is offered as a form carrying a CSRF token, not a link."""
+    assert not [a for a in page.find_all('a') if a.get_text(strip=True) == "Return to login"]
+    button = next(b for b in page.find_all('button') if b.get_text(strip=True) == "Return to login")
+    form = button.find_parent('form')
+    assert form['method'].lower() == 'post' and form['action'] == logout_path
+    token = form.find('input', attrs={'name': 'csrf_token'})
+    assert token is not None and token['value']
+    response = client.post(form['action'], data={'csrf_token': token['value']})
+    assert response.status_code == 302 and response.location.split('?')[0].endswith(login_path)
+    assert 'user_id' not in _session(client)
+    landed = client.get(response.location)
+    assert landed.status_code == 200
+
+
 def _sign_out_browser(client):
     with client.session_transaction() as sess:
         sess.clear()
@@ -346,7 +361,24 @@ def test_OPS_DB_001__sysadmin_session_is_refused(client, shared_chromebook):
     response = _claim(client, shared_chromebook["classroom"])
     assert response.status_code == 409
     assert shared_chromebook["calls"]["resolve_seat_claim"] == 0
-    _assert_return_to_login_signs_out(client, page, '/sysadmin/logout', '/sysadmin/login')
+    _assert_return_to_login_posts_sign_out(client, page, '/sysadmin/logout', '/sysadmin/login')
+
+
+def test_OPS_DB_001__sysadmin_json_refusal_redirects_to_the_sign_out_page(client, shared_chromebook):
+    """A JSON caller follows ``redirect`` with a GET, which the POST-only sysadmin
+    logout refuses with 405. It is sent back to the refusal page, whose GET
+    renders the sign-out form."""
+    _sign_out_browser(client)
+    sysadmin, _ = _create_sysadmin_via_cli("establishment_refusal_json")
+    seed_sysadmin_session(client, user_id=sysadmin.id, username="establishment_refusal_json")
+    db.session.commit()
+    response = client.post('/student/verify-username', data={'saved_username': 'x', 'retention_page_token': 'x'},
+                           headers={'Accept': 'application/json'})
+    assert response.status_code == 409 and response.is_json
+    assert response.json['redirect'] == '/student/verify-username'
+    page = BeautifulSoup(client.get(response.json['redirect']).data, 'html.parser')
+    assert SIGNED_IN in html.unescape(page.get_text(' '))
+    _assert_return_to_login_posts_sign_out(client, page, '/sysadmin/logout', '/sysadmin/login')
 
 
 def test_OPS_DB_001__revoked_session_counts_as_signed_out(client, shared_chromebook):
