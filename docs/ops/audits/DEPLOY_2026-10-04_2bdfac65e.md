@@ -155,7 +155,7 @@ Host and database checks, read-only, after the release:
 | #1482 | `GET /sysadmin/logout` answers 405 (host to gunicorn, nginx not involved) |
 | #1476 | `/student/login` and `/admin/login` answer 200 |
 
-Operator browser checks: *to record* (Redemptions tab, payroll page, attendance correction modal, console Sign Out).
+Operator browser checks (screenshots from the operator, after the release): the Store Redemptions modal lists a waiting request with Return, Deny and Accept (#1473); a student's attendance page lists completed work intervals, each with an "Invalidate work interval" button (#1477). *Still to record:* the correction modal opening (then cancelled), the payroll page, and the system admin console's Sign Out (#1482).
 
 The release's specific checks, as planned:
 
