@@ -17,6 +17,7 @@ from typing import Any
 
 from app.extensions import db
 from app.models import Transaction, Seat, ClassEconomy
+from app.services.ledger_balance_query_service import project_posting_states
 
 
 @dataclass(frozen=True)
@@ -101,9 +102,12 @@ def build_transaction_list_view(
     Returns:
         List of frozen TransactionListItemView ready for template rendering
     """
+    transactions = list(transactions)
     views = []
+    # One cursor read for the whole list instead of a query per row.
+    posting_states = project_posting_states(transactions)
 
-    for txn in transactions:
+    for txn, posting_state in zip(transactions, posting_states):
         # Pre-format amount display with sign
         amount = Decimal(str(txn.amount))
         if amount >= 0:
@@ -134,7 +138,7 @@ def build_transaction_list_view(
                 icon_class=icon_class,
                 account_type=txn.account_type or "checking",
                 transaction_type=txn.type or "transfer",
-                status=txn.posting_state.value,
+                status=posting_state.value,
             )
         )
 
