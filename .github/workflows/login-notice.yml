@@ -1,0 +1,145 @@
+name: Login page notice
+
+# Posts or clears the notice shown on the student and teacher login pages
+# (app/utils/login_notice.py). Writes instance/login_notice.json on the
+# production host; the app reads it on each login page render, so no deploy
+# or restart is needed, and the notice hides itself once it expires.
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Post a notice, or clear the current one"
+        required: true
+        default: post
+        type: choice
+        options:
+          - post
+          - clear
+      message:
+        description: "Notice text, plain language (ignored for clear)"
+        required: false
+        type: string
+      expires_at:
+        description: "Hide the notice after this time, YYYY-MM-DD HH:MM (ignored for clear)"
+        required: false
+        type: string
+      timezone:
+        description: "Time zone of expires_at"
+        required: false
+        default: America/Los_Angeles
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: login-notice
+  cancel-in-progress: false
+
+jobs:
+  notice:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      # Validated before connecting, and handed to the host as base64 JSON, so
+      # the operator's text never reaches a shell unquoted.
+      - name: Build notice
+        id: build
+        env:
+          NOTICE_ACTION: ${{ inputs.action }}
+          NOTICE_MESSAGE: ${{ inputs.message }}
+          NOTICE_EXPIRES_AT: ${{ inputs.expires_at }}
+          NOTICE_TIMEZONE: ${{ inputs.timezone }}
+        run: |
+          python3 - <<'PY'
+          import base64
+          import json
+          import os
+          import sys
+          from datetime import datetime, timezone
+          from zoneinfo import ZoneInfo
+
+          def fail(message):
+              print(f"::error::{message}")
+              sys.exit(1)
+
+          action = os.environ["NOTICE_ACTION"]
+          payload = ""
+          if action == "post":
+              message = os.environ.get("NOTICE_MESSAGE", "").strip()
+              if not message:
+                  fail("message is required to post a notice.")
+              if len(message) > 1000:
+                  fail("message is longer than 1000 characters.")
+              try:
+                  zone = ZoneInfo(os.environ.get("NOTICE_TIMEZONE", "").strip() or "America/Los_Angeles")
+              except Exception:
+                  fail("timezone is not a valid IANA zone name, e.g. America/Los_Angeles.")
+              try:
+                  local = datetime.strptime(os.environ.get("NOTICE_EXPIRES_AT", "").strip(), "%Y-%m-%d %H:%M")
+              except ValueError:
+                  fail("expires_at must look like 2026-10-10 22:00.")
+              expires_at = local.replace(tzinfo=zone).astimezone(timezone.utc)
+              now = datetime.now(timezone.utc)
+              if expires_at <= now:
+                  fail("expires_at is already in the past.")
+              notice = {
+                  "message": message,
+                  "expires_at": expires_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                  "posted_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+              }
+              payload = base64.b64encode(json.dumps(notice).encode()).decode()
+              print(f"Notice expires {local:%Y-%m-%d %H:%M} {zone.key} ({notice['expires_at']}).")
+          elif action != "clear":
+              fail(f"unknown action {action!r}.")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write(f"payload={payload}\n")
+          PY
+
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+          ping: ${{ secrets.PRODUCTION_TAILSCALE_HOST }}
+
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.10.0
+        with:
+          ssh-private-key: ${{ secrets.DO_DEPLOY_KEY }}
+
+      - name: Set up SSH host key verification
+        env:
+          KNOWN_HOSTS: ${{ secrets.KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh; chmod 700 ~/.ssh
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      # Written to a temp file and renamed, so a login page never reads a
+      # half-written notice.
+      - name: Write notice on production
+        env:
+          PRODUCTION_SERVER_HOST: ${{ secrets.PRODUCTION_TAILSCALE_HOST }}
+          NOTICE_PAYLOAD: ${{ steps.build.outputs.payload }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes root@"$PRODUCTION_SERVER_HOST" "NOTICE_PAYLOAD='$NOTICE_PAYLOAD' bash -s" <<'EOF'
+            set -euo pipefail
+            dir=~/classroom-economy/instance
+            path="$dir/login_notice.json"
+            if [ -z "$NOTICE_PAYLOAD" ]; then
+              rm -f "$path"
+              echo "Login notice cleared."
+              exit 0
+            fi
+            mkdir -p "$dir"
+            tmp="$(mktemp "$dir/.login_notice.XXXXXX")"
+            printf '%s' "$NOTICE_PAYLOAD" | base64 -d > "$tmp"
+            chmod 644 "$tmp"
+            mv -f "$tmp" "$path"
+            echo "Login notice posted."
+          EOF

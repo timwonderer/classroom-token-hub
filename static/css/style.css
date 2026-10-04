@@ -536,6 +536,12 @@ a:hover {
 .alert-card.border-warning { border-color: var(--warning) !important; }
 .alert-card.border-danger  { border-color: var(--danger) !important; }
 
+/* Operator notice on the login pages (macros/login_notice.html): guardian
+ * gray, the operator's color, on both the student and teacher page. */
+.alert-card.login-notice,
+.alert-card.login-notice.border-info { border-color: var(--guardian-gray) !important; }
+.alert-card.login-notice > .card-header { background-color: var(--guardian-gray) !important; }
+
 /* The body holds explanatory prose; trim the trailing margin so a lone
  * paragraph or list sits flush with the card padding. */
 .alert-card > .card-body > :last-child {
