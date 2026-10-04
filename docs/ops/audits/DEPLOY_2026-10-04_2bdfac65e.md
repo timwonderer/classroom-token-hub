@@ -155,7 +155,7 @@ Host and database checks, read-only, after the release:
 | #1482 | `GET /sysadmin/logout` answers 405 (host to gunicorn, nginx not involved) |
 | #1476 | `/student/login` and `/admin/login` answer 200 |
 
-Operator browser checks (screenshots from the operator, after the release): the Store Redemptions modal lists a waiting request with Return, Deny and Accept (#1473); a student's attendance page lists completed work intervals, each with an "Invalidate work interval" button (#1477). The operator reports the work-interval invalidation flow works. The payroll page loads with its Overview tab, next payroll 2026-10-10 00:00 PDT, and the 2026-10-02 run in Recent Payroll Activity. *Still to record:* the system admin console's Sign Out (#1482).
+Operator browser checks (screenshots from the operator, after the release): the Store Redemptions modal lists a waiting request with Return, Deny and Accept (#1473); a student's attendance page lists completed work intervals, each with an "Invalidate work interval" button (#1477). The operator reports the work-interval invalidation flow works. The payroll page loads with its Overview tab, next payroll 2026-10-10 00:00 PDT, and the 2026-10-02 run in Recent Payroll Activity. The system admin console's Sign Out returns to `/sysadmin/login` with "Logged out." (#1482). All operator browser checks passed.
 
 The release's specific checks, as planned:
 
