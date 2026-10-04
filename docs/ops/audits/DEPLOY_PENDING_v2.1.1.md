@@ -2,12 +2,12 @@
 
 > **Draft, prepared before deployment.** Sections marked *To record at release* are empty on purpose: they hold
 > evidence that only exists once the operator deploys. The release SHA is the tip of `main` chosen at release
-> (`98dc76b` when last synced, 2026-10-04). At release, fill in the open sections and rename this file to
+> (`0d8a346` when last synced, 2026-10-04). At release, fill in the open sections and rename this file to
 > `DEPLOY_<YYYY-MM-DD>_<sha9>.md`, matching the other records in this directory.
 
 **Type:** Tagged release under `SOP-DEP-002`, **with four migrations, three of them forward-only.** It tags as
 v2.1.1 everything merged to `main` since v2.1.0 and ships to production everything merged after the untagged
-2026-10-03 release (`ad9574334`): #1471-#1483. Because one migration drops a column
+2026-10-03 release (`ad9574334`): #1471-#1484. Because one migration drops a column
 the running code reads, the application must be stopped before the release workflow runs, as for v2.1.0, and the
 only rollback is a database restore.
 
@@ -15,7 +15,7 @@ only rollback is a database restore.
 
 | | |
 |---|---|
-| Release SHA | *To record at release:* tip of `main` (`98dc76b` when last synced); to be tagged `v2.1.1` |
+| Release SHA | *To record at release:* tip of `main` (`0d8a346` when last synced); to be tagged `v2.1.1` |
 | GitHub release | *To record at release* |
 | Branch / lineage | `main` (`lineage_ref=main`) |
 | Previous deployed SHA | `ad9574334d72fd92cc93402e851ab0ebc22aaad9` (untagged), Alembic revision `a4b50fee84c3`; record [DEPLOY_2026-10-03_ad9574334.md](DEPLOY_2026-10-03_ad9574334.md) |
@@ -48,6 +48,7 @@ Every PR below is merged unless marked, and its merge commit is an ancestor of `
 | #1477 | Attendance interval invalidation with atomic payroll recovery; immutable ledger and payroll creation lineage; ledger posting derived from scoped reconciliation cursors; historical attendance proof assessment. Four migrations (below). |
 | #1478, #1479 (via #1483) | Performance: transaction posting state is projected once per list, and batch creation proofs walk each class audit chain once. |
 | #1481 | Proposed encrypted off-host database backups (`infra/db-backup/`), **not installed**; removes the never-scheduled v1 `scripts/backup-database.sh` and `scripts/restore-database.sh`. |
+| #1484 | Full-suite remediation after #1477: test fixtures and historical migration inputs, `.github/workflows/full-suite.yml`, SOP-DEP-001 notes on forward-only revisions, and hidden-state CSS for the store redemption controls (`templates/admin_store.html`, `templates/student_detail.html`, `static/css/style.css`). No migrations. |
 | #1482 | Signing out of the operator console takes a POST with a CSRF token; `GET /sysadmin/logout` answers 405 and changes nothing. |
 
 Commits outside a PR: `69bc370` adds `.codex/environments/environment.toml` and a `.gitignore` line (developer
@@ -89,11 +90,11 @@ a dated observation; the record itself requires a fresh preflight before deploym
 
 | Check | Result |
 |---|---|
-| Release SHA on `main`, descendant of the running release | *To record at release.* `ad9574334` is an ancestor of `main` as of `98dc76b` (checked 2026-10-04). |
+| Release SHA on `main`, descendant of the running release | *To record at release.* `ad9574334` is an ancestor of `main` as of `0d8a346` (checked 2026-10-04). |
 | Running release before dispatch | *To record at release* (expected host `HEAD` `ad9574334`, Alembic `a4b50fee84c3`) |
-| Migrations changed since the running release | Four, listed above. Single head `f9a3c7d1e620` as of `98dc76b`; #1478-#1483 add none. |
+| Migrations changed since the running release | Four, listed above. Single head `f9a3c7d1e620` as of `0d8a346`; #1478-#1484 add none. |
 | **Fresh read-only migration preflight** | *To record at release.* Run in `BEGIN READ ONLY` immediately before dispatch: the `e7c2a9d4f610` predicate above returns 0, and zero `REVERSAL` rows or duplicate original locators. A nonzero count stops the release. |
-| `requirements.txt` changed | No (as of `98dc76b`) |
+| `requirements.txt` changed | No (as of `0d8a346`) |
 | New configuration | `LOGIN_NOTICE_PATH` (optional; unset means `instance/login_notice.json`). Nothing to set. |
 | Student-setup memory store (§VI item 6) | *To record at release* |
 | Full suite on the release SHA | *To record at release.* #1477's own record lists large targeted runs and says no full suite ran. With forward-only ledger migrations, a full suite on the release SHA is expected before dispatch. |
