@@ -63,7 +63,14 @@ def parse_login_notice(raw, now=None):
     now = now or datetime.now(timezone.utc)
     if now >= expires_at:
         return None
-    return message.strip()[:MAX_MESSAGE_LENGTH]
+    message = message.strip()[:MAX_MESSAGE_LENGTH]
+    try:
+        # JSON can carry lone surrogates ("\ud800"), which would fail when
+        # the page is encoded.
+        message.encode("utf-8")
+    except UnicodeEncodeError:
+        return None
+    return message
 
 
 def get_login_notice():
@@ -74,7 +81,7 @@ def get_login_notice():
             raw = handle.read(16 * 1024)
     except FileNotFoundError:
         return None
-    except OSError:
+    except (OSError, UnicodeError):
         current_app.logger.warning("Login notice file could not be read", exc_info=True)
         return None
     return parse_login_notice(raw)

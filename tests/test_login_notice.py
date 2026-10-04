@@ -41,6 +41,7 @@ def test_login_notice_parse_honours_offsets():
         json.dumps({"message": "hi"}),
         _notice(expires_at="tomorrow"),
         _notice(expires_at="2026-10-04T05:00:00"),  # naive: refused, not guessed
+        '{"message": "\\ud800", "expires_at": "2026-10-04T05:00:00Z"}',  # lone surrogate
     ],
 )
 def test_login_notice_parse_refuses_malformed_notice(raw):
@@ -86,6 +87,13 @@ def test_login_notice_missing_or_broken_file_does_not_break_login(client, app, t
     broken = tmp_path / "broken.json"
     broken.write_text("{not json")
     monkeypatch.setitem(app.config, "LOGIN_NOTICE_PATH", str(broken))
+    response = client.get(page)
+    assert response.status_code == 200
+    assert b'id="loginNotice"' not in response.data
+
+    not_utf8 = tmp_path / "not_utf8.json"
+    not_utf8.write_bytes(b'{"message": "caf\xe9", "expires_at": "2099-01-01T00:00:00Z"}')
+    monkeypatch.setitem(app.config, "LOGIN_NOTICE_PATH", str(not_utf8))
     response = client.get(page)
     assert response.status_code == 200
     assert b'id="loginNotice"' not in response.data
