@@ -8,12 +8,12 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+## [2.1.1] - Not yet released — Attendance correction, store redemption decisions, no student names in logs
+
+Everything merged to `main` since v2.1.0, including #1477 and its four migrations, and the sysadmin logout change once it merges. It includes the untagged production release of 2026-10-03 (`ad9574334`, #1466-#1470). The release SHA is the tip of `main` after the logout change merges; the date, the tag and the release record (`docs/ops/audits/DEPLOY_<date>_<sha>.md`, drafted as `DEPLOY_PENDING_v2.1.1.md`) are filled in when the operator deploys. Three of the four migrations cannot be downgraded: rollback past them is a database restore, not a redeploy.
+
 ### Attendance correction
 - Teachers can inspect completed attendance intervals and invalidate eligible work using a labelled reason, consequence preview, and explicit confirmation. The modal supports keyboard dismissal, focus management and restoration, readable errors, and mobile controls. Unpaid work leaves payroll eligibility; proven paid contributions recover atomically under a shared cap while original scans, payments and signatures remain unchanged. Intervals bounded at class day end without a closing event are identified separately from work still open and cannot be invalidated. Ledger posting derives from scoped reconciliation cursors; its migration is forward-only and requires a read-only production preflight.
-
-## [2.1.1] - Not yet released — Store redemption decisions, no student names in logs
-
-Everything merged to `main` from v2.1.0 up to and including #1476. The release candidate is `c57dadf` (merge of #1476), the last commit before #1477, so it carries no migrations: production stays at Alembic head `a4b50fee84c3`. It includes the untagged production release of 2026-10-03 (`ad9574334`, #1466-#1470). The attendance correction work in #1477 and the sysadmin logout change are not part of it; they stay under `[Unreleased]`. The date, the tag and the release record (`docs/ops/audits/DEPLOY_<date>_c57dadf.md`) are filled in when the operator deploys.
 
 ### Removed
 - **Store bundles (SPEC-STORE-001 1.5; schema gate CONTRACT (CODE ONLY), SOP-DB-003)** — A bundle ("a 3-pack") and a bulk purchase ("3 at a bulk price") already stored the same way, as N independent entitlements under one charge, and since DOM-STORE-001 5.4 every redemption verdict moves no money for either, so a bundle was a second concept with no distinct behavior. A pack is now a purchase quantity at a bulk price: a $5 item with "3+ for 20% off" sells three for $12, and a student can still buy one at $5.
