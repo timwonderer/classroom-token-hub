@@ -35,16 +35,16 @@ const SECTIONS = [
     body: "SPEC documents the specific design of a feature or hardware. SPEC documents derive its authority from the corresponding domain that owns the feature. SPEC defines how a feature should be presented, how its transition looks like, and how it should be implemented.",
   },
   {
-    label: "Operating Procedures",
+    label: "Operating Procedures (SOP-*)",
     to: "/category/standard-operating-procedures",
     tier: "Normative",
-    body: "SOP-* procedures for migrations, deployment, devops, and documentation.",
+    body: "SOPs are the standard operating procedures for the development and maintenance of Classroom Token Hub. They define the processes and best practices that must be followed by all developers to ensure that the system is maintainable, scalable, and secure.",
   },
   {
-    label: "Reference & Principles",
+    label: "Reference & Principles (REF-*, PRN-*)",
     to: "/category/reference",
-    tier: "Reference",
-    body: "REF-* vocabulary and PRN-* rationale — why a given design was chosen.",
+    tier: "Informative",
+    body: "Reference documents provide additional information and context for developers. They include glossaries, API references, and other supporting materials that help developers understand the system and its components.",
   },
 ];
 
@@ -89,7 +89,7 @@ export default function Home() {
           <div className="landing-welcome">
             <Heading as="h1">Developer documentation</Heading>
             <p>
-              Welcome! Discover the underlying structure of the Classroom Token Hub and why we build it that way.
+              Welcome! Discover the underlying structure of Classroom Token Hub and why we build it that way.
             </p>
             <div className="hero__actions">
               <Link className="button button--primary button--lg" to="/category/invariants">
@@ -107,8 +107,7 @@ export default function Home() {
         <section>
           <Heading as="h2">How to navigate the documentation</Heading>
           <p className="section-lede">
-            Classroom Token Hub has a strict documentation hierarchy structure that must be followed: <code>INV-CORE</code> → <code>INV-ARC</code> → <code>DOM</code> →{" "}
-            <code>FEAT</code>.Each layer derives their meaning from the layer above. The invariant-level documents are cumlative and authoritative and no code changes can be done if they have violated the invariants.
+            Classroom Token Hub has a strict documentation hierarchy structure to ensure all layers of specification and guardrails are coherent and consistent. The following sections are organized by their level of authority and purpose, from the most foundational rules to informative references.
           </p>
           <div className="row">
             {SECTIONS.map((section) => (
