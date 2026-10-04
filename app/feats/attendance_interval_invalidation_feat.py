@@ -26,8 +26,8 @@ from app.services.ledger_recovery_service import (
     get_recovery_outcome_records, get_recovery_outcome,
     ReconstructedRecoveryPlan, resolve_reconstructed_recovery, apply_reconstructed_recovery,
 )
-from app.services.ledger_evidence import LedgerCreationEvidence
-from app.utils.audit_verifier import verified_creation_evidence, verify_record_creation_lineage, PROTECTED_FIELDS_BY_TABLE
+from app.feats.ledger_proof_inputs import to_ledger_creation_evidence
+from app.utils.audit_verifier import verified_creation_evidences, verify_record_creation_lineage, PROTECTED_FIELDS_BY_TABLE
 from app.utils.canonical_temporal_resolver import canonical_temporal_resolver, CLASS_LEVEL_EVALUATION
 
 
@@ -58,19 +58,26 @@ def _compose_historical_settlement(ctx, target_seat_id):
     settings = get_historical_payroll_setting_inputs(ctx=ctx, class_id=ctx.class_id)
     graph = reconstruct_historical_payroll_graph(ctx=ctx, target_seat_id=target_seat_id, setting_inputs=settings)
     business_rows = get_historical_reconstruction_business_records(ctx=ctx, target_seat_id=target_seat_id)
-    business_evidence = []
+    proven_business = []
     for row in business_rows:
         summary = row.summary_json or {}
         modern = summary.get('allocation_version') == 1 or 'correction_intent_locator' in summary or 'command_receipt' in summary
         if row.lineage_event_id is not None or modern:
-            proof = verified_creation_evidence('payroll_event', row, ctx.class_id)
-            if proof is None:
-                raise AttendanceCorrectionDenied('INTEGRITY_FAILURE' if row.lineage_event_id is not None else 'PROVENANCE_UNAVAILABLE')
-            business_evidence.append(LedgerCreationEvidence(proof.table_name,proof.row_pk,proof.class_id,
-                proof.lineage_event_id,proof.lineage_token,proof.signature_version,proof.protected_fields,proof.protected_values))
+            proven_business.append(row)
     records = get_historical_payroll_credit_records(ctx=ctx, class_id=ctx.class_id, target_seat_id=target_seat_id)
     observations = diagnose_historical_audit_coverages('ledger_transaction', records, ctx.class_id)
-    creation = ledger_creation_proofs(tuple(r for r in records if r.lineage_version in (2,3)),ctx.class_id)
+    modern_records = tuple(r for r in records if r.lineage_version in (2,3))
+    # One bounded class-chain walk proves every business and Ledger row together.
+    batch = verified_creation_evidences(
+        [('payroll_event', row) for row in proven_business]
+        + [('ledger_transaction', record) for record in modern_records], ctx.class_id)
+    business_evidence = []
+    for row, proof in zip(proven_business, batch.evidence):
+        if proof is None:
+            raise AttendanceCorrectionDenied('INTEGRITY_FAILURE' if row.lineage_event_id is not None
+                and batch.chain_status != 'UNAVAILABLE' else 'PROVENANCE_UNAVAILABLE')
+        business_evidence.append(to_ledger_creation_evidence(proof))
+    creation = tuple(to_ledger_creation_evidence(proof) for proof in batch.evidence[len(proven_business):] if proof is not None)
     settlement = validate_historical_settlement(ctx=ctx, graph=graph, audit_observations=observations,
         creation_evidence=creation, business_creation_evidence=tuple(business_evidence))
     return settlement, observations, tuple(business_evidence)
@@ -175,15 +182,13 @@ def _authorize(ctx, target):
 
 
 def ledger_creation_proofs(records, class_id):
-    """Map genuine Operations query results to immutable Ledger proof inputs."""
-    result = []
-    for record in records:
-        proof = verified_creation_evidence('ledger_transaction', record, class_id)
-        if proof is not None:
-            result.append(LedgerCreationEvidence(proof.table_name, proof.row_pk, proof.class_id,
-                proof.lineage_event_id, proof.lineage_token, proof.signature_version,
-                proof.protected_fields, proof.protected_values))
-    return tuple(result)
+    """Map genuine Operations query results to immutable Ledger proof inputs.
+
+    One bounded Operations batch walks the class chain once for every record;
+    unavailable or failed evidence is omitted and so authorizes nothing.
+    """
+    batch = verified_creation_evidences([('ledger_transaction', record) for record in records], class_id)
+    return tuple(to_ledger_creation_evidence(proof) for proof in batch.evidence if proof is not None)
 
 
 def _credit_proof(ctx, original):
