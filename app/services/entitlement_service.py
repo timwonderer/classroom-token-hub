@@ -562,6 +562,49 @@ def expire_entitlement(
     return event
 
 
+def revoke_entitlement(
+    *,
+    entitlement_id: str,
+    class_id: str,
+    target_seat_id: int,
+    actor_seat_id: int,
+    product_id: int | None,
+    entitlement_type: str,
+    acquisition_type: str,
+    correlation_id: str,
+    payload: dict | None = None,
+) -> EntitlementEvent:
+    """Record a REVOKED terminal event for an entitlement.
+
+    This command performs the write only; the caller establishes that the
+    revocation is lawful. One terminal event per lineage (DOM-STORE-001
+    §VIII), so a lineage that already terminated fails closed.
+    """
+    terminal = get_entitlement_lineage_terminal_event(entitlement_id, class_id)
+    if terminal is not None:
+        raise ValueError(
+            f"Entitlement {entitlement_id} already has terminal event: "
+            f"{terminal.event_type}"
+        )
+
+    event = EntitlementEvent(
+        class_id=class_id,
+        target_seat_id=target_seat_id,
+        actor_seat_id=actor_seat_id,
+        entitlement_id=entitlement_id,
+        product_id=product_id,
+        entitlement_type=entitlement_type,
+        acquisition_type=acquisition_type,
+        event_type="REVOKED",
+        correlation_id=correlation_id,
+        payload=payload,
+        timestamp=_current_utc(),
+    )
+    db.session.add(event)
+    db.session.flush()
+    return event
+
+
 def expire_rent_perks(
     *,
     correlation_id: str,

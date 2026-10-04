@@ -8,6 +8,69 @@
 {{ view.class_labels_by_block.get(block|upper, block|upper) }}
 {%- endmacro %}
 
+{% macro redemption_detail(req) -%}
+<dl class="row small mb-3">
+  <dt class="col-sm-4 text-muted fw-normal">Student</dt>
+  <dd class="col-sm-8 fw-semibold">{{ req.student_name }}</dd>
+  <dt class="col-sm-4 text-muted fw-normal">Item</dt>
+  <dd class="col-sm-8">{{ req.item_name }}</dd>
+  <dt class="col-sm-4 text-muted fw-normal">How they got it</dt>
+  <dd class="col-sm-8">
+    {% if req.acquisition_type == 'GRANT' %}Given by you{% elif req.acquisition_type == 'PERK' %}Came with rent{% else %}Bought{% endif %}
+    {%- if req.purchased_at %} {{ req.purchased_at|fmt_timestamp }}{% endif %}
+    {%- if req.acquisition_type == 'PURCHASE' and req.price_paid is not none %}
+      {%- if req.units_in_purchase > 1 %}, {{ req.units_in_purchase }} bought together for ${{ "%.2f"|format(req.price_paid) }} total
+      {%- else %} for ${{ "%.2f"|format(req.price_paid) }}{% endif %}
+    {%- endif %}
+  </dd>
+  <dt class="col-sm-4 text-muted fw-normal">Requested</dt>
+  <dd class="col-sm-8">{{ req.submitted_at|fmt_timestamp if req.submitted_at else 'Not recorded' }}</dd>
+  {% if not req.is_pending %}
+  <dt class="col-sm-4 text-muted fw-normal">Decided</dt>
+  <dd class="col-sm-8">{{ req.decided_at|fmt_timestamp if req.decided_at else 'Not recorded' }}</dd>
+  {% endif %}
+</dl>
+
+{% if req.item_description %}
+<h3 class="h6">About this item</h3>
+<div class="small border rounded p-2 mb-3">{{ req.item_description|markdown }}</div>
+{% endif %}
+
+<h3 class="h6">What the student wrote</h3>
+{% if req.redemption_prompt %}
+<div class="small text-muted mb-1">You asked:</div>
+<div class="small fst-italic mb-2">{{ req.redemption_prompt|markdown }}</div>
+{% endif %}
+{% if req.student_note %}
+<blockquote class="border-start border-3 ps-3 mb-3 text-break" style="white-space: pre-wrap">{{ req.student_note }}</blockquote>
+{% else %}
+<p class="small text-muted mb-3">The student didn't add a note.</p>
+{% endif %}
+
+{% if req.is_pending %}
+<h3 class="h6">What each decision does</h3>
+<ul class="small mb-0 ps-3">
+  <li class="mb-1"><strong>Accept:</strong> marks the item as used. The student can't use it again.</li>
+  <li class="mb-1"><strong>Return:</strong> closes this request and gives the item back unused. The student can ask again later.</li>
+  <li><strong>Deny:</strong> closes the request without giving the student what they asked for. The item is used up and nothing is refunded, however they got it.</li>
+</ul>
+{% elif req.outcome == 'APPROVED' %}
+{% call cards.alert_card('success', 'Accepted', icon='check_circle', body_class='mb-0', role='note') %}
+  <p class="mb-0">The item was marked as used. This decision is final.</p>
+  {% if req.decision_note %}<p class="mb-0 mt-2"><strong>Your note:</strong> {{ req.decision_note }}</p>{% endif %}
+{% endcall %}
+{% else %}
+{% call cards.alert_card('danger', 'Denied', icon='cancel', body_class='mb-0', role='note') %}
+  {% if req.is_legacy %}
+  <p class="mb-0">Denied before denials used up the item, so the student kept it. This decision is final.</p>
+  {% else %}
+  <p class="mb-0">The request was denied and the item is used up. Nothing was refunded. This decision is final.</p>
+  {% endif %}
+  {% if req.decision_note %}<p class="mb-0 mt-2"><strong>Your note:</strong> {{ req.decision_note }}</p>{% endif %}
+{% endcall %}
+{% endif %}
+{%- endmacro %}
+
 {% block contextual_help_body %}
 {{ help.panel_lead("Add items, review redemption requests, and check purchase history for the current class.") }}
 
@@ -29,8 +92,7 @@
 
 {% call help.topic('store-advanced', 'tune', 'Advanced Options') %}
 <ul class="mb-3">
-  <li><strong>Bundles:</strong> Set quantity per purchase for multi-use items.</li>
-  <li><strong>Bulk discount:</strong> Lower price when students buy in larger quantities.</li>
+  <li><strong>Bulk discount:</strong> Lower price when students buy in larger quantities. For a pack (say, 3 for a set price), use a bulk discount at that quantity.</li>
   <li><strong>Collective goal:</strong> Require class-wide progress before redemption.</li>
   <li><strong>Auto delist/expiry:</strong> Remove items after a date or number of days.</li>
   <li><strong>Redemption prompt:</strong> Collect details from students at checkout.</li>
@@ -40,8 +102,12 @@
 {% endcall %}
 {% endcall %}
 
-{% call help.topic('store-redemptions', 'hourglass_bottom', 'Pending Redemptions') %}
-<p class="mb-0">Review redemption details and approve or deny requests from the overview panel.</p>
+{% call help.topic('store-redemptions', 'redeem', 'Redemption requests') %}
+<ol class="ps-3 mb-0">
+  <li class="mb-2"><strong>Open a request</strong> on the Redemptions tab to see the item, how the student got it, and what they wrote.</li>
+  <li class="mb-2">Decide by your own class rules. <strong>Accept</strong> uses the item. <strong>Deny</strong> also uses it up, with no refund. <strong>Return</strong> closes the request and gives the item back unused, so the student can ask again. Refunds and voids are for items the student hasn't asked to use yet.</li>
+  <li class="mb-0"><strong>Decisions are final.</strong> A decided request moves to the bottom list and can't be changed.</li>
+</ol>
 {% endcall %}
 
 {% call help.topic('store-history', 'history', 'Purchase History') %}
@@ -81,6 +147,13 @@
     </button>
   </li>
   <li class="nav-item" role="presentation">
+    <button class="nav-link" id="redemptions-tab" data-bs-toggle="tab" data-bs-target="#redemptions" type="button" role="tab" aria-controls="redemptions" aria-selected="false">
+      <span class="material-symbols-outlined me-1" aria-hidden="true">redeem</span>Redemptions
+      {% set waiting_total = view.pending_redemptions|length + view.pending_acknowledgements|length %}
+      {% if waiting_total %}<span class="badge bg-danger ms-1">{{ waiting_total }}<span class="visually-hidden"> waiting</span></span>{% endif %}
+    </button>
+  </li>
+  <li class="nav-item" role="presentation">
     <button class="nav-link" id="manage-tab" data-bs-toggle="tab" data-bs-target="#manage" type="button" role="tab" aria-controls="manage" aria-selected="false">
       <span class="material-symbols-outlined me-1" aria-hidden="true">inventory_2</span>Manage Items
     </button>
@@ -93,11 +166,6 @@
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button" role="tab" aria-controls="history" aria-selected="false">
       <span class="material-symbols-outlined me-1" aria-hidden="true">history</span>Purchase History
-    </button>
-  </li>
-  <li class="nav-item" role="presentation">
-    <button class="nav-link" id="audit-tab" data-bs-toggle="tab" data-bs-target="#audit" type="button" role="tab" aria-controls="audit" aria-selected="false">
-      <span class="material-symbols-outlined me-1" aria-hidden="true">article</span>Redemption Audit
     </button>
   </li>
 </ul>
@@ -151,60 +219,23 @@
       </div>
     </div>
 
-    <!-- Pending Redemption Requests -->
+    <!-- Redemption requests summary -->
     <div class="card shadow mb-4">
-      <div class="card-header bg-warning text-dark">
-        <h2 class="mb-0 h5"><span class="material-symbols-outlined me-2" aria-hidden="true">hourglass_top</span>Pending Redemption Requests</h2>
-      </div>
-      <div class="card-body">
-        {% if view.pending_redemptions %}
-        <div class="table-responsive">
-          <table class="table table-hover js-sortable">
-            <caption class="visually-hidden">Pending store redemptions</caption>
-            <thead>
-              <tr>
-                <th scope="col">Student</th>
-                <th scope="col">Item</th>
-                <th scope="col">Requested</th>
-                <th scope="col">Details</th>
-                <th scope="col">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for entitlement in view.pending_redemptions %}
-              <tr>
-                <td>{{ entitlement.student_name }}</td>
-                <td>{{ entitlement.store_item.name }}</td>
-                <td><small class="text-muted">{{ entitlement.purchased_at|fmt_timestamp if entitlement.purchased_at else 'N/A' }}</small></td>
-                <td>
-                  <small class="text-muted">{{ entitlement.redemption_details or '-' }}</small>
-                </td>
-                <td>
-                  <div class="d-flex gap-2">
-                    <button type="button" class="btn btn-sm btn-outline-danger reject-redemption-btn"
-                      data-entitlement-id="{{ entitlement.id }}"
-                      title="Refund and remove" aria-label="Refund and remove">
-                      <span class="material-symbols-outlined" aria-hidden="true">cancel</span>
-                    </button>
-                    <button type="button" class="btn btn-sm btn-success approve-redemption-btn" data-entitlement-id="{{ entitlement.id }}">
-                      <span class="material-symbols-outlined me-1" aria-hidden="true">check_circle</span>Approve
-                    </button>
-                  </div>
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+      <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <div>
+          <h2 class="h5 mb-1"><span class="material-symbols-outlined me-2" aria-hidden="true">hourglass_top</span>Redemption requests</h2>
+          <p class="mb-0 text-muted">
+            {% set waiting = view.pending_redemptions|length %}
+            {% set to_deliver = view.pending_acknowledgements|length %}
+            {% if waiting %}{{ waiting }} request{{ 's' if waiting != 1 }} waiting for your decision.{% endif %}
+            {% if to_deliver %}{{ to_deliver }} immediate-use purchase{{ 's' if to_deliver != 1 }} to deliver.{% endif %}
+            {% if not waiting and not to_deliver %}Nothing is waiting for you.{% endif %}
+          </p>
         </div>
-        <div class="text-center mt-3">
-          <a href="{{ url_for('admin.store_management') }}#overview" class="btn btn-outline-primary">View All Pending Items</a>
-        </div>
-        {% else %}
-        <div class="text-center text-muted py-3">
-          <span class="material-symbols-outlined icon-xl" aria-hidden="true">check_circle</span>
-          <p class="mb-0">No pending redemption requests</p>
-        </div>
-        {% endif %}
+        {% set anything_waiting = view.pending_redemptions or view.pending_acknowledgements %}
+        <button type="button" class="btn {{ 'btn-primary' if anything_waiting else 'btn-outline-primary' }}" onclick="document.getElementById('redemptions-tab').click()">
+          {{ 'Review' if anything_waiting else 'View decided requests' }}
+        </button>
       </div>
     </div>
 
@@ -249,6 +280,8 @@
                     <span class="badge bg-danger">Expired</span>
                   {% elif entitlement.status == 'revoked' %}
                     <span class="badge bg-dark">Revoked</span>
+                  {% elif entitlement.status == 'denied' %}
+                    <span class="badge bg-secondary">Denied</span>
                   {% else %}
                     <span class="badge bg-secondary">{{ entitlement.status|title }}</span>
                   {% endif %}
@@ -308,9 +341,6 @@
                     {% elif item.economic_role == 'convenience' %}bg-primary
                     {% elif item.economic_role == 'add_on' %}bg-warning text-dark
                     {% endif %}">{{ item.economic_role|replace('_', '-')|title }}</span>
-                {% endif %}
-                {% if item.is_bundle %}
-                  <span class="badge bg-warning text-dark">{{ item.bundle_quantity }} bundle</span>
                 {% endif %}
                 {% if item.bulk_discount_enabled %}
                   <span class="badge bg-success">{{ item.bulk_discount_percentage }}% off {{ item.bulk_discount_quantity }}+</span>
@@ -466,113 +496,146 @@
     </div>
   </div>
 
-  <!-- REDEMPTION AUDIT TAB -->
-  <div class="tab-pane fade" id="audit" role="tabpanel" aria-labelledby="audit-tab">
-    <div class="card shadow">
-      <div class="card-header bg-secondary text-white">
-        <h2 class="mb-0 h5"><span class="material-symbols-outlined me-2" aria-hidden="true">article</span>Redemption Audit Log</h2>
+  <!-- REDEMPTIONS TAB -->
+  <div class="tab-pane fade" id="redemptions" role="tabpanel" aria-labelledby="redemptions-tab">
+    <div class="card shadow mb-4">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h2 class="mb-0 h5"><span class="material-symbols-outlined me-2" aria-hidden="true">hourglass_top</span>Waiting for your decision</h2>
+        <span class="badge bg-warning text-dark">{{ view.pending_redemptions|length }}</span>
       </div>
-      <div class="card-body">
-        <form method="GET" action="{{ url_for('admin.store_management') }}" class="mb-4">
-          <div class="row g-3">
-            <div class="col-md-3">
-              <label for="audit_student" class="form-label fw-bold">Student</label>
-              <input type="text" class="form-control form-control-sm" id="audit_student" name="audit_student" value="{{ view.audit_filters.get('student', '') or '' }}" placeholder="Search by name">
-            </div>
-            <div class="col-md-3">
-              <label for="audit_class" class="form-label fw-bold">Class</label>
-              <select class="form-select form-select-sm" id="audit_class" name="audit_class">
-                <option value="">All classes</option>
-                {% for cls in view.audit_class_options %}
-                  <option value="{{ cls }}" {% if view.audit_filters.get('class') == cls %}selected{% endif %}>{{ cls }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div class="col-md-2">
-              <label for="audit_action" class="form-label fw-bold">Action</label>
-              <select class="form-select form-select-sm" id="audit_action" name="audit_action">
-                <option value="">All actions</option>
-                <option value="request" {% if view.audit_filters.get('action') == 'request' %}selected{% endif %}>Request</option>
-                <option value="approved" {% if view.audit_filters.get('action') == 'approved' %}selected{% endif %}>Approved</option>
-                <option value="rejected" {% if view.audit_filters.get('action') == 'rejected' %}selected{% endif %}>Rejected</option>
-              </select>
-            </div>
-            <div class="col-md-2">
-              <label for="audit_start_date" class="form-label fw-bold">From</label>
-              <input type="date" class="form-control form-control-sm" id="audit_start_date" name="audit_start_date" value="{{ view.audit_filters.get('start_date', '') or '' }}">
-            </div>
-            <div class="col-md-2">
-              <label for="audit_end_date" class="form-label fw-bold">To</label>
-              <input type="date" class="form-control form-control-sm" id="audit_end_date" name="audit_end_date" value="{{ view.audit_filters.get('end_date', '') or '' }}">
-            </div>
+      {% if view.pending_redemptions %}
+      <div class="list-group list-group-flush">
+        {% for req in view.pending_redemptions %}
+        <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center gap-3 py-3 text-start"
+          data-redemption-id="{{ req.request_id }}" aria-haspopup="dialog">
+          <div class="overflow-hidden">
+            <div><span class="fw-semibold">{{ req.student_name }}</span> <span class="text-muted">· {{ req.item_name }}</span></div>
+            <div class="small text-muted">Requested {{ req.submitted_at|fmt_timestamp }}</div>
+            {% if req.student_note %}<div class="small text-body-secondary text-truncate">“{{ req.student_note }}”</div>{% endif %}
           </div>
-          <div class="mt-3">
-            <button type="submit" class="btn btn-primary btn-sm"><span class="material-symbols-outlined me-1" aria-hidden="true">filter_alt</span>Apply Filters</button>
-            <a href="{{ url_for('admin.store_management') }}#audit" class="btn btn-outline-secondary btn-sm">Clear</a>
-            <span class="ms-3 text-muted">Showing {{ view.audit_rows|length }} of {{ view.audit_total|default(0) }} row(s)</span>
-          </div>
-        </form>
+          <span class="d-flex align-items-center gap-1 text-primary small flex-shrink-0">Review<span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></span>
+        </button>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="card-body text-center text-muted py-4">
+        <span class="material-symbols-outlined icon-xl" aria-hidden="true">check_circle</span>
+        <p class="mb-0">Nothing is waiting for a decision.</p>
+      </div>
+      {% endif %}
+    </div>
 
-        <div class="table-responsive">
-          <table class="table table-striped table-sm js-sortable">
-            <caption class="visually-hidden">Store audit records</caption>
-            <thead>
-              <tr>
-                <th scope="col">Student</th>
-                <th scope="col">Class</th>
-                <th scope="col">Date</th>
-                <th scope="col">Action</th>
-                <th scope="col">Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% if view.audit_rows %}
-                {% for row in view.audit_rows %}
-                <tr>
-                  <td>{{ row.student_display_name }}</td>
-                  <td>{{ row.class_display_label }}</td>
-                  <td>
-                    {% if row.timestamp %}
-                      {{ row.timestamp|fmt_timestamp }}
-                    {% else %}
-                      <span class="text-muted">N/A</span>
-                    {% endif %}
-                  </td>
-                  <td>
-                    <span class="badge bg-secondary">{{ row.action|title }}</span>
-                    {% if row.source == 'inferred_legacy' %}
-                      <span class="badge bg-warning text-dark">Legacy</span>
-                    {% endif %}
-                  </td>
-                  <td>{{ row.notes if row.notes else '—' }}</td>
-                </tr>
-                {% endfor %}
-              {% else %}
-                <tr>
-                  <td colspan="5" class="text-center text-muted">No audit records found.</td>
-                </tr>
-              {% endif %}
-            </tbody>
-          </table>
+    {% if view.pending_acknowledgements %}
+    <div class="card shadow mb-4">
+      <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <h2 class="mb-0 h5"><span class="material-symbols-outlined me-2" aria-hidden="true">bolt</span>Immediate-use purchases to deliver</h2>
+        <span class="badge bg-warning text-dark">{{ view.pending_acknowledgements|length }}</span>
+      </div>
+      <div class="card-body pb-0">
+        <p class="small text-muted mb-2">These were used when the student bought them. Deliver each one, then mark it complete.</p>
+      </div>
+      <ul class="list-group list-group-flush">
+        {% for ack in view.pending_acknowledgements %}
+        <li class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-3 py-3">
+          <div class="overflow-hidden">
+            <div><span class="fw-semibold">{{ ack.student_name }}</span> <span class="text-muted">· {{ ack.item_name }}</span></div>
+            <div class="small text-muted">Bought {{ ack.submitted_at|fmt_timestamp }}{% if ack.price_paid is not none %} for ${{ "%.2f"|format(ack.price_paid) }}{% endif %}</div>
+          </div>
+          <button type="button" class="btn btn-sm btn-outline-success flex-shrink-0" data-complete-immediate="{{ ack.request_id }}"
+            aria-label="Mark {{ ack.item_name }} for {{ ack.student_name }} as complete">
+            <span class="material-symbols-outlined me-1" aria-hidden="true">done</span>Mark as complete
+          </button>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    <div class="card shadow">
+      <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <h2 class="mb-0 h5"><span class="material-symbols-outlined me-2" aria-hidden="true">task_alt</span>Decided</h2>
+        <small class="text-muted">Decisions are final and can't be changed.</small>
+      </div>
+      {% if view.resolved_redemptions %}
+      <div class="list-group list-group-flush">
+        {% for req in view.resolved_redemptions %}
+        <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center gap-3 py-3 text-start"
+          data-redemption-id="{{ req.request_id }}" aria-haspopup="dialog">
+          <div class="overflow-hidden">
+            <div><span class="fw-semibold">{{ req.student_name }}</span> <span class="text-muted">· {{ req.item_name }}</span></div>
+            <div class="small text-muted">Decided {{ req.decided_at|fmt_timestamp if req.decided_at else '—' }}</div>
+          </div>
+          <span class="d-flex align-items-center gap-2 flex-shrink-0">
+            {% if req.outcome == 'APPROVED' %}
+            <span class="badge bg-success-subtle text-body d-inline-flex align-items-center gap-1"><span class="material-symbols-outlined icon-sm" aria-hidden="true">check_circle</span>Accepted</span>
+            {% else %}
+            <span class="badge bg-danger-subtle text-body d-inline-flex align-items-center gap-1"><span class="material-symbols-outlined icon-sm" aria-hidden="true">cancel</span>Denied</span>
+            {% endif %}
+            <span class="material-symbols-outlined text-muted" aria-hidden="true">chevron_right</span>
+          </span>
+        </button>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="card-body text-center text-muted py-4">
+        <p class="mb-0">Requests you approve or deny will appear here.</p>
+      </div>
+      {% endif %}
+    </div>
+
+    {# One inert template per request; the modal clones the one it opens. #}
+    {% for req in view.pending_redemptions + view.resolved_redemptions %}
+    <template id="redemption-detail-{{ req.request_id }}"
+      data-pending="{{ 'true' if req.is_pending else 'false' }}"
+      data-entitlement-id="{{ req.entitlement_id }}"
+      data-student-name="{{ req.student_name }}"
+      data-item-name="{{ req.item_name }}"
+      >
+      {{ redemption_detail(req) }}
+    </template>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Redemption request modal -->
+<div class="modal fade" id="redemptionModal" tabindex="-1" aria-labelledby="redemptionModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title h5" id="redemptionModalLabel">Redemption request</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="redemptionModalBody"></div>
+      <div class="modal-footer flex-column align-items-stretch gap-2">
+        <div id="redemptionDecided" class="d-flex justify-content-between align-items-center" hidden>
+          <small class="text-muted">This request has been decided. Decisions are final.</small>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
         </div>
-
-        {% if view.audit_total_pages > 1 %}
-        <nav aria-label="Audit pagination">
-          <ul class="pagination pagination-sm justify-content-center mt-3">
-            <li class="page-item {% if view.audit_page <= 1 %}disabled{% endif %}">
-              <a class="page-link" href="{{ url_for('admin.store_management', audit_page=view.audit_page-1, audit_student=view.audit_filters.get('student', ''), audit_class=view.audit_filters.get('class', ''), audit_action=view.audit_filters.get('action', ''), audit_start_date=view.audit_filters.get('start_date', ''), audit_end_date=view.audit_filters.get('end_date', '')) }}#audit">Previous</a>
-            </li>
-            {% for p in range(1, view.audit_total_pages + 1) %}
-            <li class="page-item {% if p == view.audit_page %}active{% endif %}">
-              <a class="page-link" href="{{ url_for('admin.store_management', audit_page=p, audit_student=view.audit_filters.get('student', ''), audit_class=view.audit_filters.get('class', ''), audit_action=view.audit_filters.get('action', ''), audit_start_date=view.audit_filters.get('start_date', ''), audit_end_date=view.audit_filters.get('end_date', '')) }}#audit">{{ p }}</a>
-            </li>
-            {% endfor %}
-            <li class="page-item {% if view.audit_page >= view.audit_total_pages %}disabled{% endif %}">
-              <a class="page-link" href="{{ url_for('admin.store_management', audit_page=view.audit_page+1, audit_student=view.audit_filters.get('student', ''), audit_class=view.audit_filters.get('class', ''), audit_action=view.audit_filters.get('action', ''), audit_start_date=view.audit_filters.get('start_date', ''), audit_end_date=view.audit_filters.get('end_date', '')) }}#audit">Next</a>
-            </li>
-          </ul>
-        </nav>
-        {% endif %}
+        <div id="redemptionActions" class="d-flex flex-wrap justify-content-end gap-2" hidden>
+          <button type="button" class="btn btn-outline-secondary me-auto" data-bs-dismiss="modal">Decide later</button>
+          <button type="button" class="btn btn-outline-secondary" id="redemptionReturnBtn">
+            <span class="material-symbols-outlined me-1" aria-hidden="true">undo</span>Return
+          </button>
+          <button type="button" class="btn btn-outline-danger" id="redemptionDenyBtn">
+            <span class="material-symbols-outlined me-1" aria-hidden="true">cancel</span>Deny
+          </button>
+          <button type="button" class="btn btn-success" id="redemptionApproveBtn">
+            <span class="material-symbols-outlined me-1" aria-hidden="true">check_circle</span>Accept
+          </button>
+        </div>
+        <div id="redemptionConfirm" hidden>
+          <div id="redemptionNoteGroup" class="mb-2" hidden>
+            <label for="redemptionNote" class="form-label small fw-semibold mb-1">Note about this denial <span class="text-muted fw-normal">(optional, kept with the record)</span></label>
+            <textarea class="form-control form-control-sm" id="redemptionNote" rows="2" maxlength="500"></textarea>
+          </div>
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <p class="mb-0 small" id="redemptionConfirmText" role="status"></p>
+            <div class="d-flex gap-2 ms-auto">
+              <button type="button" class="btn btn-outline-secondary" id="redemptionBackBtn">Back</button>
+              <button type="button" class="btn" id="redemptionConfirmBtn"></button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -694,91 +757,208 @@
     new bootstrap.Toast(toastEl).show();
   }
 
-  // Reject redemption requests from overview tab
-  document.querySelectorAll(".reject-redemption-btn").forEach(button => {
-    button.addEventListener("click", () => {
-      if (!confirm("Are you sure you want to reject this redemption? The request will be removed and the student will keep the entitlement.")) {
-        return;
+  // Bootstrap's bundle loads after this block, so wait for the document.
+  document.addEventListener('DOMContentLoaded', () => {
+  // Open the tab named in the URL hash (#redemptions, #history, ...).
+  (function () {
+    const tabs = document.getElementById('storeTabs');
+    if (!tabs || !window.location.hash) return;
+    const target = tabs.querySelector('[data-bs-target="' + window.location.hash + '"]');
+    if (target) bootstrap.Tab.getOrCreateInstance(target).show();
+  })();
+
+  // A decision reloads the page; the toast for it survives the reload here.
+  (function () {
+    let pending = null;
+    try {
+      pending = sessionStorage.getItem('storeRedemptionToast');
+      sessionStorage.removeItem('storeRedemptionToast');
+    } catch (e) { /* storage unavailable: no toast, nothing else lost */ }
+    if (pending) {
+      try {
+        const toast = JSON.parse(pending);
+        showToast(toast.message, toast.type || 'success');
+      } catch (e) { /* malformed: ignore */ }
+    }
+  })();
+
+  // Redemption request modal. Each request renders server-side into an inert
+  // <template>; opening one clones it in. Waiting requests get Accept, Deny and
+  // Return, each behind a confirm step, because a decision is final.
+  (function () {
+    const modalEl = document.getElementById('redemptionModal');
+    if (!modalEl) return;
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    const body = document.getElementById('redemptionModalBody');
+    const title = document.getElementById('redemptionModalLabel');
+    const decided = document.getElementById('redemptionDecided');
+    const actions = document.getElementById('redemptionActions');
+    const confirmBox = document.getElementById('redemptionConfirm');
+    const confirmText = document.getElementById('redemptionConfirmText');
+    const confirmBtn = document.getElementById('redemptionConfirmBtn');
+    const backBtn = document.getElementById('redemptionBackBtn');
+    const denyBtn = document.getElementById('redemptionDenyBtn');
+    const returnBtn = document.getElementById('redemptionReturnBtn');
+    const approveBtn = document.getElementById('redemptionApproveBtn');
+    const noteGroup = document.getElementById('redemptionNoteGroup');
+    const note = document.getElementById('redemptionNote');
+    let current = null;
+    let decision = null;
+
+    function showActions() {
+      decision = null;
+      confirmBox.hidden = true;
+      actions.hidden = false;
+      confirmBtn.disabled = false;
+    }
+
+    function open(requestId) {
+      const tpl = document.getElementById('redemption-detail-' + requestId);
+      if (!tpl) return false;
+      current = { id: requestId, data: tpl.dataset };
+      body.replaceChildren(tpl.content.cloneNode(true));
+      title.textContent = tpl.dataset.studentName + ' · ' + tpl.dataset.itemName;
+      note.value = '';
+      const isPending = tpl.dataset.pending === 'true';
+      decided.hidden = isPending;
+      confirmBox.hidden = true;
+      actions.hidden = !isPending;
+      if (isPending) showActions();
+      modal.show();
+      return true;
+    }
+
+    function ask(kind) {
+      decision = kind;
+      actions.hidden = true;
+      confirmBox.hidden = false;
+      noteGroup.hidden = kind !== 'deny';
+      if (kind === 'approve') {
+        confirmText.textContent = 'Accept this request? The item is marked as used. This is final and can\'t be changed.';
+        confirmBtn.className = 'btn btn-success';
+        confirmBtn.textContent = 'Confirm accept';
+      } else if (kind === 'return') {
+        confirmText.textContent = 'Return this request? The item goes back to the student unused, and they can ask again later. This request is closed for good.';
+        confirmBtn.className = 'btn btn-secondary';
+        confirmBtn.textContent = 'Confirm return';
+      } else {
+        confirmText.textContent = 'Deny this request? The item is used up and nothing is refunded. This is final and can\'t be changed.';
+        confirmBtn.className = 'btn btn-danger';
+        confirmBtn.textContent = 'Confirm denial';
       }
+      confirmBtn.focus();
+    }
 
-      const studentItemId = button.dataset.entitlementId;
+    function submit() {
+      if (!current || !decision) return;
       const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+      const url = {
+        approve: '/api/approve-redemption',
+        return: '/api/return-redemption',
+        deny: '/api/reject-redemption',
+      }[decision];
+      const payload = { request_id: current.id, entitlement_id: current.data.entitlementId };
+      if (decision === 'deny' && note.value.trim()) payload.note = note.value.trim();
 
-      button.disabled = true;
-      const originalHtml = button.innerHTML;
-      button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+      confirmBtn.disabled = true;
+      backBtn.disabled = true;
+      const label = confirmBtn.textContent;
+      confirmBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Saving…';
 
-      fetch('/api/reject-redemption', {
+      fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': csrfToken
-        },
-        body: JSON.stringify({ entitlement_id: studentItemId })
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+        body: JSON.stringify(payload)
       })
-      .then(response => response.json())
-      .then(data => {
-        if (data.status === 'success') {
-          const row = button.closest('tr');
-          row.style.transition = 'opacity 0.3s';
-          row.style.opacity = '0';
-          setTimeout(() => row.remove(), 300);
-          showToast('Redemption rejected.', 'success');
-        } else {
-          showToast('Rejection failed: ' + data.message, 'danger');
-          button.disabled = false;
-          button.innerHTML = originalHtml;
+        .then(response => response.json().then(data => ({ ok: response.ok, data })))
+        .then(({ ok, data }) => {
+          if (ok && data.status === 'success') {
+            try {
+              sessionStorage.setItem('storeRedemptionToast', JSON.stringify({ message: data.message, type: 'success' }));
+            } catch (e) { /* toast is a convenience */ }
+            const next = new URL(window.location.href);
+            next.searchParams.delete('request');
+            next.hash = 'redemptions';
+            window.location.replace(next.toString());
+            if (next.pathname + next.search === window.location.pathname + window.location.search) {
+              window.location.reload();
+            }
+            return;
+          }
+          showToast(data.message || 'The decision could not be saved.', 'danger');
+          confirmBtn.textContent = label;
+          confirmBtn.disabled = false;
+          backBtn.disabled = false;
+        })
+        .catch(error => {
+          console.error('Redemption decision error:', error);
+          showToast('An unexpected error occurred. Nothing was changed.', 'danger');
+          confirmBtn.textContent = label;
+          confirmBtn.disabled = false;
+          backBtn.disabled = false;
+        });
+    }
+
+    document.querySelectorAll('[data-redemption-id]').forEach(row => {
+      row.addEventListener('click', () => open(row.dataset.redemptionId));
+    });
+    approveBtn.addEventListener('click', () => ask('approve'));
+    denyBtn.addEventListener('click', () => ask('deny'));
+    returnBtn.addEventListener('click', () => ask('return'));
+    backBtn.addEventListener('click', showActions);
+    confirmBtn.addEventListener('click', submit);
+
+    // Immediate-use reminders: one button, Mark as complete, confirmed by a
+    // second click on the same button (DOM-STORE-001 §VIII.E.3).
+    document.querySelectorAll('[data-complete-immediate]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (btn.dataset.armed !== 'true') {
+          btn.dataset.armed = 'true';
+          btn.classList.replace('btn-outline-success', 'btn-success');
+          btn.textContent = 'Confirm complete';
+          return;
         }
-      })
-      .catch(error => {
-        console.error('Rejection error:', error);
-        showToast('An unexpected error occurred.', 'danger');
-        button.disabled = false;
-        button.innerHTML = originalHtml;
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        btn.disabled = true;
+        fetch('/api/complete-immediate-use', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify({ request_id: btn.dataset.completeImmediate })
+        })
+          .then(response => response.json().then(data => ({ ok: response.ok, data })))
+          .then(({ ok, data }) => {
+            if (ok && data.status === 'success') {
+              try {
+                sessionStorage.setItem('storeRedemptionToast', JSON.stringify({ message: data.message, type: 'success' }));
+              } catch (e) { /* toast is a convenience */ }
+              const next = new URL(window.location.href);
+              next.searchParams.delete('request');
+              next.hash = 'redemptions';
+              const samePage = next.pathname + next.search === window.location.pathname + window.location.search;
+              window.location.replace(next.toString());
+              if (samePage) window.location.reload();
+              return;
+            }
+            showToast(data.message || 'Could not mark it complete.', 'danger');
+            btn.disabled = false;
+          })
+          .catch(() => {
+            showToast('An unexpected error occurred. Nothing was changed.', 'danger');
+            btn.disabled = false;
+          });
       });
     });
-  });
 
-  // Approve redemption requests from overview tab
-  document.querySelectorAll(".approve-redemption-btn").forEach(button => {
-    button.addEventListener("click", () => {
-      const studentItemId = button.dataset.entitlementId;
-      const csrfToken = document.querySelector('meta[name=\"csrf-token\"]').getAttribute('content');
-
-      // Disable button and show loading state
-      button.disabled = true;
-      const originalHtml = button.innerHTML;
-      button.innerHTML = '<span class=\"material-symbols-outlined\" aria-hidden="true">hourglass_top</span> Processing...';
-
-      fetch('/api/approve-redemption', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': csrfToken
-        },
-        body: JSON.stringify({ entitlement_id: studentItemId })
-      })
-      .then(response => response.json())
-      .then(data => {
-        if (data.status === 'success') {
-          const row = button.closest('tr');
-          row.style.transition = 'opacity 0.3s';
-          row.style.opacity = '0';
-          setTimeout(() => row.remove(), 300);
-          showToast('Redemption approved successfully!', 'success');
-        } else {
-          showToast('Approval failed: ' + data.message, 'danger');
-          button.disabled = false;
-          button.innerHTML = originalHtml;
-        }
-      })
-      .catch(error => {
-        console.error('Approval error:', error);
-        showToast('An unexpected error occurred.', 'danger');
-        button.disabled = false;
-        button.innerHTML = originalHtml;
-      });
-    });
+    // Deep link from the dashboard: /admin/store?request=<id>#redemptions
+    const requested = new URLSearchParams(window.location.search).get('request');
+    if (requested) {
+      const tab = document.getElementById('redemptions-tab');
+      if (tab) bootstrap.Tab.getOrCreateInstance(tab).show();
+      if (!open(requested)) {
+        showToast('That request has already been decided or is not in this class.', 'warning');
+      }
+    }
+  })();
   });
 </script>
 

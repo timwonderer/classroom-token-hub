@@ -1,7 +1,7 @@
 """Item-type field gating on the two admin store item forms.
 
-A teacher could previously configure a bundle on an immediate-use item, or a
-bulk discount on a collective goal. ``_validate_definition`` rejects those on
+A teacher could previously configure a bulk discount on a collective goal, or
+a redemption prompt on an immediate-use item. ``_validate_definition`` rejects those on
 submit (SPEC-STORE-001 §V.A), so the whole save failed with no indication of
 which control was the illegal one.
 
@@ -24,7 +24,7 @@ from tests.helpers.store_products import publish_store_product
 
 pytestmark = [pytest.mark.regression]
 
-RULE_NAMES = {"multi_unit", "bulk_discountable", "expiring", "collective", "rent_linkable", "promptable"}
+RULE_NAMES = {"bulk_discountable", "expiring", "collective", "rent_linkable", "promptable"}
 
 
 def _contracts_payload(body):
@@ -45,18 +45,16 @@ def test_rules_cover_every_canonical_item_type():
         assert set(allowed) == RULE_NAMES, item_type
 
 
-def test_immediate_use_item_cannot_be_bundled_but_can_use_bulk_pricing():
-    """Immediate use cannot bundle, but bulk pricing is a valid price rule."""
-    assert store_service.item_type_field_rules()["immediate"]["multi_unit"] is False
+def test_immediate_use_item_can_use_bulk_pricing():
+    """Bulk pricing is a valid price rule on immediate use."""
     assert store_service.item_type_field_rules()["immediate"]["bulk_discountable"] is True
-    assert store_service.item_type_field_rules()["delayed"]["multi_unit"] is True
 
 
 def test_collective_goal_allows_only_its_own_settings():
     """A shared pot is not a per-seat count, and rent cannot grant one."""
     collective = store_service.item_type_field_rules()["collective"]
     assert collective["collective"] is True
-    assert collective["multi_unit"] is False
+    assert collective["bulk_discountable"] is False
     assert collective["rent_linkable"] is False
 
 

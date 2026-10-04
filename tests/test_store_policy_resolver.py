@@ -102,45 +102,21 @@ class TestPublicationValidation:
                         auto_expiry_days=30,
                     )
 
-    def test_rejects_bundle_on_immediate_use(self, app, test_class, teacher_seat):
-        """A bundle grants several unexercised units; an immediate item cannot
-        hold even one, because it is spent the moment it is bought."""
+    @pytest.mark.parametrize("field, value", [("is_bundle", True), ("bundle_quantity", 3)])
+    def test_rejects_the_removed_bundle_fields(self, app, test_class, teacher_seat, field, value):
+        """Bundles are gone (SPEC-STORE-001 1.5): a pack is a quantity at a bulk
+        price. A definition still carrying a bundle field is refused as
+        unknown, so no caller can publish a listing that promises several
+        units per purchase and is then sold as one."""
         with app.app_context():
-            with FEATContext("FEAT-TEST-SETUP", idempotency_key="store-publish:immediate-bundle"):
-                with pytest.raises(InvalidDefinition, match="cannot be bundled"):
-                    self._publish(
-                        test_class["class_id"], teacher_seat["seat_id"],
-                        entitlement_type="IMMEDIATE_USE",
-                        is_bundle=True,
-                        bundle_quantity=5,
-                    )
-
-    def test_rejects_bundle_of_one(self, app, test_class, teacher_seat):
-        """A "bundle" of one is the defect this whole mechanic was built to
-        fix: a listing promising several uses that grants a single lifecycle."""
-        with app.app_context():
-            with FEATContext("FEAT-TEST-SETUP", idempotency_key="store-publish:bundle-of-one"):
-                with pytest.raises(InvalidDefinition, match="more than one unit"):
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"store-publish:removed-{field}"):
+                with pytest.raises(UnknownDefinitionField, match=field):
                     self._publish(
                         test_class["class_id"], teacher_seat["seat_id"],
                         entitlement_type="DELAYED_USE",
-                        is_bundle=True,
-                        bundle_quantity=1,
+                        price="5.00",
+                        **{field: value},
                     )
-
-    def test_accepts_bundle_on_delayed_use(self, app, test_class, teacher_seat):
-        """Delayed-use items hold multiple unexercised units, so they bundle."""
-        with app.app_context():
-            with FEATContext("FEAT-TEST-SETUP", idempotency_key="store-publish:delayed-bundle"):
-                product = self._publish(
-                    test_class["class_id"], teacher_seat["seat_id"],
-                    entitlement_type="DELAYED_USE",
-                    price="5.00",
-                    is_bundle=True,
-                    bundle_quantity=3,
-                )
-            config = StorePolicyResolver.resolve_store_item(product.policy_uuid)
-            assert config.bundle_quantity == 3
 
     def test_rejects_bulk_discount_out_of_range(self, app, test_class, teacher_seat):
         """A discount outside (0, 100] cannot describe a charge."""
@@ -188,10 +164,8 @@ class TestPublicationValidation:
         """SPEC-STORE-001 §V.B: a goal is a shared pot, so per-purchase
         mechanics have nothing to attach to.
 
-        Bundling and the bulk discount are refused by one guard, because they
-        fail for one reason: both price a single student's order, and a goal is
-        not counted that way. The goal says so in its own words rather than
-        being lumped in with the types that simply cannot hold a second unit.
+        The bulk discount prices a single student's order, and a goal is not
+        counted that way.
         """
         with app.app_context():
             goal = dict(
@@ -201,12 +175,6 @@ class TestPublicationValidation:
                 collective_goal_target=100,
                 collective_goal_expires_at=utc_now() + timedelta(days=30),
             )
-            with FEATContext("FEAT-TEST-SETUP", idempotency_key="store-publish:goal-bundle"):
-                with pytest.raises(InvalidDefinition, match="cannot be bundled"):
-                    self._publish(
-                        test_class["class_id"], teacher_seat["seat_id"],
-                        is_bundle=True, bundle_quantity=5, **goal,
-                    )
             with FEATContext("FEAT-TEST-SETUP", idempotency_key="store-publish:goal-bulk"):
                 with pytest.raises(InvalidDefinition, match="cannot be given a bulk discount"):
                     self._publish(

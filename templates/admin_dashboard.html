@@ -114,7 +114,7 @@
                 {% if total_pending_actions > 0 %}
                 <div class="mt-2 small text-muted">
                     {% if pending_redemptions_count > 0 %}
-                    <span class="badge bg-warning text-dark me-1">{{ pending_redemptions_count }} orders</span>
+                    <span class="badge bg-warning text-dark me-1">{{ pending_redemptions_count }} store item{{ 's' if pending_redemptions_count != 1 }}</span>
                     {% endif %}
                     {% if pending_insurance_claims_count > 0 %}
                     <span class="badge bg-danger text-white me-1">{{ pending_insurance_claims_count }} claims</span>
@@ -259,38 +259,37 @@
                 <div class="tab-pane fade show active" id="redemptions" role="tabpanel" aria-labelledby="redemptions-tab">
                     <div class="list-group list-group-flush scroll-panel">
                         {% for req in recent_redemptions %}
-                        <div
-                            class="list-group-item px-0 d-flex justify-content-between align-items-center border-0 py-3">
-                            <div>
-                                <strong>{{ seat_profiles.get(req.seat_id).first_name ~ ' ' ~ seat_profiles.get(req.seat_id).last_name if
-                                    seat_profiles.get(req.seat_id) else 'Unknown' }}</strong>
-                                <br>
-                                <small class="text-muted">{{ req.store_item.name }}</small>
-                                {% if req.redemption_details %}
-                                <br>
-                                <div class="small text-muted">{{ req.redemption_details | markdown }}</div>
+                        {% if req.is_acknowledgement %}
+                        <a href="{{ url_for('admin.store_management') }}#redemptions"
+                            class="list-group-item list-group-item-action px-0 d-flex justify-content-between align-items-center gap-3 border-0 py-3">
+                            <div class="overflow-hidden">
+                                <strong>{{ req.student_name }}</strong>
+                                <div class="small text-muted">Bought {{ req.item_name }} · {{ req.submitted_at|fmt_timestamp }}</div>
+                                <div class="small text-body-secondary">Immediate use: deliver it, then mark it complete.</div>
+                            </div>
+                            <span class="btn btn-sm btn-outline-secondary flex-shrink-0">To deliver</span>
+                        </a>
+                        {% else %}
+                        <a href="{{ url_for('admin.store_management', request=req.request_id) }}#redemptions"
+                            class="list-group-item list-group-item-action px-0 d-flex justify-content-between align-items-center gap-3 border-0 py-3">
+                            <div class="overflow-hidden">
+                                <strong>{{ req.student_name }}</strong>
+                                <div class="small text-muted">{{ req.item_name }} · Requested {{ req.submitted_at|fmt_timestamp }}</div>
+                                {% if req.student_note %}
+                                <div class="small text-body-secondary text-truncate">“{{ req.student_note|truncate(90) }}”</div>
                                 {% endif %}
                             </div>
-                            <div class="d-flex gap-2">
-                                <button type="button" class="btn btn-sm btn-outline-danger reject-redemption-btn"
-                                    data-entitlement-id="{{ req.id }}" data-bs-toggle="tooltip"
-                                    title="Refund and remove" aria-label="Refund and remove">
-                                    <span class="material-symbols-outlined" aria-hidden="true">cancel</span>
-                                </button>
-                                <button type="button" class="btn btn-sm btn-success approve-redemption-btn"
-                                    data-entitlement-id="{{ req.id }}">
-                                    <span class="material-symbols-outlined me-1" aria-hidden="true">check_circle</span>Approve
-                                </button>
-                            </div>
-                        </div>
+                            <span class="btn btn-sm btn-outline-primary flex-shrink-0">Review</span>
+                        </a>
+                        {% endif %}
                         {% endfor %}
                     </div>
-                    {% if pending_redemptions_count > 5 %}
-                    <div class="mt-2 text-center">
-                        <small class="text-muted">Showing 5 of {{ pending_redemptions_count }} pending
-                            redemptions</small>
+                    <div class="mt-2 d-flex justify-content-between align-items-center">
+                        <small class="text-muted">
+                            {% if pending_redemptions_count > 5 %}Showing the 5 oldest of {{ pending_redemptions_count }}{% else %}Oldest first{% endif %}
+                        </small>
+                        <a href="{{ url_for('admin.store_management') }}#redemptions" class="btn btn-sm btn-link">All redemptions</a>
                     </div>
-                    {% endif %}
                 </div>
                 {% endif %}
 
@@ -484,178 +483,5 @@
     const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
     const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
 
-    // Helper to get or create toast container
-    function getOrCreateToastContainer() {
-        let container = document.getElementById('flashToastContainer');
-        if (!container) {
-            container = document.createElement('div');
-            container.id = 'flashToastContainer';
-            container.className = 'position-fixed bottom-0 end-0 p-3';
-            container.style.zIndex = '1050';
-            document.body.appendChild(container);
-        }
-        return container;
-    }
-
-    // Helper to show a toast notification
-    function showToast(message, type = 'success') {
-        const container = getOrCreateToastContainer();
-        const toastEl = document.createElement('div');
-        toastEl.className = `toast align-items-center text-bg-${type} border-0`;
-        toastEl.setAttribute('role', 'alert');
-
-        const wrapper = document.createElement('div');
-        wrapper.className = 'd-flex';
-
-        const toastBody = document.createElement('div');
-        toastBody.className = 'toast-body';
-        toastBody.textContent = message;
-
-        const closeButton = document.createElement('button');
-        closeButton.type = 'button';
-        closeButton.className = 'btn-close btn-close-white me-2 m-auto';
-        closeButton.setAttribute('data-bs-dismiss', 'toast');
-        closeButton.setAttribute('aria-label', 'Close');
-
-        wrapper.appendChild(toastBody);
-        wrapper.appendChild(closeButton);
-        toastEl.appendChild(wrapper);
-        container.appendChild(toastEl);
-        new bootstrap.Toast(toastEl).show();
-    }
-
-    // Helper to update counters after action
-    function updatePendingCounters(type) {
-        // Update the pending actions stat card
-        const pendingCard = document.querySelector('.icon-circle.bg-warning');
-        if (pendingCard) {
-            const statElement = pendingCard.closest('.card-body').querySelector('h2');
-            if (statElement) {
-                const currentCount = parseInt(statElement.textContent) || 0;
-                if (currentCount > 0) statElement.textContent = currentCount - 1;
-            }
-        }
-
-        if (type === 'redemptions') {
-            const redemptionsTabBadge = document.querySelector('#redemptions-tab .badge');
-            if (redemptionsTabBadge) {
-                const currentRedCount = parseInt(redemptionsTabBadge.textContent) || 0;
-                redemptionsTabBadge.textContent = currentRedCount - 1;
-
-                if (currentRedCount - 1 <= 0) {
-                    // Hide tab if no more redemptions
-                    const tabLi = document.querySelector('#redemptions-tab').closest('li');
-                    if (tabLi) tabLi.remove();
-
-                    // If no redemptions left, show empty state in tab content immediately
-                    const redemptionsPane = document.querySelector('#redemptions');
-                    if (redemptionsPane) {
-                        redemptionsPane.innerHTML = `
-                            <div class="text-center text-muted py-4">
-                                <span class="material-symbols-outlined icon-xl" aria-hidden="true">check_circle</span>
-                                <p class="mb-0 mt-2">No pending redemptions</p>
-                            </div>
-                        `;
-                    }
-                }
-            }
-        }
-    }
-
-    // Handle redemption rejection
-    document.querySelectorAll(".reject-redemption-btn").forEach(button => {
-        button.addEventListener("click", () => {
-            if (!confirm("Are you sure you want to reject this redemption? The request will be removed and the student will keep the entitlement.")) {
-                return;
-            }
-
-            const studentItemId = button.dataset.entitlementId;
-            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-            const icon = button.innerHTML;
-
-            // Disable button and show loading state
-            button.disabled = true;
-            button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
-
-            fetch('/api/reject-redemption', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken
-                },
-                body: JSON.stringify({ entitlement_id: studentItemId })
-            })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        // Remove the item from the list with a fade effect
-                        const listItem = button.closest('.list-group-item');
-                        listItem.style.transition = 'opacity 0.3s';
-                        listItem.style.opacity = '0';
-                        setTimeout(() => {
-                            listItem.remove();
-                            updatePendingCounters('redemptions');
-                            showToast('Redemption rejected.', 'success');
-
-                        }, 300);
-                    } else {
-                        showToast('Rejection failed: ' + data.message, 'danger');
-                        button.disabled = false;
-                        button.innerHTML = icon;
-                    }
-                })
-                .catch(error => {
-                    console.error('Rejection error:', error);
-                    showToast('An unexpected error occurred.', 'danger');
-                    button.disabled = false;
-                    button.innerHTML = icon;
-                });
-        });
-    });
-
-    // Handle redemption approval
-    document.querySelectorAll(".approve-redemption-btn").forEach(button => {
-        button.addEventListener("click", () => {
-            const studentItemId = button.dataset.entitlementId;
-            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-
-            // Disable button and show loading state
-            button.disabled = true;
-            button.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">hourglass_top</span> Processing...';
-
-            fetch('/api/approve-redemption', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken
-                },
-                body: JSON.stringify({ entitlement_id: studentItemId })
-            })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        // Remove the item from the list with a fade effect
-                        const listItem = button.closest('.list-group-item');
-                        listItem.style.transition = 'opacity 0.3s';
-                        listItem.style.opacity = '0';
-                        setTimeout(() => {
-                            listItem.remove();
-                            updatePendingCounters('redemptions');
-                            showToast('Redemption approved successfully!', 'success');
-                        }, 300);
-                    } else {
-                        showToast('Approval failed: ' + data.message, 'danger');
-                        button.disabled = false;
-                        button.innerHTML = '<span class="material-symbols-outlined me-1" aria-hidden="true">check_circle</span>Approve';
-                    }
-                })
-                .catch(error => {
-                    console.error('Approval error:', error);
-                    showToast('An unexpected error occurred.', 'danger');
-                    button.disabled = false;
-                    button.innerHTML = '<span class="material-symbols-outlined me-1" aria-hidden="true">check_circle</span>Approve';
-                });
-        });
-    });
 </script>
 {% endblock %}

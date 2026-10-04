@@ -22,8 +22,8 @@ This command closes one lapsed goal in one class. It is deliberately narrow:
 The join between the two domains is ``correlation_id``. A store purchase writes
 its ``Transaction`` and its per-unit ``EntitlementEvent`` rows under one
 correlation (``store_purchase_feat``), so the events of a single purchase share
-a correlation with exactly the transaction that paid for them. A bundle is n
-independent entitlement lifecycles under one correlation and one charge, which
+a correlation with exactly the transaction that paid for them. A purchase of n
+units is n independent entitlement lifecycles under one correlation and one charge, which
 is why the refund is issued per correlation group and never per unit — refunding
 per unit would return the price n times.
 """
@@ -145,7 +145,7 @@ def expire_lapsed_collective_goal(
 
     open_grants = _load_open_goal_entitlements(class_id, lineage_uuid)
 
-    # A bundle is many entitlements under one charge, so refunds are issued per
+    # A multi-unit purchase is many entitlements under one charge, so refunds are issued per
     # purchase (correlation), not per entitlement.
     by_correlation: dict[str, list[EntitlementEvent]] = {}
     for grant in open_grants:

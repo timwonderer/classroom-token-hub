@@ -162,11 +162,6 @@ def resolve_store_form_contract(*, item_type: str, rent_linked: bool,
             FormField('bulk_discount_quantity', 'number', 'Minimum Quantity for Discount', depends_on='bulk_discount_enabled'),
             FormField('bulk_discount_percentage', 'number', 'Discount Percentage', depends_on='bulk_discount_enabled'),
         ])
-    if item_type in {'delayed', 'hall_pass'}:
-        purchase.extend([
-            FormField('is_bundle', 'checkbox', 'This is a Bundled Item'),
-            FormField('bundle_quantity', 'number', 'Bundle Quantity', depends_on='is_bundle'),
-        ])
     groups = (
         ('basic', 'Basic Information', basic),
         ('acquisition', 'How Students Get It', acquisition),

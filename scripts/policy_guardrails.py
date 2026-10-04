@@ -615,9 +615,6 @@ _CLE_DEBT = {
     ("app/routes/api.py", "return timedelta(days=value)"),
     ("app/routes/api.py", "return timedelta(weeks=value)"),
     ("app/routes/api.py", "return timedelta(days=30)"),
-    # SLE audit-filter end widened by a second; the filter can span several
-    # classes, so it has no single class calendar to move onto.
-    ("app/routes/admin.py", "end_dt = _eb.boundary_end_utc + timedelta(seconds=1)"),
 }
 
 TEMPORAL_ARITHMETIC_BASELINE = frozenset(_SLE_DURATIONS | _CLE_DEBT)

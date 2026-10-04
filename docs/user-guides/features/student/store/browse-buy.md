@@ -4,7 +4,7 @@ category: features
 subcategory: student-store
 roles: [student]
 description: Read the badges on a store item, understand the four item types, and buy with your passphrase.
-keywords: [store, buy, purchase, passphrase, bundle, bulk discount, collective goal, rent perk, out of stock, quantity]
+keywords: [store, buy, purchase, passphrase, bulk discount, collective goal, rent perk, out of stock, quantity]
 related:
   - user-guides/features/student/store/redemption-status
   - user-guides/diagnostics/student/store
@@ -33,8 +33,7 @@ The most important badge is the **item type**, because it decides when you get t
 
 Other badges you may see:
 
-- **Bundle: N items** — one purchase, charged once, that puts N separate copies in **My Items**
-- **N% off when you buy N+** — buy that many at once and the whole order is discounted
+- **N% off when you buy N+** — buy that many at once and the whole order is discounted. Each one you buy is a separate copy in **My Items**
 - **Available: N left** — limited stock
 - **Limit: N per student** — a cap on how many you personally may buy
 
@@ -60,7 +59,7 @@ Your purchase counts toward the goal immediately. Once the deadline passes the i
 
 ### Buying
 
-Choose **Purchase** to open **Confirm Purchase**. It shows the item, the unit price, and any bundle or discount details.
+Choose **Purchase** to open **Confirm Purchase**. It shows the item, the unit price, and any discount details.
 
 Set the **quantity** with the `-` and `+` buttons. **Total Price** updates as you change it, and if a bulk discount kicks in you will see **You save $X**. Rent-perk items lock quantity to 1.
 

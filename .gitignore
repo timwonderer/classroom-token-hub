@@ -18,7 +18,10 @@ local.db
 .claude/settings.local.json
 *.log.*
 venv
-.codex/
+.codex/*
+!.codex/environments/
+.codex/environments/*
+!.codex/environments/environment.toml
 *_optimized.txt
 *.code-workspace
 docs-site/node_modules/

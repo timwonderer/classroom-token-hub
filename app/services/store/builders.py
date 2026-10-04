@@ -55,8 +55,6 @@ class StoreItemCardView:
     policy_uuid: str | None
     item_type: str  # 'immediate', 'delayed', 'collective', 'hall_pass'
     inventory_available: int | None  # None means unlimited
-    is_bundle: bool
-    bundle_quantity: int | None
     bulk_discount_enabled: bool
     bulk_discount_quantity: int | None
     bulk_discount_percentage: float | None
@@ -228,8 +226,6 @@ def build_store_item_card_view(
         policy_uuid=item.policy_uuid,
         item_type=item.item_type,
         inventory_available=stock_remaining,
-        is_bundle=item.is_bundle,
-        bundle_quantity=item.bundle_quantity,
         bulk_discount_enabled=item.bulk_discount_enabled,
         bulk_discount_quantity=item.bulk_discount_quantity,
         bulk_discount_percentage=item.bulk_discount_percentage,
@@ -306,6 +302,7 @@ def build_entitlement_card_view(
         "consumed": "Used",
         "expired": "Expired",
         "revoked": "Revoked",
+        "denied": "Denied",
     }
     display_status = status_labels.get(status, status.title())
 
@@ -341,6 +338,7 @@ def build_entitlement_card_view(
         "consumed": "bg-secondary",
         "expired": "bg-secondary",
         "revoked": "bg-danger",
+        "denied": "bg-secondary",
     }
     status_badge_class = status_badge_classes.get(status, "bg-secondary")
 

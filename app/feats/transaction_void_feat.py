@@ -131,11 +131,10 @@ def _void_purchase(tx: Transaction) -> None:
       return a version of lineage B for a purchase made against lineage A, and
       the void then either refused or revoked the student's units of the wrong
       product while the ledger reversed the charge for the other one.
-    * The ``(xN)`` in the description counts *purchases*, while a bundle grants
-      ``N * bundle_quantity`` units. A single purchase of a five-unit bundle
-      wrote ``(x1)``, so the reversal refunded the whole charge and left four
-      units GRANTED — a partially reversible purchase, which SPEC-OPS-001 §3.5
-      does not permit.
+    * The ``(xN)`` in the description could disagree with the units granted:
+      when one purchase granted several units but wrote ``(x1)``, the reversal
+      refunded the whole charge and left the other units GRANTED — a partially
+      reversible purchase, which SPEC-OPS-001 §3.5 does not permit.
 
     Both fall away once the units are counted rather than parsed: the purchase
     writes every grant under the transaction's own correlation, so that

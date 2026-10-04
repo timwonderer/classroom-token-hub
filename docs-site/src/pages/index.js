@@ -11,28 +11,28 @@ const BRAND_ROWS = [
 
 const SECTIONS = [
   {
-    label: "Invariants",
+    label: "Invariants (INV-*)",
     to: "/category/invariants",
-    tier: "Constitutional",
-    body: "INV-CORE and INV-ARC. The rules nothing else may contradict, including the identity model.",
+    tier: "Constitutional/Normative",
+    body: "Core Invariants and Architectural Invariants of Classroom Token Hub. These are the foundational rules that must be followed by all developers",
   },
   {
-    label: "Domain Authority",
+    label: "Domain (DOM-*)",
     to: "/category/domain-authority",
     tier: "Normative",
-    body: "DOM-* specs. What each domain owns, and the contracts it exposes to everything else.",
+    body: "Domains are specific and well-defined features of Classroom Token Hub (e.g. Class Configuration, Identity, etc.). Each domain define the type of data it should own, the invariants that must be maintained, and the authority it has over its data.",
   },
   {
-    label: "Feature Execution",
+    label: "Feature-Execution (FEAT-*)",
     to: "/category/feature-execution",
     tier: "Normative",
-    body: "FEAT contracts. Every state mutation in the application runs through one of these.",
+    body: "FEATs are owned by a single domain and are the sole authority for the execution of any mutation that affects the domain. They are the only source of truth for how a feature should behave and are responsible for ensuring that the feature is implemented correctly.",
   },
   {
-    label: "Specifications",
+    label: "Specifications (SPEC-*)",
     to: "/category/specifications",
     tier: "Normative",
-    body: "SPEC-* technical contracts: testing, design system, temporal handling, build requirements.",
+    body: "SPEC documents the specific design of a feature or hardware. SPEC documents derive its authority from the corresponding domain that owns the feature. SPEC defines how a feature should be presented, how its transition looks like, and how it should be implemented.",
   },
   {
     label: "Operating Procedures",
@@ -89,16 +89,14 @@ export default function Home() {
           <div className="landing-welcome">
             <Heading as="h1">Developer documentation</Heading>
             <p>
-              The documentation that governs the system: constitutional
-              invariants, domain authority specs, feature execution contracts,
-              and the procedures that keep the database and deployments honest.
+              Welcome! Discover the underlying structure of the Classroom Token Hub and why we build it that way.
             </p>
             <div className="hero__actions">
               <Link className="button button--primary button--lg" to="/category/invariants">
-                Start with the invariants
+                Start here: Read the Invariants
               </Link>
               <Link className="button button--secondary button--lg" to="/REFERENCE/REF-TERM-001_DEVELOPER_VOCABULARY">
-                Read the glossary
+                Project Glossary
               </Link>
             </div>
           </div>
@@ -107,11 +105,10 @@ export default function Home() {
 
       <main className="container margin-vert--xl">
         <section>
-          <Heading as="h2">Authority flows downward</Heading>
+          <Heading as="h2">How to navigate the documentation</Heading>
           <p className="section-lede">
-            <code>INV-CORE</code> → <code>INV-ARC</code> → <code>DOM</code> →{" "}
-            <code>FEAT</code>. When a specification and the implementation
-            disagree, the constitutional documents define the target state.
+            Classroom Token Hub has a strict documentation hierarchy structure that must be followed: <code>INV-CORE</code> → <code>INV-ARC</code> → <code>DOM</code> →{" "}
+            <code>FEAT</code>.Each layer derives their meaning from the layer above. The invariant-level documents are cumlative and authoritative and no code changes can be done if they have violated the invariants.
           </p>
           <div className="row">
             {SECTIONS.map((section) => (

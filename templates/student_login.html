@@ -1,6 +1,7 @@
 {% import 'macros/cards.html' as cards %}
 {% from "macros/auth_brand.html" import auth_brand %}
 {% from "macros/turnstile.html" import turnstile %}
+{% from "macros/login_notice.html" import login_notice %}
 <!DOCTYPE html>
 <html lang="en">
 
@@ -32,6 +33,8 @@
                 <h1 id="student-login-heading" class="h3 fw-bold text-primary">Hello, Student!</h1>
                 <p class="subtitle">Enter your information below to access your classroom account.</p>
             </div>
+
+            {{ login_notice() }}
 
             {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
