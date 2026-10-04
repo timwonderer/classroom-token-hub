@@ -199,9 +199,10 @@ the repository.
 | Other host facts | Ubuntu 22.04.5; PostgreSQL 14.24; nginx 1.18.0; Tailscale 1.102.4; Python 3.10.12; `/` 50% of 25 G; Let's Encrypt certificate valid to 2026-12-07, `nginx` authenticator. `pip-audit` on the production venv's full freeze (85 packages): no known vulnerabilities |
 | DigitalOcean web console | Not working. The droplet agent is healthy, but the web console connects over public port 22, which the `Cloudflare` cloud firewall closes. DigitalOcean publishes no console source ranges, so no rule was added; root has no password, so the Recovery Console is not usable either. The tailnet is the only way in |
 
+Cloudflare Access lifted and the resolved status update posted by the operator, 2026-10-04 about 20:54Z, after the browser checks passed.
+
 ## Follow-ups
 
-- Lift the Cloudflare Access window once the operator browser checks pass, and post the resolved status update.
 - Delete droplet snapshot `app-server-1791144850804`.
 - First automatic payday, 2026-10-10, now runs under #1477's payroll lineage triggers.
 - `infra/student-setup/README.md` says Redis 7 or newer; production runs 6.0.16 and every step-5 check passes. Find
