@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| FEAT-OBL-004 | 0.2 (DRAFT) | 2026-10-03 | 0.1 (DRAFT) | Normative (proposed) |
+| FEAT-OBL-004 | 0.3 (DRAFT) | 2026-10-03 | 0.2 (DRAFT) | Normative (proposed) |
 
 ## I. Purpose
 
@@ -263,7 +263,6 @@ Representative failures (all leave zero mutations):
 - `INSURANCE_NOT_AVAILABLE_FOR_NEW_COVERAGE` (definition not `IN_USE`)
 - `POLICY_ALREADY_HELD` (seat already holds a concurrently effective grant for the **same** `policy_uuid` — hard invariant, §VII.4)
 - `POLICY_ALREADY_HELD_IN_GROUP` (seat already holds active coverage for another policy in the same `tier_group` — tier-group mutual exclusion, §VII.4)
-- `INSUFFICIENT_FUNDS` (Ledger denied the premium plan)
 - `CROSS_DOMAIN_FAILURE`
 
 ## XIII. Consequential Amendments (same architectural arc)
@@ -289,3 +288,5 @@ and cross-domain coordination invariants.
 ## Amendment — 0.2
 
 **0.2 (2026-10-03)** incorporates universal full-shortfall charge funding and supersedes checking-only affordability denial wording. Policy availability, tier-group exclusion, duplicate acquisition, premium satisfaction, coverage timing and independently authorized fee applicability remain owning-domain decisions. No compatibility funding path, new fee or deferred liability is authorized.
+
+Version 0.3 supersedes the obsolete checking-affordability denial in §XII. Checking/savings insufficiency alone is not a denial under §VIII.3; scope, configuration and owning-domain failures remain atomic.

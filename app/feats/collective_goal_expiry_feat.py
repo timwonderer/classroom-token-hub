@@ -106,17 +106,18 @@ def _find_covering_transaction(grant: EntitlementEvent) -> Transaction | None:
     """
     if not grant.correlation_id:
         return None
-    return (
+    candidates = (
         Transaction.query.filter(
             Transaction.correlation_id == grant.correlation_id,
             Transaction.class_id == grant.class_id,
             Transaction.seat_id == grant.target_seat_id,
             Transaction.type == "purchase",
-            Transaction.reversal_transaction_id.is_(None),
         )
         .order_by(Transaction.id.asc())
-        .first()
+        .all()
     )
+    from app.services.ledger_provenance_query_service import has_exact_reversal
+    return next((transaction for transaction in candidates if not has_exact_reversal(transaction)), None)
 
 
 @requires_feat_context("FEAT-STOR-002")

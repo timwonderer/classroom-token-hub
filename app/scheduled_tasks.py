@@ -683,6 +683,7 @@ def run_savings_interest_job():
     from app.feats.base import FEATContext
     from app.models import Seat
     from app.services.ledger_interest_service import apply_savings_interest
+    from app.services.ledger_recovery_service import lock_ledger_seats
     from app.utils.canonical_temporal_resolver import utc_now
 
     # Interest accrues on posted balances only (SPEC-ECON-001 §9.2), so an
@@ -718,8 +719,13 @@ def run_savings_interest_job():
                 "FEAT-LED-001",
                 idempotency_key=f"savings-interest-job:{class_id}:{run_key}",
             ):
-                for seat in seats:
-                    posted += len(apply_savings_interest(seat))
+                # A class payout must not retain the class economy lock while
+                # acquiring another seat: payroll may already hold that seat.
+                # Lock the complete batch in canonical order before any effect.
+                locked_seats = lock_ledger_seats(class_id, [seat.id for seat in seats])
+                for seat in locked_seats:
+                    if seat.role == "student" and seat.claimed_at is not None:
+                        posted += len(apply_savings_interest(seat))
         except Exception:
             failed += 1
             db.session.rollback()

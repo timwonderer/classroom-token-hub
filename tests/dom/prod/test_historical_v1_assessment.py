@@ -54,6 +54,12 @@ with app.app_context():
 
 
 def test_genuine_v1_envelope_survives_and_reconstruction_validates_without_upgrading_lineage(app,tmp_path):
+    available = subprocess.run(['git', 'cat-file', '-e', PREDECESSOR + '^{commit}'],
+        cwd=REPOSITORY, capture_output=True)
+    assert available.returncode == 0, (
+        f'Historical reconstruction requires predecessor {PREDECESSOR}; fetch complete '
+        'git history before running this test. Missing source evidence must not be skipped.'
+    )
     source=tmp_path/'predecessor';source.mkdir()
     archive=tmp_path/'predecessor.tar'
     with archive.open('wb') as stream:

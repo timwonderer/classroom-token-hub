@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |:---|:---|:---|:---|:---|
-| DOM-OPS-002 | 1.8 | 2026-10-03 | 1.7 | Constitutional |
+| DOM-OPS-002 | 1.9 | 2026-10-03 | 1.8 | Constitutional |
 
 ---
 
@@ -314,6 +314,10 @@ Operations owns `diagnose_historical_audit_coverage(table, row, class_id, *, sou
 
 Version 1 is not a per-record emitter identifier. Explicit exact-source descriptor and independently established emitter provenance are needed before confirmed field coverage. The deployed eleven-field payload cannot be replaced by the retired eight-field verifier registry. Original creation status cannot be supplied from today's cursor or guessed values. Even authenticated envelope/chain evidence never returns `VerifiedCreationEvidence`, establishes unsigned facts, or overrides canonical §6.2. Diagnostic observations remain separate from INV-ARC-016's four canonical lineage states. Current v2/v3 payload verification is unchanged.
 
+### 6.2B Immutable reversal linkage coverage
+
+DOM-LED-001 §VII.0 and FEAT-LED-002 §VII.2/4 require an immutable new reversal effect containing original-effect and correlation linkage; originals are not modified. ORM/PostgreSQL guards freeze the retained historical `reversal_transaction_id` after INSERT. It is not an authoritative monetary or posting input and is not newly added to any signed payload. Ledger audit versions 2 and 3 keep their exact original sixteen- and nineteen-field protected registries; historical signatures, envelopes and audit coverage are unchanged. The new reversal effect receives its normal current lawful creation lineage. Audit records may describe the new reversal's ID without mutating the original row.
+
 ### 6.3 Nightly Verification Flow
 
 ```
@@ -379,6 +383,9 @@ This taxonomy is defined as canonical in `INV-ARC-016`. The operational semantic
 ---
 
 ## 9. Amendment
+
+Version 1.9 (2026-10-03) clarifies immutable exact-reversal linkage and frozen retained original pointers under §6.2B. Supersedes no signed registry or historical evidence.
+
 
 Version 1.8 (2026-10-03) incorporates SPEC-PROD-002 §VII for FEAT-PROD-005/003 historical reconstruction observations alongside FEAT-PROD-006. Supersedes diagnostic-only consumer restriction, without changing canonical lineage taxonomy, verifier/signature versions, protected fields or new-write requirements. No original linkage/status replacement, status guess or historical signing is authorized.
 

@@ -40,11 +40,11 @@ def _by_id(entries):
 
 def _post(cid, seat, account_type, amount, ts, mechanism=LedgerMechanism.SELF):
     """Insert one POSTED ledger row directly (test scaffold)."""
-    db.session.add(record_ledger_fixture(
+    record_ledger_fixture(
         seat_id=seat.seat_id, target_seat_id=seat.seat_id, actor_seat_id=seat.seat_id,
         class_id=cid, amount=Decimal(amount), account_type=account_type,
         mechanism=mechanism, posted=True, type="test", timestamp=ts,
-    ))
+    )
 
 
 def _seed_resources(classroom):

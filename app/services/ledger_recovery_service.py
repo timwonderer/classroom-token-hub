@@ -285,6 +285,18 @@ def _origin(class_id, target_seat_id, locator, lock=False):
     return query.with_for_update().first() if lock else query.first()
 
 
+def lock_ledger_seats(class_id, seat_ids):
+    """Acquire every affected shared seat anchor before a class monetary lock."""
+    required = set(seat_ids)
+    seats = (
+        Seat.query.filter(Seat.class_id == class_id, Seat.id.in_(required))
+        .order_by(Seat.id.asc()).populate_existing().with_for_update().all()
+    )
+    if {seat.id for seat in seats} != required:
+        raise RecoveryIntegrityError("Invalid scoped seat.")
+    return tuple(seats)
+
+
 def lock_recovery_scope(class_id, target_seat_id, origin_locator=None):
     if (
         Seat.query.filter_by(id=target_seat_id, class_id=class_id)
@@ -456,6 +468,7 @@ def resolve_credit_recovery(
     allocation_proof=None,
     interval_key=None,
     description="Payroll correction",
+    compensation_type=None,
 ):
     if proof.status != "VERIFIED" and (
         not (proof.status == "PENDING" and recovery_kind == "EXACT_REVERSAL")
@@ -500,6 +513,7 @@ def resolve_credit_recovery(
         source_account=p.account_type,
         compensation_origin_locator=proof.origin_locator if allocated else None,
         correction_intent_locator=correction_intent_locator if allocated else None,
+        compensation_subtype=(compensation_type if recovery_kind == "EXACT_REVERSAL" else None),
         original_transaction_id=p.id if recovery_kind == "EXACT_REVERSAL" else None,
         correlation_id=p.correlation_id if recovery_kind == "EXACT_REVERSAL" else None,
     )
@@ -561,9 +575,6 @@ def apply_credit_recovery(*, plan, idempotency_key):
         resolved_plan=plan.resolved_plan, idempotency_key=idempotency_key
     )
     principal = result["principal"]
-    if principal and plan.recovery_kind == "EXACT_REVERSAL":
-        original.reversal_transaction_id = principal.id
-        db.session.flush()
     return dict(
         result,
         origin_locator=plan.proof.origin_locator,

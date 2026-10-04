@@ -590,6 +590,7 @@ class Transaction(db.Model):
         ),
         db.UniqueConstraint('class_id', 'posting_sequence', name='uq_ledger_transaction_class_posting_sequence'),
         db.CheckConstraint("compensation_amount_cents IS NULL OR (compensation_amount_cents >= 0 AND (compensation_amount_cents = 0 OR (amount_cents = -compensation_amount_cents AND compensation_origin_locator IS NOT NULL AND correction_intent_locator IS NOT NULL)))", name='ck_ledger_attributable_recovery'),
+        db.Index('uq_ledger_exact_reversal_origin', 'original_transaction_id', unique=True, postgresql_where=sa.text("type = 'REVERSAL'")),
         db.Index('uq_ledger_recovery_intent', 'class_id', 'target_seat_id', 'compensation_origin_locator', 'correction_intent_locator', unique=True, postgresql_where=sa.text('compensation_amount_cents > 0')),
     )
 
@@ -770,18 +771,17 @@ _LEDGER_IMMUTABLE_FIELDS = frozenset({
     'account_type', 'effective_at', 'date_funds_available', 'description',
     'correlation_id', 'original_transaction_id',
     'policy_id', 'type', 'compensation_subtype', 'command_reservation_id',
-    'posting_sequence', 'idempotency_key', 'feat_code',
+    'posting_sequence', 'idempotency_key', 'feat_code', 'reversal_transaction_id',
     'compensation_origin_locator', 'compensation_amount_cents', 'correction_intent_locator',
 })
 
 # Fields the lawful post-insert paths populate exactly once: settlement records
-# informational `posted_at`, correction links
-# `reversal_transaction_id` (INV-LED-013), and the audit emitter stamps lineage
+# informational `posted_at`, and the audit emitter stamps lineage
 # after the row has an id. Creation freezes reservation identity before INSERT. NULL -> value is the
 # assignment; value -> value' is a rewrite of a settled fact and is rejected on
 # the same grounds as the set above.
 _LEDGER_WRITE_ONCE_FIELDS = frozenset({
-    'posted_at', 'reversal_transaction_id',
+    'posted_at',
     'lineage_event_id', 'lineage_token', 'lineage_version',
 })
 

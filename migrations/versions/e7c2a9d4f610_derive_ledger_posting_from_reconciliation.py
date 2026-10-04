@@ -33,9 +33,9 @@ IMMUTABLE = (
     'mechanism', 'amount', 'amount_cents', 'timestamp', 'account_type', 'effective_at',
     'date_funds_available', 'description', 'correlation_id', 'original_transaction_id',
     'policy_id', 'type', 'compensation_subtype', 'command_reservation_id',
-    'posting_sequence', 'idempotency_key', 'feat_code',
+    'posting_sequence', 'idempotency_key', 'feat_code', 'reversal_transaction_id',
 )
-WRITE_ONCE = ('posted_at', 'reversal_transaction_id', 'lineage_event_id', 'lineage_token', 'lineage_version')
+WRITE_ONCE = ('posted_at', 'lineage_event_id', 'lineage_token', 'lineage_version')
 
 
 def _install_guard():

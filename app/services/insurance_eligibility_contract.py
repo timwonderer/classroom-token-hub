@@ -146,11 +146,14 @@ def evaluate_transaction_claim_basis(
     # entitlement. The original transaction is therefore still historical
     # truth, but it is no longer an insurable loss. Check both sides of the
     # append-only lineage so this remains true for either loaded row.
-    compensated = bool(transaction.reversal_transaction_id) or (
+    compensated = (
         db.session.query(Transaction.id)
         .filter(
+            Transaction.class_id == transaction.class_id,
+            Transaction.seat_id == transaction.seat_id,
+            Transaction.account_type == transaction.account_type,
             Transaction.original_transaction_id == transaction.id,
-            Transaction.compensation_subtype.isnot(None),
+            db.or_(Transaction.compensation_subtype.isnot(None), Transaction.type == "REVERSAL"),
         )
         .first()
         is not None

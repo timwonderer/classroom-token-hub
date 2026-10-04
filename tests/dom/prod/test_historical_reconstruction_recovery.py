@@ -745,3 +745,54 @@ def test_historical_preview_ignores_unrelated_open_interval_clock(
         idempotency_key="stable-historical-preview",
         expected_preview_identity=first.identity,
     )
+
+
+
+def test_historical_payroll_excludes_only_proven_unrelated_modern_reversal(app, tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from app.feats.base import FEATContext
+    from app.feats import attendance_interval_invalidation_feat as command
+    from app.services.ledger_historical_reconstruction import _proven_unrelated_reversal
+    from app.services.ledger_recovery_service import ledger_origin_locator
+    from tests.helpers.ledger import record_ledger_fixture, compensate_ledger_posted_transaction
+
+    record = _create(app, tmp_path, scenario="paid")
+    args = _arguments(record)
+    before = preview_attendance_interval_invalidation(**args).public()["recovery_cents"]
+    with FEATContext("FEAT-LED-001", idempotency_key="unrelated-credit"):
+        unrelated = record_ledger_fixture(
+            seat_id=record["target"], target_seat_id=record["target"],
+            class_id=record["class_id"], actor_seat_id=record["actor"],
+            amount=2, type="insurance_reimbursement", mechanism="teacher", posted=True,
+        )
+    with FEATContext("FEAT-LED-002", idempotency_key="unrelated-reversal"):
+        reversal = compensate_ledger_posted_transaction(
+            unrelated, description="Unrelated refund", idempotency_key="unrelated-reversal",
+            actor_seat_id=record["actor"],
+        )
+    preview = preview_attendance_interval_invalidation(**args)
+    assert preview.public()["recovery_cents"] == before
+    settlement, _, proofs = command._historical_settlement(args["ctx"], record["target"])
+    locators = {origin.proof.origin_locator for origin in settlement.origins}
+    records_by_locator = {ledger_origin_locator(unrelated): unrelated}
+    assert _proven_unrelated_reversal(reversal, locators, records_by_locator, settlement.creation_evidence)
+    assert not _proven_unrelated_reversal(reversal, locators, records_by_locator, ())
+    malformed = SimpleNamespace(**{column.key: getattr(reversal, column.key) for column in Transaction.__table__.columns})
+    malformed.original_transaction_id = 99999999
+    assert not _proven_unrelated_reversal(malformed, locators, records_by_locator, settlement.creation_evidence)
+    # Removing verified signed-origin evidence must still deny the public
+    # preview instead of trusting an unsigned original ID or ignoring the row.
+    creation_proofs = command.ledger_creation_proofs
+    with monkeypatch.context() as patch:
+        patch.setattr(command, "ledger_creation_proofs", lambda rows, class_id: tuple(
+            proof for proof in creation_proofs(rows, class_id) if proof.row_pk != str(reversal.id)
+        ))
+        with pytest.raises(command.AttendanceCorrectionDenied, match="PROVENANCE_UNAVAILABLE"):
+            preview_attendance_interval_invalidation(**args)
+    result = invalidate_attendance_interval(
+        **args, idempotency_key="payroll-beside-unrelated-reversal", expected_preview_identity=preview.identity,
+    )
+    assert result["recovery_cents"] == before
+    assert [db.session.get(Transaction, record["credit"]).lineage_event_id,
+            db.session.get(Transaction, record["credit"]).lineage_token,
+            db.session.get(Transaction, record["credit"]).lineage_version] == record["lineage"]

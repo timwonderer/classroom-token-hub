@@ -62,6 +62,8 @@ def _replay_fingerprint(
         if version >= 4
         else ()
     )
+    if version >= 5:
+        keys += ("compensation_subtype",)
     fields = []
     for effect in effects:
         field = {key: effect.get(key) for key in keys}
@@ -194,6 +196,7 @@ __all__ = [
     "_command_fingerprint",
     "create_idempotent_transaction",
     "create_reserved_effects",
+    "replay_reserved_reversal",
 ]
 
 
@@ -234,7 +237,43 @@ def replay_reserved_charge(
         "compensation_origin_locator",
         "compensation_amount_cents",
         "correction_intent_locator",
+        "compensation_subtype",
     )
     effects = [{key: getattr(row, key) for key in keys} for row in rows]
     _assert_replay_matches(reservation, effects, canonical_intent)
     return {"principal": candidates[0], "effects": tuple(rows), "created": False}
+
+
+
+def replay_reserved_reversal(*, original, principal, actor_seat_id, mechanism,
+                             compensation_subtype, idempotency_key):
+    """Verify accepted reversal effects under their original serializer.
+
+    Resolve exact replay before current pricing/balances. Rebuild the accepted
+    vector with current requested authority and structured reason, without
+    changing any effect or inferring a missing historical reason.
+    """
+    from app.feats.base import get_active_feat_name
+
+    reservation = LedgerCommandReservation.query.filter_by(
+        id=principal.command_reservation_id, class_id=original.class_id,
+        feat_code=get_active_feat_name(), idempotency_key=idempotency_key,
+    ).one_or_none()
+    if reservation is None:
+        raise ValueError("Replay fingerprint mismatch for reversal reservation.")
+    rows = Transaction.query.filter_by(command_reservation_id=reservation.id).order_by(Transaction.id).all()
+    keys = _FINGERPRINT_EFFECT_KEYS + (
+        "compensation_origin_locator", "compensation_amount_cents",
+        "correction_intent_locator", "compensation_subtype",
+    )
+    effects = []
+    for row in rows:
+        effect = {key: getattr(row, key) for key in keys}
+        effect.update(actor_seat_id=actor_seat_id, mechanism=mechanism)
+        if row.id == principal.id:
+            effect["compensation_subtype"] = compensation_subtype
+        effects.append(effect)
+    if principal.id not in {row.id for row in rows}:
+        raise ValueError("Replay fingerprint mismatch for reversal effects.")
+    _assert_replay_matches(reservation, effects, canonical_intent=None)
+    return principal

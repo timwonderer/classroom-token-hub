@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-LED-002 | 2.1 | 2026-10-03 | 2.0 | Normative |
+| FEAT-LED-002 | 2.2 | 2026-10-03 | 2.1 | Normative |
 
 ---
 
@@ -51,7 +51,7 @@ Normative; subordinate to `INV-CORE-000` §III.1,3–6, `INV-CORE-001` §III, VI
 ### 2. Resolved Context (MANDATORY)
 * `original_transaction`: The authoritative record from `DOM-LED`.
 * `seat_id`, `class_id`: Derived from the original transaction.
-* `correlation_id`: **MUST** inherit or extend the `correlation_id` of the original operation.
+* `correlation_id`: **MUST** retain exactly the `correlation_id` of the original operation.
 
 ---
 
@@ -91,7 +91,7 @@ Normative; subordinate to `INV-CORE-000` §III.1,3–6, `INV-CORE-001` §III, VI
 1. **Exact Reversal**: A reversal or refund MUST counteract the exact integer amount of the original. Partial corrections require a separately authorized correction operation; they are not represented as a transaction void.
 2. **Chain Integrity**: The original transaction record is permanent; it MUST NOT be updated to represent the reversal.
 3. **No Double-Resolution**: Idempotency MUST ensure that multiple resolution requests for the same transaction result in only one terminal compensating transaction. A compensating transaction itself cannot be voided or reversed.
-4. **Correlation Preservation**: The compensating transaction MUST use the original transaction's `correlation_id`.
+4. **Correlation Preservation**: The compensating transaction MUST use the original transaction's `correlation_id` and immutable `original_transaction_id`. Ledger derives reversal linkage through DOM-LED-001 §VII.0 and enforces one exact child even across distinct command keys. Neither pending nor posted reversal initializes an original-row pointer. The same lock and linkage rules apply to reversal of an original debit; positive-credit reversal additionally enforces §VII.1A compensation authority.
 
 ---
 

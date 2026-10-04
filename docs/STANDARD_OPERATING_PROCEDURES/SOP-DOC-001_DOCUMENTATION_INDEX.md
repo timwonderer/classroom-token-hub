@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.19 | 2026-10-03 | 3.18 | Normative |
+| SOP-DOC-001 | 3.20 | 2026-10-03 | 3.19 | Normative |
 
 ---
 
@@ -273,6 +273,12 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.20 (2026-10-03):**
+
+- Registers FEAT-LED-001 v1.6, SPEC-LED-002 v1.3 and FEAT-OBL-004 v0.3 (DRAFT): complete multi-seat prelocking, version-5 compensation-subtype replay binding, and removal of the superseded premium affordability denial. Accepted serializers 1–4 retain their original interpretation.
+
+- Registers DOM-LED-001 v2.13, FEAT-LED-002 v2.2, DOM-CORE-002 v1.16 and DOM-OPS-002 v1.9. Reversal state derives from immutable exact-origin effects with original correlation; original Ledger rows never gain reversal pointers. Unique exact-origin reversal admission and debit/credit lock order enforce INV-LED-013 without rewriting facts. Existing signatures/registries and historical values remain unchanged; no invariant amendment or compatibility bridge is introduced.
 
 **Version 3.19 (2026-10-03):**
 - Registers the immutable-source historical reconstruction ruling: DOM-PROD-001 v1.14, DOM-LED-001 v2.12, DOM-OPS-002 v1.8, DOM-POL-001 v2.8, FEAT-PROD-003 v1.8, FEAT-PROD-005 v1.4, FEAT-PROD-006 v1.3, SPEC-PROD-001 v1.4 and SPEC-PROD-002 v1.3. Supersedes blanket legacy missing-modern-field/visibility denials, preserving exact modern creation proof, actual integrity rejection and current audit on new writes. No invariant, original record, signature, schema or historical backfill changes.

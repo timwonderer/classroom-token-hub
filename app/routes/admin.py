@@ -8695,6 +8695,8 @@ def banking():
         .offset((page - 1) * per_page)
         .all()
     )
+    from app.services.ledger_correction_service import resolve_purchase_resolution_eligibility
+
     transactions = []
     for tx, seat in rows:
         _ip = seat.identity_profile if seat else None
@@ -8708,6 +8710,7 @@ def banking():
             'description': tx.description,
             'type': tx.type,
             'posting_state': tx.posting_state.value,
+            'can_reverse': resolve_purchase_resolution_eligibility(tx).eligible,
         })
 
     transaction_types = sorted(

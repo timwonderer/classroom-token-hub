@@ -31,6 +31,27 @@ def check_constraint_exists(table_name, constraint_name):
 
 
 def upgrade():
+    if op.get_bind().dialect.name == "postgresql":
+        # Keep reversal evidence fixed until the uniqueness constraint exists.
+        # Historical pointers and monetary rows are never repaired or backfilled.
+        op.execute(sa.text("LOCK TABLE ledger_transaction IN ACCESS EXCLUSIVE MODE"))
+        duplicates = op.get_bind().execute(sa.text("""
+            SELECT count(*) FROM (
+                SELECT original_transaction_id FROM ledger_transaction
+                WHERE type='REVERSAL' AND original_transaction_id IS NOT NULL
+                GROUP BY original_transaction_id HAVING count(*) > 1
+            ) duplicates
+        """)).scalar()
+        if duplicates:
+            raise RuntimeError("Ledger reversal migration blocked: duplicate original locators require separately reviewed disposition; no data repair authorized.")
+    if not index_exists("ledger_transaction", "uq_ledger_exact_reversal_origin"):
+        op.create_index(
+            "uq_ledger_exact_reversal_origin",
+            "ledger_transaction",
+            ["original_transaction_id"],
+            unique=True,
+            postgresql_where=sa.text("type='REVERSAL'"),
+        )
     if not column_exists("ledger_transaction", "compensation_origin_locator"):
         op.add_column(
             "ledger_transaction",
@@ -99,6 +120,23 @@ def upgrade():
             """CREATE OR REPLACE FUNCTION enforce_ledger_recovery_cap() RETURNS TRIGGER AS $$
     DECLARE origin ledger_transaction%ROWTYPE; recovered bigint;
     BEGIN
+      IF NEW.type='REVERSAL' THEN
+        IF NEW.original_transaction_id IS NULL THEN
+          RAISE EXCEPTION 'Exact reversal requires an immutable original locator';
+        END IF;
+        SELECT * INTO origin FROM ledger_transaction
+          WHERE id=NEW.original_transaction_id FOR UPDATE;
+        IF NOT FOUND OR origin.type='REVERSAL'
+          OR origin.class_id IS DISTINCT FROM NEW.class_id
+          OR origin.seat_id IS DISTINCT FROM NEW.seat_id
+          OR origin.target_seat_id IS DISTINCT FROM NEW.target_seat_id
+          OR origin.account_type IS DISTINCT FROM NEW.account_type
+          OR origin.correlation_id IS DISTINCT FROM NEW.correlation_id
+          OR origin.amount_cents IS NULL OR origin.amount_cents=0
+          OR NEW.amount_cents IS DISTINCT FROM -origin.amount_cents THEN
+          RAISE EXCEPTION 'Exact reversal must negate its original in the same scope and correlation';
+        END IF;
+      END IF;
       IF NEW.compensation_amount_cents IS NULL OR NEW.compensation_amount_cents < 0 THEN
         RAISE EXCEPTION 'New Ledger effect requires explicit attributable recovery';
       END IF;

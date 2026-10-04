@@ -11,8 +11,7 @@ advances the account snapshot cursor; posting is a derived view of those facts.
 """
 
 from decimal import Decimal
-from importlib.util import module_from_spec, spec_from_file_location
-from pathlib import Path
+import re
 
 import pytest
 import sqlalchemy as sa
@@ -45,6 +44,7 @@ def _posted_transaction(seat, *, idempotency_key, amount=Decimal("25.00"), poste
         ("target_seat_id", 999999),
         ("type", "Withdrawal"),
         ("description", "rewritten after the fact"),
+        ("reversal_transaction_id", 999999),
     ],
 )
 def test_INV_LED_002__protected_fields_cannot_be_patched(client, app, field, value):
@@ -134,7 +134,7 @@ def test_INV_LED_002__posting_view_cannot_be_assigned(client, app, posted, attem
 
 
 # ---------------------------------------------------------------------------
-# Database-level enforcement (migration f1a9c3e60b72)
+# Database-level enforcement (effective e7c2a9d4f610/f8b2d6e0a410 guards)
 # ---------------------------------------------------------------------------
 #
 # Everything above drives the ORM. `_guard_ledger_immutability` is a mapper-level
@@ -214,26 +214,31 @@ def test_INV_LED_007__database_freezes_creation_posting_sequence(client, app):
 
 
 def test_INV_LED_002__database_guard_covers_exactly_the_fields_the_orm_guard_does(client, app):
-    """The two layers must protect the same columns or one of them is a fiction.
+    """Installed f8b2d6e0a410 guards and ORM must protect the same fields.
 
-    Migration `f1a9c3e60b72` restates the model's field sets in plpgsql, and a
-    restatement drifts. Opening a column in `app/models.py` without opening it in
-    the trigger produces a write the ORM permits and the database rejects; the
-    reverse produces a column the ledger claims to guard and does not. Both fail
-    here rather than in production.
+    Inspect the effective installed function, including compensation metadata
+    added after e7c2a9d4f610, rather than comparing an obsolete migration set.
     """
-    # `migrations/` is not an importable package (no `__init__.py`, by Alembic's
-    # design), so the module is loaded from its path rather than by name.
-    path = (
-        Path(__file__).resolve().parents[3]
-        / "migrations"
-        / "versions"
-        / "e7c2a9d4f610_derive_ledger_posting_from_reconciliation.py"
-    )
-    assert path.exists(), f"migration not found at {path}"
-    spec = spec_from_file_location("_ledger_immutability_migration", path)
-    migration = module_from_spec(spec)
-    spec.loader.exec_module(migration)
+    function_sql = db.session.execute(sa.text(
+        "SELECT pg_get_functiondef('prevent_ledger_transaction_rewrite()'::regprocedure)"
+    )).scalar_one()
+    immutable = set(re.findall(
+        r"IF OLD\.(\w+) IS DISTINCT FROM NEW\.\1 THEN", function_sql
+    ))
+    write_once = set(re.findall(
+        r"IF OLD\.(\w+) IS NOT NULL AND OLD\.\1 IS DISTINCT FROM NEW\.\1 THEN",
+        function_sql,
+    ))
+    assert immutable == set(_LEDGER_IMMUTABLE_FIELDS)
+    assert write_once == set(_LEDGER_WRITE_ONCE_FIELDS)
 
-    assert set(migration.IMMUTABLE) == set(_LEDGER_IMMUTABLE_FIELDS)
-    assert set(migration.WRITE_ONCE) == set(_LEDGER_WRITE_ONCE_FIELDS)
+
+def test_INV_LED_002__database_rejects_late_reversal_pointer_attachment(client, app):
+    classroom = provision_ledger_classroom("chemistry_p1", app)
+    tx = _posted_transaction(classroom.students[0].seat,
+        idempotency_key="inv-led-002:raw-reversal-pointer")
+    with pytest.raises(sa.exc.DBAPIError, match="Immutable Ledger field: reversal_transaction_id"):
+        _raw_update("reversal_transaction_id", tx.id, tx.id)
+    db.session.rollback()
+    db.session.refresh(tx)
+    assert tx.reversal_transaction_id is None

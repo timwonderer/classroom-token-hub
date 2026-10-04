@@ -144,10 +144,16 @@ def test_broken_linkage_rejected_even_with_good_chain(scoped_envelope):
 
 def _source(path):
     repository = Path(__file__).resolve().parents[3]
-    return subprocess.check_output(
+    result = subprocess.run(
         ["git", "show", f"{verifier.HISTORICAL_LEDGER_V1_SOURCE_REVISION}:{path}"],
-        cwd=repository, text=True,
+        cwd=repository, text=True, capture_output=True,
     )
+    assert result.returncode == 0, (
+        "Historical source verification requires the immutable predecessor commit "
+        f"{verifier.HISTORICAL_LEDGER_V1_SOURCE_REVISION}. Fetch complete git history "
+        "before running this test; missing source evidence must not be skipped."
+    )
+    return result.stdout
 
 
 def _assignment(source, name):

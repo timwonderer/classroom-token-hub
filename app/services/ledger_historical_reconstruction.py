@@ -53,6 +53,39 @@ def reconstructed_interval_contribution(settlement, interval_key):
     }
 
 
+def _proven_unrelated_reversal(row, origin_locators, records_by_locator, evidence):
+    """Exclude only a signed full reversal of another proven modern origin.
+
+    An unsigned legacy original ID alone cannot establish unrelatedness.
+    Missing, dangling or contradictory attribution remains a relevant negative.
+    """
+    if row.type != "REVERSAL" or row.lineage_version != 3:
+        return False
+    locator = row.compensation_origin_locator
+    if not locator or locator in origin_locators:
+        return False
+    original = records_by_locator.get(locator)
+    if original is None or original.lineage_version not in (2, 3):
+        return False
+    signed_source = ("id", "class_id", "target_seat_id", "amount_cents", "account_type", "correlation_id", "type")
+    signed_recovery = signed_source + ("compensation_origin_locator", "compensation_amount_cents", "correction_intent_locator")
+    if not evidence_matches(original, original.class_id, evidence, signed_source):
+        return False
+    if not evidence_matches(row, row.class_id, evidence, signed_recovery):
+        return False
+    return (
+        original.type != "REVERSAL" and original.amount_cents > 0
+        and row.class_id == original.class_id
+        and row.seat_id == row.target_seat_id == original.seat_id == original.target_seat_id
+        and row.account_type == original.account_type
+        and row.correlation_id == original.correlation_id
+        and row.original_transaction_id == original.id
+        and row.amount_cents == -original.amount_cents
+        and row.compensation_amount_cents == original.amount_cents
+        and bool(row.correction_intent_locator)
+    )
+
+
 def _deny(code="PROVENANCE_UNAVAILABLE"):
     raise RecoveryIntegrityError(code)
 
@@ -335,15 +368,19 @@ def validate_historical_settlement(
             _deny("INTEGRITY_FAILURE")
         assigned.add(debit.id)
         legacy_recoveries.setdefault(credit.id, []).append(debit)
+    origin_locators = {
+        ledger_origin_locator(credit) for _, credit in originals.values()
+    }
+    records_by_locator = {ledger_origin_locator(row): row for row in records}
     relevant_negative = [
         r
         for r in records
         if r.amount_cents < 0
         and r.type in {"payroll", "REVERSAL", "payroll_correction"}
+        and not _proven_unrelated_reversal(
+            r, origin_locators, records_by_locator, creation_evidence
+        )
     ]
-    origin_locators = {
-        ledger_origin_locator(credit) for _, credit in originals.values()
-    }
     if any(
         (r.lineage_version != 3 and r.id not in assigned)
         or (

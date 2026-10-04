@@ -4,7 +4,7 @@ from uuid import uuid4
 import pytest
 import sqlalchemy as sa
 from sqlalchemy.exc import DBAPIError
-from flask_migrate import downgrade, upgrade
+from flask_migrate import upgrade
 
 from app.extensions import db
 from app.feats.base import FEATContext, audit_protected
@@ -142,17 +142,30 @@ def test_database_rejects_committed_replacement_and_noop_laundering(app):
                 conn.execute(sa.text(sql), {'id': row_id, 'value': '0' * 64})
 
 
-def test_historical_null_stays_unverified_and_late_attachment_is_denied(app):
-    classroom = initialize('chemistry_p1', app)
-    cid, actor, target = classroom.class_id, classroom.teacher_seat.id, classroom.students[0].seat.id
-    db.session.rollback()
-    downgrade(revision='a4b50fee84c3')
-    with db.engine.begin() as conn:
-        row_id = conn.execute(sa.text('''INSERT INTO payroll_event
-            (class_id, actor_seat_id, target_seat_id, correlation_id, idempotency_key,
-             mechanism, payroll_event_type, recorded_at, summary_json)
-            VALUES (:cid, :actor, :target, 'historic', 'historic', 'TEACHER', 'manual_credit', NOW(), '{}')
-            RETURNING id'''), {'cid': cid, 'actor': actor, 'target': target}).scalar_one()
+def test_historical_null_stays_unverified_and_late_attachment_is_denied(app, tmp_path):
+    import json
+    import os
+    import subprocess
+    import sys
+    from tests.dom.prod.test_historical_v1_assessment import PREDECESSOR, REPOSITORY
+
+    # Construct genuine predecessor data forward from its own schema. Walking
+    # backwards from immutable evidence at head is forbidden, even in tests.
+    source = tmp_path / 'predecessor'
+    source.mkdir()
+    archive = tmp_path / 'predecessor.tar'
+    with archive.open('wb') as stream:
+        subprocess.run(['git', 'archive', PREDECESSOR], cwd=REPOSITORY,
+                       stdout=stream, check=True)
+    subprocess.run(['tar', '-xf', str(archive), '-C', str(source)], check=True)
+    environment = dict(os.environ, DATABASE_URL=os.environ['TEST_DATABASE_URL'],
+                       PYTHONPATH=str(source))
+    db.session.remove()
+    created = subprocess.run([sys.executable, '-c', HISTORICAL_UNATTESTED_CREATION],
+        cwd=source, env=environment, text=True, capture_output=True, timeout=90)
+    assert created.returncode == 0, created.stdout[-3000:] + created.stderr[-3000:]
+    row_id = json.loads(next(line.partition('=')[2] for line in created.stdout.splitlines()
+                             if line.startswith('HISTORICAL_UNATTESTED=')))
     upgrade()
     old = db.session.get(PayrollEvent, row_id)
     assert old.lineage_event_id is None
@@ -278,3 +291,28 @@ def test_json_numeric_representation_is_frozen_before_linkage(app):
             row.summary_json = {'provenance': {'sources': [1.0, 2]}}
             _attach(row)
             db.session.flush()
+
+
+HISTORICAL_UNATTESTED_CREATION = r"""
+import json
+from sqlalchemy import text
+from flask_migrate import upgrade
+from app import app, db
+from tests.helpers.classroom_initializer import initialize
+with app.app_context():
+    assert 'test' in db.engine.url.database
+    with db.engine.begin() as connection:
+        connection.execute(text('DROP SCHEMA public CASCADE'))
+        connection.execute(text('CREATE SCHEMA public'))
+    upgrade(revision='a4b50fee84c3')
+    classroom = initialize('chemistry_p1', app)
+    with db.engine.begin() as connection:
+        row_id = connection.execute(text('''INSERT INTO payroll_event
+            (class_id, actor_seat_id, target_seat_id, correlation_id, idempotency_key,
+             mechanism, payroll_event_type, recorded_at, summary_json)
+            VALUES (:cid, :actor, :target, 'historic', 'historic', 'TEACHER',
+                    'manual_credit', NOW(), '{}') RETURNING id'''),
+            {'cid': classroom.class_id, 'actor': classroom.teacher_seat.id,
+             'target': classroom.students[0].seat.id}).scalar_one()
+    print('HISTORICAL_UNATTESTED=' + json.dumps(row_id))
+"""

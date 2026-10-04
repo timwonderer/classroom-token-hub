@@ -274,10 +274,12 @@
                 </td>
                 <td>{{ tx.description or '—' }}</td>
                 <td>
+                  {% if tx.can_reverse %}
                   <button type="button" class="btn btn-sm btn-outline-danger" onclick="voidTransaction({{ tx.id }})"
-                    title="Reverse transaction">
+                    title="Reverse transaction" aria-label="Reverse transaction">
                     <span class="material-symbols-outlined" aria-hidden="true">cancel</span>
                   </button>
+                  {% endif %}
                 </td>
               </tr>
               {% endfor %}

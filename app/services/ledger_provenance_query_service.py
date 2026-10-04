@@ -8,6 +8,40 @@ from app.models import LedgerMechanism, Transaction, TransactionStatus, _quantiz
 from app.utils.canonical_temporal_resolver import ensure_utc
 
 
+def exact_reversal_query(*, class_id, seat_id, account_type,
+                         original_transaction_id, correlation_id):
+    """Derive exact reversal linkage from immutable, owner-scoped effects.
+
+    Correlation groups an economic operation; the immutable original ID
+    distinguishes an individual effect within that operation (INV-LED-013).
+    Pending and posted reversals both count, independent of reconciliation.
+    """
+    return Transaction.query.filter(
+        Transaction.class_id == class_id,
+        Transaction.seat_id == seat_id,
+        Transaction.account_type == account_type,
+        Transaction.original_transaction_id == original_transaction_id,
+        Transaction.correlation_id == correlation_id,
+        Transaction.type == "REVERSAL",
+    )
+
+
+def get_exact_reversal(transaction):
+    """Return the single canonical reversal, failing closed on duplicates."""
+    return exact_reversal_query(
+        class_id=transaction.class_id,
+        seat_id=transaction.seat_id,
+        account_type=transaction.account_type,
+        original_transaction_id=transaction.id,
+        correlation_id=transaction.correlation_id,
+    ).one_or_none()
+
+
+def has_exact_reversal(transaction):
+    """Pure eligibility query; the original transaction is never changed."""
+    return get_exact_reversal(transaction) is not None
+
+
 # --- Ledger provenance classifier (SPEC-ITR-001 §6.3) ----------------------
 #
 # The Interpretation domain classifies ledger rows by origin without ever
@@ -308,4 +342,4 @@ def get_student_savings_contribution_rows(
 
 
 
-__all__ = ["SYSTEM_ORIGINATED_FEAT_CODES", "get_seat_ids_with_student_originated_activity", "get_student_originated_rows", "get_inbound_ledger_rows", "get_student_originated_transaction_ids", "get_posted_balances_as_of", "get_student_savings_contribution_rows"]
+__all__ = ["exact_reversal_query", "get_exact_reversal", "has_exact_reversal", "SYSTEM_ORIGINATED_FEAT_CODES", "get_seat_ids_with_student_originated_activity", "get_student_originated_rows", "get_inbound_ledger_rows", "get_student_originated_transaction_ids", "get_posted_balances_as_of", "get_student_savings_contribution_rows"]

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-CORE-002     | 1.15    | 2026-10-03     | 1.14       | Constitutional |
+| DOM-CORE-002     | 1.16    | 2026-10-03     | 1.15       | Constitutional |
 
 ---
 
@@ -241,6 +241,8 @@ The protected-row `lineage_event_id` linkage is mandated narrowly by `INV-ARC-01
 - `ledger_command_reservation`
 
 `ledger_command_reservation` is the physical representation currently in use for the Ledger command reservation defined in `DOM-LED-001` §VII.1: identity `(class_id, feat_code, idempotency_key)`, the replay fingerprint, and the effects it produced (`ledger_transaction.command_reservation_id`). `DOM-LED-001` §VII.1 defers the choice of representation; this entry registers the one that exists and does not settle that choice (registered in 1.10).
+
+**Immutable reversal registration (1.16):** `ledger_transaction.original_transaction_id` on a new `REVERSAL` effect identifies its exact original Ledger effect, with matching original correlation and class/seat/account scope. Unique partial index `uq_ledger_exact_reversal_origin` on `original_transaction_id` where `type = 'REVERSAL'` prevents duplicate exact reversals. Ledger owns admission/scope/cent validation and serialization. The retained `reversal_transaction_id` column is immutable historical material, not canonical reversal state; new commands leave it uninitialized and derive linkage through the new effect. Existing values/signatures are not backfilled, removed, or reinterpreted. No cross-domain FK or persistence surface is added.
 
 **Compensation field registration (1.13):** `ledger_transaction` adds immutable Ledger-owned `compensation_origin_locator` (String(128), nullable, opaque original Ledger credit locator), `compensation_amount_cents` (Integer, nullable only on historical rows; new rows explicitly carry nonnegative attributable recovery, with protection/non-recovery legs zero), and `correction_intent_locator` (String(128), nullable, opaque originating intent). Positive recovery requires both locators, equals its exact debit cents and has unique `(class_id, target_seat_id, compensation_origin_locator, correction_intent_locator)` identity; zero-recovery effects carry neither locator. Ledger commands alone enforce the aggregate recovery cap and serialization. These locators encode no payroll business classification and introduce no FK into PROD internals. These are the three runtime compensation fields protected under Ledger signature version 3; version 2 retains its original sixteen-field registry. No historical field inference, lineage replacement or backfill is authorized.
 

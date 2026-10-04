@@ -714,3 +714,93 @@ def test_monthly_to_weekly_pays_the_straddling_week_from_the_month_end(client, a
     assert rows[1].amount == _compound_with_credits(
         "100000.00", [month_credit], (following_monday - next_month).days
     )
+
+
+
+def test_multi_seat_interest_waits_before_class_lock_and_cannot_deadlock_payroll(app, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+    from time import monotonic
+    from sqlalchemy import text
+    from app.models import ClassEconomy, Seat
+    from app.services import ledger_recovery_service, ledger_interest_service
+    from app.services.ledger_posting_service import allocate_creation_posting_sequence
+    from app import scheduled_tasks
+    from tests.helpers.ledger import provision_ledger_classroom
+
+    classroom = provision_ledger_classroom("chemistry_p1", app)
+    class_id = classroom.class_id
+    higher_seat_id = classroom.students[1].seat.id
+    held, attempted, release = Event(), Event(), Event()
+    pids, posted_seats = {}, []
+    batch_lock = ledger_recovery_service.lock_ledger_seats
+
+    def observed_batch_lock(*args):
+        pids["interest"] = db.session.execute(text("SELECT pg_backend_pid()")).scalar_one()
+        attempted.set()
+        return batch_lock(*args)
+
+    def post_with_real_allocator(seat):
+        # Isolate pricing from the lock-order regression; exercise the actual
+        # posting allocator which obtains the class economy lock per effect.
+        allocate_creation_posting_sequence(seat.id, class_id)
+        posted_seats.append(seat.id)
+        return []
+
+    monkeypatch.setattr(ledger_recovery_service, "lock_ledger_seats", observed_batch_lock)
+    monkeypatch.setattr(ledger_interest_service, "apply_savings_interest", post_with_real_allocator)
+    monkeypatch.setattr(scheduled_tasks, "run_ledger_settlement_job", lambda: None)
+    db.session.rollback()
+
+    def payroll_scope():
+        with app.app_context():
+            try:
+                with FEATContext("FEAT-LED-003", idempotency_key="interest-race-payroll"):
+                    pids["payroll"] = db.session.execute(text("SELECT pg_backend_pid()")).scalar_one()
+                    batch_lock(class_id, [higher_seat_id])
+                    held.set()
+                    assert release.wait(10)
+                    ClassEconomy.query.filter_by(class_id=class_id).with_for_update().one()
+                return "accepted"
+            finally:
+                db.session.remove()
+
+    def interest_scope():
+        with app.app_context():
+            try:
+                scheduled_tasks.run_savings_interest_job()
+                return "accepted"
+            finally:
+                db.session.remove()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        payroll = pool.submit(payroll_scope)
+        try:
+            assert held.wait(10)
+            interest = pool.submit(interest_scope)
+            assert attempted.wait(10)
+            deadline = monotonic() + 5
+            while True:
+                with db.engine.connect() as connection:
+                    blockers = connection.execute(
+                        text("SELECT pg_blocking_pids(:pid)"), {"pid": pids["interest"]}
+                    ).scalar_one()
+                if pids["payroll"] in blockers:
+                    break
+                assert monotonic() < deadline, "Interest did not wait on the already-held higher seat."
+                Event().wait(.01)
+            assert pids["interest"] != pids["payroll"]
+            assert posted_seats == []
+            # The class lock must still be available while interest waits on
+            # its seat batch. Otherwise payroll and interest form a cycle.
+            with db.engine.begin() as connection:
+                connection.execute(
+                    text("SELECT class_id FROM classes WHERE class_id=:class_id FOR UPDATE NOWAIT"),
+                    {"class_id": class_id},
+                ).one()
+        finally:
+            release.set()
+        assert payroll.result(timeout=15) == "accepted"
+        assert interest.result(timeout=15) == "accepted"
+    assert posted_seats == sorted(posted_seats)
+    assert higher_seat_id in posted_seats

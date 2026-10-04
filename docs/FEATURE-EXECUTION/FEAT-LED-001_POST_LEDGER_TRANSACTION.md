@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-LED-001 | 1.5 | 2026-10-03 | 1.4 | Normative |
+| FEAT-LED-001 | 1.6 | 2026-10-03 | 1.5 | Normative |
 
 ## I. Purpose
 
@@ -35,7 +35,7 @@ The required command reservation identity is `(class_id, feat_code, idempotency_
 ## VI. Verification and Atomic Posting
 
 1. Resolve or create the permanent command reservation within the originating FEAT transaction. On a reservation conflict, compare the fingerprint and version. An exact replay returns the accepted command outcome and its effects; a mismatch returns `REPLAY_MISMATCH` with no new effect. A read-only preview cannot reserve a command.
-2. Validate account targets, shared anchors and all effects within `class_id`. Balance-dependent commands hold the seat lock, then ClassEconomy, then any compensation-origin lock, then pending rows/snapshots in the existing deterministic order through commit. Payroll settlement uses the same seat lock when eligibility and compensation can race.
+2. Validate account targets, shared anchors and all effects within `class_id`. Balance-dependent commands hold the seat lock, then ClassEconomy, then any compensation-origin lock, then pending rows/snapshots in the existing deterministic order through commit. Payroll settlement uses the same seat lock when eligibility and compensation can race. Multi-seat balance-dependent commands acquire all affected seats in ascending seat-ID order before any ClassEconomy lock or posting.
 3. Require the resolved plan to remain valid under current domain authority. Revalidate bounded recovery under the original-transaction lock; sum attributable compensation across exact reversals and partial/residual corrections, excluding funding-transfer legs and fees. Do not reinterpret owning-domain interval evidence.
 4. Allocate each effect's immutable class-scoped posting sequence through the Ledger effect-creation command before INSERT. Freeze reservation linkage, command key, initiating FEAT and all protected inputs; append the effects for the single creation audit in step 5. The lawful Ledger settlement command reconciles account snapshots/cursors and may initialize the informational UTC `posted_at` receipt; it never patches signed transaction fields or persisted status. All required effects and settlement changes commit or roll back together. Pending/posted state remains reconciliation-derived; do not mutate original transaction lifecycle fields.
 5. Invoke the Operations audit command in the same FEAT context and transaction. No direct Ledger-to-Operations domain invocation is permitted.
@@ -64,4 +64,6 @@ Increment the version and effective date, identify superseded rules, and preserv
 
 ### Version 1.5: immutable accepted command replay (2026-10-03)
 
-Explicitly incorporates SPEC-LED-002 v1.2: version-4 effect-plan fingerprints bind the complete immutable vector and FEAT-established business intent, while the transfer family retains its exact two-leg serializer. Stored versions 1–3 remain interpreted under their original payload contracts. Replay resolves accepted effects before current prices, balances, fees, or protection and fails closed for changed canonical intent; no accepted history is re-signed or rewritten.
+Explicitly incorporates SPEC-LED-002 v1.3: version-5 effect-plan fingerprints bind the complete immutable vector and FEAT-established business intent, while the transfer family retains its exact two-leg serializer. Version 5 additionally binds compensation subtype. Stored versions 1–4 remain interpreted under their original payload contracts. Replay resolves accepted effects before current prices, balances, fees, or protection and fails closed for changed canonical intent; no accepted history is re-signed or rewritten.
+
+**1.6 (2026-10-03)** supersedes version 1.5’s incomplete multi-seat lock ordering and version-4-only serializer incorporation. All affected seats precede any class lock; new effect plans bind compensation subtype under version 5. Existing accepted fingerprints retain their original versioned interpretation.

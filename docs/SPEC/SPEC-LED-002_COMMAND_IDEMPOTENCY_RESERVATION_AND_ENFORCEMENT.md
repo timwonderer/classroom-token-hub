@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-LED-002 | 1.2 | 2026-10-03 | 1.1 | Normative |
+| SPEC-LED-002 | 1.3 | 2026-10-03 | 1.2 | Normative |
 
 ## I. Purpose
 
@@ -191,3 +191,28 @@ These values are established by the owning FEAT and its domain authority; they a
 `replay_reserved_charge` resolves the accepted reservation and its immutable complete effect vector before current balance, pricing, fee, or protection resolution. Ledger recomputes the stored-version fingerprint with the supplied canonical business tuple and validates the scoped principal. Exact replay returns the original effects even if current funding configuration or balances differ. Changed policy, quantity, selected obligation, requested partial payment, actor/seat, or explicit fee force authority fails closed. This does not grant new business eligibility or permit effects outside the accepted reservation.
 
 The internal-transfer family retains its existing canonical `_command_fingerprint` representation under version 4: account direction, scoped target/actor, requested amount, transfer type, and original/policy identity determine its digest. It remains exactly two linked effects and retains sufficient-funds eligibility. It does not acquire a charge-plan intent tuple or savings shortfall behavior.
+
+
+### Version 5 compensation-subtype fingerprint
+
+Version 1.3 supersedes version 1.2 only for newly accepted effect-plan commands.
+Fingerprint version 5 uses the exact version-4 envelope and ordered
+JSON encoding, adding `compensation_subtype` as the thirteenth field of each effect.
+A non-compensating effect encodes this field as null. A reversal records its
+owning-domain structured compensation reason on the new immutable principal.
+Changed subtype is a changed command and denies replay. Versions 1–4 retain their
+exact accepted serializers; no existing reservation or audit signature is rewritten
+or reinterpreted. The internal-transfer family retains its existing transfer
+serializer under version 5. Replaying an old effect cannot fabricate a subtype
+its accepted evidence does not establish.
+
+
+`replay_reserved_reversal` reconstructs the immutable accepted ordered effect
+vector and compares the supplied actor, applicable mechanism and compensation
+subtype under the reservation's stored fingerprint version before fresh pricing,
+funding or balance resolution. It never copies a changed request into persisted
+rows. Exact retries return the original principal; changed covered authority or
+reason fails closed. An old reservation retains precisely its own serializer's
+coverage, and missing historical subtype evidence is not fabricated on replay.
+`replay_reserved_charge` likewise includes the accepted subtype when rebuilding
+the complete version-5 vector, including explicit null on ordinary charges.

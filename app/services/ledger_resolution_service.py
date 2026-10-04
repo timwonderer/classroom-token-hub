@@ -30,6 +30,7 @@ class IntendedLedgerPlan:
     original_transaction_id: int | None = None
     correlation_id: str | None = None
     canonical_intent: tuple | None = None
+    compensation_subtype: str | None = None
 
 
 @dataclass(frozen=True)
@@ -64,6 +65,7 @@ def build_intended_ledger_plan(
     original_transaction_id=None,
     correlation_id=None,
     canonical_intent=None,
+    compensation_subtype=None,
 ):
     amount = _quantize_currency(debit_amount)
     if amount < 0 or source_account not in {"checking", "savings"}:
@@ -85,6 +87,7 @@ def build_intended_ledger_plan(
         original_transaction_id,
         correlation_id,
         canonical_intent,
+        compensation_subtype,
     )
 
 
@@ -244,6 +247,7 @@ def apply_resolved_ledger_plan(*, resolved_plan, idempotency_key):
                 type=p.transaction_type,
                 description=p.description,
                 original_transaction_id=p.original_transaction_id,
+                compensation_subtype=p.compensation_subtype,
                 compensation_origin_locator=p.compensation_origin_locator,
                 correction_intent_locator=p.correction_intent_locator,
                 compensation_amount_cents=(

@@ -38,9 +38,10 @@ MAX_IDEMPOTENCY_KEY_LENGTH = 128
 # reservation accepted under version 1 is still compared under version 1.
 # Version 3 removes authentication principal material from multi-effect commands.
 # Version 4 effect-plan commands bind the immutable vector and originating
-# business intent. Transfer-family and retained v1–v3 serializers remain exact.
-FINGERPRINT_VERSION = 4
-SUPPORTED_FINGERPRINT_VERSIONS = frozenset({1, 2, 3, 4})
+# business intent. Version 5 adds compensation subtype to new effect plans.
+# Transfer-family and retained v1–v4 serializers remain exact.
+FINGERPRINT_VERSION = 5
+SUPPORTED_FINGERPRINT_VERSIONS = frozenset({1, 2, 3, 4, 5})
 _AMOUNT_EXCLUDED_FROM_FINGERPRINT_TYPES = frozenset({"Interest"})
 
 

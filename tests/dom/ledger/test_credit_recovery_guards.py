@@ -137,50 +137,63 @@ def test_missing_or_extra_evidence_cannot_authorize_recovery(app):
         )
 
 
-@pytest.mark.parametrize(
-    "field,value",
-    [
-        ("compensation_amount_cents", None),
-        ("compensation_amount_cents", -1),
-        ("compensation_amount_cents", 1001),
-        ("compensation_origin_locator", "ledger-credit:v1:999999999"),
-        ("amount_cents", -2),
-    ],
-)
-def test_raw_postgres_rejects_invalid_compensation_metadata(app, field, value):
-    from sqlalchemy import text
-
-    classroom, original = _original(app)
-    values = dict(
-        class_id=original.class_id,
-        seat_id=original.seat_id,
-        actor_seat_id=classroom.teacher_seat_id,
-        target_seat_id=original.seat_id,
-        amount=Decimal("-0.01"),
-        amount_cents=-1,
-        account_type="checking",
-        type="payroll_correction",
-        mechanism="teacher",
-        description="Guard probe",
-        correlation_id="corr_guard_probe",
-        posting_sequence=original.posting_sequence + 1,
+def _raw_recovery_values(classroom, original):
+    return dict(
+        class_id=original.class_id, seat_id=original.seat_id,
+        actor_seat_id=classroom.teacher_seat_id, target_seat_id=original.seat_id,
+        amount=Decimal("-0.01"), amount_cents=-1, account_type="checking",
+        type="payroll_correction", mechanism="teacher", description="Guard probe",
+        correlation_id="corr_guard_probe", posting_sequence=original.posting_sequence + 1,
         compensation_origin_locator=ledger_origin_locator(original),
-        correction_intent_locator="raw:invalid",
-        compensation_amount_cents=1,
+        correction_intent_locator="raw:invalid", compensation_amount_cents=1,
         feat_code="FEAT-PROD-005",
     )
-    values[field] = value
+
+
+def _raw_insert_recovery(values):
+    from sqlalchemy import text
+
     columns = ",".join(values)
     parameters = ",".join(":" + key for key in values)
-    with pytest.raises(DBAPIError):
-        db.session.execute(
-            text(
-                f"INSERT INTO ledger_transaction ({columns},timestamp) VALUES ({parameters},now())"
-            ),
-            values,
-        )
-        db.session.commit()
+    return db.session.execute(
+        text(f"INSERT INTO ledger_transaction ({columns},timestamp) VALUES ({parameters},now()) RETURNING id"),
+        values,
+    ).scalar_one()
+
+
+@pytest.mark.parametrize(
+    "changed,expected",
+    [
+        ({"compensation_amount_cents": None}, "explicit attributable recovery"),
+        ({"compensation_amount_cents": -1}, "explicit attributable recovery"),
+        ({"compensation_amount_cents": 1001}, "Invalid attributable Ledger recovery"),
+        ({"compensation_origin_locator": "ledger-credit:v1:999999999"}, "Invalid attributable Ledger recovery"),
+        ({"amount_cents": -2}, "Invalid attributable Ledger recovery"),
+        ({"compensation_amount_cents": 1001, "amount_cents": -1001, "amount": Decimal("-10.01")}, "Ledger recovery cap exceeded"),
+    ],
+)
+def test_raw_postgres_rejects_invalid_compensation_metadata(app, changed, expected):
+    classroom, original = _original(app)
+    values = dict(_raw_recovery_values(classroom, original), **changed)
+    # Prove the immediate monetary guard, without allowing a deferred missing-
+    # lineage error at commit to hide a missing metadata/cap constraint.
+    with pytest.raises(DBAPIError, match=expected):
+        _raw_insert_recovery(values)
     db.session.rollback()
+
+
+def test_valid_raw_recovery_passes_immediate_guards_and_is_rolled_back(app):
+    from app.models import Transaction
+
+    classroom, original = _original(app)
+    before = Transaction.query.count()
+    row_id = _raw_insert_recovery(_raw_recovery_values(classroom, original))
+    assert Transaction.query.count() == before + 1
+    assert db.session.get(Transaction, row_id).compensation_amount_cents == 1
+    # This is only a structural INSERT control. It has no lawful creation
+    # lineage and must never commit or be used as compensation evidence.
+    db.session.rollback()
+    assert Transaction.query.count() == before
 
 
 @pytest.mark.parametrize(
@@ -240,6 +253,7 @@ def test_raw_postgres_recovery_intent_is_unique_per_original(app):
 
 def test_exact_savings_credit_reversal_keeps_original_account(app):
     classroom, original = _original(app, account_type="savings")
+    original_values = {column.key: getattr(original, column.key) for column in original.__table__.columns}
     with FEATContext("FEAT-LED-002", idempotency_key="cap:savings-exact"):
         inputs = positive_reversal_inputs(original)
         plan = resolve_credit_recovery(
@@ -256,6 +270,8 @@ def test_exact_savings_credit_reversal_keeps_original_account(app):
         assert result["principal"].account_type == "savings"
         assert result["principal"].amount_cents == -1000
         assert result["principal"].original_transaction_id == original.id
+        assert result["principal"].correlation_id == original.correlation_id
+        assert {column.key: getattr(original, column.key) for column in original.__table__.columns} == original_values
 
 
 def test_credit_recovery_overdraft_has_no_fee_or_fee_configuration_dependency(

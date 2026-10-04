@@ -323,8 +323,8 @@ def pay_rent(
             correlation_id, prior_payment
         )
         replay_fully_paid = replay_paid >= replay_assessed
-        if request.payment_amount is not None and _quantize_currency(request.payment_amount)!=abs(Decimal(prior_debit.amount)):
-            raise ValueError('Replay fingerprint mismatch for rent payment amount.')
+        # Reservation replay above binds the requested amount. The accepted
+        # debit may be smaller when the original request exceeded remaining rent.
         if request.payment_amount is None and not replay_fully_paid:
             raise ValueError('Replay fingerprint mismatch for full rent payment intent.')
         return RentPaymentResult(
