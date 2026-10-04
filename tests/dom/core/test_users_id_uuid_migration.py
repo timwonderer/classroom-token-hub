@@ -18,9 +18,7 @@ from flask_migrate import upgrade as alembic_upgrade
 from sqlalchemy import text
 
 from app.extensions import db
-from app.feats.base import FEATContext
-from app.models import PasskeyCredential
-from tests.helpers.classroom_initializer import initialize
+from tests.helpers.migration_schema import BEFORE_UUID_SOURCE, predecessor_classrooms
 
 PREVIOUS = "e1c7a4b9d2f3"
 
@@ -45,46 +43,43 @@ def _id_type():
 
 
 def _seed(app):
-    first = initialize("chemistry_p1", app)
-    initialize("ap_csp_p3", app)
-    with FEATContext("FEAT-IDEN-001", idempotency_key="test:uuid-migration:passkey"):
-        db.session.add(PasskeyCredential(
-            user_id=first.teacher_user.id, credential_id="cred-migration", authenticator_name="Key",
-        ))
-        db.session.flush()
-    db.session.remove()
+    predecessor_classrooms(BEFORE_UUID_SOURCE, PREVIOUS,
+                           ("chemistry_p1", "ap_csp_p3"), with_passkey=True)
     return _rows(LINKS)
 
 
 def test_downgrade_and_upgrade_keep_every_principal_link(app):
     with app.app_context():
         before = _seed(app)
+        assert _id_type() == "integer"
+        alembic_upgrade(revision="f4b8d2a6c1e9")
         assert _id_type() == "uuid"
+        assert _rows(LINKS) == before
         assert len(before) > 3
 
         alembic_downgrade(revision=PREVIOUS)
         assert _id_type() == "integer"
         assert _rows(LINKS) == before
 
-        alembic_upgrade()
+        alembic_upgrade(revision="f4b8d2a6c1e9")
         assert _id_type() == "uuid"
         assert _rows(LINKS) == before
 
 
 def test_conversion_refuses_a_reference_outside_the_allowlist(app):
     with app.app_context():
-        alembic_downgrade(revision=PREVIOUS)
+        predecessor_classrooms(BEFORE_UUID_SOURCE, PREVIOUS, ())
         with db.engine.begin() as conn:
             conn.execute(text("CREATE TABLE stray_ref (id serial PRIMARY KEY, user_id integer REFERENCES users(id))"))
         try:
             # Alembic directly: flask_migrate turns the exception into SystemExit.
             config = current_app.extensions["migrate"].migrate.get_config()
             with pytest.raises(RuntimeError, match="outside the INV-ARC-019"):
-                command.upgrade(config, "head")
+                command.upgrade(config, "f4b8d2a6c1e9")
         finally:
             db.session.remove()
             with db.engine.begin() as conn:
                 conn.execute(text("DROP TABLE IF EXISTS stray_ref"))
         assert _id_type() == "integer"
-        alembic_upgrade()
+        alembic_upgrade(revision="f4b8d2a6c1e9")
         assert _id_type() == "uuid"

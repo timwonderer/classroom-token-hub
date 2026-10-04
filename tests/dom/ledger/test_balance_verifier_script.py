@@ -17,6 +17,6 @@ def test_balance_verifier_reads_reconciled_posting_without_mutation(app, monkeyp
     runpy.run_path(str(Path(__file__).resolve().parents[3] / 'scripts/verify_balance_cache.py'), run_name='__main__')
     output = capsys.readouterr().out
     assert f'Posted Transactions: {expected}' in output
-    assert 'Status=TransactionStatus.POSTED' in output or 'Status=POSTED' in output
+    assert f'Status={TransactionStatus.POSTED.value}' in output
     assert before == [(t.id, t.amount_cents, t.posting_sequence, t.lineage_token)
                       for t in Transaction.query.order_by(Transaction.id)]

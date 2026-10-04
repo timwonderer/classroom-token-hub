@@ -19,6 +19,6 @@ with app.app_context():
     
     if tx_count > 0:
         sample = Transaction.query.first()
-        print(f"Sample Transaction: ID={sample.id}, Amount={sample.amount}, Cents={sample.amount_cents}, Status={sample.posting_state}")
+        print(f"Sample Transaction: ID={sample.id}, Amount={sample.amount}, Cents={sample.amount_cents}, Status={sample.posting_state.value}")
         
     print("--- Verification Complete ---")

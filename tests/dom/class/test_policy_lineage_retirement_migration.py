@@ -29,7 +29,7 @@ from flask_migrate import upgrade as alembic_upgrade
 from sqlalchemy import text
 
 from app.extensions import db
-from tests.helpers.canonical_classroom import provision_classroom
+from tests.helpers.migration_schema import PAYROLL_AUTHORITY_SOURCE, predecessor_classrooms
 
 BEFORE_RETIREMENT = "a7e3c9d1f5b2"
 RETIREMENT = "dd52b19d48d8"
@@ -58,13 +58,11 @@ def _columns(table):
     }
 
 
-def _provision_and_step_back(keys, revision=BEFORE_RETIREMENT):
-    classrooms = [provision_classroom(key) for key in keys]
-    ids = [(c.class_id, c.students[0].seat.id) for c in classrooms]
-    db.session.commit()
-    db.session.remove()
-    alembic_downgrade(revision=revision)
-    return ids
+def _provision_predecessor(keys, revision=BEFORE_RETIREMENT):
+    classrooms = predecessor_classrooms(PAYROLL_AUTHORITY_SOURCE, BEFORE_RETIREMENT, keys)
+    if revision != BEFORE_RETIREMENT:
+        alembic_upgrade(revision=revision)
+    return [(c["class_id"], c["seat_id"]) for c in classrooms]
 
 
 def _seed_payroll_mirrors(class_ids):
@@ -94,7 +92,7 @@ def test_upgrade_drops_the_payroll_mirrors_and_both_tables(app):
     with app.app_context():
         keys = ("tz_pacific_p1", "tz_line_islands_p1", "tz_tokyo_p1", "chemistry_p1",
                 "ap_csp_p3", "biology_block_a", "unicode")
-        ids = _provision_and_step_back(keys)
+        ids = _provision_predecessor(keys)
         _seed_payroll_mirrors([cid for cid, _seat in ids])
         assert _rows("SELECT count(*) FROM policy_versions")[0][0] == 7
 
@@ -106,7 +104,7 @@ def test_upgrade_drops_the_payroll_mirrors_and_both_tables(app):
 
 def test_upgrade_refuses_a_version_outside_payroll(app):
     with app.app_context():
-        (cid, _seat), = _provision_and_step_back(("chemistry_p1",))
+        (cid, _seat), = _provision_predecessor(("chemistry_p1",))
         _seed_payroll_mirrors([cid])
         with db.engine.begin() as conn:
             conn.execute(text(
@@ -126,7 +124,7 @@ def test_upgrade_refuses_a_version_outside_payroll(app):
 
 def test_upgrade_refuses_any_transition(app):
     with app.app_context():
-        (cid, _seat), = _provision_and_step_back(("chemistry_p1",))
+        (cid, _seat), = _provision_predecessor(("chemistry_p1",))
         _seed_payroll_mirrors([cid])
         with db.engine.begin() as conn:
             conn.execute(text(
@@ -145,7 +143,7 @@ def test_upgrade_refuses_any_transition(app):
 
 def test_upgrade_refuses_an_assessment_that_names_a_version(app):
     with app.app_context():
-        (cid, seat_id), = _provision_and_step_back(("chemistry_p1",))
+        (cid, seat_id), = _provision_predecessor(("chemistry_p1",))
         _seed_payroll_mirrors([cid])
         with db.engine.begin() as conn:
             conn.execute(text(
@@ -165,9 +163,9 @@ def test_upgrade_refuses_an_assessment_that_names_a_version(app):
 
 def test_downgrade_recreates_the_tables_empty_and_upgrade_retires_them_again(app):
     with app.app_context():
-        (cid, _seat), = _provision_and_step_back(("chemistry_p1",))
+        (cid, _seat), = _provision_predecessor(("chemistry_p1",))
         _seed_payroll_mirrors([cid])
-        alembic_upgrade()
+        alembic_upgrade(revision="624c6b7223df")
 
         alembic_downgrade(revision=BEFORE_RETIREMENT)
         _assert_nothing_retired()
@@ -175,13 +173,13 @@ def test_downgrade_recreates_the_tables_empty_and_upgrade_retires_them_again(app
         assert _rows("SELECT count(*) FROM policy_versions")[0][0] == 0
         assert _rows("SELECT count(*) FROM policy_transitions")[0][0] == 0
 
-        alembic_upgrade()
+        alembic_upgrade(revision="624c6b7223df")
         assert not ({"policy_versions", "policy_transitions"} & _tables())
 
 
 def test_engine_versions_are_dated_to_their_creation_and_stay_append_only(app):
     with app.app_context():
-        ids = _provision_and_step_back(("chemistry_p1", "ap_csp_p3"), revision=RETIREMENT)
+        ids = _provision_predecessor(("chemistry_p1", "ap_csp_p3"), revision=RETIREMENT)
         assert "effective_at" not in _columns("economic_engine")
         created = dict(_rows(
             "SELECT economic_version_id, created_at FROM economic_engine WHERE class_id = ANY(:c)",

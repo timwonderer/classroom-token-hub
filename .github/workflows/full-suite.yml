@@ -72,6 +72,9 @@ jobs:
           pip install -r status_service/requirements.txt
           pip install pytest
 
+      - name: Install browser test runtime
+        run: python -m playwright install --with-deps chromium
+
       - name: Run full suite
         env:
           FLASK_APP: app
