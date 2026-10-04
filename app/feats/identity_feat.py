@@ -644,6 +644,37 @@ def _ensure_distinct_claim_codes(*, class_id, first_hash, last_hash, first_name,
     db.session.flush()
 
 
+#: Messages the roster import and unclaim FEATs raise as ``ValueError`` for the
+#: teacher to read. Anything else a ``ValueError`` carries is internal detail.
+ROSTER_ACTION_MESSAGES = frozenset({
+    "Select a class before importing students.",
+    "You cannot import students into this class.",
+    "Provide at least one student row.",
+    "Each student row must contain first and last names.",
+    "Every row needs a first and last name.",
+    "Notes must be text.",
+    "A class-scoped teacher is required.",
+    "Enter a first and last name, each at most 100 characters.",
+    "The teacher does not own this class.",
+    "This seat is already unclaimed. Refresh the roster.",
+    "The seat's claim has changed. Refresh the roster before unclaiming it.",
+    "Refresh the roster before unclaiming this seat.",
+})
+
+
+def roster_action_message(error, fallback):
+    """Return the vetted teacher-facing message for ``error``, else ``fallback``.
+
+    The message comes from ``ROSTER_ACTION_MESSAGES`` itself, never from the
+    exception, so an unexpected ``ValueError`` cannot leak its text to a client.
+    """
+    text = str(error)
+    for message in ROSTER_ACTION_MESSAGES:
+        if message == text:
+            return message
+    return fallback
+
+
 @requires_feat_context("FEAT-IDEN-006")
 def import_student_seats(*, canonical_context, rows, correlation_id, idempotency_key):
     """Atomically provision a new seat per row; never infer identity from names.

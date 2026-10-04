@@ -17,7 +17,7 @@ from markdown.extensions.toc import TocExtension
 from markdown.extensions.codehilite import CodeHiliteExtension
 from markdown.extensions.fenced_code import FencedCodeExtension
 from markdown.extensions.tables import TableExtension
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 from app.utils.helpers import (
     EXTERNAL_DOCS_ROUTE_MAP,
@@ -144,7 +144,15 @@ def _redirect_to_public_docs(doc_path=None):
     else:
         external_target = ""
 
-    target = external_base if not external_target else f"{external_base}/{external_target}"
+    # The path is reader-supplied: percent-encode it, refuse dot-segments, and
+    # confirm the result still points at the configured docs origin.
+    segments = [part for part in external_target.split("/") if part]
+    if any(part in {".", ".."} for part in segments):
+        abort(404)
+    safe_path = quote("/".join(segments), safe="/")
+    target = f"{external_base}/{safe_path}" if safe_path else external_base
+    if urlparse(target).netloc != urlparse(external_base).netloc:
+        abort(404)
     return redirect(target)
 
 
