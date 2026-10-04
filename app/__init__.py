@@ -279,6 +279,9 @@ def create_app():
         TEMPLATES_AUTO_RELOAD=True,
         TURNSTILE_SITE_KEY=os.getenv("TURNSTILE_SITE_KEY"),
         TURNSTILE_SECRET_KEY=os.getenv("TURNSTILE_SECRET_KEY"),
+        # Login page notice file (app/utils/login_notice.py); unset means
+        # instance/login_notice.json.
+        LOGIN_NOTICE_PATH=os.getenv("LOGIN_NOTICE_PATH", "").strip() or None,
         EXTERNAL_DOCS_BASE_URL=os.getenv("EXTERNAL_DOCS_BASE_URL", "").strip() or None,
         # The marketing site is published from `github-pages/` to GitHub Pages
         # and is not served by this application, so `/`, `/privacy`, `/terms`,
@@ -617,6 +620,11 @@ def create_app():
     # Make the helper available even in contexts where context processors
     # might not run (e.g., background tasks rendering templates).
     app.jinja_env.globals['static_url'] = build_static_url
+
+    # Called only by the login templates, so the notice file is read only
+    # when a login page renders.
+    from app.utils.login_notice import get_login_notice
+    app.jinja_env.globals['get_login_notice'] = get_login_notice
 
     @app.context_processor
     def inject_static_url():
