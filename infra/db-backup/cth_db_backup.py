@@ -30,8 +30,9 @@ then the old points are kept and health is STALE.
 The host holds only the age *recipient* (public key). It cannot decrypt any
 recovery point; the identity lives with the owner, off the droplet.
 
-Dependencies: python3, psycopg2, pg_dump/pg_restore (client >= server major),
-age, rclone. No application code is imported, so the job needs none of the
+Dependencies: python3, psycopg2, pg_dump/pg_restore (same major as the server
+and the verify database; a newer pg_dump writes settings an older server
+rejects), age, rclone. No application code is imported, so the job needs none of the
 application's secrets.
 """
 from __future__ import annotations
