@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-POL-001 | 2.4 | 2026-09-30 | 2.3 | Constitutional |
+| DOM-POL-001 | 2.5 | 2026-10-03 | 2.4 | Constitutional |
 
 ## I. Purpose
 
@@ -238,7 +238,14 @@ The intended boundary is:
 
 This means Class Configuration decides whether a capability exists in the class, Policies stores the class-customized reference material for that capability as immutable version rows, and the consuming operational domain owns the resulting fact.
 
+### X.1 Bounded historical payroll-setting inputs
+
+Policies owns `get_historical_payroll_setting_inputs(*, ctx, class_id, limit=500)`, exposed only through the existing payroll-setting domain query boundary. This pure bounded query returns immutable retained class/policy identity, effective/created UTC instants and original rate inputs with availability limitations; no current/default rate or missing field is synthesized. FEAT-PROD-006 supplies these owned DTOs to PROD for candidate historical setting selection. Policies incorporates [SPEC-PROD-002](../SPEC/SPEC-PROD-002_HISTORICAL_ATTENDANCE_PROOF_ASSESSMENT.md) §V–VI for bounds, pure reads, original configuration and descriptor limitations. Retained values and dates alone do not attest original visibility, original writer assignment or lawful historical creation. No policy write, active selection behavior or deletion rule changes.
+
 ## XI. Amendment
+
+Version 2.5 (2026-10-03) adds §X.1's bounded original-setting input query. It supersedes no policy mutation/selection rule and authorizes no historical recovery.
+
 
 Revisions must remain consistent with `DOM-CLASS-001`, the consuming operational domain, and the governing FEAT and temporal invariants.
 

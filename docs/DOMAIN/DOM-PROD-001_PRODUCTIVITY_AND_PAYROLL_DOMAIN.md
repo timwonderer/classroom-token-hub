@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-PROD-001 | 1.10 | 2026-10-03 | 1.9 | Constitutional |
+| DOM-PROD-001 | 1.11 | 2026-10-03 | 1.10 | Constitutional |
 
 ---
 
@@ -579,6 +579,10 @@ The exact implementation may evolve, but business consumers SHALL interact with 
 
 `get_completed_work_interval(class_id, target_seat_id, opening_event_id, closing_event_id)` proves canonical pairing and source facts. `get_interval_eligibility(...)` derives the terminal decision separately from attendance. `get_interval_settlement_membership(...)` returns authoritative original payroll membership and retained original pricing inputs. `authorize_payroll_correction(...)` establishes business permission and correction intent. All are pure and scoped; missing provenance is explicit, never fabricated. Ledger monetary conclusions are consumed only by the FEAT through Ledger's queries.
 
+### 9. Pure historical business assessment
+
+`get_historical_attendance_business_evidence(*, ctx, class_id, target_seat_id, setting_inputs=(), payroll_event_ids=None, limit=50, source_limit=2000, event_limit=1000, as_of_utc)` is a PROD-owned bounded pure query, authorized solely for FEAT-PROD-006. It returns canonical pair evidence, payroll boundaries, retained original pricing inputs, frozen membership availability, explicit original-source rule descriptor candidates and source-set/visibility limitations. It receives immutable setting inputs only from its governing FEAT. It neither derives money nor queries/imports Policies or invokes another domain. This domain incorporates [SPEC-PROD-002](../SPEC/SPEC-PROD-002_HISTORICAL_ATTENDANCE_PROOF_ASSESSMENT.md) §V–VI and its purity/bounds requirements in §VIII for this query only. Arithmetic agreement cannot promote reconstructed membership to canonical settlement membership; unknown original writer assignment and backdated visibility remain unavailable. No current price/default, fragment clipping fallback, new persistence or correction eligibility override is authorized. Existing §XV.7 and SPEC-PROD-001 historical execution denials remain binding.
+
 ## XV. Payroll Cycle Completion and the Economic-Cycle Boundary
 
 ### 1. Payroll completion is the canonical class-level economic-cycle boundary
@@ -665,6 +669,9 @@ Pure interval queries expose original pair IDs, UTC timestamps, credited seconds
 Under INV-ARC-016 and DOM-OPS-002 §5.4, every new payroll event carries complete protected-field audit lineage. The business fields, including the full summary, are fixed at insertion. The three audit-linkage fields may move together exactly once from all-null to complete solely within that row's creating transaction, with a matching signed AuditEvent for its class, table and row ID. This initialization completes creation; it does not authorize amendment of a committed record. Commit without required valid lineage fails, replacement and post-commit attachment fail, and failures roll back the row and audit together. Historical null linkage stays unverified and is never backfilled. Lifecycle destruction remains the sole deletion exception.
 
 ## XVI. Amendment
+
+**Version 1.11 (2026-10-03)** supersedes v1.9's exclusion of historical reconstruction only for the bounded diagnostic read in §XIII.9. It preserves the exclusion of reconstructed history from settlement/recovery truth and authorizes no historical monetary execution or write.
+
 
 **Version 1.10 (2026-10-03)** registers the complete one-time invalidation creation-linkage protocol, superseding the incomplete single-pointer field list. It authorizes no mutable eligibility or business record.
 

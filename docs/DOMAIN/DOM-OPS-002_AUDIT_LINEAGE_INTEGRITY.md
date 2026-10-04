@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |:---|:---|:---|:---|:---|
-| DOM-OPS-002 | 1.6 | 2026-10-03 | 1.5 | Constitutional |
+| DOM-OPS-002 | 1.7 | 2026-10-03 | 1.6 | Constitutional |
 
 ---
 
@@ -305,6 +305,12 @@ Both application and database guards SHALL reject late attachment, replacement, 
 
 For correction execution, the originating FEAT obtains the complete source/candidate requirements from Ledger, invokes this Operations query for every required record, and supplies the resulting typed scoped evidence to Ledger. Ledger matches all identities, linked versions, required coverage and protected monetary facts to its own current locked records before deriving a recovery cap or posting. Ledger does not call Operations or import its internal class/registry; this cross-domain composition belongs only to the FEAT under INV-ARC-021 §V.1/VII. The display-only exception does not authorize runtime compensation decisions.
 
+### 6.2A Pure historical audit coverage diagnostics
+
+Operations owns `diagnose_historical_audit_coverage(table, row, class_id, *, source_descriptor=None, emitter_provenance=None, max_chain_events=1000)`, composed solely through FEAT-PROD-006. Incorporates [SPEC-PROD-002](../SPEC/SPEC-PROD-002_HISTORICAL_ATTENDANCE_PROOF_ASSESSMENT.md) §V, VII–VIII for exact original envelope/field coverage and bounded pure diagnostics. The batch query `diagnose_historical_audit_coverages(table, rows, class_id, *, max_chain_events=1000, max_rows=1000)` returns one immutable observation per scoped row and walks the complete class chain once per invocation. Both budgets are positive integers at most 1000; there is no caller-supplied chain-verification override or persisted cache. Historical descriptor/provenance parameters remain unavailable for record assignment in this phase and reject non-null caller values. It reports linked-event scope, complete chain/head envelope authentication, version, confirmed/candidate field coverage and unavailable original protected values independently. A verified chain prefix is insufficient. Scalar head observations before and after the complete walk must agree; concurrent legitimate advancement returns unavailable EVIDENCE_CHANGED_DURING_READ, never a false integrity failure. No row locks or transaction mutation are used. Excessive or unavailable chain evidence produces unavailable completeness. No autoflush, integrity-status mutation, signature repair or audit emission is allowed.
+
+Version 1 is not a per-record emitter identifier. Explicit exact-source descriptor and independently established emitter provenance are needed before confirmed field coverage. The deployed eleven-field payload cannot be replaced by the retired eight-field verifier registry. Original creation status cannot be supplied from today's cursor or guessed values. Even authenticated envelope/chain evidence never returns `VerifiedCreationEvidence`, establishes unsigned facts, or overrides canonical §6.2. Diagnostic observations remain separate from INV-ARC-016's four canonical lineage states. Current v2/v3 payload verification is unchanged.
+
 ### 6.3 Nightly Verification Flow
 
 ```
@@ -370,6 +376,9 @@ This taxonomy is defined as canonical in `INV-ARC-016`. The operational semantic
 ---
 
 ## 9. Amendment
+
+Version 1.7 (2026-10-03) adds §6.2A's bounded historical envelope/coverage diagnostic query only. Supersedes no canonical payload registry, lineage taxonomy, typed creation proof or lawful write protocol.
+
 
 Version 1.3 (2026-10-03) supersedes 1.2's incomplete protected registry for interval and payroll correction execution. Authority derives from `INV-CORE-000` §III.1–6, `INV-ARC-006` §V, `INV-ARC-016` §V–VI/IX, and `INV-ARC-021` §V/VII. Operations owns emission/verification only; eligibility and monetary conclusions remain owned by their respective domains. No runtime registry change is included.
 

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001      | 3.15    | 2026-10-03     | 3.14       | Normative |
+| SOP-DOC-001      | 3.16    | 2026-10-03     | 3.15       | Normative |
 
 ---
 
@@ -128,6 +128,7 @@ Archived material is deliberately absent; see §VI.
 - [FEAT-PROD-003 — Record Payroll Event](../FEATURE-EXECUTION/FEAT-PROD-003_RECORD_PAYROLL_EVENT.md)
 - [FEAT-PROD-004 — Complete Payroll Cycle](../FEATURE-EXECUTION/FEAT-PROD-004_COMPLETE_PAYROLL_CYCLE.md)
 - [FEAT-PROD-005 — Invalidate Attendance Interval](../FEATURE-EXECUTION/FEAT-PROD-005_INVALIDATE_ATTENDANCE_INTERVAL.md)
+- [FEAT-PROD-006 — Assess Historical Attendance Proof](../FEATURE-EXECUTION/FEAT-PROD-006_ASSESS_HISTORICAL_ATTENDANCE_PROOF.md)
 - [FEAT-STOR-001 — Store Purchase and Entitlement Grant](../FEATURE-EXECUTION/FEAT-STOR-001_STORE_PURCHASE.md)
 - [FEAT-STOR-002 — Entitlement Lifecycle Transition](../FEATURE-EXECUTION/FEAT-STOR-002_ENTITLEMENT_LIFECYCLE_TRANSITION.md)
 - [FEAT-STOR-003 — Insurance Claim Lifecycle](../FEATURE-EXECUTION/FEAT-STOR-003_INSURANCE_CLAIM_LIFECYCLE.md)
@@ -154,6 +155,7 @@ Archived material is deliberately absent; see §VI.
 - [SPEC-OPS-005 — Feature Health Evidence (internal integrity)](../SPEC/SPEC-OPS-005_FEATURE_HEALTH_EVIDENCE.md)
 - [SPEC-OPS-006 — Public Request Monitoring](../SPEC/SPEC-OPS-006_PUBLIC_REQUEST_MONITORING.md) — v1.4 (ratified 2026-10-02): a Hall passes line; 404s on the hall-pass approve, reject and cancel routes count as failed requests at 3 or more and above 2%, on the card and the hero. v1.3: plain-language hero states and area labels, Under maintenance from the access-gate check.
 - [SPEC-PROD-001 — Attendance Interval Eligibility and Payroll Correction](../SPEC/SPEC-PROD-001_ATTENDANCE_INTERVAL_ELIGIBILITY_AND_PAYROLL_CORRECTION.md) — incorporated by DOM-PROD-001 and FEAT-PROD-003/005; documentation authorization, not runtime availability.
+- [SPEC-PROD-002 — Historical Attendance Proof Assessment](../SPEC/SPEC-PROD-002_HISTORICAL_ATTENDANCE_PROOF_ASSESSMENT.md) — incorporated by owning DOM-PROD-001/DOM-LED-001/DOM-OPS-002 and FEAT-PROD-006 for pure diagnostics only.
 - [SPEC-SEC-001 — Credentials and Identity Lookup Code Contract](../SPEC/SPEC-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_CODE_CONTRACT.md)
 - [SPEC-STORE-001 — Store Product Policy Payload Schema](../SPEC/SPEC-STORE-001_PRODUCT_POLICY_PAYLOAD_SCHEMA.md)
 - [SPEC-TEST-001 — Canonical Test Initializer](../SPEC/SPEC-TEST-001_CANONICAL_TEST_INITIALIZER.md)
@@ -271,6 +273,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.16 (2026-10-03):**
+- Registers FEAT-PROD-006 and SPEC-PROD-002; DOM-PROD-001 v1.11, DOM-LED-001 v2.9 and DOM-OPS-002 v1.7 and DOM-POL-001 v2.5 authorize bounded pure historical assessment, without recovery enablement or modified signature proof.
 
 **Version 3.15 (2026-10-03):**
 - Registers the interval invalidation/correction runtime authority amendments: DOM-PROD-001 v1.10, SPEC-PROD-001 v1.1, FEAT-PROD-005 v1.1, FEAT-PROD-003 v1.6, DOM-CORE-002 v1.15, DOM-OPS-002 v1.6, DOM-LED-001 v2.8, FEAT-LED-000 v0.4, FEAT-LED-001 v1.5, SPEC-LED-002 v1.2, DOM-CLASS-001 v3.8, FEAT-OBL-003 v1.1, FEAT-OBL-004 v0.2 and FEAT-STOR-007 v1.1. Complete invalidation creation linkage, exact Ledger v3/v2 payload coverage and typed FEAT-supplied funding authority preserve immutable historical evidence.

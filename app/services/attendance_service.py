@@ -247,7 +247,7 @@ class AttendanceInterval:
                 "credited_seconds": self.credited_seconds}
 
 
-def list_attendance_interval_evidence(seat_id, class_id, *, ctx, as_of_utc=None):
+def list_attendance_interval_evidence(seat_id, class_id, *, ctx, as_of_utc=None, source_limit=None):
     """Pure PROD canonical pair projection; system closes are first-class evidence."""
     if ctx.class_id != class_id:
         raise ValueError("Attendance context does not authorize this class.")
@@ -255,8 +255,16 @@ def list_attendance_interval_evidence(seat_id, class_id, *, ctx, as_of_utc=None)
         as_of_utc = canonical_temporal_resolver(CLASS_LEVEL_EVALUATION,
             canonical_execution_context=ctx, primitive="current_time").canonical_now_utc
     as_of_utc = ensure_utc(as_of_utc)
-    rows = AttendanceSession.query.filter_by(class_id=class_id, target_seat_id=seat_id).order_by(
-        AttendanceSession.timestamp.asc(), AttendanceSession.id.asc()).all()
+    query = AttendanceSession.query.filter_by(class_id=class_id, target_seat_id=seat_id).order_by(
+        AttendanceSession.timestamp.asc(), AttendanceSession.id.asc())
+    if source_limit is not None:
+        if type(source_limit) is not int or not 1 <= source_limit <= 2000:
+            raise ValueError("INVALID_INPUT")
+        query = query.limit(source_limit + 1)
+    with db.session.no_autoflush:
+        rows = query.all()
+    if source_limit is not None and len(rows) > source_limit:
+        raise ValueError("EVIDENCE_LIMIT_EXCEEDED")
     intervals, opening = [], None
     consumed_closings = set()
     for row in rows:

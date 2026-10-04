@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-LED-001 | 2.8 | 2026-10-03 | 2.7 | Constitutional |
+| DOM-LED-001 | 2.9 | 2026-10-03 | 2.8 | Constitutional |
 
 ---
 
@@ -238,7 +238,14 @@ The inclusion and exclusion rules for posted, void, reversal, and other transact
 
 SPEC-LED-001 §III–V governs Ledger's independent reconstruction queries. With an explicitly supplied canonical `through_posting_sequence`, reconstruct scoped cents from immutable Ledger rows through that boundary without reading snapshots. If no independent reconciliation boundary can be established when the caller omits it, return UNAVAILABLE; do not infer posting from the highest allocated sequence, a transaction ID, wall-clock time, or a snapshot. An explicit boundary proves the sum at that requested boundary, not that a projection currently asserts it. Historical rows lacking required sequence, reservation, or version-specific protected evidence remain unavailable for strict monetary proof. No signatures or historical monetary facts are rewritten.
 
+### IX.2 Pure historical monetary assessment
+
+Ledger exposes `get_historical_payroll_credit_records(*, ctx, class_id, target_seat_id, limit=1000)` to provide scoped bounded source records for FEAT-to-Operations composition only; it does not provide an unscoped table read or resolve business membership. Ledger owns `assess_historical_payroll_money(*, ctx, class_id, target_seat_id, business_input, records, audit_observations=(), creation_evidence=())`: a pure bounded query through FEAT-PROD-006 that resolves uniquely scoped credit locators, compares original recorded monetary amounts with explicit original-rule replay inputs, identifies unsupported compensation evidence and reports current strict proof eligibility separately. Business inputs and audit observations are immutable FEAT-supplied data, never cross-domain calls or verification booleans. This domain incorporates [SPEC-PROD-002](../SPEC/SPEC-PROD-002_HISTORICAL_ATTENDANCE_PROOF_ASSESSMENT.md) §V–VIII for diagnostic arithmetic/monetary boundaries only. Preserve exact historical arithmetic order; no current price substitution, invented allocation, persisted earnings, default-zero compensation or signature-version override is authorized. Diagnostic v1 coverage never satisfies §VII.1A or §IX.1. Existing v2/v3 proof and recovery APIs remain unchanged.
+
 ## X. Change Notes
+
+**2.9 (2026-10-03)** adds §IX.2's historical read diagnostics; supersedes no execution-proof or compensation-cap rule. Read agreement is not monetary authorization.
+
 
 **2.6 (2026-10-03)** supersedes 2.5 for append-only correction vocabulary, bounded compensation linkage and serialization. Incorporates permanent command reservations explicitly; retains domain blindness and lawful lifecycle destruction. This is documentation authority for later implementation, not a schema migration.
 
