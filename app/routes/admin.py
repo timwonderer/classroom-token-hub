@@ -4092,7 +4092,7 @@ def _dispatch_student_deletion(seat_ids, data, *, require_gate, form_response=Fa
 @admin_bp.route('/student/unclaim', methods=['POST'])
 @admin_required
 def unclaim_student():
-    from app.feats.identity_feat import unclaim_student_seat
+    from app.feats.identity_feat import roster_action_message, unclaim_student_seat
     data = request.get_json(silent=True) or {}
     if not isinstance(data, dict) or data.get('confirmation') != 'UNCLAIM':
         return jsonify(status='error', message='Confirm Unclaim before continuing.'), 400
@@ -4109,7 +4109,9 @@ def unclaim_student():
             correlation_id=generate_correlation_id(),
             idempotency_key=f"identity:unclaim:{seat_id}:{generation}")
     except (ValueError, TypeError) as error:
-        return jsonify(status='error', message=str(error) if isinstance(error, ValueError) else 'Select a valid seat.'), 400
+        message = (roster_action_message(error, 'Unclaim could not be completed.')
+                   if isinstance(error, ValueError) else 'Select a valid seat.')
+        return jsonify(status='error', message=message), 400
     except LookupError:
         return jsonify(status='error', message='Student seat not found in this class.'), 404
     return jsonify(result)
@@ -8097,7 +8099,7 @@ def upload_students():
 
     join_code = get_display_join_code(class_id)
 
-    from app.feats.identity_feat import import_student_seats
+    from app.feats.identity_feat import import_student_seats, roster_action_message
 
     request_key = uuid.uuid4().hex
     try:
@@ -8108,7 +8110,8 @@ def upload_students():
             idempotency_key=f"roster-import:{class_id}:{request_key}",
         )
     except ValueError as exc:
-        return jsonify(status="error", message=str(exc), created=0), 400
+        message = roster_action_message(exc, "Student import could not be completed.")
+        return jsonify(status="error", message=message, created=0), 400
     return jsonify(status="success", created=created, join_code=join_code, errors=[])
 
 

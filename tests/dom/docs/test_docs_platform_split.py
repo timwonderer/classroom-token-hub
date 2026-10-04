@@ -12,6 +12,8 @@ Together those meant that configuring `EXTERNAL_DOCS_BASE_URL` redirected the
 working in-app help centre — and its index — off the application entirely.
 """
 
+import pytest
+
 from app.utils.helpers import USER_GUIDES_DIR, docs_url_for
 
 EXTERNAL = "https://docs.classroomtokenhub.com"
@@ -188,3 +190,25 @@ def test_the_docs_site_publishes_the_developer_tree():
 
     published = {"INVARIANT", "DOMAIN", "FEATURE-EXECUTION", "SPEC", "MAP"}
     assert not published & excluded_trees(_docs_site_config_source())
+
+
+def test_redirect_target_cannot_leave_the_configured_docs_origin(app, monkeypatch):
+    from urllib.parse import urlparse
+    from app.routes.docs import _redirect_to_public_docs
+
+    monkeypatch.setitem(app.config, "EXTERNAL_DOCS_BASE_URL", EXTERNAL)
+    with app.test_request_context("/"):
+        for hostile in ("//evil.example/x", "/\\evil.example", "@evil.example", "a b?next=//evil.example"):
+            location = _redirect_to_public_docs(hostile).headers["Location"]
+            assert urlparse(location).netloc == urlparse(EXTERNAL).netloc, (hostile, location)
+            assert location.startswith(f"{EXTERNAL}/")
+
+
+def test_redirect_refuses_dot_segments(app, monkeypatch):
+    from werkzeug.exceptions import NotFound
+    from app.routes.docs import _redirect_to_public_docs
+
+    monkeypatch.setitem(app.config, "EXTERNAL_DOCS_BASE_URL", EXTERNAL)
+    with app.test_request_context("/"):
+        with pytest.raises(NotFound):
+            _redirect_to_public_docs("DOMAIN/../../etc")

@@ -8,6 +8,12 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Security
+
+- **CodeQL: roster import and unclaim no longer echo exception text.** `/admin/upload-students` and `/admin/student/unclaim` returned `str(error)` from any `ValueError`. They now return a message only if it is in `ROSTER_ACTION_MESSAGES` (`app/feats/identity_feat.py`), which lists the teacher-facing messages those FEATs raise; any other `ValueError` gets a generic message. Tests: `tests/dom/identity/test_roster_action_messages.py`, including a guard that fails when a FEAT raises a message missing from the list.
+- **CodeQL: docs redirect to the external site.** `_redirect_to_public_docs` percent-encodes the reader-supplied path, refuses `.` and `..` segments, and checks the target still has the configured docs host. Tests in `tests/dom/docs/test_docs_platform_split.py`.
+- **Docs site npm advisories.** The `docs-site` lockfile moves `fast-uri` to 4.2.1, `brace-expansion` to 5.0.12 and `http-cache-semantics` to 4.3.0, closing Dependabot alerts #78-#82 and #84 (supersedes #1458). Alert #83 (`braces`, no patched release) is build-time only for the static docs site and is left for dismissal.
+
 ### Fixed
 
 - **Backup tool install sheet names the wrong `pg_dump` version.** `infra/db-backup/README.md` said `pg_dump` must be at least the server's major version. A newer one fails verification: `pg_dump` 17 writes `SET transaction_timeout`, which the PostgreSQL 14 verify database rejects, as the first v2.1.1 pre-release backup attempt showed. It now requires the same major version, and the Mac install line uses `postgresql@14`. The tool's own docstring (`cth_db_backup.py`) said the same and now matches. The tool also refuses, before any `backup` or `restore`, when `pg_dump` or `pg_restore` has a different major version from the source, verify or target database (`require_matching_clients`), and the host install line pins `postgresql-client-14`. Tests: `tests/test_db_backup_client_versions.py` (a 17-against-14 pair is refused; confirmed red with the check loosened to accept newer clients).
