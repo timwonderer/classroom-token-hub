@@ -21,7 +21,7 @@ from flask_migrate import upgrade as alembic_upgrade
 from sqlalchemy import text
 
 from app.extensions import db
-from tests.helpers.canonical_classroom import provision_classroom
+from tests.helpers.migration_schema import BEFORE_PAYROLL_SOURCE, predecessor_classrooms
 
 PREVIOUS = "f4b8d2a6c1e9"
 THIS = "a7e3c9d1f5b2"
@@ -46,20 +46,10 @@ def _columns(table):
     }
 
 
-def _provision_and_downgrade(keys):
-    """Plain ids of freshly provisioned classes, the schema stepped back one revision."""
-    classrooms = []
-    for key in keys:
-        classroom = provision_classroom(key)
-        classrooms.append(SimpleNamespace(
-            class_id=classroom.class_id,
-            seat_id=classroom.students[0].seat.id,
-            teacher_seat_id=classroom.teacher_seat_id,
-        ))
-    db.session.commit()
-    db.session.remove()
-    alembic_downgrade(revision=PREVIOUS)
-    return classrooms
+def _provision_predecessor(keys):
+    """Provision predecessor rows through their owning historical writer."""
+    return [SimpleNamespace(**row) for row in
+            predecessor_classrooms(BEFORE_PAYROLL_SOURCE, PREVIOUS, keys, anchored_payroll=True)]
 
 
 def _seed_production_shape(classrooms, *, events_per_class=3):
@@ -105,7 +95,7 @@ def _seed_production_shape(classrooms, *, events_per_class=3):
 
 def test_upgrade_remaps_every_event_to_its_classs_payroll_setting(app):
     with app.app_context():
-        classrooms = _provision_and_downgrade(CLASSROOM_KEYS)
+        classrooms = _provision_predecessor(CLASSROOM_KEYS)
         expected = _seed_production_shape(classrooms)
         created = dict(_rows("SELECT class_id, created_at FROM payroll_settings"))
 
@@ -139,7 +129,7 @@ def test_upgrade_remaps_every_event_to_its_classs_payroll_setting(app):
 
 def test_upgrade_refuses_a_class_with_more_than_one_candidate_setting(app):
     with app.app_context():
-        classrooms = _provision_and_downgrade(("chemistry_p1",))
+        classrooms = _provision_predecessor(("chemistry_p1",))
         _seed_production_shape(classrooms, events_per_class=1)
         with db.engine.begin() as conn:
             # A second (retired) row for the class: which one priced the event?
@@ -165,7 +155,7 @@ def test_upgrade_refuses_a_class_with_more_than_one_candidate_setting(app):
 
 def test_upgrade_refuses_an_event_whose_policy_version_is_another_classs(app):
     with app.app_context():
-        classrooms = _provision_and_downgrade(("chemistry_p1", "ap_csp_p3"))
+        classrooms = _provision_predecessor(("chemistry_p1", "ap_csp_p3"))
         _seed_production_shape(classrooms, events_per_class=1)
         with db.engine.begin() as conn:
             conn.execute(text(
@@ -188,7 +178,7 @@ def test_downgrade_and_upgrade_cycle_preserves_the_mapping(app):
     both needs payroll PolicyVersions that no longer exist; that refusal is held
     in tests/dom/class/test_policy_lineage_retirement_migration.py."""
     with app.app_context():
-        classrooms = _provision_and_downgrade(("chemistry_p1", "ap_csp_p3"))
+        classrooms = _provision_predecessor(("chemistry_p1", "ap_csp_p3"))
         expected = _seed_production_shape(classrooms)
         alembic_upgrade(revision=THIS)
 
@@ -221,7 +211,7 @@ def test_retired_history_keeps_the_rate_that_was_in_force_at_each_instant(app):
     from app.services.payroll.settings import payroll_setting_effective_at
 
     with app.app_context():
-        (classroom,) = _provision_and_downgrade(("chemistry_p1",))
+        (classroom,) = _provision_predecessor(("chemistry_p1",))
         cid = classroom.class_id
         older, newer = str(uuid.uuid4()), str(uuid.uuid4())
         with db.engine.begin() as conn:
@@ -252,7 +242,7 @@ def test_upgrade_refuses_a_setting_without_an_anchor_or_with_an_unsupported_sche
     """Every setting must anchor a weekly, biweekly or monthly schedule
     (operator ruling 2026-09-30); the migration will not guess one."""
     with app.app_context():
-        (classroom,) = _provision_and_downgrade(("chemistry_p1",))
+        (classroom,) = _provision_predecessor(("chemistry_p1",))
         with db.engine.begin() as conn:
             conn.execute(
                 text(f"UPDATE payroll_settings SET {column} = :v WHERE class_id = :c"),
@@ -273,7 +263,7 @@ def test_upgrade_refuses_a_setting_without_an_anchor_or_with_an_unsupported_sche
 def test_upgrade_drops_the_stored_day_count_and_constrains_the_schedule(app):
     """Pay frequency is derived from pay_schedule_type, never stored."""
     with app.app_context():
-        _provision_and_downgrade(("chemistry_p1",))
+        _provision_predecessor(("chemistry_p1",))
         assert "payroll_frequency_days" in _columns("payroll_settings")
         alembic_upgrade()
         assert "payroll_frequency_days" not in _columns("payroll_settings")

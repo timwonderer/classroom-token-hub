@@ -42,7 +42,7 @@
 <div class="small fst-italic mb-2">{{ req.redemption_prompt|markdown }}</div>
 {% endif %}
 {% if req.student_note %}
-<blockquote class="border-start border-3 ps-3 mb-3 text-break" style="white-space: pre-wrap">{{ req.student_note }}</blockquote>
+<blockquote class="border-start border-3 ps-3 mb-3 text-break redemption-student-note">{{ req.student_note }}</blockquote>
 {% else %}
 <p class="small text-muted mb-3">The student didn't add a note.</p>
 {% endif %}
@@ -607,21 +607,25 @@
       </div>
       <div class="modal-body" id="redemptionModalBody"></div>
       <div class="modal-footer flex-column align-items-stretch gap-2">
-        <div id="redemptionDecided" class="d-flex justify-content-between align-items-center" hidden>
-          <small class="text-muted">This request has been decided. Decisions are final.</small>
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <div id="redemptionDecided" hidden>
+          <div class="d-flex justify-content-between align-items-center">
+            <small class="text-muted">This request has been decided. Decisions are final.</small>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          </div>
         </div>
-        <div id="redemptionActions" class="d-flex flex-wrap justify-content-end gap-2" hidden>
-          <button type="button" class="btn btn-outline-secondary me-auto" data-bs-dismiss="modal">Decide later</button>
-          <button type="button" class="btn btn-outline-secondary" id="redemptionReturnBtn">
-            <span class="material-symbols-outlined me-1" aria-hidden="true">undo</span>Return
-          </button>
-          <button type="button" class="btn btn-outline-danger" id="redemptionDenyBtn">
-            <span class="material-symbols-outlined me-1" aria-hidden="true">cancel</span>Deny
-          </button>
-          <button type="button" class="btn btn-success" id="redemptionApproveBtn">
-            <span class="material-symbols-outlined me-1" aria-hidden="true">check_circle</span>Accept
-          </button>
+        <div id="redemptionActions" hidden>
+          <div class="d-flex flex-wrap justify-content-end gap-2">
+            <button type="button" class="btn btn-outline-secondary me-auto" data-bs-dismiss="modal">Decide later</button>
+            <button type="button" class="btn btn-outline-secondary" id="redemptionReturnBtn">
+              <span class="material-symbols-outlined me-1" aria-hidden="true">undo</span>Return
+            </button>
+            <button type="button" class="btn btn-outline-danger" id="redemptionDenyBtn">
+              <span class="material-symbols-outlined me-1" aria-hidden="true">cancel</span>Deny
+            </button>
+            <button type="button" class="btn btn-success" id="redemptionApproveBtn">
+              <span class="material-symbols-outlined me-1" aria-hidden="true">check_circle</span>Accept
+            </button>
+          </div>
         </div>
         <div id="redemptionConfirm" hidden>
           <div id="redemptionNoteGroup" class="mb-2" hidden>

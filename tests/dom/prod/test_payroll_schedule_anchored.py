@@ -23,6 +23,7 @@ from uuid import uuid4
 import pytz
 import pytest
 
+from tests.helpers.payroll_fixture import record_payroll_source_fixture
 from app.extensions import db
 from app.feats.base import FEATContext
 from app.models import PayrollEvent
@@ -70,12 +71,12 @@ def _run(classroom, setting, *, mechanism, at, occurrence=None):
         summary[SCHEDULED_OCCURRENCE_KEY] = occurrence.isoformat()
     key = f"run:{uuid4()}"
     with FEATContext("FEAT-PROD-003", idempotency_key=key):
-        db.session.add(PayrollEvent(
+        record_payroll_source_fixture(
             class_id=classroom.class_id, target_seat_id=classroom.students[0].seat.id,
             actor_seat_id=classroom.teacher_seat_id, correlation_id=key, idempotency_key=key,
             policy_uuid=setting.policy_uuid, mechanism=mechanism,
             payroll_event_type="payroll", recorded_at=at, summary_json=summary,
-        ))
+        )
         db.session.flush()
     db.session.commit()
 

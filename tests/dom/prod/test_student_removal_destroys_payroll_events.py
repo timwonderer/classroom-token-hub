@@ -23,6 +23,7 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy.exc import DBAPIError
 
+from tests.helpers.payroll_fixture import record_payroll_source_fixture
 from app.extensions import db
 from app.feats.base import FEATContext
 from app.feats.prod import record_attendance_session
@@ -79,13 +80,13 @@ def _seed_payroll_history(client, classroom, student, tag):
                               description="Helped clean up", amount="2.00")
     assert response.status_code == 302
     setting = current_payroll_setting(classroom.class_id)
-    with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"pe-removal-run:{tag}"):
-        db.session.add(PayrollEvent(
+    with FEATContext("FEAT-PROD-003", idempotency_key=f"pe-removal-run:{tag}"):
+        record_payroll_source_fixture(
             class_id=classroom.class_id, target_seat_id=student.seat.id,
             actor_seat_id=classroom.teacher_seat.id, correlation_id=f"pe-removal-run:{tag}",
             idempotency_key=f"pe-removal-run:{tag}", payroll_event_type="payroll",
             mechanism="SYSTEM", policy_uuid=setting.policy_uuid, summary_json={},
-        ))
+        )
         db.session.flush()
     db.session.commit()
     db.session.expire_all()
@@ -98,14 +99,13 @@ def _seed_payroll_history(client, classroom, student, tag):
 
 def _insert_event(classroom, *, target_seat_id, actor_seat_id, tag):
     """A manual-credit event with chosen seats, for the schema-level cases."""
-    with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"pe-removal:{tag}"):
-        event = PayrollEvent(
+    with FEATContext("FEAT-PROD-003", idempotency_key=f"pe-removal:{tag}"):
+        event = record_payroll_source_fixture(
             class_id=classroom.class_id, target_seat_id=target_seat_id,
             actor_seat_id=actor_seat_id, correlation_id=f"pe-removal:{tag}",
             idempotency_key=f"pe-removal:{tag}", payroll_event_type="manual_credit",
             mechanism="TEACHER", summary_json={},
         )
-        db.session.add(event)
         db.session.flush()
         event_id = event.id
     db.session.commit()

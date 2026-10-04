@@ -16,6 +16,7 @@ from uuid import uuid4
 import pytz
 
 import app.utils.canonical_temporal_resolver as resolver_module
+from tests.helpers.payroll_fixture import record_payroll_source_fixture
 from app.extensions import db
 from app.feats.base import FEATContext
 from app.models import PayrollEvent
@@ -117,13 +118,13 @@ def test_INV_ARC_015__payroll_page_shows_the_schedulers_next_run(client, app):
             )
         seat = classroom.students[0].seat
         with FEATContext("FEAT-PROD-003", idempotency_key=f"seed:{classroom.class_id}"):
-            db.session.add(PayrollEvent(
+            record_payroll_source_fixture(
                 class_id=classroom.class_id, target_seat_id=seat.id,
                 actor_seat_id=classroom.teacher_seat.id, correlation_id=f"seed:{uuid4().hex}",
                 idempotency_key=f"seed:{uuid4().hex}", policy_uuid=setting.policy_uuid,
                 mechanism="SYSTEM", payroll_event_type="payroll", recorded_at=FIRST_PAY,
                 summary_json={SCHEDULED_OCCURRENCE_KEY: FIRST_PAY.isoformat()},
-            ))
+            )
             db.session.flush()
         db.session.commit()
 

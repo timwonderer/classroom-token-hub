@@ -25,6 +25,7 @@ from sqlalchemy.exc import IntegrityError
 
 from datetime import timedelta
 
+from tests.helpers.payroll_fixture import record_payroll_source_fixture
 from app.extensions import db
 from app.feats.base import FEATContext
 from app.models import ClassEconomy, PayrollCycleCompletion, PayrollEvent
@@ -48,15 +49,16 @@ def _record(cid, key, cycle_id):
 def _seed_payroll_event(classroom, *, recorded_at, event_type="payroll"):
     cid = classroom.class_id
     seat = classroom.students[0]
-    with FEATContext("FEAT-BYPASS-LEGACY", correlation_id=f"win:{cid}:{recorded_at.isoformat()}"):
+    with FEATContext("FEAT-PROD-003", correlation_id=f"corr_win:{recorded_at.isoformat()}",
+                     idempotency_key=f"win:{recorded_at.isoformat()}"):
         setting = first_payroll_setting(cid)
-        db.session.add(PayrollEvent(
+        record_payroll_source_fixture(
             class_id=cid, target_seat_id=seat.seat_id,
             actor_seat_id=classroom.teacher_seat_id, correlation_id=f"corr_win:{recorded_at.isoformat()}",
             idempotency_key=f"win:{recorded_at.isoformat()}",
             policy_uuid=setting.policy_uuid, mechanism="TEACHER",
             payroll_event_type=event_type, recorded_at=recorded_at,
-        ))
+        )
         db.session.flush()
 
 
