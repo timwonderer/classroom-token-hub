@@ -1,7 +1,7 @@
 # Classroom Token Hub - Development Priorities
 
-**Last Updated:** 2026-10-02
-**Current Released Version:** 2.1.0 (`5ac05ea6f`), the latest tag, deployed to production 2026-10-02. v2.0.0 launched 2026-09-26
+**Last Updated:** 2026-10-04
+**Current Released Version:** 2.1.1 (`2bdfac65e`), the latest tag, deployed to production 2026-10-04. v2.0.0 launched 2026-09-26
 **Engineering State:** v2 in production; post-launch hardening
 **Active Integration Branch:** `main`
 
@@ -67,11 +67,17 @@ on a custom database URL.
 - **Untagged release, 2026-09-30.** `314158d53` pays savings interest at the teacher's configured
   cadence by the daily balance method (#1449), with #1438 and #1451.
   See `docs/ops/audits/DEPLOY_2026-09-30_314158d53.md`.
-- **v2.1.0** (`5ac05ea6f`, deployed 2026-10-02). Production runs this release. It collects everything
-  since v2.0.1, including the untagged releases above; see the `[2.1.0]` section of the CHANGELOG and
-  `docs/ops/audits/DEPLOY_2026-10-02_5ac05ea6f.md`. Two checks are still open: hall passes in a
-  real class on one worker, and the first automatic payday on 2026-10-10. Restoring two workers
-  waits on the first (SOP-DEP-001 v2.6).
+- **v2.1.0** (`5ac05ea6f`, deployed 2026-10-02). It collects everything since v2.0.1, including the
+  untagged releases above; see the `[2.1.0]` section of the CHANGELOG and
+  `docs/ops/audits/DEPLOY_2026-10-02_5ac05ea6f.md`.
+- **Untagged releases, 2026-10-03 and 2026-10-04.** `ad9574334` (#1470 and the changes merged after
+  v2.1.0; `docs/ops/audits/DEPLOY_2026-10-03_ad9574334.md`) and the hotfix `4c2fc4bc4` (#1476, off `main`).
+- **v2.1.1** (`2bdfac65e`, deployed 2026-10-04). Production runs this release: attendance correction
+  (#1477, with three forward-only migrations), store redemption decisions (#1473), the POST-only sysadmin
+  logout (#1482) and the #1478/#1479 performance fixes. See the `[2.1.1]` section of the CHANGELOG and
+  `docs/ops/audits/DEPLOY_2026-10-04_2bdfac65e.md`; the same window updated the host kernel and took the
+  first restore-verified backups. Two checks are still open: hall passes in a real class on one worker,
+  and the first automatic payday on 2026-10-10. Restoring two workers waits on the first (SOP-DEP-001 v2.6).
 - All ten domains (Identity, Class Configuration, Ledger, Productivity & Payroll, Obligations,
   Store & Entitlements, Operations, Interpretation, Policies, Support) run on the v2 model:
   `User` → `Seat` → `IdentityProfile`, with `ClassEconomy.class_id` as the tenant boundary and
@@ -81,9 +87,9 @@ on a custom database URL.
 
 The post-launch tracker is the working list. In priority order:
 
-1. **Operator follow-ups.** Lift the Cloudflare Access window with a status update, then check public
-   routes. (The v2.0.1 advisory is published as GHSA-5v6c-mw3v-fmf2 and linked from the CHANGELOG.) v2.1.0 is
-   tagged and deployed; record the 2026-09-29 releases it contains, apply the Grafana nginx snippet, and confirm the student-setup Redis host settings the app cannot check.
+1. **Operator follow-ups.** Record the 2026-09-29 releases contained in v2.1.0, apply the Grafana nginx
+   snippet, check the remaining public routes, and work through the follow-ups in the v2.1.1 record. The
+   student-setup Redis host settings were confirmed on 2026-10-04.
 2. **First real use.** Signed-in flows other than teacher passkeys, rent payment (its preview
    window opens 2026-09-29), daylight-saving transitions and load have not yet run in production.
 3. **Dependencies.** Twelve open Dependabot PRs have been reviewed, with a suggested merge order. CI

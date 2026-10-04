@@ -6,7 +6,7 @@ A classroom behavior management and reward platform with built-in simulated fina
 
 Students earn tokens for the time they work, and spend them on rent, insurance and a class store. Teachers run the class economy without handing over student email addresses, phone numbers or school SSO. Built with Flask, SQLAlchemy and PostgreSQL. Each class period is its own isolated economy.
 
-**In production:** [v2.1.0](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.1.0) (`5ac05ea6f`), deployed 2026-10-02 ([release record](docs/ops/audits/DEPLOY_2026-10-02_5ac05ea6f.md)). **Latest tag:** v2.1.0 (v2 launched 2026-09-26) · **Branch:** `main` · **License:** [PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0)
+**In production:** [v2.1.1](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.1.1) (`2bdfac65e`), deployed 2026-10-04 ([release record](docs/ops/audits/DEPLOY_2026-10-04_2bdfac65e.md)). **Latest tag:** v2.1.1 (v2 launched 2026-09-26) · **Branch:** `main` · **License:** [PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0)
 
 | | |
 | --- | --- |
@@ -228,17 +228,18 @@ curl http://localhost:5000/health/status   # bounded status signals; no tenant d
 gunicorn wsgi:app --workers 4 --bind 0.0.0.0:8000
 ```
 
-Tags mark the exact commit of each tagged release: `v2.0.0` is `26d1792b5` (released 2026-09-26) `v2.0.1` is `ad64a473f` (released 2026-09-28) and `v2.1.0` is `5ac05ea6f` (released 2026-10-02), the merge commit of its release PR. The full procedure is [SOP-DEP-002](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md), and each release is recorded under [docs/ops/audits/](docs/ops/audits/):
+Tags mark the exact commit of each tagged release: `v2.0.0` is `26d1792b5` (released 2026-09-26) `v2.0.1` is `ad64a473f` (released 2026-09-28), `v2.1.0` is `5ac05ea6f` (released 2026-10-02), the merge commit of its release PR, and `v2.1.1` is `2bdfac65e` (released 2026-10-04), the tip of `main` at release. The full procedure is [SOP-DEP-002](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md), and each release is recorded under [docs/ops/audits/](docs/ops/audits/):
 
 - v2.0.0: [TRANSITION_2026-09-26_26d1792b5.md](docs/ops/audits/TRANSITION_2026-09-26_26d1792b5.md)
 - v2.0.1: [DEPLOY_2026-09-28_ad64a473f.md](docs/ops/audits/DEPLOY_2026-09-28_ad64a473f.md), which also covers the unrecorded `efdf09eda` release of 2026-09-27
 - v2.1.0: [DEPLOY_2026-10-02_5ac05ea6f.md](docs/ops/audits/DEPLOY_2026-10-02_5ac05ea6f.md)
+- v2.1.1: [DEPLOY_2026-10-04_2bdfac65e.md](docs/ops/audits/DEPLOY_2026-10-04_2bdfac65e.md)
 
 Five untagged releases from `main` followed v2.0.1, each through the release workflow. On 2026-09-29: `bc5c07a2` (#1439, the payroll fix for the 2026-09-28 incident), `eaca2a7e` (#1440, a one-time payroll correction for teachers to review), `29b99b14` (#1442, the username retention check) and `00166e56` (#1443). None of these four has a release record in `docs/ops/audits/` yet. On 2026-09-30: `314158d53` (#1438, #1449, #1451).
 
-The `314158d53` release record is [DEPLOY_2026-09-30_314158d53.md](docs/ops/audits/DEPLOY_2026-09-30_314158d53.md). Production currently runs v2.1.0 (`5ac05ea6f`), deployed 2026-10-02; its record is [DEPLOY_2026-10-02_5ac05ea6f.md](docs/ops/audits/DEPLOY_2026-10-02_5ac05ea6f.md).
+The `314158d53` release record is [DEPLOY_2026-09-30_314158d53.md](docs/ops/audits/DEPLOY_2026-09-30_314158d53.md). All five releases are part of v2.1.0 in [CHANGELOG.md](CHANGELOG.md).
 
-All five releases are part of v2.1.0 in [CHANGELOG.md](CHANGELOG.md).
+Two untagged releases followed v2.1.0: `ad9574334` on 2026-10-03 ([DEPLOY_2026-10-03_ad9574334.md](docs/ops/audits/DEPLOY_2026-10-03_ad9574334.md)), and `4c2fc4bc4` on 2026-10-04, a hotfix carrying #1476 off `main`, recorded in the v2.1.1 record. Both are part of v2.1.1 in the CHANGELOG. Production currently runs v2.1.1 (`2bdfac65e`), deployed 2026-10-04; its record is [DEPLOY_2026-10-04_2bdfac65e.md](docs/ops/audits/DEPLOY_2026-10-04_2bdfac65e.md).
 
 ### Known limits of the release evidence
 
@@ -299,10 +300,10 @@ The user guides in `docs/user-guides/` are served inside the app at `/docs`. The
 
 | Line | Status | Where it lives |
 | --- | --- | --- |
-| **v2** | Current. v2.0.0 released 2026-09-26; v2.0.1 (security) released 2026-09-28; untagged releases from `main` on 2026-09-29 and 2026-09-30; v2.1.0 released 2026-10-02 | `main` |
+| **v2** | Current. v2.0.0 released 2026-09-26; v2.0.1 (security) released 2026-09-28; untagged releases from `main` on 2026-09-29 and 2026-09-30; v2.1.0 released 2026-10-02; untagged releases on 2026-10-03 and 2026-10-04; v2.1.1 released 2026-10-04 | `main` |
 | **v1** | Retired. v1.10.0 (2026-06-14) was the final v1 release | Branch `main_legacy_v1.10.0` and the `v1.*` tags |
 
-v2 is a ground-up rebuild. It's a clean break: no v1 accounts or data carry over. See the [v2.0.0](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.0.0), [v2.0.1](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.0.1) and [v2.1.0](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.1.0) release notes. Upgrading every 2.0.0 deployment to 2.0.1 is recommended: it ties each passkey to the account it was registered to.
+v2 is a ground-up rebuild. It's a clean break: no v1 accounts or data carry over. See the [v2.0.0](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.0.0), [v2.0.1](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.0.1), [v2.1.0](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.1.0) and [v2.1.1](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.1.1) release notes. Upgrading every 2.0.0 deployment to 2.0.1 is recommended: it ties each passkey to the account it was registered to.
 
 ---
 
