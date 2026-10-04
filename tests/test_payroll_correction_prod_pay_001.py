@@ -65,19 +65,30 @@ def _pay_for(cid: str, minutes: int) -> Decimal:
     return (Decimal(minutes * 60) * rate).quantize(Decimal("0.01"))
 
 
-@pytest.fixture(autouse=True)
-def historical_incident_sources(app, request, tmp_path):
-    """Create genuine predecessor inputs, then migrate forward without signing them."""
+@pytest.fixture(scope="module")
+def predecessor_source(tmp_path_factory):
+    """Extract the frozen source once; each incident still gets a fresh database."""
     from tests.dom.prod.test_historical_v1_assessment import PREDECESSOR, REPOSITORY
-    assert db.engine.url.drivername.startswith("postgresql")
-    assert "test" in (db.engine.url.database or "")
-    source = tmp_path / "predecessor"
+    root = tmp_path_factory.mktemp("historical_incident_sources")
+    source = root / "predecessor"
     source.mkdir()
-    archive = tmp_path / "predecessor.tar"
+    archive = root / "predecessor.tar"
     with archive.open("wb") as stream:
         subprocess.run(["git", "archive", PREDECESSOR], cwd=REPOSITORY,
                        stdout=stream, check=True)
     subprocess.run(["tar", "-xf", str(archive), "-C", str(source)], check=True)
+    return source
+
+
+@pytest.fixture
+def historical_incident_sources(app, request):
+    """Create genuine predecessor inputs, then migrate forward without signing them."""
+    url = db.engine.url
+    if not url.drivername.startswith("postgresql"):
+        pytest.skip("PROD-PAY-001 historical sources require PostgreSQL")
+    assert "test" in (url.database or "")
+    # Request lazily so unsupported backends skip before historical extraction.
+    source = request.getfixturevalue("predecessor_source")
     db.session.remove()
     environment = dict(os.environ, DATABASE_URL=os.environ["TEST_DATABASE_URL"],
                        PYTHONPATH=str(source), INCIDENT_FIXTURE_MODE=getattr(request, "param", "normal"))

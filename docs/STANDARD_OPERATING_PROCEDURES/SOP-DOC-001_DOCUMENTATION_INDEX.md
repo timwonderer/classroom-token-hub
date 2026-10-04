@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.20 | 2026-10-03 | 3.19 | Normative |
+| SOP-DOC-001 | 3.21 | 2026-10-04 | 3.20 | Normative |
 
 ---
 
@@ -174,7 +174,7 @@ Archived material is deliberately absent; see §VI.
 - [SOP-DB-003 — Schema Change Gate](DATABASE/SOP-DB-003_Schema_Change_Proposals.md)
 
 ### Procedures — Deployment (SOP-DEP)
-- [SOP-DEP-001 — v2 Live-Test Runbook](DEPLOYMENT/SOP-DEP-001_Live_Test_Runbook.md)
+- [SOP-DEP-001 — v2 Live-Test Runbook](DEPLOYMENT/SOP-DEP-001_Live_Test_Runbook.md) — v2.7: §XIV lists the forward-only Ledger posting, compensation provenance, and attendance invalidation revisions.
 - [SOP-DEP-002 — v2 Production Transition Runbook](DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md)
 
 ### Procedures — DevOps (SOP-DEV)
@@ -273,6 +273,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.21 (2026-10-04):**
+- Register SOP-DEP-001 v2.7 with its explicit forward-only attendance/payroll recovery revision list; supersedes the incomplete v2.6 registration.
 
 **Version 3.20 (2026-10-03):**
 
