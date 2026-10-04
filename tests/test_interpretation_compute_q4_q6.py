@@ -22,6 +22,7 @@ from __future__ import annotations
 from datetime import timedelta
 from decimal import Decimal
 
+from tests.helpers.ledger import record_ledger_fixture
 from app.extensions import db
 from app.feats.base import FEATContext
 from app.models import LedgerMechanism, Transaction, TransactionStatus
@@ -39,11 +40,11 @@ def _by_id(entries):
 
 def _post(cid, seat, account_type, amount, ts, mechanism=LedgerMechanism.SELF):
     """Insert one POSTED ledger row directly (test scaffold)."""
-    db.session.add(Transaction(
+    record_ledger_fixture(
         seat_id=seat.seat_id, target_seat_id=seat.seat_id, actor_seat_id=seat.seat_id,
         class_id=cid, amount=Decimal(amount), account_type=account_type,
-        mechanism=mechanism, status=TransactionStatus.POSTED, type="test", timestamp=ts,
-    ))
+        mechanism=mechanism, posted=True, type="test", timestamp=ts,
+    )
 
 
 def _seed_resources(classroom):

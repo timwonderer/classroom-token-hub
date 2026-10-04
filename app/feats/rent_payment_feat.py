@@ -38,14 +38,15 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from types import SimpleNamespace
 
-from app.models import ObligationAssessment, Seat, RentSettings
+from app.models import ObligationAssessment, Seat, RentSettings, _quantize_currency
 from app.services import obligations_service
 from app.services.identity_service import resolve_teacher_seat_for_class
 from app.services.ledger_balance_query_service import get_available_balance
 from app.services.ledger_posting_service import create_pending_transaction_idempotent
 from app.services import entitlement_service
 from app.services import store_service
-from app.services.class_configuration_query_service import get_rent_settings
+from app.services.class_configuration_query_service import get_rent_settings,get_banking_directive
+from app.services.ledger_resolution_service import build_intended_ledger_plan,resolve_intended_ledger_plan,apply_resolved_ledger_plan
 from app.feats.base import get_active_feat_name, requires_feat_context, FEATContext
 from app.feats.satisfy_obligation_feat import satisfy_obligation, SatisfyObligationRequest
 from app.utils.transaction_idempotency import get_idempotent_transaction
@@ -296,6 +297,9 @@ def pay_rent(
             error_code="NO_SEAT", error_message="Seat not found in class scope",
         )
 
+    from app.services.ledger_recovery_service import lock_recovery_scope
+    lock_recovery_scope(class_id,seat_id)
+
     # A same-key replay resolves from this command's own ledger row, and only
     # under the seat lock, so a retry that waited here for its predecessor sees
     # the row that predecessor committed. Recomputing instead would count the
@@ -303,9 +307,13 @@ def pay_rent(
     # write, and report the payment a second time against a remaining balance
     # that was never actually paid down.
     ledger_key = f"rent-payment:{idempotency_key}:principal"
-    prior_debit = get_idempotent_transaction(
-        ledger_key, class_id=class_id, seat_id=seat_id, feat_code=get_active_feat_name(),
-    )
+    from app.services.ledger_command_service import replay_reserved_charge
+    canonical_intent = ("RENT_PAYMENT", correlation_id,
+                        str(_quantize_currency(request.payment_amount)) if request.payment_amount is not None else None)
+    prior = replay_reserved_charge(class_id=class_id, feat_code=get_active_feat_name(),
+        idempotency_key=ledger_key, seat_id=seat_id, actor_seat_id=seat_id,
+        principal_type="rent_payment", canonical_intent=canonical_intent)
+    prior_debit = prior["principal"] if prior else None
     if prior_debit is not None:
         replay_assessed = obligations_service.resolve_assessment_amount(assessment)
         prior_payment = obligations_service.get_payment_event_by_ledger(prior_debit.id)
@@ -315,6 +323,10 @@ def pay_rent(
             correlation_id, prior_payment
         )
         replay_fully_paid = replay_paid >= replay_assessed
+        # Reservation replay above binds the requested amount. The accepted
+        # debit may be smaller when the original request exceeded remaining rent.
+        if request.payment_amount is None and not replay_fully_paid:
+            raise ValueError('Replay fingerprint mismatch for full rent payment intent.')
         return RentPaymentResult(
             success=True,
             correlation_id=correlation_id,
@@ -392,34 +404,15 @@ def pay_rent(
                 error_message="Partial rent payments are not enabled for this class",
             )
 
-    # Affordability guard: no overdraft on the rent principal slice being paid now.
-    available = get_available_balance(seat_id, class_id, "checking")
-    if available < this_payment:
-        return RentPaymentResult(
-            success=False, correlation_id=correlation_id,
-            error_code="INSUFFICIENT_FUNDS",
-            error_message=f"Checking balance {available} < payment {this_payment}",
-        )
-
-    # Phase 2: Mutation (single atomic transaction owned by this FEAT)
-
-    # (a) Post the rent principal debit via the canonical idempotent write path.
-    #     The ledger key is COMMAND-owned (the payment request's idempotency_key),
-    #     so a replay of the same command returns the same ledger row while a
-    #     distinct command posts a distinct partial debit.
+    # Business payment slice is authorized above; Ledger resolves shared funding.
     authority_seat_id = resolve_teacher_seat_for_class(class_id).id
-    transaction, _created = create_pending_transaction_idempotent(
-        idempotency_key=ledger_key,
-        seat_id=seat_id,
-        class_id=class_id,
-        target_seat_id=authority_seat_id,
-        actor_seat_id=seat_id,
-        mechanism="self",
-        amount=-this_payment,
-        account_type="checking",
-        type="rent_payment",
-        description=rent_payment_description(class_id, assessment),
-    )
+    intended=build_intended_ledger_plan(seat_id=seat_id,class_id=class_id,debit_amount=this_payment,
+        description=rent_payment_description(class_id,assessment),transaction_type='rent_payment',
+        target_seat_id=authority_seat_id,actor_seat_id=seat_id,mechanism='self', canonical_intent=canonical_intent)
+    resolved=resolve_intended_ledger_plan(plan=intended,banking_directive=get_banking_directive(class_id),fee_authority='NONE')
+    applied = apply_resolved_ledger_plan(resolved_plan=resolved,idempotency_key=ledger_key)
+    transaction = applied['principal']
+    _created = applied['created']
 
     # (b) Record the immutable PAYMENT satisfaction linked to that ledger row.
     #     PAYMENT dedupes on ledger_transaction_id, so replaying the same command

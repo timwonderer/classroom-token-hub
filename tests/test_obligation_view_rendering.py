@@ -4,6 +4,7 @@ import pytest
 from decimal import Decimal
 from datetime import datetime, timedelta, timezone
 
+from tests.helpers.ledger import record_ledger_fixture
 from app.extensions import db
 from app.models import BillCycle, ObligationAssessment, Transaction, TransactionStatus
 from app.services.obligation_view_model import build_student_obligation_view, build_class_obligation_summary
@@ -72,13 +73,13 @@ def test_obligation_view_renders_with_canonical_identity(app, canonical_class_wi
             db.session.flush()
 
             # Create payment transaction
-            txn = Transaction(
+            txn = record_ledger_fixture(
                 seat_id=seat_id,
                 actor_seat_id=seat_id,
                 target_seat_id=seat_id,
                 class_id=class_id,
                 amount=Decimal('50.00'),
-                status=TransactionStatus.POSTED,
+                posted=True,
                 timestamp=now_utc + timedelta(hours=1),
             )
             db.session.add(txn)

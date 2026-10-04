@@ -224,6 +224,8 @@ FEAT_REGISTRY = {
     "FEAT-PROD-001": {"domain": "Productivity", "blast_radius": "MED", "desc": "Record Attendance Session"},
     "FEAT-PROD-002": {"domain": "Productivity", "blast_radius": "MED", "desc": "Record Hall Pass Log"},
     "FEAT-PROD-003": {"domain": "Productivity", "blast_radius": "HIGH", "desc": "Record Payroll Event"},
+    "FEAT-PROD-005": {"domain": "Productivity", "blast_radius": "HIGH", "desc": "Invalidate Attendance Interval"},
+    "FEAT-PROD-006": {"domain": "Productivity", "blast_radius": "LOW", "desc": "Assess Historical Attendance Proof (pure read)"},
     "FEAT-PROD-004": {"domain": "Productivity", "blast_radius": "HIGH", "desc": "Complete Payroll Cycle"},
     "FEAT-CLASS-001": {"domain": "Class Configuration", "blast_radius": "HIGH", "desc": "Create class boundary"},
     "FEAT-CLASS-002": {"domain": "Class Configuration", "blast_radius": "MED", "desc": "Modify existing class boundary"},
@@ -560,6 +562,7 @@ def audit_protected(
     *,
     actor_type: str | None = None,
     actor_id_hash: str | None = None,
+    signature_version: int = 1,
 ) -> None:
     """Emit an AuditEvent for a protected row write and attach lineage fields.
 
@@ -598,6 +601,7 @@ def audit_protected(
             seat_id=getattr(row, "seat_id", None),
             actor_type=actor_type,
             actor_id_hash=actor_id_hash,
+            signature_version=signature_version,
         )
         if hasattr(row, "lineage_event_id"):
             row.lineage_event_id = event.id

@@ -47,6 +47,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          # Historical reconstruction tests archive immutable predecessor commits.
+          fetch-depth: 0
 
       - name: Install memory-only setup test dependency
         run: sudo apt-get update && sudo apt-get install -y redis-server

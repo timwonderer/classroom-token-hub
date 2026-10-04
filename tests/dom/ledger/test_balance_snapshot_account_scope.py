@@ -20,6 +20,7 @@ from decimal import Decimal
 import pytest
 from sqlalchemy.exc import IntegrityError
 
+from tests.helpers.ledger import record_ledger_fixture
 from app.extensions import db
 from app.feats.base import FEATContext
 from app.models import LedgerBalanceSnapshot, Transaction, TransactionStatus
@@ -38,7 +39,7 @@ def _snapshots(seat_id, class_id):
 
 
 def _pending(seat, amount, account_type, description):
-    return Transaction(
+    return record_ledger_fixture(
         class_id=seat.class_id,
         seat_id=seat.id,
         target_seat_id=seat.id,
@@ -46,7 +47,7 @@ def _pending(seat, amount, account_type, description):
         mechanism="self",
         amount=Decimal(amount),
         account_type=account_type,
-        status=TransactionStatus.PENDING,
+        posted=False,
         type="deposit",
         description=description,
     )
@@ -101,12 +102,11 @@ def test_DOM_LED_001__posted_balance_reads_are_account_scoped(client, app):
     assert get_posted_balance(seat_id, class_id, "checking") == Decimal("0.00")
 
 
-def test_DOM_LED_001__missing_snapshot_recomputes_instead_of_raising(client, app):
-    """INV-LED-006: the snapshot is a projection, so a missing row is normal.
+def test_DOM_LED_001__missing_snapshot_cannot_invent_posted_admission(client, app):
+    """Without its scoped cursor, history has no proven posting admission.
 
-    Deleting the row must degrade to a recompute from ledger history. Pre-fix
-    this path raised, because the read touched dropped columns before it could
-    ever reach the fallback.
+    Monetary facts remain available and pending until reconciliation rebuilds
+    the boundary; a read must not infer admission from the fact's timestamp.
     """
     classroom = initialize("chemistry_p1", app)
     seat = classroom.students[0].seat
@@ -128,8 +128,10 @@ def test_DOM_LED_001__missing_snapshot_recomputes_instead_of_raising(client, app
         db.session.flush()
 
     assert _snapshots(seat_id, class_id).get("checking") is None
-    # Rebuilt from history rather than raising or reporting zero.
-    assert get_posted_balance(seat_id, class_id, "checking") == Decimal("12.50")
+    assert get_posted_balance(seat_id, class_id, "checking") == Decimal("0.00")
+    from app.services.ledger_balance_query_service import get_available_balance, get_pending_balance_delta
+    assert get_pending_balance_delta(seat_id, class_id, "checking") == Decimal("12.50")
+    assert get_available_balance(seat_id, class_id, "checking") == Decimal("12.50")
 
 
 def test_DOM_LED_001__snapshot_scope_is_unique_per_account(client, app):

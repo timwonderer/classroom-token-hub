@@ -330,7 +330,7 @@
                         </thead>
                         <tbody>
                             {% for tx in checking_transactions[:50] %}
-                            <tr {% if tx.status.value == 'void' %}class="table-secondary text-decoration-line-through" {% endif %}>
+                            <tr>
                                 <td>
                                     {% if tx.timestamp %}
                                     {{ tx.timestamp|fmt_timestamp }}
@@ -345,11 +345,7 @@
                                 </td>
                                 <td>{{ tx.description or 'N/A' }}</td>
                                 <td>
-                                    {% if tx.status.value == 'void' %}
-                                    <span class="badge bg-secondary">Voided</span>
-                                    {% else %}
-                                    <span class="badge bg-success">Active</span>
-                                    {% endif %}
+                                    <span class="badge bg-secondary">{{ tx.posting_state.value|title }}</span>
                                 </td>
                                 <td>
                                     <a href="{{ url_for('student.report_transaction_issue', transaction_id=tx.id) }}"
@@ -391,7 +387,7 @@
                         </thead>
                         <tbody>
                             {% for tx in savings_transactions[:50] %}
-                            <tr {% if tx.status.value == 'void' %}class="table-secondary text-decoration-line-through" {% endif %}>
+                            <tr>
                                 <td>
                                     {% if tx.timestamp %}
                                     {{ tx.timestamp|fmt_timestamp }}
@@ -406,11 +402,7 @@
                                 </td>
                                 <td>{{ tx.description or 'N/A' }}</td>
                                 <td>
-                                    {% if tx.status.value == 'void' %}
-                                    <span class="badge bg-secondary">Voided</span>
-                                    {% else %}
-                                    <span class="badge bg-success">Active</span>
-                                    {% endif %}
+                                    <span class="badge bg-secondary">{{ tx.posting_state.value|title }}</span>
                                 </td>
                                 <td>
                                     <a href="{{ url_for('student.report_transaction_issue', transaction_id=tx.id) }}"

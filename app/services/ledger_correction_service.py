@@ -11,8 +11,9 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from app.extensions import db
-from app.services.ledger_command_service import create_idempotent_transaction
+from app.services.ledger_command_service import create_idempotent_transaction, replay_reserved_reversal
 from app.models import Transaction, _quantize_currency
+from app.services.ledger_provenance_query_service import get_exact_reversal, has_exact_reversal
 
 # FEAT-LED-002 §III.2.1: a compensating transaction persists REVERSAL as its
 # type, never the business reason it was raised for.
@@ -50,7 +51,7 @@ def resolve_purchase_resolution_eligibility(transaction) -> PurchaseResolutionEl
         return PurchaseResolutionEligibility(
             False, "Only a Store purchase can be reversed or refunded from an issue."
         )
-    if transaction.reversal_transaction_id is not None:
+    if has_exact_reversal(transaction):
         return PurchaseResolutionEligibility(False, "This transaction has already been reversed.")
     if obligations_service.is_obligation_related_transaction(transaction.id):
         return PurchaseResolutionEligibility(
@@ -134,14 +135,15 @@ def check_reversal_authorization(actor_seat_id, transaction) -> None:
 
 def reverse_transaction(
     transaction, *, description: str, compensation_type: str = "refund",
-    idempotency_key: str | None = None, actor_seat_id: int | None = None,
+    idempotency_key: str | None = None, actor_seat_id: int | None = None, banking_directive=None, creation_evidence=(), mechanism: str = "teacher",
 ):
     """Counteract a monetary transaction by appending a compensating one.
 
     The original is left standing as historical fact. A reversal may not
     represent it as never having occurred (SPEC-OPS-001 §3.2), so nothing on
-    it changes but the link forward to its reversal — which is also what keeps
-    reversal unique (INV-LED-013, INV-OPS-005).
+    it changes. The new effect identifies its original and preserves the
+    economic correlation; scoped effect queries establish reversal uniqueness
+    (INV-LED-013, INV-OPS-005).
 
     This is one path whether or not the charge has settled. Marking the
     original void instead would drop the debit at settlement while the credit
@@ -156,35 +158,62 @@ def reverse_transaction(
     if not idempotency_key:
         raise ValueError("Ledger corrections require a command idempotency reservation.")
 
+    if transaction.amount_cents > 0 and actor_seat_id is None:
+        raise ReversalNotAuthorized("Positive-credit recovery requires the current acting seat.")
+
     check_reversal_authorization(
         actor_seat_id if actor_seat_id is not None else transaction.actor_seat_id,
         transaction,
     )
 
     # A reversal is terminal: neither it nor its original may be reversed again
-    # (SPEC-OPS-001 §3.6, §3.7.3). The link below marks the original; this marks
-    # the compensating row, which carries no reversal link of its own.
+    # (SPEC-OPS-001 §3.6, §3.7.3). The compensating row's own immutable type
+    # prevents reversing the compensation itself.
     if transaction.type == REVERSAL_TRANSACTION_TYPE:
         raise ReversalNotAuthorized(
             f"Transaction #{transaction.id} is itself a reversal and cannot be reversed."
         )
 
-    # INV-LED-013 / INV-OPS-005: one reversal per transaction, owned here rather
-    # than by each caller. Idempotency only dedupes an identical key, and the
-    # callers derive different keys for different operations — so a transaction
-    # already reversed through an issue resolution could be reversed again
-    # through the void route, crediting the student twice and dropping the first
-    # reversal's link. An identical replay is still allowed through: it resolves
-    # to the same reservation and returns the same row.
-    existing_id = transaction.reversal_transaction_id
-    if existing_id is not None:
-        existing = db.session.get(Transaction, existing_id)
-        if existing is not None and existing.idempotency_key == idempotency_key:
-            return existing
+    # Serialize every reversal with settlement and other corrections before
+    # checking immutable children. The seat/economy/original lock order also
+    # covers purchase debits, whose reversals are positive credits.
+    from app.feats.base import get_active_feat_name
+    from app.services.ledger_recovery_service import lock_recovery_scope, ledger_origin_locator
+
+    lock_recovery_scope(
+        transaction.class_id, transaction.seat_id, ledger_origin_locator(transaction)
+    )
+    existing = get_exact_reversal(transaction)
+    if existing is not None:
+        if (existing.idempotency_key == idempotency_key
+                and existing.feat_code == get_active_feat_name()):
+            if existing.compensation_subtype != compensation_type:
+                raise ValueError("Replay fingerprint mismatch for reversal compensation subtype.")
+            return replay_reserved_reversal(
+                original=transaction, principal=existing,
+                actor_seat_id=actor_seat_id or transaction.actor_seat_id,
+                mechanism=mechanism if transaction.amount_cents > 0 else transaction.mechanism,
+                compensation_subtype=compensation_type, idempotency_key=idempotency_key,
+            )
         raise TransactionAlreadyReversed(
             f"Transaction #{transaction.id} was already reversed by "
-            f"transaction #{existing_id}."
+            f"transaction #{existing.id}."
         )
+
+    if transaction.amount_cents > 0:
+        if banking_directive is None:
+            raise ReversalNotAuthorized('Positive-credit reversal requires Class-owned funding directive.')
+        from app.services.ledger_recovery_service import lock_recovery_scope,ledger_origin_locator,get_credit_compensation_proof,resolve_credit_recovery,apply_credit_recovery
+        from app.services.ledger_balance_query_service import get_account_posting_boundary
+        locator=ledger_origin_locator(transaction)
+        lock_recovery_scope(transaction.class_id,transaction.seat_id,locator)
+        proof=get_credit_compensation_proof(class_id=transaction.class_id,target_seat_id=transaction.seat_id,
+            origin_locator=locator,through_posting_sequence=get_account_posting_boundary(transaction.seat_id,transaction.class_id,transaction.account_type) or 0,creation_evidence=creation_evidence)
+        plan=resolve_credit_recovery(proof=proof,recovery_kind='EXACT_REVERSAL',
+            correction_intent_locator=f'ledger-reversal:v1:{transaction.id}',banking_directive=banking_directive,
+            compensation_type=compensation_type,
+            actor_seat_id=actor_seat_id or transaction.actor_seat_id,mechanism=mechanism,description=description)
+        return apply_credit_recovery(plan=plan,idempotency_key=idempotency_key)['principal']
 
     compensation_amount = _quantize_currency(-(transaction.amount or Decimal("0.00")))
     kwargs = dict(
@@ -202,8 +231,8 @@ def reverse_transaction(
         description=description, original_transaction_id=transaction.id,
         policy_id=transaction.policy_id,
         # The compensating row inherits the original's economic correlation, on
-        # every path: FEAT-LED-002 §II.2 requires it to inherit or extend the
-        # original, and SPEC-OPS-001 §3.1A requires REVERSE and REFUND to share
+        # every path: FEAT-LED-002 §II.2 requires the exact original
+        # correlation, and SPEC-OPS-001 §3.1A requires REVERSE and REFUND to share
         # it. Leaving it unset let the active FEAT's correlation stand in, which
         # for a scheduled collective-goal refund named an unrelated operation.
         correlation_id=transaction.correlation_id,
@@ -211,8 +240,6 @@ def reverse_transaction(
     reversal_tx, _created = create_idempotent_transaction(
         idempotency_key=idempotency_key, **kwargs
     )
-    db.session.flush()
-    transaction.reversal_transaction_id = reversal_tx.id
     db.session.flush()
     return reversal_tx
 

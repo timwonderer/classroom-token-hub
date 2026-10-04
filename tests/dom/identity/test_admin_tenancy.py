@@ -4,7 +4,7 @@ from itsdangerous import URLSafeTimedSerializer
 from app import db
 from app.feats.base import FEATContext
 from app.feats.prod import record_attendance_session
-from app.models import AttendanceReasonCode, AttendanceSession, ClassEconomy, Seat, Transaction, User
+from app.models import AttendanceReasonCode, AttendanceSession, ClassEconomy, Seat, User
 from app.scheduled_tasks import enforce_daily_limits_job
 from app.services.context_resolver import CanonicalContext
 from tests.helpers.class_domain import put_payroll_setting_in_force
@@ -79,15 +79,27 @@ def _seed_active_attendance(classroom, seat: Seat, *, started_at: datetime) -> A
     return result.session
 
 
-def _configure_daily_limit(class_id: str, *, daily_limit_hours: float, idempotency_key: str) -> None:
-    """Configure the class's canonical payroll settings with a daily limit.
-
-    Payroll settings are append-only and effective-dated (DOM-POL-001 §VI.2);
-    the limit is recorded in force from now, as the setting under test.
-    """
-    put_payroll_setting_in_force(
+def _configure_daily_limit(class_id: str, *, daily_limit_hours: float, idempotency_key: str):
+    """Record a nonretroactive setting before the interval under test opens."""
+    return put_payroll_setting_in_force(
         class_id, max_time_per_day=daily_limit_hours, max_time_per_day_unit="hours", pay_rate=0.25,
     )
+
+
+def _opening_after_setting(classroom, effective_at):
+    """Choose an interior class-local day instant after the policy was recorded."""
+    from app.utils.canonical_temporal_resolver import (
+        CLASS_LEVEL_EVALUATION,
+        canonical_temporal_resolver,
+    )
+
+    bounds = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=_teacher_context(classroom),
+        primitive="evaluation_day_boundaries",
+        reference_time_utc=effective_at + timedelta(days=2),
+    )
+    return bounds.boundary_start_utc + timedelta(hours=12)
 
 
 def _build_student_detail_public_url(client, teacher_user: User, student_user: User, *, class_id: str) -> str:
@@ -183,23 +195,15 @@ def test_DOM_IDEN_006__student_detail_recovers_from_stale_class_context(client):
     seat_a = class_a.students[0].seat
     student_a_user = class_a.students[0].user
 
-    with FEATContext("FEAT-ADMN-001"):
-        db.session.add(
-            Transaction(
-                seat_id=seat_a.id,
-                target_seat_id=seat_a.id,
-                actor_seat_id=seat_a.id,
-                mechanism="self",
-                amount=25,
-                type="bonus",
-                account_type="checking",
-                description="Scoped tx",
-                class_id=class_a.class_id,
-            ),
+    from app.services.ledger_posting_service import create_pending_transaction
+    with FEATContext("FEAT-ADMN-001", idempotency_key="tenancy:scoped-credit"):
+        create_pending_transaction(
+            seat_id=seat_a.id, target_seat_id=seat_a.id, actor_seat_id=seat_a.id,
+            mechanism="self", amount=25, type="manual_payment", account_type="checking",
+            description="Scoped tx", class_id=class_a.class_id,
+            idempotency_key="tenancy:scoped-credit",
         )
-        db.session.flush()
 
-    db.session.commit()
     _set_admin_context(
         client,
         teacher_user=teacher,
@@ -254,21 +258,26 @@ def test_DOM_IDEN_001__enforce_daily_limits_ignores_other_class_activity(client)
     ).count() == 0
 
 
-def test_DOM_IDEN_001__enforce_daily_limits_taps_out_when_limit_reached_in_scope(client):
+def test_DOM_IDEN_001__enforce_daily_limits_taps_out_when_limit_reached_in_scope(client, monkeypatch):
     class_scope = initialize("chemistry_p1", client.application)
     seat = class_scope.students[0].seat
-    started_at = _session_start_within_evaluation_day(class_scope, hours_ago=2)
     daily_limit_hours = 0.001
     expected_limit_seconds = int(daily_limit_hours * 3600)
 
-    _configure_daily_limit(
+    setting = _configure_daily_limit(
         class_scope.class_id,
         daily_limit_hours=daily_limit_hours,
         idempotency_key="admin_tenancy:limit_seed",
     )
+    # The opening policy governs closure (DOM-PROD-001 §XV.7). Advance
+    # canonical evaluation time after recording policy and attendance instead
+    # of backdating a policy or pricing earlier work with a future setting.
+    started_at = _opening_after_setting(class_scope, setting.effective_date)
     _seed_active_attendance(class_scope, seat, started_at=started_at)
     db.session.commit()
 
+    from app.utils import canonical_temporal_resolver as temporal
+    monkeypatch.setattr(temporal, "utc_now", lambda: started_at + timedelta(seconds=10))
     enforce_daily_limits_job()
 
     rows = AttendanceSession.query.filter_by(
@@ -286,20 +295,25 @@ def test_DOM_IDEN_001__enforce_daily_limits_taps_out_when_limit_reached_in_scope
     assert inactive_row.timestamp == started_at + timedelta(seconds=expected_limit_seconds)
 
 
-def test_DOM_IDEN_001__enforce_daily_limits_does_not_duplicate_closed_session(client):
+def test_DOM_IDEN_001__enforce_daily_limits_does_not_duplicate_closed_session(client, monkeypatch):
     class_scope = initialize("chemistry_p1", client.application)
     seat = class_scope.students[0].seat
-    started_at = _session_start_within_evaluation_day(class_scope, hours_ago=2)
     daily_limit_hours = 0.001
 
-    _configure_daily_limit(
+    setting = _configure_daily_limit(
         class_scope.class_id,
         daily_limit_hours=daily_limit_hours,
         idempotency_key="admin_tenancy:limit_idempotency_seed",
     )
+    # The opening policy governs closure (DOM-PROD-001 §XV.7). Advance
+    # canonical evaluation time after recording policy and attendance instead
+    # of backdating a policy or pricing earlier work with a future setting.
+    started_at = _opening_after_setting(class_scope, setting.effective_date)
     _seed_active_attendance(class_scope, seat, started_at=started_at)
     db.session.commit()
 
+    from app.utils import canonical_temporal_resolver as temporal
+    monkeypatch.setattr(temporal, "utc_now", lambda: started_at + timedelta(seconds=10))
     enforce_daily_limits_job()
     enforce_daily_limits_job()
 

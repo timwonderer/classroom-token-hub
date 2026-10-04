@@ -21,6 +21,7 @@ payroll boundary (DOM-CLASS-003 §VII).
 from __future__ import annotations
 
 from datetime import datetime
+from dataclasses import dataclass
 from decimal import Decimal
 
 from app.extensions import db
@@ -236,3 +237,34 @@ def destroy_payroll_settings_for_classes(class_ids) -> None:
     PayrollSettings.query.filter(
         PayrollSettings.class_id.in_(class_ids)
     ).delete(synchronize_session=False)
+
+
+# DOM-POL-001 §X.1: immutable observations only; no policy admission.
+
+
+@dataclass(frozen=True)
+class HistoricalPayrollSettingInput:
+    class_id: str
+    policy_locator: str
+    effective_at: object
+    created_at: object
+    rate_per_minute: str
+    legacy_rate_per_minute: str | None = None
+
+
+def get_historical_payroll_setting_inputs(*, ctx, class_id, limit=500):
+    """Bounded retained settings for FEAT-PROD-006 candidate reconstruction."""
+    if (not class_id or not getattr(ctx,'seat_id',None) or not getattr(ctx,'user_id',None)
+            or getattr(ctx, 'class_id', None) != class_id
+            or getattr(ctx, 'actor_role', None) != 'teacher'):
+        raise ValueError('UNAUTHORIZED_SCOPE')
+    if type(limit) is not int or not 1 <= limit <= 500:
+        raise ValueError('INVALID_INPUT')
+    with db.session.no_autoflush:
+        rows = _for_class(class_id).order_by(PayrollSettings.effective_date.asc(),
+            PayrollSettings.created_at.asc()).limit(limit + 1).all()
+    if len(rows) > limit:
+        raise ValueError('EVIDENCE_LIMIT_EXCEEDED')
+    return tuple(HistoricalPayrollSettingInput(row.class_id,row.policy_uuid,
+        ensure_utc(row.effective_date),ensure_utc(row.created_at),str(row.pay_rate),
+        str(row.pay_rate or Decimal('0.25'))) for row in rows)

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |:---|:---|:---|:---|:---|
-| DOM-OPS-002 | 1.2 | 2026-09-30 | 1.1 | Constitutional |
+| DOM-OPS-002 | 1.9 | 2026-10-03 | 1.8 | Constitutional |
 
 ---
 
@@ -242,7 +242,26 @@ The event hash is `HMAC-SHA256(AUDIT_HMAC_KEY, message)` where `message` is pipe
 |---|---|
 | `transactions` | `amount`, `account_type`, `type`, `status`, `class_id`, `seat_id`, `description`, `correlation_id` |
 
-Additional tables shall be added to this registry in coordination with each Phase 3b migration.
+The `transactions` row above describes the historical surface; it does not substitute for the canonical V2 `ledger_transaction` registration below.
+
+| Canonical Table | Protected Fields |
+|---|---|
+| `attendance_interval_invalidation` | `id`, `class_id`, `actor_seat_id`, `target_seat_id`, `opening_event_id`, `closing_event_id`, `recorded_at`, `reason_code`, `idempotency_key`, `correlation_id`, `receipt_json` |
+| `payroll_event` | `id`, `class_id`, `payroll_cycle_id`, `actor_seat_id`, `target_seat_id`, `correlation_id`, `idempotency_key`, `policy_uuid`, `mechanism`, `payroll_event_type`, `recorded_at`, `summary_json` |
+| `ledger_transaction` (version 2) | `id`, `class_id`, `actor_seat_id`, `target_seat_id`, `mechanism`, `amount_cents`, `timestamp`, `account_type`, `description`, `correlation_id`, `feat_code`, `idempotency_key`, `policy_id`, `type`, `posting_sequence`, `command_reservation_id` |
+| `ledger_transaction` (version 3) | `id`, `class_id`, `actor_seat_id`, `target_seat_id`, `mechanism`, `amount_cents`, `timestamp`, `account_type`, `description`, `correlation_id`, `feat_code`, `idempotency_key`, `policy_id`, `type`, `posting_sequence`, `command_reservation_id`, `compensation_origin_locator`, `compensation_amount_cents`, `correction_intent_locator` |
+
+The row marked `ledger_transaction` (version 2) is the retained **signature version 2** registry. Every listed attribute must exist in the model/schema and emitter; signing an absent attribute as `None` is prohibited. Creation freezes all sixteen fields before INSERT, including command reservation, initiating FEAT, command key, and immutable class posting sequence. The FEAT emits that final creation payload once; cursor reconciliation and informational `posted_at` initialization do not alter it. Version 2 changes the protected payload schema, not the HMAC algorithm or key, and does not require re-signing any accepted event.
+
+New Ledger effects use signature version 3 with exactly nineteen model/schema fields: the unchanged sixteen version-2 fields plus immutable `compensation_origin_locator`, nonnegative integer `compensation_amount_cents`, and `correction_intent_locator`. Locator columns are nullable String(128); the cent column permits NULL only on historical rows. New effects explicitly set cents (zero for non-recovery), without a default or historical backfill. These are fixed before INSERT and audit emission. Non-compensation and protection-transfer legs record zero attributable recovery and no compensation intent; a recovery leg names its opaque original credit and correction intent. The emitter and verifier select the exact registry by event signature version. Accepted version-2 rows remain verifiable against their original sixteen fields; newly present compensation fields are not retroactively added to those signatures and cannot establish historical compensation authority. Required-field coverage is evaluated against the registry of the linked event's signature version, never against the newest global registry. A version-2 signature cannot prove any of the three version-3 compensation fields merely because the model now contains them. A missing registered attribute or unsupported signature version is unavailable coverage, never a fabricated null. The HMAC algorithm and signer key are unchanged. No historical audit pointer, token, version or payload is replaced.
+
+Historical Ledger signature version 1 retains its original field definition and hash-chain inputs. Where the retired persisted `status` input prevents faithful row-payload reconstruction, return DEGRADED with bounded `VERIFIER_COVERAGE_UNAVAILABLE` evidence; canonical creation-proof consumers return UNAVAILABLE; the distinct Ledger-owned reconstruction contract may consume authenticated original envelope/chain observations without treating them as creation proof. A non-NULL historical pointer is not relabeled UNVERIFIED (INV-ARC-016 §VI). Do not fabricate an original status, reinterpret the signature as version 2, rewrite the row, or issue a replacement signature. Historical chain verification remains unchanged; only NULL linkage denotes UNVERIFIED.
+
+The entire `summary_json` is protected, including original interval source IDs, credited seconds, policy locators/rates, allocation version, scheduled-occurrence provenance, original payroll event, correction intent, invalidation ID, and opaque correction/monetary outcome locators. It stores no monetary amounts. The entire nonmonetary `receipt_json` is protected, including accepted preview identity, fingerprint version, intent digest, settlement disposition, and opaque original-outcome locators. Transient audit payload digests do not substitute for a durable command receipt.
+
+These canonical registrations declare authority; they do not attest deployed verifier coverage. Each implemented protected table must register these exact fields in its emitter and verifier. Field parity under INV-OPS-019 is mandatory when implemented. Protected field changes use the lineage-version mechanism (§8.12) and must not retroactively reinterpret old signatures.
+
+Every new invalidation, correction payroll row, and compensation effect emits once after flush and before the single FEAT commit through the existing Operations command path (§6.1); emission failure rolls back the whole business action. `lineage_event_id` is assigned by that protocol rather than hashed circularly as its own payload. The mandatory audit pointer under `INV-ARC-016` §V is narrowly scoped and grants no general exception for other-domain internal FKs. Additional tables shall be registered before implementation, in coordination with owning domain authority and lawful FEAT execution.
 
 ### 5.5 Chain Scope Resolution
 
@@ -276,7 +295,30 @@ caller enters FEAT context
   → FEAT transaction commits
 ```
 
-### 6.2 Nightly Verification Flow
+For `payroll_event` and `attendance_interval_invalidation`, the creation protocol is `INSERT → initialize complete linkage once → commit`. The owning PROD FEAT freezes every business field, including all of `summary_json` or the complete nonmonetary `receipt_json`, before INSERT. Operations emits the §5.4 payload through `audit_protected()` after flush and attaches `lineage_event_id`, `lineage_token`, and `lineage_version` together exactly once in that same creating transaction. This initialization is the sole exception to an UPDATE prohibition: business fields cannot change even before commit, and no field, including linkage, can change after commit. Only FEAT-PROD-005 may originate invalidation creation evidence. FEAT-PROD-003/004/005 may originate payroll creation evidence; FEAT-STOR-003 may do so only for its incorporated productivity-insurance `manual_credit` command (FEAT-STOR-003 §VIII, DOM-PROD-001 §VIII).
+
+Both application and database guards SHALL reject late attachment, replacement, partial linkage, and creation without required lineage. The database defers the creation check until transaction completion and checks the final persisted row and matching creation event; Operations' application guard additionally checks the canonical protected payload digest. Privileged SQL does not become a lawful write path through satisfying structural linkage constraints; the strict verifier remains responsible for cryptographic chain and payload proof (`INV-ARC-016` §V/IX). Emission, initialization, or commit validation failure rolls back business rows, Ledger effects, and audit chain changes together. Existing lifecycle guards govern seat/class destruction. Historical NULL linkage remains UNVERIFIED and SHALL NOT be backfilled or signed by this rollout.
+
+### 6.2 Pure Creation-Evidence Query
+
+`verified_creation_evidence(table, row, class_id, required_fields?)` is an Operations-owned public pure query. It returns unavailable (`None`) unless strict scoped pointer/token/version, exact linked-version field coverage, current protected payload and complete class-chain/head verification all succeed. Its immutable `VerifiedCreationEvidence` contains `table_name`, `row_pk`, `class_id`, `lineage_event_id`, `lineage_token`, `signature_version`, exact `protected_fields`, and immutable `protected_values`. It contains no client-supplied verification boolean; unavailable evidence grants no authority. Missing model attributes are not synthesized as null.
+
+For correction execution, the originating FEAT obtains the complete source/candidate requirements from Ledger, invokes this Operations query for every required record, and supplies the resulting typed scoped evidence to Ledger. Ledger matches all identities, linked versions, required coverage and protected monetary facts to its own current locked records before deriving a recovery cap or posting. Ledger does not call Operations or import its internal class/registry; this cross-domain composition belongs only to the FEAT under INV-ARC-021 §V.1/VII. The display-only exception does not authorize runtime compensation decisions.
+
+### 6.2A Pure historical audit coverage diagnostics
+
+The historical reconstruction FEATs also compose the unchanged canonical §6.2 query for modern sources and §6.2A observations for old sources. These observations can be accepted as coverage metadata by Ledger's separate reconstruction evidence; they do not expand original signed fields or relabel original lawfulness. Legacy NULL linkage remains UNVERIFIED. Retired v1 status that cannot be faithfully reproduced remains DEGRADED with VERIFIER_COVERAGE_UNAVAILABLE; its complete linked envelope/chain is still checked. Missing coverage differs from authenticated payload/HMAC/chain/scope contradiction, which remains INVALID and denies recovery. Coverage-only inability is not diagnosed as actual tampering; known contradictions cannot be suppressed as a coverage gap. New business and monetary writes still require complete current lawful lineage.
+
+
+Operations owns `diagnose_historical_audit_coverage(table, row, class_id, *, source_descriptor=None, emitter_provenance=None, max_chain_events=1000)`, composed through FEAT-PROD-006 and directly through FEAT-PROD-005/003 reconstruction coordination. Incorporates [SPEC-PROD-002](../SPEC/SPEC-PROD-002_HISTORICAL_ATTENDANCE_PROOF_ASSESSMENT.md) §V, VII–VIII for exact original envelope/field coverage and bounded pure diagnostics. The batch query `diagnose_historical_audit_coverages(table, rows, class_id, *, max_chain_events=1000, max_rows=1000)` returns one immutable observation per scoped row and walks the complete class chain once per invocation. Both budgets are positive integers at most 1000; there is no caller-supplied chain-verification override or persisted cache. Historical descriptor/provenance parameters remain unavailable for record assignment in this phase and reject non-null caller values. It reports linked-event scope, complete chain/head envelope authentication, version, confirmed/candidate field coverage and unavailable original protected values independently. A verified chain prefix is insufficient. Scalar head observations before and after the complete walk must agree; concurrent legitimate advancement returns unavailable EVIDENCE_CHANGED_DURING_READ, never a false integrity failure. No row locks or transaction mutation are used. Excessive or unavailable chain evidence produces unavailable completeness. No autoflush, integrity-status mutation, signature repair or audit emission is allowed.
+
+Version 1 is not a per-record emitter identifier. Explicit exact-source descriptor and independently established emitter provenance are needed before confirmed field coverage. The deployed eleven-field payload cannot be replaced by the retired eight-field verifier registry. Original creation status cannot be supplied from today's cursor or guessed values. Even authenticated envelope/chain evidence never returns `VerifiedCreationEvidence`, establishes unsigned facts, or overrides canonical §6.2. Diagnostic observations remain separate from INV-ARC-016's four canonical lineage states. Current v2/v3 payload verification is unchanged.
+
+### 6.2B Immutable reversal linkage coverage
+
+DOM-LED-001 §VII.0 and FEAT-LED-002 §VII.2/4 require an immutable new reversal effect containing original-effect and correlation linkage; originals are not modified. ORM/PostgreSQL guards freeze the retained historical `reversal_transaction_id` after INSERT. It is not an authoritative monetary or posting input and is not newly added to any signed payload. Ledger audit versions 2 and 3 keep their exact original sixteen- and nineteen-field protected registries; historical signatures, envelopes and audit coverage are unchanged. The new reversal effect receives its normal current lawful creation lineage. Audit records may describe the new reversal's ID without mutating the original row.
+
+### 6.3 Nightly Verification Flow
 
 ```
 scheduler triggers run_audit_invariant_check_job() at 03:00 UTC
@@ -342,8 +384,26 @@ This taxonomy is defined as canonical in `INV-ARC-016`. The operational semantic
 
 ## 9. Amendment
 
+Version 1.9 (2026-10-03) clarifies immutable exact-reversal linkage and frozen retained original pointers under §6.2B. Supersedes no signed registry or historical evidence.
+
+
+Version 1.8 (2026-10-03) incorporates SPEC-PROD-002 §VII for FEAT-PROD-005/003 historical reconstruction observations alongside FEAT-PROD-006. Supersedes diagnostic-only consumer restriction, without changing canonical lineage taxonomy, verifier/signature versions, protected fields or new-write requirements. No original linkage/status replacement, status guess or historical signing is authorized.
+
+
+Version 1.7 (2026-10-03) adds §6.2A's bounded historical envelope/coverage diagnostic query only. Supersedes no canonical payload registry, lineage taxonomy, typed creation proof or lawful write protocol.
+
+
+Version 1.3 (2026-10-03) supersedes 1.2's incomplete protected registry for interval and payroll correction execution. Authority derives from `INV-CORE-000` §III.1–6, `INV-ARC-006` §V, `INV-ARC-016` §V–VI/IX, and `INV-ARC-021` §V/VII. Operations owns emission/verification only; eligibility and monetary conclusions remain owned by their respective domains. No runtime registry change is included.
+
+
 Revisions must preserve the append-only guarantee for `audit_events`, the HMAC chain integrity algorithm, the `UNVERIFIED ≠ INVALID` distinction, and the two-path lawful write model. Any change to the canonical payload format or HMAC message structure shall increment `signature_version`.
 
 Audit metadata must not copy authentication principal IDs, including a teacher alias.
 The removed `teacher_id` was outside the signed event/context inputs; removing that
 column preserves accepted chain hashes. Class attribution remains `seat_id` and `class_id`.
+
+Version 1.4 (2026-10-03) supersedes the unqualified payroll UPDATE prohibition only for complete, one-time linkage initialization in the creating transaction (§6.1). It requires immutable business fields before INSERT, permanent linkage immutability after commit, deferred creation enforcement, and atomic audit failure rollback. Historical records remain untouched.
+
+Version 1.6 (2026-10-03) registers nineteen-field Ledger signature version 3 while preserving exact sixteen-field version-2 verification, and applies the protected invalidation triple-linkage creation protocol. It supersedes future-only compensation registration and incomplete invalidation linkage without reinterpreting historical signatures.
+
+Version 1.5 (2026-10-03) registers the sixteen implemented immutable Ledger creation fields under signature version 2; the three prospective compensation fields require their own later registered version before correction implementation. It supersedes stored-status payload registration for new Ledger events without reinterpreting historical version 1 signatures.

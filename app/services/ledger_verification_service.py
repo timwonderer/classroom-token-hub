@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from app.services.ledger_balance_query_service import (
+    get_account_posting_boundary,
+    get_transfer_posting_boundaries,
     LedgerProofResult,
     TransferProofResult,
     verify_available_balance,
@@ -72,13 +74,14 @@ def verify_class_ledger(
 
     for seat_id, account_type in balance_scopes:
         try:
+            boundary = get_account_posting_boundary(seat_id,class_id,account_type)
             checks.append(_balance_check(
                 "posted_balance_reconciliation",
-                verify_posted_balance(class_id, seat_id, account_type), checked_at,
+                verify_posted_balance(class_id, seat_id, account_type, boundary), checked_at,
             ))
             checks.append(_balance_check(
                 "available_balance_constraint",
-                verify_available_balance(class_id, seat_id, account_type), checked_at,
+                verify_available_balance(class_id, seat_id, account_type, boundary), checked_at,
             ))
         except Exception:
             checks.append(LedgerVerificationCheck(
@@ -88,7 +91,7 @@ def verify_class_ledger(
 
     for correlation_id in transfer_correlations:
         try:
-            checks.append(_transfer_check(verify_transfer(class_id, correlation_id), checked_at))
+            checks.append(_transfer_check(verify_transfer(class_id, correlation_id, get_transfer_posting_boundaries(class_id,correlation_id)), checked_at))
         except Exception:
             checks.append(LedgerVerificationCheck(
                 check="internal_transfer_zero_sum", outcome="UNKNOWN",

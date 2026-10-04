@@ -132,8 +132,8 @@ def test_INV_LED_015__settlement_waits_for_a_debit_holding_the_seat_lock(app):
 
         _settle(seat_id, class_id)
         still_pending = Transaction.query.filter_by(
-            seat_id=seat_id, class_id=class_id, status=TransactionStatus.PENDING
-        ).count()
+            seat_id=seat_id, class_id=class_id
+        ).filter(Transaction.posting_state == TransactionStatus.PENDING).count()
         assert still_pending == 0
         assert get_posted_balance(seat_id, class_id, "checking") == Decimal("105.00")
 
@@ -251,8 +251,8 @@ def _is_insurance_replay_lookup(statement):
 
 
 def _is_rent_replay_lookup(statement):
-    """Return whether SQL looks up a rent debit by idempotency key."""
-    return "FROM ledger_transaction" in statement and "ledger_transaction.idempotency_key" in statement
+    """Return whether SQL resolves the canonical command reservation by key."""
+    return "FROM ledger_command_reservation" in statement and "ledger_command_reservation.idempotency_key" in statement
 
 
 def test_INV_LED_015__insurance_purchase_resolves_its_replay_under_the_seat_lock(app):
@@ -355,3 +355,53 @@ def test_INV_LED_015__partial_rent_replay_reports_the_original_payment(app):
         ).count()
         assert payments == 2
         assert obligations_service.get_paid_magnitude(correlation_id) == Decimal("30.00")
+
+
+def test_INV_LED_015__clamped_rent_payment_replays_exact_request_and_denies_changed_intent(app):
+    """Overpayment retries resolve the accepted debit, preserving request identity."""
+    classroom = initialize("chemistry_p1", app)
+    with app.app_context():
+        _setup_rent_class(classroom)
+        customize_rent_settings(classroom.class_id, allow_incremental_payment=True)
+        student = classroom.students[0]
+        seat_id, class_id = student.seat.id, classroom.class_id
+        execute_reconcile_rent(class_id, reference_time_utc=_T_INITIAL)
+        _fund(student, class_id, "200.00", "rent-overpay")
+        correlation_id = f"rent:{class_id}:{seat_id}:cycle:1"
+        key = f"inv-led-015:rent-overpay:{correlation_id}"
+
+        first = execute_rent_payment(
+            class_id, seat_id, correlation_id,
+            idempotency_key=key, payment_amount=Decimal("100.00"),
+        )
+        assert first.success is True
+        assert first.amount_paid == Decimal("50.00")
+        assert first.fully_paid is True
+        balance_after = get_available_balance(seat_id, class_id, "checking")
+        effects_after = Transaction.query.filter_by(class_id=class_id).count()
+        payments_after = ObligationAssessment.query.filter_by(
+            correlation_id=correlation_id, event_type="PAYMENT"
+        ).count()
+
+        replay = execute_rent_payment(
+            class_id, seat_id, correlation_id,
+            idempotency_key=key, payment_amount=Decimal("100.00"),
+        )
+        assert replay.success is True
+        assert replay.transaction_id == first.transaction_id
+        assert replay.amount_paid == first.amount_paid
+        assert replay.remaining_after == Decimal("0.00")
+        assert replay.fully_paid is True
+        assert replay.passes_awarded == 0
+
+        with pytest.raises(ValueError, match="Replay fingerprint mismatch"):
+            execute_rent_payment(
+                class_id, seat_id, correlation_id,
+                idempotency_key=key, payment_amount=Decimal("90.00"),
+            )
+        db.session.rollback()
+        assert get_available_balance(seat_id, class_id, "checking") == balance_after
+        assert Transaction.query.filter_by(class_id=class_id).count() == effects_after
+        assert ObligationAssessment.query.filter_by(
+            correlation_id=correlation_id, event_type="PAYMENT"
+        ).count() == payments_after == 1

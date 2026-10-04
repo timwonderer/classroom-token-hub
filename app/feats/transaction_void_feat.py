@@ -64,6 +64,13 @@ def execute_void_transactions(
     reason: str = "ADMIN_CORRECTION",
     actor_seat_id: int | None = None,
 ) -> list[VoidTransactionResult]:
+    if transactions:
+        class_ids = {tx.class_id for tx in transactions}
+        if len(class_ids) != 1:
+            raise ValueError("Reversal batch must remain within one class.")
+        from app.services.ledger_recovery_service import lock_ledger_seats
+
+        lock_ledger_seats(next(iter(class_ids)), [tx.seat_id for tx in transactions])
     return [
         _execute_void_transaction_impl(tx, reason=reason, actor_seat_id=actor_seat_id)
         for tx in transactions
@@ -100,16 +107,23 @@ def _execute_void_transaction_impl(
     # transaction must not be voided (INV-OPS-001), and marking the original
     # void alongside its reversal used to drop an unsettled debit while the
     # credit still posted, returning money that was never taken.
+    recovery_inputs = {}
+    if tx.amount_cents > 0:
+        from app.feats.ledger_proof_inputs import positive_reversal_inputs
+        from app.services.identity_service import resolve_teacher_seat_for_class
+        actor_seat_id = actor_seat_id or resolve_teacher_seat_for_class(tx.class_id).id
+        recovery_inputs = dict(positive_reversal_inputs(tx), mechanism="teacher")
     reversal_tx = reverse_transaction(
         tx,
         idempotency_key=void_refund_key(tx.id),
         description=void_description,
         actor_seat_id=actor_seat_id or tx.actor_seat_id,
+        **recovery_inputs,
     )
 
     return VoidTransactionResult(
         transaction_id=tx.id,
-        reversal_transaction_id=reversal_tx.id if reversal_tx else tx.reversal_transaction_id,
+        reversal_transaction_id=reversal_tx.id if reversal_tx else None,
     )
 
 

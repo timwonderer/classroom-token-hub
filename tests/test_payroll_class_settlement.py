@@ -110,15 +110,11 @@ def test_manual_credits_and_reversals_are_not_cycle_events(app):
 
     # Pre-existing manual credit (not a cycle event) for seat C.
     with FEATContext("FEAT-PROD-003", correlation_id=f"mc:{cid}", idempotency_key=f"mc:{cid}"):
-        policy = first_payroll_setting(cid)
-        db.session.add(PayrollEvent(
-            class_id=cid, target_seat_id=sC.seat_id,
-            actor_seat_id=classroom.teacher_seat_id, correlation_id=f"corr_mc:{cid}",
-            idempotency_key=f"mc:{cid}:evt",
-            policy_uuid=policy.policy_uuid, mechanism="TEACHER",
-            payroll_event_type="manual_credit", recorded_at=now, payroll_cycle_id=None,
-        ))
-        db.session.flush()
+        from app.feats.prod import _record_payroll_event_impl
+        _record_payroll_event_impl(ctx=settlement_module._build_teacher_context(cid),
+            target_seat_id=sC.seat_id, correlation_id=f"corr_mc:{cid}",
+            idempotency_key=f"mc:{cid}:evt",mechanism="TEACHER",payroll_event_type="manual_credit",
+            reference_time_utc=now,amount=Decimal("1.00"))
 
     cycle_id = str(uuid4())
     with FEATContext("FEAT-PROD-004", idempotency_key=f"run:{cycle_id}"):

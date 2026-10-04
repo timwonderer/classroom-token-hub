@@ -633,3 +633,40 @@ def test_premium_description_names_the_policy_and_its_period(world):
         if t.description and t.description.startswith("Insurance premium")
     }
     assert descriptions == {"Insurance premium: Cover (Jan 10 – Jan 16)"}
+
+
+def test_manual_funded_premium_replays_after_banking_change(world):
+    from app.feats.class_configuration.feat_class_005_economic_engine_evolution import execute_evolve_economic_engine
+    from tests.helpers.ledger import record_ledger_fixture
+    from app.models import Transaction
+    w = world()
+    w.fund(PURCHASE - timedelta(hours=1))
+    w.buy()
+    w.renew(PREVIEW_2)
+    assert w.premium_state(2).is_outstanding
+    with _clock(PREVIEW_2):
+        configured = execute_evolve_economic_engine(canonical_context=w.teacher_ctx,
+            class_id=w.class_id, updates={'overdraft_protection_enabled': True},
+            feature_list=['banking'], idempotency_key='premium:protection')
+        assert configured.success
+        with FEATContext('FEAT-LED-001', idempotency_key='premium:savings'):
+            record_ledger_fixture(seat_id=w.seat_id, class_id=w.class_id,
+                account_type='savings', amount=PREMIUM * 2)
+        db.session.commit()
+        first = execute_insurance_premium_payment(class_id=w.class_id, seat_id=w.seat_id,
+            entitlement_id=w.entitlement_id, idempotency_key='premium:manual')
+        assert first.success
+        ids = [row.id for row in Transaction.query.filter_by(idempotency_key='insurance-premium-payment:premium:manual').all()]
+        assert len(ids) == 3
+        execute_evolve_economic_engine(canonical_context=w.teacher_ctx,
+            class_id=w.class_id, updates={'overdraft_protection_enabled': False},
+            feature_list=['banking'], idempotency_key='premium:protection-off')
+        replay = execute_insurance_premium_payment(class_id=w.class_id, seat_id=w.seat_id,
+            entitlement_id=w.entitlement_id, idempotency_key='premium:manual')
+        assert replay.success and replay.transaction_id == first.transaction_id
+        assert replay.amount_paid == first.amount_paid
+        assert [row.id for row in Transaction.query.filter_by(idempotency_key='insurance-premium-payment:premium:manual').all()] == ids
+        with pytest.raises(ValueError, match='fingerprint'):
+            execute_insurance_premium_payment(class_id=w.class_id, seat_id=w.seat_id,
+                entitlement_id=w.entitlement_id, idempotency_key='premium:manual',
+                correlation_id=premium_correlation_id(w.entitlement_id, 2))

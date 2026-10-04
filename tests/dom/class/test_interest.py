@@ -2,42 +2,23 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from app import Transaction, db
-from app.models import TransactionStatus, LedgerBalanceSnapshot as BalanceCache
 from app.feats.base import FEATContext
 from unittest.mock import patch
 from tests.helpers.classroom_initializer import initialize
 
 
-def test_DOM_CLASS_001__apply_savings_interest_with_naive_datetimes(client, app):
+def test_DOM_CLASS_001__apply_savings_interest_with_canonical_historical_admission(client, app):
     classroom = initialize("chemistry_p1", app)
     test_student = classroom.students[0].seat
     past_date = datetime.now(timezone.utc) - timedelta(days=31)
-    savings_tx = Transaction(
-        seat_id=test_student.id,
-        target_seat_id=test_student.id,
-        actor_seat_id=test_student.id,
-        mechanism="self",
-        class_id=test_student.class_id,
-        amount=100.0,
-        account_type='savings',
-        description='Initial savings deposit',
-        timestamp=past_date,
-        date_funds_available=past_date,
-        status=TransactionStatus.POSTED,
-        posted_at=past_date.replace(tzinfo=None),
-        posting_sequence=1,
-    )
+    from tests.helpers.ledger import record_ledger_fixture
     with FEATContext("FEAT-LED-001", idempotency_key="interest:test_apply_savings_interest"):
-        db.session.add(savings_tx)
-        db.session.flush()
-        # One snapshot row per account (DOM-LED-001 §2); only savings is relevant here.
-        db.session.add(BalanceCache(
-            seat_id=test_student.id,
-            class_id=test_student.class_id,
-            account_type="savings",
-            posted_balance_cents=10000,
-        ))
-        db.session.flush()
+        record_ledger_fixture(
+            seat_id=test_student.id, class_id=test_student.class_id,
+            amount=Decimal("100.00"), account_type="savings",
+            description="Initial savings deposit", timestamp=past_date,
+            posted=True,
+        )
 
     with patch("app.routes.student.resolve_canonical_context", return_value=type("Ctx", (), {"class_id": test_student.class_id})()), patch("app.routes.student.get_current_seat", return_value=test_student):
         from app.services.ledger_interest_service import (
@@ -52,7 +33,7 @@ def test_DOM_CLASS_001__apply_savings_interest_with_naive_datetimes(client, app)
             # none. SPEC-ECON-001 §11 forbids a hidden default APY, so an
             # unconfigured class pays nothing. Supply the rate explicitly — the
             # documented deterministic-replay override — because what this test
-            # pins is naive-datetime handling, not rate resolution. The payout
+            # pins is historical admission and daily accrual, not rate resolution. The payout
             # window (monthly, the unconfigured default) must have closed, so the
             # evaluation instant is taken just past the end of the current month.
             apply_savings_interest(

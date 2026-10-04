@@ -106,17 +106,18 @@ def _find_covering_transaction(grant: EntitlementEvent) -> Transaction | None:
     """
     if not grant.correlation_id:
         return None
-    return (
+    candidates = (
         Transaction.query.filter(
             Transaction.correlation_id == grant.correlation_id,
             Transaction.class_id == grant.class_id,
             Transaction.seat_id == grant.target_seat_id,
             Transaction.type == "purchase",
-            Transaction.reversal_transaction_id.is_(None),
         )
         .order_by(Transaction.id.asc())
-        .first()
+        .all()
     )
+    from app.services.ledger_provenance_query_service import has_exact_reversal
+    return next((transaction for transaction in candidates if not has_exact_reversal(transaction)), None)
 
 
 @requires_feat_context("FEAT-STOR-002")
@@ -170,13 +171,17 @@ def expire_lapsed_collective_goal(
         # charge has settled: append a compensating transaction and leave the
         # original standing as historical fact (§3.2). The student sees this as
         # a refund, which §8.2 permits as user-facing language for a reversal.
+        recovery_inputs = {}
+        if covering_tx.amount_cents > 0:
+            from app.feats.ledger_proof_inputs import positive_reversal_inputs
+            recovery_inputs = positive_reversal_inputs(covering_tx)
         reverse_transaction(
             covering_tx,
             idempotency_key=f"goal-expiry-refund:{class_id}:{purchase_correlation_id}",
             description=(
                 f"Refund: collective goal not reached - {product.name}"
             )[:255],
-            actor_seat_id=actor_seat_id,
+            actor_seat_id=actor_seat_id, mechanism="system", **recovery_inputs,
         )
         result.purchases_refunded += 1
 

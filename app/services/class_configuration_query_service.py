@@ -9,6 +9,7 @@ Per SPEC-ECON-002: effective_at parameter enables future-law visibility
 Per multi-tenancy rules: All queries scoped by class_id (never teacher_id alone)
 """
 
+from decimal import Decimal
 from bisect import bisect_right
 from datetime import datetime, timezone
 from typing import Optional
@@ -717,4 +718,57 @@ def get_unpaid_work_notice_acknowledged_at(class_id: str) -> Optional[datetime]:
         db.session.query(ClassEconomy.unpaid_work_notice_acknowledged_at)
         .filter(ClassEconomy.class_id == class_id)
         .scalar()
+    )
+
+
+from dataclasses import dataclass as _dataclass
+
+
+@_dataclass(frozen=True)
+class BankingDirective:
+    class_id: str
+    version_locator: str | None
+    protection_enabled: bool
+    flat_fee: Decimal | None
+    progressive_fee: tuple | None
+    cwi: Decimal | None
+    fee_period_start: datetime | None
+
+
+def get_banking_directive(class_id: str, effective_at=None, *, include_fees=False):
+    """Class-owned immutable funding/fee inputs supplied through an originating FEAT."""
+    from decimal import Decimal
+    from types import SimpleNamespace
+    from app.utils.canonical_temporal_resolver import CLASS_LEVEL_EVALUATION
+
+    engine = economic_engine_effective_at(class_id, effective_at)
+    evaluation = (
+        canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=SimpleNamespace(class_id=class_id),
+            primitive="evaluation_period_boundaries",
+            period="month",
+            reference_time_utc=effective_at,
+        )
+        if include_fees
+        else None
+    )
+    schedule = engine.progressive_overdraft_fee if engine and include_fees else None
+    cwi = calculate_cwi(class_id) if isinstance(schedule, dict) else None
+    return BankingDirective(
+        class_id,
+        engine.economic_version_id if engine else None,
+        bool(engine and engine.overdraft_protection_enabled is True),
+        (
+            Decimal(engine.flat_overdraft_fee)
+            if engine and include_fees and engine.flat_overdraft_fee is not None
+            else None
+        ),
+        (
+            tuple(sorted(schedule.items()))
+            if isinstance(schedule, dict) and schedule
+            else () if schedule is None else None
+        ),
+        Decimal(str(cwi)) if cwi is not None else None,
+        evaluation.boundary_start_utc if evaluation else None,
     )

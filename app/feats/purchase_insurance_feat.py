@@ -174,6 +174,9 @@ def execute_purchase_insurance(
             ),
         )
 
+    from app.services.ledger_recovery_service import lock_recovery_scope
+    lock_recovery_scope(class_id,seat_id)
+
     premium = Decimal(str(definition.premium))
     if premium <= Decimal("0.00"):
         return InsurancePurchaseResult(
@@ -203,15 +206,6 @@ def execute_purchase_insurance(
                 f"Seat already holds active coverage in tier group "
                 f"'{definition.tier_group}'"
             ),
-        )
-
-    # Affordability: the first premium must be payable now (no overdraft here).
-    available = get_available_balance(seat_id, class_id, "checking")
-    if available < premium:
-        return InsurancePurchaseResult(
-            success=False, correlation_id=correlation_id,
-            error_code="INSUFFICIENT_FUNDS",
-            error_message=f"Checking balance {available} < premium {premium}",
         )
 
     # Resolve the recurring terms and cycle 1's boundaries in the read phase: a

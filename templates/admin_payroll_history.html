@@ -73,7 +73,7 @@
                         {{ entry.student_name }}
                       {% endif %}
                     </td>
-                    <td>${{ "%.2f"|format(entry.amount) }}</td>
+                    <td>{{ entry.display_amount }}</td>
                     <td>{{ entry.notes }}</td>
                 </tr>
                 {% endfor %}

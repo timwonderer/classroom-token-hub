@@ -2,13 +2,13 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-PROD-001 | 1.3 | 2026-10-01 | 1.2 | Normative |
+| FEAT-PROD-001 | 1.5 | 2026-10-03 | 1.4 | Normative |
 
 ---
 
 ## I. Purpose
 
-This FEAT is the sole lawful mutation path for `attendance_sessions`.
+This FEAT owns attendance ingress. FEAT-PROD-003/004 may compose only the due-system-closure PROD command authorized by DOM-PROD-001 §XV.7 inside their own atomic context.
 
 It records attendance-session rows for the Productivity and Payroll domain and
 replaces any other FEAT or route path that would otherwise write to that table.
@@ -17,7 +17,27 @@ This FEAT uses `CanonicalContext` for live request authority and `canonical_temp
 
 ---
 
-## II. Execution Context
+## II. Scope
+
+Governs append-only attendance event creation. Terminal interval invalidation is a separate `FEAT-PROD-005` operation; this FEAT does not write eligibility decisions or money.
+
+## III. Authority Level
+
+Normative; subordinate to INV-CORE-000 §III.1–6, INV-CORE-001 §III, VIII, DOM-PROD-001 §VII–XI, and FEAT-CORE-000 §II–V. INV-ARC-006 §V, INV-ARC-007 §V, INV-ARC-009 §V, and INV-ARC-021 §V govern command-only mutation, pure reads, domain authority, and composition.
+
+## IV. Dependencies
+
+- `docs/DOMAIN/DOM-PROD-001_PRODUCTIVITY_AND_PAYROLL_DOMAIN.md`
+- `docs/FEATURE-EXECUTION/FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md`
+- `app/services/context_resolver.py`
+- `docs/SPEC/SPEC-TIME-001_CANONICAL_TEMPORAL_RESOLVER.md`
+- `app/utils/canonical_temporal_resolver.py`
+
+- [FEAT-PROD-005](FEAT-PROD-005_INVALIDATE_ATTENDANCE_INTERVAL.md)
+
+---
+
+## V. Execution Context
 
 ### 1. Required Inputs
 
@@ -41,11 +61,11 @@ The FEAT MUST NOT infer class or seat authority from any legacy identity source.
 
 ---
 
-## III. Canonical Write
+## VI. Canonical Write
 
 ### `record_attendance_session(...)`
 
-This is the only lawful mutation path for `attendance_sessions`.
+Attendance ingress uses this FEAT; due system closure may be composed by FEAT-PROD-003/004 under DOM-PROD-001 §XV.7.
 
 Canonical business actions:
 
@@ -86,7 +106,7 @@ Rules:
 
 Correction rule:
 
-- If a written attendance row contributes to an incorrect payroll result, the lawful correction path is `FEAT-PROD-003` payroll reversal.
+- A teacher invalidates a completed work interval through `FEAT-PROD-005`, which appends a separate eligibility decision and any required payroll correction through domain commands. `FEAT-PROD-003` retains exact whole-event reversal and residual recovery authority.
 - The original attendance row remains part of the immutable productivity timeline.
 
 Execution steps:
@@ -111,7 +131,7 @@ Failure conditions:
 
 ---
 
-## IV. Temporal Rules
+## VII. Temporal Rules
 
 - Attendance comparisons MUST use the canonical temporal resolver.
 - Attendance rows are recorded in UTC and displayed in class canonical time.
@@ -120,34 +140,34 @@ Failure conditions:
 
 ---
 
-## V. Write Authority
+## VIII. Write Authority
 
-`FEAT-PROD-001` is the exclusive writer for `attendance_sessions`.
+The PROD attendance command is the sole writer for `attendance_sessions`; FEAT-PROD-001 owns ingress and FEAT-PROD-003/004 may compose its narrow due-system-closure operation.
 
 No other FEAT, route, background job, service, or migration logic may write to
 `attendance_sessions` directly.
 
-All other attendance-related behavior MUST delegate to this FEAT.
+Other attendance writers MUST compose this domain command under the declared execution contract, never execute a nested FEAT (`FEAT-CORE-000` §V.1). Interval eligibility is a separate domain surface and writes no `attendance_sessions` row.
 
 ---
 
-## VI. Invariants
+## IX. Invariants
 
 1. Attendance writes are append-only.
 2. Attendance rows are immutable after insertion and permanent for as long as their target seat exists; they are destroyed only with that seat or with the class (`DOM-PROD-001` §VII.1.a, `INV-CORE-000` §III.6).
 3. There is no delete, soft-delete, mark-deleted, or correction-in-place attendance path. Lifecycle destruction of the seat or class is not such a path.
-4. Payroll correction is handled through payroll reversal, not attendance mutation.
+4. Interval invalidation and payroll recovery append separate records under `FEAT-PROD-005` / `FEAT-PROD-003`; neither changes attendance.
 5. Hall-pass attendance rows must carry the same consumed entitlement instance `entitlement_id` recorded as `hall_pass_logs.hall_pass_id`.
 6. The FEAT must fail closed if `ctx.class_id` or `ctx.seat_id` cannot be established.
 7. The FEAT must not mutate hall-pass entitlement state.
-8. The FEAT must be the only writer to `attendance_sessions`.
+8. All attendance writes use the PROD command under a declared FEAT coordinator; the system-closure exception is limited by DOM-PROD-001 §XV.7.
 
 ---
 
-## VII. Dependencies
+## X. Amendment
 
-- `docs/DOMAIN/DOM-PROD-001_PRODUCTIVITY_AND_PAYROLL_DOMAIN.md`
-- `docs/FEATURE-EXECUTION/FEAT-CORE-000_FEATURE_EXECUTION_CONSTITUTIONAL_DIRECTIVE.md`
-- `app/services/context_resolver.py`
-- `docs/SPEC/SPEC-TIME-001_CANONICAL_TEMPORAL_RESOLVER.md`
-- `app/utils/canonical_temporal_resolver.py`
+Version 1.4 (2026-10-03) supersedes v1.3's whole-payroll-only correction wording; it preserves attendance immutability and identifies the separate interval-invalidation contract. This amendment implements documentation authority only. Revisions must increment version/date, identify superseded rules, and preserve governing invariants.
+
+### Version 1.5: prospective provenance foundation (2026-10-03)
+
+Supersedes 1.4's exclusive writer wording only for canonical due system closure. Incorporates DOM-PROD-001 §XV.7–8 and [SPEC-PROD-001](../SPEC/SPEC-PROD-001_ATTENDANCE_INTERVAL_ELIGIBILITY_AND_PAYROLL_CORRECTION.md) §VI: preserve pair IDs, freeze version-1 settlement inputs, protect complete payroll summaries, and expose pure evidence queries. Every attendance writer locks its class/target seat before selection. New payroll composes `close_due_attendance_intervals` within one FEAT transaction before pricing; class completion resolves completed-run replay first and locks eligible seats in stable order. Audit linkage initializes once within creation and cannot change after commit. No nested FEAT, historical backfill, or correction button is authorized by this foundation.

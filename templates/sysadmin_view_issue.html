@@ -226,10 +226,8 @@
                         </div>
                     </div>
                     <p class="mb-0 mt-2"><strong>Description:</strong> {{ issue.context_snapshot.transaction.description }}</p>
-                    {% if issue.context_snapshot.transaction.is_void %}
-                    {% call cards.alert_card('danger', 'Transaction voided', icon='cancel', body_class='mt-2 mb-0', heading_tag='h6') %}
-                        <p class="mb-0">Transaction was voided.</p>
-                    {% endcall %}
+                    {% if issue.context_snapshot.transaction.posting_state %}
+                    <p>Posting state when reported: {{ issue.context_snapshot.transaction.posting_state|title }}</p>
                     {% endif %}
                     {% endif %}
                 </div>

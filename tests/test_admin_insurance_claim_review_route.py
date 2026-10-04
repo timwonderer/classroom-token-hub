@@ -30,7 +30,7 @@ from app.feats.class_configuration import configure_insurance_definition
 from app.feats.purchase_insurance_feat import execute_purchase_insurance
 from app.models import InsuranceClaim
 from app.services.context_resolver import CanonicalContext
-from app.utils.transaction_idempotency import create_idempotent_transaction
+from app.services.ledger_command_service import create_idempotent_transaction
 from tests.helpers.canonical_classroom import provision_classroom
 from tests.helpers.canonical_session import set_canonical_context
 from tests.helpers.class_domain import enable_class_feature

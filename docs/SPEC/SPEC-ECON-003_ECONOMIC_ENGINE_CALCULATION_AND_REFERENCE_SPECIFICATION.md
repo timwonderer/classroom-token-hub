@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-ECON-003    |  2.1    |     2026-09-24 |        2.0 |       Normative |
+| SPEC-ECON-003    |  2.2    |     2026-10-03 |        2.1 |       Normative |
 
 ---
 
@@ -646,7 +646,8 @@ An NSF fee SHALL NOT be charged for:
 - **Penalties** — a teacher-applied deduction (an admin adjustment / fine) is
   itself a penalty, neither a purchase nor an obligation. A penalty **cannot
   generate a fine**; it posts as a direct debit (settling below zero if the
-  balance cannot cover it) and does not draw on savings to cover itself.
+  balance cannot cover it), after applying the shared protection rule of §4.5.1.1A. Savings eligibility for funding and fee applicability are separate decisions.
+- **Payroll corrections** — interval or residual recovery is a separately authorized corrective debit, not a failed agreement. It incurs no NSF fee and creates no obligation or deferred deduction.
 
 Fee amount (authority): the **teacher sets** the fee amount. The Economic Engine
 does not determine it; per §4.5.1 the CWI helper surfaces a **CWI-normed
@@ -662,6 +663,45 @@ obligation (`DOM-OBL-001` §II.C, immediate charge), recorded by the
 **originating business FEAT's** cross-domain orchestration — never by the Ledger
 resolution primitive. This resolves the
 overdraft/NSF ownership question previously open in `DOM-ITR-001` §XIII.c.
+
+---
+
+##### 4.5.1.1A Universal Charge and Deduction Funding
+
+This technical rule is explicitly incorporated by `DOM-CLASS-001` §X,
+`DOM-CLASS-002` §VII, and `FEAT-LED-000` §XI.5, deriving from
+`INV-CORE-000` §III.3, `INV-ARC-009` §V and `INV-ARC-021` §V, VII.
+It applies to every independently authorized checking charge or deduction,
+including purchases, obligation payments, penalties, fees and payroll corrections.
+It does not itself authorize the underlying business action.
+
+For integer-cent checking balance `B`, savings balance `S`, and a lawful debit
+`D > 0`, define `shortfall = max(0, D - B)`. When protection is enabled,
+`shortfall > 0`, and savings can cover the **entire** shortfall (`S >= shortfall`),
+the resolved plan transfers exactly `shortfall` cents from savings to checking
+and applies the debit atomically. Otherwise it transfers nothing, leaves savings
+untouched and applies the debit to checking, which may become negative. Partial
+savings sweeps are prohibited. Resolution uses current authoritative available
+balances while holding the seat serialization lock through posting.
+
+Own-account transfers are excluded: insufficient source funds deny the transfer,
+with no protection transfer or fee. Fee applicability remains the separate
+failed-agreement test in §4.5.1.1. Funding an NSF fee does not generate another
+NSF fee. A payroll correction always has zero NSF fee and cannot generate an
+obligation, deferred debt or future deduction.
+
+| Checking | Savings | Debit | Protection | Transfer | Final checking | Final savings |
+|---:|---:|---:|:---:|---:|---:|---:|
+| $2 | $3 | $10 | On | $0 | −$8 | $3 |
+| $2 | $8 | $10 | On | $8 | $0 | $0 |
+| $2 | $20 | $10 | Off | $0 | −$8 | $20 |
+| −$2 | $12 | $10 | On | $12 | $0 | $0 |
+
+All funding legs and the charge commit or roll back together. This revision
+supersedes the prior penalty-specific savings exclusion; penalties still cannot
+generate NSF fees. The originating FEAT records any independently authorized
+failed-agreement obligation through its owning domain commands, never through
+Ledger resolution. No existing fee amount or interest formula changes.
 
 ---
 
@@ -1021,6 +1061,8 @@ Revisions to this document must:
 3. remain consistent with the class-economy authority chain.
 
 ### Revision history
+
+- **2.2 (2026-10-03)** — Introduces §4.5.1.1A universal full-shortfall-or-no-transfer protection for charges and deductions. Supersedes the penalty savings exclusion in 2.1 and earlier. Preserves transfer sufficient-funds rules and independent failed-agreement fees; payroll correction has zero NSF fee and creates no obligation or deferred deduction. Documentation-only authority, not runtime certification.
 
 - **2.1 (2026-09-24)** — The premium charged each billing period is the frozen
   contractual amount of the purchased policy version and does not scale with that

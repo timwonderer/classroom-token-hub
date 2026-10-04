@@ -4,6 +4,7 @@ import pytest
 from decimal import Decimal
 from datetime import datetime, timedelta, timezone
 
+from tests.helpers.ledger import record_ledger_fixture
 from app.extensions import db
 from app.models import (
     User, UserRole, Seat, ClassEconomy, IdentityProfile,
@@ -266,13 +267,13 @@ def test_build_student_obligation_view_with_payment(app):
             db.session.flush()
 
             # Create a Transaction for the payment
-            txn = Transaction(
+            txn = record_ledger_fixture(
                 seat_id=seat_id,
                 actor_seat_id=seat_id,
                 target_seat_id=seat_id,
                 class_id=class_id,
                 amount=Decimal('60.00'),
-                status=TransactionStatus.POSTED,
+                posted=True,
                 timestamp=now_utc,
             )
             db.session.add(txn)
@@ -347,13 +348,13 @@ def test_build_student_obligation_view_negative_ledger_payment(app):
             db.session.flush()
 
             # Rent principal debit is posted NEGATIVE, mirroring FEAT-OBL-001.
-            txn = Transaction(
+            txn = record_ledger_fixture(
                 seat_id=seat_id,
                 actor_seat_id=seat_id,
                 target_seat_id=seat_id,
                 class_id=class_id,
                 amount=Decimal('-50.00'),
-                status=TransactionStatus.POSTED,
+                posted=True,
                 timestamp=now_utc,
             )
             db.session.add(txn)
@@ -430,13 +431,13 @@ def test_multiple_payment_events_share_one_correlation(app):
             # Two partial payments, each its own ledger debit (negative), each its
             # own PAYMENT event — but all under the same obligation correlation.
             for idx, part in enumerate((Decimal('-30.00'), Decimal('-20.00'))):
-                txn = Transaction(
+                txn = record_ledger_fixture(
                     seat_id=seat_id,
                     actor_seat_id=seat_id,
                     target_seat_id=seat_id,
                     class_id=class_id,
                     amount=part,
-                    status=TransactionStatus.POSTED,
+                    posted=True,
                     timestamp=now_utc + timedelta(hours=idx + 1),
                 )
                 db.session.add(txn)

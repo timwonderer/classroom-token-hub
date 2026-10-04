@@ -1,216 +1,120 @@
-"""Payroll reversal is reachable, and it compensates rather than deletes.
-
-Finding 28. DOM-PROD-001 §185 forbids correcting payroll by mutating attendance
-history and §187 names reversal as the remedy instead. That remedy had no
-surface: ``record_payroll_reversal`` appeared exactly once in the repository —
-its own definition — with no route, service or test reaching it, while the
-payroll template already rendered a REVERSAL badge for rows nothing could
-produce. The read side anticipated what the write side never made.
-
-Taken with finding 27 (attendance immutability now enforced in the database),
-these close the operator decision of 2026-09-21: attendance is never corrected,
-and reversing the payroll is the only remedy — so that remedy has to work.
-"""
-
-from __future__ import annotations
-
-from decimal import Decimal
-
-from app.extensions import db
-from app.models import PayrollEvent, Transaction
-from tests.helpers.class_domain import enable_class_feature
+"""Signed FEAT-PROD-003 full/residual recovery surface and original lineage."""
+from app.models import PayrollEvent,Transaction
 from tests.helpers.classroom_initializer import initialize_as_teacher
+from tests.dom.prod.test_attendance_invalidation_command import _paid_sources
 
 
-def _manual_credit(client, classroom, amount="25.00"):
-    """Create a payroll lineage through the real admin surface."""
-    student = classroom.students[0]
-    # student_ids carries the seat's PUBLIC id, which is what the picker submits
-    # and what _resolve_student_detail_seat resolves; a raw seat id is silently
-    # skipped by the class-scope filter and applies to nobody.
-    response = client.post(
-        "/admin/payroll/manual-payment",
-        data={
-            "student_ids": student.seat.public_id,
-            "amount": amount,
-            "description": "Seed credit",
-            "payment_type": "deposit",
-        },
-        follow_redirects=False,
-    )
-    return response, student
+def _payment(app,client):
+    classroom=initialize_as_teacher('chemistry_p1',client,app)
+    source,ctx,target,pairs,event=_paid_sources(app)
+    return source,event
 
 
-def _teacher_context(classroom):
+def _preview(client,event):return client.get(f'/admin/payroll/event/{event.id}/recovery-preview')
+
+def _confirm(client,event,p,key='surface:recovery:1'):
+    return client.post(f'/admin/payroll/event/{event.id}/reverse',json={'idempotency_key':key,'expected_preview_identity':p['expected_preview_identity']})
+
+
+def test_a_payroll_entry_can_be_reversed_from_the_payroll_page(app,client):
+    classroom,event=_payment(app,client); original_summary=event.summary_json.copy(); correlation=event.correlation_id
+    p=_preview(client,event); assert p.status_code==200 and p.json['recovery_kind']=='EXACT_REVERSAL'
+    response=_confirm(client,event,p.json); assert response.status_code==200,response.data
+    reversal=PayrollEvent.query.filter_by(class_id=classroom.class_id,payroll_event_type='reversal').one()
+    assert reversal.correlation_id==correlation and reversal.target_seat_id==event.target_seat_id
+    assert PayrollEvent.query.filter_by(id=event.id).one().summary_json==original_summary
+    credit=Transaction.query.filter_by(idempotency_key='correction-original').one()
+    counter=Transaction.query.filter_by(compensation_origin_locator=f'ledger-credit:v1:{credit.id}').one()
+    assert counter.amount==-credit.amount and counter.compensation_amount_cents==credit.amount_cents
+
+
+def test_an_entry_cannot_be_reversed_twice(app,client):
+    _,event=_payment(app,client);p=_preview(client,event).json
+    assert _confirm(client,event,p).status_code==200
+    assert _confirm(client,event,p).json['replayed']
+    assert _preview(client,event).json['code']=='ALREADY_RECOVERED'
+    assert PayrollEvent.query.filter_by(payroll_event_type='reversal').count()==1
+
+
+def test_a_reversal_cannot_itself_be_reversed(app,client):
+    _,event=_payment(app,client);_confirm(client,event,_preview(client,event).json)
+    reversal=PayrollEvent.query.filter_by(payroll_event_type='reversal').one()
+    assert _preview(client,reversal).status_code==409
+
+
+def test_reversal_is_scoped_to_the_active_class(app,client):
+    _,event=_payment(app,client)
+    initialize_as_teacher('biology_block_a',client,app)
+    assert _preview(client,event).status_code==404
+    assert _confirm(client,event,{'expected_preview_identity':'foreign'}).status_code==404
+
+
+def test_the_payroll_page_offers_the_control(app,client):
+    _,event=_payment(app,client)
+    html=client.get('/admin/payroll').get_data(as_text=True)
+    assert 'Recover payment' in html and 'recovery-preview' in html
+    assert 'onsubmit="return confirm(\'Reverse' not in html
+
+
+def test_an_entry_with_no_linked_transaction_is_refused_not_500(app,client,monkeypatch):
+    _,event=_payment(app,client)
+    import app.feats.attendance_interval_invalidation_feat as feat
+    monkeypatch.setattr(feat,'resolve_payroll_credit_locator',lambda **kwargs:None)
+    response=_preview(client,event)
+    assert response.status_code==409 and response.json['code']=='PROVENANCE_UNAVAILABLE'
+    assert PayrollEvent.query.filter_by(payroll_event_type='reversal').count()==0
+
+
+def test_interval_and_residual_history_use_exact_signed_negative_effects(app,client):
+    from app.feats.attendance_interval_invalidation_feat import preview_attendance_interval_invalidation,invalidate_attendance_interval
+    initialize_as_teacher('chemistry_p1',client,app)
+    classroom,ctx,target,pairs,event=_paid_sources(app)
+    args=dict(ctx=ctx,target_seat_id=target,opening_event_id=pairs[0][0],closing_event_id=pairs[0][1],reason_code='INVALID_ATTENDANCE')
+    p=preview_attendance_interval_invalidation(**args)
+    invalidate_attendance_interval(**args,idempotency_key='history-interval',expected_preview_identity=p.identity)
+    p=_preview(client,event).json;response=_confirm(client,event,p,key='history-residual')
+    assert response.status_code==200
+    from app.routes.admin import _build_payroll_event_display_rows
+    corrections=PayrollEvent.query.filter_by(class_id=ctx.class_id,payroll_event_type='correction').all()
+    rows=_build_payroll_event_display_rows(ctx=ctx,payroll_events=corrections)
+    assert len(rows)==2 and all(row['display_amount']=='$-1.00' for row in rows)
+    assert '$-1.00' in client.get('/admin/payroll-history').get_data(as_text=True)
+
+
+def test_missing_correction_proof_is_unavailable_in_all_history_views(app,client,monkeypatch):
+    from tests.test_student_detail_attendance_intervals import _detail_url
+    classroom,event=_payment(app,client);_confirm(client,event,_preview(client,event).json)
+    import app.feats.attendance_interval_invalidation_feat as feat
+    monkeypatch.setattr(feat,'verified_creation_evidence',lambda *args,**kwargs:None)
+    for url in ('/admin/payroll','/admin/payroll-history',_detail_url(client,classroom.students[0].seat.public_id)):
+        response=client.get(url);assert response.status_code==200,response.data
+        html=response.get_data(as_text=True)
+        assert 'Contribution unavailable' in html
+    html=client.get(_detail_url(client,classroom.students[0].seat.public_id)).get_data(as_text=True)
+    assert 'Total unavailable' in html
+
+
+def test_missing_and_malformed_correction_locators_never_fabricate_zero(app,client):
+    from app.feats.base import FEATContext,audit_protected
+    from app.utils.audit_verifier import PROTECTED_FIELDS_BY_TABLE
+    from app.extensions import db
+    from app.routes.admin import _build_payroll_event_display_rows
+    from tests.test_student_detail_attendance_intervals import _detail_url
+    from datetime import datetime,timezone
+    classroom,event=_payment(app,client)
     from app.services.context_resolver import CanonicalContext
-
-    return CanonicalContext(
-        user_id=classroom.teacher_user.id,
-        class_id=classroom.class_id,
-        seat_id=classroom.teacher_seat.id,
-        actor_role="teacher",
-    )
-
-
-def _events(class_id, **kw):
-    return PayrollEvent.query.filter_by(class_id=class_id, **kw).all()
-
-
-def test_a_payroll_entry_can_be_reversed_from_the_payroll_page(app, client):
-    classroom = initialize_as_teacher("chemistry_p1", client, app)
-    with app.app_context():
-        enable_class_feature(class_id=classroom.class_id, feature="payroll")
-
-    _manual_credit(client, classroom)
-
-    with app.app_context():
-        original = _events(classroom.class_id, payroll_event_type="manual_credit")
-        assert len(original) == 1, "seed credit did not produce a payroll event"
-        event_id = original[0].id
-        correlation_id = original[0].correlation_id
-
-    response = client.post(f"/admin/payroll/event/{event_id}/reverse", data={"reason": "wrong attendance"})
-    assert response.status_code == 302, response.data
-
-    with app.app_context():
-        reversals = _events(classroom.class_id, payroll_event_type="reversal")
-        assert len(reversals) == 1, "no reversal payroll event was written"
-        reversal = reversals[0]
-
-        # A compensating entry, not a deletion: the original survives.
-        assert db.session.get(PayrollEvent, event_id) is not None
-        # The reversal carries the lineage of what it compensates.
-        assert reversal.correlation_id == correlation_id
-        assert reversal.target_seat_id == original[0].target_seat_id
-
-        # The money moved with the record, in the opposite direction.
-        txns = Transaction.query.filter_by(
-            class_id=classroom.class_id,
-            target_seat_id=reversal.target_seat_id,
-        ).all()
-        amounts = [Decimal(t.amount) for t in txns]
-        assert any(a > 0 for a in amounts), amounts
-        assert any(a < 0 for a in amounts), "no counter-entry was posted"
-        assert sum(amounts) == Decimal("0.00"), f"reversal did not net to zero: {amounts}"
-
-
-def test_an_entry_cannot_be_reversed_twice(app, client):
-    classroom = initialize_as_teacher("chemistry_p1", client, app)
-    with app.app_context():
-        enable_class_feature(class_id=classroom.class_id, feature="payroll")
-    _manual_credit(client, classroom)
-
-    with app.app_context():
-        event_id = _events(classroom.class_id, payroll_event_type="manual_credit")[0].id
-
-    client.post(f"/admin/payroll/event/{event_id}/reverse")
-    client.post(f"/admin/payroll/event/{event_id}/reverse")
-
-    with app.app_context():
-        assert len(_events(classroom.class_id, payroll_event_type="reversal")) == 1, (
-            "a second reversal was written; the money would be returned twice"
-        )
-
-
-def test_a_reversal_cannot_itself_be_reversed(app, client):
-    classroom = initialize_as_teacher("chemistry_p1", client, app)
-    with app.app_context():
-        enable_class_feature(class_id=classroom.class_id, feature="payroll")
-    _manual_credit(client, classroom)
-
-    with app.app_context():
-        event_id = _events(classroom.class_id, payroll_event_type="manual_credit")[0].id
-    client.post(f"/admin/payroll/event/{event_id}/reverse")
-
-    with app.app_context():
-        reversal_id = _events(classroom.class_id, payroll_event_type="reversal")[0].id
-
-    client.post(f"/admin/payroll/event/{reversal_id}/reverse")
-
-    with app.app_context():
-        assert len(_events(classroom.class_id, payroll_event_type="reversal")) == 1
-
-
-def test_reversal_is_scoped_to_the_active_class(app, client):
-    """An event id from another class is not found, and nothing is written."""
-    first = initialize_as_teacher("chemistry_p1", client, app)
-    with app.app_context():
-        enable_class_feature(class_id=first.class_id, feature="payroll")
-    _manual_credit(client, first)
-    with app.app_context():
-        foreign_event_id = _events(first.class_id, payroll_event_type="manual_credit")[0].id
-
-    # A different teacher, a different class.
-    second = initialize_as_teacher("ap_csp_p3", client, app)
-    with app.app_context():
-        enable_class_feature(class_id=second.class_id, feature="payroll")
-
-    response = client.post(f"/admin/payroll/event/{foreign_event_id}/reverse")
-    assert response.status_code == 404
-
-    with app.app_context():
-        assert _events(first.class_id, payroll_event_type="reversal") == []
-
-
-def test_the_payroll_page_offers_the_control(app, client):
-    """The remedy must be reachable by a teacher, not only by a test."""
-    classroom = initialize_as_teacher("chemistry_p1", client, app)
-    with app.app_context():
-        enable_class_feature(class_id=classroom.class_id, feature="payroll")
-    _manual_credit(client, classroom)
-
-    page = client.get("/admin/payroll").data.decode()
-    assert "reverse_payroll_event" in page or "/reverse" in page, (
-        "the payroll page renders no control for the only documented remedy"
-    )
-
-
-def test_an_entry_with_no_linked_transaction_is_refused_not_500(app, client):
-    """The LookupError branch must actually run.
-
-    `record_payroll_reversal` raises LookupError when it cannot find the ledger
-    transaction it would compensate. The handler for that branch called
-    `_log_api_client_error`, which is defined in app/routes/api.py and neither
-    defined nor imported here, so reaching it raised NameError and produced an
-    undiagnosed 500 instead of the intended refusal.
-
-    None of the original tests entered the branch -- they covered the happy path,
-    double reversal, reversing a reversal, and cross-class scoping, all of which
-    return before the try block or succeed inside it. A handler no test executes
-    is a handler that has never run. Caught in review rather than by this suite,
-    which is why the case is added here.
-
-    A zero-amount payroll event is the reachable way in: the FEAT writes the
-    event but posts no transaction, so the reversal has nothing to negate.
-    """
-    classroom = initialize_as_teacher("chemistry_p1", client, app)
-    student = classroom.students[0]
-
-    with app.app_context():
-        enable_class_feature(class_id=classroom.class_id, feature="payroll")
-        from app.feats.prod import record_payroll_event
-        from app.feats.base import generate_correlation_id
-
-        record_payroll_event(
-            ctx=_teacher_context(classroom),
-            target_seat_id=student.seat.id,
-            payroll_event_type="manual_credit",
-            correlation_id=generate_correlation_id(),
-            idempotency_key=f"zero-credit:{student.seat.id}",
-            mechanism="TEACHER",
-            summary_json={"description": "Zero-amount credit", "source": "test"},
-            amount=Decimal("0.00"),
-        )
-        db.session.flush()
-        event = _events(classroom.class_id, payroll_event_type="manual_credit")[0]
-        event_id = event.id
-        assert Transaction.query.filter_by(
-            class_id=classroom.class_id, target_seat_id=student.seat.id
-        ).count() == 0, "fixture assumption broken: a transaction was posted"
-
-    response = client.post(f"/admin/payroll/event/{event_id}/reverse")
-
-    # A refusal, not a server error.
-    assert response.status_code == 302, response.data
-    with app.app_context():
-        assert _events(classroom.class_id, payroll_event_type="reversal") == []
+    ctx=CanonicalContext(classroom.teacher_user.id,event.class_id,classroom.teacher_seat.id,'teacher')
+    cases=[('correction',{}),('correction',{'ledger_result_locator':'malformed'}),('reversal',{'command_receipt':{}})]
+    records=[]
+    for index,(kind,summary) in enumerate(cases):
+        with FEATContext('FEAT-PROD-003',idempotency_key=f'unprovable-correction:{index}'):
+            record=PayrollEvent(class_id=event.class_id,target_seat_id=event.target_seat_id,actor_seat_id=ctx.seat_id,
+                correlation_id=f'corr_unprovable-correction:{index}',idempotency_key=f'unprovable-correction:{index}',
+                policy_uuid=event.policy_uuid,mechanism='TEACHER',payroll_event_type=kind,recorded_at=datetime.now(timezone.utc),summary_json=summary)
+            db.session.add(record);db.session.flush();audit_protected('payroll_event',record,'INSERT',PROTECTED_FIELDS_BY_TABLE['payroll_event'])
+            records.append(record)
+    rows=_build_payroll_event_display_rows(ctx=ctx,payroll_events=records)
+    assert all(row['amount'] is None and row['display_amount']=='Contribution unavailable' for row in rows)
+    for url in ('/admin/payroll','/admin/payroll-history',_detail_url(client,classroom.students[0].seat.public_id)):
+        response=client.get(url);assert response.status_code==200,response.data
+        assert 'Contribution unavailable' in response.get_data(as_text=True)

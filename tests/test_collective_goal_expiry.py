@@ -20,6 +20,7 @@ import pytest
 import sqlalchemy as sa
 
 from app.extensions import db
+from app.services.ledger_provenance_query_service import get_exact_reversal
 from app.feats.base import FEATContext
 from app.feats.store_purchase_feat import execute_store_purchase
 from app.models import EntitlementEvent, StoreProduct, Transaction, TransactionStatus
@@ -206,11 +207,14 @@ class TestUnmetGoalIsExpiredAndRefunded:
             db.session.commit()
 
             db.session.refresh(purchase)
-            # The original charge stands as historical fact; only the link
-            # forward is added (SPEC-OPS-001 §3.2, INV-OPS-001).
-            assert purchase.status == TransactionStatus.POSTED
-            assert purchase.reversal_transaction_id is not None
-            reversal = db.session.get(Transaction, purchase.reversal_transaction_id)
+            # The original charge stands unchanged as historical fact. A new
+            # immutable child establishes reversal (SPEC-OPS-001 §3.2).
+            assert purchase.posting_state == TransactionStatus.POSTED
+            assert purchase.reversal_transaction_id is None
+            reversal = get_exact_reversal(purchase)
+            assert reversal is not None
+            assert reversal.original_transaction_id == purchase.id
+            assert reversal.correlation_id == purchase.correlation_id
             # FEAT-LED-002 §III.2.1: the ledger type is REVERSAL. The business
             # reason it was raised for is recorded separately, so a rebuild from
             # history reads one vocabulary for every compensating row.
@@ -272,8 +276,12 @@ class TestUnmetGoalIsExpiredAndRefunded:
                 .filter_by(class_id=room.class_id, seat_id=student.seat_id, type="purchase")
                 .one()
             )
-            assert purchase.status == TransactionStatus.POSTED
-            assert purchase.reversal_transaction_id is not None
+            assert purchase.posting_state == TransactionStatus.POSTED
+            assert purchase.reversal_transaction_id is None
+            reversal = get_exact_reversal(purchase)
+            assert reversal is not None
+            assert reversal.original_transaction_id == purchase.id
+            assert reversal.correlation_id == purchase.correlation_id
 
 
 class TestGoalProgressAuthority:

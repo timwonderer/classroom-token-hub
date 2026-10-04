@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| FEAT-OBL-004 | 0.1 (DRAFT) | 2026-09-01 | N/A | Normative (proposed) |
+| FEAT-OBL-004 | 0.3 (DRAFT) | 2026-10-03 | 0.2 (DRAFT) | Normative (proposed) |
 
 ## I. Purpose
 
@@ -174,8 +174,8 @@ Through the lawful Obligations satisfaction-by-payment command (FEAT-OBL-003),
 which coordinates the Ledger posting (FEAT-LED-000 → FEAT-LED-001):
 
 - the intended plan is a premium debit against the student's account;
-- Ledger MAY accept, lawfully transform (e.g. configured overdraft/recovery), or **deny** the plan;
-- a **denied** plan SHALL abort the entire purchase with no assessment, grant, or bill cycle persisted (`INSUFFICIENT_FUNDS`);
+- Ledger applies the shared charge-funding rule incorporated by FEAT-LED-000 §VIII/XI.5 and DOM-CLASS-001 §X. The initiating FEAT supplies resolved Identity seats and immutable Class banking directives under canonical seat → class serialization. Enabled protection covers the entire shortfall only if savings can fund it; otherwise savings is untouched and the authorized checking debit may become negative. Insufficient savings alone is not a funding denial;
+- an unlawful scope, malformed required directive or denied domain eligibility aborts the entire purchase with no assessment, grant, bill cycle or monetary effect persisted; the former `INSUFFICIENT_FUNDS` wording does not authorize checking-only affordability rejection of an otherwise lawful premium;
 - the resulting `PAYMENT` event references the lawful `ledger_transaction_id`.
 
 Insurance premiums are not waivable (`WAIVED` is rent-only, DOM-OBL-001 §VII.1).
@@ -263,7 +263,6 @@ Representative failures (all leave zero mutations):
 - `INSURANCE_NOT_AVAILABLE_FOR_NEW_COVERAGE` (definition not `IN_USE`)
 - `POLICY_ALREADY_HELD` (seat already holds a concurrently effective grant for the **same** `policy_uuid` — hard invariant, §VII.4)
 - `POLICY_ALREADY_HELD_IN_GROUP` (seat already holds active coverage for another policy in the same `tier_group` — tier-group mutual exclusion, §VII.4)
-- `INSUFFICIENT_FUNDS` (Ledger denied the premium plan)
 - `CROSS_DOMAIN_FAILURE`
 
 ## XIII. Consequential Amendments (same architectural arc)
@@ -285,3 +284,9 @@ Adopting this FEAT requires, in the same arc, to avoid leaving contradictory con
 Revisions must remain consistent with `DOM-OBL-001`, `DOM-POL-001`,
 `DOM-STORE-001`, `DOM-LED-001`, `FEAT-CORE-000`, and the governing FEAT, temporal,
 and cross-domain coordination invariants.
+
+## Amendment — 0.2
+
+**0.2 (2026-10-03)** incorporates universal full-shortfall charge funding and supersedes checking-only affordability denial wording. Policy availability, tier-group exclusion, duplicate acquisition, premium satisfaction, coverage timing and independently authorized fee applicability remain owning-domain decisions. No compatibility funding path, new fee or deferred liability is authorized.
+
+Version 0.3 supersedes the obsolete checking-affordability denial in §XII. Checking/savings insufficiency alone is not a denial under §VIII.3; scope, configuration and owning-domain failures remain atomic.

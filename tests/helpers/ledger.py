@@ -120,10 +120,18 @@ def compensate_ledger_posted_transaction(
     idempotency_key: str | None = None,
     actor_seat_id: int | None = None,
 ):
+    inputs = {}
+    if transaction.amount_cents > 0:
+        from app.feats.ledger_proof_inputs import positive_reversal_inputs
+        inputs = positive_reversal_inputs(transaction)
+        if actor_seat_id is None:
+            from app.services.identity_service import resolve_teacher_seat_for_class
+            actor_seat_id = resolve_teacher_seat_for_class(transaction.class_id).id
     return reverse_transaction(
         transaction,
         description=description,
         compensation_type=compensation_type,
+        **inputs,
         idempotency_key=idempotency_key,
         actor_seat_id=actor_seat_id,
     )
@@ -134,8 +142,11 @@ def apply_ledger_savings_interest(seat, *, annual_rate: Decimal = Decimal("0.045
 
 
 def apply_ledger_overdraft_fee_if_needed(seat, *, force: bool = False, idempotency_key: str | None = None):
+    from app.services.class_configuration_query_service import get_banking_directive
+    from app.services.identity_service import resolve_teacher_seat_for_class
     return apply_overdraft_fee_if_needed(
-        seat,
+        seat,banking_directive=get_banking_directive(seat.class_id,include_fees=True),
+        actor_seat_id=resolve_teacher_seat_for_class(seat.class_id).id,
         force=force,
         idempotency_key=idempotency_key,
     )
@@ -143,3 +154,31 @@ def apply_ledger_overdraft_fee_if_needed(seat, *, force: bool = False, idempoten
 
 def settle_ledger_balances(seat_id: int, class_id: str) -> None:
     settle_balances(seat_id, class_id)
+
+
+def record_ledger_fixture(*, seat_id, class_id, amount, account_type="checking", type="Deposit",
+                          description="Ledger fixture", target_seat_id=None, actor_seat_id=None,
+                          mechanism="self", timestamp=None, posted=False,
+                          original_transaction_id=None):
+    """Create immutable evidence through Ledger; reconcile explicitly if needed.
+
+    This fixture accepts no persisted lifecycle field. Historical event times
+    enter the canonical creation command before INSERT, never through patches.
+    """
+    from contextlib import ExitStack
+    from unittest.mock import patch
+    from app.utils.canonical_temporal_resolver import ensure_utc
+    with ExitStack() as clocks:
+        if timestamp is not None:
+            instant = ensure_utc(timestamp)
+            clocks.enter_context(patch("app.utils.canonical_temporal_resolver.utc_now", return_value=instant))
+            clocks.enter_context(patch("app.services.ledger_settlement_service.utc_now", return_value=instant))
+        transaction = create_pending_transaction(
+            seat_id=seat_id, class_id=class_id, amount=amount, account_type=account_type,
+            type=type, description=description, target_seat_id=target_seat_id or seat_id,
+            actor_seat_id=actor_seat_id or seat_id, mechanism=mechanism,
+            original_transaction_id=original_transaction_id,
+        )
+        if posted:
+            settle_balances(seat_id, class_id)
+        return transaction

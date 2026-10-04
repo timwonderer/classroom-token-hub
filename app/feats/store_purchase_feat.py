@@ -29,14 +29,15 @@ import uuid
 
 from app.extensions import db
 from app.feats.base import requires_feat_context, FEATContext, get_correlation_id
-from app.feats.ledger_resolution_feat import (
+from app.services.ledger_resolution_service import (
     build_intended_ledger_plan,
     resolve_intended_ledger_plan,
     apply_resolved_ledger_plan,
 )
 from app.models import Seat, EntitlementEvent, ClassEconomy
 from app.services.context_resolver import CanonicalContext
-from app.services.class_configuration_query_service import get_current_economic_engine
+from app.services.class_configuration_query_service import get_banking_directive
+from app.services.identity_service import resolve_teacher_seat_for_class
 from app.services.class_configuration_query_service import get_rent_settings
 from app.services.obligation_view_model import build_student_obligation_view
 from app.services.store_policy_resolver import StorePolicyResolver, PolicyNotFound, PolicyParseError, PolicyValidationError
@@ -178,6 +179,9 @@ def _execute_store_purchase_impl(
             error_message="Target seat not found or not in class scope",
         )
 
+    from app.services.ledger_recovery_service import lock_recovery_scope
+    lock_recovery_scope(canonical_context.class_id,canonical_context.seat_id)
+
     # Validate quantity
     if not isinstance(quantity, int) or quantity <= 0:
         return StorePurchaseResult(
@@ -187,6 +191,27 @@ def _execute_store_purchase_impl(
             error_code="QUANTITY_NOT_ALLOWED",
             error_message="Quantity must be a positive integer",
         )
+
+    canonical_intent = ("STORE_PURCHASE", policy_uuid, quantity)
+    if idempotency_key:
+        from app.services.ledger_command_service import replay_reserved_charge
+        prior = replay_reserved_charge(
+            class_id=canonical_context.class_id, feat_code="FEAT-STOR-001",
+            idempotency_key=idempotency_key, seat_id=canonical_context.seat_id,
+            actor_seat_id=canonical_context.seat_id, principal_type="purchase",
+            canonical_intent=canonical_intent,
+        )
+        if prior:
+            principal = prior["principal"]
+            grants = EntitlementEvent.query.filter_by(
+                class_id=canonical_context.class_id, target_seat_id=canonical_context.seat_id,
+                correlation_id=principal.correlation_id, event_type="GRANTED", acquisition_type="PURCHASE",
+            ).all()
+            if not grants or any((event.payload or {}).get("policy_uuid") != policy_uuid for event in grants):
+                raise ValueError("Accepted purchase grant evidence is unavailable.")
+            return StorePurchaseResult(success=True, correlation_id=principal.correlation_id,
+                quantity_granted=len(grants), entitlement_ids=[event.entitlement_id for event in grants],
+                product_id=grants[0].product_id)
 
     # =========================================================================
     # Resolve and validate product policy per SPEC-STORE-001
@@ -350,7 +375,7 @@ def _execute_store_purchase_impl(
         )
 
     # Generate or use provided correlation ID
-    corr_id = correlation_id or get_correlation_id() or f"store_purchase_{uuid.uuid4().hex}"
+    corr_id = get_correlation_id() or correlation_id or f"store_purchase_{uuid.uuid4().hex}"
 
     # =========================================================================
     # PHASE 2: Ledger Execution
@@ -374,17 +399,19 @@ def _execute_store_purchase_impl(
         # transaction's correlation_id instead, so the description is free to
         # read however it reads best.
         description=f"Purchase: {policy_config.name or policy_config.product_id} (x{quantity})",
-        transaction_type="purchase",
+        transaction_type="purchase", actor_seat_id=canonical_context.seat_id,
+        target_seat_id=canonical_context.seat_id,mechanism='self',
+        fee_actor_seat_id=resolve_teacher_seat_for_class(canonical_context.class_id).id,
         source_account="checking",
         target_account="store_purchase",
+        canonical_intent=canonical_intent,
     )
-    economic_engine = get_current_economic_engine(canonical_context.class_id)
+    banking_directive = get_banking_directive(canonical_context.class_id,include_fees=True)
     ledger_idempotency_key = idempotency_key or f"store-purchase:{corr_id}:ledger-plan"
     resolved_plan = resolve_intended_ledger_plan(
         plan=intended_plan,
-        economic_engine=economic_engine,
-        idempotency_key=ledger_idempotency_key,
-        allow_recovery_transfer=True,
+        banking_directive=banking_directive,
+        fee_authority="FAILED_AGREEMENT",
     )
     if resolved_plan.outcome == "DENY":
         return StorePurchaseResult(
@@ -396,7 +423,6 @@ def _execute_store_purchase_impl(
         )
     ledger_result = apply_resolved_ledger_plan(
         resolved_plan=resolved_plan,
-        economic_engine=economic_engine,
         idempotency_key=ledger_idempotency_key,
     )
     if not ledger_result.get("accepted", False):

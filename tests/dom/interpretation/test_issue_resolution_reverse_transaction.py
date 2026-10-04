@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from app.extensions import db
+from app.services.ledger_provenance_query_service import get_exact_reversal
 from app.feats.base import FEATContext
 from app.models import EntitlementEvent, Transaction
 from app.services import entitlement_service
@@ -38,7 +39,7 @@ def test_DOM_SUP_001__issue_reverse_transaction_creates_reversal_for_unused_purc
     and the teacher's active class matches the issue's class, so the reversal
     succeeds and the item is revoked."""
     classroom, student, issue, tx = issue_reverse_success_state(client, app)
-    status_before = tx.status
+    status_before = tx.posting_state
 
     issue_ref = make_opaque_ref("issue", issue.id)
     page = client.get(f"/admin/issues/{issue_ref}").get_data(as_text=True)
@@ -55,11 +56,11 @@ def test_DOM_SUP_001__issue_reverse_transaction_creates_reversal_for_unused_purc
     db.session.refresh(tx)
     # The original stays a standing historical fact. A reversal may not present
     # it as never having occurred (SPEC-OPS-001 §3.2), and money is not voided
-    # at all (INV-OPS-001) — only the link forward to the reversal is added.
-    assert tx.status == status_before
-    assert tx.reversal_transaction_id is not None
+    # at all (INV-OPS-001). The new child carries the original identity.
+    assert tx.posting_state == status_before
+    assert tx.reversal_transaction_id is None
 
-    reversal = db.session.get(Transaction, tx.reversal_transaction_id)
+    reversal = get_exact_reversal(tx)
     assert reversal is not None
     assert reversal.original_transaction_id == tx.id
     assert reversal.class_id == classroom.class_id
@@ -81,7 +82,12 @@ def test_DOM_SUP_001__issue_refund_retains_the_item(client, app):
     assert response.status_code == 302
 
     db.session.refresh(tx)
-    assert tx.reversal_transaction_id is not None
+    assert tx.reversal_transaction_id is None
+    reversal = get_exact_reversal(tx)
+    assert reversal is not None
+    assert reversal.original_transaction_id == tx.id
+    assert reversal.correlation_id == tx.correlation_id
+    assert reversal.amount == -tx.amount
     assert _revocations(tx) == []
 
 
@@ -116,6 +122,7 @@ def test_DOM_SUP_001__issue_reverse_transaction_rejects_scope_mismatch(client, a
 
     db.session.refresh(tx)
     assert tx.reversal_transaction_id is None
+    assert get_exact_reversal(tx) is None
 
 
 def test_SPEC_OPS_001__payroll_cannot_be_reversed_or_refunded_from_an_issue(client, app):
@@ -190,3 +197,4 @@ def test_DOM_SUP_001__used_item_cannot_be_reversed_or_refunded(client, app):
 
     db.session.refresh(tx)
     assert tx.reversal_transaction_id is None
+    assert get_exact_reversal(tx) is None

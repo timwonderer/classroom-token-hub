@@ -9,10 +9,6 @@ from app.extensions import db
 from app.models import LedgerBalanceSnapshot, Transaction, TransactionStatus, _quantize_currency
 
 
-def _non_void_filter():
-    return Transaction.status != TransactionStatus.VOID
-
-
 class LedgerProofResult(NamedTuple):
     outcome: str
     reconstructed_cents: int | None = None
@@ -61,8 +57,7 @@ def _get_balance_cache(seat_id: int, class_id: str, account_type: str):
 def _get_posted_balance_fallback(seat_id: int, class_id: str, account_type: str) -> Decimal:
     total = db.session.query(db.func.sum(Transaction.amount)).filter(
         Transaction.seat_id == seat_id, Transaction.class_id == class_id,
-        Transaction.account_type == account_type, Transaction.status == TransactionStatus.POSTED,
-        _non_void_filter(),
+        Transaction.account_type == account_type, Transaction.posting_state == TransactionStatus.POSTED,
     ).scalar() or Decimal("0.00")
     return _quantize_currency(total)
 
@@ -75,8 +70,7 @@ def get_posted_balance(seat_id: int, class_id: str, account_type: str) -> Decima
 def get_pending_balance_delta(seat_id: int, class_id: str, account_type: str) -> Decimal:
     pending = db.session.query(db.func.sum(Transaction.amount)).filter(
         Transaction.seat_id == seat_id, Transaction.class_id == class_id,
-        Transaction.account_type == account_type, Transaction.status == TransactionStatus.PENDING,
-        _non_void_filter(),
+        Transaction.account_type == account_type, Transaction.posting_state == TransactionStatus.PENDING,
     ).scalar() or Decimal("0.00")
     return _quantize_currency(pending)
 
@@ -94,7 +88,6 @@ def _available_balance_expression(seat_id: int, class_id: str, account_type: str
         Transaction.seat_id == seat_id,
         Transaction.class_id == class_id,
         Transaction.account_type == account_type,
-        _non_void_filter(),
     )
     snapshot_cents = (
         db.session.query(LedgerBalanceSnapshot.posted_balance_cents)
@@ -108,12 +101,12 @@ def _available_balance_expression(seat_id: int, class_id: str, account_type: str
     )
     posted_sum = (
         db.session.query(func.coalesce(func.sum(Transaction.amount), 0))
-        .filter(*scope, Transaction.status == TransactionStatus.POSTED)
+        .filter(*scope, Transaction.posting_state == TransactionStatus.POSTED)
         .scalar_subquery()
     )
     pending_sum = (
         db.session.query(func.coalesce(func.sum(Transaction.amount), 0))
-        .filter(*scope, Transaction.status == TransactionStatus.PENDING)
+        .filter(*scope, Transaction.posting_state == TransactionStatus.PENDING)
         .scalar_subquery()
     )
     # Same precedence as get_posted_balance: the snapshot when one exists, else
@@ -169,8 +162,7 @@ def get_batch_balances_by_class_seat(class_seat_pairs):
         func.sum(Transaction.amount_cents),
     ).filter(
         Transaction.class_id.in_(class_ids), Transaction.seat_id.in_(seat_ids),
-        tx_scope.in_(list(normalized_pairs)), Transaction.status == TransactionStatus.PENDING,
-        _non_void_filter(),
+        tx_scope.in_(list(normalized_pairs)), Transaction.posting_state == TransactionStatus.PENDING,
     ).group_by(Transaction.class_id, Transaction.seat_id, Transaction.account_type).all():
         key = (str(rec.class_id), int(rec.seat_id))
         if str(rec.account_type).lower() in {"checking", "savings"}:
@@ -180,7 +172,7 @@ def get_batch_balances_by_class_seat(class_seat_pairs):
     ).filter(
         Transaction.class_id.in_(class_ids), Transaction.seat_id.in_(seat_ids),
         tx_scope.in_(list(normalized_pairs)), Transaction.amount > 0,
-        _non_void_filter(), ~Transaction.description.ilike("Transfer%"),
+        ~Transaction.description.ilike("Transfer%"),
     ).group_by(Transaction.class_id, Transaction.seat_id).all():
         raw_balances[(str(rec.class_id), int(rec.seat_id))]["earnings"] = _quantize_currency(rec[2])
     return raw_balances
@@ -191,42 +183,44 @@ def reconstruct_posted_balance(class_id: str, seat_id: int, account_type: str, t
         return LedgerProofResult("UNAVAILABLE", complete=False, code="invalid_scope")
     query = Transaction.query.filter(
         Transaction.class_id == class_id, Transaction.seat_id == seat_id,
-        Transaction.account_type == account_type, Transaction.status == TransactionStatus.POSTED,
-        _non_void_filter(), Transaction.posting_sequence.isnot(None),
+        Transaction.account_type == account_type,
+        Transaction.posting_sequence.isnot(None),
     )
     boundary = through_posting_sequence
     if boundary is None:
-        boundary = db.session.query(db.func.max(Transaction.posting_sequence)).filter(Transaction.class_id == class_id).scalar()
-    if boundary is None:
         return LedgerProofResult("UNAVAILABLE", complete=False, code="missing_posting_boundary")
+    if type(boundary) is not int or boundary < 0:
+        return LedgerProofResult("UNAVAILABLE", complete=False, code="invalid_posting_boundary")
+    if Transaction.query.filter_by(class_id=class_id, seat_id=seat_id, account_type=account_type).filter(Transaction.posting_sequence.is_(None)).first():
+        return LedgerProofResult("UNAVAILABLE", complete=False, code="incomplete_posting_history")
     total = query.filter(Transaction.posting_sequence <= boundary).with_entities(db.func.coalesce(db.func.sum(Transaction.amount_cents), 0)).scalar()
     return LedgerProofResult("PASS", reconstructed_cents=int(total or 0), boundary=int(boundary))
 
 
-def reconstruct_available_balance(class_id: str, seat_id: int, account_type: str) -> LedgerProofResult:
-    posted = reconstruct_posted_balance(class_id, seat_id, account_type)
+def reconstruct_available_balance(class_id: str, seat_id: int, account_type: str, through_posting_sequence: int | None = None) -> LedgerProofResult:
+    posted = reconstruct_posted_balance(class_id, seat_id, account_type, through_posting_sequence)
     if posted.outcome != "PASS":
         return posted
-    pending = db.session.query(db.func.coalesce(db.func.sum(Transaction.amount_cents), 0)).filter(
+    total = db.session.query(db.func.coalesce(db.func.sum(Transaction.amount_cents), 0)).filter(
         Transaction.class_id == class_id, Transaction.seat_id == seat_id,
-        Transaction.account_type == account_type, Transaction.status == TransactionStatus.PENDING,
-        _non_void_filter(),
-    ).scalar()
-    return LedgerProofResult("PASS", reconstructed_cents=posted.reconstructed_cents + int(pending or 0), boundary=posted.boundary)
+        Transaction.account_type == account_type).scalar()
+    return LedgerProofResult("PASS", reconstructed_cents=int(total or 0), boundary=posted.boundary)
 
 
-def verify_posted_balance(class_id: str, seat_id: int, account_type: str) -> LedgerProofResult:
+def verify_posted_balance(class_id: str, seat_id: int, account_type: str, through_posting_sequence: int | None = None) -> LedgerProofResult:
     """Compare the stored balance projection with canonical posted history."""
     if _invalid_balance_scope(class_id, seat_id, account_type):
         return LedgerProofResult("UNAVAILABLE", complete=False, code="invalid_scope")
     snapshot = LedgerBalanceSnapshot.query.filter_by(
         class_id=class_id, seat_id=seat_id, account_type=account_type
     ).first()
-    reconstructed = reconstruct_posted_balance(class_id, seat_id, account_type)
+    reconstructed = reconstruct_posted_balance(class_id, seat_id, account_type, through_posting_sequence)
     if reconstructed.outcome != "PASS":
         return reconstructed
     if snapshot is None:
         return LedgerProofResult("UNAVAILABLE", boundary=reconstructed.boundary, complete=False, code="missing_snapshot")
+    if snapshot.reconciled_through_posting_sequence != reconstructed.boundary:
+        return LedgerProofResult("UNAVAILABLE", boundary=reconstructed.boundary, complete=False, code="snapshot_boundary_mismatch")
     stored = int(snapshot.posted_balance_cents)
     if stored != reconstructed.reconstructed_cents:
         return LedgerProofResult("FAIL", reconstructed_cents=reconstructed.reconstructed_cents,
@@ -234,11 +228,11 @@ def verify_posted_balance(class_id: str, seat_id: int, account_type: str) -> Led
     return reconstructed
 
 
-def verify_available_balance(class_id: str, seat_id: int, account_type: str) -> LedgerProofResult:
+def verify_available_balance(class_id: str, seat_id: int, account_type: str, through_posting_sequence: int | None = None) -> LedgerProofResult:
     """Compare the normal Ledger read with independent canonical reconstruction."""
     if _invalid_balance_scope(class_id, seat_id, account_type):
         return LedgerProofResult("UNAVAILABLE", complete=False, code="invalid_scope")
-    reconstructed = reconstruct_available_balance(class_id, seat_id, account_type)
+    reconstructed = reconstruct_available_balance(class_id, seat_id, account_type, through_posting_sequence)
     if reconstructed.outcome != "PASS":
         return reconstructed
     observed = get_available_balance(seat_id, class_id, account_type)
@@ -249,7 +243,7 @@ def verify_available_balance(class_id: str, seat_id: int, account_type: str) -> 
     return reconstructed
 
 
-def verify_transfer(class_id: str, correlation_id: str) -> TransferProofResult:
+def verify_transfer(class_id: str, correlation_id: str, through_posting_sequences: dict | None = None) -> TransferProofResult:
     if not class_id or not correlation_id:
         return TransferProofResult("UNAVAILABLE", 0, False, False, False, False, False, "invalid_scope")
     rows = Transaction.query.filter_by(class_id=class_id, correlation_id=correlation_id).all()
@@ -263,11 +257,10 @@ def verify_transfer(class_id: str, correlation_id: str) -> TransferProofResult:
     pair_ok = len(rows) == 2 and accounts == {"checking", "savings"} and signs == {True, False}
     magnitude_ok = len(amounts) == 2 and abs(amounts[0]) == abs(amounts[1])
     zero_sum = sum(amounts) == 0
-    posting_ok = all(
-        row.posting_sequence is not None
-        and row.status == TransactionStatus.POSTED
-        for row in rows
-    )
+    boundaries = through_posting_sequences
+    if not isinstance(boundaries, dict) or set(boundaries) != {"checking", "savings"} or any(type(boundaries.get(account)) is not int or boundaries[account] < 0 for account in ("checking", "savings")):
+        return TransferProofResult("UNAVAILABLE", len(rows), scope_ok, pair_ok, magnitude_ok, zero_sum, False, "missing_posting_evidence")
+    posting_ok = all(row.posting_sequence is not None and row.account_type in boundaries and row.posting_sequence <= boundaries[row.account_type] for row in rows)
     if not posting_ok and scope_ok and pair_ok and magnitude_ok and zero_sum:
         return TransferProofResult("UNAVAILABLE", len(rows), scope_ok, pair_ok, magnitude_ok, zero_sum, False, "missing_posting_evidence")
     passed = scope_ok and pair_ok and magnitude_ok and zero_sum and posting_ok
@@ -275,3 +268,20 @@ def verify_transfer(class_id: str, correlation_id: str) -> TransferProofResult:
 
 
 __all__ = ["LedgerProofResult", "TransferProofResult", "get_posted_balance", "get_pending_balance_delta", "get_available_balance", "get_available_balances", "get_batch_balances_by_class_seat", "reconstruct_posted_balance", "reconstruct_available_balance", "verify_posted_balance", "verify_available_balance", "verify_transfer"]
+
+
+def get_account_posting_boundary(seat_id, class_id, account_type):
+    """Normal scoped reconciliation query; proof receives its boundary explicitly."""
+    _require_balance_scope(seat_id, class_id, account_type)
+    return db.session.query(LedgerBalanceSnapshot.reconciled_through_posting_sequence).filter_by(
+        class_id=class_id, seat_id=seat_id, account_type=account_type).scalar()
+
+
+def get_transfer_posting_boundaries(class_id, correlation_id):
+    """Normal Ledger admission query; independent transfer proof receives values."""
+    seats = {seat for seat, in db.session.query(Transaction.seat_id).filter_by(
+        class_id=class_id,correlation_id=correlation_id).distinct().all()}
+    if len(seats) != 1:
+        return None
+    seat_id = next(iter(seats))
+    return {account:get_account_posting_boundary(seat_id,class_id,account) for account in ("checking","savings")}

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-STOR-007 | 1.0 | 2026-09-24 | N/A | Normative |
+| FEAT-STOR-007 | 1.1 | 2026-10-03 | 1.0 | Normative |
 
 ## I. Purpose
 
@@ -44,6 +44,8 @@ When the current cycle's assessment point arrives (`next_assessment_at − previ
 1. request succession for the next period through `schedule_next_bill_cycle`, with that period's boundaries from §IV;
 2. assess that period's premium against the new cycle — the frozen per-period premium (`SPEC-ECON-003` §4.4.2), due at the new cycle's `cycle_boundary_at`;
 3. attempt automatic satisfaction from the seat's available funds through the lawful satisfaction path.
+
+Automatic satisfaction has the independent available-funds eligibility required by DOM-STORE-001 §VIII.E.1. The FEAT supplies Class banking directives and obtains Ledger's pure full-funding conclusion under canonical seat → class serialization. Checking may fund the entire premium, or enabled protection may cover the entire checking shortfall from savings. If neither can fund it completely, no automatic debit is authorized: the premium remains outstanding. The FEAT does not duplicate balance arithmetic or consume a checking-only shortcut that bypasses eligible protection. This conditional automatic intent differs from a student's separately authorized manual payment, which follows FEAT-LED-000's shared charge-funding rule and may debit checking below zero. No additional fee applicability is created.
 
 If automatic satisfaction fails, the premium remains outstanding and the transaction still commits steps 1–2. The student may satisfy it manually at any later time, before or after its due boundary, through the ordinary obligation payment path. Whether a fee applies to the failed attempt is governed by `SPEC-ECON-003` §4.5.1.1, unchanged by this FEAT.
 
@@ -105,7 +107,12 @@ A run that finds nothing due for an entitlement writes nothing.
 - `FEAT-OBL-002` (bill-cycle succession)
 - `FEAT-STOR-002` (entitlement expiry)
 - `FEAT-STOR-003` (claims; eligibility at filing, per-period scope)
+- `FEAT-LED-000` §VIII/XI.5 (typed shared funding, with independent available-funds automatic eligibility)
+- `DOM-CLASS-001` §X (pure banking directives)
 
 ## XIII. Amendment
+
+**1.1 (2026-10-03)** clarifies available-funds eligibility using Ledger-owned full-funding evidence including eligible protection. Retains failed automatic attempts, coverage gating and nonpayment lifecycle; universal funding does not create an unconditional automatic debit.
+
 
 Revisions must remain consistent with `DOM-STORE-001`, `DOM-OBL-001`, `DOM-POL-001`, and `INV-ARC-015`, and SHALL NOT introduce persistence owned by this FEAT.

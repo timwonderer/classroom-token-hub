@@ -7,6 +7,7 @@ Success criteria: template renders (status 200) and contains expected content.
 
 import pytest
 from flask import url_for
+from tests.helpers.ledger import record_ledger_fixture
 from app.models import Transaction, ObligationAssessment
 from app.extensions import db
 from app.utils.canonical_temporal_resolver import utc_now
@@ -43,7 +44,7 @@ def obligations_test_context(app, client):
 
         with FEATContext("FEAT-TEST-OBL-SETUP"):  # Test FEAT for phase 8 verification setup
             # Create sample ledger transaction for payment
-            transaction = Transaction(
+            transaction = record_ledger_fixture(
                 seat_id=student.seat.id,
                 target_seat_id=student.seat.id,
                 actor_seat_id=student.seat.id,

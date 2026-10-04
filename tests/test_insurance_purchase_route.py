@@ -18,7 +18,7 @@ from app.services import insurance_definition_service as insurance_defs
 from app.services import entitlement_read_service
 from app.models import InsuranceClaim
 from app.feats.purchase_insurance_feat import execute_purchase_insurance
-from app.utils.transaction_idempotency import create_idempotent_transaction
+from app.services.ledger_command_service import create_idempotent_transaction
 from tests.helpers.canonical_classroom import provision_classroom, login_student
 from tests.helpers.class_domain import enable_class_feature
 
@@ -99,13 +99,13 @@ def test_marketplace_lists_and_student_can_buy(app, client):
     assert b"You have this coverage" in resp.data
 
 
-def test_purchase_insufficient_funds_flashes_and_writes_nothing(app, client):
+def test_authorized_purchase_can_debit_checking_below_zero(app, client):
     with app.app_context():
         classroom = provision_classroom("chemistry_p1")
         enable_class_feature(class_id=classroom.class_id, feature="insurance")
         policy_uuid = _make_policy(classroom, premium="10.00")
         student = classroom.students[0]
-        _fund(student.seat, "5.00")  # cannot afford the 10.00 premium
+        _fund(student.seat, "5.00")  # shared funding permits the authorized 10.00 debit
         seat_id = student.seat.id
         class_id = classroom.class_id
         login_student(client, student)
@@ -119,7 +119,11 @@ def test_purchase_insufficient_funds_flashes_and_writes_nothing(app, client):
 
     with app.app_context():
         assert entitlement_read_service.has_active_insurance_coverage(
-            seat_id, class_id, policy_uuid) is False
+            seat_id, class_id, policy_uuid) is True
+        from app.services.ledger_balance_query_service import get_available_balances
+        checking, savings = get_available_balances(seat_id, class_id)
+        assert checking == Decimal("-5.00")
+        assert savings == Decimal("0.00")
 
 
 def _student_ctx(classroom):

@@ -8,6 +8,9 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Attendance correction
+- Teachers can inspect completed attendance intervals and invalidate eligible work using a labelled reason, consequence preview, and explicit confirmation. The modal supports keyboard dismissal, focus management and restoration, readable errors, and mobile controls. Unpaid work leaves payroll eligibility; proven paid contributions recover atomically under a shared cap while original scans, payments and signatures remain unchanged. Intervals bounded at class day end without a closing event are identified separately from work still open and cannot be invalidated. Ledger posting derives from scoped reconciliation cursors; its migration is forward-only and requires a read-only production preflight.
+
 ### Removed
 - **Store bundles (SPEC-STORE-001 1.5; schema gate CONTRACT (CODE ONLY), SOP-DB-003)** — A bundle ("a 3-pack") and a bulk purchase ("3 at a bulk price") already stored the same way, as N independent entitlements under one charge, and since DOM-STORE-001 5.4 every redemption verdict moves no money for either, so a bundle was a second concept with no distinct behavior. A pack is now a purchase quantity at a bulk price: a $5 item with "3+ for 20% off" sells three for $12, and a student can still buy one at $5.
   - Removed from the item form, its type-gating JS and form contract (the `multi_unit` rule), `store_service` validation and its definition allow-list (a definition still carrying a bundle field is refused as unknown), the policy resolver, the purchase multiplier (`units_to_grant` is the purchase quantity), the admin and student store cards, the student buy modal, and the redemption modal.

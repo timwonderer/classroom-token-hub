@@ -232,6 +232,7 @@ def emit_audit_event(
     idempotency_key: str | None = None,
     correlation_id: str | None = None,
     request_id: str | None = None,
+    signature_version: int = 1,
 ):
     """Append a tamper-evident event to the audit chain.
 
@@ -330,7 +331,7 @@ def emit_audit_event(
         context_digest=context_digest,
         created_at_utc=now_utc,
         signer_key_id=_SIGNER_KEY_ID,
-        signature_version=_SIGNATURE_VERSION,
+        signature_version=signature_version,
         hmac_signature=event_hash,
     )
     db.session.add(audit_event)

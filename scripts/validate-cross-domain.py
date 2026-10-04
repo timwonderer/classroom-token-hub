@@ -51,6 +51,7 @@ TABLE_DOMAIN = {
     "feature_settings": "DOM-CLASS",
     # DOM-PROD-001 — productivity and payroll facts
     "attendance_sessions": "DOM-PROD",
+    "attendance_interval_invalidation": "DOM-PROD",
     "hall_pass_logs": "DOM-PROD",
     "payroll_event": "DOM-PROD",
     "payroll_cycle_completion": "DOM-PROD",
@@ -114,7 +115,6 @@ FEAT_HARNESS_MODULES = {"app.feats.base"}
 # exist so the gate can fail on *new* coupling instead of staying permanently
 # red on inherited debt. Removing a violation requires deleting its line here.
 BASELINE_COORDINATION = {
-    "app/services/ledger_fee_service.py imports app.feats.ledger_resolution_feat",
     "app/services/payroll/settlement.py imports app.feats.prod",
 }
 BASELINE_FOREIGN_KEYS = {

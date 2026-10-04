@@ -359,3 +359,56 @@ def test_SPEC_LED_002__version_one_reservation_is_compared_under_version_one(cli
                 class_id=classroom.class_id, feat_code="FEAT-LED-000", idempotency_key=key,
                 effects=[{**effect, "amount": Decimal("4.00")}],
             )
+
+
+
+def test_version_four_digest_is_retained_and_version_five_binds_subtype():
+    effect = dict(
+        seat_id=5, target_seat_id=5, actor_seat_id=3, mechanism="teacher",
+        amount=Decimal("-10.00"), account_type="checking", type="REVERSAL",
+        original_transaction_id=7, policy_id=None,
+        compensation_origin_locator="ledger-credit:v1:7", compensation_amount_cents=1000,
+        correction_intent_locator="test:exact", compensation_subtype="issue_refund",
+    )
+    old_digest = "80be73e6b175e8fc5dcb03d05b3a97f9c46d3f62a70f3498d8811442ecad0d3e"
+    assert _replay_fingerprint([effect], 4) == old_digest
+    changed = dict(effect, compensation_subtype="issue_reversal")
+    assert _replay_fingerprint([changed], 4) == old_digest
+    assert _replay_fingerprint([effect], 5) != _replay_fingerprint([changed], 5)
+
+
+def test_version_five_reversal_subtype_replay_mismatch_denies(app):
+    classroom = provision_ledger_classroom("chemistry_p1", app)
+    seat = classroom.students[0].seat
+    with FEATContext("FEAT-LED-001", idempotency_key="subtype-source"):
+        original, _ = create_ledger_idempotent_transaction(
+            idempotency_key="subtype-source", seat_id=seat.id,
+            target_seat_id=seat.id, actor_seat_id=classroom.teacher_seat_id,
+            class_id=classroom.class_id, amount=Decimal("-3.00"),
+            account_type="checking", type="purchase", description="Purchase",
+        )
+    effect = dict(
+        seat_id=seat.id, target_seat_id=seat.id, class_id=classroom.class_id,
+        actor_seat_id=classroom.teacher_seat_id, mechanism="teacher",
+        amount=Decimal("3.00"), account_type="checking", type="REVERSAL",
+        original_transaction_id=original.id, correlation_id=original.correlation_id,
+        compensation_subtype="issue_refund", description="Refund",
+    )
+    with FEATContext("FEAT-LED-002", idempotency_key="subtype-reversal"):
+        created, accepted = create_reserved_effects(
+            class_id=classroom.class_id, feat_code="FEAT-LED-002",
+            idempotency_key="subtype-reversal", effects=[effect],
+        )
+        assert accepted and created[0].compensation_subtype == "issue_refund"
+        assert created[0].command_reservation.fingerprint_version == 5
+        replay, accepted = create_reserved_effects(
+            class_id=classroom.class_id, feat_code="FEAT-LED-002",
+            idempotency_key="subtype-reversal", effects=[effect],
+        )
+        assert not accepted and replay[0].id == created[0].id
+        with pytest.raises(ValueError, match="Replay fingerprint mismatch"):
+            create_reserved_effects(
+                class_id=classroom.class_id, feat_code="FEAT-LED-002",
+                idempotency_key="subtype-reversal",
+                effects=[dict(effect, compensation_subtype="issue_reversal")],
+            )

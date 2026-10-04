@@ -26,16 +26,39 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 PROTECTED_FIELDS_BY_TABLE: dict[str, list[str]] = {
+    "attendance_interval_invalidation": ["id", "class_id", "actor_seat_id", "target_seat_id", "opening_event_id", "closing_event_id", "recorded_at", "reason_code", "idempotency_key", "correlation_id", "receipt_json"],
+    "payroll_event": [
+        "id", "class_id", "payroll_cycle_id", "actor_seat_id", "target_seat_id",
+        "correlation_id", "idempotency_key", "policy_uuid", "mechanism",
+        "payroll_event_type", "recorded_at", "summary_json",
+    ],
     # Keep both names during the Wave 5 table rename transition.
     "transaction": [
         "amount", "account_type", "type", "status",
         "class_id", "seat_id", "description", "correlation_id",
     ],
     "ledger_transaction": [
-        "amount", "account_type", "type", "status",
-        "class_id", "seat_id", "description", "correlation_id",
-    ],
+        "id", "class_id", "actor_seat_id", "target_seat_id", "mechanism", "amount_cents",
+        "timestamp", "account_type", "description", "correlation_id", "feat_code",
+        "idempotency_key", "policy_id", "type", "posting_sequence", "command_reservation_id",
+        "compensation_origin_locator", "compensation_amount_cents", "correction_intent_locator"],
 }
+
+
+LEDGER_FIELDS_BY_VERSION = {
+    2: (
+        "id", "class_id", "actor_seat_id", "target_seat_id", "mechanism", "amount_cents",
+        "timestamp", "account_type", "description", "correlation_id", "feat_code",
+        "idempotency_key", "policy_id", "type", "posting_sequence", "command_reservation_id",
+    ),
+    3: (
+        "id", "class_id", "actor_seat_id", "target_seat_id", "mechanism", "amount_cents",
+        "timestamp", "account_type", "description", "correlation_id", "feat_code",
+        "idempotency_key", "policy_id", "type", "posting_sequence", "command_reservation_id",
+        "compensation_origin_locator", "compensation_amount_cents", "correction_intent_locator",
+    ),
+}
+
 
 
 # ---------------------------------------------------------------------------
@@ -267,7 +290,15 @@ def verify_row_lineage(
                 detail=f"AuditEvent id={lineage_event_id} not found — deleted or never created",
             )
 
+        if table_name == "ledger_transaction" and event.signature_version not in {2,3}:
+            return RowVerificationResult(table_name=table_name, row_pk=row_pk_str,
+                state=LineageState.DEGRADED, lineage_event_id=lineage_event_id,
+                failure_type="VERIFIER_COVERAGE_UNAVAILABLE",
+                detail="Historical Ledger signature uses a retired stored-state payload; current canonical coverage is unavailable.")
+
         protected_fields = PROTECTED_FIELDS_BY_TABLE.get(table_name)
+        if table_name == "ledger_transaction":
+            protected_fields = LEDGER_FIELDS_BY_VERSION[event.signature_version]
         if protected_fields is None:
             return RowVerificationResult(
                 table_name=table_name,
@@ -278,10 +309,11 @@ def verify_row_lineage(
                 detail=f"No protected field definition for table '{table_name}'",
             )
 
-        current_values = {
-            f: getattr(model_instance, f, None)
-            for f in protected_fields
-        }
+        if any(not hasattr(model_instance, field) for field in protected_fields):
+            return RowVerificationResult(table_name=table_name, row_pk=row_pk_str,
+                state=LineageState.DEGRADED, lineage_event_id=lineage_event_id,
+                failure_type="VERIFIER_COVERAGE_UNAVAILABLE", detail="Required protected field is unavailable.")
+        current_values = {f: getattr(model_instance, f) for f in protected_fields}
         current_digest = _compute_payload_digest(
             event.table_name,
             event.row_pk,
@@ -381,3 +413,281 @@ def record_integrity_verification(results: list[VerificationResult]) -> None:
     ]
     if failed:
         logger.warning("Invariant check failures: %s", json.dumps(failed))
+
+
+def verify_record_creation_lineage(table, row, class_id, *, required_fields=()):
+    """Pure Operations proof: scoped creation pointer, payload, coverage and complete chain.
+
+    Required field coverage fails closed when an owner needs evidence its runtime
+    protected-field registration does not yet provide. It never substitutes old
+    field values or repairs historical evidence.
+    """
+    from app.services.audit_service import LineageState
+    from app.models import AuditEvent, ChainHead
+    pointer = getattr(row, "lineage_event_id", None)
+    if pointer is None:
+        return False
+    event = db.session.get(AuditEvent, pointer)
+    if event is None or event.table_name != table or event.row_pk != str(row.id) or event.class_id != class_id:
+        return False
+    fields=PROTECTED_FIELDS_BY_TABLE.get(table, ())
+    if table == "ledger_transaction":
+        fields = LEDGER_FIELDS_BY_VERSION.get(event.signature_version, ())
+    if not set(required_fields).issubset(fields) or any(not hasattr(row,field) for field in fields):
+        return False
+    if event.chain_scope != f"class:{class_id}" or event.operation != "INSERT":
+        return False
+    if row.lineage_token != event.hmac_signature or row.lineage_version != event.signature_version:
+        return False
+    head = db.session.get(ChainHead, event.chain_scope)
+    if head is None or event.sequence_number > head.latest_sequence:
+        return False
+    verification = verify_chain(event.chain_scope, limit=head.latest_sequence + 1)
+    if (verification.state != LineageState.VERIFIED or verification.event_count != head.latest_sequence
+            or verification.last_good_hash != head.latest_hash or head.event_count != verification.event_count):
+        return False
+    return verify_row_lineage(table, row.id, row).state == LineageState.VERIFIED
+
+
+@dataclass(frozen=True)
+class VerifiedCreationEvidence:
+    """Operations-owned immutable result supplied by an authorized FEAT.
+
+    Consumers match the complete scoped result against their own current
+    sources; this is never a client boolean or permission to omit a candidate.
+    """
+    table_name: str
+    row_pk: str
+    class_id: str
+    lineage_event_id: int
+    lineage_token: str
+    signature_version: int
+    protected_fields: tuple[str, ...]
+    protected_values: tuple[tuple[str, object], ...]
+
+
+def _freeze_evidence_value(value):
+    if isinstance(value, dict):
+        return tuple((key, _freeze_evidence_value(item)) for key, item in sorted(value.items()))
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze_evidence_value(item) for item in value)
+    return value
+
+
+def verified_creation_evidence(table, row, class_id, *, required_fields=()):
+    """Pure scoped Operations proof with exact linked-version coverage.
+
+    Returns None on any unavailable or failed proof. Ledger and other owners
+    receive this result through FEAT orchestration, never through domain calls.
+    """
+    if not verify_record_creation_lineage(table, row, class_id, required_fields=required_fields):
+        return None
+    from app.models import AuditEvent
+    event = db.session.get(AuditEvent, row.lineage_event_id)
+    fields = (LEDGER_FIELDS_BY_VERSION.get(event.signature_version, ())
+        if table == 'ledger_transaction' else tuple(PROTECTED_FIELDS_BY_TABLE.get(table, ())))
+    return VerifiedCreationEvidence(table, str(row.id), class_id, row.lineage_event_id,
+        row.lineage_token, event.signature_version, tuple(fields),
+        tuple((field, _freeze_evidence_value(getattr(row, field))) for field in fields))
+
+
+# A source descriptor, not a per-record emitter assignment. The exact deployed
+# writers both declared eleven fields; the retired verifier listed only eight.
+HISTORICAL_LEDGER_V1_CANDIDATE_FIELDS = (
+    "amount", "account_type", "type", "status", "class_id", "seat_id",
+    "target_seat_id", "actor_seat_id", "mechanism", "description", "correlation_id",
+)
+HISTORICAL_LEDGER_V1_SOURCE_REVISION = "ad9574334d72fd92cc93402e851ab0ebc22aaad9"
+
+
+@dataclass(frozen=True)
+class HistoricalAuditCoverage:
+    """Observations only: never lawful-creation or compensation proof."""
+
+    table_name: str
+    row_pk: str
+    class_id: str
+    signature_version: int | None
+    envelope_status: str
+    chain_status: str
+    candidate_protected_fields: tuple[str, ...]
+    confirmed_protected_fields: tuple[str, ...]
+    unavailable_protected_fields: tuple[str, ...]
+    reasons: tuple[str, ...]
+
+    def as_dict(self):
+        from dataclasses import asdict
+        return asdict(self)
+
+
+def diagnose_historical_audit_coverage(
+    table, row, class_id, *, source_descriptor=None, emitter_provenance=None,
+    max_chain_events=1000,
+):
+    """Single-row form of the bounded diagnostic; never creation evidence."""
+    return diagnose_historical_audit_coverages(
+        table, (row,), class_id, source_descriptor=source_descriptor,
+        emitter_provenance=emitter_provenance, max_chain_events=max_chain_events,
+    )[0]
+
+
+def _historical_head_snapshot(scope):
+    """Scalar read avoids ORM identity caching and preserves pending changes."""
+    from app.models import ChainHead
+    return (ChainHead.query.with_entities(
+        ChainHead.latest_sequence, ChainHead.event_count, ChainHead.latest_hash,
+    ).filter_by(chain_scope=scope).first())
+
+
+def _diagnose_historical_audit_coverages(
+    table, rows, class_id, *, source_descriptor=None, emitter_provenance=None,
+    max_chain_events=1000, max_rows=1000,
+):
+    """Pure batch: one complete class-chain walk, row-local coverage checks.
+
+    All reuse is within this invocation. No caller-provided verification result,
+    historic state substitution, persisted cache, or canonical helper override.
+    """
+    from itertools import islice
+    from app.models import AuditEvent, ChainHead
+
+    for budget in (max_chain_events, max_rows):
+        if (not isinstance(budget, int) or isinstance(budget, bool)
+                or not 1 <= budget <= 1000):
+            raise ValueError("Invalid audit evidence bound.")
+    if source_descriptor is not None or emitter_provenance is not None:
+        raise ValueError("Historical emitter assignment is unavailable.")
+    if table not in PROTECTED_FIELDS_BY_TABLE or not class_id:
+        raise ValueError("Unsupported audit diagnostic scope.")
+    selected = tuple(islice(iter(rows), max_rows + 1))
+    if len(selected) > max_rows:
+        raise ValueError("Audit diagnostic row bound exceeded.")
+    if any(getattr(row, "class_id", None) != class_id for row in selected):
+        raise ValueError("Unauthorized audit diagnostic scope.")
+    if not selected:
+        return ()
+    scope = f"class:{class_id}"
+    with db.session.no_autoflush:
+        head = None
+        events = ()
+        chain_status, chain_reason = "UNAVAILABLE", "MISSING_CHAIN_HEAD"
+        if any(getattr(row, "lineage_event_id", None) is not None for row in selected):
+            head = _historical_head_snapshot(scope)
+            if not _SIGNING_KEY:
+                chain_reason = "AUDIT_KEY_UNAVAILABLE"
+            elif head is not None:
+                if (not isinstance(head.latest_sequence, int) or head.latest_sequence < 0
+                        or not isinstance(head.event_count, int) or head.event_count < 0):
+                    return tuple(HistoricalAuditCoverage(
+                        table, str(getattr(row, "id", "")), class_id, None,
+                        "INVALID", "INVALID", (), (), (), ("MALFORMED_CHAIN_HEAD",),
+                    ) for row in selected)
+                events = (AuditEvent.query.filter_by(chain_scope=scope)
+                          .order_by(AuditEvent.sequence_number.asc())
+                          .limit(max_chain_events + 1).all())
+                if len(events) > max_chain_events or head.latest_sequence > max_chain_events:
+                    chain_reason = "EVIDENCE_LIMIT_EXCEEDED"
+                else:
+                    previous = "genesis"
+                    chain_status, chain_reason = "COMPLETE", None
+                    for position, item in enumerate(events, 1):
+                        if (item.sequence_number != position or item.previous_hash != previous
+                                or item.class_id != class_id):
+                            chain_status, chain_reason = "INVALID", "CHAIN_CONTINUITY_MISMATCH"
+                            break
+                        expected = _compute_event_hash(
+                            _SIGNING_KEY, previous, scope, position, item.table_name,
+                            item.row_pk, item.operation, _rebuild_actor_context_json(item),
+                            item.payload_digest, _utc_isoformat(item.created_at_utc),
+                        )
+                        if expected != item.event_hash or item.hmac_signature != item.event_hash:
+                            chain_status, chain_reason = "INVALID", "ENVELOPE_HMAC_MISMATCH"
+                            break
+                        previous = item.event_hash
+                    final_head = _historical_head_snapshot(scope)
+                    if final_head != head:
+                        # A legitimate concurrent append changes the head atomically.
+                        # Report a stale observation, not an integrity incident.
+                        chain_status, chain_reason = "UNAVAILABLE", "EVIDENCE_CHANGED_DURING_READ"
+                    elif chain_status == "COMPLETE" and (
+                            len(events) != head.latest_sequence or len(events) != head.event_count
+                            or previous != head.latest_hash):
+                        chain_status, chain_reason = "INVALID", "CHAIN_HEAD_MISMATCH"
+        by_id = {event.id: event for event in events}
+        outcomes = []
+        for row in selected:
+            row_pk = str(getattr(row, "id", ""))
+            pointer = getattr(row, "lineage_event_id", None)
+            event = by_id.get(pointer)
+            version = event.signature_version if event is not None else None
+            candidate = (HISTORICAL_LEDGER_V1_CANDIDATE_FIELDS if version == 1
+                         and table in ("ledger_transaction", "transaction")
+                         else LEDGER_FIELDS_BY_VERSION.get(version, ())
+                         if table == "ledger_transaction"
+                         else tuple(PROTECTED_FIELDS_BY_TABLE.get(table, ())))
+
+            def result(envelope, reason, confirmed=(), row_chain_status=None):
+                reasons = () if reason is None else (reason,) if isinstance(reason, str) else reason
+                outcomes.append(HistoricalAuditCoverage(
+                    table, row_pk, class_id, version, envelope,
+                    row_chain_status or chain_status, tuple(candidate), tuple(confirmed),
+                    tuple(field for field in candidate if field not in confirmed), tuple(reasons),
+                ))
+
+            if pointer is None:
+                result("UNAVAILABLE", "MISSING_LINEAGE", row_chain_status="UNAVAILABLE")
+            elif chain_status == "UNAVAILABLE":
+                result("UNAVAILABLE", chain_reason)
+            elif event is None:
+                result("INVALID", "LINKED_EVENT_SCOPE_OR_MISSING")
+            elif (event.class_id != class_id or event.chain_scope != scope
+                    or event.table_name != table or event.row_pk != row_pk
+                    or event.operation != "INSERT"
+                    or getattr(row, "lineage_token", None) != event.hmac_signature
+                    or getattr(row, "lineage_version", None) != version):
+                result("INVALID", "LINKAGE_MISMATCH")
+            elif chain_status == "INVALID":
+                result("INVALID", chain_reason)
+            elif version == 1 and table in ("ledger_transaction", "transaction"):
+                result("AUTHENTICATED", (
+                    "PER_RECORD_EMITTER_PROVENANCE_UNAVAILABLE",
+                    "ORIGINAL_PROTECTED_VALUES_UNAVAILABLE", "UNSIGNED_MONETARY_PROVENANCE",
+                ))
+            elif not candidate:
+                result("AUTHENTICATED", "UNSUPPORTED_SIGNATURE_VERSION")
+            elif any(not hasattr(row, field) for field in candidate):
+                result("AUTHENTICATED", "PROTECTED_FIELD_UNAVAILABLE")
+            elif _compute_payload_digest(
+                    table, row_pk, "INSERT", class_id,
+                    {field: getattr(row, field) for field in candidate},
+            ) != event.payload_digest:
+                result("AUTHENTICATED", "PROTECTED_PAYLOAD_MISMATCH")
+            else:
+                result("AUTHENTICATED", None, confirmed=candidate)
+        return tuple(outcomes)
+
+
+def diagnose_historical_audit_coverages(
+    table, rows, class_id, *, source_descriptor=None, emitter_provenance=None,
+    max_chain_events=1000, max_rows=1000,
+):
+    """Bounded batch public boundary; infrastructure failures remain unavailable."""
+    from itertools import islice
+    from sqlalchemy.exc import SQLAlchemyError
+    if (not isinstance(max_rows, int) or isinstance(max_rows, bool)
+            or not 1 <= max_rows <= 1000):
+        raise ValueError("Invalid audit evidence bound.")
+    with db.session.no_autoflush:
+        selected = tuple(islice(iter(rows), max_rows + 1))
+        try:
+            return _diagnose_historical_audit_coverages(
+                table, selected, class_id, source_descriptor=source_descriptor,
+                emitter_provenance=emitter_provenance, max_chain_events=max_chain_events,
+                max_rows=max_rows,
+            )
+        except SQLAlchemyError:
+            # Do not repair IntegrityStatus or roll back another owner's transaction.
+            return tuple(HistoricalAuditCoverage(
+                table, str(getattr(row, "id", "")), class_id, None, "UNAVAILABLE",
+                "UNAVAILABLE", (), (), (), ("AUDIT_INFRASTRUCTURE_UNAVAILABLE",),
+            ) for row in selected)

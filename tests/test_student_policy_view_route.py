@@ -19,7 +19,7 @@ from app.feats.class_configuration import configure_insurance_definition
 from app.feats.purchase_insurance_feat import execute_purchase_insurance
 from app.services.context_resolver import CanonicalContext
 from app.utils.canonical_temporal_resolver import utc_now
-from app.utils.transaction_idempotency import create_idempotent_transaction
+from app.services.ledger_command_service import create_idempotent_transaction
 from tests.helpers.canonical_classroom import provision_classroom, login_student
 from tests.helpers.class_domain import enable_class_feature
 

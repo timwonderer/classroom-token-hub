@@ -253,7 +253,7 @@
             <tbody>
               {% if transactions %}
               {% for tx in transactions %}
-              <tr class="{% if tx.is_void %}table-secondary text-muted{% endif %}">
+              <tr>
                 <td>
                   {% if tx.timestamp %}{{ tx.timestamp|fmt_timestamp }}{% else %}N/A{% endif %}
                 </td>
@@ -270,17 +270,15 @@
                 </td>
                 <td class="{% if tx.amount > 0 %}text-success{% else %}text-danger{% endif %} fw-bold text-end">
                   ${{ "%.2f"|format(tx.amount) }}
-                  {% if tx.is_void %}<span class="badge bg-secondary ms-1">VOID</span>{% endif %}
+                  <span class="badge bg-secondary ms-1">{{ tx.posting_state|title }}</span>
                 </td>
                 <td>{{ tx.description or '—' }}</td>
                 <td>
-                  {% if not tx.is_void %}
+                  {% if tx.can_reverse %}
                   <button type="button" class="btn btn-sm btn-outline-danger" onclick="voidTransaction({{ tx.id }})"
-                    title="Void transaction">
+                    title="Reverse transaction" aria-label="Reverse transaction">
                     <span class="material-symbols-outlined" aria-hidden="true">cancel</span>
                   </button>
-                  {% else %}
-                  <span class="text-muted small">Voided</span>
                   {% endif %}
                 </td>
               </tr>
@@ -496,7 +494,7 @@
 <script>
   // Void Transaction
   async function voidTransaction(transactionId) {
-    if (!confirm('Are you sure you want to void this transaction? This cannot be undone.')) return;
+    if (!confirm('Reverse this transaction? A compensating entry will be added to its history.')) return;
 
     try {
       const resp = await window.AppCore.csrfFetch(`/admin/void-transaction/${transactionId}`, {
@@ -509,13 +507,13 @@
 
       const data = await resp.json();
       if (data.status === 'success') {
-        showToast('Transaction voided successfully', 'success');
+        showToast('Transaction reversed successfully', 'success');
         setTimeout(() => location.reload(), 1000);
       } else {
-        showToast(data.message || 'Failed to void transaction', 'error');
+        showToast(data.message || 'Failed to reverse transaction', 'error');
       }
     } catch (err) {
-      showToast('Error voiding transaction', 'error');
+      showToast('Error reversing transaction', 'error');
     }
   }
 

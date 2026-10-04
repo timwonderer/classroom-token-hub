@@ -8,6 +8,7 @@ law — a teacher cannot widen or narrow it — so these tests pin every predica
 * structural gates (not-found, wrong class, wrong seat, not-a-loss) that never
   touch the DB and are exercised with lightweight in-memory ``Transaction`` rows;
 * category gates (transfer, obligation, globally-disallowed type);
+* compensated-loss exclusion using a persisted original and its immutable refund;
 * entitlement-linked gates resolved through shared correlation lineage
   (collective-goal exclusion; item purchased-and-USED requirement; item
   revoked/expired exclusion) which require persisted ``EntitlementEvent`` rows.
@@ -22,11 +23,14 @@ from app.extensions import db
 from app.feats.base import FEATContext
 from app.models import EntitlementEvent, Transaction
 from app.services import insurance_eligibility_contract as eligibility
+from app.services.ledger_correction_service import reverse_transaction
+from app.services.ledger_provenance_query_service import get_exact_reversal
+from tests.helpers.ledger import create_ledger_idempotent_transaction
 from tests.helpers.classroom_initializer import initialize
 
 
 # ---------------------------------------------------------------------------
-# Structural gates — no DB access, so an unpersisted Transaction row suffices.
+# Structural gates use unpersisted rows; compensation requires real Ledger history.
 # ---------------------------------------------------------------------------
 
 def _txn(*, class_id, seat_id, amount, ttype="purchase", correlation_id=None):
@@ -133,12 +137,35 @@ class TestStructuralGates:
             assert verdict.eligible is True
 
     def test_loss_with_compensating_entry_is_not_insurable(self, app):
+        classroom = initialize("chemistry_p1", app)
+        seat = classroom.students[0].seat
         with app.app_context():
-            txn = _txn(class_id="c1", seat_id=1, amount="-5.00")
-            txn.id = 42
-            txn.reversal_transaction_id = 99
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key="insurance-loss:seed"):
+                txn, _ = create_ledger_idempotent_transaction(
+                    idempotency_key="insurance-loss:original",
+                    class_id=classroom.class_id, seat_id=seat.id,
+                    amount=Decimal("-5.00"), account_type="checking",
+                    type="purchase", description="Insurance claim loss",
+                )
+            original_facts = (txn.amount, txn.correlation_id, txn.lineage_token)
+            with FEATContext("FEAT-LED-002", correlation_id=txn.correlation_id,
+                             idempotency_key="insurance-loss:refund"):
+                reversal = reverse_transaction(
+                    txn, description="Refund before insurance claim",
+                    idempotency_key="insurance-loss:refund",
+                    actor_seat_id=classroom.teacher_seat.id,
+                    compensation_type="refund",
+                )
+            db.session.refresh(txn)
+            assert txn.reversal_transaction_id is None
+            assert (txn.amount, txn.correlation_id, txn.lineage_token) == original_facts
+            assert get_exact_reversal(txn).id == reversal.id
+            assert reversal.original_transaction_id == txn.id
+            assert reversal.correlation_id == txn.correlation_id
+            assert reversal.amount == -txn.amount
+            assert reversal.compensation_subtype == "refund"
             verdict = eligibility.evaluate_transaction_claim_basis(
-                txn, class_id="c1", covered_seat_id=1
+                txn, class_id=classroom.class_id, covered_seat_id=seat.id
             )
             assert verdict.eligible is False
             assert verdict.reason_code == eligibility.ALREADY_COMPENSATED

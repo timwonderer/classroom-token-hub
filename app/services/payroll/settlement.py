@@ -33,7 +33,7 @@ from app.models import (
     PayrollEvent,
     Seat,
 )
-from app.services.attendance_service import calculate_payable_attendance_seconds
+from app.services.attendance_service import (calculate_payable_attendance_seconds, calculate_seat_payroll_intervals, lock_attendance_seat, close_due_attendance_intervals)
 from app.services.context_resolver import CanonicalContext
 from app.services.identity_service import resolve_teacher_seat_for_class
 from app.services.payroll.schedule import SCHEDULED_OCCURRENCE_KEY
@@ -186,10 +186,16 @@ def settle_class_payroll_cycle(
     skipped: list[int] = []
     events: list[PayrollEvent] = []
 
-    for seat_id in _eligible_seat_ids(class_id):
+    seat_ids = _eligible_seat_ids(class_id)
+    for seat_id in seat_ids:
+        lock_attendance_seat(seat_id, class_id)
+    for seat_id in seat_ids:
         if _already_settled(class_id, seat_id, payroll_cycle_id):
             skipped.append(seat_id)
             continue
+        close_due_attendance_intervals(ctx=ctx, seat_id=seat_id, as_of_utc=boundary_utc)
+        if calculate_seat_payroll_intervals(seat_id, class_id, ctx=ctx, as_of_utc=boundary_utc).unprovable:
+            raise ClassSettlementError("Historical partial settlement has no provable interval membership.")
         # A seat with no closed, unpaid session has nothing to settle and gets no
         # payroll event: an open session is paid once it closes.
         if calculate_payable_attendance_seconds(

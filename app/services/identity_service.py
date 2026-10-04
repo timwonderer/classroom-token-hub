@@ -110,3 +110,16 @@ def match_hall_pass_profiles(*, class_id: str, first_name: str, last_name: str):
             if len(matches) == 2:
                 break
     return matches
+
+
+def resolve_teacher_target_seat(*, ctx, target_seat_id):
+    """Pure Identity proof of canonical teacher and class-local student anchors."""
+    if (ctx is None or getattr(ctx, 'actor_role', None) != 'teacher'
+            or not getattr(ctx, 'class_id', None) or not getattr(ctx, 'seat_id', None)):
+        raise ValueError('UNAUTHORIZED_SCOPE')
+    actor = Seat.query.filter_by(id=ctx.seat_id, class_id=ctx.class_id,
+        user_id=ctx.user_id, role='teacher').first()
+    target = Seat.query.filter_by(id=target_seat_id, class_id=ctx.class_id, role='student').first()
+    if actor is None or target is None:
+        raise ValueError('UNAUTHORIZED_SCOPE')
+    return target

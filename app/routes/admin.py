@@ -50,7 +50,7 @@ from app.feats.base import requires_feat_context, FEATContext, InvariantViolatio
 from app.access.scope import Scope
 from app.access import AccessScopeDenied, resolve_scope
 from app.models import (
-    ClassEconomy, Transaction, TransactionStatus, AttendanceSession, StoreProduct, StoreItemVisibility,
+    ClassEconomy, Transaction, AttendanceSession, StoreProduct, StoreItemVisibility,
     # Legacy tap table removed; use attendance_sessions (DOM-PROD-001).
     # StudentItem removed — student_items unauthorized; use store_purchases + redemption_events (DOM-STORE-001)
     # StoreItemBlock removed — store_item_blocks unauthorized; use store_item_visibility (DOM-STORE-001)
@@ -193,7 +193,7 @@ from app.utils.student_deletion import (
 )
 from app.utils.seat_scope import seat_scoped_filter, transaction_scope_filter
 from app.feats.identity_feat import remove_pending_student_seat
-from app.feats.prod import record_attendance_session, record_payroll_event, record_payroll_reversal
+from app.feats.prod import record_attendance_session, record_payroll_event
 from app.feats.complete_payroll_cycle import complete_payroll_cycle
 from app.services.payroll.settlement import NoPayableAttendanceError, PayrollNotConfiguredError
 from app.services.payroll.corrections import (
@@ -1368,6 +1368,53 @@ def _read_student_detail_nav_token(token: str) -> dict | None:
     return payload if isinstance(payload, dict) else None
 
 
+def _attendance_interval_page(intervals, *, seat_id, class_id, actor_public_id):
+    """Paginate completed PROD projections, never a truncated scan timeline.
+
+    The signed chronological cursor is bound to the same principal and target
+    as student navigation. Newly recorded attendance cannot shift older pages.
+    """
+    serializer = URLSafeTimedSerializer(
+        current_app.config["SECRET_KEY"], salt="cth-attendance-detail-page-v1"
+    )
+    scope = {
+        "user_id": str(g.canonical_context.user_id),
+        "class_id": str(class_id), "seat_id": int(seat_id),
+    }
+    cursor = request.args.get("attendance_cursor")
+    boundary = None
+    if cursor:
+        try:
+            payload = serializer.loads(cursor, max_age=3600)
+            if not isinstance(payload, dict) or any(payload.get(k) != v for k, v in scope.items()):
+                abort(404)
+            key = payload.get("before")
+            if not isinstance(key, list) or len(key) != 3:
+                abort(404)
+            boundary = (ensure_utc(datetime.fromisoformat(key[0])), int(key[1]), int(key[2]))
+        except (BadSignature, SignatureExpired, ValueError, TypeError, OverflowError):
+            abort(404)
+
+    def interval_key(interval):
+        return (ensure_utc(interval.closed_at), interval.opening_event_id, interval.closing_event_id)
+
+    completed = sorted(
+        (interval for interval in intervals if interval.closing_event_id is not None),
+        key=interval_key, reverse=True,
+    )
+    remaining = [interval for interval in completed if boundary is None or interval_key(interval) < boundary]
+    page = remaining[:50]
+    nav = _issue_student_detail_nav_token(actor_public_id=actor_public_id, class_id=class_id)
+    base_args = {"actor_public_id": actor_public_id, "nav": nav, "tab": "attendance"}
+    older_url = None
+    if len(remaining) > 50:
+        last_key = interval_key(page[-1])
+        token = serializer.dumps({**scope, "before": [last_key[0].isoformat(), last_key[1], last_key[2]]})
+        older_url = url_for("admin.student_detail_public", **base_args, attendance_cursor=token, _anchor="attendance")
+    newest_url = url_for("admin.student_detail_public", **base_args, _anchor="attendance") if cursor else None
+    return page, older_url, newest_url, len(completed)
+
+
 def _resolve_student_detail_seat(actor_public_id: str) -> Seat | None:
     selected_class_id = (getattr(getattr(g, "canonical_context", None), "class_id", None) or "").strip()
     # No class scope, no answer. The class filter used to be conditional, so a
@@ -2360,7 +2407,6 @@ def dashboard():
         Transaction.query
         .filter(Transaction.class_id == active_class_id)
         .filter(Transaction.seat_id.in_(claimed_seat_ids) if claimed_seat_ids else sa.false())
-        .filter(Transaction.status != TransactionStatus.VOID)
         .order_by(Transaction.timestamp.desc())
         .limit(5)
         .all()
@@ -2375,8 +2421,7 @@ def dashboard():
         .filter(Transaction.seat_id.in_(claimed_seat_ids) if claimed_seat_ids else sa.false())
         .filter(
             Transaction.timestamp >= today_start_db,
-            Transaction.status != TransactionStatus.VOID,
-        )
+            )
         .count()
     )
 
@@ -3257,6 +3302,8 @@ def student_detail_public(actor_public_id):
     """View detailed information for a specific student via public-id URL."""
     user_id = g.canonical_context.user_id
     current_class_id = g.canonical_context.class_id
+    if not current_class_id:
+        abort(404)
     nav_payload = _read_student_detail_nav_token(request.args.get('nav', ''))
     if not nav_payload:
         abort(404)
@@ -3298,10 +3345,6 @@ def student_detail_public(actor_public_id):
         abort(404)
 
     tx_scope = sa.and_(Transaction.seat_id == seat_id, Transaction.class_id == class_id)
-    att_scope = sa.and_(
-        AttendanceSession.target_seat_id == seat_id,
-        AttendanceSession.class_id == class_id,
-    )
 
     # Attendance context uses the canonical PROD session backend.
     # Rent is a class feature; its status comes from recorded rent assessments,
@@ -3346,12 +3389,15 @@ def student_detail_public(actor_public_id):
         )
         for ent in _entitlements_raw
     ]
-    attendance_rows = (
-        AttendanceSession.query.filter(att_scope)
-        .order_by(AttendanceSession.timestamp.desc(), AttendanceSession.id.desc())
-        .limit(50)
-        .all()
+    from app.services.attendance_service import (
+        list_attendance_interval_evidence, calculate_seat_payroll_intervals,
     )
+    attendance_rows, interval_projections = list_attendance_interval_evidence(
+        seat_id, class_id, ctx=g.canonical_context,
+    )
+    attendance_estimate_incomplete = bool(calculate_seat_payroll_intervals(
+        seat_id, class_id, ctx=g.canonical_context,
+    ).unprovable)
     class_section = (
         scoped_seat.class_economy.section
         if scoped_seat and scoped_seat.class_economy and scoped_seat.class_economy.section
@@ -3367,7 +3413,133 @@ def student_detail_public(actor_public_id):
         )
         for row in attendance_rows
     ]
-    latest_attendance_event = attendance_display_rows[0] if attendance_display_rows else None
+    latest_attendance_event = attendance_display_rows[-1] if attendance_display_rows else None
+    # INV-ARC-007 / DOM-PROD-001: reads compose authoritative domain queries;
+    # this route only formats their conclusions and original evidence.
+    from app.services.payroll_interval_provenance import (
+        payroll_interval_memberships, payroll_provenance_history_limitations,
+    )
+    from app.services.ledger_payroll_allocation import payroll_allocation_proof, get_payroll_credit_evidence_records
+    from app.feats.attendance_interval_invalidation_feat import ledger_creation_proofs
+    from app.services.ledger_balance_query_service import get_account_posting_boundary
+    from app.utils.audit_verifier import verify_record_creation_lineage
+    interval_page, attendance_older_url, attendance_newest_url, attendance_completed_count = _attendance_interval_page(
+        interval_projections, seat_id=seat_id, class_id=class_id, actor_public_id=actor_public_id,
+    )
+    memberships = payroll_interval_memberships(seat_id, class_id, ctx=g.canonical_context)
+    proofs = {}
+    historical_details = {}
+    historical_denial = None
+    if any(m.get('status') == 'historical_unavailable' or m.get('requires_reconstruction') for m in memberships.values()):
+        from app.feats.attendance_interval_invalidation_feat import historical_attendance_interval_details
+        try:
+            historical_details = historical_attendance_interval_details(ctx=g.canonical_context,target_seat_id=seat_id)
+        except ValueError as exc:
+            historical_denial = getattr(exc,'evidence_reason',str(exc))
+    source_events_by_id = {row.id: row for row in attendance_rows}
+    paired_source_ids = set()
+
+    def interval_sources(interval):
+        # Only PROD-selected endpoint IDs prove this pair. Other original scans
+        # remain visible separately; temporal proximity cannot assign them to it.
+        ids = [interval.opening_event_id]
+        if interval.closing_event_id is not None:
+            ids.append(interval.closing_event_id)
+        return [source_events_by_id[event_id] for event_id in ids]
+
+    for interval in interval_projections:
+        paired_source_ids.update(row.id for row in interval_sources(interval))
+
+    from app.models import AttendanceIntervalInvalidation
+    invalidated_pairs = {(r.opening_event_id,r.closing_event_id) for r in AttendanceIntervalInvalidation.query.filter_by(class_id=class_id,target_seat_id=seat_id).all()}
+
+    def display_interval(interval):
+        minutes, seconds = divmod(interval.credited_seconds, 60)
+        hours, minutes = divmod(minutes, 60)
+        duration_label = f"{hours}h {minutes}m {seconds}s" if hours else f"{minutes}m {seconds}s"
+        membership = memberships.get((interval.opening_event_id, interval.closing_event_id), {})
+        status = membership.get("status", "unpaid")
+        event = membership.get("event")
+        amount = pricing_inputs = None
+        original_records = ()
+        # Temporal proximity is an evidence limitation, never proven membership.
+        if status == "historical_unavailable" or membership.get("requires_reconstruction"):
+            status = "historical_unavailable"
+            event = None
+            reconstructed = historical_details.get((interval.opening_event_id,interval.closing_event_id))
+            if reconstructed:
+                status = reconstructed['status']
+                amount = Decimal(reconstructed['allocated_cents'])/100
+                originals = reconstructed['original_events']
+                original_records = originals
+                event = SimpleNamespace(id=originals[0].event_id,recorded_at=originals[0].recorded_at) if originals else None
+                pricing_inputs = {'allocation_version':reconstructed['allocation_version'], 'pay_rate_per_minute':None}
+        if status == "recorded":
+            if event.id not in proofs:
+                if verify_record_creation_lineage("payroll_event", event, class_id):
+                    proofs[event.id] = payroll_allocation_proof(class_id=class_id, target_seat_id=seat_id,
+                        correlation_id=event.correlation_id, idempotency_key=event.idempotency_key,
+                        allocation_version=(event.summary_json or {}).get("allocation_version"),
+                        pricing=membership["pricing"], originating_actor_seat_id=event.actor_seat_id,
+                        originating_mechanism=event.mechanism,
+                        through_posting_sequence=get_account_posting_boundary(seat_id, class_id, "checking"),
+                        creation_evidence=ledger_creation_proofs(get_payroll_credit_evidence_records(class_id=class_id,
+                            target_seat_id=seat_id, correlation_id=event.correlation_id, idempotency_key=event.idempotency_key), class_id))
+                else:
+                    proofs[event.id] = {"status": "provenance_unavailable", "allocations": {}}
+            proof = proofs[event.id]
+            status = proof["status"]
+            if status == "verified":
+                amount = Decimal(proof["allocations"][(interval.opening_event_id, interval.closing_event_id)]) / 100
+                share = next(share for share in membership["pricing"] if any(
+                    source["opening_event_id"] == interval.opening_event_id and source["closing_event_id"] == interval.closing_event_id
+                    for source in share["intervals"]))
+                pricing_inputs = {"pay_rate_per_minute": share["pay_rate_per_minute"], "allocation_version": 1}
+        labels = {
+            "unpaid": ("Unpaid", "Eligible", "Earnings will be confirmed at payroll; no settled contribution is recorded."),
+            "historical_unavailable": ("Historical contribution unavailable", "Settlement evidence requires review", "The historical payroll reconstruction could not be validated. Review its source records before correcting this interval."),
+            "provenance_unavailable": ("Contribution unavailable", "Settlement evidence requires review", "Original settlement evidence cannot be verified. Automatic partial correction is blocked."),
+            "pending": ("Payroll recorded · Pending posting", "Included in recorded payroll", "Payroll is recorded but its credit has not posted. A paid contribution is not yet available."),
+            "zero_cent": ("Recorded · $0.00", "Recorded payroll contribution", "This interval belongs to an original payroll record whose reproduced amount is zero."),
+            "verified": ("Paid", "Historically settled", "This contribution is validated against the original attendance, historical pricing, and posted payroll credit."),
+        }
+        label, eligibility, message = labels[status]
+        if status == 'historical_unavailable':
+            explanations = {
+                'INTEGRITY_FAILURE':'The payroll amount or financial evidence disagrees with the reconstructed attendance. No automatic correction is available.',
+                'PRIOR_RECOVERY_UNAVAILABLE':'An earlier payroll recovery cannot be assigned unambiguously to its payment. Review that recovery before correcting this interval.',
+                'AMBIGUOUS_SETTING':'The payroll setting used for this work cannot be selected unambiguously.',
+                'MISSING_SETTING':'The payroll setting used for this work is unavailable.',
+                'MISSING_OR_AMBIGUOUS_SETTING':'The payroll setting used for this work cannot be selected unambiguously.',
+                'RECORDED_PRICING_MISMATCH':'The retained pricing inputs disagree with the attendance selected for this payroll window.',
+                'RECORDED_MEMBERSHIP_MISMATCH':'The retained work-session membership disagrees with the original payroll window.',
+                'TOPUP_MEMBERSHIP_UNAVAILABLE':'The attendance covered by an earlier payroll correction cannot be established.',
+                'COMPENSATION_MEMBERSHIP_UNAVAILABLE':'An earlier payroll recovery cannot be assigned to its original payment.',
+                'UNKNOWN_SETTLEMENT_RULE':'The original payroll calculation rule cannot be identified.',
+                'TIED_PAYROLL_BOUNDARY':'Two payroll records have the same boundary; the original window cannot be selected unambiguously.',
+                'CONFLICTING_SELECTION':'The attendance sources do not form an unambiguous historical payroll window.',
+                'EVIDENCE_LIMIT_EXCEEDED':'This attendance history exceeds the automatic reconstruction limit.',
+            }
+            message = explanations.get(historical_denial,message)
+        is_invalidated = (interval.opening_event_id,interval.closing_event_id) in invalidated_pairs
+        if is_invalidated:
+            eligibility = "Ineligible · Invalidated"
+        action_url = url_for("admin.attendance_interval_invalidation", actor_public_id=actor_public_id, nav=request.args.get("nav")) if interval.closing_event_id and not is_invalidated and status in {"unpaid","verified","zero_cent"} else None
+        return SimpleNamespace(**interval.__dict__, duration_label=duration_label,
+            source_events=interval_sources(interval), amount=amount, settlement_label=label,
+            eligibility_label=eligibility, evidence_message=message, pricing_inputs=pricing_inputs,
+            payroll_event_id=event.id if event else None, payroll_recorded_at=event.recorded_at if event else None,
+            payroll_history_url=None, original_payroll_records=original_records, correction_url=action_url)
+
+    attendance_intervals = [display_interval(interval) for interval in interval_page]
+    attendance_open_intervals = [display_interval(interval) for interval in interval_projections if interval.closing_event_id is None]
+    attendance_unpaired_events = [row for row in attendance_rows if row.id not in paired_source_ids]
+    attendance_historical_evidence_limited = (
+        historical_denial is not None
+        or any((value['status']=='historical_unavailable' or value.get('requires_reconstruction')) and key not in historical_details
+            for key,value in memberships.items())
+        or (not memberships and payroll_provenance_history_limitations(seat_id,class_id,ctx=g.canonical_context))
+    )
 
     scoped_seat = (
         Seat.query
@@ -3460,12 +3632,29 @@ def student_detail_public(actor_public_id):
         payroll_events=payroll_events,
         class_label=class_display_label,
     )
+    # A verified interval link must lead to the same Ledger-proven credit,
+    # rather than the older payroll display's correlation-only heuristic.
+    for row in payroll_event_history:
+        proof = proofs.get(row["payroll_event_id"])
+        if proof and proof["status"] == "verified":
+            row["amount"] = Decimal(proof["transaction"].amount)
+            row["display_amount"] = f"${row['amount']:.2f}"
+    visible_payroll_ids = {row["payroll_event_id"] for row in payroll_event_history[:20]}
+    for interval in attendance_intervals:
+        if interval.settlement_label == "Paid" and interval.payroll_event_id in visible_payroll_ids:
+            interval.payroll_history_url = url_for("admin.student_detail_public",
+                actor_public_id=actor_public_id,
+                nav=_issue_student_detail_nav_token(actor_public_id=actor_public_id, class_id=class_id),
+                tab="payroll", _anchor=f"payroll-event-{interval.payroll_event_id}")
     scoped_total_earnings = float(
         sum(
             Decimal(row.get("amount") or 0)
             for row in payroll_event_history
         )
     )
+
+    if any(row.get('amount') is None for row in payroll_event_history):
+        scoped_total_earnings = None
 
     # CRITICAL: Fetch current class Join Code for Account Recovery display.
     join_codes = {}
@@ -3497,6 +3686,14 @@ def student_detail_public(actor_public_id):
                          entitlements=store_purchases,
                          latest_attendance_event=latest_attendance_event,
                          attendance_events=attendance_display_rows,
+                         attendance_intervals=attendance_intervals,
+                         attendance_open_intervals=attendance_open_intervals,
+                         attendance_unpaired_events=attendance_unpaired_events,
+                         attendance_completed_count=attendance_completed_count,
+                         attendance_older_url=attendance_older_url,
+                         attendance_newest_url=attendance_newest_url,
+                         attendance_historical_evidence_limited=attendance_historical_evidence_limited,
+                         attendance_estimate_incomplete=attendance_estimate_incomplete,
                          active_insurance=active_insurance,
                          scoped_checking_balance=scoped_checking_balance,
                          scoped_savings_balance=scoped_savings_balance,
@@ -6140,9 +6337,6 @@ def void_transaction(transaction_id):
     if tx is None:
         abort(404)
 
-    if tx.status == TransactionStatus.VOID:
-        return _void_error("Transaction is already voided.")
-
     try:
         ctx = g.canonical_context
         if tx.class_id != ctx.class_id:
@@ -6746,6 +6940,21 @@ def _build_payroll_event_display_rows(*, ctx, payroll_events, class_label=None):
         ledger_by_event_key[(tx.correlation_id, tx.target_seat_id)].append(tx)
 
     def _ledger_amount_for_event(event):
+        summary=event.summary_json if isinstance(event.summary_json,dict) else {}
+        if event.payroll_event_type == 'correction' or (event.payroll_event_type == 'reversal' and ('ledger_result_locator' in summary or 'command_receipt' in summary)):
+            from app.feats.attendance_interval_invalidation_feat import ledger_creation_proofs
+            from app.services.ledger_recovery_service import get_recovery_outcome_records,get_recovery_outcome,RecoveryIntegrityError
+            from app.utils.audit_verifier import verify_record_creation_lineage
+            if not summary.get('ledger_result_locator') or not verify_record_creation_lineage('payroll_event',event,ctx.class_id):
+                return None
+            locators=(summary['ledger_result_locator'],)
+            try:
+                records=get_recovery_outcome_records(class_id=ctx.class_id,target_seat_id=event.target_seat_id,effect_locators=locators)
+                outcome=get_recovery_outcome(class_id=ctx.class_id,target_seat_id=event.target_seat_id,
+                    effect_locators=locators,creation_evidence=ledger_creation_proofs(records,ctx.class_id))
+            except RecoveryIntegrityError:
+                return None
+            return -Decimal(outcome['recovered_cents'])/100
         linked = ledger_by_event_key.get((event.correlation_id, event.target_seat_id), [])
         if event.payroll_event_type == "reversal":
             reversal_tx = next((tx for tx in linked if Decimal(tx.amount or 0) < 0), None)
@@ -6769,7 +6978,7 @@ def _build_payroll_event_display_rows(*, ctx, payroll_events, class_label=None):
             # Not a claimed participant, so the event is not displayed. Rendering
             # it as "Unknown" would show a row the teacher cannot act on.
             continue
-        summary = event.summary_json or {}
+        summary = event.summary_json if isinstance(event.summary_json,dict) else {}
         ledger_amount = _ledger_amount_for_event(event)
         payroll_records.append({
             'id': event.id,
@@ -6784,130 +6993,135 @@ def _build_payroll_event_display_rows(*, ctx, payroll_events, class_label=None):
             'student_name': (seat.identity_profile.full_name if seat and seat.identity_profile else 'Unknown'),
             'student': None,
             'amount': ledger_amount,
-            'display_amount': f"${ledger_amount:.2f}",
+            'display_amount': f"${ledger_amount:.2f}" if ledger_amount is not None else 'Contribution unavailable',
             'account_type': "checking",
             'notes': summary.get("description") or event.payroll_event_type,
             'is_reversal': event.payroll_event_type == "reversal",
-            # DOM-PROD-001 §187 names payroll reversal as THE remedy for an
-            # attendance row that produced a wrong payroll outcome. It was
-            # hardcoded False, so the remedy had no surface: `record_payroll_
-            # reversal` appeared exactly once in the repository -- its own
-            # definition -- while this template already rendered a REVERSAL
-            # badge. The read side anticipated rows the write side never made.
+            # A scoped pure preview determines full/residual recovery authority.
             'can_reverse': (
-                event.payroll_event_type != "reversal"
-                and event.correlation_id not in reversed_correlation_ids
+                event.payroll_event_type in {"payroll", "manual_credit"}
             ),
         })
     return payroll_records
 
 
+def _correction_denial(exc):
+    code = getattr(exc, 'code', None)
+    if code is None and isinstance(exc, ValueError) and exc.args and exc.args[0] in {'PREVIEW_CHANGED', 'PROVENANCE_UNAVAILABLE', 'REPLAY_MISMATCH'}:
+        code = exc.args[0]
+    if code is None:
+        code = 'INTEGRITY_FAILURE'
+    pending = code == 'PAYROLL_PENDING'
+    if pending:
+        code = 'PROVENANCE_UNAVAILABLE'
+    messages = {'UNAUTHORIZED_SCOPE':'This student is unavailable in this class.',
+        'INCOMPLETE_INTERVAL':'Choose a completed work interval.', 'INVALID_REASON':'Choose a listed reason.',
+        'ALREADY_INVALIDATED':'This interval has already been invalidated.',
+        'ALREADY_RECOVERED':'This payment has already been fully recovered.',
+        'PREVIEW_CHANGED':'The attendance or financial facts changed. Review a fresh preview.',
+        'REPLAY_MISMATCH':'This command key belongs to a different request.',
+        'PROVENANCE_UNAVAILABLE':'Original payment evidence cannot be verified. No changes were made.',
+        'INTEGRITY_FAILURE':'The correction could not be verified. No changes were made.',
+        'INVALID_REQUEST':'The correction request is incomplete or contains unsupported fields.'}
+    code = next((known for known in messages if known == code), 'INTEGRITY_FAILURE')
+    status = 500 if code == 'INTEGRITY_FAILURE' else 403 if code == 'UNAUTHORIZED_SCOPE' else 400 if code in {'INVALID_REASON','INCOMPLETE_INTERVAL','INVALID_REQUEST'} else 409
+    return jsonify(status='denied', code=code, message='Payroll is pending.' if pending else messages.get(code,messages['INTEGRITY_FAILURE'])), status
+
+
+def _correction_source_id(value):
+    if isinstance(value,bool) or not (isinstance(value,int) or (isinstance(value,str) and value.isascii() and value.isdigit())):
+        from app.services.attendance_invalidation_service import AttendanceCorrectionDenied
+        raise AttendanceCorrectionDenied('INVALID_REQUEST')
+    result=int(value)
+    if not 0 < result <= 2147483647:
+        from app.services.attendance_invalidation_service import AttendanceCorrectionDenied
+        raise AttendanceCorrectionDenied('INVALID_REQUEST')
+    return result
+
+
+def _attendance_correction_target(actor_public_id):
+    ctx = g.canonical_context
+    nav = _read_student_detail_nav_token(request.args.get('nav',''))
+    if (not ctx.class_id or not nav or str(nav.get('user_id')) != str(ctx.user_id)
+        or nav.get('actor_public_id') != actor_public_id or nav.get('class_id') != ctx.class_id):
+        abort(404)
+    target = Seat.query.join(ClassEconomy, ClassEconomy.class_id == Seat.class_id).filter(
+        Seat.public_id == actor_public_id, Seat.class_id == ctx.class_id, Seat.role == 'student',
+        ClassEconomy.teacher_user_id == ctx.user_id).first()
+    if not target or not target.user_id:
+        abort(404)
+    return target
+
+
+@admin_bp.route('/students/<string:actor_public_id>/attendance/invalidation', methods=['GET','POST'])
+@admin_required
+def attendance_interval_invalidation(actor_public_id):
+    from app.feats.attendance_interval_invalidation_feat import preview_attendance_interval_invalidation, invalidate_attendance_interval
+    from app.services.attendance_invalidation_service import AttendanceCorrectionDenied
+    from app.services.ledger_recovery_service import RecoveryIntegrityError
+    target = _attendance_correction_target(actor_public_id)
+    data = request.args if request.method == 'GET' else request.get_json(silent=True) or request.form
+    try:
+        allowed = {'nav','opening_event_id','closing_event_id','reason_code'} if request.method == 'GET' else {'opening_event_id','closing_event_id','reason_code','idempotency_key','expected_preview_identity','csrf_token'}
+        if set(data) - allowed or (request.method == 'POST' and not all(isinstance(data.get(field),str) and data.get(field).strip() for field in ('idempotency_key','expected_preview_identity'))):
+            raise AttendanceCorrectionDenied('INVALID_REQUEST')
+        if request.method == 'POST' and len(data['idempotency_key']) > 128:
+            raise AttendanceCorrectionDenied('INVALID_REQUEST')
+        opening, closing = _correction_source_id(data.get('opening_event_id')), _correction_source_id(data.get('closing_event_id'))
+        args = dict(ctx=g.canonical_context, target_seat_id=target.id, opening_event_id=opening,
+            closing_event_id=closing, reason_code=data.get('reason_code'))
+        if request.method == 'GET':
+            return jsonify(status='preview', **preview_attendance_interval_invalidation(**args).public())
+        return jsonify(invalidate_attendance_interval(**args, idempotency_key=data.get('idempotency_key'),
+            expected_preview_identity=data.get('expected_preview_identity')))
+    except (AttendanceCorrectionDenied, RecoveryIntegrityError) as exc:
+        return _correction_denial(exc)
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Attendance correction failed')
+        return _correction_denial(AttendanceCorrectionDenied('INTEGRITY_FAILURE'))
+
+
+@admin_bp.route('/payroll/event/<int:payroll_event_id>/recovery-preview')
+@admin_required
+def payroll_recovery_preview(payroll_event_id):
+    from app.feats.attendance_interval_invalidation_feat import preview_payroll_recovery
+    from app.services.attendance_invalidation_service import AttendanceCorrectionDenied
+    from app.services.ledger_recovery_service import RecoveryIntegrityError
+    if PayrollEvent.query.filter_by(id=payroll_event_id,class_id=g.canonical_context.class_id).first() is None:
+        abort(404)
+    try:
+        return jsonify(status='preview', **preview_payroll_recovery(ctx=g.canonical_context,payroll_event_id=payroll_event_id).public())
+    except (AttendanceCorrectionDenied, RecoveryIntegrityError) as exc:
+        return _correction_denial(exc)
+    except Exception:
+        current_app.logger.exception('Payroll correction preview failed')
+        return _correction_denial(AttendanceCorrectionDenied('INTEGRITY_FAILURE'))
+
+
 @admin_bp.route('/payroll/event/<int:payroll_event_id>/reverse', methods=['POST'])
 @admin_required
 def reverse_payroll_event(payroll_event_id):
-    """Reverse a payroll event — the sole remedy for a wrong payroll outcome.
-
-    DOM-PROD-001 §185 forbids correcting payroll by mutating attendance history,
-    and §187 names this as the path instead. The path did not exist:
-    ``record_payroll_reversal`` appeared exactly once in the repository, in its
-    own definition, with no route, service or test reaching it — while the
-    payroll template already rendered a REVERSAL badge for rows nothing could
-    produce. A teacher wanting to make a student whole had to leave the dispute
-    and issue a manual credit, which records itself as ``manual_credit`` rather
-    than as a correction: the money moved and the business record did not say
-    why.
-
-    This surface is deliberately on Payroll rather than on the support ticket
-    that may have raised the dispute. A teacher can discover a payroll mistake
-    with no ticket in existence, and Support must not acquire a Productivity
-    remedy — cross-domain coordination belongs in the FEAT layer, not in another
-    domain's route. Support can deep-link here; it does not execute this.
-
-    No FEAT envelope is opened here. ``record_payroll_reversal`` carries
-    ``@requires_feat_context("FEAT-PROD-003")``, which OPENS a context, so a
-    route-level one would nest and fail — the defect this same batch fixed on
-    hall-pass approval. Driving the FEAT rather than the bare domain command is
-    what keeps the counter-entry and the payroll record one operation: the FEAT
-    inherits the original's ``policy_uuid`` and derives the amount as the
-    negation of the linked transaction, so the reversal is a compensating entry
-    with the provenance of what it compensates, never a deletion.
-    """
-    ctx = g.canonical_context
-    class_id = (getattr(ctx, "class_id", None) or "").strip()
-    if not class_id:
+    """Confirm a signed full/residual recovery through the owning FEAT."""
+    from app.feats.attendance_interval_invalidation_feat import recover_payroll_payment
+    from app.services.attendance_invalidation_service import AttendanceCorrectionDenied
+    from app.services.ledger_recovery_service import RecoveryIntegrityError
+    if PayrollEvent.query.filter_by(id=payroll_event_id,class_id=g.canonical_context.class_id).first() is None:
         abort(404)
-
-    event = PayrollEvent.query.filter_by(
-        id=payroll_event_id, class_id=class_id
-    ).first()
-    if event is None:
-        # Scoped by class: an event id belonging to another class is not found,
-        # not forbidden, so the response reveals nothing about other classes.
-        abort(404)
-
-    if event.payroll_event_type == "reversal":
-        flash("That entry is already a reversal and cannot itself be reversed.", "warning")
-        return redirect(url_for('admin.payroll_history'))
-
-    already_reversed = PayrollEvent.query.filter_by(
-        class_id=class_id,
-        correlation_id=event.correlation_id,
-        payroll_event_type="reversal",
-    ).first()
-    if already_reversed is not None:
-        flash("That payroll entry has already been reversed.", "warning")
-        return redirect(url_for('admin.payroll_history'))
-
-    reason = (request.form.get("reason") or "").strip()
-
+    data = request.get_json(silent=True) or request.form
     try:
-        record_payroll_reversal(
-            ctx=ctx,
-            target_seat_id=event.target_seat_id,
-            correlation_id=event.correlation_id,
-            idempotency_key=f"payroll_reversal:{class_id}:{event.id}",
-            mechanism="TEACHER",
-            summary_json={
-                "description": (
-                    f"Reversal of {event.payroll_event_type}"
-                    + (f": {reason}" if reason else "")
-                ),
-                "source": "admin_payroll_reversal",
-                "reversed_payroll_event_id": event.id,
-                "reason": reason or None,
-            },
-        )
-    except LookupError as exc:
-        # current_app.logger, not _log_api_client_error: that helper is defined in
-        # app/routes/api.py and this module neither defines nor imports it, so
-        # reaching either handler raised NameError and turned a handled refusal
-        # into an undiagnosed 500 -- an error path failing worse than the error it
-        # handles. Caught in review; the branch had no test exercising it.
-        current_app.logger.warning(
-            "Payroll reversal could not resolve its original entry: "
-            "event_id=%s class_id=%s error=%s",
-            event.id, class_id, exc,
-        )
-        flash(
-            "That payroll entry has no linked transaction to reverse, so there is "
-            "nothing to return.",
-            "warning",
-        )
-        return redirect(url_for('admin.payroll_history'))
-    except ValueError as exc:
-        current_app.logger.warning(
-            "Payroll reversal refused: event_id=%s class_id=%s error=%s",
-            event.id, class_id, exc,
-        )
-        flash("That payroll entry cannot be reversed.", "warning")
-        return redirect(url_for('admin.payroll_history'))
-
-    flash(
-        "Payroll entry reversed. The original entry and its reversal both remain "
-        "in the history, so the record shows what happened and why.",
-        "success",
-    )
-    return redirect(url_for('admin.payroll_history'))
+        if set(data) - {'idempotency_key','expected_preview_identity','csrf_token'} or not all(isinstance(data.get(field),str) and data.get(field).strip() for field in ('idempotency_key','expected_preview_identity')):
+            raise AttendanceCorrectionDenied('INVALID_REQUEST')
+        if len(data['idempotency_key']) > 128:
+            raise AttendanceCorrectionDenied('INVALID_REQUEST')
+        return jsonify(recover_payroll_payment(ctx=g.canonical_context,payroll_event_id=payroll_event_id,
+            idempotency_key=data.get('idempotency_key'),expected_preview_identity=data.get('expected_preview_identity')))
+    except (AttendanceCorrectionDenied, RecoveryIntegrityError) as exc:
+        return _correction_denial(exc)
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Payroll recovery failed')
+        return _correction_denial(AttendanceCorrectionDenied('INTEGRITY_FAILURE'))
 
 
 @admin_bp.route('/payroll-history')
@@ -8481,6 +8695,8 @@ def banking():
         .offset((page - 1) * per_page)
         .all()
     )
+    from app.services.ledger_correction_service import resolve_purchase_resolution_eligibility
+
     transactions = []
     for tx, seat in rows:
         _ip = seat.identity_profile if seat else None
@@ -8493,7 +8709,8 @@ def banking():
             'account_type': tx.account_type,
             'description': tx.description,
             'type': tx.type,
-            'is_void': tx.status == TransactionStatus.VOID,
+            'posting_state': tx.posting_state.value,
+            'can_reverse': resolve_purchase_resolution_eligibility(tx).eligible,
         })
 
     transaction_types = sorted(
@@ -10405,7 +10622,6 @@ def resolve_issue(issue_ref):
                 or transaction.class_id != class_id
                 or not submitter_seat
                 or transaction.seat_id != submitter_seat.id
-                or transaction.status == TransactionStatus.VOID
             ):
                 flash("The related transaction could not be resolved for this issue.", "error")
                 return redirect(url_for('admin.view_issue', issue_ref=issue_ref))
