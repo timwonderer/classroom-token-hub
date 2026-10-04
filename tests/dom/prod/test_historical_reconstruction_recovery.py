@@ -782,11 +782,17 @@ def test_historical_payroll_excludes_only_proven_unrelated_modern_reversal(app, 
     assert not _proven_unrelated_reversal(malformed, locators, records_by_locator, settlement.creation_evidence)
     # Removing verified signed-origin evidence must still deny the public
     # preview instead of trusting an unsigned original ID or ignoring the row.
-    creation_proofs = command.ledger_creation_proofs
+    creation_proofs = command.verified_creation_evidences
+
+    def without_reversal_proof(items, class_id, **kwargs):
+        batch = creation_proofs(items, class_id, **kwargs)
+        return batch.__class__(tuple(
+            None if proof is not None and proof.table_name == "ledger_transaction"
+            and proof.row_pk == str(reversal.id) else proof for proof in batch.evidence
+        ), batch.chain_status, batch.reason)
+
     with monkeypatch.context() as patch:
-        patch.setattr(command, "ledger_creation_proofs", lambda rows, class_id: tuple(
-            proof for proof in creation_proofs(rows, class_id) if proof.row_pk != str(reversal.id)
-        ))
+        patch.setattr(command, "verified_creation_evidences", without_reversal_proof)
         with pytest.raises(command.AttendanceCorrectionDenied, match="PROVENANCE_UNAVAILABLE"):
             preview_attendance_interval_invalidation(**args)
     result = invalidate_attendance_interval(

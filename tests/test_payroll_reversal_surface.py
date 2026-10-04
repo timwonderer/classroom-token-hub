@@ -85,7 +85,9 @@ def test_missing_correction_proof_is_unavailable_in_all_history_views(app,client
     from tests.test_student_detail_attendance_intervals import _detail_url
     classroom,event=_payment(app,client);_confirm(client,event,_preview(client,event).json)
     import app.feats.attendance_interval_invalidation_feat as feat
-    monkeypatch.setattr(feat,'verified_creation_evidence',lambda *args,**kwargs:None)
+    from app.utils.audit_verifier import CreationEvidenceBatch
+    monkeypatch.setattr(feat,'verified_creation_evidences',lambda items,class_id,**kwargs:
+        CreationEvidenceBatch(tuple(None for _ in items),'UNAVAILABLE','TEST_PROOF_REMOVED'))
     for url in ('/admin/payroll','/admin/payroll-history',_detail_url(client,classroom.students[0].seat.public_id)):
         response=client.get(url);assert response.status_code==200,response.data
         html=response.get_data(as_text=True)

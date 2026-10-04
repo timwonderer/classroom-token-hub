@@ -8697,8 +8697,11 @@ def banking():
     )
     from app.services.ledger_correction_service import resolve_purchase_resolution_eligibility
 
+    from app.services.ledger_balance_query_service import project_posting_states
+
+    posting_states = project_posting_states(tx for tx, _seat in rows)
     transactions = []
-    for tx, seat in rows:
+    for (tx, seat), posting_state in zip(rows, posting_states):
         _ip = seat.identity_profile if seat else None
         transactions.append({
             'id': tx.id,
@@ -8709,7 +8712,7 @@ def banking():
             'account_type': tx.account_type,
             'description': tx.description,
             'type': tx.type,
-            'posting_state': tx.posting_state.value,
+            'posting_state': posting_state.value,
             'can_reverse': resolve_purchase_resolution_eligibility(tx).eligible,
         })
 

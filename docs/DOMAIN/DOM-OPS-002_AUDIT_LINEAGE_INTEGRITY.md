@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |:---|:---|:---|:---|:---|
-| DOM-OPS-002 | 1.9 | 2026-10-03 | 1.8 | Constitutional |
+| DOM-OPS-002 | 1.10 | 2026-10-04 | 1.9 | Constitutional |
 
 ---
 
@@ -318,6 +318,12 @@ Version 1 is not a per-record emitter identifier. Explicit exact-source descript
 
 DOM-LED-001 §VII.0 and FEAT-LED-002 §VII.2/4 require an immutable new reversal effect containing original-effect and correlation linkage; originals are not modified. ORM/PostgreSQL guards freeze the retained historical `reversal_transaction_id` after INSERT. It is not an authoritative monetary or posting input and is not newly added to any signed payload. Ledger audit versions 2 and 3 keep their exact original sixteen- and nineteen-field protected registries; historical signatures, envelopes and audit coverage are unchanged. The new reversal effect receives its normal current lawful creation lineage. Audit records may describe the new reversal's ID without mutating the original row.
 
+### 6.2C Bounded batch creation-evidence query
+
+Operations owns `verified_creation_evidences(items, class_id, *, required_fields=(), max_chain_events, max_rows)`, the batch form of §6.2 for FEATs that must prove many records in one class. `items` are `(table, row)` pairs. It returns an immutable `CreationEvidenceBatch` holding one §6.2 result per item, in request order, plus a `chain_status` (`COMPLETE`, `UNAVAILABLE` or `INVALID`) and a reason. Reuse is confined to the single invocation: the complete class chain is walked and authenticated once, and every item then receives every row-specific §6.2 check (scoped pointer, INSERT linkage, token and signature version, exact linked-version field coverage including `required_fields`, current protected payload digest) against that walk. A `None` entry under `COMPLETE` is a row-specific proof failure and grants no authority.
+
+Both budgets are server-owned ceilings (`CREATION_PROOF_MAX_CHAIN_EVENTS`, `CREATION_PROOF_MAX_ROWS`); callers may lower them, never raise them, and invalid budgets are rejected before any read. A chain or row count beyond its budget returns every entry unavailable; a verified chain prefix is never treated as a complete chain. The chain head is read as an independent scalar snapshot before and after the walk, never from a cached mutable ORM row. Disagreement returns unavailable `EVIDENCE_CHANGED_DURING_READ`; a missing head, missing signing key or infrastructure failure returns unavailable; a malformed head, continuity break, HMAC mismatch or head/walk disagreement returns `INVALID`. In every non-`COMPLETE` outcome all entries are unavailable. There is no persisted proof cache, mutable verification flag, caller-supplied verification result or bypass; the query runs without autoflush, locks or writes, so previews stay pure and commands keep their atomicity and existing integrity denials. The single-row §6.2 query is unchanged. FEAT-PROD-005/003/006 reconstruction and Ledger reversal-input coordination compose this query in place of one §6.2 call per record.
+
 ### 6.3 Nightly Verification Flow
 
 ```
@@ -383,6 +389,8 @@ This taxonomy is defined as canonical in `INV-ARC-016`. The operational semantic
 ---
 
 ## 9. Amendment
+
+Version 1.10 (2026-10-04) adds §6.2C's bounded batch form of the §6.2 creation-evidence query, so a batch walks each unchanged class chain once instead of once per record. Supersedes no proof requirement: every row-specific §6.2 check, the complete-chain requirement and fail-closed unavailability are retained, and no proof cache, verification flag or bypass is authorized.
 
 Version 1.9 (2026-10-03) clarifies immutable exact-reversal linkage and frozen retained original pointers under §6.2B. Supersedes no signed registry or historical evidence.
 

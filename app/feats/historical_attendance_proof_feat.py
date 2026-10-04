@@ -65,28 +65,29 @@ def assess_historical_attendance_proof(*, ctx, target_seat_id, payroll_event_ids
             reconstruct_historical_payroll_graph, get_historical_reconstruction_business_records,
         )
         from app.services.ledger_historical_reconstruction import validate_historical_settlement
-        from app.services.ledger_evidence import LedgerCreationEvidence
-        from app.utils.audit_verifier import verified_creation_evidence
+        from app.feats.ledger_proof_inputs import to_ledger_creation_evidence
+        from app.utils.audit_verifier import verified_creation_evidences
         reconstruction,reason = None,None
         try:
             graph = reconstruct_historical_payroll_graph(ctx=ctx,target_seat_id=target_seat_id,
                 setting_inputs=settings,as_of_utc=at)
-            business_proofs=[]
+            proven_business=[]
             for row in get_historical_reconstruction_business_records(ctx=ctx,target_seat_id=target_seat_id):
                 summary=row.summary_json or {}
                 if row.lineage_event_id is not None or summary.get('allocation_version')==1 or 'correction_intent_locator' in summary or 'command_receipt' in summary:
-                    proof=verified_creation_evidence('payroll_event',row,ctx.class_id)
-                    if proof is None:
-                        raise ValueError('INTEGRITY_FAILURE' if row.lineage_event_id is not None else 'PROVENANCE_UNAVAILABLE')
-                    business_proofs.append(LedgerCreationEvidence(proof.table_name,proof.row_pk,proof.class_id,
-                        proof.lineage_event_id,proof.lineage_token,proof.signature_version,proof.protected_fields,proof.protected_values))
-            credit_proofs=[]
-            for row in records:
-                if row.lineage_version in (2,3):
-                    proof=verified_creation_evidence('ledger_transaction',row,ctx.class_id)
-                    if proof is not None:
-                        credit_proofs.append(LedgerCreationEvidence(proof.table_name,proof.row_pk,proof.class_id,
-                            proof.lineage_event_id,proof.lineage_token,proof.signature_version,proof.protected_fields,proof.protected_values))
+                    proven_business.append(row)
+            modern_records=[row for row in records if row.lineage_version in (2,3)]
+            # One bounded class-chain walk proves business and Ledger rows together.
+            batch=verified_creation_evidences([('payroll_event',row) for row in proven_business]
+                +[('ledger_transaction',row) for row in modern_records],ctx.class_id)
+            business_proofs=[]
+            for row,proof in zip(proven_business,batch.evidence):
+                if proof is None:
+                    raise ValueError('INTEGRITY_FAILURE' if row.lineage_event_id is not None
+                        and batch.chain_status!='UNAVAILABLE' else 'PROVENANCE_UNAVAILABLE')
+                business_proofs.append(to_ledger_creation_evidence(proof))
+            credit_proofs=[to_ledger_creation_evidence(proof)
+                for proof in batch.evidence[len(proven_business):] if proof is not None]
             reconstruction=validate_historical_settlement(ctx=ctx,graph=graph,audit_observations=diagnostics,
                 creation_evidence=tuple(credit_proofs),business_creation_evidence=tuple(business_proofs))
         except ValueError as exc:

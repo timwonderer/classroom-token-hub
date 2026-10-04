@@ -21,7 +21,12 @@ from app.services.economic_engine import (
     credit_savings_interest,
     project_savings_balances,
 )
-from app.services.ledger_balance_query_service import get_posted_balance
+from app.services.ledger_balance_query_service import (
+    classify_posting_state,
+    get_posted_balance,
+    posting_scope_of,
+    resolve_reconciliation_cursors,
+)
 from app.services.ledger_posting_service import create_pending_transaction_idempotent
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
@@ -247,6 +252,8 @@ def _savings_ledger(seat_id, class_id, cadence):
         )
         .all()
     )
+    # Every row shares one account scope, so its cursor is read once, not per row.
+    cursors = resolve_reconciliation_cursors(posting_scope_of(row) for row in rows)
     history = []
     paid_keys = set()
     paid_through = None
@@ -259,7 +266,9 @@ def _savings_ledger(seat_id, class_id, cadence):
             if paid_through is None or window.end_utc > paid_through:
                 paid_through = window.end_utc
             history.append((window.end_utc, row.amount_cents))
-        elif row.posting_state == TransactionStatus.POSTED and row.posted_at is not None:
+        elif row.posted_at is not None and classify_posting_state(
+            row.posting_sequence, cursors.get(posting_scope_of(row))
+        ) == TransactionStatus.POSTED:
             history.append((ensure_utc(row.posted_at), row.amount_cents))
     history.sort(key=lambda entry: entry[0])
     return _SavingsLedger(history, paid_keys, paid_through)
