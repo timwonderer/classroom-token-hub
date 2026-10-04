@@ -204,9 +204,14 @@ def login():
     return render_template("system_admin_login.html", form=form)
 
 
-@sysadmin_bp.route('/logout')
+@sysadmin_bp.route('/logout', methods=['POST'])
 def logout():
-    """System admin logout."""
+    """System admin logout.
+
+    POST only, so the global CSRFProtect checks the token: a GET (a link, an
+    image tag, a prefetch, another site) cannot end anyone's sign-in. GET
+    answers 405 and changes nothing.
+    """
     session.pop("user_id", None)
     session.pop("current_session_nonce", None)
     session.pop("last_activity", None)

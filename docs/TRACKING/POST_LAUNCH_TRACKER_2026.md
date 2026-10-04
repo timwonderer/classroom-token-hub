@@ -331,8 +331,9 @@ against this tracker, the archived launch trackers and the live-test RESUME reco
     rule never caught that case.
   - A student or teacher on a sysadmin surface logs `TLCP-SURFACE-PRINCIPAL-MISMATCH` at INFO, with surface,
     principal, class context and outcome.
-  - **Follow-up:** `GET /sysadmin/logout` signs out any principal, not just a sysadmin. It is the same GET-time session
-    pop as `admin.login` above.
+  - **Follow-up (resolved 2026-10-04):** `GET /sysadmin/logout` signed out any principal, not just a sysadmin. It was
+    the same GET-time session pop as `admin.login` above. Logout now requires POST with a CSRF token; a GET is 405
+    and changes nothing.
 - [ ] **Simple interest does not conform to SPEC-ECON-001 §4.1.** Credited interest joins the earning balance for
   every calculation type. `simple` prevents compounding within one payout window, but each window's credit then
   earns interest in later windows, so simple interest compounds across payout windows. Tracked and deferred by the

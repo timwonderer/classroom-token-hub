@@ -1,7 +1,8 @@
 {% from "macros/auth_brand.html" import auth_brand %}
 {#- Shown in place of claim, credential setup and recovery while someone is signed
-    in (DOM-IDEN-005 §VII). Reads nothing from the session and writes nothing:
-    no flashed messages, no form, no CSRF token. -#}
+    in (DOM-IDEN-005 §VII). Reads no principal or establishment state and writes
+    none: no flashed messages. The one form, for a sysadmin, carries only the CSRF
+    token its POST-only logout requires. -#}
 <!DOCTYPE html>
 <html lang="en">
 
@@ -31,7 +32,14 @@
             <p class="mb-4">Return to the login page and sign in again. Before continuing, close any older Classroom Token Hub tabs that are still open.</p>
 
             {#- Goes through the signed-in role's logout, which ends the sign-in and lands on that role's login page. -#}
+            {% if sign_out_by_post %}
+            <form method="post" action="{{ return_to_login_url }}" class="mb-4">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-primary w-100 btn-lg">Return to login</button>
+            </form>
+            {% else %}
             <a href="{{ return_to_login_url }}" class="btn btn-primary w-100 btn-lg mb-4">Return to login</a>
+            {% endif %}
         </div>
     </div>
 </main>

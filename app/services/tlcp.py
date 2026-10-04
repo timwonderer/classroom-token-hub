@@ -163,9 +163,11 @@ OUTCOME_SYSTEM_FAILURE = "SYSTEM_FAILURE"
 # Endpoints whose operation is to make the caller a sysadmin principal: they
 # complete only when the session names a sysadmin afterwards.
 _SIGN_IN_ENDPOINTS = frozenset({"sysadmin.login", "sysadmin.passkey_auth_finish"})
-# Endpoints that complete for any caller. ``GET /sysadmin/logout`` clears the
-# session's principal whoever holds it (a tracked follow-up, unchanged here),
-# so for a student or teacher it is a completed operation, not a denial.
+# Endpoints that complete for any caller. ``POST /sysadmin/logout`` clears the
+# session's principal whoever holds it, so for a student or teacher it is a
+# completed operation, not a denial. A missing or forged CSRF token is refused
+# by Flask-WTF's before_request hook, which runs before correlation is
+# captured, so that refusal (like a GET, 405) records nothing here.
 _COMPLETES_FOR_ANY_PRINCIPAL = frozenset({"sysadmin.logout"})
 _SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
