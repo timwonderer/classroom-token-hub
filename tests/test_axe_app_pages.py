@@ -99,6 +99,11 @@ def test_no_axe_violations_across_pages_needing_no_domain_setup(app, client, wca
         ("/admin/students", teacher_session),
         ("/admin/help-support", teacher_session),
         ("/admin/banking", teacher_session),
+        ("/admin/attendance-log", teacher_session),
+        ("/admin/announcements", teacher_session),
+        ("/admin/announcements/create", teacher_session),
+        ("/admin/create-class", teacher_session),
+        ("/admin/payroll/correction", teacher_session),
         # Group C -- feature-disabled fallback, reached with zero extra setup
         ("/admin/store", teacher_session),
         # Group E -- student, no extra setup
@@ -272,6 +277,39 @@ def test_no_axe_violations_on_sysadmin_pages_with_tickets(app, client, wcag_live
                     assert 'class="sysadmin-ticket"' in html, "escalated ticket row missing"
                 else:
                     assert "Needs developer investigation" in html, "ticket detail missing"
+                if violations:
+                    failures[path] = violations
+                page.context.close()
+
+            assert_no_violations(failures)
+
+
+@pytest.mark.skipif(sync_playwright is None, reason="Playwright Python package is unavailable")
+def test_no_axe_violations_across_student_feature_gated_pages(app, client, wcag_live_server):
+    """WCAG 2.1 A/AA audit of the student pages gated behind class features
+    that start OFF (store, rent, insurance), as a student, empty states.
+    Populated states are audited from tests/a11y_fixtures.
+    """
+    classroom, student = initialize_as_student("chemistry_p1", client, app)
+    for feature in ("insurance", "rent", "store"):
+        enable_class_feature(class_id=classroom.class_id, feature=feature)
+    student_cookie = _build_student_session(
+        client, user_id=student.user.id, class_id=classroom.class_id, seat_id=student.seat.id,
+    )
+
+    pages = ["/student/shop", "/student/rent", "/student/insurance"]
+
+    with sync_playwright() as playwright:
+        try:
+            browser = playwright.chromium.launch(headless=True)
+        except Exception as exc:  # pragma: no cover - browser installation varies
+            skip_or_fail_without_browser(exc)
+
+        with browser:
+            failures: dict[str, list] = {}
+            for path in pages:
+                page = authenticated_page(browser, wcag_live_server, student_cookie)
+                violations = axe_violations(page, f"{wcag_live_server}{path}")
                 if violations:
                     failures[path] = violations
                 page.context.close()

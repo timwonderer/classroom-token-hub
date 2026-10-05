@@ -218,8 +218,10 @@ a:hover {
     color: var(--text-inverse) !important;
 }
 
+/* Text uses the darkened success pair: --success is 4.32:1 on the tinted
+   card headers these buttons sit in, below AA for 14px text. */
 .btn-outline-success {
-    color: var(--success) !important;
+    color: var(--alert-success-text) !important;
     border-color: var(--success) !important;
     background: transparent;
 }

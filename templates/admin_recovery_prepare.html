@@ -2,7 +2,7 @@
 {% block content %}
 <main class="container py-4"><h1>Preparing account recovery</h1>
 <p id="preparationStatus" role="status">Selecting recovery helpers in each class…</p>
-<a href="{{ url_for('admin.recover') }}">Return to recovery</a></main>
+<a href="{{ url_for('admin.recover') }}" class="text-decoration-underline">Return to recovery</a></main>
 <script>
 (async () => {
   const classes = {{ class_refs|tojson }};

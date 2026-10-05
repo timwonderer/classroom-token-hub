@@ -1,20 +1,26 @@
 #!/usr/bin/env python3
-"""Fail a PR that changes a template no axe sweep ever rendered.
+"""Fail a PR that changes a template no axe scenario ever rendered.
 
-The Accessibility Gate runs the authenticated axe-core sweep
-(``tests/test_axe_app_pages.py``), which records every template it renders to
-``AXE_RENDERED_TEMPLATES_FILE``. A changed template is *covered* when it was
-rendered directly, or when a rendered template reaches it through ``extends``,
-``include``, ``import`` or ``from ... import`` -- so a change to a layout or macro
-is covered by every page that uses it.
+A changed template is *covered* when at least one canonical accessibility
+render path put it in front of axe-core:
 
-A changed template that is neither covered nor listed in the exemptions file
-fails the gate: the sweep has no page for it, so a defect in it would merge
-unaudited. Fix that by adding the page to the sweep, or -- only where a page
-cannot be built in CI -- by adding a dated exemption with the reason.
+* a real-route scenario (``tests/test_axe_app_pages.py``), recorded to
+  ``AXE_RENDERED_TEMPLATES_FILE``; or
+* a registered fixture state (``tests/a11y_fixtures``, audited by
+  ``tests/test_axe_fixture_pages.py``), recorded to ``AXE_FIXTURE_TEMPLATES_FILE``.
+
+Either way the template counts when it was rendered directly, or when a rendered
+template reaches it through ``extends``, ``include``, ``import`` or
+``from ... import`` -- so a change to a layout or macro is covered by every page
+that uses it. A template with a real-route scenario needs no duplicate fixture.
+
+A changed template with neither path, and no individually justified entry in the
+exemptions file, fails the gate. "No convenient route" is not a justification:
+register a fixture state instead.
 
 Usage:
-    check_axe_template_coverage.py --changed changed.txt --rendered rendered.json \
+    check_axe_template_coverage.py --changed changed.txt --rendered routes.json \
+        [--fixture-rendered fixtures.json] \
         [--exemptions tests/axe_coverage_exemptions.json] [--templates-dir templates]
 """
 
@@ -73,7 +79,9 @@ def load_changed(path: Path) -> set[str]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--changed", type=Path, required=True)
-    parser.add_argument("--rendered", type=Path, required=True)
+    parser.add_argument("--rendered", type=Path, required=True, help="templates rendered by the real-route sweep")
+    parser.add_argument("--fixture-rendered", type=Path, default=None,
+                        help="templates rendered by registered fixture states")
     parser.add_argument("--exemptions", type=Path, default=Path("tests/axe_coverage_exemptions.json"))
     parser.add_argument("--templates-dir", type=Path, default=Path("templates"))
     args = parser.parse_args(argv)
@@ -83,14 +91,20 @@ def main(argv: list[str] | None = None) -> int:
         print("No changed templates; nothing to cover.")
         return 0
 
-    if not args.rendered.exists():
-        print(f"FAIL: {args.rendered} does not exist -- the axe sweep recorded nothing, "
-              "so no changed template can be shown to have been audited.")
-        return 1
-    rendered = set(json.loads(args.rendered.read_text(encoding="utf-8")))
-    if not rendered:
-        print("FAIL: the axe sweep rendered no templates.")
-        return 1
+    rendered: set[str] = set()
+    for label, path, required in (("real-route sweep", args.rendered, True),
+                                  ("fixture render", args.fixture_rendered, False)):
+        if path is None:
+            continue
+        if not path.exists():
+            print(f"ACCESSIBILITY COVERAGE FAIL\nreason: {path} does not exist -- the {label} recorded nothing, "
+                  "so no changed template can be shown to have been audited by it.")
+            return 1
+        names = set(json.loads(path.read_text(encoding="utf-8")))
+        if not names and required:
+            print(f"ACCESSIBILITY COVERAGE FAIL\nreason: the {label} rendered no templates.")
+            return 1
+        rendered |= names
 
     exemptions = json.loads(args.exemptions.read_text(encoding="utf-8")) if args.exemptions.exists() else {}
     env = Environment(loader=FileSystemLoader(str(args.templates_dir)))
@@ -100,15 +114,20 @@ def main(argv: list[str] | None = None) -> int:
     missing = uncovered(changed, covered, exemptions)
     if missing:
         problems = True
-        print("FAIL: changed templates that no axe sweep page renders or reaches:")
         for name in missing:
-            print(f"  - templates/{name}")
-        print("Add a page that renders it to tests/test_axe_app_pages.py, or add a justified "
-              "entry to tests/axe_coverage_exemptions.json.")
+            print(f"ACCESSIBILITY COVERAGE FAIL\ntemplate: templates/{name}\n"
+                  "reason: no route scenario or registered render fixture")
+        print("Register a fixture state in tests/a11y_fixtures, or add a route scenario to "
+              "tests/test_axe_app_pages.py. A route is not required just to make a template testable.")
     stale = stale_exemptions(exemptions, args.templates_dir)
     if stale:
         problems = True
         print("FAIL: exemptions naming templates that no longer exist: " + ", ".join(stale))
+
+    redundant = sorted(name for name in exemptions if name in covered)
+    if redundant:
+        problems = True
+        print("FAIL: these templates are covered now; remove their exemptions: " + ", ".join(redundant))
 
     exempt_hit = sorted(changed & set(exemptions) - covered)
     for name in exempt_hit:

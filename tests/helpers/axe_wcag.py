@@ -114,9 +114,11 @@ def authenticated_page(browser, base_url: str, session_dict: dict | None):
     return context.new_page()
 
 
-def axe_violations(page, url: str) -> list:
+def axe_violations(page, url: str, *, before_axe=None) -> list:
     response = page.goto(url, wait_until="networkidle")
     assert response is not None and response.ok, f"Could not load {url} (status {response.status if response else 'no response'})"
+    if before_axe is not None:
+        before_axe(page)
     page.add_script_tag(content=AXE_SOURCE)
     result = page.evaluate("""async () => {
         return await axe.run(document, {
@@ -183,3 +185,82 @@ def sysadmin_session(username: str) -> dict:
         "current_session_nonce": nonce,
         "last_activity": utc_now().isoformat(),
     }
+
+
+def format_violations(violations: list) -> str:
+    return "\n".join(
+        f"violation: {v['id']} [{v['impact']}] {v['help']}\n"
+        + "\n".join(f"    - {n['target']}: {n['failureSummary']}" for n in v["nodes"])
+        for v in violations
+    )
+
+
+def _interact(page, state) -> None:
+    """Click each of the state's selectors, then let transitions settle.
+
+    Hidden content (an inactive Bootstrap tab pane) is invisible to axe, so a
+    state that audits one reveals it the way a user would.
+    """
+    for selector in state.interact:
+        page.click(selector)
+        page.wait_for_load_state("networkidle")
+        page.wait_for_timeout(400)  # Bootstrap's fade transition; contrast is computed on settled opacity
+
+
+def _fulfill_with(fixture):
+    return lambda route, _request=None: route.fulfill(status=200, body=fixture.html, headers=fixture.headers)
+
+
+def audit_fixture_states(browser, base_url: str, states, *, flask_app=flask_app) -> tuple[dict[str, str], set[str]]:
+    """Render every registered state and run axe over it in ``browser``.
+
+    The HTML is produced by the real Jinja environment and response pipeline
+    (``tests.a11y_fixtures.render_state``) and handed to Chromium at a URL on the
+    live test server, so the project's real CSS, fonts and template JS load.
+
+    Returns ``(failures, rendered_templates)``. ``failures`` maps
+    ``"<template>::<state>"`` to a report naming the template, the state and the
+    reason (a render failure or the axe violations); ``rendered_templates`` is the
+    set of templates that rendered successfully, for the coverage guard.
+    """
+    from tests.a11y_fixtures import FixtureRenderError, render_state
+
+    failures: dict[str, str] = {}
+    rendered_templates: set[str] = set()
+    for state in states:
+        try:
+            fixture = render_state(flask_app, state)
+        except FixtureRenderError as exc:
+            failures[state.id] = f"AXE FAIL (fixture cannot render)\n{exc}"
+            continue
+        rendered_templates.update(fixture.templates)
+
+        context = browser.new_context(base_url=base_url)
+        page = context.new_page()
+        url = f"{base_url}/__a11y_fixture__/{state.template.replace('/', '__')}/{state.state}"
+        page.route(f"{url}**", _fulfill_with(fixture))
+        if state.query:
+            url = f"{url}?{state.query}"
+        try:
+            violations = axe_violations(page, url, before_axe=lambda p, s=state: _interact(p, s))
+        finally:
+            context.close()
+        if violations:
+            failures[state.id] = (
+                f"AXE FAIL\ntemplate: templates/{state.template}\nstate: {state.state}\n"
+                + format_violations(violations)
+            )
+    return failures, rendered_templates
+
+
+def record_fixture_templates(names: set[str]) -> None:
+    """Merge fixture-rendered templates into ``AXE_FIXTURE_TEMPLATES_FILE``."""
+    target = os.environ.get("AXE_FIXTURE_TEMPLATES_FILE")
+    if not target:
+        return
+    path = Path(target)
+    existing: set[str] = set()
+    if path.exists():
+        existing = set(json.loads(path.read_text(encoding="utf-8")))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(sorted(existing | names)), encoding="utf-8")
