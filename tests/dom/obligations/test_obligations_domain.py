@@ -211,6 +211,20 @@ class TestScheduleNextBillCycle:
 class TestSatisfyObligation:
     """Test FEAT-OBL-003: Satisfy Obligation (waiver path)."""
 
+    def test_registry_names_feat_obl_003_for_its_contract(self):
+        """The registry label is the contract's title, read from the contract itself."""
+        import re
+        from pathlib import Path
+
+        from app.feats.base import FEAT_REGISTRY
+
+        docs = Path(__file__).resolve().parents[3] / "docs" / "FEATURE-EXECUTION"
+        (contract,) = docs.glob("FEAT-OBL-003_*.md")
+        heading = contract.read_text(encoding="utf-8").splitlines()[0]
+        title = re.fullmatch(r"# FEAT-OBL-003: (.+)", heading).group(1).strip()
+
+        assert FEAT_REGISTRY["FEAT-OBL-003"]["desc"] == title
+
     def test_satisfy_obligation_creates_waived_event(self, app):
         """Waiver creates WAIVED event with same correlation_id as ASSESSMENT per DOM-OBL-001."""
         classroom = initialize("chemistry_p1", app)

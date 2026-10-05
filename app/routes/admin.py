@@ -5210,7 +5210,8 @@ def rent_settings():
     Configuration authority, not Obligations mutation (MAP-UI-001).
 
     This route previously carried ``@requires_feat_context("FEAT-OBL-003")``
-    (Obligations / "Scheduled Insurance Cycle"), which made the POST open a
+    (Obligations / Satisfy Obligation, then mislabelled "Scheduled Insurance
+    Cycle" in the registry), which made the POST open a
     second, nested context and fail outright with ``FEATContextError``: a
     teacher could not change rent at all. The decorator could not simply be
     re-pointed at the right FEAT either, since ``requires_feat_context`` reads

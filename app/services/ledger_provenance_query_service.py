@@ -67,7 +67,12 @@ SYSTEM_ORIGINATED_FEAT_CODES: frozenset[str] = frozenset(
         "FEAT-LED-001",   # Overdraft/NSF Fee Application
         # obligation assessment (scheduled cycles, not self-payment)
         "FEAT-OBL-002",   # Scheduled Rent Cycle
-        "FEAT-OBL-003",   # Scheduled Insurance Cycle
+        # FEAT-OBL-003 is Satisfy Obligation. It was admitted here under its old
+        # registry label, "Scheduled Insurance Cycle". Insurance premium payments
+        # post under it (insurance_premium_payment_feat.py), including a
+        # student's manual payment, which is not system-originated. Whether it
+        # belongs here is undecided.
+        "FEAT-OBL-003",   # Satisfy Obligation
         # admin adjustment
         "FEAT-ADMN-001",  # Bulk administration
     }
