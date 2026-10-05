@@ -145,4 +145,6 @@ jobs:
             --exemptions tests/axe_coverage_exemptions.json
 
       - name: Guard script unit tests
+        env:
+          DATABASE_URL: postgresql://user:password@localhost:5432/classroom_test_db
         run: pytest -q tests/test_axe_template_coverage_guard.py
