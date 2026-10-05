@@ -61,7 +61,7 @@ from app.models import (
     RentSettings,
     HallPassLog, HallPassSettings, PayrollSettings,
     ClassFeature,
-    Announcement, Issue, IssueCategory, IssueStatusHistory, IssueResolutionAction, Seat,
+    Announcement, Issue, IssueStatusHistory, IssueResolutionAction, Seat,
     LedgerBalanceSnapshot, User, UserRole, _quantize_currency,
     ObligationAssessment,
     AttendanceReasonCode, IdentityProfile, PayrollEvent, PolicyVersion,
@@ -9227,11 +9227,7 @@ def help_support():
             'clean_description': issue.student_explanation or '',
         } for issue in issues]
 
-    category_to_report_type = {
-        'general': 'comment',
-        'bug': 'bug',
-        'feature': 'suggestion',
-    }
+    from app.utils.issue_categories import TEACHER_TOPIC_CATEGORIES, ensure_teacher_topic_category
 
     if not selected_class_id and request.method == 'GET':
         flash(
@@ -9249,7 +9245,7 @@ def help_support():
                 "error",
             )
             return redirect(url_for('admin.help_support'))
-        issue_category = request.form.get('issue_category', 'general').strip().lower()
+        issue_category = request.form.get('issue_category', '').strip().lower()
         title = request.form.get('title', '').strip()
         description = request.form.get('description', '').strip()
         expected_behavior = request.form.get('expected_behavior', '').strip()
@@ -9261,8 +9257,8 @@ def help_support():
         # Submission topic never changes scope. Form data cannot select or remove it.
         ticket_class_public_id = active_class_row.class_public_id
 
-        if issue_category not in category_to_report_type:
-            flash("Please select a valid support ticket category.", "error")
+        if issue_category not in TEACHER_TOPIC_CATEGORIES:
+            flash("Please choose what you need help with.", "error")
             my_reports = _support_report_views(
                 Issue.query.filter(
                     Issue.actor_public_id == actor_public_id,
@@ -9289,7 +9285,7 @@ def help_support():
             )
 
         if not title or not description or not issue_category:
-            flash("Please provide a category, title, and description for your support ticket.", "error")
+            flash("Please say what you need help with and give a title and description.", "error")
             my_reports = _support_report_views(
                 Issue.query.filter(
                     Issue.actor_public_id == actor_public_id,
@@ -9342,11 +9338,7 @@ def help_support():
                 "FEAT-SUP-001",
                 idempotency_key=f"admin_help_support:{user_id}:{payload_hash}",
             ):
-                category = IssueCategory.query.filter_by(
-                    name=category_to_report_type[issue_category],
-                ).first()
-                if not category:
-                    category = IssueCategory.query.first()
+                category = ensure_teacher_topic_category(issue_category)
                 create_support_ticket(
                     actor_public_id=anonymous_code,
                     class_public_id=ticket_class_public_id,

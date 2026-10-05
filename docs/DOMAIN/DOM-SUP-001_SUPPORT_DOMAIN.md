@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-SUP-001 | 1.7 | 2026-09-17 | 1.6 | Normative |
+| DOM-SUP-001 | 1.8 | 2026-09-23 | 1.7 | Normative |
 
 ## I. Purpose
 
@@ -99,7 +99,8 @@ Key fields:
 - `id`
 - `name` — unique; the canonical category label
 - `description`
-- `category_type` — `transaction` | `general`
+- `category_type` — `transaction` | `general` (student categories) | `teacher`
+  (the topic a teacher picks on a direct support ticket)
 - `is_active`
 - `display_order`
 
@@ -107,6 +108,10 @@ Rules:
 
 - Categories are system-managed. Students select from this list at submission time;
   they do not create categories.
+- Students are offered only `transaction` and `general` categories; teachers only
+  `teacher` categories. A `teacher` category is a topic, not a scope: it never removes
+  or changes the ticket's class (§X), and its name must not carry a class name, which
+  reaches system support only through the separate consent flag.
 - `is_active = false` categories may not be selected for new issues but must be
   retained for display on historical issues.
 

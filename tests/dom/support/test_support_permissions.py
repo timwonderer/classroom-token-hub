@@ -156,7 +156,7 @@ def test_direct_teacher_submission_class_name_is_separate_permission(client):
     classroom = initialize_support_teacher('chemistry_p1', client, client.application)
     seed_support_issue_categories()
     response = client.post('/admin/help-support', data={
-        'issue_category': 'bug', 'title': 'Consent test', 'description': 'TEACHER REPORT',
+        'issue_category': 'class', 'title': 'Consent test', 'description': 'TEACHER REPORT',
         'share_class_name': 'on',
     }, follow_redirects=True)
     assert response.status_code == 200
@@ -232,7 +232,7 @@ def test_teacher_account_deletion_removes_seat_scoped_ticket_and_pack(client):
     seed_support_issue_categories()
     teacher_id = classroom.teacher_user.id
     response = client.post('/admin/help-support', data={
-        'class_id': 'account', 'issue_category': 'bug', 'title': 'Teacher ticket',
+        'class_id': 'account', 'issue_category': 'account', 'title': 'Teacher ticket',
         'description': 'Teacher context',
     })
     assert response.status_code == 302
@@ -302,7 +302,7 @@ def test_teacher_ticket_keeps_original_class_label_after_class_rename(client):
     seed_support_issue_categories()
     original_label = classroom.economy.display_name
     response = client.post('/admin/help-support', data={
-        'issue_category': 'bug', 'title': 'Frozen context', 'description': 'Frozen teacher report',
+        'issue_category': 'account', 'title': 'Frozen context', 'description': 'Frozen teacher report',
         'class_id': 'account',  # Untrusted input cannot remove canonical class scope.
     })
     assert response.status_code == 302

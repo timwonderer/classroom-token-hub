@@ -88,6 +88,45 @@ DEFAULT_GENERAL_CATEGORIES = [
 ]
 
 
+# Topics a teacher picks on the Help & Support form. They are a separate
+# category_type so they never appear in a student's category list. The topic
+# says what the ticket is about; it never changes the ticket's scope, which is
+# always the teacher's active seat and class (DOM-SUP-001 §X). The class topic
+# is deliberately named generically: the class name reaches system support only
+# through the separate consent checkbox.
+TEACHER_TOPIC_CATEGORIES = {
+    'account': {
+        'name': 'My own account and actions',
+        'description': 'A problem with the teacher\'s own account or something they did',
+        'category_type': 'teacher',
+        'display_order': 1
+    },
+    'class': {
+        'name': 'My class',
+        'description': 'A problem with the teacher\'s active class',
+        'category_type': 'teacher',
+        'display_order': 2
+    },
+}
+
+
+def ensure_teacher_topic_category(topic):
+    """Return the category for a teacher help topic, creating it on first use.
+
+    Must run inside the caller's FEAT-SUP-001 context. Returns None for an
+    unknown topic so the caller can reject the submission.
+    """
+    cat_data = TEACHER_TOPIC_CATEGORIES.get(topic)
+    if cat_data is None:
+        return None
+    category = IssueCategory.query.filter_by(name=cat_data['name']).first()
+    if category is None:
+        category = IssueCategory(is_active=True, **cat_data)
+        db.session.add(category)
+        db.session.flush()  # FEAT-AUTHORIZED-SHELL
+    return category
+
+
 @requires_feat_context("FEAT-SUP-001")
 def init_default_categories(*, correlation_id: str, idempotency_key: str):
     """
@@ -99,7 +138,11 @@ def init_default_categories(*, correlation_id: str, idempotency_key: str):
     """
     created_count = 0
 
-    all_categories = DEFAULT_TRANSACTION_CATEGORIES + DEFAULT_GENERAL_CATEGORIES
+    all_categories = (
+        DEFAULT_TRANSACTION_CATEGORIES
+        + DEFAULT_GENERAL_CATEGORIES
+        + list(TEACHER_TOPIC_CATEGORIES.values())
+    )
 
     for cat_data in all_categories:
         # Check if category already exists

@@ -414,6 +414,39 @@ a:hover {
     box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--primary) 25%, transparent) !important;
 }
 
+/* `.btn` above zeroes every border to transparent, so each outline variant
+ * must restore its own; an outline button left to Bootstrap renders with no
+ * border and Bootstrap's untokened text colour. */
+.btn-outline-success {
+    color: var(--success) !important;
+    border-color: var(--success) !important;
+    background: transparent;
+}
+
+.btn-outline-success:hover,
+.btn-outline-success:focus-visible,
+.btn-outline-success:active,
+.btn-outline-success.active {
+    background-color: var(--success) !important;
+    border-color: var(--success) !important;
+    color: var(--text-inverse) !important;
+}
+
+.btn-outline-danger {
+    color: var(--danger) !important;
+    border-color: var(--danger) !important;
+    background: transparent;
+}
+
+.btn-outline-danger:hover,
+.btn-outline-danger:focus-visible,
+.btn-outline-danger:active,
+.btn-outline-danger.active {
+    background-color: var(--danger) !important;
+    border-color: var(--danger) !important;
+    color: var(--text-inverse) !important;
+}
+
 .btn-link {
     color: var(--primary);
     text-decoration: none;
@@ -512,6 +545,17 @@ a:hover {
 .card-body {
     padding: 1.25rem;
     color: var(--text-primary);
+}
+
+/* Bootstrap fills tables and list groups with --bs-body-bg, which tokens.css
+ * maps to the page --background. Inside a card that paints page-grey rows on
+ * the white card surface, so the card reads as having holes in its border. */
+.card .table {
+    --bs-table-bg: var(--surface);
+}
+
+.card .list-group {
+    --bs-list-group-bg: var(--surface);
 }
 
 .card-footer {

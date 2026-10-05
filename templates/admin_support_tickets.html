@@ -9,7 +9,7 @@
 {% call help.topic('sup-who', 'person_raised_hand', 'Who files, and against what') %}
 <ul class="ps-3 mb-0">
     <li class="mb-2"><strong>This form is for teacher problems.</strong> A student's issue has to start with the student — they open it, and you elevate it from the Student Issues queue. You cannot file on their behalf from here.</li>
-    <li class="mb-0"><strong>Scope it correctly.</strong> Pick your active class if the problem is with that class, or "My account" if it follows you everywhere. Only the class you have open is offered; switch classes first if you meant a different one.</li>
+    <li class="mb-0"><strong>Say what it is about.</strong> Choose "My own account and actions" for a problem with your account or something you did, or your class for a problem with the class itself. Either way the ticket is filed from the class you have open; switch classes first if you meant a different one.</li>
 </ul>
 {% endcall %}
 
@@ -21,7 +21,7 @@
 {% endcall %}
 
 {% call help.topic('sup-privacy', 'shield_person', 'Privacy and ticket status') %}
-<p><strong>Leave student names out.</strong> You are identified by the IDs shown under the scope selector, which is all support needs — no student information travels with the ticket.</p>
+<p><strong>Leave student names out.</strong> You are identified by the references shown under "I need help with", which is all support needs — no student information travels with the ticket.</p>
 <p class="mb-0 text-muted">My Tickets shows status. <em>Teacher review</em> means it is back with you; <em>escalated</em> means it has reached the developers.</p>
 {% endcall %}
 {% endblock %}
@@ -41,21 +41,19 @@
                     <form method="POST" action="{{ url_for('admin.help_support') }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         {% set active_class = class_scope_options | first %}
+                        {% set class_label = active_class.label if active_class else 'your active class' %}
                         <div class="mb-3">
-                            <p>Submitted from <strong>{{ active_class.label if active_class else 'your active class' }}</strong>.</p>
-                            <small class="text-muted">
+                            <label for="issue_category" class="form-label">I need help with <span class="text-danger">*</span></label>
+                            <select class="form-select" id="issue_category" name="issue_category" required aria-describedby="ticket-references">
+                                <option value="" disabled {% if form_issue_category not in ['account', 'class'] %}selected{% endif %}>Choose one…</option>
+                                <option value="account" {% if form_issue_category == 'account' %}selected{% endif %}>My own account and actions</option>
+                                <option value="class" {% if form_issue_category == 'class' %}selected{% endif %}>My class {{ class_label }}</option>
+                            </select>
+                            <small class="form-text text-muted d-block mt-2" id="ticket-references">
+                                Submitted from {{ class_label }}.<br>
                                 Your seat reference: {{ actor_public_id }}<br>
                                 Your class reference: {{ active_class.class_public_id if active_class else '' }}
                             </small>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="issue_category" class="form-label">Issue Type <span class="text-danger">*</span></label>
-                            <select class="form-select" id="issue_category" name="issue_category" required>
-                                <option value="general">General Support</option>
-                                <option value="bug">Bug / Error</option>
-                                <option value="feature">Feature Request</option>
-                            </select>
                         </div>
 
                         <div class="mb-3">
@@ -93,9 +91,8 @@
 
         <div class="col-lg-7">
             <div class="card shadow-sm">
-                <div class="card-header d-flex justify-content-between align-items-center">
+                <div class="card-header">
                     <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">format_list_bulleted</span>My Tickets</h5>
-                    <span class="small text-muted">Active class context</span>
                 </div>
                 <div class="card-body">
                     {% if my_reports %}
@@ -114,7 +111,7 @@
                             </div>
                             <div class="small text-muted mt-1">
                                 Submitted {{ report.submitted_at|fmt_timestamp }}
-                                • Category: {{ (entry.issue_category or report.report_type)|replace('_', ' ')|title }}
+                                • Topic: {{ entry.issue_category or report.report_type|replace('_', ' ')|title }}
                             </div>
                             <p class="mb-0 mt-2">{{ entry.clean_description[:220] }}{% if entry.clean_description|length > 220 %}...{% endif %}</p>
                         </div>
