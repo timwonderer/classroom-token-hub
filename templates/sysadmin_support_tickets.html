@@ -6,7 +6,6 @@
 {% block content %}
 <style>
     .sa-maxw-200 { max-width: 200px; }
-    .sa-maxw-400 { max-width: 400px; }
     .sa-minw-160 { min-width: 160px; }
     .sa-w-120 { width: 120px; }
     .sa-w-130 { width: 130px; }
@@ -65,14 +64,14 @@
     </div>
 
     <!-- ── Tabs ── -->
-    <ul class="nav nav-tabs mb-0 border-bottom-0" id="ticketTabs" role="tablist">
+    <ul class="nav nav-tabs sysadmin-tabs" id="ticketTabs" role="tablist">
         <li class="nav-item" role="presentation">
             <button class="nav-link {% if active_tab == 'reports' or not active_tab %}active{% endif %}"
                 id="reports-tab" data-bs-toggle="tab" data-bs-target="#reports-pane" type="button" role="tab" aria-controls="reports-pane" aria-selected="{% if active_tab == 'reports' or not active_tab %}true{% else %}false{% endif %}">
                 <span class="material-symbols-outlined align-middle me-1 icon-xs" aria-hidden="true">bug_report</span>
                 Teacher Issues
                 {% if new_reports > 0 %}
-                <span class="badge bg-primary ms-1">{{ new_reports }}</span>
+                <span class="badge bg-primary">{{ new_reports }}</span>
                 {% endif %}
             </button>
         </li>
@@ -81,28 +80,28 @@
                 data-bs-toggle="tab" data-bs-target="#issues-pane" type="button" role="tab" aria-controls="issues-pane" aria-selected="{% if active_tab == 'issues' %}true{% else %}false{% endif %}">
                 <span class="material-symbols-outlined align-middle me-1 icon-xs"
                     aria-hidden="true">escalator_warning</span>
-                Escalated Student Issues
+                <span><span class="d-none d-sm-inline">Escalated </span>Student Issues</span>
                 {% if (pending_issues + in_review_issues) > 0 %}
-                <span class="badge bg-warning text-dark ms-1">{{ pending_issues + in_review_issues }}</span>
+                <span class="badge bg-warning text-dark">{{ pending_issues + in_review_issues }}</span>
                 {% endif %}
             </button>
         </li>
     </ul>
 
-    <div class="tab-content border border-top-0 rounded-bottom bg-white shadow-sm mb-4">
+    <div class="tab-content sysadmin-tab-panel">
 
         <!-- ── Teacher Issues Tab ── -->
         <div class="tab-pane fade {% if active_tab == 'reports' or not active_tab %}show active{% endif %}"
             id="reports-pane" role="tabpanel" aria-labelledby="reports-tab">
 
             <!-- Filter Bar -->
-            <div class="p-3 border-bottom bg-light d-flex flex-wrap gap-2 align-items-end">
+            <div class="sysadmin-filterbar">
                 <form method="GET" action="{{ url_for('sysadmin.support_tickets') }}"
-                    class="d-flex flex-wrap gap-2 w-100">
+                    class="d-flex flex-wrap gap-2 align-items-end">
                     <input type="hidden" name="tab" value="reports">
-                    <div class="sa-minw-160 sa-maxw-200">
-                        <label class="form-label mb-1 type-xs">Status</label>
-                        <select name="status" class="form-select form-select-sm" aria-label="Filter support tickets by status" onchange="this.form.submit()">
+                    <div class="sysadmin-filter-field sa-minw-160 sa-maxw-200">
+                        <label class="form-label mb-1 type-xs" for="ticket-status-filter">Status</label>
+                        <select id="ticket-status-filter" name="status" class="form-select form-select-sm" aria-label="Filter support tickets by status" onchange="this.form.submit()">
                             <option value="all" {% if status_filter=='all' %}selected{% endif %}>All Statuses</option>
                             <option value="open" {% if status_filter=='open' %}selected{% endif %}>Open</option>
                             <option value="dev_resolved" {% if status_filter=='dev_resolved' %}selected{% endif %}>Resolved
@@ -110,9 +109,9 @@
                             <option value="closed" {% if status_filter=='closed' %}selected{% endif %}>Closed</option>
                         </select>
                     </div>
-                    <div class="sa-minw-160 sa-maxw-200">
-                        <label class="form-label mb-1 type-xs">Type</label>
-                        <select name="type" class="form-select form-select-sm" aria-label="Filter support tickets by type" onchange="this.form.submit()">
+                    <div class="sysadmin-filter-field sa-minw-160 sa-maxw-200">
+                        <label class="form-label mb-1 type-xs" for="ticket-type-filter">Type</label>
+                        <select id="ticket-type-filter" name="type" class="form-select form-select-sm" aria-label="Filter support tickets by type" onchange="this.form.submit()">
                             <option value="all" {% if report_type_filter=='all' %}selected{% endif %}>All Types</option>
                             <option value="bug" {% if report_type_filter=='bug' %}selected{% endif %}>Bug</option>
                             <option value="suggestion" {% if report_type_filter=='suggestion' %}selected{% endif %}>
@@ -221,26 +220,26 @@
             role="tabpanel" aria-labelledby="issues-tab">
 
             <!-- Issue sub-tabs -->
-            <div class="p-3 border-bottom bg-light">
-                <ul class="nav nav-pills nav-sm gap-2" id="issuePills" role="tablist">
+            <div class="sysadmin-filterbar">
+                <ul class="nav nav-pills sysadmin-pills" id="issuePills">
                     <li class="nav-item">
-                        <button type="button" class="nav-link active py-1 px-3 type-sm" data-bs-toggle="pill" data-bs-target="#pill-pending">
+                        <button type="button" class="nav-link active" data-bs-toggle="pill" data-bs-target="#pill-pending">
                             Pending
                             {% if issues_pending|length > 0 %}
-                            <span class="badge bg-warning text-dark ms-1">{{ issues_pending|length }}</span>
+                            <span class="badge bg-warning text-dark">{{ issues_pending|length }}</span>
                             {% endif %}
                         </button>
                     </li>
                     <li class="nav-item">
-                        <button type="button" class="nav-link py-1 px-3 type-sm" data-bs-toggle="pill" data-bs-target="#pill-review">
+                        <button type="button" class="nav-link" data-bs-toggle="pill" data-bs-target="#pill-review">
                             In Review
                             {% if issues_in_review|length > 0 %}
-                            <span class="badge bg-info ms-1">{{ issues_in_review|length }}</span>
+                            <span class="badge bg-info">{{ issues_in_review|length }}</span>
                             {% endif %}
                         </button>
                     </li>
                     <li class="nav-item">
-                        <button type="button" class="nav-link py-1 px-3 type-sm" data-bs-toggle="pill" data-bs-target="#pill-resolved">
+                        <button type="button" class="nav-link" data-bs-toggle="pill" data-bs-target="#pill-resolved">
                             Resolved
                         </button>
                     </li>
@@ -256,59 +255,55 @@
                 ] %}
                 <div class="tab-pane fade {% if loop.first %}show active{% endif %}" id="pill-{{ pill_id }}">
                     {% if issue_list %}
-                    <div class="list-group list-group-flush">
+                    <div>
                         {% for issue in issue_list %}
                         <a href="{{ url_for('sysadmin.view_issue', issue_ref=issue_ref_for(issue.id)) }}"
-                            class="list-group-item list-group-item-action py-3">
-                            <div class="d-flex w-100 justify-content-between align-items-start">
-                                <div class="flex-grow-1 me-3 min-width-0">
-                                    <!-- Badges row -->
-                                    <div class="d-flex flex-wrap gap-1 mb-2">
-                                        <span class="badge bg-secondary type-2xs">
-                                            <span class="material-symbols-outlined me-1" aria-hidden="true">person</span>
-                                            {{ issue.actor_public_id[:8] }}...
-                                        </span>
-                                        <span class="badge bg-light text-dark border type-2xs">
-                                            {{ issue.category_name }}
-                                        </span>
-                                        <span class="badge bg-primary type-2xs">
-                                            <span class="material-symbols-outlined me-1" aria-hidden="true">badge</span>{% if issue.reviewer_public_id %}{{ issue.reviewer_public_id[:8] }}...{% else %}Unattributed{% endif %}
-                                        </span>
-                                        {% if issue.share_class_name_with_sysadmin and issue.class_label %}
-                                        <span class="badge bg-info type-2xs">
-                                            <span class="material-symbols-outlined me-1" aria-hidden="true">door_front</span>{{ issue.class_label }}
-                                        </span>
-                                        {% endif %}
-                                    </div>
-                                    <!-- Escalation reason -->
-                                    <div class="fw-semibold mb-1 type-sm">{{ issue.escalation_reason
-                                        }}</div>
-                                    <div class="text-muted text-truncate type-xs sa-maxw-400">
-                                        {% if issue.student_explanation %}
-                                        {{ issue.student_explanation[:150] }}{% if issue.student_explanation|length >
-                                        150 %}...{% endif %}
-                                        {% else %}
-                                        The teacher has not shared this report’s content.
-                                        {% endif %}
-                                    </div>
-                                    <div class="text-muted mt-1 type-2xs">
-                                        {% if pill_id == 'pending' %}
-                                        <span class="material-symbols-outlined me-1" aria-hidden="true">arrow_circle_up</span>
-                                        Escalated {{ issue.escalated_at|fmt_timestamp }}
-                                        {% elif pill_id == 'review' %}
-                                        <span class="material-symbols-outlined me-1" aria-hidden="true">visibility</span>
-                                        In review since {{ (issue.sysadmin_reviewed_at or issue.escalated_at)|fmt_timestamp }}
-                                        {% else %}
-                                        <span class="material-symbols-outlined me-1" aria-hidden="true">check_circle</span>
-                                        Resolved {{ issue.sysadmin_resolved_at|fmt_timestamp }}
-                                        {% endif %}
-                                    </div>
+                            class="sysadmin-ticket">
+                            <div class="sysadmin-ticket-head">
+                                <div class="sysadmin-ticket-chips">
+                                    <span class="sysadmin-chip sysadmin-chip-code">
+                                        <span class="material-symbols-outlined" aria-hidden="true">person</span>
+                                        <span class="sysadmin-chip-text">{{ issue.actor_public_id[:8] }}…</span>
+                                    </span>
+                                    <span class="sysadmin-chip">
+                                        <span class="sysadmin-chip-text">{{ issue.category_name }}</span>
+                                    </span>
+                                    <span class="sysadmin-chip sysadmin-chip-code">
+                                        <span class="material-symbols-outlined" aria-hidden="true">badge</span>
+                                        <span class="sysadmin-chip-text">{% if issue.reviewer_public_id %}{{ issue.reviewer_public_id[:8] }}…{% else %}Unattributed{% endif %}</span>
+                                    </span>
+                                    {% if issue.share_class_name_with_sysadmin and issue.class_label %}
+                                    <span class="sysadmin-chip">
+                                        <span class="material-symbols-outlined" aria-hidden="true">door_front</span>
+                                        <span class="sysadmin-chip-text">{{ issue.class_label }}</span>
+                                    </span>
+                                    {% endif %}
                                 </div>
                                 <span class="badge {{ badge_class }} flex-shrink-0 type-2xs">
                                     {% if pill_id == 'pending' %}Pending
                                     {% elif pill_id == 'review' %}In Review
                                     {% else %}Resolved{% endif %}
                                 </span>
+                            </div>
+                            <div class="sysadmin-ticket-title">{{ issue.escalation_reason }}</div>
+                            <div class="sysadmin-ticket-excerpt">
+                                {% if issue.student_explanation %}
+                                {{ issue.student_explanation[:150] }}{% if issue.student_explanation|length > 150 %}…{% endif %}
+                                {% else %}
+                                The teacher has not shared this report’s content.
+                                {% endif %}
+                            </div>
+                            <div class="sysadmin-ticket-meta">
+                                {% if pill_id == 'pending' %}
+                                <span class="material-symbols-outlined" aria-hidden="true">arrow_circle_up</span>
+                                Escalated {{ issue.escalated_at|fmt_timestamp }}
+                                {% elif pill_id == 'review' %}
+                                <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
+                                In review since {{ (issue.sysadmin_reviewed_at or issue.escalated_at)|fmt_timestamp }}
+                                {% else %}
+                                <span class="material-symbols-outlined" aria-hidden="true">check_circle</span>
+                                Resolved {{ issue.sysadmin_resolved_at|fmt_timestamp }}
+                                {% endif %}
                             </div>
                         </a>
                         {% endfor %}

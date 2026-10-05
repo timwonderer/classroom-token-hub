@@ -71,14 +71,23 @@
     .log-box .log-header > span {
         flex-shrink: 0;
     }
+    /* The log box is always dark. The status tokens are tuned for light
+       surfaces (3.3:1 or less on --neutral-900), so it carries its own
+       light-on-dark pair; each is at least 7:1 on #171717. */
     .log-box .timestamp {
-        color: var(--info);
+        color: #8fc4e8;
     }
     .log-box .level {
         font-weight: var(--weight-bold);
     }
+    .log-box .level.text-warning {
+        color: #f0c36d !important;
+    }
+    .log-box .level.text-danger {
+        color: #ff8a80 !important;
+    }
     .log-box .module {
-        color: var(--text-secondary);
+        color: var(--text-on-dark-muted);
     }
     .log-box pre.message {
         white-space: pre-wrap;

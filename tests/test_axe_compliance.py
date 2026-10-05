@@ -13,6 +13,7 @@ reserved for "audited, and the page has a violation".
 """
 
 import http.server
+import os
 import socketserver
 import threading
 from contextlib import contextmanager
@@ -86,6 +87,8 @@ def test_published_pages_have_no_axe_violations():
         try:
             browser = playwright.chromium.launch(headless=True)
         except Exception as exc:  # pragma: no cover - browser installation varies
+            if os.environ.get("AXE_REQUIRE_BROWSER") == "1":
+                pytest.fail(f"AXE_REQUIRE_BROWSER=1 but Chromium is unavailable: {exc}")
             pytest.skip(f"Chromium is unavailable: {exc}")
 
         with browser, _serve_site() as base_url:

@@ -29,10 +29,13 @@ from __future__ import annotations
 import pytest
 
 from app.feats.base import FEATContext
+from app.models import Issue, IssueCategory
+from app.utils.opaque_refs import make_opaque_ref
 from tests.helpers.axe_wcag import (
     assert_no_violations,
     authenticated_page,
     axe_violations,
+    skip_or_fail_without_browser,
     sync_playwright,
     sysadmin_session,
     teacher_session as _build_teacher_session,
@@ -40,7 +43,9 @@ from tests.helpers.axe_wcag import (
     wcag_live_server,  # noqa: F401 -- fixture, used via pytest injection
 )
 from tests.helpers.class_domain import enable_class_feature
+from tests.helpers.canonical_classroom import login_teacher
 from tests.helpers.classroom_initializer import initialize_as_student, initialize_as_teacher
+from tests.helpers.support_domain import initialize_support_student, seed_support_issue_categories
 from tests.helpers.store_products import publish_store_product
 
 
@@ -94,6 +99,11 @@ def test_no_axe_violations_across_pages_needing_no_domain_setup(app, client, wca
         ("/admin/students", teacher_session),
         ("/admin/help-support", teacher_session),
         ("/admin/banking", teacher_session),
+        ("/admin/attendance-log", teacher_session),
+        ("/admin/announcements", teacher_session),
+        ("/admin/announcements/create", teacher_session),
+        ("/admin/create-class", teacher_session),
+        ("/admin/payroll/correction", teacher_session),
         # Group C -- feature-disabled fallback, reached with zero extra setup
         ("/admin/store", teacher_session),
         # Group E -- student, no extra setup
@@ -109,6 +119,12 @@ def test_no_axe_violations_across_pages_needing_no_domain_setup(app, client, wca
         ("/student/help-support/submit-issue", student_session),
         # Group F -- public, no auth, no setup
         ("/admin/signup", None),
+        ("/admin/login", None),
+        ("/admin/recover", None),
+        ("/admin/resume-credentials", None),
+        ("/student/login", None),
+        ("/student/claim-account", None),
+        ("/sysadmin/login", None),
         ("/docs/", None),
         ("/docs/search", None),
         ("/docs/user-guides/teacher_manual", None),
@@ -127,7 +143,7 @@ def test_no_axe_violations_across_pages_needing_no_domain_setup(app, client, wca
         try:
             browser = playwright.chromium.launch(headless=True)
         except Exception as exc:  # pragma: no cover - browser installation varies
-            pytest.skip(f"Chromium is unavailable: {exc}")
+            skip_or_fail_without_browser(exc)
 
         with browser:
             failures: dict[str, list] = {}
@@ -181,12 +197,118 @@ def test_no_axe_violations_across_feature_gated_pages(app, client, wcag_live_ser
         try:
             browser = playwright.chromium.launch(headless=True)
         except Exception as exc:  # pragma: no cover - browser installation varies
-            pytest.skip(f"Chromium is unavailable: {exc}")
+            skip_or_fail_without_browser(exc)
 
         with browser:
             failures: dict[str, list] = {}
             for path, session_dict in pages:
                 page = authenticated_page(browser, wcag_live_server, session_dict)
+                violations = axe_violations(page, f"{wcag_live_server}{path}")
+                if violations:
+                    failures[path] = violations
+                page.context.close()
+
+            assert_no_violations(failures)
+
+
+@pytest.mark.skipif(sync_playwright is None, reason="Playwright Python package is unavailable")
+def test_no_axe_violations_on_sysadmin_pages_with_tickets(app, client, wcag_live_server):
+    """WCAG 2.1 A/AA audit of the sysadmin support pages with real rows.
+
+    The empty-state sweep above renders `/sysadmin/support` with no tickets, so
+    the ticket chips, status badges, table rows and the ticket detail page are
+    never in front of axe. This provisions a student ticket that the teacher
+    escalates (sharing the class name, so every chip renders) and a teacher
+    ticket, all through the production routes, then audits both tabs and the
+    detail page. Detail view of a *teacher* ticket is not separately audited:
+    it renders the same `sysadmin_view_issue.html`.
+    """
+    classroom, _student = initialize_support_student("chemistry_p1", client, app)
+    seed_support_issue_categories()
+    category = (
+        IssueCategory.query.filter_by(category_type="general", is_active=True)
+        .order_by(IssueCategory.id).first()
+    )
+    response = client.post(
+        "/student/help-support/submit-issue",
+        data={"category_id": category.id, "explanation": "Axe sweep student ticket.",
+              "expected_outcome": "It works."},
+    )
+    assert response.status_code == 302, response.get_data(as_text=True)[:500]
+    issue = Issue.query.filter_by(student_explanation="Axe sweep student ticket.").one()
+
+    login_teacher(client, classroom)
+    ref = make_opaque_ref("issue", issue.id)
+    response = client.post(
+        f"/admin/issues/{ref}/escalate",
+        data={"escalation_reason": "Needs developer investigation", "share_class_name": "on"},
+    )
+    assert response.status_code == 302
+    response = client.post("/admin/help-support", data={
+        "issue_category": "bug", "title": "Axe sweep teacher ticket",
+        "description": "Teacher-written report.",
+    })
+    assert response.status_code == 302
+
+    admin_session = sysadmin_session("axe_sweep_sysadmin_tickets")
+    pages = [
+        "/sysadmin/support?tab=reports",
+        "/sysadmin/support?tab=issues",
+        f"/sysadmin/issues/{ref}",
+    ]
+
+    with sync_playwright() as playwright:
+        try:
+            browser = playwright.chromium.launch(headless=True)
+        except Exception as exc:  # pragma: no cover - browser installation varies
+            skip_or_fail_without_browser(exc)
+
+        with browser:
+            failures: dict[str, list] = {}
+            for path in pages:
+                page = authenticated_page(browser, wcag_live_server, admin_session)
+                violations = axe_violations(page, f"{wcag_live_server}{path}")
+                # Guard against auditing an empty page: the rows must be there.
+                html = page.content()
+                if path.endswith("tab=reports"):
+                    assert "Axe sweep teacher ticket" in html, "teacher ticket row missing"
+                elif path.endswith("tab=issues"):
+                    # Opaque refs are encrypted per call, so match the row, not the ref.
+                    assert 'class="sysadmin-ticket"' in html, "escalated ticket row missing"
+                else:
+                    assert "Needs developer investigation" in html, "ticket detail missing"
+                if violations:
+                    failures[path] = violations
+                page.context.close()
+
+            assert_no_violations(failures)
+
+
+@pytest.mark.skipif(sync_playwright is None, reason="Playwright Python package is unavailable")
+def test_no_axe_violations_across_student_feature_gated_pages(app, client, wcag_live_server):
+    """WCAG 2.1 A/AA audit of the student pages gated behind class features
+    that start OFF (store, rent, insurance), as a student, empty states.
+    Populated states are audited from tests/a11y_fixtures.
+    """
+    classroom, student = initialize_as_student("chemistry_p1", client, app)
+    for feature in ("insurance", "rent", "store"):
+        enable_class_feature(class_id=classroom.class_id, feature=feature)
+    student_cookie = _build_student_session(
+        client, user_id=student.user.id, class_id=classroom.class_id, seat_id=student.seat.id,
+    )
+
+    pages = ["/student/shop", "/student/rent", "/student/insurance"]
+
+    with sync_playwright() as playwright:
+        try:
+            browser = playwright.chromium.launch(headless=True)
+        except Exception as exc:  # pragma: no cover - browser installation varies
+            skip_or_fail_without_browser(exc)
+
+        with browser:
+            failures: dict[str, list] = {}
+            for path in pages:
+                page = authenticated_page(browser, wcag_live_server, student_cookie)
                 violations = axe_violations(page, f"{wcag_live_server}{path}")
                 if violations:
                     failures[path] = violations

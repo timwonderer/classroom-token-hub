@@ -5,8 +5,15 @@ on:
     paths:
       - 'templates/**'
       - 'static/css/**'
-      - 'static/js/username_retention_check.js'
+      - 'static/js/**'
       - 'tests/test_username_retention_check_browser.py'
+      - 'tests/test_axe_*.py'
+      - 'tests/axe_coverage_exemptions.json'
+      - 'tests/a11y_fixtures/**'
+      - 'tests/helpers/axe_wcag.py'
+      - 'tests/assets/axe-core.min.js'
+      - 'scripts/check_axe_template_coverage.py'
+      - '.github/workflows/accessibility-gate.yml'
       - 'app/routes/**'
       - 'app/forms.py'
 
@@ -95,6 +102,20 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
+      # Templates are not the only thing that changes rendered accessibility:
+      # styles, template-driven scripts and the harness itself do too.
+      - name: Detect changes that affect rendered accessibility
+        id: axe_scope
+        run: |
+          if git diff --name-only --diff-filter=AMDR "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" -- \
+              'templates/**' 'static/css/**' 'static/js/**' 'tests/a11y_fixtures/**' 'tests/test_axe_*.py' \
+              'tests/helpers/axe_wcag.py' 'tests/axe_coverage_exemptions.json' 'scripts/check_axe_template_coverage.py' \
+              '.github/workflows/accessibility-gate.yml' | grep -q .; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Run Accessibility Test Suite
         if: steps.changed_templates.outputs.templates != ''
         env:
@@ -111,3 +132,40 @@ jobs:
         env:
           DATABASE_URL: postgresql://user:password@localhost:5432/classroom_test_db
         run: pytest -q tests/test_username_retention_check_browser.py
+
+      # Hard stop: axe-core runs in Chromium on every PR that touches templates or
+      # styles, over two canonical render paths: the real-route sweep and the
+      # registered fixture states (tests/a11y_fixtures). The PR fails on any axe
+      # violation, on a fixture that cannot render, and on a changed template that
+      # neither path renders (SOP-TEST-002 §X). The static check above cannot judge
+      # colour contrast, focus, or ARIA semantics. Make this check *required* in the
+      # branch protection settings for main so it cannot be merged around.
+      - name: Run axe-core over the real-route sweep and the fixture states
+        if: steps.axe_scope.outputs.run == 'true'
+        env:
+          FLASK_APP: app
+          FLASK_ENV: testing
+          DATABASE_URL: postgresql://user:password@localhost:5432/classroom_test_db
+          TEST_DATABASE_URL: postgresql://user:password@localhost:5432/classroom_test_db
+          # A missing browser is a failure here, never a skip.
+          AXE_REQUIRE_BROWSER: '1'
+          AXE_RENDERED_TEMPLATES_FILE: /tmp/axe_rendered_templates.json
+          AXE_FIXTURE_TEMPLATES_FILE: /tmp/axe_fixture_templates.json
+        run: |
+          pytest -q tests/test_axe_app_pages.py tests/test_axe_fixture_pages.py tests/test_axe_compliance.py
+
+      - name: Require every changed template to have an accessibility render path
+        if: steps.axe_scope.outputs.run == 'true'
+        run: |
+          python scripts/check_axe_template_coverage.py \
+            --changed /tmp/changed_templates.txt \
+            --rendered /tmp/axe_rendered_templates.json \
+            --fixture-rendered /tmp/axe_fixture_templates.json \
+            --exemptions tests/axe_coverage_exemptions.json
+
+      - name: Gate unit tests (the guard and the fixture harness must themselves fail when they should)
+        env:
+          DATABASE_URL: postgresql://user:password@localhost:5432/classroom_test_db
+          TEST_DATABASE_URL: postgresql://user:password@localhost:5432/classroom_test_db
+          AXE_REQUIRE_BROWSER: '1'
+        run: pytest -q tests/test_axe_template_coverage_guard.py tests/test_axe_fixture_gate.py
