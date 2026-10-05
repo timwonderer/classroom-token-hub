@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-SUP-001 | 1.7 | 2026-09-17 | 1.6 | Normative |
+| DOM-SUP-001 | 1.8 | 2026-10-04 | 1.7 | Normative |
 
 ## I. Purpose
 
@@ -422,7 +422,37 @@ class names must not be silently embedded in metadata headers. Such a form does
 not automatically attach balances, transactions, or roster notes. No assertion
 is made about the contents of user-entered free text.
 
-## XI. Amendment
+## XI. Outbound filing notification
+
+Support authorizes one best-effort outbound IFTTT notification when a teacher
+files a direct ticket or escalates a student ticket for system support. Student
+submission alone does not notify the external operator. Escalation changes an
+existing issue; it does not insert a second issue. Reads, review, resolution,
+closure, and rejected submissions do not trigger filing notifications.
+
+Only a successful outer database commit authorizes delivery. Rollback discards
+the transaction-local notification; a savepoint release is not delivery authority.
+Notification failure never changes the committed issue, history, or response.
+Delivery uses the existing application process, a fixed IFTTT HTTPS destination,
+a three-second socket timeout, and no redirects, retries, durable outbox, or
+additional service. Process loss can lose an alert; exactly-once delivery and
+email receipt are not promised.
+
+The complete external payload allow-list is a fixed teacher-filing or student-
+escalation label, an encrypted opaque issue reference, and the UTC event timestamp.
+No participant or class identifiers, names, free text (including title), category
+labels, page URLs, IP/browser information, diagnostics, permissions, correlation
+packs, or economic records may be sent. In-app diagnostic consent does not widen
+this external allow-list. The reference identifies a Support record only and
+grants no access; authenticated operator visibility checks still apply. The email
+recipient is configured within IFTTT, never collected or processed by CTH.
+
+`SUPPORT_IFTTT_EVENT` and `SUPPORT_IFTTT_KEY` configure this optional integration.
+Both unset disables it. Partial or invalid configuration is a delivery failure,
+not a ticket failure. Credentials, webhook URL, payload, response bodies, and
+exception text must never be logged or traced. Logs record delivery outcome only.
+
+## XII. Amendment
 
 Revisions require version increment, effective-date update, and continued consistency
 with higher-order invariants.

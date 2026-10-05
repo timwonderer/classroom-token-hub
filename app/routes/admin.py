@@ -10760,7 +10760,7 @@ def escalate_issue(issue_ref):
         abort(403)
     issue = Issue.query.filter_by(
         id=issue_id, class_public_id=class_row.class_public_id,
-    ).first_or_404()
+    ).with_for_update().first_or_404()
 
     escalation_reason = request.form.get('escalation_reason', '').strip()
     diagnostic_note = request.form.get('diagnostic_note', '').strip()
@@ -10803,6 +10803,10 @@ def escalate_issue(issue_ref):
             teacher_public_id,
             notes=f"Escalated: {escalation_reason}",
         )
+
+        from app.services.support_notifications import schedule_support_notification
+        if issue.correlation_pack is not None and issue.correlation_pack.actor_type == 'student':
+            schedule_support_notification(issue.id, event_type="student_escalation")
 
         flash("Issue escalated to developer successfully.", "success")
         return redirect(url_for('admin.issues_queue'))

@@ -1,7 +1,7 @@
 # FEAT-SUP-001 — Issue Submission and Escalation
 
 Authority: INV-CORE-000, INV-ARC-005, INV-ARC-018, INV-ARC-019,
-DOM-SUP-001 §X. Effective 2026-09-15.
+DOM-SUP-001 §X–XI. Version 1.1, supersedes 1.0. Effective 2026-10-04.
 
 Student submissions capture immutable teacher-review context and the existing
 correlation pack. A selected transaction must belong to the submitting seat and
@@ -27,3 +27,17 @@ are canonical seat public IDs, including teacher-submitted tickets, with no fore
 key to `seats` (DOM-SUP-001 §X). Seat/account deletion deletes the corresponding
 issues by public ID, and Support's own cascades remove the pack, history, and
 resolution rows, rather than retaining a detached snapshot.
+
+For direct teacher filing and teacher escalation of a student issue, freeze the
+DOM-SUP-001 §XI allow-listed notification values in transaction-local memory
+after the ticket command succeeds. Send one outbound POST only after the outer
+FEAT transaction commits; discard values on rollback and defer through savepoint
+release. Lock the class-scoped issue row before evaluating its escalation status
+and hold that lock through commit, so concurrent requests cannot each accept the
+same transition. Do not query classroom records during delivery or serialize an Issue
+model. Use IFTTT's `Receive a web request` trigger with `value1` = fixed event
+label, `value2` = encrypted opaque issue reference, `value3` = UTC event timestamp.
+Delivery failures log only a bounded outcome and never escape into ticket success
+handling. Student filing, refused actions, operator reads, and other transitions
+do not schedule this notification. No schema change or delivery-state record is
+authorized by this feature.
