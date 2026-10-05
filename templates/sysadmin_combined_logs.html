@@ -69,14 +69,14 @@
     </div>
 
     <!-- ── Tabs ── -->
-    <ul class="nav nav-tabs mb-0 border-bottom-0" id="logTabs" role="tablist">
+    <ul class="nav nav-tabs sysadmin-tabs" id="logTabs" role="tablist">
         <li class="nav-item" role="presentation">
             <button class="nav-link {% if active_tab == 'errors' or not active_tab %}active{% endif %}" id="errors-tab"
                 data-bs-toggle="tab" data-bs-target="#errors-pane" type="button" role="tab" aria-controls="errors-pane" aria-selected="{% if active_tab == 'errors' or not active_tab %}true{% else %}false{% endif %}">
                 <span class="material-symbols-outlined align-middle me-1 icon-xs" aria-hidden="true">error</span>
                 Error Logs
                 {% if total_errors > 0 %}
-                <span class="badge bg-danger ms-1">{{ total_errors }}</span>
+                <span class="badge bg-danger">{{ total_errors }}</span>
                 {% endif %}
             </button>
         </li>
@@ -90,20 +90,20 @@
         </li>
     </ul>
 
-    <div class="tab-content border border-top-0 rounded-bottom bg-white shadow-sm mb-4">
+    <div class="tab-content sysadmin-tab-panel">
 
         <!-- ── Error Logs Tab ── -->
         <div class="tab-pane fade {% if active_tab == 'errors' or not active_tab %}show active{% endif %}"
             id="errors-pane" role="tabpanel" aria-labelledby="errors-tab">
 
             <!-- Filter Bar -->
-            <div class="p-3 border-bottom bg-light d-flex flex-wrap gap-2 align-items-end">
+            <div class="sysadmin-filterbar">
                 <form method="GET" action="{{ url_for('sysadmin.combined_logs') }}"
-                    class="d-flex flex-wrap gap-2 w-100">
+                    class="d-flex flex-wrap gap-2 align-items-end">
                     <input type="hidden" name="tab" value="errors">
-                    <div class="flex-grow-1 sa-minw-200 sa-maxw-320">
-                        <label class="form-label mb-1 type-xs">Filter by Error Type</label>
-                        <select name="error_type" class="form-select form-select-sm" aria-label="Filter by error type">
+                    <div class="sysadmin-filter-field flex-grow-1 sa-minw-200 sa-maxw-320">
+                        <label class="form-label mb-1 type-xs" for="error-type-filter">Filter by Error Type</label>
+                        <select id="error-type-filter" name="error_type" class="form-select form-select-sm" aria-label="Filter by error type">
                             <option value="">All Error Types</option>
                             {% for et in error_types %}
                             <option value="{{ et }}" {% if et==current_error_type %}selected{% endif %}>{{ et }}
@@ -281,13 +281,13 @@
             role="tabpanel" aria-labelledby="network-tab">
 
             <!-- Filter & Stats Row -->
-            <div class="p-3 border-bottom bg-light d-flex flex-wrap gap-3 align-items-end">
+            <div class="sysadmin-filterbar d-flex flex-wrap gap-3 align-items-end">
                 <form method="GET" action="{{ url_for('sysadmin.combined_logs') }}"
                     class="d-flex flex-wrap gap-2 align-items-end">
                     <input type="hidden" name="tab" value="network">
-                    <div class="sa-minw-200 sa-maxw-280">
-                        <label class="form-label mb-1 type-xs">Filter by IP Address</label>
-                        <select name="ip" class="form-select form-select-sm" aria-label="Filter by IP address">
+                    <div class="sysadmin-filter-field sa-minw-200 sa-maxw-280">
+                        <label class="form-label mb-1 type-xs" for="ip-filter">Filter by IP Address</label>
+                        <select id="ip-filter" name="ip" class="form-select form-select-sm" aria-label="Filter by IP address">
                             <option value="">All IP Addresses</option>
                             {% for ip in ip_addresses %}
                             <option value="{{ ip }}" {% if ip==current_ip %}selected{% endif %}>{{ ip }}</option>

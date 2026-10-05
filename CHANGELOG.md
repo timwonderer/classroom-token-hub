@@ -24,6 +24,8 @@ and this project follows semantic versioning principles.
 
 ### Changed
 
+- **Sysadmin UI brought in line with the v2 shell.** The sysadmin `<main>` no longer carries the teacher `.main-content` class, whose 2rem padding and 280px margin inset the page header and left a 20px gap beside the 260px sidebar (and oversized gutters on phones); it now shrinks (`min-width: 0`) so wide tables cannot stretch the page. Stat cards share one structure and stack icon-over-text below 576px so labels no longer squeeze to a word per line, and the warning icon uses the accent text token. Support Tickets and Logs get a single non-wrapping tab strip (`.sysadmin-tabs`, icons dropped on phones), guardian-gray pills instead of Bootstrap blue, stacked full-width filter fields with labels bound to their selects, and escalated tickets render as `.sysadmin-ticket` rows with `.sysadmin-chip` labels that truncate instead of overflowing. Template and CSS only; no route or schema change.
+
 - **Version references point at v2.1.1.** README, SECURITY.md, DEVELOPMENT.md and the post-launch tracker named v2.1.0 as the production release. The tracker's release table gains the 2026-10-03 and 2026-10-04 releases, and its items made stale by the 2026-10-04 window are updated from read-only host checks: the student-setup store checks are done, Loki is out of `/tmp` with a 14-day retention, Tempo and Alloy are stopped, the orphaned v1 Loki chunks are gone, and the first restore-verified backups exist. `docs/ops/DATABASE_BACKUP_PLAN.md` §1 names the newest recovery point.
 
 ## [2.1.1] - 2026-10-04 — Attendance correction, store redemption decisions, no student names in logs
