@@ -86,7 +86,7 @@ def test_student_ticket_still_appears_next_to_teacher_ticket(client, app):
         category_id=category.id,
         issue_type="general",
         student_explanation=STUDENT_TEXT,
-        status=Issue.STATUS_TEACHER_REVIEW,
+        status=Issue.STATUS_DEV_RESOLVED,
     )
     from app.feats.base import FEATContext
     with FEATContext("FEAT-TEST-SETUP", idempotency_key="teacher_ticket_queue:student"):
