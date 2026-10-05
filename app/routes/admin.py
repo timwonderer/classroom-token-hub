@@ -10760,7 +10760,7 @@ def escalate_issue(issue_ref):
         abort(403)
     issue = Issue.query.filter_by(
         id=issue_id, class_public_id=class_row.class_public_id,
-    ).first_or_404()
+    ).with_for_update().first_or_404()
 
     escalation_reason = request.form.get('escalation_reason', '').strip()
     diagnostic_note = request.form.get('diagnostic_note', '').strip()

@@ -32,7 +32,9 @@ For direct teacher filing and teacher escalation of a student issue, freeze the
 DOM-SUP-001 §XI allow-listed notification values in transaction-local memory
 after the ticket command succeeds. Send one outbound POST only after the outer
 FEAT transaction commits; discard values on rollback and defer through savepoint
-release. Do not query classroom records during delivery or serialize an Issue
+release. Lock the class-scoped issue row before evaluating its escalation status
+and hold that lock through commit, so concurrent requests cannot each accept the
+same transition. Do not query classroom records during delivery or serialize an Issue
 model. Use IFTTT's `Receive a web request` trigger with `value1` = fixed event
 label, `value2` = encrypted opaque issue reference, `value3` = UTC event timestamp.
 Delivery failures log only a bounded outcome and never escape into ticket success

@@ -1,12 +1,15 @@
 """DOM-SUP-001 §XI: commit ordering, disclosure and delivery isolation."""
 
 import json
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event, current_thread
+from time import monotonic
 from datetime import datetime
 from types import SimpleNamespace
 
 import pytest
 from flask import Flask
-from sqlalchemy import event, select
+from sqlalchemy import event, select, text
 
 from app.extensions import db
 from app.feats.base import FEATContext
@@ -246,3 +249,63 @@ def test_unconfigured_integration_schedules_nothing(delivery_app):
     delivery_app.config.update(SUPPORT_IFTTT_EVENT="", SUPPORT_IFTTT_KEY="")
     # Even outside a transaction, disabled integration requires no DB access.
     notifications.schedule_support_notification(101, event_type="teacher_ticket")
+
+
+def test_concurrent_student_escalations_emit_one_notification(client, monkeypatch, webhook):
+    app = client.application
+    classroom, student = initialize_support_student("chemistry_p1", client, app)
+    issue_id = _submit_issue(classroom, student).id
+    login_teacher(client, classroom)
+    _enable(app, monkeypatch)
+    path = f"/admin/issues/{make_opaque_ref('issue', issue_id)}/escalate"
+    cookie_name = app.config.get("SESSION_COOKIE_NAME", "session")
+    cookie = client.get_cookie(cookie_name).value
+    first_inside, second_attempted, release = Event(), Event(), Event()
+    pids = {}
+    original_schedule = notifications.schedule_support_notification
+
+    def pause_first(*args, **kwargs):
+        if current_thread().name.endswith("_0"):
+            pids["first"] = db.session.execute(text("SELECT pg_backend_pid()")).scalar_one()
+            first_inside.set()
+            assert release.wait(10), "First escalation was not released."
+        return original_schedule(*args, **kwargs)
+
+    def capture_second(connection, cursor, statement, parameters, context, executemany):
+        if current_thread().name.endswith("_1") and "FROM issues" in statement and "second" not in pids:
+            pids["second"] = connection.exec_driver_sql("SELECT pg_backend_pid()").scalar_one()
+            second_attempted.set()
+
+    def post():
+        worker = app.test_client()
+        worker.set_cookie(cookie_name, cookie)
+        return worker.post(path, data={"escalation_reason": "Concurrent synthetic escalation"}).status_code
+
+    monkeypatch.setattr(notifications, "schedule_support_notification", pause_first)
+    engine = db.engine
+    event.listen(engine, "before_cursor_execute", capture_second)
+    db.session.rollback()
+    try:
+        with ThreadPoolExecutor(max_workers=2, thread_name_prefix="support_escalation") as pool:
+            first = pool.submit(post)
+            try:
+                assert first_inside.wait(10), "First escalation did not reach scheduling."
+                second = pool.submit(post)
+                assert second_attempted.wait(10), "Second escalation did not reach the issue query."
+                deadline = monotonic() + 5
+                while True:
+                    with engine.connect() as connection:
+                        blockers = connection.execute(text("SELECT pg_blocking_pids(:pid)"), {"pid": pids["second"]}).scalar_one()
+                    if pids["first"] in blockers:
+                        break
+                    assert monotonic() < deadline, "The independent requests did not contend on the issue row."
+                    Event().wait(.01)
+            finally:
+                release.set()
+            assert first.result(timeout=15) == second.result(timeout=15) == 302
+    finally:
+        release.set()
+        event.remove(engine, "before_cursor_execute", capture_second)
+    assert len(webhook) == 1
+    db.session.expire_all()
+    assert db.session.get(Issue, issue_id).status == Issue.STATUS_ESCALATED_TO_DEV
