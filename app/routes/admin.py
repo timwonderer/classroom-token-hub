@@ -173,6 +173,7 @@ from app.services.admin_settings_service import (
     supersede_rent_settings,
 )
 from app.services.issue_service import create_support_ticket
+from app.services.support_operator_access import student_authored_clause
 from app.utils.ip_handler import get_real_ip
 from app.utils.turnstile import verify_turnstile_token
 from app.utils.help_content import HELP_ARTICLES
@@ -10412,6 +10413,9 @@ def issues_queue():
         issues_query = Issue.query.filter_by(class_public_id=active_class_public_id)
     else:
         issues_query = Issue.query.filter_by(class_public_id=None)
+    # The teacher's own tickets go straight to system support and never enter
+    # the teacher review lifecycle; this queue is for student tickets only.
+    issues_query = issues_query.filter(student_authored_clause())
 
     # Get issues by status.
     pending_rows = issues_query.filter(
@@ -10502,7 +10506,7 @@ def view_issue(issue_ref):
     if issue_id is None:
         abort(404)
 
-    issue_query = Issue.query.filter_by(id=issue_id)
+    issue_query = Issue.query.filter_by(id=issue_id).filter(student_authored_clause())
     if class_id:
         class_row = get_class_economy(class_id)
         if class_row:
@@ -10571,7 +10575,7 @@ def resolve_issue(issue_ref):
     if issue_id is None:
         abort(404)
 
-    issue_query = Issue.query.filter_by(id=issue_id)
+    issue_query = Issue.query.filter_by(id=issue_id).filter(student_authored_clause())
     if class_id:
         class_row = get_class_economy(class_id)
         if class_row:
@@ -10760,7 +10764,7 @@ def escalate_issue(issue_ref):
         abort(403)
     issue = Issue.query.filter_by(
         id=issue_id, class_public_id=class_row.class_public_id,
-    ).with_for_update().first_or_404()
+    ).filter(student_authored_clause()).with_for_update().first_or_404()
 
     escalation_reason = request.form.get('escalation_reason', '').strip()
     diagnostic_note = request.form.get('diagnostic_note', '').strip()
@@ -10833,7 +10837,7 @@ def close_issue(issue_ref):
     issue_id = _resolve_issue_id_from_ref(issue_ref)
     if issue_id is None:
         abort(404)
-    issue_query = Issue.query.filter_by(id=issue_id)
+    issue_query = Issue.query.filter_by(id=issue_id).filter(student_authored_clause())
     if class_id:
         class_row = get_class_economy(class_id)
         if class_row:

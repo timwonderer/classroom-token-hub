@@ -52,6 +52,17 @@ def teacher_authored_clause():
     )).correlate(Issue)
 
 
+def student_authored_clause():
+    """SQL predicate: the ticket is not a teacher's direct report.
+
+    The teacher's review queue and its review/resolve/escalate/close actions
+    work on these only. A teacher's own ticket is addressed to system support
+    (DOM-SUP-001 §X); it has no teacher-review stage, so it must never surface
+    as something the teacher reviews.
+    """
+    return ~teacher_authored_clause()
+
+
 def escalated_clause():
     """SQL predicate: a teacher escalated the ticket to system support."""
     return Issue.escalated_at.isnot(None)
