@@ -1,6 +1,8 @@
 """DOM-SUP-001 §XI: commit ordering, disclosure and delivery isolation."""
 
 import json
+import logging
+from io import StringIO
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event, current_thread
 from time import monotonic
@@ -8,7 +10,7 @@ from datetime import datetime
 from types import SimpleNamespace
 
 import pytest
-from flask import Flask
+from flask import Flask, g
 from sqlalchemy import event, select, text
 
 from app.extensions import db
@@ -309,3 +311,51 @@ def test_concurrent_student_escalations_emit_one_notification(client, monkeypatc
     assert len(webhook) == 1
     db.session.expire_all()
     assert db.session.get(Issue, issue_id).status == Issue.STATUS_ESCALATED_TO_DEV
+
+
+@pytest.mark.parametrize("outcome", ["success", "http_failure", "transport_failure", "configuration_failure"])
+def test_formatted_delivery_logs_have_no_request_or_actor_context(delivery_app, monkeypatch, outcome):
+    from app import RequestIdFilter
+
+    class Connection:
+        def __init__(self, *args, **kwargs):
+            if outcome == "transport_failure":
+                raise TimeoutError("secret-test-key secret-ticket exception")
+
+        def request(self, *args, **kwargs):
+            pass
+
+        def getresponse(self):
+            return SimpleNamespace(status=503 if outcome == "http_failure" else 200)
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(notifications.http.client, "HTTPSConnection", Connection)
+    if outcome == "configuration_failure":
+        delivery_app.config["SUPPORT_IFTTT_EVENT"] = "invalid/event"
+    output = StringIO()
+    handler = logging.StreamHandler(output)
+    handler.addFilter(RequestIdFilter())
+    # Render every request field used by the production formatter. Pytest
+    # replaces root handlers between tests, so do not depend on that registry.
+    handler.setFormatter(logging.Formatter(
+        "[%(request_id)s] actor=%(actor_type)s:%(actor_public_id)s "
+        "class_id=%(class_id)s endpoint=%(endpoint)s method=%(method)s: %(message)s"
+    ))
+    logger = delivery_app.logger
+    previous_level = logger.level
+    logger.setLevel(logging.INFO)
+    logger.addHandler(handler)
+    try:
+        with delivery_app.test_request_context("/private-path-sentinel", method="POST"):
+            g.request_id = "request-id-sentinel"
+            g.correlation_context = {"actor_type": "teacher", "actor_public_id": "actor-id-sentinel", "class_id": "class-id-sentinel"}
+            notifications._deliver({"value1": "label", "value2": "secret-ticket", "value3": "time"})
+    finally:
+        logger.removeHandler(handler)
+        logger.setLevel(previous_level)
+    rendered = output.getvalue()
+    assert "support_notification_" in rendered
+    for forbidden in ("request-id-sentinel", "actor-id-sentinel", "class-id-sentinel", "private-path-sentinel", "secret-test-key", "secret-ticket"):
+        assert forbidden not in rendered

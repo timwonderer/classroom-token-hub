@@ -2,6 +2,7 @@
 
 import http.client
 import json
+import logging
 import re
 from urllib.parse import quote
 
@@ -40,6 +41,16 @@ def schedule_support_notification(issue_id, *, event_type):
     session.info.setdefault(_PENDING, []).append((transaction, payload))
 
 
+def _log_outcome(level, message, *args):
+    # RequestIdFilter respects explicit fields. Supply inert values so the
+    # production formatter cannot attach actor/class/request context to alerts.
+    current_app.logger.log(level, message, *args, extra={
+        "request_id": "-", "actor_type": "-", "actor_public_id": "-",
+        "class_id": "-", "endpoint": "-", "method": "-",
+        "error_class": "-", "error_message": "-", "correlation_version": "-",
+    })
+
+
 def _deliver(payload):
     """One HTTPS attempt; delivery cannot change the committed ticket outcome."""
     connection = None
@@ -47,7 +58,7 @@ def _deliver(payload):
         event_name = current_app.config.get("SUPPORT_IFTTT_EVENT", "")
         key = current_app.config.get("SUPPORT_IFTTT_KEY", "")
         if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", event_name) or not key:
-            current_app.logger.warning("support_notification_delivery_failed reason=configuration")
+            _log_outcome(logging.WARNING, "support_notification_delivery_failed reason=configuration")
             return
         # Use the fixed IFTTT host with no redirects, retries or HTTP-client
         # tracing. The credential is in IFTTT's path; never log the URL, response
@@ -61,11 +72,11 @@ def _deliver(payload):
         )
         response = connection.getresponse()
         if 200 <= response.status < 300:
-            current_app.logger.info("support_notification_delivered")
+            _log_outcome(logging.INFO, "support_notification_delivered")
         else:
-            current_app.logger.warning("support_notification_delivery_failed reason=http_status status=%s", response.status)
+            _log_outcome(logging.WARNING, "support_notification_delivery_failed reason=http_status status=%s", response.status)
     except Exception:
-        current_app.logger.warning("support_notification_delivery_failed reason=transport")
+        _log_outcome(logging.WARNING, "support_notification_delivery_failed reason=transport")
     finally:
         if connection is not None:
             try:
