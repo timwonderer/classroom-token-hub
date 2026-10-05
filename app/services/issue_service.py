@@ -46,6 +46,8 @@ def create_support_ticket(*, actor_public_id: str, class_public_id: str, categor
         report, actor_type='teacher', actor_public_id=actor_public_id,
         class_id=class_row.class_id,
     )
+    from app.services.support_notifications import schedule_support_notification
+    schedule_support_notification(report.id, event_type="teacher_ticket")
     return report
 
 

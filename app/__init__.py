@@ -279,6 +279,8 @@ def create_app():
         TEMPLATES_AUTO_RELOAD=True,
         TURNSTILE_SITE_KEY=os.getenv("TURNSTILE_SITE_KEY"),
         TURNSTILE_SECRET_KEY=os.getenv("TURNSTILE_SECRET_KEY"),
+        SUPPORT_IFTTT_EVENT=os.getenv("SUPPORT_IFTTT_EVENT", "").strip(),
+        SUPPORT_IFTTT_KEY=os.getenv("SUPPORT_IFTTT_KEY", "").strip(),
         # Login page notice file (app/utils/login_notice.py); unset means
         # instance/login_notice.json.
         LOGIN_NOTICE_PATH=os.getenv("LOGIN_NOTICE_PATH", "").strip() or None,

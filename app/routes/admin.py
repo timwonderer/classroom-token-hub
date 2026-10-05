@@ -10804,6 +10804,10 @@ def escalate_issue(issue_ref):
             notes=f"Escalated: {escalation_reason}",
         )
 
+        from app.services.support_notifications import schedule_support_notification
+        if issue.correlation_pack is not None and issue.correlation_pack.actor_type == 'student':
+            schedule_support_notification(issue.id, event_type="student_escalation")
+
         flash("Issue escalated to developer successfully.", "success")
         return redirect(url_for('admin.issues_queue'))
 

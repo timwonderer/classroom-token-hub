@@ -548,6 +548,8 @@ def app(request):
         ENV="testing",
         SESSION_COOKIE_SECURE=False,
         RATELIMIT_ENABLED=False,
+        SUPPORT_IFTTT_EVENT="",
+        SUPPORT_IFTTT_KEY="",
     )
 
     with flask_app.app_context():

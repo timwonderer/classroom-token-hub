@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.21 | 2026-10-04 | 3.20 | Normative |
+| SOP-DOC-001 | 3.22 | 2026-10-04 | 3.21 | Normative |
 
 ---
 
@@ -273,6 +273,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.22 (2026-10-04):**
+- Register DOM-SUP-001 v1.8 and FEAT-SUP-001 v1.1: optional non-identifying IFTTT filing notifications after successful outer commit, with teacher-filing and student-escalation triggers only.
 
 **Version 3.21 (2026-10-04):**
 - Register SOP-DEP-001 v2.7 with its explicit forward-only attendance/payroll recovery revision list; supersedes the incomplete v2.6 registration.

@@ -8,6 +8,10 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Added
+
+- Optional IFTTT email alerts for direct teacher support filings and teacher-escalated student tickets (DOM-SUP-001 v1.8; FEAT-SUP-001 v1.1). The existing app sends one HTTPS request after commit, containing only a fixed event label, opaque ticket reference, and UTC timestamp. Delivery failure preserves ticket success. Setup: `docs/ops/SUPPORT_IFTTT_SETUP.md`; no new worker or schema change.
+
 ### Security
 
 - **CodeQL: roster import and unclaim no longer echo exception text.** `/admin/upload-students` and `/admin/student/unclaim` returned `str(error)` from any `ValueError`. They now return a message only if it is in `ROSTER_ACTION_MESSAGES` (`app/feats/identity_feat.py`), which lists the teacher-facing messages those FEATs raise; any other `ValueError` gets a generic message. Tests: `tests/dom/identity/test_roster_action_messages.py`, including a guard that fails when a FEAT raises a message missing from the list.
