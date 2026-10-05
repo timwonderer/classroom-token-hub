@@ -10,6 +10,8 @@ as it would a real login's cookie.
 
 from __future__ import annotations
 
+import json
+import os
 import threading
 from pathlib import Path
 
@@ -20,6 +22,7 @@ try:
 except ImportError:  # pragma: no cover - environment-dependent dependency
     sync_playwright = None
 
+from flask import template_rendered
 from werkzeug.serving import make_server
 
 from app import app as flask_app
@@ -39,9 +42,46 @@ AXE_SOURCE = (REPO_ROOT / "tests" / "assets" / "axe-core.min.js").read_text(enco
 ACCEPTED_RULE_IDS: set[str] = set()
 
 
+def skip_or_fail_without_browser(exc: Exception) -> None:
+    """Chromium missing: skip locally, fail where the audit is a gate.
+
+    A skip says "not audited here". The accessibility gate sets
+    ``AXE_REQUIRE_BROWSER=1`` because there a skip would let a template change
+    merge without ever being audited -- the same silent-green failure the
+    ``test_accessibility.py`` empty-corpus bug had.
+    """
+    if os.environ.get("AXE_REQUIRE_BROWSER") == "1":
+        pytest.fail(f"AXE_REQUIRE_BROWSER=1 but Chromium is unavailable: {exc}")
+    pytest.skip(f"Chromium is unavailable: {exc}")
+
+
+def _record_rendered_templates(names: set[str]) -> None:
+    """Merge the templates this sweep rendered into ``AXE_RENDERED_TEMPLATES_FILE``.
+
+    ``scripts/check_axe_template_coverage.py`` reads that file to decide whether
+    each changed template was actually put in front of axe.
+    """
+    target = os.environ.get("AXE_RENDERED_TEMPLATES_FILE")
+    if not target:
+        return
+    path = Path(target)
+    existing: set[str] = set()
+    if path.exists():
+        existing = set(json.loads(path.read_text(encoding="utf-8")))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(sorted(existing | names)), encoding="utf-8")
+
+
 @pytest.fixture
 def wcag_live_server(app):
     """A real HTTP server for the already-configured test Flask app."""
+    rendered: set[str] = set()
+
+    def _on_render(sender, template, context, **extra):
+        if template.name:
+            rendered.add(template.name)
+
+    template_rendered.connect(_on_render, app)
     server = make_server("127.0.0.1", 0, app, threaded=True)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -50,6 +90,8 @@ def wcag_live_server(app):
     finally:
         server.shutdown()
         thread.join(timeout=5)
+        template_rendered.disconnect(_on_render, app)
+        _record_rendered_templates(rendered)
 
 
 def session_cookie(session_dict: dict) -> str:
