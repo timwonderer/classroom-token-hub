@@ -89,9 +89,9 @@ change with any pending value is not released.
 
 | Class | Meaning | `SOP-DB-003` classification |
 |-------|---------|-----------------------------|
-| `M0 NONE` | No structure, row, or persisted-meaning change. | none (gate does not apply) |
+| `M0 NONE` | No structure, row, or persisted-meaning change, including no new semantic version written. | none (gate does not apply) |
 | `M1 EXPAND` | Additive structure only; previous release still runs on the result. | EXPAND |
-| `M2 DATA` | One-time rewrite or backfill of existing rows, structure unchanged. | not classified by the gate; treated as EXPAND for review and as `M4` for rollback (§IX.4) when the rewrite cannot be reversed |
+| `M2 DATA` | Persisted meaning changes with structure unchanged: a one-time rewrite or backfill of existing rows, or code that begins writing a new explicit semantic version into an existing column or document with no DDL (the writer cutover of §VII.4). | not classified by the gate; treated as EXPAND for review, and as `M4` for rollback (§IX.4) when a rewrite cannot be reversed or the previous release cannot read rows written under the new version |
 | `M3 CONTRACT-CODE` | Code stops reading or writing an element; structure unchanged. | CONTRACT (CODE ONLY) |
 | `M4 CONTRACT-DATABASE` | Removes or narrows structure or data, or contains a forward-only revision. | CONTRACT (DATABASE) |
 
@@ -238,8 +238,8 @@ The record states which row applies and names the rollback boundary before the w
    | Level | Required when |
    |-------|---------------|
    | MAJOR | The meaning of retained data changes in a way a user would observe in existing records (a new semantic version changes what existing historical records mean to the user), or the identity, tenancy or authority model changes, or a capability users depend on is removed. |
-   | MINOR | A capability is added or changed, or the release contains any `M1`, `M2` or `M4` change, including any forward-only revision. |
-   | PATCH | The release is `M0`, or only `M1` changes that add no capability and pass §IX.4's first row. |
+   | MINOR | A capability is added or changed, or the release contains any `M2` or `M4` change, including any forward-only revision or a new semantic version written, or an `M1` change that fails §IX.4's first row. |
+   | PATCH | The release is `M0`, or only `M1` changes that add no capability and pass §IX.4's first row. Nothing else is PATCH. |
 
 4. **Untagged releases.** A release with no migration (`M0`) may ship untagged as a hotfix from an
    approved lineage ref. The next tagged release's record names it. A release containing any
