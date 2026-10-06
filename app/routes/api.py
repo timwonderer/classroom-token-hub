@@ -48,7 +48,7 @@ from app.feats.attendance import (
     save_hall_pass_setup_config as feat_save_hall_pass_setup_config,
     update_hall_pass_queue_settings as feat_update_hall_pass_queue_settings,
 )
-from app.feats.prod import record_attendance_session
+from app.feats.prod import HallPassSettingsMissing, record_attendance_session
 from app.routes.student import (
     get_feature_settings_for_student,
 )
@@ -861,6 +861,11 @@ def handle_pending_hall_pass_request(request_id, action):
         return jsonify({"status": "success", "message": "Hall pass issued."})
     except HallPassRequestNotFound:
         return jsonify({"status": "error", "message": "Pending request not found."}), 404
+    except HallPassSettingsMissing:
+        return jsonify({
+            "status": "error",
+            "message": "Hall passes are not set up for this class yet. Save hall pass settings, then approve the request.",
+        }), 409
     except ValueError as exc:
         _log_api_client_error("handle_pending_hall_pass_request", exc, extra=f"request_id={request_id}")
         return jsonify({"status": "error", "message": "Hall pass request cannot be approved."}), 400

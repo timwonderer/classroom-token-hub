@@ -60,6 +60,10 @@ def _seed_hall_pass_settings(classroom) -> None:
     db.session.add(
         HallPassSettings(
             class_id=classroom.class_id,
+            # Tests issue passes as far back as yesterday. A pass is only issued
+            # under settings already in effect (FEAT-PROD-002 §III), so these must
+            # predate every issue time rather than take effect at insert.
+            effective_date=_current_utc() - timedelta(days=2),
             max_queue_limit=50,
             pass_type_payload=[
                 {"pass_name": "Bathroom", "max_queue": 50, "consume_pass": True},
