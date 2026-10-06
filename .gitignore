@@ -9,6 +9,8 @@ instance/
 *.sql
 # The frozen bootstrap schema is source, not a dump (migrations/versions/0001_bootstrap.py).
 !migrations/baseline/0001_baseline_schema.sql
+# Read-only evidence queries are source, not dumps (SOP-DB-004 §IX.1.7 baselines).
+!docs/ops/audits/evidence/*/*.sql
 .DS_Store
 GPT_instruction.md
 *.db
