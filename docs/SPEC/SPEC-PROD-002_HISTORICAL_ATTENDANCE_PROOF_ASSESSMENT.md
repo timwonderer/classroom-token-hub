@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| SPEC-PROD-002 | 1.3 | 2026-10-03 | 1.2 | Normative |
+| SPEC-PROD-002 | 1.4 | 2026-10-06 | 1.3 | Normative |
 
 ## I. Purpose
 
@@ -57,7 +57,7 @@ Each origin's original credit equals original quantized shares and bounds total 
 
 ## VII. Audit diagnostics and monetary boundary
 
-Operations diagnoses the linked original event's scope, envelope HMAC and continuous complete chain/head within budget, independently of row-payload coverage. A verified prefix is insufficient. Scalar head observations before and after the complete walk must agree; concurrent legitimate advancement returns unavailable EVIDENCE_CHANGED_DURING_READ, never a false integrity failure. No row locks or transaction mutation are used. Batch diagnostics walk one bounded complete class chain once per invocation; no caller proof input or persisted cache is allowed. Unsupported per-record source assignment is rejected rather than accepted through an arbitrary descriptor argument. Missing linkage is a coverage gap; wrong scope, invalid envelope or broken chain are integrity failures; unavailable infrastructure or over-budget chain is unavailable. Diagnostics must not write canonical integrity status.
+Operations diagnoses the linked original event's scope, envelope HMAC and continuous complete chain/head within budget, independently of row-payload coverage. A verified prefix is insufficient. Scalar head observations before and after the complete walk must agree; concurrent legitimate advancement returns unavailable EVIDENCE_CHANGED_DURING_READ, never a false integrity failure. No row locks or transaction mutation are used. Batch diagnostics walk one bounded complete class chain once per invocation; no caller proof input or persisted cache is allowed. Unsupported per-record source assignment is rejected rather than accepted through an arbitrary descriptor argument. Missing linkage is a coverage gap; wrong scope, invalid envelope or broken chain are integrity failures; unavailable infrastructure or over-budget chain is unavailable. Diagnostics must not write canonical integrity status. Assessment and reconstruction are read-side interpretation of retained historical state under an explicit immutable source; they provide no alternate path for creating new state and no fallback or heuristic interpretation (`SOP-DB-004` §VII).
 
 At deployed `ad9574334`, `app/services/ledger_posting_service.py:_TRANSACTION_AUDIT_FIELDS` and `app/utils/transaction_idempotency.py:_TRANSACTION_AUDIT_FIELDS` declare exactly eleven fields: amount, account_type, type, status, class_id, seat_id, target_seat_id, actor_seat_id, mechanism, description, correlation_id. The historical verifier's eight-field list is not the emitter definition. This source establishes a descriptor only; version 1 by itself does not establish per-record emitter provenance. Preserve exact historical payload serialization if provenance and original protected values are available. Without them report declared candidate coverage separately from confirmed signed coverage. Do not substitute a hypothetical creation status, derived cursor status, or guessed status until a digest matches.
 
@@ -70,6 +70,8 @@ FEAT-PROD-006 assessment remains pure; reconstruction supplies internally valida
 Targeted acceptance includes genuine ad957 predecessor-created and forward-migrated original evidence; successful aggregate replay/cent allocation without fabricated old fields; legacy repeated-active/open fragments, closed remainder and incident top-up; zero boundaries; aggregate fractional-second truncation; mismatching totals or conflicting membership; invalid/ambiguous settings; unsupported writer/versions; actual chain/HMAC/payload contradiction; modern malformed records refusing historical fallback; prior legacy reversal counted once, complete modern partial/full/residual recovery; pending originals; mixed-origin graphs; same-key exact retry and changed-intent mismatch; concurrent payroll/full/partial/residual recovery, complete rollback and original signature preservation. Consult pytest_result first; targeted tests only. Synthetic observations must be distinguished from genuine predecessor fixtures.
 
 ## IX. Amendment
+
+Version 1.4 (2026-10-06) clarifies that §VII diagnostics and reconstruction are read-side interpretation of lawful historical state only, consistent with the owner's compatibility ruling in `SOP-DB-004` §VII–VIII. Supersedes no assessment dimension, descriptor or monetary boundary.
 
 Version 1.3 (2026-10-03) supersedes v1.0–1.2 diagnostic-only execution restriction and demanded historical signed source/visibility/modern-field evidence for recognized immutable-source reconstruction. Separate reconstructed evidence now contributes to authorized correction FEATs. Modern canonical proof, actual integrity denial, original signatures and all new-write lineage remain unchanged.
 
