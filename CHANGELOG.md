@@ -10,7 +10,7 @@ and this project follows semantic versioning principles.
 
 ### Added
 
-- Optional IFTTT email alerts for direct teacher support filings and teacher-escalated student tickets (DOM-SUP-001 v1.8; FEAT-SUP-001 v1.1). The existing app sends one HTTPS request after commit, containing only a fixed event label, opaque ticket reference, and UTC timestamp. Delivery failure preserves ticket success. Setup: `docs/ops/SUPPORT_IFTTT_SETUP.md`; no new worker or schema change.
+- Optional IFTTT email alerts for direct teacher support filings and teacher-escalated student tickets (DOM-SUP-001 v1.8; FEAT-SUP-001 v1.1). The existing app sends one HTTPS request after commit, containing only a fixed event label, opaque ticket reference, and UTC timestamp. Delivery failure preserves ticket success. Setup: [SOP-OPS-002 — Support IFTTT Notification Setup](docs/STANDARD_OPERATING_PROCEDURES/OPERATIONS/SOP-OPS-002_SUPPORT_IFTTT_NOTIFICATION_SETUP.md); no new worker or schema change.
 
 ### Security
 

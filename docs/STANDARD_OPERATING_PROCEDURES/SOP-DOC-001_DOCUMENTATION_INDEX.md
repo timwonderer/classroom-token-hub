@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.22 | 2026-10-04 | 3.21 | Normative |
+| SOP-DOC-001 | 3.23 | 2026-10-04 | 3.22 | Normative |
 
 ---
 
@@ -183,6 +183,7 @@ Archived material is deliberately absent; see §VI.
 
 ### Procedures — Operations (SOP-OPS)
 - [SOP-OPS-001 — Service Status and Incident Communication](OPERATIONS/SOP-OPS-001_SERVICE_STATUS_AND_INCIDENT_COMMUNICATION.md)
+- [SOP-OPS-002 — Support IFTTT Notification Setup](OPERATIONS/SOP-OPS-002_SUPPORT_IFTTT_NOTIFICATION_SETUP.md)
 
 ### Procedures — Security (SOP-SEC)
 - [SOP-SEC-001 — Credentials and Identity Lookup Operations](SECURITY/SOP-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_OPERATIONS.md)
@@ -273,6 +274,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.23 (2026-10-04):**
+- Register SOP-OPS-002 v1.0: promote the Support IFTTT setup guide to a normative OPERATIONS procedure, retaining Support's notification authority and documenting setup, payload values, validation, and troubleshooting.
 
 **Version 3.22 (2026-10-04):**
 - Register DOM-SUP-001 v1.8 and FEAT-SUP-001 v1.1: optional non-identifying IFTTT filing notifications after successful outer commit, with teacher-filing and student-escalation triggers only.
