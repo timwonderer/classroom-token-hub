@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DB-001       | 1.6     | 2026-09-30     | 1.5 | Normative |
+| SOP-DB-001       | 1.7     | 2026-10-06     | 1.6 | Normative |
 
 > [!NOTE]
 > v1.1 (2026-09-14) adds §V.A, a named exception to Golden Rule 3. Rule 3 is not weakened:
@@ -17,6 +17,10 @@
 > for. §V.B permits only the guard that declines the operation in that case. It may not change what
 > the migration does when the element is present, and it may not alter the migration's intended end
 > state. Golden Rule 3 now names two exceptions and no others.
+
+> v1.7 (2026-10-06): Phase 1 of the Schema Contraction Policy no longer says the application supports
+> both forms. Physical schema coexistence is permitted; dual-write, fallback and heuristic
+> interpretation are not (`SOP-DB-004` §VII, owner ruling 2026-10-06). No other rule changes.
 
 > [!IMPORTANT]
 > This is the **Single Source of Truth** for all database migration policies, best practices, and workflows in the Classroom Economy project. All contributors must adhere to these standards.
@@ -437,7 +441,7 @@ This gate is **PR‑blocking**.
 **Phase 1: Expand (Release N)**
 
 - New elements exist alongside legacy.
-- Application supports both.
+- Schema supports both; the application writes only the new form (`SOP-DB-004` §VII–VIII).
 - NO destructive migrations.
 
 **Phase 2: Contract Code (Release N+1)**
