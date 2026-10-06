@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-001      | 2.7     | 2026-10-04     | 2.6 | Normative |
+| SOP-DEP-001      | 2.8     | 2026-10-06     | 2.7 | Normative |
 
 ## I. Purpose
 
@@ -39,7 +39,7 @@ Normative (SOP Tier). Subordinate to INV-CORE-000.
 
 - `INV-CORE-000_CORE_INVARIANTS.md`
 - `DOM-IDEN-002_STUDENT_IDENTITY_ARCHITECTURE.md` (seat state; §VIII participation and visibility)
-- `SOP-DB-009_Migration_Compliance_Review.md`
+- `SOP-DB-004_Live_V2_Migration_And_Versioning_Contract.md`
 - `SOP-DB-001_Migration_Specifications.md`
 - `SOP-TEST-001_Validation_Execution_And_Reporting.md`
 
@@ -72,7 +72,7 @@ python scripts/lint_migrations.py --baseline migrations/lint_baseline.txt
 
    `check-migrations.sh` must report a single head. The linter must report
    **zero errors**; warnings accepted by `migrations/lint_baseline.txt` are
-   pre-gate debt under SOP-DB-009 §VI and do not block. The baseline only
+   pre-gate debt under SOP-DB-009 §VI (archived; superseded by `SOP-DB-001`) and do not block. The baseline only
    shrinks — a new migration never goes into it.
 
 4. Run the PostgreSQL-backed test suite and attach its artifact:
@@ -422,6 +422,10 @@ output is advisory only and is **not** independent verification authority.
    evidence), `f8b2d6e0a410` (immutable compensation provenance), and
    `f9a3c7d1e620` (terminal attendance invalidation evidence). Their schema
    protections must not be removed through a backward migration.
+   The complete list is `migrations/forward_only_register.txt`, which
+   `tests/test_forward_only_revision_register.py` holds equal to the revisions
+   whose own `downgrade()` raises or does nothing (`SOP-DB-004` §V.5); the
+   revisions named above are examples, not the set.
    Rolling back past any of these revisions requires restoring the database
    snapshot taken in step 6; otherwise use a separately reviewed forward fix.
    Confirm that snapshot exists before applying them. *Version 2.7 supersedes
@@ -481,6 +485,7 @@ revision; where they disagree, the code wins and this document is corrected.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.8 | 2026-10-06 | §XIV: the forward-only list is `migrations/forward_only_register.txt`, enforced against the chain by a test; the prose list was incomplete. Dependencies: `SOP-DB-009` (archived) replaced by `SOP-DB-004`. |
 | 2.7 | 2026-10-04 | §XIV: register the three attendance/payroll recovery revisions that reject all downgrades; preserve snapshot restore or reviewed fix-forward recovery. |
 | 2.6 | 2026-10-01 | §VII: production runs one worker, reverted 2026-10-01 after pending hall-pass requests held in per-process memory failed under two. More than one worker is permitted only when no request or workflow state is held in process memory (enforced by `tests/test_process_local_state_guard.py`). Two workers may be restored after pending hall-pass requests, now `pending_actions` rows, are deployed and verified. |
 | 2.5 | 2026-10-01 | §VII: more than one worker permitted; production to run two (operator ruling after incident OPS-DB-001). Scheduler ownership by advisory lock; verification query. |

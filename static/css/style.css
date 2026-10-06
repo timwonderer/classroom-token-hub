@@ -218,8 +218,10 @@ a:hover {
     color: var(--text-inverse) !important;
 }
 
+/* Text uses the darkened success pair: --success is 4.32:1 on the tinted
+   card headers these buttons sit in, below AA for 14px text. */
 .btn-outline-success {
-    color: var(--success) !important;
+    color: var(--alert-success-text) !important;
     border-color: var(--success) !important;
     background: transparent;
 }
@@ -1222,18 +1224,21 @@ body.sysadmin-shell {
 
 .sysadmin-main {
     flex-grow: 1;
+    /* A flex child will not shrink below its content: without this a wide
+       table or long unbroken ID stretches the page past the viewport. */
+    min-width: 0;
     min-height: 100vh;
     margin-left: 260px;
     background: linear-gradient(135deg, var(--neutral-100) 0%, var(--neutral-50) 100%);
 }
 
 .sysadmin-content {
-    padding: 1.5rem 1.5rem 1.5rem 1rem;
+    padding: 1.5rem;
 }
 
 body.sysadmin-shell .page-header {
     background: var(--surface);
-    padding: 1.25rem 1.5rem 1.25rem 1rem;
+    padding: 1.25rem 1.5rem;
     border-bottom: 1px solid var(--border-color);
     margin-bottom: 0;
 }
@@ -1348,8 +1353,18 @@ body.sysadmin-shell .eyebrow {
         margin-left: 0;
     }
 
+    /* Clear the fixed hamburger (1rem inset + ~2.5rem button) */
     body.sysadmin-shell .page-header {
-        padding-left: 4rem;
+        padding: 1rem 1rem 1rem 4.25rem;
+        min-height: 4.5rem;
+    }
+
+    body.sysadmin-shell .page-header h1 {
+        font-size: var(--text-2xl);
+    }
+
+    .sysadmin-content {
+        padding: 1rem;
     }
 
 }
@@ -1623,7 +1638,12 @@ table.js-sortable thead th:hover .sort-indicator {
     color: var(--secondary);
 }
 
-/* Stat Cards */
+/* Stat Cards
+   Every card shares one structure (icon, value, label) and one height: the
+   grid row stretches them (h-100) and the label may wrap without moving the
+   value, because the text block is top-aligned to the icon. Below 576px the
+   icon stacks above the text so two cards fit per row without the label
+   being squeezed to a word per line. */
 .sysadmin-stat-card {
     background: var(--surface);
     border-radius: var(--radius-md);
@@ -1631,13 +1651,18 @@ table.js-sortable thead th:hover .sort-indicator {
     box-shadow: var(--shadow-sm);
     padding: 1.25rem;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 1rem;
+    min-width: 0;
+}
+
+.sysadmin-stat-card > div:last-child {
+    min-width: 0;
 }
 
 .sysadmin-stat-icon {
-    width: 52px;
-    height: 52px;
+    width: 48px;
+    height: 48px;
     border-radius: 50%;
     background-color: var(--neutral-100);
     color: var(--secondary);
@@ -1645,6 +1670,12 @@ table.js-sortable thead th:hover .sort-indicator {
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+}
+
+/* Gold is a fill, not a text colour (tokens.css): the warning icon on its
+   pale-gold disc uses the accent text token instead. */
+.sysadmin-stat-icon .text-warning {
+    color: var(--accent-text-on-light) !important;
 }
 
 .sysadmin-stat-value {
@@ -1655,10 +1686,243 @@ table.js-sortable thead th:hover .sort-indicator {
 }
 
 .sysadmin-stat-label {
-    font-size: 0.8rem;
+    font-size: var(--text-sm);
+    line-height: var(--leading-snug);
     color: var(--text-secondary);
     font-weight: 500;
-    margin-top: 0.1rem;
+    margin-top: 0.25rem;
+}
+
+@media (max-width: 575.98px) {
+    .sysadmin-stat-card {
+        flex-direction: column;
+        gap: 0.75rem;
+        padding: 1rem;
+    }
+
+    .sysadmin-stat-icon {
+        width: 40px;
+        height: 40px;
+    }
+}
+
+/* Tabs and pills
+   One tab strip for every sysadmin page: a single scrolling row (never
+   wrapped onto a second line), labels that do not break, and the same
+   guardian-gray treatment as the rest of the shell instead of Bootstrap's
+   default link blue. */
+.sysadmin-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    border-bottom: 0;
+}
+
+.sysadmin-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+.sysadmin-tabs .nav-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    white-space: nowrap;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.sysadmin-tabs .nav-link:hover,
+.sysadmin-tabs .nav-link:focus-visible {
+    color: var(--primary);
+}
+
+.sysadmin-tabs .nav-link.active {
+    color: var(--primary);
+    font-weight: 600;
+    border-top: 3px solid var(--secondary);
+}
+
+@media (max-width: 575.98px) {
+    /* Icons are decorative; dropping them keeps every label and its count
+       badge inside the strip instead of scrolling off the edge. */
+    .sysadmin-tabs .nav-link {
+        padding: 0.5rem 0.75rem;
+    }
+
+    .sysadmin-tabs .nav-link > .material-symbols-outlined {
+        display: none;
+    }
+}
+
+.sysadmin-pills {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.sysadmin-pills .nav-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    white-space: nowrap;
+    color: var(--primary);
+    background: var(--surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-pill);
+    padding: 0.35rem 0.9rem;
+    font-size: var(--text-sm);
+    font-weight: 500;
+}
+
+.sysadmin-pills .nav-link:hover {
+    background: var(--neutral-100);
+}
+
+.sysadmin-pills .nav-link.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: var(--text-inverse);
+}
+
+/* Filter bar above a table or list: stacks full-width on phones */
+.sysadmin-filterbar {
+    padding: 1rem;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--neutral-50);
+}
+
+.sysadmin-filterbar .form-select,
+.sysadmin-filterbar .btn {
+    min-height: 2.25rem;
+}
+
+@media (max-width: 575.98px) {
+    .sysadmin-filterbar .sysadmin-filter-field,
+    .sysadmin-filterbar .btn {
+        width: 100%;
+        max-width: none;
+    }
+}
+
+/* Chips: a compact label with an optional leading icon. Unlike a raw
+   .badge they size the icon to the text, centre it on the baseline, and
+   truncate rather than overflow their row. */
+.sysadmin-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    max-width: 100%;
+    min-width: 0;
+    padding: 0.2rem 0.6rem;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--border-color);
+    background: var(--neutral-100);
+    color: var(--text-primary);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    line-height: 1.3;
+    white-space: nowrap;
+}
+
+.sysadmin-chip > .material-symbols-outlined {
+    font-size: var(--icon-2xs);
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.sysadmin-chip > .sysadmin-chip-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Bootstrap's default <code> pink is 4.12:1 on the table-hover row
+   (#f5f5f3); the sysadmin tables are full of references and paths. */
+body.sysadmin-shell code {
+    color: var(--text-primary);
+}
+
+.sysadmin-chip-code {
+    font-family: var(--font-data);
+}
+
+/* Ticket row (escalated issues list) */
+.sysadmin-ticket {
+    display: block;
+    padding: 1rem;
+    color: inherit;
+    text-decoration: none;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.sysadmin-ticket:last-child {
+    border-bottom: 0;
+}
+
+.sysadmin-ticket:hover,
+.sysadmin-ticket:focus-visible {
+    background: var(--neutral-50);
+    color: inherit;
+}
+
+.sysadmin-ticket-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.sysadmin-ticket-head .badge {
+    margin-left: auto;
+}
+
+.sysadmin-ticket-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    min-width: 0;
+}
+
+.sysadmin-ticket-title {
+    font-weight: 600;
+    font-size: var(--text-sm);
+    overflow-wrap: anywhere;
+}
+
+.sysadmin-ticket-excerpt {
+    color: var(--text-secondary);
+    font-size: var(--text-xs);
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.sysadmin-ticket-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-top: 0.4rem;
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+}
+
+.sysadmin-ticket-meta .material-symbols-outlined {
+    font-size: var(--icon-2xs);
+    line-height: 1;
+}
+
+/* Panel under a tab strip: attaches to the tabs and clips children to its radius */
+.sysadmin-tab-panel {
+    background: var(--surface);
+    border: 1px solid var(--border-color);
+    border-radius: 0 var(--radius-md) var(--radius-md) var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+    margin-bottom: 1.5rem;
 }
 
 /* ─── Page Header ─── */

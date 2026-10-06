@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.23 | 2026-10-04 | 3.22 | Normative |
+| SOP-DOC-001 | 3.25 | 2026-10-06 | 3.24 | Normative |
 
 ---
 
@@ -172,6 +172,7 @@ Archived material is deliberately absent; see §VI.
 - [SOP-DB-001 — Database Migration Specifications](DATABASE/SOP-DB-001_Migration_Specifications.md)
 - [SOP-DB-002 — Deprecated Symbols Registry](DATABASE/SOP-DB-002_Deprecated_Symbols_Registry.md)
 - [SOP-DB-003 — Schema Change Gate](DATABASE/SOP-DB-003_Schema_Change_Proposals.md)
+- [SOP-DB-004 — Live-v2 Migration and Semantic-Versioning Contract](DATABASE/SOP-DB-004_Live_V2_Migration_And_Versioning_Contract.md)
 
 ### Procedures — Deployment (SOP-DEP)
 - [SOP-DEP-001 — v2 Live-Test Runbook](DEPLOYMENT/SOP-DEP-001_Live_Test_Runbook.md) — v2.7: §XIV lists the forward-only Ledger posting, compensation provenance, and attendance invalidation revisions.
@@ -275,8 +276,14 @@ Their surviving content lives at:
 
 ## VIII. Change Notes
 
-**Version 3.23 (2026-10-04):**
-- Register SOP-OPS-002 v1.0: promote the Support IFTTT setup guide to a normative OPERATIONS procedure, retaining Support's notification authority and documenting setup, payload values, validation, and troubleshooting.
+**Version 3.25 (2026-10-06):**
+- Register INV-ARC-008 v1.2, DOM-OPS-002 v1.11, SPEC-PROD-002 v1.4 and SOP-DB-004 v1.2: the owner's compatibility ruling (no bridge, dual-write, fallback or heuristic interpretation; versioned read-side interpretation of retained history only) now stands in the governing documents. INV-ARC-008 drops its "approved bridge code" allowance.
+
+**Version 3.24 (2026-10-06):**
+- Register SOP-DB-004 v1.1, SOP-DEP-001 v2.8 and SOP-DEP-002 v1.8: the forward-only revision register, and removal of archived/nonexistent dependency citations.
+
+**Version 3.23 (2026-10-06):**
+- Register SOP-DB-004 v1.0: classification, history, rollback/cutover evidence and semantic-versioning rules for changes to live-v2 production state; SOP-DB-001 v1.7 aligns expand/contract Phase 1 with it.
 
 **Version 3.22 (2026-10-04):**
 - Register DOM-SUP-001 v1.8 and FEAT-SUP-001 v1.1: optional non-identifying IFTTT filing notifications after successful outer commit, with teacher-filing and student-escalation triggers only.

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |:---|:---|:---|:---|:---|
-| DOM-OPS-002 | 1.10 | 2026-10-04 | 1.9 | Constitutional |
+| DOM-OPS-002 | 1.11 | 2026-10-06 | 1.10 | Constitutional |
 
 ---
 
@@ -307,7 +307,7 @@ For correction execution, the originating FEAT obtains the complete source/candi
 
 ### 6.2A Pure historical audit coverage diagnostics
 
-The historical reconstruction FEATs also compose the unchanged canonical §6.2 query for modern sources and §6.2A observations for old sources. These observations can be accepted as coverage metadata by Ledger's separate reconstruction evidence; they do not expand original signed fields or relabel original lawfulness. Legacy NULL linkage remains UNVERIFIED. Retired v1 status that cannot be faithfully reproduced remains DEGRADED with VERIFIER_COVERAGE_UNAVAILABLE; its complete linked envelope/chain is still checked. Missing coverage differs from authenticated payload/HMAC/chain/scope contradiction, which remains INVALID and denies recovery. Coverage-only inability is not diagnosed as actual tampering; known contradictions cannot be suppressed as a coverage gap. New business and monetary writes still require complete current lawful lineage.
+The historical reconstruction FEATs also compose the unchanged canonical §6.2 query for modern sources and §6.2A observations for old sources. These observations can be accepted as coverage metadata by Ledger's separate reconstruction evidence; they do not expand original signed fields or relabel original lawfulness. Legacy NULL linkage remains UNVERIFIED. Retired v1 status that cannot be faithfully reproduced remains DEGRADED with VERIFIER_COVERAGE_UNAVAILABLE; its complete linked envelope/chain is still checked. Missing coverage differs from authenticated payload/HMAC/chain/scope contradiction, which remains INVALID and denies recovery. Coverage-only inability is not diagnosed as actual tampering; known contradictions cannot be suppressed as a coverage gap. New business and monetary writes still require complete current lawful lineage. These diagnostics are read-side interpretation of retained historical state: they create no state, supply no alternate path for creating new state, and do not persist a competing semantic authority (`SOP-DB-004` §VII).
 
 
 Operations owns `diagnose_historical_audit_coverage(table, row, class_id, *, source_descriptor=None, emitter_provenance=None, max_chain_events=1000)`, composed through FEAT-PROD-006 and directly through FEAT-PROD-005/003 reconstruction coordination. Incorporates [SPEC-PROD-002](../SPEC/SPEC-PROD-002_HISTORICAL_ATTENDANCE_PROOF_ASSESSMENT.md) §V, VII–VIII for exact original envelope/field coverage and bounded pure diagnostics. The batch query `diagnose_historical_audit_coverages(table, rows, class_id, *, max_chain_events=1000, max_rows=1000)` returns one immutable observation per scoped row and walks the complete class chain once per invocation. Both budgets are positive integers at most 1000; there is no caller-supplied chain-verification override or persisted cache. Historical descriptor/provenance parameters remain unavailable for record assignment in this phase and reject non-null caller values. It reports linked-event scope, complete chain/head envelope authentication, version, confirmed/candidate field coverage and unavailable original protected values independently. A verified chain prefix is insufficient. Scalar head observations before and after the complete walk must agree; concurrent legitimate advancement returns unavailable EVIDENCE_CHANGED_DURING_READ, never a false integrity failure. No row locks or transaction mutation are used. Excessive or unavailable chain evidence produces unavailable completeness. No autoflush, integrity-status mutation, signature repair or audit emission is allowed.
@@ -389,6 +389,8 @@ This taxonomy is defined as canonical in `INV-ARC-016`. The operational semantic
 ---
 
 ## 9. Amendment
+
+Version 1.11 (2026-10-06) clarifies that §6.2A diagnostics are read-side interpretation of lawful historical state only, consistent with the owner's compatibility ruling in `SOP-DB-004` §VII–VIII. Supersedes no query, evidence rule or integrity outcome.
 
 Version 1.10 (2026-10-04) adds §6.2C's bounded batch form of the §6.2 creation-evidence query, so a batch walks each unchanged class chain once instead of once per record. Supersedes no proof requirement: every row-specific §6.2 check, the complete-chain requirement and fail-closed unavailability are retained, and no proof cache, verification flag or bypass is authorized.
 
