@@ -83,6 +83,21 @@ def test_mutation_noop_spellings_are_reported():
         assert classify_revision(_revision(body)).forward_only, body
 
 
+def test_mutation_noop_dressed_as_logging_or_control_flow_is_reported():
+    bodies = (
+        "logger.warning('nothing to undo')",
+        "if True:\n        print('a')\n    else:\n        print('b')",
+        "import logging\n    logging.getLogger(__name__).info('skipped')",
+    )
+    for body in bodies:
+        assert classify_revision(_revision(body)).forward_only, body
+
+
+def test_mutation_noop_hidden_in_a_helper_is_reported():
+    extra = "def _undo():\n    pass\n"
+    assert classify_revision(_revision("_undo()", extra=extra)).forward_only
+
+
 def test_mutation_missing_downgrade_is_reported():
     source = "revision = 'zz01'\ndown_revision = 'abc'\ndef upgrade():\n    op.drop_table('t')\n"
     assert classify_revision(source).forward_only
@@ -102,6 +117,16 @@ def test_reversible_downgrade_is_not_reported():
 def test_downgrade_calling_a_non_raising_helper_is_not_reported():
     extra = "def _undo():\n    op.drop_column('t', 'c')\n"
     assert not classify_revision(_revision("_undo()", extra=extra)).forward_only
+
+
+def test_downgrade_that_executes_sql_is_not_reported():
+    assert not classify_revision(_revision("op.get_bind().execute('update t set c = 1')")).forward_only
+    assert not classify_revision(_revision("connection.execute(sa.text('delete from t'))")).forward_only
+
+
+def test_downgrade_using_batch_alter_table_is_not_reported():
+    body = "with op.batch_alter_table('t') as batch:\n        batch.drop_column('c')"
+    assert not classify_revision(_revision(body)).forward_only
 
 
 def test_pure_merge_revision_is_not_reported():
