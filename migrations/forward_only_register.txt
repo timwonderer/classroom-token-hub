@@ -1,0 +1,40 @@
+# Forward-only Alembic revisions (SOP-DB-004 §V.5, SOP-DEP-001 §XIV).
+# A revision is forward-only when its downgrade() raises or does nothing. Past the first one in a
+# release, recovery is snapshot restore or a reviewed fix-forward, never `flask db downgrade`.
+# tests/test_forward_only_revision_register.py requires this file to equal the set derived from
+# migrations/versions. A new forward-only revision must be added here in the PR that creates it.
+
+0001  # 0001_bootstrap.py: downgrade() does nothing
+0f0436f6026f  # 0f0436f6026f_class_phase_2_create_economic_engine_.py: downgrade() raises
+7c3d4e5f6a7b  # 7c3d4e5f6a7b_drop_all_unauthorized_tables.py: downgrade() raises
+83be5c965a68  # 83be5c965a68_phase_2b_remove_id_surrogate_from_class_features.py: downgrade() raises
+9a5b6c7d8e9f  # 9a5b6c7d8e9f_phase_2c_add_composite_fk_and_unique_constraints.py: downgrade() raises
+9c6d5e4f3a2b  # 9c6d5e4f3a2b_phase_2e_add_composite_key_class_scoping.py: downgrade() raises
+a1b2c3d4e5f6  # a1b2c3d4e5f6_repoint_obligation_assessment_policy_version_.py: downgrade() raises
+a6d9c2e4f1b7  # a6d9c2e4f1b7_add_canonical_identity_foundation.py: downgrade() raises
+a7e3c9d1f5b2  # a7e3c9d1f5b2_payroll_settings_effective_dated_authority.py: downgrade() calls _restore_payroll_event(), which raises
+ae6b7c8d9e0f  # ae6b7c8d9e0f_phase_2d_add_database_immutability_triggers.py: downgrade() raises
+b2c3d4e5f8a  # b2c3d4e5f8a_align_prod_domain_schema_contract.py: downgrade() raises
+b3c4d5e6f7a8  # b3c4d5e6f7a8_manual_credit_without_payroll_policy.py: downgrade() raises
+b4d7e2f9a1c3  # b4d7e2f9a1c3_install_phase2d_immutability_triggers_unconditionally.py: downgrade() does nothing
+b7e4c1d9a2f6  # b7e4c1d9a2f6_backfill_canonical_identity_principals.py: downgrade() does nothing
+c1a1b2d3e4f5  # c1a1b2d3e4f5_clear_claimed_seat_artifacts.py: downgrade() does nothing
+c3d4e5f8a9b  # c3d4e5f8a9b_align_prod_domain_schema_contract_v2.py: downgrade() raises
+c7a7b8c9d0e1  # c7a7b8c9d0e1_seat_owned_records.py: downgrade() raises
+c7d8e9f0a1b2  # c7d8e9f0a1b2_make_teacher_user_id_nullable.py: downgrade() raises
+c9e0f1a2b3c4  # c9e0f1a2b3c4_hall_pass_policy_append_only.py: downgrade() raises
+d9e0f1a2b3c4  # d9e0f1a2b3c4_allow_grant_only_store_prices.py: downgrade() raises
+d9e1f3a5b7c9  # d9e1f3a5b7c9_drop_support_seat_public_id_foreign_keys.py: downgrade() does nothing
+da1b2c3d4e5f  # da1b2c3d4e5f_add_overdraft_fine_to_economic_engine.py: downgrade() raises
+db2c3d4e5f6a  # db2c3d4e5f6a_allow_universe_destruction.py: downgrade() raises
+dc3d4e5f6a7b  # dc3d4e5f6a7b_drop_banking_settings.py: downgrade() raises
+e1c7a4b9d2f3  # e1c7a4b9d2f3_seed_default_issue_categories.py: downgrade() does nothing
+e4a2b7c9d1f0  # e4a2b7c9d1f0_make_tap_event_student_id_nullable.py: downgrade() raises
+e5f6a7b8c9d0  # e5f6a7b8c9d0_align_prod_indexes_with_orm.py: downgrade() raises
+e6f7a8b9c0d1  # e6f7a8b9c0d1_canonicalize_ledger_persistence.py: downgrade() raises
+e7c2a9d4f610  # e7c2a9d4f610_derive_ledger_posting_from_reconciliation.py: downgrade() raises
+f0a1b2c3d4e5  # f0a1b2c3d4e5_finalize_ledger_canonical_indexes.py: downgrade() raises
+f1f1f1f1f1f1  # f1f1f1f1f1f1_repoint_legacy_fks_to_users.py: downgrade() raises
+f2c9d1a6b7e8  # f2c9d1a6b7e8_reconcile_ledger_table_split.py: downgrade() does nothing
+f8b2d6e0a410  # f8b2d6e0a410_ledger_compensation_provenance.py: downgrade() raises
+f9a3c7d1e620  # f9a3c7d1e620_attendance_interval_invalidation.py: downgrade() raises

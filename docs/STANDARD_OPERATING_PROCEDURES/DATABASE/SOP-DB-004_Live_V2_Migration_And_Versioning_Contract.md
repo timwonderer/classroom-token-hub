@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DB-004 | 1.0 | 2026-10-06 | — | Normative |
+| SOP-DB-004 | 1.1 | 2026-10-06 | 1.0 | Normative |
 
 > [!NOTE]
 > §VII and §VIII record the owner ruling of 2026-10-06 on compatibility: physical schema coexistence
@@ -73,8 +73,10 @@ what is not permitted until they have.
    selected only by a historical row's explicit, immutable semantic version (§VII.3).
 5. **Forward-only revision.** An Alembic revision whose `downgrade()` raises, or does nothing for
    the schema or data it changed. Merge revisions that change nothing are not forward-only in this
-   sense. The list in `SOP-DEP-001` §XIV is a register of known cases, not the definition; the
-   definition is the revision's own `downgrade()`.
+   sense. The complete list is `migrations/forward_only_register.txt`, which
+   `tests/test_forward_only_revision_register.py` holds equal to the set derived from each
+   revision's own `downgrade()`. A PR that adds a forward-only revision adds it to the register;
+   a missing or stale entry fails the test.
 6. **Rollback boundary.** The first revision in a release whose `downgrade()` is not both defined
    and rehearsed (`SOP-DB-003` §VII.5). Past it, recovery is snapshot restore or a reviewed
    fix-forward, never a downgrade.
@@ -176,7 +178,8 @@ scope (`INV-ARC-017` §V.5, §V.8). Evidence contains no PII and no secrets (`IN
 ### IX.1 Before the window
 
 1. Exact release SHA, and its ancestry of the approved lineage (`SOP-DEP-002` §VI).
-2. `flask db heads` (exactly one) and `flask db current` for the target database.
+2. `flask db heads` (exactly one) and `flask db current` for the target database, and the
+   release's forward-only revisions named from `migrations/forward_only_register.txt`.
 3. Classification (§VI) for every change in the release, and the rollback boundary (§V.6).
 4. A restorable snapshot reference and proof the restore procedure works
    (`SOP-DEP-002` §VI.2; `docs/ops/DATABASE_BACKUP_PLAN.md`).
@@ -264,8 +267,8 @@ the named independent observer; and the version assigned under §X with the leve
 - `SOP-DB-001` §VIII Phase 1 is read as §VIII here states (v1.7 of that document records this).
 - `SOP-DB-003` remains the PR gate. `M2 DATA` has no box in its classification; this document is
   the only place a data rewrite is classified, and the PR description cites it.
-- `SOP-DEP-001` §XIV's list of forward-only revisions is a register of known cases. The
-  definition in §V.5 governs where they differ.
+- `SOP-DEP-001` §XIV defers to `migrations/forward_only_register.txt` for the complete list of
+  forward-only revisions; §V.5 gives the definition.
 - `SOP-DEP-002` is unchanged. §IX adds evidence to its checklist; it removes none.
 
 ## XIII. Amendment

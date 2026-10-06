@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.23 | 2026-10-06 | 3.22 | Normative |
+| SOP-DOC-001 | 3.24 | 2026-10-06 | 3.23 | Normative |
 
 ---
 
@@ -274,6 +274,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.24 (2026-10-06):**
+- Register SOP-DB-004 v1.1, SOP-DEP-001 v2.8 and SOP-DEP-002 v1.8: the forward-only revision register, and removal of archived/nonexistent dependency citations.
 
 **Version 3.23 (2026-10-06):**
 - Register SOP-DB-004 v1.0: classification, history, rollback/cutover evidence and semantic-versioning rules for changes to live-v2 production state; SOP-DB-001 v1.7 aligns expand/contract Phase 1 with it.
