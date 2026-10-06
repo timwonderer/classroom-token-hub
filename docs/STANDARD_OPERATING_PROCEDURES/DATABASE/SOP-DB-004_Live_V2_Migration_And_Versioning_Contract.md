@@ -4,11 +4,11 @@
 |------------------|---------|----------------|------------|-----------------|
 | SOP-DB-004 | 1.0 | 2026-10-06 | — | Normative |
 
-> [!IMPORTANT]
-> **Draft pending owner confirmation of §VII.** Section VII states the strict reading of the owner
-> prohibition on compatibility bridges and helpers. It is the default until the owner rules
-> otherwise, and it is the only section whose text depends on an unresolved authority conflict
-> (see §VII.4). Everything else in this document stands without that ruling.
+> [!NOTE]
+> §VII and §VIII record the owner ruling of 2026-10-06 on compatibility: physical schema coexistence
+> during expand/contract is permitted; dual-write, fallback, heuristic interpretation and competing
+> semantic authorities are prohibited; historical rows may keep an explicit semantic version and be
+> interpreted by that immutable version.
 
 ## I. Purpose
 
@@ -64,10 +64,13 @@ what is not permitted until they have.
 3. **Prospective only.** This contract classifies changes made after its effective date. It does
    not reclassify, renumber or re-open any release already shipped. A tag, once published, is never
    moved.
-4. **Bridge.** Any code, column, alias, fallback, dual-read, dual-write, flag or helper whose
-   purpose is to let current code interpret a superseded representation, or superseded code
-   interpret the current one, beyond the single execution of the migration that changes it. A
-   migration run once is not a bridge; a runtime path that outlives the migration is.
+4. **Prohibited compatibility.** Any dual-write, fallback (try the new form, else the old),
+   heuristic interpretation (inferring what a row means from its content, timestamps or shape),
+   competing semantic authority (two components that each decide what the same row means), or flag
+   or helper whose purpose is any of those. A migration run once is not one; a runtime path that
+   outlives it is.
+   **Versioned interpretation** is not prohibited compatibility: a read-side interpreter that is
+   selected only by a historical row's explicit, immutable semantic version (§VII.3).
 5. **Forward-only revision.** An Alembic revision whose `downgrade()` raises, or does nothing for
    the schema or data it changed. Merge revisions that change nothing are not forward-only in this
    sense. The list in `SOP-DEP-001` §XIV is a register of known cases, not the definition; the
@@ -102,9 +105,10 @@ What happens to rows that already exist, answered per table touched.
 | Value | Meaning |
 |-------|---------|
 | `H0 UNAFFECTED` | No existing row is read differently, rewritten or removed. |
-| `H1 PRESERVED` | Existing rows keep their stored meaning and the canonical reader needs no translation to understand them. |
-| `H2 PROTECTED` | Existing rows are protected or immutable and the change alters how they would be read. Requires an owner ruling (§VII.3) before implementation. |
-| `H3 REWRITTEN` | A migration rewrites existing rows once, to the new representation. Allowed only for unprotected rows, with the evidence in §IX.2. |
+| `H1 PRESERVED` | Existing rows keep their stored meaning and the current reader understands them as stored; no new semantic version exists. |
+| `H2 VERSIONED` | Existing rows keep an explicit semantic version and are interpreted by that version (§VII.3). Applies to protected rows, which are not rewritten. |
+| `H3 REWRITTEN` | A migration rewrites existing rows once, to the new representation. Allowed only for unprotected rows, with the evidence in §IX.2, and only if rollback does not require rewriting them back (§VII.6). |
+| `H5 UNRESOLVED` | Existing rows have no explicit semantic version and their meaning would have to be inferred. Blocked for an owner ruling (§VII.7). |
 | `H4 RETIRED` | Existing rows are deleted, within a lifetime an `INV-*` or `DOM-*` document authorizes (cite it). |
 
 ### VI.3 Risk
@@ -115,45 +119,54 @@ required for any value other than the row's minimum.
 | Risk | At least this when… |
 |------|---------------------|
 | Medium | `M2`, `M3`, or any change touching Policy rows or External state. |
-| High | `M4`; `H2`, `H3` or `H4`; any change touching Protected rows; or any change whose rollback is restore (§IX.4). |
+| High | `M4`; `H2`, `H3`, `H4` or `H5`; any change touching Protected rows; or any change whose rollback is restore (§IX.4). |
 
-## VII. History and the No-Bridge Rule
+## VII. History, Versioned Interpretation and Compatibility
 
-1. **No new bridge.** No change may add a bridge (§V.4). This covers compatibility columns,
-   aliases, dual reads or writes, "fall back to the old form" branches, and helper functions whose
-   job is to translate between representations. A bridge added "for safety", "temporarily" or
-   "behind a flag" is still a bridge.
-2. **Allowed ways to meet existing history.** A change reaches existing data only through one of:
-   1. `H0` or `H1`: nothing needs translating, because the new reader understands the old rows
-      as stored.
-   2. `H3`: a single forward migration rewrites the rows. Once it has run, no code reads the old
-      representation.
-   3. `H4`: the rows are deleted within an authorized lifetime.
-3. **Anything else is blocked for a ruling.** If neither 2.1 nor 2.2 nor 2.3 fits, in particular
-   when protected rows cannot be rewritten and the new meaning would require reading them
-   differently (`H2`), the change stops. Its issue records the conflict, names the governing
-   clauses, and waits for an owner ruling recorded in the governing `INV-*`/`DOM-*` document.
-   An agent never resolves it by choosing a bridge.
-4. **Existing authority is not precedent.** Historical interpretation that already exists under
-   owner-ruled documents (for example `DOM-OPS-002` §6.2A and `SPEC-PROD-002`, which diagnose old
-   audit coverage without rewriting it, and the "approved bridge code" allowance in `INV-ARC-008`
-   §VI) is unchanged by this document and is not authority for a new bridge. Whether those
-   provisions and `SOP-DB-001` §VIII Phase 1 ("application supports both") are consistent with
-   the no-bridge rule is an open authority conflict for the owner; until it is ruled, §VIII
-   states the stricter reading.
+1. **Prohibited.** No change may introduce dual-write, fallback, heuristic interpretation, or a
+   competing semantic authority (§V.4). "For safety", "temporarily" and "behind a flag" do not
+   change that. Compatibility on the read side must not provide an alternate path for creating
+   new state.
+2. **Permitted.** Physical schema coexistence during expand/contract (old and new columns,
+   tables or constraints existing together), and versioned interpretation of lawful historical
+   state (§VII.3).
+3. **Versioned interpretation.** A historical row may retain an explicit semantic version, stored
+   with the row (or fixed by a recorded, immutable boundary the owning domain defines) and never
+   changed afterward. The interpreter is chosen only by that value. Each version's meaning is
+   defined by one authority, the owning domain's `DOM-*` document. Only lawful historical state
+   is interpreted this way (`INV-ARC-016`); a row of unknown lawfulness is not made lawful by
+   being read.
+4. **Writer cutover.** There is one cutover point, inside one release. After it every new write
+   uses only the current semantic version; before it, writers use only the previous one. No
+   release writes both.
+5. **Retirement.** Every expand/contract artifact (a column, trigger, constraint or interpreter)
+   has an explicit retirement condition recorded in its issue and release record, stating what
+   must be true for it to be removed and in which release. The only exemption is an artifact
+   permanently required to interpret retained historical records; it says so and cites the
+   authority that requires the records to be kept.
+6. **Rollback.** Rollback must not require rewriting historical rows into a different semantic
+   version. A change whose recovery would need such a rewrite recovers by snapshot restore or
+   fix-forward (§IX.4), and is classified accordingly.
+7. **Unversioned or ambiguous history is blocked.** When existing rows carry no explicit version
+   and would have to be interpreted by inference (`H5`), the change stops. Its issue records the
+   rows, the governing clauses and the ambiguity, and waits for an owner ruling recorded in the
+   governing `INV-*`/`DOM-*` document. An agent never resolves it by inferring.
+8. **Existing provisions.** `DOM-OPS-002` §6.2A and `SPEC-PROD-002` (diagnosing old audit coverage
+   without creating state) and the "approved bridge code" allowance in `INV-ARC-008` §VI are not
+   amended here. Neither is authority for new compatibility code; any new reliance on them goes
+   through §VII.3 or §VII.7.
 
 ## VIII. Expand and Contract Under This Contract
 
-`SOP-DB-001` §VIII remains the phase vocabulary. Under the strict reading in §VII:
+`SOP-DB-001` §VIII remains the phase vocabulary, read as follows.
 
-1. **Structure may coexist, code may not.** Old and new structure may exist together only for the
-   span of one release, inside a controlled window (§IX.3). During that span the running code
-   reads and writes one representation, the new one.
-2. **No release depends on old code and new schema both running.** A release whose previous
-   version must keep running against the new schema (the premise of code-only rollback) must
-   prove that, per §IX.4, and is `M1` at most.
-3. **Contract in two releases at most.** A removal follows the `M3` release by one `M4` release.
-   The `M4` release contains no unrelated code (`SOP-DB-003` §VII.1).
+1. **Coexistence is physical.** In Phase 1 the schema supports both forms. The application writes
+   one, the current form, and reads history only as §VII.3 allows.
+2. **Prior release may keep running only if proven.** A release whose previous version must run
+   against the new schema (code-only rollback) must prove it per §IX.4, and is `M1` at most.
+3. **Contract in two releases at most.** A removal follows the `M3` release by one `M4` release,
+   unless an artifact is exempt under §VII.5. The `M4` release contains no unrelated code
+   (`SOP-DB-003` §VII.1).
 
 ## IX. Rollback and Cutover Evidence
 
@@ -176,9 +189,9 @@ scope (`INV-ARC-017` §V.5, §V.8). Evidence contains no PII and no secrets (`IN
    aggregate ledger totals, taken before the window so the same query can be repeated after. It
    identifies classes by `class_id` and contains no names.
 
-### IX.2 For `H3` changes
+### IX.2 For `H2` and `H3` changes
 
-All of §IX.1, plus: the rewrite is run against the clone, and a before/after comparison of the
+All of §IX.1, plus, for `H2`: a test that the interpreter selected by each historical version yields the meaning the owning domain defines for a seeded sample of rows of that version, and that the new writer emits only the current version. For `H3`: the rewrite is run against the clone, and a before/after comparison of the
 baseline queries shows exactly the intended differences and no others; the rewrite is repeatable
 without further change (idempotent per `SOP-DB-001` §VI).
 
@@ -198,7 +211,7 @@ without further change (idempotent per `SOP-DB-001` §VI).
 
 | Condition | Permitted recovery |
 |-----------|--------------------|
-| Release is `M0`, or `M1` and the previous SHA is shown (before the window) to boot and pass `/health` against the upgraded schema | Redeploy the previous SHA. |
+| Release is `M0`, or `M1` and the previous SHA is shown (before the window) to boot and pass `/health` against the upgraded schema | Redeploy the previous SHA, which must also interpret every row written after cutover without any row being rewritten. |
 | Anything else, including every release containing a forward-only revision or an `M2` rewrite that cannot be reversed | Snapshot restore, or a reviewed fix-forward. `flask db downgrade` is never an automatic recovery. |
 
 The record states which row applies and names the rollback boundary before the window opens.
@@ -224,7 +237,7 @@ The record states which row applies and names the rollback boundary before the w
 
    | Level | Required when |
    |-------|---------------|
-   | MAJOR | The meaning of retained data changes in a way a user would observe in existing records (`H2` resolved by ruling), or the identity, tenancy or authority model changes, or a capability users depend on is removed. |
+   | MAJOR | The meaning of retained data changes in a way a user would observe in existing records (a new semantic version changes what existing historical records mean to the user), or the identity, tenancy or authority model changes, or a capability users depend on is removed. |
    | MINOR | A capability is added or changed, or the release contains any `M1`, `M2` or `M4` change, including any forward-only revision. |
    | PATCH | The release is `M0`, or only `M1` changes that add no capability and pass §IX.4's first row. |
 
@@ -248,7 +261,7 @@ the named independent observer; and the version assigned under §X with the leve
 
 ## XII. Relationship to Existing Procedures
 
-- `SOP-DB-001` is unchanged. Its §VIII expand/contract applies as §VIII here restricts it.
+- `SOP-DB-001` §VIII Phase 1 is read as §VIII here states (v1.7 of that document records this).
 - `SOP-DB-003` remains the PR gate. `M2 DATA` has no box in its classification; this document is
   the only place a data rewrite is classified, and the PR description cites it.
 - `SOP-DEP-001` §XIV's list of forward-only revisions is a register of known cases. The
@@ -258,5 +271,4 @@ the named independent observer; and the version assigned under §X with the leve
 ## XIII. Amendment
 
 Revisions require incrementing the version, updating the Effective Date, and populating the
-Supersedes field, and must remain consistent with `INV-CORE-000`. Confirming or replacing §VII after
-the owner's ruling is a version increment that cites the ruling.
+Supersedes field, and must remain consistent with `INV-CORE-000`. Any change to §VII requires an owner ruling, which the new version cites.

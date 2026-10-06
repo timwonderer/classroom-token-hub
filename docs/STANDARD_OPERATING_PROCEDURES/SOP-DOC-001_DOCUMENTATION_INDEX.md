@@ -276,7 +276,7 @@ Their surviving content lives at:
 ## VIII. Change Notes
 
 **Version 3.23 (2026-10-06):**
-- Register SOP-DB-004 v1.0: classification, history, rollback/cutover evidence and semantic-versioning rules for changes to live-v2 production state (draft pending owner confirmation of its §VII).
+- Register SOP-DB-004 v1.0: classification, history, rollback/cutover evidence and semantic-versioning rules for changes to live-v2 production state; SOP-DB-001 v1.7 aligns expand/contract Phase 1 with it.
 
 **Version 3.22 (2026-10-04):**
 - Register DOM-SUP-001 v1.8 and FEAT-SUP-001 v1.1: optional non-identifying IFTTT filing notifications after successful outer commit, with teacher-filing and student-escalation triggers only.
