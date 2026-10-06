@@ -86,16 +86,17 @@ def _latest_hall_pass_attendance_state(log: HallPassLog) -> str:
     return "left" if left_seen else "approved"
 
 
-def _enforce_hall_pass_settings(
-    *,
-    ctx: CanonicalContext,
-    destination: str,
-    reference_time_utc,
-) -> str:
+def require_hall_pass_settings(class_id: str, reference_time_utc) -> HallPassSettings:
+    """The settings that govern a hall pass in this class at this instant.
+
+    Raises ``HallPassSettingsMissing`` when there are none. Request submission
+    and approval both call this, so a request can be made only when approval
+    would find settings to evaluate.
+    """
     settings = (
         HallPassSettings.query
         .filter(
-            HallPassSettings.class_id == ctx.class_id,
+            HallPassSettings.class_id == class_id,
             HallPassSettings.effective_date <= reference_time_utc,
         )
         .order_by(HallPassSettings.effective_date.desc(), HallPassSettings.id.desc())
@@ -103,6 +104,16 @@ def _enforce_hall_pass_settings(
     )
     if settings is None:
         raise HallPassSettingsMissing("Hall passes are not set up for this class.")
+    return settings
+
+
+def _enforce_hall_pass_settings(
+    *,
+    ctx: CanonicalContext,
+    destination: str,
+    reference_time_utc,
+) -> str:
+    settings = require_hall_pass_settings(ctx.class_id, reference_time_utc)
     pass_types = settings.get_pass_types()
     normalized_destination = (destination or "").strip().lower()
     pass_type = next(

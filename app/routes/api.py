@@ -738,6 +738,8 @@ def complete_immediate_use():
 
 # -------------------- HALL PASS API --------------------
 
+HALL_PASS_NOT_SET_UP = "Hall passes are not set up for this class yet. Ask your teacher."
+
 @api_bp.route('/hall-pass/request', methods=['POST'])
 @login_required
 def request_hall_pass():
@@ -790,6 +792,8 @@ def request_hall_pass():
             requested_at_utc=evaluation.canonical_now_utc,
             idempotency_key=f"hall_pass_request:{context.class_id}:{student.id}:{secrets.token_urlsafe(12)}",
         )
+    except HallPassSettingsMissing:
+        return jsonify({"status": "error", "message": HALL_PASS_NOT_SET_UP}), 409
     except ValueError:
         return jsonify({"status": "error", "message": "No hall passes available."}), 403
     return jsonify({
@@ -1505,11 +1509,9 @@ def get_available_hall_pass_types():
         }), 403
 
     if not settings:
-        # Return defaults if not configured
-        return jsonify({
-            "status": "success",
-            "pass_type_payload": HallPassSettings.get_default_pass_types()
-        })
+        # No destinations are offered until the teacher saves settings: a request
+        # made now could not be approved (FEAT-PROD-002 §III).
+        return jsonify({"status": "error", "message": HALL_PASS_NOT_SET_UP}), 409
 
     # Return just the names for enabled pass types
     pass_types = settings.get_pass_types()

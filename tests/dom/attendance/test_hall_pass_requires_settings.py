@@ -7,10 +7,15 @@ no settings row fell back to the built-in pass types and recorded
 Production held 14 such logs on 2026-10-06, written as recently as the day
 before (docs/ops/audits/RECON_2026-10-06_P0B_PRODUCTION_STATE.md §5.2).
 
-The owner ruled that there is no default policy: approval is refused until the
-teacher saves settings, and nothing creates settings on the teacher's behalf.
-Per FEAT-PROD-002 §III.A a refused approval rolls back and leaves the request
-pending.
+The owner ruled that there is no default policy: hall passes are unavailable
+until the teacher saves settings, and nothing creates settings on the teacher's
+behalf. The gate sits at every step, so a request exists only when it could be
+approved:
+
+* the student is offered no destinations;
+* a request is refused and queues nothing;
+* approval of a request made before the gate is refused, and per FEAT-PROD-002
+  §III.A the request stays pending for the teacher to reject.
 """
 
 import pytest
@@ -18,13 +23,14 @@ import pytest
 from app.extensions import db
 from app.feats.attendance import save_hall_pass_setup_config
 from app.feats.base import FEATContext
-from app.feats.hall_pass_request_feat import approve_hall_pass_request
+from app.feats.hall_pass_request_feat import approve_hall_pass_request, submit_hall_pass_request
 from app.feats.prod import HallPassSettingsMissing
 from app.models import EntitlementEvent, HallPassLog, HallPassSettings, PendingAction
 from app.services.context_resolver import CanonicalContext
 from app.services.entitlement_service import get_hall_pass_balance, grant_hall_passes
+from app.utils.canonical_temporal_resolver import utc_now
 from tests.helpers.class_domain import enable_class_feature
-from tests.helpers.classroom_initializer import initialize, initialize_as_teacher
+from tests.helpers.classroom_initializer import initialize, initialize_as_student, initialize_as_teacher
 from tests.helpers.hall_pass_requests import seed_pending_hall_pass_request
 
 
@@ -141,3 +147,82 @@ def test_another_class_settings_do_not_unlock_this_class(client, app):
     assert response.status_code == 409
     with app.app_context():
         assert HallPassLog.query.filter_by(class_id=classroom.class_id).count() == 0
+
+
+def _student_class_without_settings(classroom, student):
+    enable_class_feature(class_id=classroom.class_id, feature="hall_pass")
+    _remove_hall_pass_settings(classroom.class_id)
+    with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"grant:{student.seat.id}"):
+        grant_hall_passes(student.seat, 1, correlation_id=f"corr-grant-{student.seat.id}")
+
+
+def _pending_requests(class_id: str) -> int:
+    return PendingAction.query.filter_by(class_id=class_id, authoritative_feat="FEAT-PROD-002").count()
+
+
+def test_student_is_offered_no_destinations_until_settings_exist(client, app):
+    classroom, student = initialize_as_student("chemistry_p1", client, app)
+    with app.app_context():
+        _student_class_without_settings(classroom, student)
+
+    response = client.get("/api/hall-pass/available-types")
+
+    assert response.status_code == 409
+    assert response.get_json()["status"] == "error"
+    assert "not set up" in response.get_json()["message"]
+
+    with app.app_context():
+        save_hall_pass_setup_config(
+            user_id=classroom.teacher_user.id,
+            class_id=classroom.class_id,
+            hall_pass_enabled=True,
+            pass_type_payload=_PAYLOAD,
+            max_queue_limit=10,
+            correlation_id="corr_hall_pass_types",
+            idempotency_key="test:hall-pass:types",
+        )
+
+    response = client.get("/api/hall-pass/available-types")
+
+    assert response.status_code == 200
+    assert [t["pass_name"] for t in response.get_json()["pass_type_payload"]] == ["Bathroom"]
+
+
+def test_request_is_refused_without_settings_and_queues_nothing(client, app):
+    classroom, student = initialize_as_student("chemistry_p1", client, app)
+    with app.app_context():
+        _student_class_without_settings(classroom, student)
+
+    started = client.post("/api/tap", json={"action": "start_work", "pin": student.pin})
+    assert started.status_code == 200, started.data
+
+    response = client.post("/api/hall-pass/request", json={"destination": "Bathroom", "pin": student.pin})
+
+    assert response.status_code == 409, response.data
+    assert "not set up" in response.get_json()["message"]
+    with app.app_context():
+        assert _pending_requests(classroom.class_id) == 0
+        assert HallPassSettings.query.filter_by(class_id=classroom.class_id).count() == 0
+
+
+def test_submit_feat_refuses_without_settings(client, app):
+    classroom = initialize("chemistry_p1", app)
+    student = classroom.students[0]
+    _student_class_without_settings(classroom, student)
+    ctx = CanonicalContext(
+        user_id=student.user.id,
+        class_id=classroom.class_id,
+        seat_id=student.seat.id,
+        actor_role="student",
+    )
+
+    with pytest.raises(HallPassSettingsMissing):
+        submit_hall_pass_request(
+            ctx=ctx,
+            destination="Bathroom",
+            requested_at_utc=utc_now(),
+            idempotency_key=f"hall_pass_request:{classroom.class_id}:{student.seat.id}:test",
+        )
+    db.session.rollback()
+
+    assert _pending_requests(classroom.class_id) == 0
