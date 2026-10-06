@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.24 | 2026-10-06 | 3.23 | Normative |
+| SOP-DOC-001 | 3.25 | 2026-10-06 | 3.24 | Normative |
 
 ---
 
@@ -274,6 +274,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.25 (2026-10-06):**
+- Register INV-ARC-008 v1.2, DOM-OPS-002 v1.11, SPEC-PROD-002 v1.4 and SOP-DB-004 v1.2: the owner's compatibility ruling (no bridge, dual-write, fallback or heuristic interpretation; versioned read-side interpretation of retained history only) now stands in the governing documents. INV-ARC-008 drops its "approved bridge code" allowance.
 
 **Version 3.24 (2026-10-06):**
 - Register SOP-DB-004 v1.1, SOP-DEP-001 v2.8 and SOP-DEP-002 v1.8: the forward-only revision register, and removal of archived/nonexistent dependency citations.

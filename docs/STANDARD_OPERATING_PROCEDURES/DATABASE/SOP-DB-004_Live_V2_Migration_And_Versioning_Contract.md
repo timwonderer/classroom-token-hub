@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DB-004 | 1.1 | 2026-10-06 | 1.0 | Normative |
+| SOP-DB-004 | 1.2 | 2026-10-06 | 1.1 | Normative |
 
 > [!NOTE]
 > §VII and §VIII record the owner ruling of 2026-10-06 on compatibility: physical schema coexistence
@@ -153,10 +153,10 @@ required for any value other than the row's minimum.
    and would have to be interpreted by inference (`H5`), the change stops. Its issue records the
    rows, the governing clauses and the ambiguity, and waits for an owner ruling recorded in the
    governing `INV-*`/`DOM-*` document. An agent never resolves it by inferring.
-8. **Existing provisions.** `DOM-OPS-002` §6.2A and `SPEC-PROD-002` (diagnosing old audit coverage
-   without creating state) and the "approved bridge code" allowance in `INV-ARC-008` §VI are not
-   amended here. Neither is authority for new compatibility code; any new reliance on them goes
-   through §VII.3 or §VII.7.
+8. **Existing provisions.** `INV-ARC-008` v1.2 §VI no longer allows "approved bridge code".
+   `DOM-OPS-002` v1.11 §6.2A and `SPEC-PROD-002` v1.4 describe read-side interpretation of
+   retained history that creates no state, as §VII.3 requires. None of them is authority for new
+   compatibility code; any new reliance on them goes through §VII.3 or §VII.7.
 
 ## VIII. Expand and Contract Under This Contract
 
