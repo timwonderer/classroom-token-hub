@@ -88,7 +88,9 @@ def ensure_within_holding_limit(
     §V.A), and PRIVILEGE is hard-set to one. The caller must hold the target
     seat's row lock so the count cannot race a concurrent grant.
     """
-    limit = 1 if entitlement_type == "PRIVILEGE" else holding_limit
+    # PRIVILEGE is hard-set to one; so is COLLECTIVE_GOAL, one buy-in per
+    # student (owner ruling 2026-10-07).
+    limit = 1 if entitlement_type in {"PRIVILEGE", "COLLECTIVE_GOAL"} else holding_limit
     if limit is None or not product_lineage_uuid:
         return
     on_hand = get_active_holding_quantity(

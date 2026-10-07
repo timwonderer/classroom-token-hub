@@ -15,7 +15,7 @@ Everything merged to `main` since v2.1.1. Three untagged releases shipped part o
 - `35bad089a` (2026-10-05 05:13Z): the sysadmin UI shell (#1489);
 - `1cdbf03da` (2026-10-06 03:10Z): teacher-ticket routing (#1491).
 
-The last two have no release record. Against `1cdbf03da`, which production runs, this release changes application behavior through #1522 only: the hall-pass settings gate and preset removal. The rest is documentation, tests and CI:
+The last two have no release record. Against `1cdbf03da`, which production runs, this release changes application behavior in two places: #1522, the hall-pass settings gate and preset removal; and the store fix below, under which a purchase needs the money and a collective goal is one buy-in per student. The rest is documentation, tests and CI:
 - the P0A migration contract (#1518, #1519, #1521);
 - the P0B record (#1523);
 - the every-PR deprecated-symbol guard (#1524).
@@ -39,6 +39,13 @@ There is no schema migration and no change to the application's Python dependenc
 - **Docs site npm advisories.** The `docs-site` lockfile moves `fast-uri` to 4.2.1, `brace-expansion` to 5.0.12 and `http-cache-semantics` to 4.3.0, closing Dependabot alerts #78-#82 and #84 (supersedes #1458). Alert #83 (`braces`, no patched release) is build-time only for the static docs site and is left for dismissal.
 
 ### Fixed
+
+- **The store no longer lets a student spend money they do not have, and a collective goal is one buy-in per student** (owner rulings 2026-10-07).
+  - **What happened.** On 2026-10-07 a student moved all of checking to savings, then bought 32 units of a $750 whole-class collective goal. The purchase posted $24,000 into a negative balance, a $25 non-sufficient-funds fee was added, and 32 buy-ins went to that one seat. The documents of the time prescribed exactly that: a purchase protection could not cover went through and drew the fee (`SPEC-ECON-003` 2.2 §4.5.1.1A, `FEAT-LED-000` 0.3). Nothing limited a collective goal's quantity.
+  - **Now.** A purchase proceeds only when checking, alone or with a full overdraft-protection transfer from savings, covers it. Otherwise it is refused before anything posts, with no fee, as a declined card purchase would be (`FEAT-STOR-001` 3.2, `SPEC-ECON-003` 2.3, `FEAT-LED-000` 0.5). The shop shows how much the student can spend, and the purchase dialog will not confirm a total above it.
+  - **Collective goals.** A collective goal is bought one unit at a time, and a student holding a buy-in cannot buy another; the card reads **Joined** (`DOM-STORE-001` 5.5, `SPEC-STORE-001` 1.6). The cap applies whatever holding limit is configured, as it already did for privileges.
+  - **The overdraft fee.** No path in the app charges the fee any more. The store purchase was the only one, and bill payments never did. The teacher guide now says so. `record_nsf_fee_obligation` has no caller left; its removal is left to U11.
+  - **The 2026-10-07 transaction is not changed by this release.** The owner is handling it.
 
 - **Hall passes are unavailable in a class with no hall-pass settings.** Such a class offered students the built-in destinations, accepted their requests, and on approval recorded `hall_pass_logs.policy_uuid = 'default'`, a reference that names no policy (`DOM-POL-001` §VII). FEAT-PROD-002 §III requires the class's settings to be evaluated before the log is written. The gate now applies at every step, through one check (`require_hall_pass_settings` in `app/feats/prod.py`), so a request can be made only when it could be approved. The student is offered no destinations and sees "Hall passes are not set up for this class yet" (`/api/hall-pass/available-types`, 409). A request is refused and queues nothing (`submit_hall_pass_request`, 409). Approving a request made before this change is refused, and the request stays pending for the teacher to reject (§III.A). The built-in destination preset (Bathroom, Water Fountain, Office, Nurse, Counselor) is removed outright, so nothing can display it:
   - `HallPassSettings.get_default_pass_types` is gone, and `get_pass_types()` no longer falls back to it.

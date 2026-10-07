@@ -286,6 +286,7 @@ _PURCHASE_ERROR_COPY = {
     "RENT_PAST_DUE_PURCHASE_BLOCKED": "Rent is overdue, so this item cannot be bought until it is paid.",
     "COLLECTIVE_GOAL_EXPIRED": "This class goal has closed, so it can no longer be bought into.",
     "QUANTITY_NOT_ALLOWED": "That quantity is not available for this item.",
+    "COLLECTIVE_GOAL_ALREADY_JOINED": "You have already joined this goal.",
     "PRODUCT_NOT_PURCHASABLE": "This item is not on sale right now.",
     "DIRECT_PURCHASE_NOT_ALLOWED": "This item cannot be bought directly — your teacher grants it.",
     "PRICE_NOT_CONFIGURED": "This item has no price set yet, so it cannot be bought.",
