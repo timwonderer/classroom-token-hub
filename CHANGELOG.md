@@ -10,11 +10,15 @@ and this project follows semantic versioning principles.
 
 ## [2.2.0] - 2026-10-07 — Hall passes require teacher settings, deprecated symbols checked on every PR, P0B baseline
 
-Everything merged to `main` since v2.1.1. That includes the untagged `381a12d49` release of 2026-10-05: support notifications (#1488), the backup-tool documentation (#1485) and the security fixes (#1486). It also includes:
-- the sysadmin UI shell (#1489) and teacher-ticket routing (#1491);
+Everything merged to `main` since v2.1.1. Three untagged releases shipped part of it (`SOP-DB-004` §X.4):
+- `381a12d49` (2026-10-05 01:25Z): support notifications (#1488), the backup-tool documentation (#1485) and the security fixes (#1486);
+- `35bad089a` (2026-10-05 05:13Z): the sysadmin UI shell (#1489);
+- `1cdbf03da` (2026-10-06 03:10Z): teacher-ticket routing (#1491).
+
+The last two have no release record. Against `1cdbf03da`, which production runs, this release changes application behavior through #1522 only: the hall-pass settings gate and preset removal. The rest is documentation, tests and CI:
 - the P0A migration contract (#1518, #1519, #1521);
-- the hall-pass settings gate and preset removal (#1522);
-- the P0B record (#1523) and the every-PR deprecated-symbol guard (#1524).
+- the P0B record (#1523);
+- the every-PR deprecated-symbol guard (#1524).
 
 There is no migration and no dependency change. MINOR under `SOP-DB-004` §X.3, because #1522 changes a capability: hall passes are unavailable until the teacher saves settings.
 
