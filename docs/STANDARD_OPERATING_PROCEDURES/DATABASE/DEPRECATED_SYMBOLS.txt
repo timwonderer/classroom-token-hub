@@ -1,8 +1,10 @@
 # Deprecated symbols registry — enforced list for SOP-DB-002 §VI.
 # One symbol per line. Lines starting with # are ignored.
-# The Schema Change Gate (.github/workflows/schema-gate.yml) runs `grep -r <symbol>` over
-# app/, templates/ and scripts/ (*.py, *.html, *.sh). It is a substring match, so only list a
-# symbol that appears nowhere in those paths today; see SOP-DB-002 §V and §VII.
+# tests/test_deprecated_symbols_guard.py scans first-party code on every pull request
+# (policy-guardrails.yml) and in the Schema Change Gate: *.py, *.html, *.sh and *.js under
+# app/, templates/ and scripts/, and *.js under static/ except static/vendor/ (SOP-DB-002 §II).
+# It is a substring match, so only list a symbol that appears nowhere in that scope today;
+# see SOP-DB-002 §V and §VII.
 #
 # Keep this file and SOP-DB-002 §VI in step, in the same change.
 
@@ -17,3 +19,7 @@ BalanceCache
 # Code removed in the CONTRACT (CODE ONLY) PR; the columns are dropped in a later CONTRACT (DATABASE) PR.
 is_bundle
 bundle_quantity
+
+# Hall-pass destination preset, removed 2026-10-07 by owner ruling (#1522): a class without saved
+# hall-pass settings offers no destinations (FEAT-PROD-002 §III; SOP-DB-002 v2.2).
+get_default_pass_types

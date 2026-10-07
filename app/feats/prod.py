@@ -37,6 +37,15 @@ class HallPassLogResult:
     hall_pass_log: HallPassLog
 
 
+class HallPassSettingsMissing(ValueError):
+    """The class has no hall-pass settings, so there is nothing to evaluate.
+
+    FEAT-PROD-002 §III evaluates the class's ``hall_pass_settings`` before it
+    writes a log. Without a row the pass is refused: no built-in pass types and
+    no placeholder policy reference stand in for the teacher's settings.
+    """
+
+
 @dataclass(frozen=True)
 class PayrollEventResult:
     payroll_event: PayrollEvent
@@ -77,22 +86,35 @@ def _latest_hall_pass_attendance_state(log: HallPassLog) -> str:
     return "left" if left_seen else "approved"
 
 
+def require_hall_pass_settings(class_id: str, reference_time_utc) -> HallPassSettings:
+    """The settings that govern a hall pass in this class at this instant.
+
+    Raises ``HallPassSettingsMissing`` when there are none. Request submission
+    and approval both call this, so a request can be made only when approval
+    would find settings to evaluate.
+    """
+    settings = (
+        HallPassSettings.query
+        .filter(
+            HallPassSettings.class_id == class_id,
+            HallPassSettings.effective_date <= reference_time_utc,
+        )
+        .order_by(HallPassSettings.effective_date.desc(), HallPassSettings.id.desc())
+        .first()
+    )
+    if settings is None:
+        raise HallPassSettingsMissing("Hall passes are not set up for this class.")
+    return settings
+
+
 def _enforce_hall_pass_settings(
     *,
     ctx: CanonicalContext,
     destination: str,
     reference_time_utc,
 ) -> str:
-    settings = (
-        HallPassSettings.query
-        .filter(
-            HallPassSettings.class_id == ctx.class_id,
-            HallPassSettings.effective_date <= reference_time_utc,
-        )
-        .order_by(HallPassSettings.effective_date.desc(), HallPassSettings.id.desc())
-        .first()
-    )
-    pass_types = settings.get_pass_types() if settings else HallPassSettings.get_default_pass_types()
+    settings = require_hall_pass_settings(ctx.class_id, reference_time_utc)
+    pass_types = settings.get_pass_types()
     normalized_destination = (destination or "").strip().lower()
     pass_type = next(
         (
@@ -136,7 +158,7 @@ def _enforce_hall_pass_settings(
         ]
         if len(destination_out) >= int(simultaneous_limit):
             raise ValueError("Hall-pass destination limit reached.")
-    return settings.policy_uuid if settings else "default"
+    return settings.policy_uuid
 
 
 @requires_feat_context("FEAT-PROD-001")
@@ -211,7 +233,8 @@ def _record_hall_pass_log_impl(
         .order_by(HallPassSettings.effective_date.desc(), HallPassSettings.id.desc())
         .first()
     )
-    pass_types = settings.get_pass_types() if settings else HallPassSettings.get_default_pass_types()
+    # _enforce_hall_pass_settings refused above when this read finds no row.
+    pass_types = settings.get_pass_types()
     pass_type = next(
         (
             item for item in pass_types

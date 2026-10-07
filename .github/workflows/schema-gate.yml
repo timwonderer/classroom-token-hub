@@ -174,34 +174,11 @@ jobs:
       # 2. Deprecated Symbol Audit (Requirement 3.3)
       # -----------------------------------------------------------
       - name: Audit Deprecated Symbols
-        if: steps.check_classification.outputs.classification != 'NON-MODEL CHANGE'
-        run: |
-          echo "🔍 Scanning for deprecated symbol usage in application code..."
-
-          # Fix 3: Require deprecated_symbols.txt to exist
-          if [ ! -f docs/STANDARD_OPERATING_PROCEDURES/DATABASE/DEPRECATED_SYMBOLS.txt ]; then
-            echo "❌ Missing mandatory file: docs/STANDARD_OPERATING_PROCEDURES/DATABASE/DEPRECATED_SYMBOLS.txt"
-            echo "   Please create this file (it can be empty if no symbols are deprecated)."
-            exit 1
-          fi
-
-          # Fix 3 (continued): Scan app, templates, and scripts
-          has_errors=0
-          while IFS= read -r symbol; do
-            # Skip empty lines or comments
-            [[ -z "$symbol" || "$symbol" =~ ^# ]] && continue
-
-            if grep -r "$symbol" app/ templates/ scripts/ --include="*.py" --include="*.html" --include="*.sh"; then
-              echo "❌ Found usage of deprecated symbol '$symbol' in codebase."
-              has_errors=1
-            fi
-          done < docs/STANDARD_OPERATING_PROCEDURES/DATABASE/DEPRECATED_SYMBOLS.txt
-
-          if [ $has_errors -eq 1 ]; then
-            exit 1
-          else
-            echo "✅ No deprecated usage found."
-          fi
+        # The same scanner policy-guardrails.yml runs on every pull request
+        # (SOP-DB-002 §VIII). It does not depend on the classification, so it
+        # runs for NON-MODEL CHANGE too. The test fails if DEPRECATED_SYMBOLS.txt
+        # is missing or empty.
+        run: python -m pytest tests/test_deprecated_symbols_guard.py -q --noconftest
 
       # -----------------------------------------------------------
       # 3. Migration Rehearsal (Requirement 3.5)
