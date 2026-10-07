@@ -20,7 +20,7 @@ The last two have no release record. Against `1cdbf03da`, which production runs,
 - the P0B record (#1523);
 - the every-PR deprecated-symbol guard (#1524).
 
-There is no migration and no dependency change. MINOR under `SOP-DB-004` §X.3, because #1522 changes a capability: hall passes are unavailable until the teacher saves settings.
+There is no schema migration and no change to the application's Python dependencies (`requirements.txt`). The only dependency change is the docs-site npm update in #1486 (`docs-site/package.json` and `package-lock.json`, build-time only for the static docs site), which shipped in `381a12d49`. MINOR under `SOP-DB-004` §X.3, because #1522 changes a capability: hall passes are unavailable until the teacher saves settings.
 
 ### Added
 
