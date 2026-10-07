@@ -24,7 +24,7 @@ import subprocess
 import sys
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -160,6 +160,9 @@ def _seed_hall_pass_policy(class_id: str) -> None:
             db.session.flush()
         db.session.add(HallPassSettings(
             class_id=class_id,
+            # Requests are submitted at REQUESTED_AT, and submission and approval
+            # both require settings already in effect (FEAT-PROD-002 §III).
+            effective_date=REQUESTED_AT - timedelta(hours=1),
             max_queue_limit=10,
             pass_type_payload=[{"pass_name": "Bathroom", "max_queue": 10, "consume_pass": True}],
         ))

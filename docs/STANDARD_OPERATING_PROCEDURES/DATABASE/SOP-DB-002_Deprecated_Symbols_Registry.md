@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DB-002 | 2.1 | 2026-10-03 | 2.0 | Normative |
+| SOP-DB-002 | 2.2 | 2026-10-07 | 2.1 | Normative |
 
 ## I. Purpose
 
@@ -58,7 +58,10 @@ Normative (SOP Tier). Subordinate to INV-CORE-000, INV-ARC-019 and DOM-CORE-002.
 The v1 identity layer and the v1 balance cache were contracted during the v1→v2 migration. None of
 these exists as a model or a table (INV-ARC-019; DOM-CORE-002). Store bundles were contracted on
 2026-10-03 (SPEC-STORE-001): their model attributes are gone, and their two `store_products` columns
-remain only until the CONTRACT (DATABASE) migration drops them.
+remain only until the CONTRACT (DATABASE) migration drops them. The built-in hall-pass destination
+preset was removed on 2026-10-07 by owner ruling (#1522). It was model behavior, not a column. It is
+registered because a class without saved hall-pass settings must offer no destinations, so any
+reintroduced preset is a defect (FEAT-PROD-002 §III; DOM-POL-001 §VII).
 
 | Symbol | Replaced by | Status |
 |--------|-------------|--------|
@@ -69,6 +72,7 @@ remain only until the CONTRACT (DATABASE) migration drops them.
 | `BalanceCache` | `LedgerBalanceSnapshot` via `ledger_balance_query_service` (DOM-LED-001) | Enforced |
 | `is_bundle` | A quantity bought at a bulk price (`bulk_discount_*`, SPEC-STORE-001) | Enforced |
 | `bundle_quantity` | The purchase `quantity` (SPEC-STORE-001) | Enforced |
+| `get_default_pass_types` | None. Destinations are only the ones the teacher saved (`HallPassSettings.get_pass_types()`); without settings, hall passes are unavailable | Enforced |
 
 ## VII. Retired Symbols Not Enforceable by Literal Scan
 
@@ -107,6 +111,12 @@ Revisions to this document must:
 4. Maintain consistency with `INV-CORE-000`, `INV-ARC-019` and `DOM-CORE-002`.
 
 ## X. Change Notes
+
+**Version 2.2 (2026-10-07):**
+- Registered `get_default_pass_types` in §VI and `DEPRECATED_SYMBOLS.txt`. The built-in hall-pass
+  destination preset was removed by owner ruling (#1522). A scan of `app/`, `templates/` and `scripts/`
+  on 2026-10-07 found no occurrence. As §VIII states, the audit runs only on pull requests that touch
+  the model or migration paths, and it does not scan `static/`.
 
 **Version 2.0 (2026-09-28):**
 - Brought the registry to the v2 model. Version 1.2 listed `teacher_id` as "replaced by StudentTeacher

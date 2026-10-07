@@ -17,3 +17,7 @@ BalanceCache
 # Code removed in the CONTRACT (CODE ONLY) PR; the columns are dropped in a later CONTRACT (DATABASE) PR.
 is_bundle
 bundle_quantity
+
+# Hall-pass destination preset, removed 2026-10-07 by owner ruling (#1522): a class without saved
+# hall-pass settings offers no destinations (FEAT-PROD-002 §III; SOP-DB-002 v2.2).
+get_default_pass_types

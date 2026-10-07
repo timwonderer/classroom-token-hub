@@ -53,6 +53,16 @@ from app.utils.canonical_temporal_resolver import utc_now
 from app.utils.join_code import generate_join_code
 from app.utils.username_generation import build_username
 from tests.helpers.canonical_identities import CLASSROOMS, TEACHERS
+
+# The hall-pass destinations a provisioned teacher has saved. Test data only:
+# the application has no built-in destination set.
+PROVISIONED_HALL_PASS_TYPES = [
+    {"pass_name": "Bathroom", "max_queue": 10, "consume_pass": True},
+    {"pass_name": "Water Fountain", "max_queue": 10, "consume_pass": True},
+    {"pass_name": "Office", "max_queue": 10, "consume_pass": True},
+    {"pass_name": "Nurse", "max_queue": 10, "consume_pass": True},
+    {"pass_name": "Counselor", "max_queue": 10, "consume_pass": True},
+]
 from tests.helpers.canonical_session import set_canonical_context
 
 
@@ -232,7 +242,7 @@ def provision_classroom(classroom_key: str, *, with_payroll_settings: bool = Tru
         hall_pass_settings = HallPassSettings(
             class_id=economy.class_id,
             max_queue_limit=10,
-            pass_type_payload=HallPassSettings.get_default_pass_types(),
+            pass_type_payload=PROVISIONED_HALL_PASS_TYPES,
         )
         db.session.add(hall_pass_settings)
         db.session.flush()

@@ -50,8 +50,12 @@ def submit_hall_pass_request(
     idempotency_key: str | None = None,
 ) -> PendingHallPassRequest:
     """Persist the student's request for teacher approval."""
+    from app.feats.prod import require_hall_pass_settings
     from app.services.entitlement_service import get_available_hall_pass_grant
 
+    # Approval (FEAT-PROD-002 §III) is refused without settings, so a request
+    # made without them could never be granted.
+    require_hall_pass_settings(ctx.class_id, requested_at_utc)
     grant = get_available_hall_pass_grant(ctx.seat_id, ctx.class_id)
     if grant is None:
         raise ValueError("No hall passes available.")
