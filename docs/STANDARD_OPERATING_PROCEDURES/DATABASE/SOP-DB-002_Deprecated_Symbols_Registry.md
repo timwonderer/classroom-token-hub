@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DB-002 | 2.2 | 2026-10-07 | 2.1 | Normative |
+| SOP-DB-002 | 2.3 | 2026-10-07 | 2.2 | Normative |
 
 ## I. Purpose
 
@@ -20,8 +20,13 @@ This registry turns past contractions into permanent guardrails.
 
 ## II. Scope
 
-Symbols that are prohibited from appearing in application code: `app/`, `templates/` and
-`scripts/` (`*.py`, `*.html`, `*.sh`).
+Symbols that are prohibited from appearing in first-party application code:
+
+- `*.py`, `*.html`, `*.sh` and `*.js` under `app/`, `templates/` and `scripts/`;
+- `*.js` under `static/`, except `static/vendor/`, which holds third-party code.
+
+Tests, migrations and documentation are outside the scope. They name retired symbols lawfully, to
+test their absence, to drop their tables, or to record their history.
 
 ## III. Authority Level
 
@@ -35,7 +40,10 @@ Normative (SOP Tier). Subordinate to INV-CORE-000, INV-ARC-019 and DOM-CORE-002.
 - `docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-001_Migration_Specifications.md`: §VIII, *Schema Contraction Policy*
 - `docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-003_Schema_Change_Proposals.md`: the Schema Change Gate, which enforces this registry
 - `docs/STANDARD_OPERATING_PROCEDURES/DATABASE/DEPRECATED_SYMBOLS.txt`: the machine-readable list
-- `.github/workflows/schema-gate.yml`: the *Audit Deprecated Symbols* step
+- `tests/guards/deprecated_symbols.py`: the scanner, a pure function over file text (SOP-TEST-003 §IX.A)
+- `tests/test_deprecated_symbols_guard.py`: the guard, with its mutation proofs
+- `.github/workflows/policy-guardrails.yml`: runs the guard on every pull request and every push to `main`
+- `.github/workflows/schema-gate.yml`: the *Audit Deprecated Symbols* step, which runs the same guard
 
 ## V. Rules
 
@@ -44,9 +52,12 @@ Normative (SOP Tier). Subordinate to INV-CORE-000, INV-ARC-019 and DOM-CORE-002.
   enforced.
 - Symbols are **literal strings**, exactly as they would appear in code, one per line. Lines
   beginning with `#` are comments.
-- No regex, wildcards or glob patterns. The gate runs `grep -r <symbol>`, which is a substring match.
-- A symbol may be enforced only if a scan of `app/`, `templates/` and `scripts/` finds **no**
-  occurrence of it. Clear every hit first, or the gate fails every model-changing pull request.
+- No regex, wildcards or glob patterns. The scan is a case-sensitive substring match on each line,
+  as `grep` is. A symbol inside a longer identifier, a string literal or a comment is reported.
+- A symbol may be enforced only if a scan of the §II scope finds **no** occurrence of it. Clear every
+  hit first, or the guard fails every pull request.
+- The file MUST list at least one symbol. The guard fails on an empty file, which would enforce
+  nothing while passing.
 - A symbol whose literal also appears lawfully in code cannot be enforced this way. This covers a guard
   that must name it in order to forbid it, and a substring of a legitimate identifier. Record such a
   symbol in §VII, not in the file.
@@ -94,13 +105,19 @@ This registry derives its authority from:
 - SOP-DB-001 §VIII, *Schema Contraction Policy* ("Expand and Contract")
 - SOP-DB-003, the Schema Change Gate (PR-blocking checklist)
 
-A violation of this registry is a Schema Change Gate failure. The gate runs only on pull requests that
-touch `migrations/versions/**`, `app/models.py` or `app/models/**`. On those, it runs the deprecated-symbol
-audit unless the pull request is classified `NON-MODEL CHANGE`. That classification is allowed only when
-no migration file changed and the model files show no structural AST change once comments and docstrings
-are removed; otherwise the classification check fails the gate. A pull request that changes only
-`app/`, `templates/` or `scripts/` outside those paths does not trigger the audit, so review remains the
-backstop there.
+The registry is enforced on **every** pull request. `policy-guardrails.yml` runs
+`tests/test_deprecated_symbols_guard.py` on each pull request, whatever paths it touches, and again on
+each push to `main`. The guard scans the whole §II scope, not only the changed lines, and needs no
+database. A violation fails the pull request.
+
+The Schema Change Gate runs the same guard in its *Audit Deprecated Symbols* step, so a model-changing
+pull request reports the violation there too. That step runs whatever the classification, including
+`NON-MODEL CHANGE`. There is one scanner; the two workflows only invoke it.
+
+The guard also fails when this document's §VI table and `DEPRECATED_SYMBOLS.txt` list different
+enforced symbols (§V).
+
+Review remains the backstop only for the §VII symbols, which a literal scan cannot enforce.
 
 ## IX. Amendment
 
@@ -111,6 +128,21 @@ Revisions to this document must:
 4. Maintain consistency with `INV-CORE-000`, `INV-ARC-019` and `DOM-CORE-002`.
 
 ## X. Change Notes
+
+**Version 2.3 (2026-10-07):**
+- Enforced the registry on every pull request. Until 2.2 the scan ran only in the Schema Change Gate,
+  which triggers on pull requests touching the model or migration paths and skipped the scan for
+  `NON-MODEL CHANGE`. A pull request that brought back a deprecated symbol in a route, template or
+  script without touching a model file was never scanned. The scan is now a pytest guard
+  (`tests/test_deprecated_symbols_guard.py`) with mutation proofs (SOP-TEST-003 §IX.A). It runs from
+  `policy-guardrails.yml` on every pull request and push to `main`, and it replaces the gate's inline
+  `grep`.
+- Widened §II to first-party JavaScript: `*.js` under `app/`, `templates/`, `scripts/` and `static/`,
+  excluding `static/vendor/` (owner decision, 2026-10-07). A scan of that scope on 2026-10-07 found
+  none of the §VI symbols.
+- §V: the file must list at least one symbol, and the guard checks it against §VI. Version 2.0
+  recorded the earlier failure, where an empty file enforced nothing.
+- No symbol was added or removed.
 
 **Version 2.2 (2026-10-07):**
 - Registered `get_default_pass_types` in §VI and `DEPRECATED_SYMBOLS.txt`. The built-in hall-pass
