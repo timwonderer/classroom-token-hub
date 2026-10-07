@@ -8,6 +8,9 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Fixed
+- A collective-goal store item can no longer be bought in a quantity above one. The goal counts one buy-in per seat, so one student buying x32 was charged 32 times the price for a single buy-in.
+
 ## [2.2.0] - 2026-10-07 — Hall passes require teacher settings, deprecated symbols checked on every PR, P0B baseline
 
 Everything merged to `main` since v2.1.1. Three untagged releases shipped part of it (`SOP-DB-004` §X.4):

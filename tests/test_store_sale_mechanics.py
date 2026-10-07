@@ -213,6 +213,31 @@ class TestSingleUnitPurchaseRules:
             assert _checking(buyer) == before
 
 
+    def test_collective_goal_rejects_multiple_quantity(self, app, buyer):
+        """A goal is a headcount (1 per person); x32 once charged one seat 24000.00."""
+        with app.app_context():
+            product = _publish(
+                buyer,
+                "Whole Class Goal",
+                entitlement_type="COLLECTIVE_GOAL",
+                price="750.00",
+                collective_goal_type="whole_class",
+                collective_goal_expires_at=utc_now() + timedelta(days=30),
+            )
+            before = _checking(buyer)
+
+            result = execute_store_purchase(
+                canonical_context=buyer["context"],
+                policy_uuid=product.policy_uuid,
+                quantity=32,
+            )
+
+            assert result.success is False
+            assert result.error_code == "QUANTITY_NOT_ALLOWED"
+            assert _granted_units(buyer, product) == []
+            assert _checking(buyer) == before
+
+
 class TestVersionedProductDerivations:
     def test_edit_preserves_stock_and_collective_progress(self, app, buyer):
         with app.app_context():

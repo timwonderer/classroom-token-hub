@@ -320,14 +320,16 @@ def _execute_store_purchase_impl(
     # units.  Quantity greater than one is therefore not a larger purchase of
     # the same product; it would manufacture inventory the product type cannot
     # represent.  A quantity above one is lawful only for types that hold
-    # independent unredeemed units.
-    if policy_config.entitlement_type in {'IMMEDIATE_USE', 'PRIVILEGE'} and quantity != 1:
+    # independent unredeemed units.  A collective goal is a headcount of
+    # distinct buy-ins (one per person), so a quantity above one would charge
+    # one seat for buy-ins the goal counts once.
+    if policy_config.entitlement_type in {'IMMEDIATE_USE', 'PRIVILEGE', 'COLLECTIVE_GOAL'} and quantity != 1:
         return StorePurchaseResult(
             success=False,
             correlation_id="",
             quantity_granted=0,
             error_code="QUANTITY_NOT_ALLOWED",
-            error_message="Immediate-use and privilege products may only be purchased one at a time",
+            error_message="Immediate-use, privilege and collective-goal products may only be purchased one at a time",
         )
 
     # A collective goal closes at its deadline. Past it the goal can no longer
