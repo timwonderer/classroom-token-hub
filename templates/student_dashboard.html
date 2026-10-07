@@ -239,11 +239,13 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <p class="text-muted small mb-3">Choose a hall-pass destination or mark yourself done for the day.</p>
-                <div id="hallPassDestinationList" class="d-grid gap-2 mb-3">
-                    <button type="button" class="btn btn-outline-secondary" disabled>Loading destinations...</button>
+                {# Shown only when the teacher has saved hall-pass destinations; otherwise the
+                   student sees "Done for the day" alone (attendance.js showBreakDestinations). #}
+                <div id="hallPassDestinationSection" hidden>
+                    <p class="text-muted small mb-3">Choose a hall-pass destination or mark yourself done for the day.</p>
+                    <div id="hallPassDestinationList" class="d-grid gap-2 mb-3"></div>
+                    <hr>
                 </div>
-                <hr>
                 <button type="button" class="btn btn-outline-danger w-100" id="doneForDayBreakBtn">
                     <span class="material-symbols-outlined align-bottom me-1" aria-hidden="true">done_all</span>
                     Done for the day

@@ -1159,7 +1159,7 @@ def hall_pass_settings():
         "status": "success",
         "settings": {
             "max_queue_limit": settings.max_queue_limit if settings else 10,
-            "pass_type_payload": settings.get_pass_types() if settings else HallPassSettings.get_default_pass_types()
+            "pass_type_payload": settings.get_pass_types() if settings else []
         }
     })
 
@@ -1187,6 +1187,11 @@ def update_hall_pass_settings():
             correlation_id=f"corr_settings_queue_{uuid.uuid4().hex}",
             idempotency_key=f"feat:settings:hall-pass-queue:{context.user_id}:{class_id}:{uuid.uuid4().hex}",
         )
+    except HallPassSettingsMissing:
+        return jsonify({
+            "status": "error",
+            "message": "Hall passes are not set up for this class yet. Add at least one pass type first.",
+        }), 409
     except ValueError as exc:
         _log_api_client_error("update_hall_pass_settings", exc, extra=f"class_id={class_id}")
         return jsonify({"status": "error", "message": "Hall pass settings are invalid."}), 400
@@ -1346,14 +1351,14 @@ def get_hall_pass_setup():
     settings = get_hall_pass_settings(scope["class_id"])
 
     if not settings:
-        # Return default configuration
+        # Nothing is configured yet: the teacher starts from an empty list.
         return jsonify({
             "status": "success",
             "hall_pass_enabled": True,
-            "pass_type_payload": HallPassSettings.get_default_pass_types()
+            "pass_type_payload": []
         })
 
-    # Return configured pass types with fallback to defaults
+    # Return configured pass types
     return jsonify({
         "status": "success",
         "hall_pass_enabled": True,

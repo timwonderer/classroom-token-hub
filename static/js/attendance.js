@@ -357,7 +357,7 @@ function configureBreakButton(button, isActive, hallPass, doneForDay = false) {
 }
 
 function openBreakChoiceModal() {
-  renderBreakDestinations([]);
+  hideBreakDestinations();
 
   const modalEl = document.getElementById('breakChoiceModal');
   if (modalEl && window.bootstrap) {
@@ -367,17 +367,14 @@ function openBreakChoiceModal() {
   fetch('/api/hall-pass/available-types')
     .then(r => r.json())
     .then(data => {
+      // Hall passes that are disabled or not set up offer no destinations,
+      // so the student sees "Done for the day" alone.
       if (data.status === 'success') {
-        // The endpoint returns pass_type_payload; this read `data.pass_types`,
-        // which the API has never sent, so the destination list rendered empty.
         renderBreakDestinations(data.pass_type_payload || []);
-      } else {
-        renderBreakDestinationError(data.message || 'Unable to load hall-pass destinations.');
       }
     })
     .catch(err => {
       console.error('Hall pass destination load error:', err);
-      renderBreakDestinationError('Unable to load hall-pass destinations.');
     });
 }
 
@@ -388,18 +385,18 @@ function closeBreakChoiceModal() {
   }
 }
 
-function renderBreakDestinations(passTypes) {
+function hideBreakDestinations() {
+  const section = document.getElementById('hallPassDestinationSection');
   const list = document.getElementById('hallPassDestinationList');
-  if (!list) return;
-  list.textContent = '';
+  if (list) list.textContent = '';
+  if (section) section.hidden = true;
+}
 
-  if (!Array.isArray(passTypes) || passTypes.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'text-muted small';
-    empty.textContent = 'No hall-pass destinations are currently available.';
-    list.appendChild(empty);
-    return;
-  }
+function renderBreakDestinations(passTypes) {
+  hideBreakDestinations();
+  const section = document.getElementById('hallPassDestinationSection');
+  const list = document.getElementById('hallPassDestinationList');
+  if (!section || !list || !Array.isArray(passTypes)) return;
 
   passTypes.forEach(passType => {
     const destination = (passType && (passType.name || passType.pass_name))
@@ -416,20 +413,7 @@ function renderBreakDestinations(passTypes) {
     });
     list.appendChild(button);
   });
-}
-
-function renderBreakDestinationError(message) {
-  const list = document.getElementById('hallPassDestinationList');
-  if (!list) return;
-  list.textContent = '';
-  list.appendChild(window.AppCore.buildAlertCard({
-    level: 'danger',
-    icon: 'error',
-    title: 'Destinations unavailable',
-    body: message,
-    role: 'alert',
-    className: 'mb-0',
-  }));
+  section.hidden = list.childElementCount === 0;
 }
 
 document.addEventListener('DOMContentLoaded', () => {

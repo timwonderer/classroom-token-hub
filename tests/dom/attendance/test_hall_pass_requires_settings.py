@@ -226,3 +226,53 @@ def test_submit_feat_refuses_without_settings(client, app):
     db.session.rollback()
 
     assert _pending_requests(classroom.class_id) == 0
+
+
+# --------------------------------------------------------------------------
+# No built-in destination preset (owner, 2026-10-06): nothing can display one.
+# --------------------------------------------------------------------------
+
+def test_there_is_no_built_in_destination_preset():
+    assert not hasattr(HallPassSettings, "get_default_pass_types")
+    assert HallPassSettings(pass_type_payload=[]).get_pass_types() == []
+
+
+def test_teacher_setup_starts_empty_without_settings(client, app):
+    classroom = initialize_as_teacher("chemistry_p1", client, app)
+    with app.app_context():
+        enable_class_feature(class_id=classroom.class_id, feature="hall_pass")
+        _remove_hall_pass_settings(classroom.class_id)
+
+    setup = client.get("/api/hall-pass/setup")
+    assert setup.status_code == 200
+    assert setup.get_json()["pass_type_payload"] == []
+
+    queue = client.get("/api/hall-pass/settings")
+    assert queue.status_code == 200
+    assert queue.get_json()["settings"]["pass_type_payload"] == []
+
+
+def test_queue_limit_alone_does_not_create_settings(client, app):
+    classroom = initialize_as_teacher("chemistry_p1", client, app)
+    with app.app_context():
+        enable_class_feature(class_id=classroom.class_id, feature="hall_pass")
+        _remove_hall_pass_settings(classroom.class_id)
+
+    response = client.post("/api/hall-pass/settings", json={"max_queue_limit": 5})
+
+    assert response.status_code == 409
+    assert "not set up" in response.get_json()["message"]
+    with app.app_context():
+        assert HallPassSettings.query.filter_by(class_id=classroom.class_id).count() == 0
+
+
+def test_student_break_modal_hides_destinations_until_they_load(client, app):
+    """Only "Done for the day" shows unless attendance.js renders saved destinations."""
+    initialize_as_student("chemistry_p1", client, app)
+
+    page = client.get("/student/dashboard")
+
+    assert page.status_code == 200
+    html = page.get_data(as_text=True)
+    assert '<div id="hallPassDestinationSection" hidden>' in html
+    assert "doneForDayBreakBtn" in html

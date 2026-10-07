@@ -1260,22 +1260,9 @@ class HallPassSettings(db.Model):
         db.Index('ix_hall_pass_settings_class_availability', 'class_id', 'availability_state'),
     )
 
-    @staticmethod
-    def get_default_pass_types():
-        """Return default pass types when teacher hasn't configured any."""
-        return [
-            {"pass_name": "Bathroom", "max_queue": 10, "consume_pass": True},
-            {"pass_name": "Water Fountain", "max_queue": 10, "consume_pass": True},
-            {"pass_name": "Office", "max_queue": 10, "consume_pass": True},
-            {"pass_name": "Nurse", "max_queue": 10, "consume_pass": True},
-            {"pass_name": "Counselor", "max_queue": 10, "consume_pass": True}
-        ]
-
     def get_pass_types(self):
-        """Get pass types, defaulting to the built-in set when unset."""
-        if not self.pass_type_payload:
-            return self.get_default_pass_types()
-        return self.pass_type_payload
+        """The destinations the teacher saved. There is no built-in set to fall back on."""
+        return self.pass_type_payload or []
 
     @property
     def effective_queue_limit(self):
