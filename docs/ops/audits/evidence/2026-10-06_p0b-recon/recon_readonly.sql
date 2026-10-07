@@ -12,7 +12,8 @@
 --   * No PII. No query selects a name, free-text column (descriptions, notes,
 --     explanations, titles, messages, destinations), credential, hash, token, or join code.
 --     Classes are identified only by the first eight characters of `class_id`.
---   * Compare a rerun with the recorded results by query id (Q0-Q14). Q14 ran after the owner ruling of 2026-10-06.
+--   * Compare a rerun with the recorded results by query id (Q0-Q16). Q14 ran after the owner ruling of 2026-10-06; Q15 and Q16 ran on
+--     2026-10-07 after review (PR #1523) found gaps in Q11b's chain check and Q12's table list.
 
 -- Q0 revision, server, table set
 SELECT now() AT TIME ZONE 'UTC' AS observed_at_utc,
@@ -225,6 +226,7 @@ UNION ALL SELECT 'issue_history', coalesce(previous_status,'<null>') || '->' || 
 UNION ALL SELECT 'issue_actions', action_type, performed_by_type, (related_transaction_id IS NOT NULL)::text, count(*) FROM issue_resolution_actions GROUP BY 1,2,3,4
 UNION ALL SELECT 'tcp', correlation_version::text, actor_type, '', count(*) FROM ticket_correlation_pack GROUP BY 1,2,3,4
 UNION ALL SELECT 'chain_heads', (chain_scope='system')::text, '', 'events=' || sum(event_count)::text, count(*) FROM chain_heads GROUP BY 1,2,3
+-- chain_mismatch starts from chain_heads, so it cannot see an event scope with no head; Q15 checks both directions.
 UNION ALL SELECT 'chain_mismatch', '', '', '', count(*) FROM chain_heads h
 WHERE h.event_count <> (SELECT count(*) FROM audit_events e WHERE e.chain_scope=h.chain_scope)
    OR h.latest_sequence <> (SELECT max(sequence_number) FROM audit_events e WHERE e.chain_scope=h.chain_scope)
@@ -234,7 +236,8 @@ UNION ALL SELECT 'announcements', priority, is_active::text, '', count(*) FROM a
 UNION ALL SELECT 'passkeys', '', '', '', count(*) FROM passkey_credentials
 ORDER BY 1,2,3,4;
 
--- Q12 per-class row-count baseline for class-scoped tables (the repeatable SOP-DB-004 §IX.1.7 query)
+-- Q12 per-class row-count baseline for class-scoped tables (the repeatable SOP-DB-004 §IX.1.7 query).
+-- Q12 does not cover every class-scoped table: Q16 adds the rest. Rerun both together.
 WITH x AS (
 SELECT 'seats' t, class_id FROM seats UNION ALL SELECT 'ledger_transaction', class_id FROM ledger_transaction
 UNION ALL SELECT 'ledger_balance_snapshot', class_id FROM ledger_balance_snapshot UNION ALL SELECT 'ledger_command_reservation', class_id FROM ledger_command_reservation
@@ -265,3 +268,36 @@ SELECT t.lineage_version, a.feat_id, t.mechanism::text mech, (a.actor_type IS NU
        (t.lineage_token = a.hmac_signature) token_ok, count(*) n
 FROM ledger_transaction t JOIN audit_events a ON a.id = t.lineage_event_id
 GROUP BY 1,2,3,4,5,6,7,8,9,10,11,12 ORDER BY 1,2,3;
+
+-- Q15 audit chain heads against event scopes, in both directions (2026-10-07). Q11b's chain_mismatch
+-- starts from chain_heads and cannot see an event scope that has no head.
+WITH e AS (SELECT chain_scope, count(*) n, max(sequence_number) max_seq FROM audit_events GROUP BY 1)
+SELECT now() AT TIME ZONE 'UTC' observed_at_utc,
+  count(*) FILTER (WHERE h.chain_scope IS NOT NULL AND e.chain_scope IS NOT NULL) both_present,
+  count(*) FILTER (WHERE h.chain_scope IS NULL) events_without_head,
+  count(*) FILTER (WHERE e.chain_scope IS NULL) head_without_events,
+  count(*) FILTER (WHERE h.chain_scope IS NOT NULL AND e.chain_scope IS NOT NULL
+                   AND (h.event_count <> e.n OR h.latest_sequence <> e.max_seq)) count_or_seq_mismatch,
+  (SELECT count(*) FROM audit_events) total_events
+FROM chain_heads h FULL JOIN e ON e.chain_scope = h.chain_scope;
+
+-- Q16 per-class row counts for the class-scoped tables Q12 omits (2026-10-07). Together, Q12 and Q16
+-- cover every table with a class_id column except classes itself (31 tables, from
+-- information_schema.columns), plus class-scoped tables keyed another way: the issue tables and
+-- ticket_correlation_pack by class_public_id, chain_heads by chain_scope, store_item_visibility by
+-- seat. '<none>' would mark a row that maps to no class. Empty tables return no row.
+WITH x AS (
+SELECT 'actor_request_trace' t, class_id FROM actor_request_trace UNION ALL SELECT 'announcements', class_id FROM announcements
+UNION ALL SELECT 'feature_settings', class_id FROM feature_settings UNION ALL SELECT 'identity_profiles', class_id FROM identity_profiles
+UNION ALL SELECT 'insurance_claim_productivity_dates', class_id FROM insurance_claim_productivity_dates UNION ALL SELECT 'insurance_claims', class_id FROM insurance_claims
+UNION ALL SELECT 'insurance_policies', class_id FROM insurance_policies UNION ALL SELECT 'obligation_command_reservation', class_id FROM obligation_command_reservation
+UNION ALL SELECT 'recovery_class_challenges', class_id FROM recovery_class_challenges UNION ALL SELECT 'student_recovery_codes', class_id FROM student_recovery_codes
+UNION ALL SELECT 'issues', c.class_id FROM issues i LEFT JOIN classes c ON c.class_public_id = i.class_public_id
+UNION ALL SELECT 'issue_status_history', c.class_id FROM issue_status_history h LEFT JOIN classes c ON c.class_public_id = h.class_public_id
+UNION ALL SELECT 'issue_resolution_actions', c.class_id FROM issue_resolution_actions a LEFT JOIN classes c ON c.class_public_id = a.class_public_id
+UNION ALL SELECT 'ticket_correlation_pack', c.class_id FROM ticket_correlation_pack p LEFT JOIN classes c ON c.class_public_id = p.class_public_id
+UNION ALL SELECT 'chain_heads', CASE WHEN chain_scope LIKE 'class:%' THEN substr(chain_scope, 7) END FROM chain_heads
+UNION ALL SELECT 'store_item_visibility', s.class_id FROM store_item_visibility v LEFT JOIN seats s ON s.id = v.seat_id)
+SELECT now() AT TIME ZONE 'UTC' observed_at_utc, t,
+       string_agg(coalesce(left(class_id,8),'<none>') || '=' || n, ' ' ORDER BY class_id NULLS FIRST) per_class, sum(n) total
+FROM (SELECT t, class_id, count(*) n FROM x GROUP BY 1,2) y GROUP BY t ORDER BY t;

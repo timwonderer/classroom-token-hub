@@ -10,7 +10,7 @@ Two kinds of finding are kept apart throughout:
 
 - **Observed (production).** Results of the queries in
   [`evidence/2026-10-06_p0b-recon/recon_readonly.sql`](evidence/2026-10-06_p0b-recon/recon_readonly.sql), cited by
-  query id (Q0–Q14).
+  query id (Q0–Q16).
 - **Repository.** Code at `28193df5a` (`main`), cited by `file:line`. Production runs `381a12d49`
   ([release record](DEPLOY_2026-10-04_381a12d49.md)); the repository finding applies to production only where the
   code is unchanged between the two. No migration was added after `381a12d49`: both are at Alembic head
@@ -20,7 +20,7 @@ Two kinds of finding are kept apart throughout:
 
 - **Surface.** The operator's TablePlus "Production" connection (SSH to the production host, database
   `classroom_economy`), through its read-only query tool, which rejects anything but reads. Fourteen SELECT
-  statements, 2026-10-06 06:08:34Z to 06:11:30Z, plus Q13 after them and Q14 after the owner's ruling on §5.1. No write, no DDL, no lock, no session
+  statements, 2026-10-06 06:08:34Z to 06:11:30Z, plus Q13 after them, Q14 after the owner's ruling on §5.1, and Q15–Q16 on 2026-10-07 at 02:33Z after review of #1523 found two coverage gaps (below). No write, no DDL, no lock, no session
   setting change. The application was running; each statement is its own snapshot, so totals across statements
   can differ by writes made between them. None was observed: Q1, Q2 and Q12 agree.
 - **PII.** No query selects a name, free text (descriptions, notes, explanations, titles, messages, hall-pass
@@ -134,6 +134,27 @@ has a NULL `amount_cents`. Seven of ten classes have ledger activity.
 | seats | 1da9085a=32 34294790=1 41e5092b=37 6eda1262=29 72041438=1 8af5d987=29 bfe8cfc4=35 c393fd39=34 d478db0f=30 da5ef035=33 | 261 |
 | store_products | 1da9085a=5 c393fd39=5 d478db0f=5 | 15 |
 
+**Q16, the class-scoped tables Q12 omits (2026-10-07 02:33:52Z).** Q12 left out these 10 tables that have a
+`class_id` column, plus the class-scoped tables keyed another way. Q16 completes the baseline; rerun Q12
+and Q16 together. It was observed about 20 hours after Q12, so the two are separate snapshots. Every row
+maps to a class (no `<none>` bucket). These tables are empty:
+- `insurance_claims`, `insurance_claim_productivity_dates`, `insurance_policies`;
+- `recovery_class_challenges`, `student_recovery_codes`;
+- `store_item_visibility`.
+
+| Table | Per class | Total |
+|---|---|---:|
+| actor_request_trace | 1da9085a=590 34294790=20 41e5092b=620 6eda1262=462 72041438=20 8af5d987=406 bfe8cfc4=540 c393fd39=580 d478db0f=600 da5ef035=657 | 4495 |
+| announcements | one each in 1da9085a 41e5092b 6eda1262 8af5d987 bfe8cfc4 c393fd39 d478db0f da5ef035 | 8 |
+| chain_heads (`class:` scope) | one each in 1da9085a 41e5092b 6eda1262 bfe8cfc4 c393fd39 d478db0f da5ef035 | 7 |
+| feature_settings | 1da9085a=1 34294790=1 da5ef035=1 | 3 |
+| identity_profiles | 1da9085a=32 34294790=1 41e5092b=37 6eda1262=29 72041438=1 8af5d987=29 bfe8cfc4=35 c393fd39=34 d478db0f=30 da5ef035=33 | 261 |
+| issue_resolution_actions (via `class_public_id`) | 41e5092b=1 | 1 |
+| issue_status_history (via `class_public_id`) | 1da9085a=3 41e5092b=4 6eda1262=1 da5ef035=10 | 18 |
+| issues (via `class_public_id`) | 1da9085a=1 41e5092b=1 6eda1262=1 da5ef035=4 | 7 |
+| obligation_command_reservation | 1da9085a=1 41e5092b=1 bfe8cfc4=1 c393fd39=1 da5ef035=1 | 5 |
+| ticket_correlation_pack (via `class_public_id`) | 1da9085a=1 41e5092b=1 6eda1262=1 da5ef035=4 | 7 |
+
 ## 3. Observed persisted semantics
 
 ### 3.1 Ledger (Q3, Q5, Q9)
@@ -174,7 +195,10 @@ Two cohorts, split exactly by signature version:
   `payroll-correction:…`), and 5 are teacher credits with random `token_hex` keys.
 - `attendance_interval_invalidation`: 4 rows (`INVALID_ATTENDANCE`, 2026-10-04), all linked.
 - Audit chain: 997 events, all `signer_key_id = v1`, every `hmac_signature = event_hash`, none without
-  `class_id`; 7 `class:` chain heads and no `system` head; head counts and sequences match the events. Only
+  `class_id`; 7 `class:` chain heads and no `system` head; head counts and sequences match the events.
+  Q11b's check starts from `chain_heads`, so it cannot see an event scope with no head. Q15 (2026-10-07
+  02:33:59Z) compares the two sets in both directions: 7 scopes have both, 0 have events without a head,
+  0 have a head without events, and 0 differ in count or sequence, over 1086 events at that time. Only
   three tables are audited: `ledger_transaction`, `payroll_event`, `attendance_interval_invalidation`.
 - `payroll_cycle_completion`: 26 rows, all `manual-payroll:` keys. Scheduled payroll has never completed a cycle.
   `interpretation_cycle_record`: 26, one per completion.
@@ -331,5 +355,5 @@ change stops until the owner rules in the governing document. Nothing here propo
 
 ## 6. Rerun
 
-For the post-change comparison in `SOP-DB-004` §IX.5.2, rerun Q1, Q2 and Q12 (and the query of any table the
-change touches) and compare by query id. Every difference must be explained by the change.
+For the post-change comparison in `SOP-DB-004` §IX.5.2, rerun Q1, Q2, Q12 and Q16, and Q15 for the audit
+chain (plus the query of any table the change touches), and compare by query id. Every difference must be explained by the change.
