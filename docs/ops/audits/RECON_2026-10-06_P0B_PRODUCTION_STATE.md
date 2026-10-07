@@ -10,7 +10,7 @@ Two kinds of finding are kept apart throughout:
 
 - **Observed (production).** Results of the queries in
   [`evidence/2026-10-06_p0b-recon/recon_readonly.sql`](evidence/2026-10-06_p0b-recon/recon_readonly.sql), cited by
-  query id (Q0–Q16).
+  query id (Q0–Q18).
 - **Repository.** Code at `28193df5a` (`main`), cited by `file:line`. Production runs `381a12d49`
   ([release record](DEPLOY_2026-10-04_381a12d49.md)); the repository finding applies to production only where the
   code is unchanged between the two. No migration was added after `381a12d49`: both are at Alembic head
@@ -20,7 +20,7 @@ Two kinds of finding are kept apart throughout:
 
 - **Surface.** The operator's TablePlus "Production" connection (SSH to the production host, database
   `classroom_economy`), through its read-only query tool, which rejects anything but reads. Fourteen SELECT
-  statements, 2026-10-06 06:08:34Z to 06:11:30Z, plus Q13 after them, Q14 after the owner's ruling on §5.1, and Q15–Q16 on 2026-10-07 at 02:33Z after review of #1523 found two coverage gaps (below). No write, no DDL, no lock, no session
+  statements, 2026-10-06 06:08:34Z to 06:11:30Z, plus Q13 after them, Q14 after the owner's ruling on §5.1, and Q15–Q18 on 2026-10-07 between 02:33Z and 02:37Z after review of #1523 found gaps in the evidence (below). No write, no DDL, no lock, no session
   setting change. The application was running; each statement is its own snapshot, so totals across statements
   can differ by writes made between them. None was observed: Q1, Q2 and Q12 agree.
 - **PII.** No query selects a name, free text (descriptions, notes, explanations, titles, messages, hall-pass
@@ -228,8 +228,12 @@ Two cohorts, split exactly by signature version:
 
 - Rent: five classes; exactly one `IN_USE` row each (`1da9085a` also has 3 `RETIRED`). Hall pass: two classes,
   one `IN_USE` each (`1da9085a` has 3 `RETIRED`). Payroll: one row each in nine classes. Store: 15 products in
-  three classes, all `IN_USE`, one version per lineage. Nothing is effective in the future, nothing is
-  `RETIRED` without `retired_at`, and nothing is resurrected.
+  three classes, all `IN_USE`, one version per lineage. Nothing is effective in the future.
+- What Q10 checks about retirement covers store products only, and only their current state: no product
+  is `RETIRED` without `retired_at`, and none is outside `RETIRED` with `retired_at` set. That cannot show
+  a product was never resurrected, because `store_service.set_availability` clears `retired_at` when a
+  product leaves `RETIRED` (`app/services/store_service.py:330`). Rent and hall-pass settings have no
+  `retired_at` column, so Q10 says nothing about their history beyond the counts above.
 - Economic engine: 32 versions in 10 classes, all `economy_policy_mode = default`, none future-dated.
   `feature_settings`: 3 rows, mode `default`, alignment status NULL, `economy_policy_updated_at` set,
   `economy_last_rebalanced_at` NULL. `class_features`: 121 rows, none with NULL `economic_version_id`.
@@ -244,7 +248,10 @@ Two cohorts, split exactly by signature version:
   `claimed_at` set), 21 unclaimed (both NULL), 10 teacher seats. No seat has a user without `claimed_at`, or the
   reverse, among student seats. No class has more than one teacher seat. Profiles: 261, all bound.
 - Issues: 7, all **canonical** statuses (3 `CLOSED`, 3 `DEV_RESOLVED`, 1 `OPEN`); history 18 rows, all canonical.
-  Only 6 issues have an initial `→ OPEN` history row; one does not.
+  At issue level (Q17, 2026-10-07 02:37:36Z):
+  - 6 of 7 issues have exactly one initial `→ OPEN` history row, and none has a duplicate.
+  - 1 issue has none: a `general` issue, now `DEV_RESOLVED`, with 3 history rows.
+  - No history row lacks its issue.
 - `ticket_correlation_pack`: 7, version 1. `operational_events`: 0. `actor_request_trace`: 4478.
   Passkeys: 3. Recovery tables: empty.
 
@@ -301,9 +308,15 @@ change stops until the owner rules in the governing document. Nothing here propo
   5. This is read-side interpretation of retained creation evidence (`DOM-OPS-002` §6.2A). It rewrites no row and
      upgrades no signature. A blanket "origin unknown" is unwarranted, and a blanket "system-originated" is
      incorrect.
-- **Production consequence (Q14, `recon_readonly.sql`).** All 974 ledger rows link to an `INSERT` event whose
+- **Production consequence (Q14; confirmed by Q18).** All 974 ledger rows link to an `INSERT` event whose
   `class_id`, `chain_scope` (`class:<class_id>`) and `lineage_token = hmac_signature` agree with the row. Origin is
   therefore available for all 854 v1 rows, and none is ambiguous. The HMAC of each is not yet authenticated.
+  Q14 used an inner join, which would silently drop a row with a NULL or dangling pointer. Q18 (2026-10-07
+  02:37:40Z) left-joins every ledger row and checks the event's `table_name`, `row_pk`, `operation` and
+  signature version:
+  - every row is a linked `INSERT`, with no NULL, dangling or wrong-event pointer, and every check holds;
+  - that is 854 v1 rows (unchanged) and 184 v3 rows, the v3 count having grown since 2026-10-05;
+  - every one of them has NULL actor context.
 - **Actor attribution is unavailable from audit actor context, for every row.** `actor_type` and `actor_id_hash`
   are NULL on all 974 linked creation events (v1 and v3). The bound `actor_context_json` carries `feat_id` and
   `correlation_id` but no actor identity. The cause is in the repository: no `audit_protected` caller passes

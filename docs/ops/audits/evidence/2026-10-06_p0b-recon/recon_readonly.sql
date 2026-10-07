@@ -12,8 +12,8 @@
 --   * No PII. No query selects a name, free-text column (descriptions, notes,
 --     explanations, titles, messages, destinations), credential, hash, token, or join code.
 --     Classes are identified only by the first eight characters of `class_id`.
---   * Compare a rerun with the recorded results by query id (Q0-Q16). Q14 ran after the owner ruling of 2026-10-06; Q15 and Q16 ran on
---     2026-10-07 after review (PR #1523) found gaps in Q11b's chain check and Q12's table list.
+--   * Compare a rerun with the recorded results by query id (Q0-Q18). Q14 ran after the owner ruling of 2026-10-06; Q15-Q18 ran on
+--     2026-10-07 after review (PR #1523) found gaps in Q11b, Q12 and Q14 and in the issue-history claim.
 
 -- Q0 revision, server, table set
 SELECT now() AT TIME ZONE 'UTC' AS observed_at_utc,
@@ -260,7 +260,8 @@ SELECT left(h.class_id,8) class8, (h.policy_uuid='default') dflt,
 FROM hall_pass_logs h GROUP BY 1,2,3 ORDER BY 1,2;
 
 -- Q14 creation-evidence linkage and actor context for every ledger row (run after the owner's §5.1 ruling).
--- Structural agreement only; it does not authenticate HMACs or walk the chain.
+-- Structural agreement only; it does not authenticate HMACs or walk the chain. Its inner join drops a row
+-- with a NULL or dangling pointer; Q18 is the complete form.
 SELECT t.lineage_version, a.feat_id, t.mechanism::text mech, (a.actor_type IS NULL) no_actor_type,
        (a.actor_id_hash IS NULL) no_actor_hash, (a.context_digest IS NULL) no_ctx, (a.seat_id IS NULL) no_seat,
        (a.seat_id = t.actor_seat_id) seat_is_actor, (a.seat_id = t.target_seat_id) seat_is_target,
@@ -301,3 +302,31 @@ UNION ALL SELECT 'store_item_visibility', s.class_id FROM store_item_visibility 
 SELECT now() AT TIME ZONE 'UTC' observed_at_utc, t,
        string_agg(coalesce(left(class_id,8),'<none>') || '=' || n, ' ' ORDER BY class_id NULLS FIRST) per_class, sum(n) total
 FROM (SELECT t, class_id, count(*) n FROM x GROUP BY 1,2) y GROUP BY t ORDER BY t;
+
+-- Q17 issue-level initial OPEN history (2026-10-07). Q11b's issue_history aggregate drops issue_id, so it
+-- cannot show which issues have an initial row, or whether any has two.
+SELECT now() AT TIME ZONE 'UTC' observed_at_utc,
+  (SELECT count(*) FROM issues) issues,
+  (SELECT count(*) FROM issues i WHERE EXISTS (SELECT 1 FROM issue_status_history h
+     WHERE h.issue_id = i.id AND h.previous_status IS NULL AND h.new_status = 'OPEN')) issues_with_initial_open,
+  (SELECT count(*) FROM issues i WHERE NOT EXISTS (SELECT 1 FROM issue_status_history h
+     WHERE h.issue_id = i.id AND h.previous_status IS NULL AND h.new_status = 'OPEN')) issues_without_initial_open,
+  (SELECT count(*) FROM (SELECT issue_id FROM issue_status_history WHERE previous_status IS NULL AND new_status = 'OPEN'
+     GROUP BY issue_id HAVING count(*) > 1) d) issues_with_duplicate_initial_open,
+  (SELECT count(*) FROM issue_status_history h WHERE NOT EXISTS (SELECT 1 FROM issues i WHERE i.id = h.issue_id)) history_rows_without_issue,
+  (SELECT string_agg(i.issue_type || '/' || i.status || '/hist=' || (SELECT count(*) FROM issue_status_history h WHERE h.issue_id = i.id), ',')
+     FROM issues i WHERE NOT EXISTS (SELECT 1 FROM issue_status_history h
+     WHERE h.issue_id = i.id AND h.previous_status IS NULL AND h.new_status = 'OPEN')) missing_shape;
+
+-- Q18 creation-evidence linkage for every ledger row, left-joined (2026-10-07). It reports NULL, dangling and
+-- wrong-event pointers explicitly, and validates the event's table_name, row_pk, operation and version.
+SELECT now() AT TIME ZONE 'UTC' observed_at_utc, t.lineage_version,
+  CASE WHEN t.lineage_event_id IS NULL THEN 'null_pointer'
+       WHEN a.id IS NULL THEN 'dangling_pointer'
+       WHEN a.table_name <> 'ledger_transaction' OR a.row_pk <> t.id::text OR a.operation <> 'INSERT' THEN 'pointer_to_wrong_event'
+       ELSE 'linked_insert' END linkage,
+  a.feat_id, (a.class_id = t.class_id) class_ok, (a.chain_scope = 'class:' || t.class_id) scope_ok,
+  (t.lineage_token = a.hmac_signature) token_ok, (t.lineage_version = a.signature_version) version_ok,
+  (a.actor_type IS NULL AND a.actor_id_hash IS NULL) no_actor_context, count(*) n
+FROM ledger_transaction t LEFT JOIN audit_events a ON a.id = t.lineage_event_id
+GROUP BY 2,3,4,5,6,7,8,9 ORDER BY 2,3,4;
