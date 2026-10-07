@@ -11,10 +11,20 @@ Two kinds of finding are kept apart throughout:
 - **Observed (production).** Results of the queries in
   [`evidence/2026-10-06_p0b-recon/recon_readonly.sql`](evidence/2026-10-06_p0b-recon/recon_readonly.sql), cited by
   query id (Q0–Q18).
-- **Repository.** Code at `28193df5a` (`main`), cited by `file:line`. Production runs `381a12d49`
-  ([release record](DEPLOY_2026-10-04_381a12d49.md)); the repository finding applies to production only where the
-  code is unchanged between the two. No migration was added after `381a12d49`: both are at Alembic head
-  `f9a3c7d1e620`.
+- **Repository.** Code at `28193df5a` (`main`), cited by `file:line`. The repository finding applies to production
+  only where the code is unchanged between the two.
+  - **Correction (2026-10-07).** This record first said production ran `381a12d49`, taken from the latest release
+    record ([`DEPLOY_2026-10-04_381a12d49.md`](DEPLOY_2026-10-04_381a12d49.md)) without checking the host.
+  - **What actually ran.** Two later releases went through the exact-SHA release workflow with no release record:
+    `35bad089a` (#1489, 2026-10-05 05:13Z) and `1cdbf03da` (#1491, 2026-10-06 03:10Z).
+  - **Throughout these observations.** The host's checkout was `1cdbf03da` (read-only host check, 2026-10-07
+    04:38Z; service active since 2026-10-06 03:10Z).
+  - **The findings hold.** `1cdbf03da` and `28193df5a` differ in 16 paths. Those include the documentation, tests
+    and CI of #1518, #1519, #1521 and `2e4ac99dd`. Their application trees match: across `app/`, `templates/`,
+    `static/`, `wsgi.py`, `migrations/` and `requirements.txt`, the only difference is
+    `migrations/forward_only_register.txt`, a text register that only a test reads. So every repository finding
+    here describes the application code production ran.
+  - Both are at Alembic head `f9a3c7d1e620`.
 
 ## Method and limits
 
