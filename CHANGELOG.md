@@ -15,7 +15,7 @@ Everything merged to `main` since v2.1.1. Three untagged releases shipped part o
 - `35bad089a` (2026-10-05 05:13Z): the sysadmin UI shell (#1489);
 - `1cdbf03da` (2026-10-06 03:10Z): teacher-ticket routing (#1491).
 
-The last two have no release record. Against `1cdbf03da`, which production runs, this release changes application behavior in three places: #1522, the hall-pass settings gate and preset removal; #1526, under which a purchase needs the money, a collective goal is one buy-in per student, and a collective-goal purchase and the NSF fee can be reversed; and #1527, which drops a cross-class query that ran on every page render. The rest is documentation, tests and CI:
+The last two have no release record. Against `1cdbf03da`, which production runs, this release changes application behavior in four places: #1522, the hall-pass settings gate and preset removal; #1526, under which a purchase needs the money, a collective goal is one buy-in per student, and a collective-goal purchase and the NSF fee can be reversed; #1527, which drops a cross-class query that ran on every page render; and #1528, which removes the sysadmin console's log viewers (logs are read in Grafana). The rest is documentation, tests and CI:
 - the P0A migration contract (#1518, #1519, #1521);
 - the P0B record (#1523);
 - the every-PR deprecated-symbol guard (#1524).
