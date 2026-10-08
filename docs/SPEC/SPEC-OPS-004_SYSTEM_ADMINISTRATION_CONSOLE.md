@@ -57,6 +57,7 @@ The console navigation exposes exactly four destinations plus sign-out:
 | --- | --- | --- |
 | Dashboard | `/sysadmin/dashboard` | Platform-wide counts |
 | Support | `/sysadmin/support` | Teacher issues and developer-escalated issues |
+| Grafana | `/sysadmin/grafana` | Application logs, error events and request activity, opened in a new tab (§6.5) |
 | Passkeys | `/sysadmin/passkey/settings` | The operator's own WebAuthn credentials |
 
 Routes outside this set are reachable by direct URL only and MUST NOT be treated as supported operator surfaces.
@@ -164,7 +165,8 @@ The prior guides at `docs/user-guides/features/sysadmin/` and `docs/user-guides/
 **Version 1.4 (2026-10-07):**
 - Removed log reading from the console (owner ruling 2026-10-07: logs are read in Grafana). §VI no
   longer lists a Logs destination, §6.2 drops the recent-errors list, and §6.4 states that the console
-  has no log viewer. `/sysadmin/logs` read the application log file but displayed nothing in
+  has no log viewer. §6.1 now lists Grafana, which the navigation already exposed but the table
+  omitted, so the table again holds the four destinations it names. `/sysadmin/logs` read the application log file but displayed nothing in
   production; the combined-logs network tab only repeated the error rows.
 
 **Version 1.3 (2026-09-29):**
