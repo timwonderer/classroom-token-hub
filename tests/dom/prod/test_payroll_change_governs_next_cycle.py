@@ -106,10 +106,13 @@ def _setup(client, app, monkeypatch):
     """R1 = $60/hour ($1/min) in force; 15 minutes worked under it; then R2 =
     $600/hour ($10/min) saved while the cycle is still open."""
     classroom = initialize_as_teacher("chemistry_p1", client, app, with_payroll_settings=False)
-    enable_class_feature(class_id=classroom.class_id, feature="payroll")
     seat_id = classroom.students[0].seat.id
 
+    # Enable payroll under the pinned clock. Class features are effective-dated,
+    # and enabling at the real time stamps them after MON once the calendar
+    # passes 2026-10-05, so the pinned-clock pages saw payroll as disabled.
     with _clock(monkeypatch, MON):
+        enable_class_feature(class_id=classroom.class_id, feature="payroll")
         _login(client, classroom, MON)
         _save_rate(client, "60.00")
     _work(classroom, seat_id, MON + timedelta(minutes=5), 15)
