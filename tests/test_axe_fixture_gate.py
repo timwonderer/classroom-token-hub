@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 from jinja2 import ChoiceLoader, DictLoader
 
+import wsgi  # noqa: F401 -- registers wsgi's hooks on the shared app, as gunicorn does
 from app import app as flask_app
 from tests import a11y_fixtures
 from tests.a11y_fixtures import FixtureRenderError, RenderState, load_registry, render_state
@@ -180,6 +181,23 @@ def test_7_error_templates_render_from_presentation_input_alone(app):
         fixture = render_state(flask_app, state)
         assert fixture.templates >= {state.template}, state.id
         assert "<h1" in fixture.html, state.id
+
+
+def test_7b_error_templates_still_render_without_a_query_once_wsgi_is_loaded(app):
+    """Production serves ``wsgi:app``, and importing ``wsgi`` adds hooks to the shared app.
+
+    One of them, ``inject_payroll_status``, ran ``PayrollSettings.query.first()``
+    on every template render: an unscoped read of every class's settings whose
+    result no template used. Tests run against the bare ``app.app``, so the gate
+    passed or failed depending on whether an earlier test in the session had
+    imported ``wsgi`` (two under ``tests/dom`` do). This module imports it, so
+    the gate checks what production actually renders. The import sits at module
+    level because Flask refuses new ``before_request`` hooks once the app has
+    served a request, which an earlier test in the session may already have done.
+    """
+    for state in (s for s in load_registry() if s.template.startswith("error_")):
+        fixture = render_state(flask_app, state)
+        assert fixture.templates >= {state.template}, state.id
 
 
 def test_every_error_template_has_a_fixture_state():
