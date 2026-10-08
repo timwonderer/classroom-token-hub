@@ -83,7 +83,6 @@ from app.models import (
     RentSettings,
     User,
     UserRole,
-    PayrollSettings,
 )
 
 # Auth utilities (Stage 3)
@@ -131,17 +130,6 @@ else:
     @app.before_request
     def create_default_admin_if_needed():
         pass
-
-
-# -------------------- CONTEXT PROCESSORS --------------------
-
-@app.context_processor
-def inject_payroll_status():
-    """Make payroll settings status available in all templates."""
-    # Context processors must be read-only; never trigger autoflush from pending session state.
-    with db.session.no_autoflush:
-        has_payroll_settings = PayrollSettings.query.first() is not None
-    return dict(has_payroll_settings=has_payroll_settings)
 
 
 # -------------------- ERROR LOGGING UTILITIES --------------------
