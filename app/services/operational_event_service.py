@@ -48,10 +48,10 @@ def record(
 
     Logs (as before) AND persists a row to ``operational_events``
     (DOM-OPS-001 SS4: "Emit Structured Log -> Effect: Appends to
-    operational_events"). The table did not exist until this was written
-    live-blocking finding 14 -- get_recent_error_events()/get_error_events()
-    have queried it since the migration that was supposed to create it only
-    dropped its predecessors.
+    operational_events"). The table did not exist until live-blocking
+    finding 14; the migration that was supposed to create it only dropped its
+    predecessors. Nothing in the console reads it: logs are read in Grafana
+    (SPEC-OPS-004 1.4).
 
     Writes on a raw engine connection, not ``db.session``: this must be
     callable from anywhere, including inside an exception handler right after
@@ -111,63 +111,3 @@ def record(
             conn.commit()
     except Exception:  # noqa: BLE001 -- telemetry must never break the caller
         current_app.logger.exception("Failed to persist operational_events row")
-
-
-def _row_to_error_view(row) -> dict[str, Any]:
-    """Project one operational_events row into the shape the error-list
-    templates (system_admin_dashboard.html, sysadmin_combined_logs.html)
-    already expect: error_type, error_message, request_method, request_path,
-    timestamp. Those templates predate this table's existence and were never
-    updated to the id/created_at/level/message/payload columns this service
-    actually reads -- projecting here keeps the fix in one place rather than
-    reshaping every consuming template.
-    """
-    payload = row.get("payload") or {}
-    route = payload.get("route") or ""
-    return {
-        "id": row.get("id"),
-        "timestamp": row.get("created_at"),
-        "error_type": row.get("level"),
-        "error_message": row.get("message"),
-        # record() captures the request path only, not the HTTP method, so
-        # this is deliberately blank rather than guessed.
-        "request_method": None,
-        "request_path": route or None,
-        "payload": payload,
-    }
-
-
-def get_recent_error_events(limit: int = 5) -> list[dict[str, Any]]:
-    """Read the most recent ERROR/CRITICAL operational events (read-only).
-
-    Returns plain dicts so route/GET handlers never touch db.session directly
-    (INV-ARC-007: reads route through the service layer, keeping the read out
-    of the request handler and satisfying the policy guardrails).
-    """
-    rows = db.session.execute(
-        sa.text(
-            "SELECT id, created_at, level, message, payload "
-            "FROM operational_events "
-            "WHERE level IN ('ERROR', 'CRITICAL') "
-            "ORDER BY created_at DESC, id DESC LIMIT :limit"
-        ),
-        {"limit": limit},
-    ).mappings().all()
-    return [_row_to_error_view(dict(row)) for row in rows]
-
-
-def get_error_events() -> list[dict[str, Any]]:
-    """Read all ERROR/CRITICAL operational events, newest first (read-only).
-
-    Pagination/slicing is performed by the caller; this returns the full
-    ordered result set as plain dicts.
-    """
-    rows = db.session.execute(
-        sa.text(
-            "SELECT id, created_at, level, message, payload "
-            "FROM operational_events "
-            "WHERE level IN ('ERROR', 'CRITICAL') "
-            "ORDER BY created_at DESC, id DESC"
-        )
-    ).mappings().all()
-    return [_row_to_error_view(dict(row)) for row in rows]

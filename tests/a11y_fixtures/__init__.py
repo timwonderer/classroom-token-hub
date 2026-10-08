@@ -37,7 +37,6 @@ FIXTURE_MODULES = (
     "tests.a11y_fixtures.public",
     "tests.a11y_fixtures.admin",
     "tests.a11y_fixtures.student",
-    "tests.a11y_fixtures.sysadmin",
 )
 
 

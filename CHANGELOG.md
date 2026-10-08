@@ -38,6 +38,13 @@ There is no schema migration and no change to the application's Python dependenc
 - **CodeQL: docs redirect to the external site.** `_redirect_to_public_docs` percent-encodes the reader-supplied path, refuses `.` and `..` segments, and checks the target still has the configured docs host. Tests in `tests/dom/docs/test_docs_platform_split.py`.
 - **Docs site npm advisories.** The `docs-site` lockfile moves `fast-uri` to 4.2.1, `brace-expansion` to 5.0.12 and `http-cache-semantics` to 4.3.0, closing Dependabot alerts #78-#82 and #84 (supersedes #1458). Alert #83 (`braces`, no patched release) is build-time only for the static docs site and is left for dismissal.
 
+### Removed
+
+- **Log reading is gone from the sysadmin console; logs are read in Grafana** (owner ruling 2026-10-07; `SPEC-OPS-004` 1.4).
+  - **Removed:** `/sysadmin/combined-logs`, `/sysadmin/logs`, the redirects `/sysadmin/error-logs`, `/sysadmin/logs-testing` and `/sysadmin/network-activity`, the **Logs** navigation link, and the dashboard's **View Logs** action and **Recent Errors** panel. Their templates and the service readers `get_error_events` and `get_recent_error_events` go with them.
+  - **Why.** `/sysadmin/logs` displayed nothing in production even though its log file was being written. The combined-logs **Network Activity** tab only repeated the error rows. The full-suite run before this release also failed on hard-coded colours in the unused log template.
+  - **Unchanged:** the `operational_events` table and its writer.
+
 ### Fixed
 
 - **Hall passes are unavailable in a class with no hall-pass settings.** Such a class offered students the built-in destinations, accepted their requests, and on approval recorded `hall_pass_logs.policy_uuid = 'default'`, a reference that names no policy (`DOM-POL-001` §VII). FEAT-PROD-002 §III requires the class's settings to be evaluated before the log is written. The gate now applies at every step, through one check (`require_hall_pass_settings` in `app/feats/prod.py`), so a request can be made only when it could be approved. The student is offered no destinations and sees "Hall passes are not set up for this class yet" (`/api/hall-pass/available-types`, 409). A request is refused and queues nothing (`submit_hall_pass_request`, 409). Approving a request made before this change is refused, and the request stays pending for the teacher to reject (§III.A). The built-in destination preset (Bathroom, Water Fountain, Office, Nurse, Counselor) is removed outright, so nothing can display it:
