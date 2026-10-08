@@ -302,6 +302,8 @@ def _detail_context(*, populated: bool = True) -> dict:
             SimpleNamespace(id=6, timestamp=_NOW - timedelta(days=2), account_type="checking", amount=10.0,
                             description="Payroll", posting_state=_POSTED, type="payroll"),
         ],
+        # The purchase keeps its Reverse control so the button stays under audit.
+        "reversible_transaction_ids": frozenset({7}),
         "entitlements": [
             SimpleNamespace(purchase_date=_NOW - timedelta(days=3), status="purchased", redemption_details=None,
                             store_item=SimpleNamespace(name="Homework pass", item_type="delayed")),
@@ -330,7 +332,8 @@ def _detail_context(*, populated: bool = True) -> dict:
     }
     if not populated:
         base.update(
-            transactions=[], entitlements=[], latest_attendance_event=None, attendance_events=[],
+            transactions=[], reversible_transaction_ids=frozenset(), entitlements=[],
+            latest_attendance_event=None, attendance_events=[],
             attendance_intervals=[], attendance_open_intervals=[], attendance_unpaired_events=[],
             attendance_completed_count=0, attendance_older_url=None, attendance_newest_url=None,
             attendance_historical_evidence_limited=False, attendance_estimate_incomplete=False,
