@@ -124,8 +124,11 @@ def test_economy_page_shows_the_cadence_and_the_real_period_length(client, app, 
     """Monthly anchored on Jan 1: the February period is 28 days, March's 31.
     The page never states a month as 30 days."""
     classroom = initialize_as_teacher("chemistry_p1", client, app, with_payroll_settings=False)
-    enable_class_feature(class_id=classroom.class_id, feature="payroll")
+    # Enable payroll under the pinned clock: class features are effective-dated,
+    # so enabling at the real time would leave payroll off at DEC_20 once the
+    # calendar passes that date.
     with _clock(monkeypatch, DEC_20):
+        enable_class_feature(class_id=classroom.class_id, feature="payroll")
         _login(client, classroom, DEC_20)
         update_payroll_settings(
             client, settings_mode="simple", simple_pay_rate="60.00",
