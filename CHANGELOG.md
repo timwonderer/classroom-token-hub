@@ -15,7 +15,7 @@ Everything merged to `main` since v2.1.1. Three untagged releases shipped part o
 - `35bad089a` (2026-10-05 05:13Z): the sysadmin UI shell (#1489);
 - `1cdbf03da` (2026-10-06 03:10Z): teacher-ticket routing (#1491).
 
-The last two have no release record. Against `1cdbf03da`, which production runs, this release changes application behavior in three places: #1522, the hall-pass settings gate and preset removal; #1526, under which a purchase needs the money, a collective goal is one buy-in per student, and a collective-goal purchase and the NSF fee can be reversed; and #1527, which drops a cross-class query that ran on every page render. The rest is documentation, tests and CI:
+The last two have no release record. Against `1cdbf03da`, which production runs, this release changes application behavior in four places: #1522, the hall-pass settings gate and preset removal; #1526, under which a purchase needs the money, a collective goal is one buy-in per student, and a collective-goal purchase and the NSF fee can be reversed; #1527, which drops a cross-class query that ran on every page render; and #1528, which removes the sysadmin console's log viewers (logs are read in Grafana). The rest is documentation, tests and CI:
 - the P0A migration contract (#1518, #1519, #1521);
 - the P0B record (#1523);
 - the every-PR deprecated-symbol guard (#1524).
@@ -37,6 +37,13 @@ There is no schema migration and no change to the application's Python dependenc
 - **CodeQL: roster import and unclaim no longer echo exception text.** `/admin/upload-students` and `/admin/student/unclaim` returned `str(error)` from any `ValueError`. They now return a message only if it is in `ROSTER_ACTION_MESSAGES` (`app/feats/identity_feat.py`), which lists the teacher-facing messages those FEATs raise; any other `ValueError` gets a generic message. Tests: `tests/dom/identity/test_roster_action_messages.py`, including a guard that fails when a FEAT raises a message missing from the list.
 - **CodeQL: docs redirect to the external site.** `_redirect_to_public_docs` percent-encodes the reader-supplied path, refuses `.` and `..` segments, and checks the target still has the configured docs host. Tests in `tests/dom/docs/test_docs_platform_split.py`.
 - **Docs site npm advisories.** The `docs-site` lockfile moves `fast-uri` to 4.2.1, `brace-expansion` to 5.0.12 and `http-cache-semantics` to 4.3.0, closing Dependabot alerts #78-#82 and #84 (supersedes #1458). Alert #83 (`braces`, no patched release) is build-time only for the static docs site and is left for dismissal.
+
+### Removed
+
+- **Log reading is gone from the sysadmin console; logs are read in Grafana** (owner ruling 2026-10-07; `SPEC-OPS-004` 1.4).
+  - **Removed:** `/sysadmin/combined-logs`, `/sysadmin/logs`, the redirects `/sysadmin/error-logs`, `/sysadmin/logs-testing` and `/sysadmin/network-activity`, the **Logs** navigation link, and the dashboard's **View Logs** action and **Recent Errors** panel. Their templates and the service readers `get_error_events` and `get_recent_error_events` go with them.
+  - **Why.** `/sysadmin/logs` displayed nothing in production even though its log file was being written. The combined-logs **Network Activity** tab only repeated the error rows. The full-suite run before this release also failed on hard-coded colours in the unused log template.
+  - **Unchanged:** the `operational_events` table and its writer.
 
 ### Fixed
 
