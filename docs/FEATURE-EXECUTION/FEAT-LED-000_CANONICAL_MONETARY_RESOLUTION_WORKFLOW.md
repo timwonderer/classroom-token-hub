@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-LED-000 | 0.4 | 2026-10-03 | 0.3 | Normative |
+| FEAT-LED-000 | 0.5 | 2026-10-07 | 0.4 | Normative |
 
 ---
 
@@ -316,6 +316,8 @@ This FEAT does not:
 ---
 
 ## XV. Change Notes
+
+**0.5 (2026-10-07)**, owner ruling 2026-10-07: a Store purchase requires sufficient funds (`FEAT-STOR-001` 3.2, `SPEC-ECON-003` 2.3). Refusing a purchase that the full-shortfall rule cannot cover is a business-eligibility decision of the originating FEAT, made before anything posts. It is not a Ledger funding alternative, a partial sweep or a compatibility path, so 0.3's statement about purchase rejection governs Ledger funding only. Ledger funding semantics are unchanged.
 
 **0.4 (2026-10-03)** incorporates typed FEAT-supplied banking/Identity directives into Ledger domain commands. It supersedes direct cross-domain configuration or Identity lookup inside monetary resolution and requires all caller paths to adopt the same interface; no compatibility bridge or new fee applicability is authorized.
 

@@ -211,8 +211,8 @@ from app.services.payroll.cycle_completion import get_completed_cycle_window
 from app.feats.direct_entitlement_grant_feat import execute_direct_grant, execute_hall_pass_adjustment
 # execute_insurance_claim_resolution removed — insurance_claim_feat.py deleted; insurance feature broken pending DOM-OBL-001 migration
 from app.feats.transaction_void_feat import (
-    ImmediatePurchaseNotVoidable,
-    UsedDelayedPurchaseNotVoidable,
+    ObligationTransactionNotVoidable,
+    PurchaseNotReversible,
     execute_void_transaction,
     execute_void_transactions,
 )
@@ -3297,6 +3297,43 @@ def set_current_class():
 # confirmation or re-set path.
 
 
+# Rows the student detail page never offers to reverse: compensations, payroll
+# (corrected through its own flow) and reversals themselves (SPEC-OPS-001 §3.6).
+_STUDENT_DETAIL_UNREVERSIBLE_TYPES = frozenset(
+    {"refund", "payroll", "manual_payment", "payroll_correction", "REVERSAL"}
+)
+
+
+def _reversible_transaction_ids(transactions):
+    """Ids of the rows whose Reverse control the reverse action would honour.
+
+    Read-only, so the GET may call it. A row is offered only when the action
+    would accept it: not already reversed, no obligation provenance
+    (SPEC-OPS-001 §VII), and, for a Store purchase, passing the same
+    eligibility gate the action enforces. A button that can only fail is
+    worse than no button.
+    """
+    from app.services.ledger_correction_service import resolve_purchase_resolution_eligibility
+    from app.services.ledger_provenance_query_service import has_exact_reversal
+
+    candidates = [tx for tx in transactions if tx.type not in _STUDENT_DETAIL_UNREVERSIBLE_TYPES]
+    if not candidates:
+        return frozenset()
+    from app.services.obligations_service import obligation_related_transaction_ids
+
+    obligation_related = obligation_related_transaction_ids(tx.id for tx in candidates)
+    reversible = set()
+    for tx in candidates:
+        if tx.id in obligation_related:
+            continue
+        if tx.type == "purchase":
+            if resolve_purchase_resolution_eligibility(tx).eligible:
+                reversible.add(tx.id)
+        elif not has_exact_reversal(tx):
+            reversible.add(tx.id)
+    return frozenset(reversible)
+
+
 @admin_bp.route('/students/<string:actor_public_id>')
 @admin_required
 def student_detail_public(actor_public_id):
@@ -3365,6 +3402,7 @@ def student_detail_public(actor_public_id):
     transactions_query = Transaction.query.filter(tx_scope)
 
     transactions = transactions_query.order_by(Transaction.timestamp.desc()).all()
+    reversible_transaction_ids = _reversible_transaction_ids(transactions)
     _entitlement_query = (
         EntitlementEvent.query
         .filter(
@@ -3684,6 +3722,7 @@ def student_detail_public(actor_public_id):
                          reset_code_is_active=reset_code_is_active,
                          join_codes=join_codes,
                          transactions=transactions,
+                         reversible_transaction_ids=reversible_transaction_ids,
                          entitlements=store_purchases,
                          latest_attendance_event=latest_attendance_event,
                          attendance_events=attendance_display_rows,
@@ -6355,13 +6394,14 @@ def void_transaction(transaction_id):
         db.session.rollback()
         current_app.logger.info("Transaction void denied for %s: %s", transaction_id, e)
         return _void_error("You do not have permission to void this transaction.", status_code=403)
-    except ImmediatePurchaseNotVoidable:
+    except PurchaseNotReversible as e:
         db.session.rollback()
-        return _void_error("Immediate-use item purchases are not voidable.")
-    except UsedDelayedPurchaseNotVoidable:
+        current_app.logger.info("Transaction reversal refused for %s: %s", transaction_id, e)
+        return _void_error(str(e))
+    except ObligationTransactionNotVoidable:
         db.session.rollback()
         return _void_error(
-            "Delayed-use item has already been used and cannot be voided.",
+            "This charge settles an obligation and cannot be reversed. Use a manual credit instead.",
         )
     except ValueError as e:
         db.session.rollback()

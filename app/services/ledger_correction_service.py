@@ -21,6 +21,18 @@ REVERSAL_TRANSACTION_TYPE = "REVERSAL"
 
 _TERMINAL_ENTITLEMENT_EVENTS = ("CONSUMED", "EXPIRED", "REVOKED")
 
+# Entitlement types whose purchase the governing domain lets a reversal revoke
+# with a refund (SPEC-OPS-001 §3.4.5, §3.7.1). DOM-STORE-001 §VIII.E names them:
+# a delayed-use item is an eligible pre-use purchase (FEAT-LED-002 §I), and a
+# collective-goal buy-in records REVOKED "when the entitlement is withdrawn
+# individually or classwide and coordinate[s] a lawful refund". Every other type
+# is excluded by its own rule or by the absence of one: immediate use is CONSUMED
+# at purchase, a purchased hall pass may not be REVOKED (only a direct grant
+# may), insurance is never revoked or refunded, and a privilege is an intangible
+# state that is in force from the moment of purchase, so there is no unused
+# value to refund (owner ruling 2026-10-07).
+_REVERSIBLE_ENTITLEMENT_TYPES = frozenset({"DELAYED_USE", "COLLECTIVE_GOAL"})
+
 
 @dataclass(frozen=True)
 class PurchaseResolutionEligibility:
@@ -39,8 +51,12 @@ def resolve_purchase_resolution_eligibility(transaction) -> PurchaseResolutionEl
     narrow: FEAT-LED-002 §I resolves an eligible pre-use Store purchase, and
     DOM-SUP-001 §IX offers REVERSE and REFUND only for an unused or pending
     item. So the transaction must be a Store purchase that has not been
-    reversed, carries no obligation provenance (§3.7.4), and whose grants to the
-    buying seat are all still active (§6.1). Anything else takes a manual credit.
+    reversed, carries no obligation provenance (§3.7.4), whose grants are of a
+    type the Store domain lets a reversal revoke, and whose grants to the buying
+    seat are all still active (§6.1). Anything else takes a manual credit.
+
+    The reverse action (FEAT-LED-002, ``transaction_void_feat``) gates on this
+    same function, so the Reverse control and the action cannot disagree.
 
     Read-only: a GET may call this.
     """
@@ -76,6 +92,10 @@ def resolve_purchase_resolution_eligibility(transaction) -> PurchaseResolutionEl
     if any(grant.entitlement_type == "INSURANCE" for grant in grants):
         # Coverage is never revoked or refunded; it expires (FEAT-STOR-002 §IX.C).
         return PurchaseResolutionEligibility(False, "Insurance coverage cannot be reversed or refunded.")
+    if any(grant.entitlement_type not in _REVERSIBLE_ENTITLEMENT_TYPES for grant in grants):
+        return PurchaseResolutionEligibility(
+            False, "This kind of item cannot be reversed or refunded. Use a manual credit instead."
+        )
     terminal = EntitlementEvent.query.filter(
         EntitlementEvent.class_id == transaction.class_id,
         EntitlementEvent.entitlement_id.in_([grant.entitlement_id for grant in grants]),

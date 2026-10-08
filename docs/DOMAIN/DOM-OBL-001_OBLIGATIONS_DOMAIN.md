@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-OBL-001 | 3.2 | 2026-09-24 | 3.1 | Constitutional |
+| DOM-OBL-001 | 3.3 | 2026-10-07 | 3.2 | Constitutional |
 
 ---
 
@@ -45,9 +45,11 @@ Rent is a homegrown obligation lifecycle owned by Obligations. It is configured 
 
 Insurance is not owned by Obligations as a product lifecycle. Store and Entitlements owns the insurance entitlement / coverage lifecycle, and Policies owns the insurance definition. Obligations may service recurring insurance premiums as debt lifecycle, but only with lawful inputs supplied by the owning authority. One insurance entitlement is one premium lineage: its `internal_ref` derives from the `entitlement_id` alone and never from a purchase command's idempotency key, so a repurchase is a new entitlement and a new lineage.
 
-### C. Immediate Charges
+### C. NSF and Overdraft Fees Are Not Obligations
 
-Overdraft fees, NSF fees, and other immediately collected charges are still obligations when the system lawfully instantiates a liability before or alongside settlement. The fact that the liability is settled immediately does not remove it from this domain.
+A non-sufficient-funds (NSF) or overdraft fee is not an obligation. It is a side effect of a negative ledger balance, owned by Ledger: one debit, never assessed and later satisfied, and so never waived. CTH charges no such fee (owner ruling 2026-10-07). A purchase the student cannot afford is refused before anything posts (`FEAT-STOR-001`). A payment toward an obligation that fails for insufficient funds leaves that obligation unpaid: it remains owed, accumulates with later assessments, and is subject to late fees under its own policy.
+
+`NSF_FEE` rows written to `assessment_events` before 3.3 were recorded through the assessment mechanism. They are history, not obligation facts: they confer no obligation provenance on the ledger debit they reference, which Ledger may reverse like any other fee.
 
 ### D. Exclusions
 
