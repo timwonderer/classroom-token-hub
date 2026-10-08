@@ -60,15 +60,37 @@ def get_active_holding_quantity(*, class_id: str, seat_id: int, product_lineage_
     Possession is derived from immutable events: a GRANTED lineage with no
     CONSUMED, EXPIRED or REVOKED terminal event is still held.
     """
-    events = EntitlementEvent.query.filter_by(
-        class_id=class_id, target_seat_id=seat_id, product_id=product_lineage_uuid
+    return get_active_holding_quantities(
+        class_id=class_id, seat_id=seat_id, product_lineage_uuids=[product_lineage_uuid]
+    ).get(product_lineage_uuid, 0)
+
+
+def get_active_holding_quantities(
+    *, class_id: str, seat_id: int, product_lineage_uuids
+) -> dict[str, int]:
+    """``get_active_holding_quantity`` for many lineages in one query.
+
+    Returns ``{product_lineage_uuid: held}``, omitting lineages the seat holds
+    none of. One definition serves both, so a page listing many products and
+    the purchase command cannot disagree about what a student holds.
+    """
+    lineages = [uuid for uuid in product_lineage_uuids if uuid]
+    if not lineages:
+        return {}
+    events = EntitlementEvent.query.filter(
+        EntitlementEvent.class_id == class_id,
+        EntitlementEvent.target_seat_id == seat_id,
+        EntitlementEvent.product_id.in_(lineages),
     ).all()
-    granted = {event.entitlement_id for event in events if event.event_type == "GRANTED"}
     terminal = {
         event.entitlement_id for event in events
         if event.event_type in {"CONSUMED", "EXPIRED", "REVOKED"}
     }
-    return len(granted - terminal)
+    held: dict[str, int] = {}
+    for event in events:
+        if event.event_type == "GRANTED" and event.entitlement_id not in terminal:
+            held[event.product_id] = held.get(event.product_id, 0) + 1
+    return held
 
 
 def ensure_within_holding_limit(

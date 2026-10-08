@@ -214,3 +214,46 @@ def test_student_detail_offers_reverse_only_where_the_action_would_accept(app, g
         purchase = db.session.get(Transaction, goal_purchase["purchase_id"])
         assert _reversible_transaction_ids([purchase]) == frozenset(), \
             "a reversed purchase offers no second reversal"
+
+
+def test_shop_joined_lookup_counts_held_buy_ins_and_not_reversed_ones(app, goal_purchase):
+    """The shop's "Joined" state comes from one batched query over every goal on the page.
+
+    It must agree with the purchase command's per-lineage count, so a reversed
+    buy-in reads as not joined and the student may buy in again.
+    """
+    from app.services.entitlement_service import (
+        get_active_holding_quantities,
+        get_active_holding_quantity,
+    )
+
+    with app.app_context():
+        class_id, seat_id = goal_purchase["class_id"], goal_purchase["seat_id"]
+        seat = db.session.get(Seat, seat_id)
+        context = CanonicalContext(
+            user_id=seat.user_id, class_id=class_id, seat_id=seat_id, actor_role="student",
+        )
+        reversed_goal = goal_purchase["goal"]
+        held_goal = _publish(
+            class_id, goal_purchase["teacher_seat_id"], entitlement_type="COLLECTIVE_GOAL",
+            name="Movie Day", price="5.00", collective_goal_type="whole_class",
+            collective_goal_expires_at=utc_now() + timedelta(days=60),
+        )
+        _buy(context, held_goal)
+        purchase = db.session.get(Transaction, goal_purchase["purchase_id"])
+        execute_void_transaction(
+            purchase, correlation_id=purchase.correlation_id,
+            idempotency_key=f"goal-reversal:void:{purchase.id}",
+        )
+        db.session.commit()
+
+        lineages = [reversed_goal.product_lineage_uuid, held_goal.product_lineage_uuid]
+        batched = get_active_holding_quantities(
+            class_id=class_id, seat_id=seat_id, product_lineage_uuids=lineages,
+        )
+
+        assert batched == {held_goal.product_lineage_uuid: 1}
+        for lineage in lineages:
+            assert batched.get(lineage, 0) == get_active_holding_quantity(
+                class_id=class_id, seat_id=seat_id, product_lineage_uuid=lineage,
+            )
