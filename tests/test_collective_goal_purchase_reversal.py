@@ -6,8 +6,13 @@ with "Only delayed-use item purchases are voidable." The button and the action
 decided reversibility separately. The banking page asked
 ``resolve_purchase_resolution_eligibility``, which accepted any active
 non-insurance purchase; the action accepted delayed-use items only. The student
-detail page asked neither and offered Reverse on almost every row, including an
-NSF fee settled through an obligation, which SPEC-OPS-001 §VII makes final.
+detail page asked neither and offered Reverse on almost every row, including a
+rent payment, which SPEC-OPS-001 §VII makes final.
+
+The production NSF fee could not be reversed either: it had been written through
+the assessment mechanism, so the reverse path read it as obligation-related. An
+NSF fee is a Ledger fee, a side effect of a negative balance, not an obligation
+(DOM-OBL-001 §II.C), and Ledger reverses it like any other fee.
 
 DOM-STORE-001 §VIII.E lets a reversal withdraw a collective-goal buy-in with a
 refund, so the action now accepts it, and both pages and the action share one
@@ -174,36 +179,52 @@ def test_a_purchase_the_store_does_not_let_reversal_revoke_is_refused_before_mon
         assert purchase.id not in _reversible_transaction_ids([purchase])
 
 
-def test_student_detail_offers_reverse_only_where_the_action_would_accept(app, goal_purchase):
+def _post_charge(class_id, seat_id, *, key, amount, type, description):
+    with FEATContext("FEAT-LED-001", idempotency_key=f"goal-reversal:{key}"):
+        row = record_ledger_fixture(
+            seat_id=seat_id, class_id=class_id, amount=Decimal(amount),
+            type=type, description=description,
+        )
+        db.session.flush()
+        row_id = row.id
+    db.session.commit()
+    return row_id
+
+
+def _settle_obligation(class_id, seat_id, *, obligation_type, internal_ref, correlation_id, ledger_id):
     from app.feats.assess_obligation_feat import execute_assess_obligation
     from app.feats.satisfy_obligation_feat import execute_satisfy_obligation_payment
 
+    execute_assess_obligation(
+        seat_id=seat_id, class_id=class_id, internal_ref=internal_ref,
+        correlation_id=correlation_id, obligation_type=obligation_type,
+    )
+    db.session.commit()
+    execute_satisfy_obligation_payment(
+        correlation_id=correlation_id, class_id=class_id, seat_id=seat_id,
+        ledger_transaction_id=ledger_id,
+    )
+    db.session.commit()
+
+
+def test_student_detail_offers_reverse_only_where_the_action_would_accept(app, goal_purchase):
+    """A rent payment is final; an NSF fee is a Ledger fee, not an obligation (DOM-OBL-001 §II.C)."""
     with app.app_context():
         class_id, seat_id = goal_purchase["class_id"], goal_purchase["seat_id"]
         purchase = db.session.get(Transaction, goal_purchase["purchase_id"])
 
-        # A charge settled through an obligation, as the production NSF fee was.
-        with FEATContext("FEAT-LED-001", idempotency_key="goal-reversal:fee"):
-            fee = record_ledger_fixture(
-                seat_id=seat_id, class_id=class_id, amount=Decimal("-25.00"),
-                type="overdraft_fee", description="Non-sufficient funds fee",
-            )
-            db.session.flush()
-            fee_id = fee.id
-        db.session.commit()
-        execute_assess_obligation(
-            seat_id=seat_id, class_id=class_id, internal_ref="nsf:test",
-            correlation_id="goal-reversal:nsf", obligation_type="NSF_FEE",
-        )
-        db.session.commit()
-        execute_satisfy_obligation_payment(
-            correlation_id="goal-reversal:nsf", class_id=class_id, seat_id=seat_id,
-            ledger_transaction_id=fee_id,
-        )
-        db.session.commit()
+        rent_id = _post_charge(class_id, seat_id, key="rent", amount="-20.00",
+                               type="Rent Payment", description="Rent Payment")
+        _settle_obligation(class_id, seat_id, obligation_type="RENT", internal_ref="rent:monthly",
+                           correlation_id="goal-reversal:rent", ledger_id=rent_id)
+        fee_id = _post_charge(class_id, seat_id, key="fee", amount="-25.00",
+                              type="overdraft_fee", description="Non-sufficient funds fee")
+        _settle_obligation(class_id, seat_id, obligation_type="NSF_FEE", internal_ref="nsf:test",
+                           correlation_id="goal-reversal:nsf", ledger_id=fee_id)
 
+        rent = db.session.get(Transaction, rent_id)
         fee = db.session.get(Transaction, fee_id)
-        assert _reversible_transaction_ids([purchase, fee]) == {purchase.id}
+        assert _reversible_transaction_ids([purchase, rent, fee]) == {purchase.id, fee.id}
 
         execute_void_transaction(
             purchase, correlation_id=purchase.correlation_id,
@@ -214,6 +235,59 @@ def test_student_detail_offers_reverse_only_where_the_action_would_accept(app, g
         purchase = db.session.get(Transaction, goal_purchase["purchase_id"])
         assert _reversible_transaction_ids([purchase]) == frozenset(), \
             "a reversed purchase offers no second reversal"
+
+
+def test_an_nsf_fee_reverses_and_its_obligation_record_stays_as_history(app, goal_purchase):
+    """The production case: a $25 NSF fee written through the assessment mechanism. Ledger reverses it."""
+    from app.models import ObligationAssessment
+    from app.services import obligations_service
+
+    with app.app_context():
+        class_id, seat_id = goal_purchase["class_id"], goal_purchase["seat_id"]
+        fee_id = _post_charge(class_id, seat_id, key="fee-reverse", amount="-25.00",
+                              type="overdraft_fee", description="Non-sufficient funds fee")
+        _settle_obligation(class_id, seat_id, obligation_type="NSF_FEE", internal_ref="nsf:reverse",
+                           correlation_id="goal-reversal:nsf-reverse", ledger_id=fee_id)
+        before = get_available_balance(seat_id, class_id, "checking")
+        events_before = ObligationAssessment.query.filter_by(
+            correlation_id="goal-reversal:nsf-reverse").count()
+        assert obligations_service.is_obligation_related_transaction(fee_id) is False
+
+        fee = db.session.get(Transaction, fee_id)
+        execute_void_transaction(
+            fee, correlation_id=fee.correlation_id,
+            idempotency_key=f"goal-reversal:void:{fee_id}",
+        )
+        db.session.commit()
+
+        db.session.expire_all()
+        assert get_available_balance(seat_id, class_id, "checking") == before + Decimal("25.00")
+        assert has_exact_reversal(db.session.get(Transaction, fee_id))
+        assert ObligationAssessment.query.filter_by(
+            correlation_id="goal-reversal:nsf-reverse").count() == events_before, \
+            "the historical NSF record is neither rewritten nor extended"
+
+
+def test_a_rent_payment_stays_final(app, goal_purchase):
+    from app.feats.transaction_void_feat import ObligationTransactionNotVoidable
+    from app.services import obligations_service
+
+    with app.app_context():
+        class_id, seat_id = goal_purchase["class_id"], goal_purchase["seat_id"]
+        rent_id = _post_charge(class_id, seat_id, key="rent-final", amount="-20.00",
+                               type="Rent Payment", description="Rent Payment")
+        _settle_obligation(class_id, seat_id, obligation_type="RENT", internal_ref="rent:final",
+                           correlation_id="goal-reversal:rent-final", ledger_id=rent_id)
+        assert obligations_service.is_obligation_related_transaction(rent_id) is True
+
+        rent = db.session.get(Transaction, rent_id)
+        with pytest.raises(ObligationTransactionNotVoidable):
+            execute_void_transaction(
+                rent, correlation_id=rent.correlation_id,
+                idempotency_key=f"goal-reversal:void:{rent_id}",
+            )
+        db.session.rollback()
+        assert not has_exact_reversal(db.session.get(Transaction, rent_id))
 
 
 def test_shop_joined_lookup_counts_held_buy_ins_and_not_reversed_ones(app, goal_purchase):

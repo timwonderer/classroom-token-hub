@@ -3319,12 +3319,9 @@ def _reversible_transaction_ids(transactions):
     candidates = [tx for tx in transactions if tx.type not in _STUDENT_DETAIL_UNREVERSIBLE_TYPES]
     if not candidates:
         return frozenset()
-    obligation_related = {
-        row[0]
-        for row in db.session.query(ObligationAssessment.ledger_transaction_id)
-        .filter(ObligationAssessment.ledger_transaction_id.in_([tx.id for tx in candidates]))
-        .all()
-    }
+    from app.services.obligations_service import obligation_related_transaction_ids
+
+    obligation_related = obligation_related_transaction_ids(tx.id for tx in candidates)
     reversible = set()
     for tx in candidates:
         if tx.id in obligation_related:
