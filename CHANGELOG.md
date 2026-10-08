@@ -15,7 +15,7 @@ Everything merged to `main` since v2.1.1. Three untagged releases shipped part o
 - `35bad089a` (2026-10-05 05:13Z): the sysadmin UI shell (#1489);
 - `1cdbf03da` (2026-10-06 03:10Z): teacher-ticket routing (#1491).
 
-The last two have no release record. Against `1cdbf03da`, which production runs, this release changes application behavior through #1522 only: the hall-pass settings gate and preset removal. The rest is documentation, tests and CI:
+The last two have no release record. Against `1cdbf03da`, which production runs, this release changes application behavior in three places: #1522, the hall-pass settings gate and preset removal; #1526, under which a purchase needs the money, a collective goal is one buy-in per student, and a collective-goal purchase and the NSF fee can be reversed; and #1527, which drops a cross-class query that ran on every page render. The rest is documentation, tests and CI:
 - the P0A migration contract (#1518, #1519, #1521);
 - the P0B record (#1523);
 - the every-PR deprecated-symbol guard (#1524).
@@ -39,6 +39,21 @@ There is no schema migration and no change to the application's Python dependenc
 - **Docs site npm advisories.** The `docs-site` lockfile moves `fast-uri` to 4.2.1, `brace-expansion` to 5.0.12 and `http-cache-semantics` to 4.3.0, closing Dependabot alerts #78-#82 and #84 (supersedes #1458). Alert #83 (`braces`, no patched release) is build-time only for the static docs site and is left for dismissal.
 
 ### Fixed
+
+- **The store no longer lets a student spend money they do not have, and a collective goal is one buy-in per student** (owner rulings 2026-10-07).
+  - **What happened.** On 2026-10-07 a student moved all of checking to savings, then bought 32 units of a $750 whole-class collective goal. The purchase posted $24,000 into a negative balance, a $25 non-sufficient-funds fee was added, and 32 buy-ins went to that one seat. The documents of the time prescribed exactly that: a purchase protection could not cover went through and drew the fee (`SPEC-ECON-003` 2.2 §4.5.1.1A, `FEAT-LED-000` 0.3). Nothing limited a collective goal's quantity.
+  - **Now.** A purchase proceeds only when checking, alone or with a full overdraft-protection transfer from savings, covers it. Otherwise it is refused before anything posts, with no fee, as a declined card purchase would be (`FEAT-STOR-001` 3.2, `SPEC-ECON-003` 2.3, `FEAT-LED-000` 0.5). The shop shows how much the student can spend, and the purchase dialog will not confirm a total above it.
+  - **Collective goals.** A collective goal is bought one unit at a time, and a student holding a buy-in cannot buy another; the card reads **Joined** (`DOM-STORE-001` 5.5, `SPEC-STORE-001` 1.6). The cap applies whatever holding limit is configured, as it already did for privileges.
+  - **The overdraft fee.** No path in the app charges the fee any more. The store purchase was the only one, and bill payments never did. The teacher guide now says so. `record_nsf_fee_obligation` has no caller left; its removal is left to U11.
+  - **The 2026-10-07 transaction is not changed by this release.** The owner is handling it.
+
+- **A collective-goal purchase can be reversed, and Reverse appears only where it works.** The teacher could not reverse the 2026-10-07 purchase: the button was shown, and every press failed with "Transaction could not be voided." The button and the action decided reversibility separately. The banking page accepted any active non-insurance purchase, the action accepted delayed-use items only, and the student page offered Reverse on almost every row, including rent payments, which are final (`SPEC-OPS-001` §VII).
+  - Reversing a collective-goal buy-in now refunds it and revokes every unit it granted, as `DOM-STORE-001` §VIII.E permits. All units must still be active. The expiry sweep skips revoked buy-ins, so a reversed purchase cannot be refunded a second time when the goal lapses.
+  - The banking page, the student page and the action share one gate (`resolve_purchase_resolution_eligibility`). Delayed-use and collective-goal purchases are reversible. Immediate-use items, purchased hall passes, insurance and privileges are not; a privilege is in force from the moment it is bought (owner ruling 2026-10-07).
+  - A refused reversal tells the teacher why, and an obligation-related charge says to use a manual credit instead.
+
+- **The 2026-10-07 NSF fee can be reversed.** An NSF fee is not an obligation. It is a Ledger fee, a side effect of a negative balance: one debit, never assessed and later satisfied, so a waiver does not apply to it. It had been written through the obligation-assessment mechanism, with an assessment and a payment pointing at the debit, so the reverse path read it as obligation-related and refused it. Those `NSF_FEE` records are now treated as history, not obligation facts, and Ledger reverses the fee like any other (`DOM-OBL-001` 3.3 §II.C). Rent, insurance-premium and late-fee payments remain final. The NSF records stay in place, and nothing is added to them.
+  - `DOM-OBL-001` 3.3 also states that CTH charges no NSF or overdraft fee, and that a failed obligation payment leaves the obligation unpaid, accumulating, and subject to late fees. `SPEC-ECON-003` 2.3 §4.5.1.1 is aligned with it. The full removal of the retired fee machinery follows in a later release.
 
 - **Every page render no longer runs an unscoped payroll query.** `wsgi.py` registered a context processor, `inject_payroll_status`, that ran `PayrollSettings.query.first()` on every template render in production. It asked whether *any* class had payroll settings, a read across every class, and no template used the answer. It is deleted.
   - It also made four accessibility tests depend on test order. The fixture gate forbids database access while rendering, and the processor is attached only when `wsgi` is imported, which two `tests/dom` files do. The full suite therefore failed `test_axe_fixture_gate.py` (3 tests) and `test_axe_fixture_pages.py`, while each file passed on its own. A new gate test imports `wsgi` first, so the gate checks the hooks production actually runs.

@@ -26,7 +26,7 @@ There are two of them, and they are independent — you can run either, both, or
 | Control | What it does |
 | --- | --- |
 | **Overdraft protection** | *When on, a negative checking transaction pulls from savings before it overdraws.* |
-| **Overdraft Fee (flat)** | *Charged when an account overdraws. Leave blank to charge no fee.* The field's placeholder reads *Leave blank to disable*. |
+| **Overdraft Fee (flat)** | The field's placeholder reads *Leave blank to disable*. It is never charged for a store purchase; see below. |
 
 Finish with **Save Banking Settings**.
 
@@ -36,14 +36,13 @@ The system works through this in order:
 
 1. **Checking covers it.** The purchase goes through. Nothing else happens.
 2. **Checking is short, protection is on, and savings covers the whole shortfall.** The missing amount moves from savings to checking, then the purchase goes through. No fee.
-3. **Checking is still short and a fee is set.** The purchase goes through, checking goes negative, and the fee is charged on top.
-4. **Checking is still short and no fee is set.** The purchase is refused for insufficient funds.
+3. **Checking is still short.** The purchase is refused. Nothing is charged, nothing is granted, and no fee is added, the way a declined card costs nothing at the register.
 
-Step 4 is the default with both controls off, and it is the strictest setting: students simply cannot spend money they do not have.
+A purchase never takes checking below zero, whatever the fee is set to. Students see this before they buy: the store tells them how much they can spend, and it will not let them confirm a purchase they cannot afford.
 
 ### Partial savings does not help
 
-Protection is all-or-nothing. If a student is $5 short and has $3 in savings, the transfer does not happen — $3 is not enough to close the gap, so the system moves nothing and falls through to the fee or the refusal.
+Protection is all-or-nothing. If a student is $5 short and has $3 in savings, the transfer does not happen — $3 is not enough to close the gap, so the system moves nothing and the purchase is refused.
 
 Students often read this as a bug. It is not. Tell them to move the money to checking themselves before buying.
 
@@ -56,10 +55,10 @@ If you have not set a pay rate yet, the line instead reads *Set a payroll pay ra
 ## Important notes
 
 > [!IMPORTANT]
-> **Overdraft protection applies to store purchases.** It is the purchase path that is allowed to reach into savings. Rent, fines, and other administrative debits do not pull from savings on the student's behalf.
+> **Students cannot spend money they do not have.** Setting a fee does not unlock a purchase. A purchase that checking and a full savings transfer cannot cover is refused, with no fee.
 
-> [!WARNING]
-> **A fee turns refusal into permission.** With no fee set, an unaffordable purchase is blocked. The moment you set a fee, the same purchase succeeds and the student ends up with a negative balance plus the fee. If you want a hard spending wall, leave the fee blank.
+> [!NOTE]
+> **Where the fee applies.** The overdraft fee is for a bill payment that fails, not for spending in the store. No bill payment charges it today, so in practice setting it has no effect yet.
 
 > [!NOTE]
 > **Overdraft fees reuse the classroom fine band.** *A fee is only active while a value is set.* Clearing the field removes the fee entirely rather than setting it to zero.

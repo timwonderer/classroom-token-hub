@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-STOR-001 | 3.1 | 2026-09-01 | 3.0 | Normative |
+| FEAT-STOR-001 | 3.2 | 2026-10-07 | 3.1 | Normative |
 
 ## I. Purpose
 
@@ -124,6 +124,9 @@ Validate, as applicable:
   limit, independent of current holding quantity;
 - the requested grant would not cause the student's active holding quantity to
   exceed the product's source-independent holding limit;
+- for a collective-goal product, the requested quantity is exactly one and the
+  student holds no active buy-in for the product. A collective goal is one buy-in
+  per student, whatever holding limit is configured (owner ruling 2026-10-07);
 - the product has not been prospectively disabled for new acquisition.
 
 The FEAT SHALL NOT copy product configuration into Store and Entitlements persistence merely to make later reads convenient.
@@ -160,10 +163,19 @@ Calculate the intended purchase amount from authoritative Policy configuration.
 
 Construct the intended Ledger plan and submit it through the lawful Ledger resolution path.
 
-The Ledger resolution result may:
+A purchase requires sufficient funds (owner ruling 2026-10-07). It may proceed only when
+checking covers the purchase amount, either alone or together with a full
+overdraft-protection transfer from savings where the class enables protection
+(`SPEC-ECON-003` §4.5.1.1A). A purchase SHALL NOT post into a negative checking
+balance. When the funds do not cover it, the FEAT refuses with
+`INSUFFICIENT_FUNDS` before any mutation: nothing posts, no entitlement is
+granted, and no fee or obligation results, because no agreement was formed
+(`SPEC-ECON-003` §4.5.1.1). A purchase of amount zero needs no funds.
+
+Within that rule, the Ledger resolution result may:
 
 - accept the plan;
-- lawfully transform the plan, such as through configured overdraft/recovery behavior; or
+- lawfully transform the plan through a full overdraft-protection transfer; or
 - deny the purchase.
 
 A denied financial plan SHALL abort with no entitlement grant.
@@ -245,6 +257,11 @@ Collective-goal purchases use the ordinary purchase path.
 The FEAT SHALL NOT create a collective-progress record merely because the configured offering is collective.
 
 Each purchased unit creates one entitlement lifecycle according to the product contract.
+
+A collective goal is one buy-in per student (owner ruling 2026-10-07): a purchase is for exactly
+one unit, and a student holding an active buy-in for the product cannot buy
+another. Progress counts students, not units (`DOM-STORE-001` §VIII.E.5), so a
+second unit would move money without moving the goal.
 
 Collective activation or exercisability remains a projection over:
 
@@ -328,7 +345,8 @@ Representative failures include:
 - `PURCHASE_LIMIT_REACHED`
 - `INVENTORY_UNAVAILABLE`
 - `OBLIGATION_BLOCK`
-- `INSUFFICIENT_FUNDS`
+- `INSUFFICIENT_FUNDS` (no fee; nothing posts)
+- `COLLECTIVE_GOAL_ALREADY_JOINED`
 - `INSURANCE_NOT_PURCHASABLE_VIA_STORE` (insurance is acquired via FEAT-OBL-004, not this FEAT)
 - `IDEMPOTENCY_CONFLICT`
 - `CROSS_DOMAIN_FAILURE`
@@ -388,6 +406,13 @@ Store pricing guidance SHALL use the Store product Helper contract in
 `SPEC-ECON-003`: currency first, CWI share second, economic-role reference
 position, and the teacher-selected purchase scenario. It MUST NOT use the
 retired Basic, Standard, Premium, or Luxury tier model.
+
+**3.2 (2026-10-07)**, owner ruling 2026-10-07: a purchase requires sufficient funds (§VI.E) and
+is refused with no fee when checking, with any full overdraft-protection transfer,
+does not cover it. Supersedes 3.1's allowance for an overdraft transform that
+leaves checking negative. A collective goal is one buy-in per student (§VI.B,
+§VII.E). Production evidence: on 2026-10-07 a 32-unit collective purchase posted
+into a negative balance with an NSF fee; this revision forbids both.
 
 Revisions to this document must:
 
