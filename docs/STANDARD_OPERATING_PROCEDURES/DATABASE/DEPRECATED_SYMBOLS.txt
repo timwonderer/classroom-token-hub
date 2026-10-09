@@ -23,3 +23,7 @@ bundle_quantity
 # Hall-pass destination preset, removed 2026-10-07 by owner ruling (#1522): a class without saved
 # hall-pass settings offers no destinations (FEAT-PROD-002 §III; SOP-DB-002 v2.2).
 get_default_pass_types
+
+# Hall-pass use writing a Store CONSUMED event, removed 2026-10-09 by owner ruling: the hall-pass log
+# is the only consumption record (FEAT-PROD-002 §III; DOM-STORE-001 §VIII.E.6; SOP-DB-002 v2.4).
+consume_hall_pass

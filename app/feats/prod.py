@@ -19,7 +19,6 @@ from app.services.attendance_service import (CLOSED_SESSION_SETTLEMENT_RULE, loc
 from app.services.context_resolver import CanonicalContext
 from app.services.attendance_writer_service import AttendanceSessionResult, record_attendance_session_command
 from app.services.entitlement_service import (
-    consume_hall_pass,
     get_available_hall_pass_grant,
     get_hall_pass_balance,
 )
@@ -205,8 +204,10 @@ def _record_hall_pass_log_impl(
     idempotency_key: str | None = None,
     reference_time_utc=None,
 ) -> HallPassLogResult:
-    """Productivity DOMAIN command: consume a hall-pass entitlement and record the
-    HallPassLog. Runs within the CALLING FEAT's single context — not a FEAT
+    """Productivity DOMAIN command: use a hall-pass entitlement and record the
+    HallPassLog. The log is the use: it names the pass's ``entitlement_id`` in
+    ``hall_pass_id``, and nothing is written to the entitlement history
+    (FEAT-PROD-002 §III; owner ruling 2026-10-09). Runs within the CALLING FEAT's single context — not a FEAT
     executor (INV-ARC-006, INV-ARC-021 §V.2). ``record_hall_pass_log`` is the thin
     FEAT-PROD-002 boundary for a top-level (route) ingress.
     """
@@ -247,27 +248,27 @@ def _record_hall_pass_log_impl(
 
     if not requested_by_seat_id or not ctx.class_id:
         raise ValueError("Hall-pass consumption requires requested_by_seat_id and class_id")
-    consume_event = None
-    hall_pass_grant = get_available_hall_pass_grant(requested_by_seat_id, ctx.class_id)
-    if consume_pass and hall_pass_grant is None:
-        raise ValueError("No available hall-pass entitlement grant")
+    used_pass = None
     if consume_pass:
-        consume_event, _balance = consume_hall_pass(
-            requested_by_seat_id,
-            ctx.class_id,
-            trigger_id=idempotency_key or f"hall_pass_log:{ctx.class_id}:{requested_by_seat_id}:{now.isoformat()}",
-        )
-        if not consume_event.correlation_id:
+        # Serialize uses for this seat, so two approvals cannot pick the same
+        # pass; the second waits and takes the next one. The unique index on
+        # hall_pass_logs.hall_pass_id is the database's own guarantee that an
+        # entitlement_id is spent at most once.
+        lock_attendance_seat(requested_by_seat_id, ctx.class_id)
+        used_pass = get_available_hall_pass_grant(requested_by_seat_id, ctx.class_id)
+        if used_pass is None:
+            raise ValueError("No available hall-pass entitlement grant")
+        if not used_pass.correlation_id:
             raise ValueError("Hall-pass entitlement consumption missing correlation_id")
-        if not consume_event.entitlement_id:
+        if not used_pass.entitlement_id:
             raise ValueError("Hall-pass entitlement consumption missing entitlement_id")
 
     # A non-consuming destination has no entitlement lifecycle to reference, and
     # HallPassLog.hall_pass_id is documented as the *consumed* pass. Naming an
     # unconsumed grant there made two claims that are not true: the grant stayed
     # available, so a later consuming approval could consume and record the same
-    # entitlement_id (the column is indexed but not unique, so two logs would
-    # carry it while only one consumed a pass), and the copied correlation_id was
+    # entitlement_id (two logs would carry it while only one consumed a pass; the
+    # column is now unique where set), and the copied correlation_id was
     # the grant's own, which identifies the purchase rather than this approval.
     fallback_correlation_id = (
         idempotency_key
@@ -278,9 +279,9 @@ def _record_hall_pass_log_impl(
         approved_by_seat_id=approved_by_seat_id,
         class_id=ctx.class_id,
         timestamp=now,
-        hall_pass_id=consume_event.entitlement_id if consume_event else None,
+        hall_pass_id=used_pass.entitlement_id if used_pass else None,
         correlation_id=(
-            consume_event.correlation_id if consume_event else fallback_correlation_id
+            used_pass.correlation_id if used_pass else fallback_correlation_id
         ),
         policy_uuid=policy_uuid,
         destination=destination,

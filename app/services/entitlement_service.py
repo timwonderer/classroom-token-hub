@@ -12,8 +12,10 @@ from app.extensions import db
 from app.models import EntitlementEvent, Seat, StoreProduct
 from app.feats.base import generate_correlation_id
 from app.services.entitlement_read_service import (
+    ended_entitlement_ids,
     get_entitlement_balance,
     get_entitlement_lineage_terminal_event,
+    hall_pass_use_log,
 )
 from app.utils.canonical_temporal_resolver import (
     SYSTEM_LEVEL_EVALUATION,
@@ -82,10 +84,10 @@ def get_active_holding_quantities(
         EntitlementEvent.target_seat_id == seat_id,
         EntitlementEvent.product_id.in_(lineages),
     ).all()
-    terminal = {
-        event.entitlement_id for event in events
-        if event.event_type in {"CONSUMED", "EXPIRED", "REVOKED"}
-    }
+    # A used hall pass is ended by its log, not by an event (FEAT-PROD-002 §III).
+    terminal = ended_entitlement_ids(
+        class_id, {event.entitlement_id for event in events if event.event_type == "GRANTED"}
+    )
     held: dict[str, int] = {}
     for event in events:
         if event.event_type == "GRANTED" and event.entitlement_id not in terminal:
@@ -432,48 +434,19 @@ def _available_hall_pass_grant(seat_id: int, class_id: str) -> EntitlementEvent 
         .order_by(EntitlementEvent.timestamp.asc(), EntitlementEvent.event_id.asc())
         .all()
     )
+    ended = ended_entitlement_ids(class_id, [grant.entitlement_id for grant in grants])
     for grant in grants:
-        terminal_event = get_entitlement_lineage_terminal_event(grant.entitlement_id, class_id)
-        if terminal_event is None:
+        if grant.entitlement_id not in ended:
             return grant
     return None
 
 
-def consume_hall_pass(
-    seat_id: int,
-    class_id: str,
-    *,
-    trigger_id: str,
-) -> tuple[EntitlementEvent, int]:
-    """Consume one hall pass from an existing grant and return (event, balance)."""
-    grant = _available_hall_pass_grant(seat_id, class_id)
-    if grant is None:
-        raise ValueError("No available hall-pass entitlement grant to consume")
-
-    now = _current_utc()
-    event = EntitlementEvent(
-        class_id=class_id,
-        target_seat_id=seat_id,
-        actor_seat_id=seat_id,
-        entitlement_id=grant.entitlement_id,
-        product_id=grant.product_id,
-        entitlement_type="HALL_PASS",
-        acquisition_type=grant.acquisition_type,
-        event_type="CONSUMED",
-        correlation_id=grant.correlation_id,
-        payload={
-            "source": "consume_hall_pass",
-            "trigger_id": trigger_id,
-        },
-        timestamp=now,
-    )
-    db.session.add(event)
-    db.session.flush()
-    return event, get_hall_pass_balance(seat_id, class_id)
-
-
 def get_available_hall_pass_grant(seat_id: int, class_id: str) -> EntitlementEvent | None:
-    """Return one available hall-pass grant without consuming it."""
+    """Return the oldest usable hall pass (FIFO), writing nothing.
+
+    Approval uses the pass by naming it in ``hall_pass_logs.hall_pass_id``
+    (FEAT-PROD-002 §III); no entitlement event is written for the use.
+    """
     return _available_hall_pass_grant(seat_id, class_id)
 
 
@@ -496,8 +469,9 @@ def consume_entitlement(
     (enforced by ix_entitlement_events_one_terminal_per_lineage).
 
     This is the canonical write path for non-hall-pass consumption
-    (store items, privileges, etc.). Hall pass consumption uses
-    consume_hall_pass() which also handles balance derivation.
+    (store items, privileges, etc.). A hall pass is never consumed here: its
+    use is the hall-pass log (FEAT-PROD-002 §III), and this refuses a pass
+    that a log already names.
     """
     terminal = get_entitlement_lineage_terminal_event(entitlement_id, class_id)
     if terminal is not None:
@@ -505,6 +479,8 @@ def consume_entitlement(
             f"Entitlement {entitlement_id} already has terminal event: "
             f"{terminal.event_type}"
         )
+    if hall_pass_use_log(entitlement_id, class_id) is not None:
+        raise ValueError(f"Entitlement {entitlement_id} is a hall pass already used")
 
     now = _current_utc()
     event = EntitlementEvent(
@@ -566,6 +542,8 @@ def expire_entitlement(
             f"Entitlement {entitlement_id} already has terminal event: "
             f"{existing.event_type}"
         )
+    if hall_pass_use_log(entitlement_id, class_id) is not None:
+        raise ValueError(f"Entitlement {entitlement_id} is a hall pass already used")
 
     now = effective_at or _current_utc()
     event = EntitlementEvent(
@@ -610,6 +588,8 @@ def revoke_entitlement(
             f"Entitlement {entitlement_id} already has terminal event: "
             f"{terminal.event_type}"
         )
+    if hall_pass_use_log(entitlement_id, class_id) is not None:
+        raise ValueError(f"Entitlement {entitlement_id} is a hall pass already used")
 
     event = EntitlementEvent(
         class_id=class_id,
@@ -663,11 +643,10 @@ def expire_rent_perks(
 
     now = _current_utc()
     expired_count = 0
+    ended = ended_entitlement_ids(class_id, [grant.entitlement_id for grant in grants])
     for grant in grants:
-        terminal = get_entitlement_lineage_terminal_event(
-            grant.entitlement_id, class_id,
-        )
-        if terminal is not None:
+        # A used pass is already spent; expiring it would end it twice.
+        if grant.entitlement_id in ended:
             continue
         event = EntitlementEvent(
             class_id=class_id,

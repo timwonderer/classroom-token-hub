@@ -8,6 +8,16 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A purchased hall pass can be reversed** (owner ruling 2026-10-08). Reversing a purchase removes every item it paid for (`SPEC-OPS-001` §3.3), hall passes included; DOM-STORE-001's direct-grant rule governs removing a pass on its own, not a reversed purchase. v2.2.0 wrongly excluded hall passes, so a 1,000-pass purchase made on 2026-10-08 without the money could not be reversed. The reversal stays all-or-nothing: a purchase with any pass already used is refused, with nothing changed. A pending request does not block it; approving that request afterwards takes another pass, or is refused when none is left.
+
+### Changed
+
+- **Using a hall pass writes nothing to the entitlement history** (owner ruling 2026-10-09). The hall-pass log is the only consumption record: approval names the pass's `entitlement_id` in `hall_pass_logs.hall_pass_id`, as `FEAT-PROD-002` §III and `DOM-STORE-001` §VIII.E.6 require, and no longer also writes a Store `CONSUMED` event. One rule now decides whether a pass is spent (a terminal event, or a log naming it), and every reader uses it: the balance, which pass is used next, teacher removal, rent-perk expiry, item status, the store's held count, rent privileges, insurance's claim basis and the reversal check. Historical hall passes carry both records and read the same. `consume_hall_pass` is removed and registered as a deprecated symbol (`SOP-DB-002` 2.4).
+- **A hall pass can be spent only once, enforced by the database.** Migration `35a9a0d3ab93` adds the partial unique index `uq_hall_pass_logs_hall_pass_id` (`DOM-CORE-002` 1.17). It replaces the protection the one-terminal-event index gave while use also wrote `CONSUMED`. Approval also locks the student's seat, so two approvals at once take two different passes instead of colliding. The migration refuses, changing nothing, if any pass is already logged twice; production had 17 logs on 17 distinct passes. EXPAND only and reversible.
+- The teacher guide's student-detail page describes **Reverse** as it works today (it still described a **Void** button), including which entries can be reversed.
+
 ## [2.2.0] - 2026-10-07 — Hall passes require teacher settings, deprecated symbols checked on every PR, P0B baseline
 
 Everything merged to `main` since v2.1.1. Three untagged releases shipped part of it (`SOP-DB-004` §X.4):

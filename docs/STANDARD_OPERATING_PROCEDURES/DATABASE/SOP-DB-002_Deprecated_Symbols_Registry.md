@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DB-002 | 2.3 | 2026-10-07 | 2.2 | Normative |
+| SOP-DB-002 | 2.4 | 2026-10-09 | 2.3 | Normative |
 
 ## I. Purpose
 
@@ -84,6 +84,7 @@ reintroduced preset is a defect (FEAT-PROD-002 §III; DOM-POL-001 §VII).
 | `is_bundle` | A quantity bought at a bulk price (`bulk_discount_*`, SPEC-STORE-001) | Enforced |
 | `bundle_quantity` | The purchase `quantity` (SPEC-STORE-001) | Enforced |
 | `get_default_pass_types` | None. Destinations are only the ones the teacher saved (`HallPassSettings.get_pass_types()`); without settings, hall passes are unavailable | Enforced |
+| `consume_hall_pass` | None. Approval names the pass in `hall_pass_logs.hall_pass_id`, which is the only consumption record; it writes no entitlement event (`get_available_hall_pass_grant` selects the pass) | Enforced |
 
 ## VII. Retired Symbols Not Enforceable by Literal Scan
 
@@ -128,6 +129,12 @@ Revisions to this document must:
 4. Maintain consistency with `INV-CORE-000`, `INV-ARC-019` and `DOM-CORE-002`.
 
 ## X. Change Notes
+
+**Version 2.4 (2026-10-09):**
+- Registered `consume_hall_pass` in §VI and `DEPRECATED_SYMBOLS.txt`. It wrote a Store `CONSUMED`
+  event on every hall-pass approval, duplicating the `hall_pass_logs` row that DOM-STORE-001
+  §VIII.E.6 makes the only consumption record (owner ruling 2026-10-09). A scan of `app/`,
+  `templates/`, `scripts/` and `static/` on 2026-10-09 found no occurrence.
 
 **Version 2.3 (2026-10-07):**
 - Enforced the registry on every pull request. Until 2.2 the scan ran only in the Schema Change Gate,

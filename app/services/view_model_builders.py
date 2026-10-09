@@ -159,6 +159,12 @@ def build_entitlement_list_view(seat_id: int, class_id: str) -> list[Entitlement
             .with_entities(EntitlementEvent.timestamp)
             .first()
         )
+        if consumed_at is None and event.entitlement_type == "HALL_PASS":
+            # A hall pass is used by its log, which writes no CONSUMED event.
+            from app.services.entitlement_read_service import hall_pass_use_log
+
+            use_log = hall_pass_use_log(event.entitlement_id, class_id)
+            consumed_at = (use_log.timestamp,) if use_log else None
 
         views.append(
             EntitlementListView(
