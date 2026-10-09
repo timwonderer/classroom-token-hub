@@ -8,9 +8,9 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
-## [2.2.0] - 2026-10-07 — Hall passes require teacher settings, deprecated symbols checked on every PR, P0B baseline
+## [2.2.0] - 2026-10-09 — A purchase needs the money, hall passes require teacher settings, sysadmin log viewers removed, P0B baseline
 
-Everything merged to `main` since v2.1.1. Three untagged releases shipped part of it (`SOP-DB-004` §X.4):
+Everything merged to `main` since v2.1.1, released as `5ebae62db` on 2026-10-09 at 07:10 UTC ([record](docs/ops/audits/DEPLOY_2026-10-09_5ebae62db.md)). Three untagged releases shipped part of it (`SOP-DB-004` §X.4):
 - `381a12d49` (2026-10-05 01:25Z): support notifications (#1488), the backup-tool documentation (#1485) and the security fixes (#1486);
 - `35bad089a` (2026-10-05 05:13Z): the sysadmin UI shell (#1489);
 - `1cdbf03da` (2026-10-06 03:10Z): teacher-ticket routing (#1491).

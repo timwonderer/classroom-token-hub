@@ -1,7 +1,7 @@
 # Classroom Token Hub - Development Priorities
 
-**Last Updated:** 2026-10-04
-**Current Released Version:** 2.1.1 (`2bdfac65e`), the latest tag, deployed to production 2026-10-04. v2.0.0 launched 2026-09-26
+**Last Updated:** 2026-10-09
+**Current Released Version:** 2.2.0 (`5ebae62db`), the latest tag, deployed to production 2026-10-09. v2.0.0 launched 2026-09-26
 **Engineering State:** v2 in production; post-launch hardening
 **Active Integration Branch:** `main`
 
@@ -50,7 +50,7 @@ Run once after clone:
 `hooks/post-checkout` rewrites `DATABASE_URL` in `.env` on every checkout. Check it before relying
 on a custom database URL.
 
-## Current State (2026-10-04)
+## Current State (2026-10-09)
 
 ### In production
 
@@ -72,12 +72,21 @@ on a custom database URL.
   `docs/ops/audits/DEPLOY_2026-10-02_5ac05ea6f.md`.
 - **Untagged releases, 2026-10-03 and 2026-10-04.** `ad9574334` (#1470 and the changes merged after
   v2.1.0; `docs/ops/audits/DEPLOY_2026-10-03_ad9574334.md`) and the hotfix `4c2fc4bc4` (#1476, off `main`).
-- **v2.1.1** (`2bdfac65e`, deployed 2026-10-04). Production runs this release: attendance correction
+- **v2.1.1** (`2bdfac65e`, deployed 2026-10-04): attendance correction
   (#1477, with three forward-only migrations), store redemption decisions (#1473), the POST-only sysadmin
   logout (#1482) and the #1478/#1479 performance fixes. See the `[2.1.1]` section of the CHANGELOG and
   `docs/ops/audits/DEPLOY_2026-10-04_2bdfac65e.md`; the same window updated the host kernel and took the
   first restore-verified backups. Two checks are still open: hall passes in a real class on one worker,
   and the first automatic payday on 2026-10-10. Restoring two workers waits on the first (SOP-DEP-001 v2.6).
+- **Untagged releases, 2026-10-05 and 2026-10-06.** `381a12d49` (#1485, #1486, #1488;
+  `docs/ops/audits/DEPLOY_2026-10-04_381a12d49.md`), `35bad089a` (#1489) and `1cdbf03da` (#1491). The last
+  two have no release record.
+- **v2.2.0** (`5ebae62db`, deployed 2026-10-09). Production runs this release: a store purchase needs the
+  money and a collective goal is one buy-in per student (#1526), collective-goal purchases and the NSF fee
+  can be reversed (#1526), hall passes require teacher settings (#1522), the per-render cross-class payroll
+  query is gone (#1527), and the sysadmin log viewers are removed (#1528). No migration. See the `[2.2.0]`
+  section of the CHANGELOG and `docs/ops/audits/DEPLOY_2026-10-09_5ebae62db.md`. Next: v2.2.1 makes
+  purchased hall passes reversible, and the NSF fee machinery is retired in a later release.
 - All ten domains (Identity, Class Configuration, Ledger, Productivity & Payroll, Obligations,
   Store & Entitlements, Operations, Interpretation, Policies, Support) run on the v2 model:
   `User` → `Seat` → `IdentityProfile`, with `ClassEconomy.class_id` as the tenant boundary and
