@@ -70,7 +70,7 @@ A reversal adds a refund entry that cancels the original amount. The original st
 
 Reversing a store purchase also removes every item it paid for, including hall passes and collective-goal buy-ins. It all goes back together or not at all, so if any of those items was already used, expired or removed, the purchase can't be reversed; give a manual credit instead.
 
-**Reverse** appears only on entries that can be reversed. It doesn't appear on rent or insurance payments, on immediate-use items, privileges or insurance purchases, on refunds, or on entries already reversed.
+**Reverse** appears only on entries that can be reversed. It doesn't appear on rent or insurance payments, on immediate-use items, privileges or insurance purchases, on refunds or the "item removed" entry a reversal adds, or on entries already reversed.
 
 ### Items tab
 

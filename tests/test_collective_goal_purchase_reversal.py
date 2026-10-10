@@ -331,3 +331,67 @@ def test_shop_joined_lookup_counts_held_buy_ins_and_not_reversed_ones(app, goal_
             assert batched.get(lineage, 0) == get_active_holding_quantity(
                 class_id=class_id, seat_id=seat_id, product_lineage_uuid=lineage,
             )
+
+
+def _reversal_rows(class_id, seat_id):
+    return (
+        Transaction.query
+        .filter(Transaction.class_id == class_id, Transaction.seat_id == seat_id,
+                Transaction.type.in_(("REVERSAL", "void_item_removed")))
+        .order_by(Transaction.id)
+        .all()
+    )
+
+
+def test_the_rows_a_purchase_reversal_writes_offer_no_reverse(app, goal_purchase):
+    """Reversing a purchase writes a REVERSAL and a $0 item-removed row in one
+    operation (SPEC-OPS-001 §3.5). Both are the compensation, which is terminal
+    (§3.1, §3.6). Production showed Reverse on the item-removed row (2026-10-10)."""
+    with app.app_context():
+        class_id, seat_id = goal_purchase["class_id"], goal_purchase["seat_id"]
+        purchase = db.session.get(Transaction, goal_purchase["purchase_id"])
+        execute_void_transaction(
+            purchase, correlation_id=purchase.correlation_id,
+            idempotency_key=f"goal-reversal:void:{purchase.id}",
+        )
+        db.session.commit()
+
+        rows = _reversal_rows(class_id, seat_id)
+        assert sorted(row.type for row in rows) == ["REVERSAL", "void_item_removed"]
+        assert _reversible_transaction_ids(rows) == frozenset()
+
+
+def test_reversing_an_item_removed_row_is_refused_and_writes_nothing(app, client):
+    from app.services.ledger_correction_service import ReversalNotAuthorized, reverse_transaction
+
+    classroom = initialize_as_teacher("chemistry_p1", client, app)
+    with app.app_context():
+        seat_id, context = _student_context(classroom)
+        _fund(classroom.class_id, seat_id, "1000.00", "removed")
+        purchase = _buy(context, _goal(classroom.class_id, classroom.teacher_seat_id, "Removed Goal"))
+        execute_void_transaction(
+            purchase, correlation_id=purchase.correlation_id,
+            idempotency_key=f"goal-reversal:void:{purchase.id}",
+        )
+        db.session.commit()
+        (removed,) = [row for row in _reversal_rows(classroom.class_id, seat_id)
+                      if row.type == "void_item_removed"]
+        removed_id = removed.id
+        before = Transaction.query.filter_by(class_id=classroom.class_id).count()
+
+        with pytest.raises(ReversalNotAuthorized, match="part of a reversal"):
+            with FEATContext("FEAT-LED-002", idempotency_key="goal-reversal:service-guard"):
+                reverse_transaction(removed, description="probe",
+                                    idempotency_key="goal-reversal:service-guard",
+                                    actor_seat_id=classroom.teacher_seat_id)
+        db.session.rollback()
+
+    response = client.post(
+        f"/admin/void-transaction/{removed_id}",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+
+    assert response.status_code == 400, response.get_json()
+    assert response.get_json()["message"] == "This entry is part of a reversal and can't be reversed."
+    with app.app_context():
+        assert Transaction.query.filter_by(class_id=classroom.class_id).count() == before

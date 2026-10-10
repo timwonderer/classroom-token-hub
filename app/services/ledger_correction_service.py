@@ -19,6 +19,12 @@ from app.services.ledger_provenance_query_service import get_exact_reversal, has
 # type, never the business reason it was raised for.
 REVERSAL_TRANSACTION_TYPE = "REVERSAL"
 
+# Every row a reversal writes. Besides the compensating REVERSAL, reversing a
+# purchase records the removed item as a $0 ``void_item_removed`` row in the
+# same operation (SPEC-OPS-001 §3.5). Both are part of the compensation, which
+# is terminal (§3.1, §3.6): neither may be reversed.
+REVERSAL_RECORD_TYPES = frozenset({REVERSAL_TRANSACTION_TYPE, "void_item_removed"})
+
 # Entitlement types whose purchase a reversal may revoke with a refund
 # (SPEC-OPS-001 §3.4.5, §3.7.1). Reversing a purchase invalidates every
 # entitlement it paid for (§3.3): a delayed-use item (FEAT-LED-002 §I), a
@@ -229,9 +235,9 @@ def reverse_transaction(
     # A reversal is terminal: neither it nor its original may be reversed again
     # (SPEC-OPS-001 §3.6, §3.7.3). The compensating row's own immutable type
     # prevents reversing the compensation itself.
-    if transaction.type == REVERSAL_TRANSACTION_TYPE:
+    if transaction.type in REVERSAL_RECORD_TYPES:
         raise ReversalNotAuthorized(
-            f"Transaction #{transaction.id} is itself a reversal and cannot be reversed."
+            f"Transaction #{transaction.id} is part of a reversal and cannot be reversed."
         )
 
     # Serialize every reversal with settlement and other corrections before

@@ -8,6 +8,7 @@ from app.feats.base import requires_feat_context
 from app.models import EntitlementEvent, StoreProduct, Transaction
 from app.services import obligations_service
 from app.services.ledger_correction_service import (
+    REVERSAL_RECORD_TYPES,
     lock_and_resolve_purchase_eligibility,
     reverse_transaction,
 )
@@ -25,7 +26,11 @@ class VoidTransactionResult:
     reversal_transaction_id: int | None
 
 
-class PurchaseNotReversible(ValueError):
+class TransactionNotReversible(ValueError):
+    """Raised when a transaction cannot be reversed; the message is teacher-facing."""
+
+
+class PurchaseNotReversible(TransactionNotReversible):
     """Raised when a Store purchase fails the reversal eligibility gate.
 
     The message is the teacher-facing reason from
@@ -83,6 +88,12 @@ def execute_void_transactions(
 def _execute_void_transaction_impl(
     tx: Transaction, *, reason: str, actor_seat_id: int | None = None
 ) -> VoidTransactionResult:
+    # A reversal's own rows are terminal (SPEC-OPS-001 §3.1, §3.6).
+    if tx.type in REVERSAL_RECORD_TYPES:
+        raise TransactionNotReversible(
+            "This entry is part of a reversal and can't be reversed."
+        )
+
     # SPEC-OPS-001 §VII / INV-OPS-008: obligation-related monetary transactions are
     # neither voidable nor reversible. Reject at the canonical void/reversal boundary
     # BEFORE any compensating transaction can be created, so no ledger mutation occurs
