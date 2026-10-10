@@ -1,7 +1,7 @@
 # Classroom Token Hub - Development Priorities
 
-**Last Updated:** 2026-10-09
-**Current Released Version:** 2.2.0 (`5ebae62db`), the latest tag, deployed to production 2026-10-09. v2.0.0 launched 2026-09-26
+**Last Updated:** 2026-10-10
+**Current Released Version:** 2.2.1 (`f98d8a206`), the latest tag, deployed to production 2026-10-10. v2.0.0 launched 2026-09-26
 **Engineering State:** v2 in production; post-launch hardening
 **Active Integration Branch:** `main`
 
@@ -81,12 +81,16 @@ on a custom database URL.
 - **Untagged releases, 2026-10-05 and 2026-10-06.** `381a12d49` (#1485, #1486, #1488;
   `docs/ops/audits/DEPLOY_2026-10-04_381a12d49.md`), `35bad089a` (#1489) and `1cdbf03da` (#1491). The last
   two have no release record.
-- **v2.2.0** (`5ebae62db`, deployed 2026-10-09). Production runs this release: a store purchase needs the
+- **v2.2.0** (`5ebae62db`, deployed 2026-10-09): a store purchase needs the
   money and a collective goal is one buy-in per student (#1526), collective-goal purchases and the NSF fee
   can be reversed (#1526), hall passes require teacher settings (#1522), the per-render cross-class payroll
   query is gone (#1527), and the sysadmin log viewers are removed (#1528). No migration. See the `[2.2.0]`
-  section of the CHANGELOG and `docs/ops/audits/DEPLOY_2026-10-09_5ebae62db.md`. Next: v2.2.1 makes
-  purchased hall passes reversible, and the NSF fee machinery is retired in a later release.
+  section of the CHANGELOG and `docs/ops/audits/DEPLOY_2026-10-09_5ebae62db.md`.
+- **v2.2.1** (`f98d8a206`, deployed 2026-10-10). Production runs this release: purchased hall passes can be
+  reversed, using a pass writes only the hall-pass log, a pass with a request waiting is reserved, and an item
+  with a request waiting can't be reversed (#1530). Migration `35a9a0d3ab93` makes a pass spendable once. See
+  the `[2.2.1]` section of the CHANGELOG and `docs/ops/audits/DEPLOY_2026-10-10_f98d8a206.md`. Next: the NSF
+  fee machinery is retired in a later release.
 - All ten domains (Identity, Class Configuration, Ledger, Productivity & Payroll, Obligations,
   Store & Entitlements, Operations, Interpretation, Policies, Support) run on the v2 model:
   `User` → `Seat` → `IdentityProfile`, with `ClassEconomy.class_id` as the tenant boundary and

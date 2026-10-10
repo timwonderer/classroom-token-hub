@@ -8,6 +8,10 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+## [2.2.1] - 2026-10-10 — Purchased hall passes reversible; hall-pass use is the log only
+
+Released as `f98d8a206` on 2026-10-10 at 20:27 UTC ([record](docs/ops/audits/DEPLOY_2026-10-10_f98d8a206.md)). It ships #1530 on top of v2.2.0, plus `AGENTS.md`, which changes no application behavior. One migration, `35a9a0d3ab93` (EXPAND only).
+
 ### Fixed
 
 - **A purchased hall pass can be reversed** (owner ruling 2026-10-08). Reversing a purchase removes every item it paid for (`SPEC-OPS-001` §3.3), hall passes included; DOM-STORE-001's direct-grant rule governs removing a pass on its own, not a reversed purchase. v2.2.0 wrongly excluded hall passes, so a 1,000-pass purchase made on 2026-10-08 without the money could not be reversed. The reversal stays all-or-nothing: a purchase with any pass already used is refused, with nothing changed.
