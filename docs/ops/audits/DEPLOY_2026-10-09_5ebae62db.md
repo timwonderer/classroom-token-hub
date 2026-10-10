@@ -151,9 +151,9 @@ Host and database checks, read-only, after the release:
 | #1528 | `/sysadmin/logs` and `/sysadmin/combined-logs` 404 |
 | P0B Q13 (#1495) | 14 hall-pass logs carry `policy_uuid = 'default'`, of 17; unchanged, as #1522 requires (it gates new writes and leaves history alone) |
 
-Operator browser checks: to be recorded here after the operator runs them — the shop's spendable amount and
-refusal of an unaffordable total, **Joined** on a joined collective goal, Reverse shown only on reversible rows,
-and teacher and student class switching.
+Operator browser checks, reported by the operator on 2026-10-09: **all passed.** They covered the shop's spendable
+amount and its refusal of an unaffordable total, **Joined** on a joined collective goal, Reverse shown only on
+reversible rows, and teacher and student class switching.
 
 ## Rollback
 
