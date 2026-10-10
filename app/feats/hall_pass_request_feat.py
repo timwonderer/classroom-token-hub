@@ -56,10 +56,14 @@ def submit_hall_pass_request(
     # Approval (FEAT-PROD-002 §III) is refused without settings, so a request
     # made without them could never be granted.
     require_hall_pass_settings(ctx.class_id, requested_at_utc)
+    # The new request replaces the seat's earlier one, which releases the pass
+    # it reserved; clear it first so that pass is available to this request.
+    # If no pass is available the whole submission rolls back, earlier request
+    # included.
+    clear_pending_hall_pass_requests_for_seat(class_id=ctx.class_id, seat_id=ctx.seat_id)
     grant = get_available_hall_pass_grant(ctx.seat_id, ctx.class_id)
     if grant is None:
         raise ValueError("No hall passes available.")
-    clear_pending_hall_pass_requests_for_seat(class_id=ctx.class_id, seat_id=ctx.seat_id)
     return enqueue_hall_pass_request(
         PendingHallPassRequest(
             request_id=new_request_id(),

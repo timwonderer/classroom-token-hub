@@ -145,3 +145,17 @@ def test_a_reserved_pass_cannot_be_revoked_directly(app, seat):
                 )
         db.session.rollback()
         assert _ended(first, "REVOKED") == 0
+
+
+def test_resubmitting_with_one_pass_replaces_the_request_and_keeps_the_pass(app, seat):
+    """The new request replaces the earlier one, which releases its pass first."""
+    from app.models import PendingAction
+
+    with app.app_context():
+        (only,) = _grant(seat, 1, "resubmit")
+        first, first_named = _request(seat, "resubmit-1")
+        second, second_named = _request(seat, "resubmit-2")
+
+        assert first_named == second_named == only
+        rows = PendingAction.query.filter_by(class_id=seat["class_id"]).all()
+        assert [row.pending_action_id for row in rows] == [second.request_id]
