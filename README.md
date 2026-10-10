@@ -6,7 +6,13 @@ A classroom behavior management and reward platform with built-in simulated fina
 
 Students earn tokens for the time they work, and spend them on rent, insurance and a class store. Teachers run the class economy without handing over student email addresses, phone numbers or school SSO. Built with Flask, SQLAlchemy and PostgreSQL. Each class period is its own isolated economy.
 
-**In production:** [v2.2.1](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.2.1) (`f98d8a206`), deployed 2026-10-10 ([release record](docs/ops/audits/DEPLOY_2026-10-10_f98d8a206.md)). **Latest tag:** v2.2.1 (v2 launched 2026-09-26) · **Branch:** `main` · **License:** [PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0)
+**In production:** [v2.2.1](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.2.1) (`f98d8a206`), deployed 2026-10-10 ([release record](docs/ops/audits/DEPLOY_2026-10-10_f98d8a206.md)). 
+
+**Latest tag:** ![Version](https://img.shields.io/github/v/release/timwonderer/classroom-token-hub)
+
+**Branch:** `main` 
+
+**License:** [Polyform Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0)
 
 | | |
 | --- | --- |
