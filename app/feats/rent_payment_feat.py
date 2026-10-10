@@ -35,7 +35,7 @@ from __future__ import annotations
 import hashlib
 import logging
 from dataclasses import dataclass, field
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from types import SimpleNamespace
 
 from app.models import ObligationAssessment, Seat, RentSettings, _quantize_currency
@@ -118,6 +118,27 @@ class RentPaymentRequest:
     correlation_id: str  # The specific rent obligation (seat + cycle) to satisfy
     idempotency_key: str  # Identifies THIS payment command; stable on replay
     payment_amount: Decimal | None = None  # None → pay full remaining principal
+
+
+def requested_amount_problem(amount) -> str | None:
+    """Why a requested payment amount is unusable, or None when it is a lawful amount.
+
+    A payment is a positive, finite number of whole cents (DOM-LED-001
+    integer-cent effects). It is refused rather than rounded: rounding would pay
+    an amount the student never typed, and the resulting Ledger debit would
+    disagree with the amount the satisfaction reports.
+    """
+    try:
+        value = amount if isinstance(amount, Decimal) else Decimal(str(amount))
+    except (InvalidOperation, ValueError):
+        return "Enter a valid payment amount."
+    if not value.is_finite():
+        return "Enter a valid payment amount."
+    if value <= Decimal("0.00"):
+        return "Payment amount must be positive"
+    if value != value.quantize(Decimal("0.01")):
+        return "Payment amount must be in whole cents."
+    return None
 
 
 def perks_already_granted(class_id: str, correlation_id: str) -> bool:
@@ -244,6 +265,13 @@ def pay_rent(
         raise ValueError("pay_rent requires a command idempotency_key")
 
     # Phase 1: Verification (read-only)
+    if request.payment_amount is not None:
+        problem = requested_amount_problem(request.payment_amount)
+        if problem is not None:
+            return RentPaymentResult(
+                success=False, correlation_id=correlation_id,
+                error_code="INVALID_AMOUNT", error_message=problem,
+            )
     assessment = obligations_service.get_assessment_for_correlation(correlation_id)
     if assessment is None:
         return RentPaymentResult(
@@ -410,6 +438,15 @@ def pay_rent(
         description=rent_payment_description(class_id,assessment),transaction_type='rent_payment',
         target_seat_id=authority_seat_id,actor_seat_id=seat_id,mechanism='self', canonical_intent=canonical_intent)
     resolved=resolve_intended_ledger_plan(plan=intended,banking_directive=get_banking_directive(class_id),fee_authority='NONE')
+    # DOM-OBL-001 §II.C / SPEC-ECON-003 §4.5.1.1: a payment the seat cannot cover
+    # (checking, with any full overdraft-protection transfer) leaves the rent
+    # owed. Nothing has been written yet, so refusing here changes no state.
+    if resolved.checking_after < 0:
+        return RentPaymentResult(
+            success=False, correlation_id=correlation_id,
+            error_code="INSUFFICIENT_FUNDS",
+            error_message="Checking, with any overdraft-protection transfer, does not cover this payment",
+        )
     applied = apply_resolved_ledger_plan(resolved_plan=resolved,idempotency_key=ledger_key)
     transaction = applied['principal']
     _created = applied['created']
@@ -508,6 +545,13 @@ def pay_rent_bill(
     full group balance; a smaller amount is a partial bill payment (lawful only
     when the class enables incremental payment).
     """
+    if payment_amount is not None:
+        problem = requested_amount_problem(payment_amount)
+        if problem is not None:
+            return RentBillPaymentResult(
+                success=False, rent_correlation_id=rent_correlation_id,
+                error_code="INVALID_AMOUNT", error_message=problem,
+            )
     obligations = _bill_obligations_in_order(class_id, seat_id, rent_correlation_id)
     if not obligations:
         return RentBillPaymentResult(
@@ -534,13 +578,41 @@ def pay_rent_bill(
         budget = group_remaining
     else:
         budget = Decimal(str(payment_amount))
-        if budget <= Decimal("0.00"):
-            return RentBillPaymentResult(
-                success=False, rent_correlation_id=rent_correlation_id,
-                error_code="INVALID_AMOUNT", error_message="Payment amount must be positive",
-            )
         if budget > group_remaining:
             budget = group_remaining
+
+    # A bill is paid whole or not at all (the command commits fully or not at
+    # all), so the whole budget is checked against the seat's funds before any
+    # slice posts. Slices are then funded in order against the same balances
+    # (sequential full-shortfall protection transfers sum to the aggregate one),
+    # so a slice cannot become unaffordable after an earlier slice has posted.
+    from app.services.ledger_recovery_service import lock_recovery_scope
+    seat = Seat.query.filter_by(id=seat_id, class_id=class_id).with_for_update().first()
+    if seat is None:
+        return RentBillPaymentResult(
+            success=False, rent_correlation_id=rent_correlation_id,
+            error_code="NO_SEAT", error_message="Seat not found in class scope",
+        )
+    lock_recovery_scope(class_id, seat_id)
+    # Read-only: safe to repeat on a command replay. It only screens the batch
+    # before any slice posts; it does not itself authorize or fund anything —
+    # each slice's own pay_rent() still resolves and applies its own plan.
+    funding = resolve_intended_ledger_plan(
+        plan=build_intended_ledger_plan(
+            seat_id=seat_id, class_id=class_id, debit_amount=budget,
+            description="Rent bill", transaction_type="rent_payment",
+            target_seat_id=resolve_teacher_seat_for_class(class_id).id,
+            actor_seat_id=seat_id, mechanism="self",
+        ),
+        banking_directive=get_banking_directive(class_id),
+        fee_authority="NONE",
+    )
+    if funding.checking_after < 0:
+        return RentBillPaymentResult(
+            success=False, rent_correlation_id=rent_correlation_id,
+            error_code="INSUFFICIENT_FUNDS",
+            error_message="Checking, with any overdraft-protection transfer, does not cover this payment",
+        )
 
     # Allocate the budget across obligations in order (rent first, then late fees).
     results: list[RentPaymentResult] = []

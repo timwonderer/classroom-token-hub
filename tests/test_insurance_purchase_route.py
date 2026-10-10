@@ -99,13 +99,15 @@ def test_marketplace_lists_and_student_can_buy(app, client):
     assert b"You have this coverage" in resp.data
 
 
-def test_authorized_purchase_can_debit_checking_below_zero(app, client):
+def test_unaffordable_purchase_is_refused_not_overdrawn(app, client):
+    """DOM-OBL-001 3.3 §II.C / SPEC-ECON-003 §4.5.1.1 (owner ruling 2026-10-07):
+    the route surfaces the refusal and no coverage or debit is created."""
     with app.app_context():
         classroom = provision_classroom("chemistry_p1")
         enable_class_feature(class_id=classroom.class_id, feature="insurance")
         policy_uuid = _make_policy(classroom, premium="10.00")
         student = classroom.students[0]
-        _fund(student.seat, "5.00")  # shared funding permits the authorized 10.00 debit
+        _fund(student.seat, "5.00")  # insufficient for the 10.00 first premium
         seat_id = student.seat.id
         class_id = classroom.class_id
         login_student(client, student)
@@ -116,13 +118,14 @@ def test_authorized_purchase_can_debit_checking_below_zero(app, client):
         follow_redirects=True,
     )
     assert resp.status_code == 200
+    assert b"enough in checking" in resp.data
 
     with app.app_context():
         assert entitlement_read_service.has_active_insurance_coverage(
-            seat_id, class_id, policy_uuid) is True
+            seat_id, class_id, policy_uuid) is False
         from app.services.ledger_balance_query_service import get_available_balances
         checking, savings = get_available_balances(seat_id, class_id)
-        assert checking == Decimal("-5.00")
+        assert checking == Decimal("5.00")
         assert savings == Decimal("0.00")
 
 

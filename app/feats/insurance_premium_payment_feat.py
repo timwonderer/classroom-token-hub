@@ -59,6 +59,64 @@ def premium_description(class_id: str, correlation_id: str) -> str:
     return f"Insurance premium: {title} ({fmt(first)} – {fmt(last)})"
 
 
+class PremiumNotAffordable(Exception):
+    """Checking, with any full overdraft-protection transfer, cannot cover a premium.
+
+    DOM-OBL-001 §II.C / SPEC-ECON-003 §4.5.1.1: a payment that cannot be covered
+    leaves the premium unpaid; it never posts into a negative checking balance.
+    Raised inside ``settle_insurance_premium`` so no premium payment path can
+    skip the rule; callers that can answer with a result check
+    ``premium_is_affordable`` first.
+    """
+
+
+def resolve_premium_funding(
+    *,
+    class_id: str,
+    seat_id: int,
+    amount: Decimal,
+    description: str,
+    mechanism: str = "self",
+    actor_seat_id: int | None = None,
+    canonical_intent: tuple | None = None,
+):
+    """Resolve how a premium debit would be funded, without posting anything."""
+    authority_seat_id = resolve_teacher_seat_for_class(class_id).id
+    intended = build_intended_ledger_plan(
+        seat_id=seat_id, class_id=class_id, debit_amount=amount,
+        transaction_type="insurance_premium", description=description,
+        target_seat_id=authority_seat_id,
+        actor_seat_id=actor_seat_id if actor_seat_id is not None else seat_id,
+        mechanism=mechanism, canonical_intent=canonical_intent,
+    )
+    return resolve_intended_ledger_plan(
+        plan=intended, banking_directive=get_banking_directive(class_id),
+        fee_authority="NONE",
+    )
+
+
+def premium_is_affordable(
+    *,
+    class_id: str,
+    seat_id: int,
+    amount: Decimal,
+    description: str = "Insurance premium",
+    mechanism: str = "self",
+    actor_seat_id: int | None = None,
+) -> bool:
+    """Whether checking (with a full protection transfer, if enabled) covers ``amount``.
+
+    Read-only. Call it while holding the seat serialization lock.
+    """
+    from app.services.ledger_recovery_service import lock_recovery_scope
+    lock_recovery_scope(class_id, seat_id)
+    resolved = resolve_premium_funding(
+        class_id=class_id, seat_id=seat_id, amount=amount, description=description,
+        mechanism=mechanism, actor_seat_id=actor_seat_id,
+    )
+    return resolved.checking_after >= 0
+
+
 def settle_insurance_premium(
     *,
     class_id: str,
@@ -82,12 +140,15 @@ def settle_insurance_premium(
         description = premium_description(class_id, correlation_id)
     from app.services.ledger_recovery_service import lock_recovery_scope
     lock_recovery_scope(class_id,seat_id)
-    authority_seat_id = resolve_teacher_seat_for_class(class_id).id
-    intended=build_intended_ledger_plan(seat_id=seat_id,class_id=class_id,debit_amount=amount,
-        transaction_type='insurance_premium',description=description,target_seat_id=authority_seat_id,
-        actor_seat_id=actor_seat_id if actor_seat_id is not None else seat_id,mechanism=mechanism, canonical_intent=canonical_intent)
-    resolved=resolve_intended_ledger_plan(plan=intended,banking_directive=get_banking_directive(class_id),fee_authority='NONE')
-    transaction=apply_resolved_ledger_plan(resolved_plan=resolved,idempotency_key=ledger_idempotency_key)['principal']
+    resolved = resolve_premium_funding(
+        class_id=class_id, seat_id=seat_id, amount=amount, description=description,
+        mechanism=mechanism, actor_seat_id=actor_seat_id, canonical_intent=canonical_intent,
+    )
+    if resolved.checking_after < 0:
+        raise PremiumNotAffordable(correlation_id)
+    transaction = apply_resolved_ledger_plan(
+        resolved_plan=resolved, idempotency_key=ledger_idempotency_key,
+    )['principal']
     satisfy_obligation(
         SatisfyObligationRequest(
             correlation_id=correlation_id,
@@ -175,6 +236,18 @@ def execute_insurance_premium_payment(
         )
 
     amount = state.remaining_amount
+
+    # DOM-OBL-001 §II.C: a payment the seat cannot cover leaves the premium
+    # unpaid. Nothing has been written yet, so refusing here changes no state.
+    if not premium_is_affordable(
+        class_id=class_id, seat_id=seat_id, amount=amount,
+        description=premium_description(class_id, state.correlation_id),
+    ):
+        return InsurancePremiumPaymentResult(
+            correlation_id=state.correlation_id,
+            error_code="INSUFFICIENT_FUNDS",
+            error_message="Checking, with any overdraft-protection transfer, does not cover this premium",
+        )
 
     transaction = settle_insurance_premium(
         class_id=class_id,
