@@ -9,8 +9,9 @@ on 2026-10-08 without the money could not be reversed.
 Owner ruling 2026-10-09: a hall pass is used when, and only when, a hall-pass
 log names it; using one writes no entitlement event. So "already used" for the
 all-or-nothing gate (§3.4) is read from hall_pass_logs. An item with a request
-still waiting is not reversed (owner ruling 2026-10-09): the teacher approves or
-rejects the request first (DOM-SUP-001 §IX allows the reversal afterwards).
+still waiting is not reversed (owner ruling 2026-10-09): the teacher resolves the
+request first without using the item (reject a hall-pass request, Return a
+redemption), and DOM-SUP-001 §IX allows the reversal afterwards.
 """
 
 from decimal import Decimal
@@ -142,8 +143,8 @@ def test_a_purchase_with_a_used_pass_is_refused_before_money_moves(app, shop):
 def test_a_waiting_request_blocks_the_reversal_until_the_teacher_resolves_it(app, shop):
     """Owner ruling 2026-10-09: an item with a request still waiting is not reversed.
 
-    The teacher rejects the request first; the pass is then neither pending nor
-    used, and the reversal goes through (DOM-SUP-001 §IX).
+    The teacher rejects the request first, which uses no pass; the pass is then
+    neither pending nor used, and the reversal goes through (DOM-SUP-001 §IX).
     """
     from app.feats.hall_pass_request_feat import reject_hall_pass_request, submit_hall_pass_request
 
@@ -182,9 +183,14 @@ def test_a_waiting_request_blocks_the_reversal_until_the_teacher_resolves_it(app
         assert get_hall_pass_balance(seat_id, class_id) == 0
 
 
-def test_a_waiting_redemption_blocks_a_delayed_use_reversal(app, shop):
-    """The same rule for every entitlement type: a pending redemption request."""
-    from app.feats.entitlement_lifecycle_feat import execute_use_item_request
+def test_a_waiting_redemption_blocks_a_delayed_use_reversal_until_returned(app, shop):
+    """The same rule for every entitlement type. Return gives the item back unused,
+    so the purchase is then reversible; Accept or Deny would end it."""
+    from app.feats.entitlement_lifecycle_feat import (
+        execute_return_redemption,
+        execute_use_item_request,
+    )
+    from app.services.entitlement_read_service import pending_action_for_entitlement
 
     with app.app_context():
         with FEATContext("FEAT-TEST-SETUP", idempotency_key="hp-reversal:delayed-product"):
@@ -209,7 +215,11 @@ def test_a_waiting_redemption_blocks_a_delayed_use_reversal(app, shop):
         ).one()
         execute_use_item_request(
             class_id=shop["class_id"], seat_id=shop["seat_id"],
-            entitlement_id=grant.entitlement_id, action_payload={"kind": "redemption"},
+            entitlement_id=grant.entitlement_id,
+            # The shape /api uses for a redemption request (app/routes/api.py).
+            action_payload={"action": "REQUEST", "item_type": "delayed",
+                            "product_id": delayed.product_lineage_uuid,
+                            "policy_uuid": delayed.policy_uuid, "details": None},
             idempotency_key="hp-reversal:redeem",
         )
         db.session.commit()
@@ -217,3 +227,13 @@ def test_a_waiting_redemption_blocks_a_delayed_use_reversal(app, shop):
         eligibility = resolve_purchase_resolution_eligibility(purchase)
         assert eligibility.eligible is False
         assert "still waiting" in eligibility.reason
+
+        execute_return_redemption(
+            entitlement=grant,
+            pending_action=pending_action_for_entitlement(grant.entitlement_id),
+            ctx=shop["teacher"],
+            idempotency_key="hp-reversal:return",
+        )
+        db.session.commit()
+
+        assert resolve_purchase_resolution_eligibility(purchase).eligible is True

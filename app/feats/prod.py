@@ -9,6 +9,7 @@ from app.models import (
     AttendanceReasonCode,
     AttendanceSession,
     ClassEconomy,
+    EntitlementEvent,
     HallPassLog,
     HallPassSettings,
     PayrollEvent,
@@ -203,6 +204,7 @@ def _record_hall_pass_log_impl(
     reason: str,
     idempotency_key: str | None = None,
     reference_time_utc=None,
+    hall_pass_entitlement_id: str | None = None,
 ) -> HallPassLogResult:
     """Productivity DOMAIN command: use a hall-pass entitlement and record the
     HallPassLog. The log is the use: it names the pass's ``entitlement_id`` in
@@ -258,7 +260,18 @@ def _record_hall_pass_log_impl(
         from app.services.entitlement_service import lock_hall_pass_holder
 
         lock_hall_pass_holder(requested_by_seat_id, ctx.class_id)
-        used_pass = get_available_hall_pass_grant(requested_by_seat_id, ctx.class_id)
+        if hall_pass_entitlement_id:
+            # A request is for one particular pass, and its availability was
+            # decided when it was submitted (DOM-STORE-001 §IX: submitted_at is
+            # authoritative). While it waits, nothing can remove that pass
+            # (owner ruling 2026-10-09), so approval uses exactly it.
+            used_pass = _named_hall_pass(
+                hall_pass_entitlement_id, requested_by_seat_id, ctx.class_id
+            )
+            if used_pass is None:
+                raise ValueError("The hall pass this request names has already been used")
+        else:
+            used_pass = get_available_hall_pass_grant(requested_by_seat_id, ctx.class_id)
         if used_pass is None:
             raise ValueError("No available hall-pass entitlement grant")
         if not used_pass.correlation_id:
@@ -293,6 +306,19 @@ def _record_hall_pass_log_impl(
     db.session.flush()
 
     return HallPassLogResult(hall_pass_log=log)
+
+
+def _named_hall_pass(entitlement_id: str, seat_id: int, class_id: str):
+    """The seat's grant for the pass a request names, unless a log already used it."""
+    from app.services.entitlement_read_service import hall_pass_use_log
+
+    grant = EntitlementEvent.query.filter_by(
+        entitlement_id=entitlement_id, class_id=class_id, target_seat_id=seat_id,
+        entitlement_type="HALL_PASS", event_type="GRANTED",
+    ).first()
+    if grant is None or hall_pass_use_log(entitlement_id, class_id) is not None:
+        return None
+    return grant
 
 
 @requires_feat_context("FEAT-PROD-002")

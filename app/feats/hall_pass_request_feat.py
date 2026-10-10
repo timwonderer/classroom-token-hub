@@ -96,6 +96,7 @@ def approve_hall_pass_request(
         destination=request.destination,
         reason="teacher_approved",
         idempotency_key=idempotency_key,
+        hall_pass_entitlement_id=request.entitlement_id,
     )
 
 

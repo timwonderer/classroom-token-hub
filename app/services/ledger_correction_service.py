@@ -96,18 +96,29 @@ def resolve_purchase_resolution_eligibility(transaction) -> PurchaseResolutionEl
         )
     # An item with a request still waiting (a hall-pass request or a redemption)
     # is not reversed out from under it (owner ruling 2026-10-09). The teacher
-    # approves or rejects the request first; a rejected item is neither pending
-    # nor used, so it can then take REVERSE or REFUND (DOM-SUP-001 §IX).
-    from app.models import PendingAction
+    # resolves the request first without using the item: Return a redemption,
+    # or reject (or the student cancels) a hall-pass request. The item is then
+    # neither pending nor used, so it can take REVERSE or REFUND (DOM-SUP-001
+    # §IX). Accepting uses it, and denying a redemption revokes it.
+    from app.services.entitlement_read_service import entitlements_with_pending_action
 
-    pending = PendingAction.query.filter(
-        PendingAction.class_id == transaction.class_id,
-        PendingAction.entitlement_id.in_([grant.entitlement_id for grant in grants]),
-    ).first()
-    if pending is not None:
+    waiting = entitlements_with_pending_action(
+        transaction.class_id, [grant.entitlement_id for grant in grants]
+    )
+    if waiting:
+        # A hall pass is resolved by Productivity on the Hall Passes page, not
+        # by the Store's redemption dialog.
+        if any(grant.entitlement_type == "HALL_PASS" and grant.entitlement_id in waiting
+               for grant in grants):
+            return PurchaseResolutionEligibility(
+                False,
+                "A hall-pass request for this pass is still waiting. Reject it on the Hall "
+                "Passes page first; approving it would use the pass.",
+            )
         return PurchaseResolutionEligibility(
             False,
-            "A request for this item is still waiting. Approve or reject it first, then reverse.",
+            "A redemption request for this item is still waiting. Return it first; accepting "
+            "or denying it would use or remove the item.",
         )
 
     # All-or-nothing (§3.4): one used, expired or removed unit refuses the

@@ -13,6 +13,7 @@ from app.models import EntitlementEvent, Seat, StoreProduct
 from app.feats.base import generate_correlation_id
 from app.services.entitlement_read_service import (
     ended_entitlement_ids,
+    entitlements_with_pending_action,
     get_entitlement_balance,
     get_entitlement_lineage_terminal_event,
     hall_pass_use_log,
@@ -430,7 +431,13 @@ def remove_hall_passes(
         remaining -= 1
 
     if remaining:
-        raise ValueError("Unable to find enough unconsumed hall-pass entitlements to reverse")
+        # The balance counts a pass with a request waiting, but such a pass
+        # cannot be removed until the request is resolved (owner ruling
+        # 2026-10-09). The whole removal rolls back.
+        raise ValueError(
+            "Cannot remove that many hall passes: a pass with a request waiting can't be "
+            "removed until the request is approved or rejected"
+        )
 
     db.session.flush()
     return get_hall_pass_balance(seat.id, seat.class_id)
@@ -450,9 +457,12 @@ def _available_hall_pass_grant(seat_id: int, class_id: str) -> EntitlementEvent 
         .order_by(EntitlementEvent.timestamp.asc(), EntitlementEvent.event_id.asc())
         .all()
     )
-    ended = ended_entitlement_ids(class_id, [grant.entitlement_id for grant in grants])
+    ids = [grant.entitlement_id for grant in grants]
+    # A pass named by a waiting request is reserved for it (owner ruling
+    # 2026-10-09): only that request's approval or rejection resolves it.
+    unavailable = ended_entitlement_ids(class_id, ids) | entitlements_with_pending_action(class_id, ids)
     for grant in grants:
-        if grant.entitlement_id not in ended:
+        if grant.entitlement_id not in unavailable:
             return grant
     return None
 
@@ -491,6 +501,8 @@ def consume_entitlement(
     """
     if entitlement_type == "HALL_PASS":
         lock_hall_pass_holder(target_seat_id, class_id)
+        if entitlements_with_pending_action(class_id, [entitlement_id]):
+            raise ValueError(f"Hall pass {entitlement_id} has a request waiting and cannot be ended")
     terminal = get_entitlement_lineage_terminal_event(entitlement_id, class_id)
     if terminal is not None:
         raise ValueError(
@@ -554,6 +566,8 @@ def expire_entitlement(
     """
     if entitlement_type == "HALL_PASS":
         lock_hall_pass_holder(target_seat_id, class_id)
+        if entitlements_with_pending_action(class_id, [entitlement_id]):
+            raise ValueError(f"Hall pass {entitlement_id} has a request waiting and cannot be ended")
     existing = get_entitlement_lineage_terminal_event(entitlement_id, class_id)
     if existing is not None:
         if existing.event_type == "EXPIRED":
@@ -604,6 +618,8 @@ def revoke_entitlement(
     """
     if entitlement_type == "HALL_PASS":
         lock_hall_pass_holder(target_seat_id, class_id)
+        if entitlements_with_pending_action(class_id, [entitlement_id]):
+            raise ValueError(f"Hall pass {entitlement_id} has a request waiting and cannot be ended")
     terminal = get_entitlement_lineage_terminal_event(entitlement_id, class_id)
     if terminal is not None:
         raise ValueError(
@@ -683,7 +699,10 @@ def expire_rent_perks(
 
     now = _current_utc()
     expired_count = 0
-    ended = ended_entitlement_ids(class_id, [grant.entitlement_id for grant in grants])
+    ids = [grant.entitlement_id for grant in grants]
+    # A used pass is already spent, and a pass with a request waiting cannot be
+    # removed while it waits (owner ruling 2026-10-09); expiry skips both.
+    ended = ended_entitlement_ids(class_id, ids) | entitlements_with_pending_action(class_id, ids)
     for grant in grants:
         # A used pass is already spent; expiring it would end it twice.
         if grant.entitlement_id in ended:

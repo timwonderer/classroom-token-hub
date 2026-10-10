@@ -809,26 +809,50 @@ def entitlement_terminal_event(entitlement_id: str):
     )
 
 
-def pending_action_for_entitlement(entitlement_id: str):
-    """Return the latest unresolved PendingAction for an entitlement lineage.
+def _unresolved_pending_actions():
+    """Pending actions still waiting on the entitlement they name.
 
     An immediate-use purchase's reminder is not an action on the entitlement
     (DOM-STORE-001 §VIII.E.3): the item is already used, so it is excluded.
+    Every resolution deletes its row; the outcome filter guards older rows that
+    recorded one.
     """
     from app.models import PendingAction
 
+    return PendingAction.query.filter(
+        PendingAction.payload["outcome"].as_string().is_(None),
+        sa.or_(
+            PendingAction.payload["kind"].as_string().is_(None),
+            PendingAction.payload["kind"].as_string() != "immediate_use_acknowledgement",
+        ),
+    )
+
+
+def pending_action_for_entitlement(entitlement_id: str):
+    """Return the latest unresolved PendingAction for an entitlement lineage."""
+    from app.models import PendingAction
+
     return (
-        PendingAction.query
-        .filter(
-            PendingAction.entitlement_id == entitlement_id,
-            PendingAction.payload["outcome"].as_string().is_(None),
-            sa.or_(
-                PendingAction.payload["kind"].as_string().is_(None),
-                PendingAction.payload["kind"].as_string() != "immediate_use_acknowledgement",
-            ),
-        )
+        _unresolved_pending_actions()
+        .filter(PendingAction.entitlement_id == entitlement_id)
         .order_by(PendingAction.submitted_at.desc(), PendingAction.pending_action_id.desc())
         .first()
+    )
+
+
+def entitlements_with_pending_action(class_id: str, entitlement_ids) -> frozenset[str]:
+    """``pending_action_for_entitlement`` for many lineages in one query."""
+    from app.models import PendingAction
+
+    ids = [eid for eid in entitlement_ids if eid]
+    if not ids:
+        return frozenset()
+    return frozenset(
+        row.entitlement_id
+        for row in _unresolved_pending_actions()
+        .filter(PendingAction.class_id == class_id, PendingAction.entitlement_id.in_(ids))
+        .with_entities(PendingAction.entitlement_id)
+        .all()
     )
 
 
