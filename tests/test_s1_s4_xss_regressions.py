@@ -155,7 +155,7 @@ def test_hall_pass_destination_cannot_execute_in_teacher_history_view(app, clien
         seat_id=classroom.teacher_seat.id,
     )
     with sync_playwright() as p:
-        browser = p.chromium.launch(executable_path="/opt/pw-browsers/chromium-1194/chrome-linux/chrome")
+        browser = p.chromium.launch(headless=True)
         try:
             page = authenticated_page(browser, wcag_live_server, sess)
             page.goto("/admin/hall-pass", wait_until="networkidle")
