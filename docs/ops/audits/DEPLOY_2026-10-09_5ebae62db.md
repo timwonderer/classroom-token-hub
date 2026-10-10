@@ -155,6 +155,28 @@ Operator browser checks, reported by the operator on 2026-10-09: **all passed.**
 amount and its refusal of an unaffordable total, **Joined** on a joined collective goal, Reverse shown only on
 reversible rows, and teacher and student class switching.
 
+#### `SOP-DEP-002` §VIII coverage
+
+| §VIII item | Result |
+|---|---|
+| App boots normally | PASS: service active, `/health` `ok`, scheduler started, 0 error lines (verifier) |
+| `/admin/login` and `/student/login` load | PASS: 200 each (verifier, host-local) |
+| `/docs` loads | PASS: 308, its usual redirect (verifier, host-local) |
+| Teacher current-class switching (`POST /admin/current-class`) | PASS (operator, browser) |
+| Student add-class and switch-class | Switch-class PASS (operator, browser). **Add-class not run.** |
+| Class-scoped admin actions respect membership | **Not run** |
+| Selected-class export (`/admin/export-students?join_code=…`) | **Not run** |
+| Hall-pass verification path (`/verify/hallpass/<teacher_public_token>`) | **Not run** |
+| No migration head drift | PASS: production at `f9a3c7d1e620`, the single head (verifier) |
+
+The four unrun items need an authenticated teacher or a class's verification token, so they are browser checks,
+and the operator's checks for this release did not include them. The earlier records
+(`DEPLOY_2026-10-02_5ac05ea6f.md`, `DEPLOY_2026-10-04_2bdfac65e.md`) do not record them either. No line of v2.2.0
+changes the code of these flows (`git diff 1cdbf03da 5ebae62db` matches none of add-class, export-students,
+the hall-pass verify route, current-class or switch-class). It does change what every page render runs (#1527)
+and the hall-pass rules (#1522). That is reasoning, not a check. They are recorded here as not performed, and
+they stay owed for this release and the next.
+
 ## Rollback
 
 - **Code:** release `1cdbf03dae6ae3d5eda7832920206db6b3bc39c4` through the same workflow. No migration ran, so no
