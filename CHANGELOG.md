@@ -18,9 +18,9 @@ and this project follows semantic versioning principles.
 - **A hall pass can be spent only once, enforced by the database.** Migration `35a9a0d3ab93` adds the partial unique index `uq_hall_pass_logs_hall_pass_id` (`DOM-CORE-002` 1.17). It replaces the protection the one-terminal-event index gave while use also wrote `CONSUMED`. Approval also locks the student's seat, so two approvals at once take two different passes instead of colliding. The migration refuses, changing nothing, if any pass is already logged twice; production had 17 logs on 17 distinct passes. EXPAND only and reversible.
 - The teacher guide's student-detail page describes **Reverse** as it works today (it still described a **Void** button), including which entries can be reversed.
 
-## [2.2.0] - 2026-10-07 — Hall passes require teacher settings, deprecated symbols checked on every PR, P0B baseline
+## [2.2.0] - 2026-10-09 — A purchase needs the money, hall passes require teacher settings, sysadmin log viewers removed, P0B baseline
 
-Everything merged to `main` since v2.1.1. Three untagged releases shipped part of it (`SOP-DB-004` §X.4):
+Everything merged to `main` since v2.1.1, released as `5ebae62db` on 2026-10-09 at 07:10 UTC ([record](docs/ops/audits/DEPLOY_2026-10-09_5ebae62db.md)). Three untagged releases shipped part of it (`SOP-DB-004` §X.4):
 - `381a12d49` (2026-10-05 01:25Z): support notifications (#1488), the backup-tool documentation (#1485) and the security fixes (#1486);
 - `35bad089a` (2026-10-05 05:13Z): the sysadmin UI shell (#1489);
 - `1cdbf03da` (2026-10-06 03:10Z): teacher-ticket routing (#1491).
