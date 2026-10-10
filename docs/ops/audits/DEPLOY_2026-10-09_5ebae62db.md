@@ -166,10 +166,10 @@ reversible rows, and teacher and student class switching.
 | Student add-class and switch-class | Switch-class PASS (operator, browser). **Add-class not run.** |
 | Class-scoped admin actions respect membership | **Not run** |
 | Selected-class export (`/admin/export-students?join_code=…`) | **Not run** |
-| Hall-pass verification path (`/verify/hallpass/<teacher_public_token>`) | **Not run** |
+| Hall-pass verification path (`/verify/hallpass/<teacher_public_token>`): the teacher's link shows a form (class, first and last name) and answers whether that student holds a valid pass today, revealing no roster | **Not run** |
 | No migration head drift | PASS: production at `f9a3c7d1e620`, the single head (verifier) |
 
-The four unrun items need an authenticated teacher or a class's verification token, so they are browser checks,
+The four unrun items need an authenticated teacher or the teacher's hall-pass verification link, so they are browser checks,
 and the operator's checks for this release did not include them. The earlier records
 (`DEPLOY_2026-10-02_5ac05ea6f.md`, `DEPLOY_2026-10-04_2bdfac65e.md`) do not record them either. No line of v2.2.0
 changes the code of these flows (`git diff 1cdbf03da 5ebae62db` matches none of add-class, export-students,
