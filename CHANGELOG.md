@@ -8,6 +8,8 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+Released untagged as `c2f16fb11` on 2026-10-10 at 21:59 UTC ([record](docs/ops/audits/DEPLOY_2026-10-10_c2f16fb11.md)): #1532.
+
 ### Fixed
 
 - **Reverse no longer appears on the $0 "item removed" entry a purchase reversal writes** (#1532; owner report 2026-10-10). Reversing a purchase writes a refund (`REVERSAL`) and a $0 `void_item_removed` entry in one operation (`SPEC-OPS-001` §3.5); both are the compensation, which is terminal (§3.1, §3.6). The student page offered Reverse on the second, and pressing it failed with an error. One list, `REVERSAL_RECORD_TYPES` (`app/services/ledger_correction_service.py`), now names a reversal's rows: the student page offers no Reverse on them, the reverse action refuses them with "This entry is part of a reversal and can't be reversed." before anything is written, and `reverse_transaction` refuses them too. Tests in `tests/test_collective_goal_purchase_reversal.py`, each confirmed red with its guard removed.
