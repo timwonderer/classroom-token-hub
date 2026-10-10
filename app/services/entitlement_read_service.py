@@ -29,7 +29,7 @@ from typing import Optional
 import sqlalchemy as sa
 
 from app.extensions import db
-from app.models import EntitlementEvent
+from app.models import EntitlementEvent, HallPassLog
 from app.utils.canonical_temporal_resolver import ensure_utc
 
 
@@ -128,6 +128,22 @@ def get_entitlement_balance(
 
     terminal_count = terminal.scalar() or 0
 
+    # A used hall pass has no terminal event of its own; its log ends it.
+    if entitlement_type == "HALL_PASS":
+        granted_ids = granted.with_entities(EntitlementEvent.entitlement_id)
+        terminal_ids = terminal.with_entities(EntitlementEvent.entitlement_id)
+        logged_only = (
+            db.session.query(db.func.count(db.distinct(HallPassLog.hall_pass_id)))
+            .filter(
+                HallPassLog.class_id == class_id,
+                HallPassLog.hall_pass_id.in_(granted_ids.scalar_subquery()),
+                HallPassLog.hall_pass_id.notin_(terminal_ids.scalar_subquery()),
+            )
+            .scalar()
+            or 0
+        )
+        terminal_count += logged_only
+
     return granted_count - terminal_count
 
 
@@ -168,7 +184,7 @@ def is_entitlement_exercisable(
         .first()
     )
 
-    if terminal_event:
+    if terminal_event or hall_pass_use_log(entitlement_id, class_id):
         return False
 
     # TODO: Check if expired per policy window
@@ -264,6 +280,72 @@ def get_hall_pass_balance(
 # ---------------------------------------------------------------------------
 # Cross-Domain Consumption Checks
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Hall-pass use
+# ---------------------------------------------------------------------------
+#
+# A hall pass is used when, and only when, a ``hall_pass_logs`` row names it in
+# ``hall_pass_id`` (FEAT-PROD-002 §III). The log is the only legal consumption
+# reference (owner ruling 2026-10-09): using a pass writes nothing to the
+# entitlement history, because Productivity is the authoritative consumer and
+# Store must not keep a duplicate ``CONSUMED`` row (DOM-STORE-001 §VIII.E.6).
+# Approvals made before that ruling also wrote a ``CONSUMED`` event; either one
+# marks the pass spent, so history and new use read the same way.
+#
+# Every reader and writer that asks "has this lineage ended?" for a hall pass
+# goes through these, so a used pass is never offered, counted as held,
+# expired, revoked or refunded.
+
+
+def used_hall_pass_ids(class_id: str, entitlement_ids) -> frozenset[str]:
+    """The hall passes among ``entitlement_ids`` that a hall-pass log names as used."""
+    ids = [eid for eid in entitlement_ids if eid]
+    if not ids:
+        return frozenset()
+    return frozenset(
+        row[0]
+        for row in db.session.query(HallPassLog.hall_pass_id)
+        .filter(HallPassLog.class_id == class_id, HallPassLog.hall_pass_id.in_(ids))
+        .distinct()
+        .all()
+    )
+
+
+def hall_pass_use_log(entitlement_id: str, class_id: str) -> Optional[HallPassLog]:
+    """The hall-pass log that used this pass, if any."""
+    if not entitlement_id:
+        return None
+    return (
+        HallPassLog.query
+        .filter(HallPassLog.class_id == class_id, HallPassLog.hall_pass_id == entitlement_id)
+        .order_by(HallPassLog.timestamp.asc(), HallPassLog.id.asc())
+        .first()
+    )
+
+
+def ended_entitlement_ids(class_id: str, entitlement_ids) -> frozenset[str]:
+    """Lineages among ``entitlement_ids`` that have ended: a terminal event, or a logged hall-pass use."""
+    ids = [eid for eid in entitlement_ids if eid]
+    if not ids:
+        return frozenset()
+    terminal = {
+        row[0]
+        for row in db.session.query(EntitlementEvent.entitlement_id)
+        .filter(
+            EntitlementEvent.class_id == class_id,
+            EntitlementEvent.entitlement_id.in_(ids),
+            EntitlementEvent.event_type.in_(["CONSUMED", "EXPIRED", "REVOKED"]),
+        )
+        .all()
+    }
+    return frozenset(terminal) | used_hall_pass_ids(class_id, ids)
+
+
+def entitlement_lineage_ended(entitlement_id: str, class_id: str) -> bool:
+    """True when the lineage has a terminal event or is a logged, used hall pass."""
+    return bool(ended_entitlement_ids(class_id, [entitlement_id]))
 
 
 def get_entitlement_lineage_terminal_event(
@@ -394,6 +476,10 @@ def get_entitlement_status(
         )
         if event:
             return event_type
+
+    # A logged hall pass is used even though it carries no CONSUMED event.
+    if hall_pass_use_log(entitlement_id, class_id):
+        return "CONSUMED"
 
     # No terminal event found; check if GRANTED exists
     granted = (
@@ -691,16 +777,7 @@ def get_active_rent_grant(
         .order_by(EntitlementEvent.timestamp.desc())
         .all()
     ):
-        terminal_event = (
-            EntitlementEvent.query
-            .filter(
-                EntitlementEvent.entitlement_id == candidate.entitlement_id,
-                EntitlementEvent.class_id == class_id,
-                EntitlementEvent.event_type.in_(["CONSUMED", "EXPIRED", "REVOKED"]),
-            )
-            .first()
-        )
-        if not terminal_event:
+        if not entitlement_lineage_ended(candidate.entitlement_id, class_id):
             return candidate
 
     return None
@@ -732,26 +809,50 @@ def entitlement_terminal_event(entitlement_id: str):
     )
 
 
-def pending_action_for_entitlement(entitlement_id: str):
-    """Return the latest unresolved PendingAction for an entitlement lineage.
+def _unresolved_pending_actions():
+    """Pending actions still waiting on the entitlement they name.
 
     An immediate-use purchase's reminder is not an action on the entitlement
     (DOM-STORE-001 §VIII.E.3): the item is already used, so it is excluded.
+    Every resolution deletes its row; the outcome filter guards older rows that
+    recorded one.
     """
     from app.models import PendingAction
 
+    return PendingAction.query.filter(
+        PendingAction.payload["outcome"].as_string().is_(None),
+        sa.or_(
+            PendingAction.payload["kind"].as_string().is_(None),
+            PendingAction.payload["kind"].as_string() != "immediate_use_acknowledgement",
+        ),
+    )
+
+
+def pending_action_for_entitlement(entitlement_id: str):
+    """Return the latest unresolved PendingAction for an entitlement lineage."""
+    from app.models import PendingAction
+
     return (
-        PendingAction.query
-        .filter(
-            PendingAction.entitlement_id == entitlement_id,
-            PendingAction.payload["outcome"].as_string().is_(None),
-            sa.or_(
-                PendingAction.payload["kind"].as_string().is_(None),
-                PendingAction.payload["kind"].as_string() != "immediate_use_acknowledgement",
-            ),
-        )
+        _unresolved_pending_actions()
+        .filter(PendingAction.entitlement_id == entitlement_id)
         .order_by(PendingAction.submitted_at.desc(), PendingAction.pending_action_id.desc())
         .first()
+    )
+
+
+def entitlements_with_pending_action(class_id: str, entitlement_ids) -> frozenset[str]:
+    """``pending_action_for_entitlement`` for many lineages in one query."""
+    from app.models import PendingAction
+
+    ids = [eid for eid in entitlement_ids if eid]
+    if not ids:
+        return frozenset()
+    return frozenset(
+        row.entitlement_id
+        for row in _unresolved_pending_actions()
+        .filter(PendingAction.class_id == class_id, PendingAction.entitlement_id.in_(ids))
+        .with_entities(PendingAction.entitlement_id)
+        .all()
     )
 
 
@@ -771,6 +872,9 @@ def derive_display_status(entitlement_id: str) -> str:
         if terminal.event_type == "REVOKED" and (terminal.payload or {}).get("outcome") == "DENIED":
             return "denied"
         return {"REVOKED": "revoked", "EXPIRED": "expired"}.get(terminal.event_type, "consumed")
-    if latest_entitlement_grant(entitlement_id):
+    grant = latest_entitlement_grant(entitlement_id)
+    if grant and hall_pass_use_log(entitlement_id, grant.class_id):
+        return "consumed"
+    if grant:
         return "purchased"
     return "unknown"

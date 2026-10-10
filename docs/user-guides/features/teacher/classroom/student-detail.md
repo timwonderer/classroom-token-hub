@@ -63,12 +63,14 @@ The tab label carries a count. The table shows **Date**, **Type**, **Account**, 
 To reverse one entry:
 
 1. Find the row.
-2. Select **Void** in the **Actions** column.
-3. Confirm at *Are you sure you want to void this transaction?*
+2. Select **Reverse** in the **Actions** column.
+3. Confirm at *Are you sure you want to reverse this transaction?*
 
-The row is struck through and greyed, and the amount stops counting toward the balance. The entry stays visible — voiding is a correction on the record, not a deletion of it.
+A reversal adds a refund entry that cancels the original amount. The original stays in the history: a reversal is a correction on the record, not a deletion of it.
 
-Already-voided rows and refunds have no **Void** button.
+Reversing a store purchase also removes every item it paid for, including hall passes and collective-goal buy-ins. It all goes back together or not at all, so if any of those items was already used, expired or removed, the purchase can't be reversed; give a manual credit instead.
+
+**Reverse** appears only on entries that can be reversed. It doesn't appear on rent or insurance payments, on immediate-use items, privileges or insurance purchases, on refunds, or on entries already reversed.
 
 ### Items tab
 

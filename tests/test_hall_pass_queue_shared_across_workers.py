@@ -32,7 +32,7 @@ from sqlalchemy import text
 
 from app.extensions import db
 from app.feats.base import FEATContext
-from app.models import HallPassLog, HallPassSettings, PendingAction, Seat
+from app.models import EntitlementEvent, HallPassLog, HallPassSettings, PendingAction, Seat
 from app.services.context_resolver import CanonicalContext
 from app.services.entitlement_service import get_available_hall_pass_grant, grant_hall_passes
 from app.services.hall_pass_request_queue import (
@@ -414,7 +414,14 @@ def test_second_approval_after_the_first_is_not_found(app, client):
 
 
 def test_refused_approval_leaves_the_request_pending(app, client):
-    """DOM-STORE-001 §VII.B: a failed resolution leaves the pending action intact."""
+    """DOM-STORE-001 §VII.B: a failed resolution leaves the pending action intact.
+
+    A request names one particular pass, decided at submission (DOM-STORE-001
+    §IX; owner ruling 2026-10-09), and approval uses exactly it. This request was
+    seeded with no pass available, so it names none that exists: a pass granted
+    later does not satisfy it. It stays pending for the teacher to reject, and
+    the student submits again.
+    """
     classroom = initialize_as_teacher("chemistry_p1", client, app)
     with app.app_context():
         _ready_class(classroom, passes=0)
@@ -429,7 +436,9 @@ def test_refused_approval_leaves_the_request_pending(app, client):
         assert rows[0].submitted_at == submitted_at
         _grant(classroom.students[0], 1, tag="late-grant")
 
-    assert client.post(f"/api/hall-pass/request/{request_id}/approve").status_code == 200
+    assert client.post(f"/api/hall-pass/request/{request_id}/approve").status_code == 400
+    with app.app_context():
+        assert [row.pending_action_id for row in _rows(classroom.class_id)] == [request_id]
 
 
 # --------------------------------------------------------------------------
@@ -459,7 +468,19 @@ def test_submission_writes_a_typed_pending_action_and_replaces_the_seats_earlier
         assert row.authoritative_feat == "FEAT-PROD-002"
         assert row.payload == {"kind": KIND, "requested_by_seat_id": student.seat.id, "destination": "Bathroom"}
         assert row.correlation_id == f"{KIND}:{classroom.class_id}:{later.request_id}"
-        assert row.entitlement_id == get_available_hall_pass_grant(student.seat.id, classroom.class_id).entitlement_id
+        # The request names the seat's oldest pass and reserves it: that pass is no
+        # longer offered as available (owner ruling 2026-10-09).
+        oldest = (
+            EntitlementEvent.query.filter_by(
+                target_seat_id=student.seat.id, class_id=classroom.class_id,
+                entitlement_type="HALL_PASS", event_type="GRANTED",
+            )
+            .order_by(EntitlementEvent.timestamp.asc(), EntitlementEvent.event_id.asc())
+            .first()
+        )
+        assert row.entitlement_id == oldest.entitlement_id
+        available = get_available_hall_pass_grant(student.seat.id, classroom.class_id)
+        assert available is None or available.entitlement_id != oldest.entitlement_id
         assert row.submitted_at == later_at
         assert student.first_name not in json.dumps(row.payload)
 
