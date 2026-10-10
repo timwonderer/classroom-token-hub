@@ -212,10 +212,11 @@ from app.feats.direct_entitlement_grant_feat import execute_direct_grant, execut
 # execute_insurance_claim_resolution removed — insurance_claim_feat.py deleted; insurance feature broken pending DOM-OBL-001 migration
 from app.feats.transaction_void_feat import (
     ObligationTransactionNotVoidable,
-    PurchaseNotReversible,
+    TransactionNotReversible,
     execute_void_transaction,
     execute_void_transactions,
 )
+from app.services.ledger_correction_service import REVERSAL_RECORD_TYPES
 from app.hash_utils import hash_username_lookup
 from app.services.ledger_balance_query_service import get_batch_balances_by_class_seat
 from app.services.attendance_service import calculate_unpaid_attendance_seconds
@@ -3294,8 +3295,8 @@ def set_current_class():
 # Rows the student detail page never offers to reverse: compensations, payroll
 # (corrected through its own flow) and reversals themselves (SPEC-OPS-001 §3.6).
 _STUDENT_DETAIL_UNREVERSIBLE_TYPES = frozenset(
-    {"refund", "payroll", "manual_payment", "payroll_correction", "REVERSAL"}
-)
+    {"refund", "payroll", "manual_payment", "payroll_correction"}
+) | REVERSAL_RECORD_TYPES
 
 
 def _reversible_transaction_ids(transactions):
@@ -6388,7 +6389,7 @@ def void_transaction(transaction_id):
         db.session.rollback()
         current_app.logger.info("Transaction void denied for %s: %s", transaction_id, e)
         return _void_error("You do not have permission to void this transaction.", status_code=403)
-    except PurchaseNotReversible as e:
+    except TransactionNotReversible as e:
         db.session.rollback()
         current_app.logger.info("Transaction reversal refused for %s: %s", transaction_id, e)
         return _void_error(str(e))
