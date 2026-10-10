@@ -49,8 +49,9 @@ def resolve_purchase_resolution_eligibility(transaction) -> PurchaseResolutionEl
     DOM-SUP-001 §IX offers REVERSE and REFUND only for an unused or pending
     item. So the transaction must be a Store purchase that has not been
     reversed, carries no obligation provenance (§3.7.4), whose grants are of a
-    type the Store domain lets a reversal revoke, and whose grants to the buying
-    seat are all still active (§6.1). Anything else takes a manual credit.
+    type the Store domain lets a reversal revoke, none of which has a request
+    still waiting, and whose grants to the buying seat are all still active
+    (§6.1). Anything else takes a manual credit.
 
     The reverse action (FEAT-LED-002, ``transaction_void_feat``) gates on this
     same function, so the Reverse control and the action cannot disagree.
@@ -93,6 +94,22 @@ def resolve_purchase_resolution_eligibility(transaction) -> PurchaseResolutionEl
         return PurchaseResolutionEligibility(
             False, "This kind of item cannot be reversed or refunded. Use a manual credit instead."
         )
+    # An item with a request still waiting (a hall-pass request or a redemption)
+    # is not reversed out from under it (owner ruling 2026-10-09). The teacher
+    # approves or rejects the request first; a rejected item is neither pending
+    # nor used, so it can then take REVERSE or REFUND (DOM-SUP-001 §IX).
+    from app.models import PendingAction
+
+    pending = PendingAction.query.filter(
+        PendingAction.class_id == transaction.class_id,
+        PendingAction.entitlement_id.in_([grant.entitlement_id for grant in grants]),
+    ).first()
+    if pending is not None:
+        return PurchaseResolutionEligibility(
+            False,
+            "A request for this item is still waiting. Approve or reject it first, then reverse.",
+        )
+
     # All-or-nothing (§3.4): one used, expired or removed unit refuses the
     # reversal. A used hall pass is ended by its hall-pass log, not an event.
     from app.services.entitlement_read_service import ended_entitlement_ids
@@ -103,6 +120,22 @@ def resolve_purchase_resolution_eligibility(transaction) -> PurchaseResolutionEl
             "A used, expired or removed item cannot be reversed or refunded. Use a manual credit instead.",
         )
     return PurchaseResolutionEligibility(True, None, tuple(grants))
+
+
+def lock_and_resolve_purchase_eligibility(transaction) -> PurchaseResolutionEligibility:
+    """``resolve_purchase_resolution_eligibility`` under the buyer's seat lock.
+
+    For the commands that act on the answer. A purchase's hall passes can be
+    used (a hall-pass log) or revoked (an entitlement event), and those live in
+    different tables, so the reversal takes the same seat lock as approval
+    before deciding (``lock_hall_pass_holder``). The read-only function stays
+    lock-free for GET handlers.
+    """
+    from app.services.entitlement_service import lock_hall_pass_holder
+
+    if transaction is not None and transaction.seat_id and transaction.class_id:
+        lock_hall_pass_holder(transaction.seat_id, transaction.class_id)
+    return resolve_purchase_resolution_eligibility(transaction)
 
 
 class TransactionAlreadyReversed(Exception):

@@ -10675,10 +10675,10 @@ def resolve_issue(issue_ref):
             # which options the issue page offers, so the form cannot promise an
             # outcome this handler would refuse.
             from app.services.ledger_correction_service import (
-                resolve_purchase_resolution_eligibility,
+                lock_and_resolve_purchase_eligibility,
                 reverse_transaction,
             )
-            eligibility = resolve_purchase_resolution_eligibility(transaction)
+            eligibility = lock_and_resolve_purchase_eligibility(transaction)
             if not eligibility.eligible:
                 flash(eligibility.reason, "error")
                 return redirect(url_for('admin.view_issue', issue_ref=issue_ref))

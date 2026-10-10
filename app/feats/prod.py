@@ -250,11 +250,14 @@ def _record_hall_pass_log_impl(
         raise ValueError("Hall-pass consumption requires requested_by_seat_id and class_id")
     used_pass = None
     if consume_pass:
-        # Serialize uses for this seat, so two approvals cannot pick the same
-        # pass; the second waits and takes the next one. The unique index on
+        # Serialize with every other write that can end this seat's passes
+        # (other approvals, reversal, removal, perk expiry): the second waits
+        # and then sees the pass spent. The unique index on
         # hall_pass_logs.hall_pass_id is the database's own guarantee that an
-        # entitlement_id is spent at most once.
-        lock_attendance_seat(requested_by_seat_id, ctx.class_id)
+        # entitlement_id is used at most once.
+        from app.services.entitlement_service import lock_hall_pass_holder
+
+        lock_hall_pass_holder(requested_by_seat_id, ctx.class_id)
         used_pass = get_available_hall_pass_grant(requested_by_seat_id, ctx.class_id)
         if used_pass is None:
             raise ValueError("No available hall-pass entitlement grant")

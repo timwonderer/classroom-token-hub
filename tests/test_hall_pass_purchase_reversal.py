@@ -8,9 +8,9 @@ on 2026-10-08 without the money could not be reversed.
 
 Owner ruling 2026-10-09: a hall pass is used when, and only when, a hall-pass
 log names it; using one writes no entitlement event. So "already used" for the
-all-or-nothing gate (§3.4) is read from hall_pass_logs. A pending request does
-not block a reversal (§3.1A covers pending items): approval takes another pass,
-or is refused when none is left (FEAT-PROD-002 §III.A).
+all-or-nothing gate (§3.4) is read from hall_pass_logs. An item with a request
+still waiting is not reversed (owner ruling 2026-10-09): the teacher approves or
+rejects the request first (DOM-SUP-001 §IX allows the reversal afterwards).
 """
 
 from decimal import Decimal
@@ -139,24 +139,81 @@ def test_a_purchase_with_a_used_pass_is_refused_before_money_moves(app, shop):
         assert get_hall_pass_balance(seat_id, class_id) == 1
 
 
-def test_a_pending_request_does_not_block_the_reversal(app, shop):
-    """§3.1A: a pending item is still eligible. Approval afterwards finds no pass."""
-    from app.feats.hall_pass_request_feat import submit_hall_pass_request
+def test_a_waiting_request_blocks_the_reversal_until_the_teacher_resolves_it(app, shop):
+    """Owner ruling 2026-10-09: an item with a request still waiting is not reversed.
+
+    The teacher rejects the request first; the pass is then neither pending nor
+    used, and the reversal goes through (DOM-SUP-001 §IX).
+    """
+    from app.feats.hall_pass_request_feat import reject_hall_pass_request, submit_hall_pass_request
 
     with app.app_context():
         purchase = _buy(shop, 1)
-        submit_hall_pass_request(
+        request = submit_hall_pass_request(
             ctx=shop["student"], destination="Bathroom", requested_at_utc=utc_now(),
             idempotency_key="hp-reversal:request",
         )
         db.session.commit()
-        assert PendingAction.query.filter_by(class_id=shop["class_id"]).count() == 1
+        class_id, seat_id = shop["class_id"], shop["seat_id"]
+        before = get_available_balance(seat_id, class_id, "checking")
+
+        assert resolve_purchase_resolution_eligibility(purchase).eligible is False
+        assert purchase.id not in _reversible_transaction_ids([purchase])
+        with pytest.raises(PurchaseNotReversible, match="still waiting"):
+            execute_void_transaction(
+                purchase, correlation_id=purchase.correlation_id,
+                idempotency_key=f"hp-reversal:void:{purchase.id}",
+            )
+        db.session.rollback()
+        db.session.expire_all()
+        assert get_available_balance(seat_id, class_id, "checking") == before
+
+        reject_hall_pass_request(
+            ctx=shop["teacher"], request_id=request.request_id,
+            idempotency_key="hp-reversal:reject",
+        )
+        db.session.commit()
+        assert PendingAction.query.filter_by(class_id=class_id).count() == 0
 
         _reverse(purchase)
 
         db.session.expire_all()
         assert has_exact_reversal(db.session.get(Transaction, purchase.id))
-        assert get_hall_pass_balance(shop["seat_id"], shop["class_id"]) == 0
-        with pytest.raises(ValueError, match="No available hall-pass"):
-            _use_one(shop, "after-reversal")
-        db.session.rollback()
+        assert get_hall_pass_balance(seat_id, class_id) == 0
+
+
+def test_a_waiting_redemption_blocks_a_delayed_use_reversal(app, shop):
+    """The same rule for every entitlement type: a pending redemption request."""
+    from app.feats.entitlement_lifecycle_feat import execute_use_item_request
+
+    with app.app_context():
+        with FEATContext("FEAT-TEST-SETUP", idempotency_key="hp-reversal:delayed-product"):
+            delayed = publish_store_product(
+                class_id=shop["class_id"], entitlement_type="DELAYED_USE", name="Homework Pass",
+                price="5.00", created_by_seat_id=shop["teacher"].seat_id,
+            )
+        db.session.commit()
+        result = execute_store_purchase(
+            canonical_context=shop["student"], policy_uuid=delayed.policy_uuid, quantity=1,
+        )
+        assert result.success is True, result.error_code
+        db.session.commit()
+        purchase = (
+            Transaction.query
+            .filter_by(class_id=shop["class_id"], seat_id=shop["seat_id"], type="purchase")
+            .order_by(Transaction.id.desc())
+            .first()
+        )
+        grant = EntitlementEvent.query.filter_by(
+            correlation_id=purchase.correlation_id, event_type="GRANTED",
+        ).one()
+        execute_use_item_request(
+            class_id=shop["class_id"], seat_id=shop["seat_id"],
+            entitlement_id=grant.entitlement_id, action_payload={"kind": "redemption"},
+            idempotency_key="hp-reversal:redeem",
+        )
+        db.session.commit()
+
+        eligibility = resolve_purchase_resolution_eligibility(purchase)
+        assert eligibility.eligible is False
+        assert "still waiting" in eligibility.reason

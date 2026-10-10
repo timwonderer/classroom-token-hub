@@ -39,6 +39,21 @@ def get_hall_pass_balance(seat_id: int, class_id: str) -> int:
     )
 
 
+def lock_hall_pass_holder(seat_id: int, class_id: str) -> Seat:
+    """The one serialization point for every write that can end a hall pass.
+
+    A pass ends by use (a hall-pass log, FEAT-PROD-002 §III) or by a REVOKED or
+    EXPIRED event, and those live in different tables, so no index can stop an
+    approval and a revocation from both ending the same pass. Every such writer
+    takes this lock on the holder's seat row first and only then reads whether
+    the pass is spent. It is the same row the attendance writers lock.
+    """
+    seat = Seat.query.filter_by(id=seat_id, class_id=class_id).with_for_update().first()
+    if seat is None:
+        raise ValueError("Hall-pass holder must be a seat in the class.")
+    return seat
+
+
 def _generate_entitlement_id() -> str:
     return f"hpent_{secrets.token_urlsafe(16)}"
 
@@ -385,6 +400,7 @@ def remove_hall_passes(
     if quantity_to_remove <= 0:
         raise ValueError("Hall-pass removal quantity must be positive")
 
+    lock_hall_pass_holder(seat.id, seat.class_id)
     current_balance = get_hall_pass_balance(seat.id, seat.class_id)
     if quantity_to_remove > current_balance:
         raise ValueError("Cannot remove more hall passes than the current available balance")
@@ -473,6 +489,8 @@ def consume_entitlement(
     use is the hall-pass log (FEAT-PROD-002 §III), and this refuses a pass
     that a log already names.
     """
+    if entitlement_type == "HALL_PASS":
+        lock_hall_pass_holder(target_seat_id, class_id)
     terminal = get_entitlement_lineage_terminal_event(entitlement_id, class_id)
     if terminal is not None:
         raise ValueError(
@@ -534,6 +552,8 @@ def expire_entitlement(
     Idempotent: an already-EXPIRED lineage returns its existing event. A conflicting
     terminal disposition (e.g. REVOKED) fails closed.
     """
+    if entitlement_type == "HALL_PASS":
+        lock_hall_pass_holder(target_seat_id, class_id)
     existing = get_entitlement_lineage_terminal_event(entitlement_id, class_id)
     if existing is not None:
         if existing.event_type == "EXPIRED":
@@ -582,6 +602,8 @@ def revoke_entitlement(
     revocation is lawful. One terminal event per lineage (DOM-STORE-001
     §VIII), so a lineage that already terminated fails closed.
     """
+    if entitlement_type == "HALL_PASS":
+        lock_hall_pass_holder(target_seat_id, class_id)
     terminal = get_entitlement_lineage_terminal_event(entitlement_id, class_id)
     if terminal is not None:
         raise ValueError(
@@ -628,6 +650,24 @@ def expire_rent_perks(
 
     Returns the count of entitlements expired.
     """
+    # Hall passes among the perks: lock their holders first, in seat order, so
+    # an approval that would use one of them waits or is waited on.
+    holder_ids = sorted({
+        row[0]
+        for row in db.session.query(EntitlementEvent.target_seat_id)
+        .filter(
+            EntitlementEvent.class_id == class_id,
+            EntitlementEvent.correlation_id == correlation_id,
+            EntitlementEvent.acquisition_type == "PERK",
+            EntitlementEvent.event_type == "GRANTED",
+            EntitlementEvent.entitlement_type == "HALL_PASS",
+        )
+        .distinct()
+        .all()
+    })
+    for holder_id in holder_ids:
+        lock_hall_pass_holder(holder_id, class_id)
+
     # Lock grant rows to serialize concurrent expiration attempts (FOR UPDATE).
     grants = (
         EntitlementEvent.query
