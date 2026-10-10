@@ -8,7 +8,7 @@ from app.feats.base import requires_feat_context
 from app.models import EntitlementEvent, StoreProduct, Transaction
 from app.services import obligations_service
 from app.services.ledger_correction_service import (
-    resolve_purchase_resolution_eligibility,
+    lock_and_resolve_purchase_eligibility,
     reverse_transaction,
 )
 from app.services.ledger_posting_service import create_pending_transaction
@@ -162,7 +162,7 @@ def _void_purchase(tx: Transaction) -> None:
     # §3.4: every grant from this charge must still be active, because a
     # reversal is all-or-nothing and refunding units already spent would hand
     # back money for value the student consumed.
-    eligibility = resolve_purchase_resolution_eligibility(tx)
+    eligibility = lock_and_resolve_purchase_eligibility(tx)
     if not eligibility.eligible:
         raise PurchaseNotReversible(eligibility.reason)
     selected_items = list(eligibility.grants)

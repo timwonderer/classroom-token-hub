@@ -53,6 +53,8 @@ class PendingHallPassRequest:
     requested_by_seat_id: int
     destination: str
     requested_at_utc: datetime
+    # The pass this request is for (DOM-STORE-001 §IX): approval uses exactly it.
+    entitlement_id: str | None = None
 
 
 def new_request_id() -> str:
@@ -82,6 +84,7 @@ def _to_request(row: PendingAction) -> PendingHallPassRequest:
         requested_by_seat_id=int(payload.get("requested_by_seat_id", row.seat_id)),
         destination=str(payload.get("destination") or ""),
         requested_at_utc=_aware_utc(row.submitted_at),
+        entitlement_id=row.entitlement_id,
     )
 
 

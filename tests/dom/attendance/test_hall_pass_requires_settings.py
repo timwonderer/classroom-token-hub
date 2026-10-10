@@ -55,7 +55,12 @@ def _class_without_settings(classroom, *, passes: int = 1):
 
 
 def _consumed(class_id: str) -> int:
-    return EntitlementEvent.query.filter_by(class_id=class_id, event_type="CONSUMED").count()
+    """Passes used in the class. A hall-pass log naming a pass is the only consumption
+    record (FEAT-PROD-002 §III; owner ruling 2026-10-09); use writes no CONSUMED event."""
+    assert EntitlementEvent.query.filter_by(class_id=class_id, event_type="CONSUMED").count() == 0
+    return HallPassLog.query.filter(
+        HallPassLog.class_id == class_id, HallPassLog.hall_pass_id.isnot(None)
+    ).count()
 
 
 def test_approval_is_refused_without_settings_and_writes_nothing(client, app):

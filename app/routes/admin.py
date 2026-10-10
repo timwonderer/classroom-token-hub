@@ -3181,17 +3181,11 @@ def _get_rent_privileges_for_student(student, class_id, seat_id):
     if not granted:
         return rent_privileges
 
-    # Drop anything already consumed, expired, or revoked.
-    terminal_ids = {
-        row[0]
-        for row in db.session.query(EntitlementEvent.entitlement_id)
-        .filter(
-            EntitlementEvent.class_id == class_id,
-            EntitlementEvent.entitlement_id.in_([e.entitlement_id for e in granted]),
-            EntitlementEvent.event_type.in_(("CONSUMED", "EXPIRED", "REVOKED")),
-        )
-        .all()
-    }
+    # Drop anything already consumed, expired, or revoked, and any hall pass a
+    # hall-pass log has used.
+    from app.services.entitlement_read_service import ended_entitlement_ids
+
+    terminal_ids = ended_entitlement_ids(class_id, [e.entitlement_id for e in granted])
 
     seen_lineages = set()
     for event in granted:
@@ -10681,10 +10675,10 @@ def resolve_issue(issue_ref):
             # which options the issue page offers, so the form cannot promise an
             # outcome this handler would refuse.
             from app.services.ledger_correction_service import (
-                resolve_purchase_resolution_eligibility,
+                lock_and_resolve_purchase_eligibility,
                 reverse_transaction,
             )
-            eligibility = resolve_purchase_resolution_eligibility(transaction)
+            eligibility = lock_and_resolve_purchase_eligibility(transaction)
             if not eligibility.eligible:
                 flash(eligibility.reason, "error")
                 return redirect(url_for('admin.view_issue', issue_ref=issue_ref))

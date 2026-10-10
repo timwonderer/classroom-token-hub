@@ -19,19 +19,16 @@ from app.services.ledger_provenance_query_service import get_exact_reversal, has
 # type, never the business reason it was raised for.
 REVERSAL_TRANSACTION_TYPE = "REVERSAL"
 
-_TERMINAL_ENTITLEMENT_EVENTS = ("CONSUMED", "EXPIRED", "REVOKED")
-
-# Entitlement types whose purchase the governing domain lets a reversal revoke
-# with a refund (SPEC-OPS-001 §3.4.5, §3.7.1). DOM-STORE-001 §VIII.E names them:
-# a delayed-use item is an eligible pre-use purchase (FEAT-LED-002 §I), and a
-# collective-goal buy-in records REVOKED "when the entitlement is withdrawn
-# individually or classwide and coordinate[s] a lawful refund". Every other type
-# is excluded by its own rule or by the absence of one: immediate use is CONSUMED
-# at purchase, a purchased hall pass may not be REVOKED (only a direct grant
-# may), insurance is never revoked or refunded, and a privilege is an intangible
-# state that is in force from the moment of purchase, so there is no unused
-# value to refund (owner ruling 2026-10-07).
-_REVERSIBLE_ENTITLEMENT_TYPES = frozenset({"DELAYED_USE", "COLLECTIVE_GOAL"})
+# Entitlement types whose purchase a reversal may revoke with a refund
+# (SPEC-OPS-001 §3.4.5, §3.7.1). Reversing a purchase invalidates every
+# entitlement it paid for (§3.3): a delayed-use item (FEAT-LED-002 §I), a
+# collective-goal buy-in (DOM-STORE-001 §VIII.E.5) and a purchased hall pass
+# (owner ruling 2026-10-08; DOM-STORE-001's direct-grant rule governs revoking a
+# pass on its own, not propagation from a reversed purchase). The rest are
+# excluded: immediate use is CONSUMED at purchase, insurance is never revoked or
+# refunded, and a privilege is in force from the moment of purchase, so there is
+# no unused value to refund (owner ruling 2026-10-07).
+_REVERSIBLE_ENTITLEMENT_TYPES = frozenset({"DELAYED_USE", "COLLECTIVE_GOAL", "HALL_PASS"})
 
 
 @dataclass(frozen=True)
@@ -52,8 +49,9 @@ def resolve_purchase_resolution_eligibility(transaction) -> PurchaseResolutionEl
     DOM-SUP-001 §IX offers REVERSE and REFUND only for an unused or pending
     item. So the transaction must be a Store purchase that has not been
     reversed, carries no obligation provenance (§3.7.4), whose grants are of a
-    type the Store domain lets a reversal revoke, and whose grants to the buying
-    seat are all still active (§6.1). Anything else takes a manual credit.
+    type the Store domain lets a reversal revoke, none of which has a request
+    still waiting, and whose grants to the buying seat are all still active
+    (§6.1). Anything else takes a manual credit.
 
     The reverse action (FEAT-LED-002, ``transaction_void_feat``) gates on this
     same function, so the Reverse control and the action cannot disagree.
@@ -96,17 +94,59 @@ def resolve_purchase_resolution_eligibility(transaction) -> PurchaseResolutionEl
         return PurchaseResolutionEligibility(
             False, "This kind of item cannot be reversed or refunded. Use a manual credit instead."
         )
-    terminal = EntitlementEvent.query.filter(
-        EntitlementEvent.class_id == transaction.class_id,
-        EntitlementEvent.entitlement_id.in_([grant.entitlement_id for grant in grants]),
-        EntitlementEvent.event_type.in_(_TERMINAL_ENTITLEMENT_EVENTS),
-    ).first()
-    if terminal is not None:
+    # An item with a request still waiting (a hall-pass request or a redemption)
+    # is not reversed out from under it (owner ruling 2026-10-09). The teacher
+    # resolves the request first without using the item: Return a redemption,
+    # or reject (or the student cancels) a hall-pass request. The item is then
+    # neither pending nor used, so it can take REVERSE or REFUND (DOM-SUP-001
+    # §IX). Accepting uses it, and denying a redemption revokes it.
+    from app.services.entitlement_read_service import entitlements_with_pending_action
+
+    waiting = entitlements_with_pending_action(
+        transaction.class_id, [grant.entitlement_id for grant in grants]
+    )
+    if waiting:
+        # A hall pass is resolved by Productivity on the Hall Passes page, not
+        # by the Store's redemption dialog.
+        if any(grant.entitlement_type == "HALL_PASS" and grant.entitlement_id in waiting
+               for grant in grants):
+            return PurchaseResolutionEligibility(
+                False,
+                "A hall-pass request for this pass is still waiting. Reject it on the Hall "
+                "Passes page first; approving it would use the pass.",
+            )
+        return PurchaseResolutionEligibility(
+            False,
+            "A redemption request for this item is still waiting. Return it first; accepting "
+            "or denying it would use or remove the item.",
+        )
+
+    # All-or-nothing (§3.4): one used, expired or removed unit refuses the
+    # reversal. A used hall pass is ended by its hall-pass log, not an event.
+    from app.services.entitlement_read_service import ended_entitlement_ids
+
+    if ended_entitlement_ids(transaction.class_id, [grant.entitlement_id for grant in grants]):
         return PurchaseResolutionEligibility(
             False,
             "A used, expired or removed item cannot be reversed or refunded. Use a manual credit instead.",
         )
     return PurchaseResolutionEligibility(True, None, tuple(grants))
+
+
+def lock_and_resolve_purchase_eligibility(transaction) -> PurchaseResolutionEligibility:
+    """``resolve_purchase_resolution_eligibility`` under the buyer's seat lock.
+
+    For the commands that act on the answer. A purchase's hall passes can be
+    used (a hall-pass log) or revoked (an entitlement event), and those live in
+    different tables, so the reversal takes the same seat lock as approval
+    before deciding (``lock_hall_pass_holder``). The read-only function stays
+    lock-free for GET handlers.
+    """
+    from app.services.entitlement_service import lock_hall_pass_holder
+
+    if transaction is not None and transaction.seat_id and transaction.class_id:
+        lock_hall_pass_holder(transaction.seat_id, transaction.class_id)
+    return resolve_purchase_resolution_eligibility(transaction)
 
 
 class TransactionAlreadyReversed(Exception):

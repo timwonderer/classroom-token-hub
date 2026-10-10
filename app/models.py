@@ -938,6 +938,9 @@ class HallPassLog(db.Model):
     correlation_id = db.Column(db.String(100), nullable=False, index=True)
     policy_uuid = db.Column(db.String(36), nullable=False, index=True)
     # FK-style reference to EntitlementEvent.entitlement_id for the consumed pass.
+    # This row is the pass's only consumption record (FEAT-PROD-002 §III; owner
+    # ruling 2026-10-09), so an entitlement_id may appear here at most once:
+    # uq_hall_pass_logs_hall_pass_id enforces that where the column is set.
     # Non-consuming destinations have no entitlement lifecycle to reference;
     # the correlation_id remains the audit identity for those logs.
     hall_pass_id = db.Column(db.String(100), nullable=True, unique=False, index=True)
@@ -949,6 +952,15 @@ class HallPassLog(db.Model):
 
     requested_by_seat = db.relationship('Seat', foreign_keys=[requested_by_seat_id], post_update=True)
     approved_by_seat = db.relationship('Seat', foreign_keys=[approved_by_seat_id], post_update=True)
+
+    __table_args__ = (
+        db.Index(
+            'uq_hall_pass_logs_hall_pass_id',
+            'hall_pass_id',
+            unique=True,
+            postgresql_where=db.text('hall_pass_id IS NOT NULL'),
+        ),
+    )
 
 
 class PayrollEvent(db.Model):
