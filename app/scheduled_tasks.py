@@ -397,10 +397,12 @@ def run_insurance_expiry_job():
 
     The canonical terminal disposition for purchased insurance is EXPIRED at the
     coverage boundary — never REVOKED or refunded (FEAT-STOR-002 §IX.C, DOM-STORE-001
-    §1). Coverage stops renewing when its recurring premium lineage is terminated
-    (a terminal ``bill_cycles`` row with ``next_assessment_at IS NULL`` — via
-    FEAT-OBL-005 cancellation, teacher offering-cancel, or nonpayment non-renewal;
-    DOM-OBL-001 §160/§241). This job is the Store-owned boundary trigger: it reads
+    §1). Coverage stops renewing when its recurring premium lineage is terminated,
+    meaning a terminal ``bill_cycles`` row with ``next_assessment_at IS NULL``
+    (DOM-OBL-001 §V.7, §VII.2). Two paths write that row today, both through
+    ``terminate_bill_cycle``: FEAT-OBL-005 cancellation and FEAT-STOR-007
+    nonpayment (``CANCEL_AFTER_X_DAYS``). Teacher offering-cancel is not
+    implemented. This job is the Store-owned boundary trigger: it reads
     the bill-cycle table directly for terminal insurance lineages whose
     ``cycle_boundary_at`` has been reached and writes EXPIRED for the matching
     coverage through the FEAT-STOR-002 domain command.
