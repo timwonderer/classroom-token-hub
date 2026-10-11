@@ -1,0 +1,29 @@
+# Pre-existing |safe usages reviewed and found not to carry unescaped
+# request- or database-sourced text, per the PR D guard
+# (tests/guards/unsafe_jinja_filter_markup.py, docs/ops/audits/
+# INCIDENT_2026-10-11_SEC-SAST-GAP-001.md §5). Same convention as
+# migrations/lint_baseline.txt: this records debt the guard accepted on
+# introduction, it does not pre-clear anything new. Do not add an entry here
+# to silence a new finding — fix the finding, or route the value through a
+# filter on SAFE_BEFORE_SAFE_FILTERS once that filter is proven safe the way
+# Part A proves it. An entry that stops matching a real violation must be
+# deleted, not left stale.
+#
+# templates/docs/view.html — toc/content are built by
+# app/routes/docs.py:render_markdown_content() via bleach.Cleaner().clean()
+# before the template ever sees them, from markdown files on disk, not
+# request or user-table data.
+templates/docs/view.html::toc|safe
+templates/docs/view.html::content|safe
+
+# templates/macros/cards.html — header_actions/attrs/body_attrs are macro
+# call arguments: literal HTML snippets written by the calling template's
+# author, never a value read from a request or the database.
+templates/macros/cards.html::header_actions|safe
+templates/macros/cards.html::attrs|safe
+templates/macros/cards.html::body_attrs|safe
+
+# templates/student_help_support_new.html — article.content comes from
+# HELP_ARTICLES (app/utils/help_content.py), a hardcoded dict literal in
+# source control, not a request or database value.
+templates/student_help_support_new.html::article.content|safe
