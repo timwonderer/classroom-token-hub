@@ -1,0 +1,55 @@
+name: CodeQL
+
+# Advanced-setup CodeQL, checked in rather than left to the Settings-managed
+# "default setup." Two differences from default setup matter here:
+#
+#   - Query suite is explicitly security-extended, not the narrower "default"
+#     suite. docs/ops/audits/INCIDENT_2026-10-11_SEC-SAST-GAP-001.md found
+#     that the default suite has no model for a value reaching Jinja output
+#     through the `safe` filter or a custom Markup()-wrapping filter -- the
+#     exact shape of the S1/S4 XSS sinks that audit tracked down.
+#   - The configuration is reviewable in a PR diff, rather than hidden in a
+#     repository setting nobody has reason to revisit.
+#
+# This workflow only takes effect once "default setup" is turned off in
+# Settings -> Code security -- GitHub refuses to run an advanced-configuration
+# CodeQL analysis alongside default setup on the same repository. That
+# Settings change is tracked as a follow-up on the incident record above; it
+# is not something a workflow file can do.
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 8 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ python, javascript-typescript ]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-extended
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
