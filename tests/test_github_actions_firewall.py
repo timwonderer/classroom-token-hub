@@ -73,14 +73,15 @@ def test_create_rejects_invalid_returned_firewall_id(monkeypatch):
 
 
 def test_valid_ids_reach_doctl(script, monkeypatch):
-    identifier = FIREWALL_ID if script.__file__.endswith('add-github-actions-to-firewall.py') else '123'
+    identifier = FIREWALL_ID.upper() if script.__file__.endswith('add-github-actions-to-firewall.py') else '00123'
+    expected = FIREWALL_ID if script.__file__.endswith('add-github-actions-to-firewall.py') else '123'
     monkeypatch.setattr(script.sys, 'argv', [script.__file__, identifier])
     run = Mock(return_value=SimpleNamespace(returncode=0, stdout='', stderr=''))
     monkeypatch.setattr(script.subprocess, 'run', run)
     monkeypatch.setattr(script, 'fetch_github_ips', lambda: None)
     with pytest.raises(SystemExit):
         script.main()
-    assert run.call_args_list[1].args[0][-1] == identifier
+    assert run.call_args_list[1].args[0][-1] == expected
 
 
 def test_uncaptured_spawn_error_returns_failure(monkeypatch):

@@ -233,7 +233,9 @@ These 15 PR-head alerts are separate from the 98-alert baseline counted above.
 
 - **Command-line alerts #304–#307:** argv lists removed shell interpretation, but
   that alone does not rule out argument injection. The firewall utilities now reject
-  non-UUID firewall IDs and non-positive decimal droplet IDs before invoking doctl.
+  non-UUID firewall IDs and non-positive integer droplet IDs before invoking doctl.
+  Both IDs are parsed into typed values and serialized into canonical arguments,
+  so raw CLI strings never reach a subprocess.
   GitHub API ranges are parsed and normalized with `ipaddress.ip_network()` before
   becoming rule values; the firewall ID returned by doctl is also UUID-validated.
   Both command helpers return a failure tuple on spawn errors, preserving the
@@ -254,3 +256,9 @@ log sanitization with a raw string fails all three log checks. These isolated te
 exercise real script functions and extracted logger calls; they do not exercise
 Flask request setup, PostgreSQL, or the DigitalOcean API. Python 3.10 syntax and
 alert-table totals were also checked.
+
+The first follow-up scan cleared #308–#318 but re-reported command inputs as
+#320–#322 and retained #305; UUID regex guards were not recognized as taint
+boundaries. It also flagged #319 on the droplet regex. The utilities now parse
+UUIDs and integers and serialize them back to canonical arguments; no ID regex
+remains. Rescan evidence is required before claiming these new alerts cleared.

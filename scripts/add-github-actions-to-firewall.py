@@ -11,7 +11,7 @@ Usage:
 
 import ipaddress
 import json
-import re
+import uuid
 import subprocess
 import sys
 import urllib.request
@@ -74,8 +74,9 @@ def main():
         print("  doctl compute firewall list")
         sys.exit(1)
 
-    firewall_id = sys.argv[1]
-    if not re.fullmatch(r'[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}', firewall_id):
+    try:
+        firewall_id = str(uuid.UUID(sys.argv[1]))
+    except ValueError:
         print(f"{RED}Error: Firewall ID must be a UUID{NC}")
         sys.exit(1)
 

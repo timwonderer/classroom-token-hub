@@ -11,7 +11,7 @@ Usage:
 
 import ipaddress
 import json
-import re
+import uuid
 import subprocess
 import sys
 import urllib.request
@@ -113,8 +113,9 @@ def create_firewall_with_rules(droplet_id, github_ips):
         print(f"Error: {error}")
         return None
 
-    firewall_id = firewall_id.strip()
-    if not re.fullmatch(r'[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}', firewall_id):
+    try:
+        firewall_id = str(uuid.UUID(firewall_id.strip()))
+    except ValueError:
         print(f"{RED}Error: doctl returned an invalid firewall ID{NC}")
         return None
     print(f"{GREEN}✓ Firewall created: {firewall_id}{NC}")
@@ -148,10 +149,14 @@ def main():
         print("  doctl compute droplet list")
         sys.exit(1)
 
-    droplet_id = sys.argv[1]
-    if not re.fullmatch(r'0*[1-9][0-9]*', droplet_id):
+    try:
+        droplet_number = int(sys.argv[1])
+        if droplet_number <= 0:
+            raise ValueError
+    except ValueError:
         print(f"{RED}Error: Droplet ID must be a positive integer{NC}")
         sys.exit(1)
+    droplet_id = str(droplet_number)
 
     # Verify doctl
     success, _, _ = run_command(['doctl', 'version'])
