@@ -108,8 +108,8 @@
 <!-- Announcements Section -->
 {% if announcements %}
 {% for announcement in announcements %}
-{% call cards.alert_card(announcement.get_priority_level(), announcement.title, icon=announcement.get_priority_icon(), body_class='mb-3 policy-announcement', role='alert', id='policy-announcement-' ~ announcement.id, dismissible=True, attrs='data-announcement-id="' ~ announcement.id ~ '"') %}
-    <p class="mb-0">{{ announcement.message|nl2br|safe }}</p>
+{% call cards.alert_card(announcement.get_priority_level(), announcement.title, icon=announcement.get_priority_icon(), body_class='mb-3 policy-announcement', role='alert', id='policy-announcement-' ~ announcement.id, dismissible=True, attrs='data-announcement-id="' ~ (announcement.id | int) ~ '"') %}
+    <p class="mb-0">{{ announcement.message|nl2br }}</p>
     {% if announcement.expires_at %}
     <small class="text-muted d-block mt-2">
         <span class="material-symbols-outlined fs-6 align-text-bottom" aria-hidden="true">schedule</span>
