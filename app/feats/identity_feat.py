@@ -266,6 +266,25 @@ def recovery_setup_is_valid(user: Optional[User], authorization: Optional[str]) 
     return hmac.compare_digest(user.recovery_setup_nonce_hash, _recovery_nonce_hash(authorization))
 
 
+def _pin_is_well_formed(pin: str) -> bool:
+    """FEAT-IDEN-002 §Step 4.2: 4-6 digits, not all one digit, not sequential.
+
+    The client-side check in ``student_pin_setup.html`` enforces only the
+    length/digit shape (``/^\\d{4,6}$/``); a crafted submission bypasses it
+    entirely (audit S8). This is the one place every setup/recovery path
+    funnels through before hashing, so it is the only place that needs to
+    enforce the rest of the contract.
+    """
+    if not isinstance(pin, str) or not (4 <= len(pin) <= 6) or not pin.isdigit():
+        return False
+    if len(set(pin)) == 1:
+        return False
+    digits = [int(ch) for ch in pin]
+    ascending = all(b - a == 1 for a, b in zip(digits, digits[1:]))
+    descending = all(b - a == -1 for a, b in zip(digits, digits[1:]))
+    return not (ascending or descending)
+
+
 @requires_feat_context("FEAT-IDEN-002")
 def activate_student_credentials(
     *,
@@ -294,6 +313,12 @@ def activate_student_credentials(
     from app.hash_utils import hash_password
     from app.services import student_setup
     from app.services.classroom_setup import create_student_user_for_seat
+
+    if not _pin_is_well_formed(pin):
+        return CredentialSetupResult(
+            success=False, error_code="INVALID_PIN",
+            error_message="PIN must be 4-6 digits, not all the same or sequential.",
+        )
 
     if user_id is not None:
         # Hash before holding the principal lock. Recheck TTL after acquiring it.

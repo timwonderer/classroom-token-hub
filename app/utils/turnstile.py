@@ -25,19 +25,31 @@ def verify_turnstile_token(token, remote_ip=None):
         - Tokens expire after 5 minutes (300 seconds)
         - Each token can only be validated once
         - Server-side validation is mandatory for security in production
-        - Bypasses verification if TURNSTILE_SECRET_KEY is not configured (for testing)
         - Bypasses verification in testing environments
+        - Bypasses verification outside production when TURNSTILE_SECRET_KEY is
+          not configured (local development without a registered key)
+        - In production a missing TURNSTILE_SECRET_KEY fails closed (returns False);
+          startup also refuses to run without it
     """
     secret_key = current_app.config.get('TURNSTILE_SECRET_KEY')
-
-    # Bypass verification if Turnstile is not configured (testing/development)
-    if not secret_key:
-        current_app.logger.info("Turnstile verification bypassed: TURNSTILE_SECRET_KEY not configured")
-        return True
 
     # Bypass verification in testing environments
     if current_app.config.get('TESTING') or current_app.config.get('ENV') == 'testing':
         current_app.logger.info("Turnstile verification bypassed: Testing environment")
+        return True
+
+    if not secret_key:
+        # Production never skips the bot check. create_app() refuses to start
+        # without the key, so reaching this branch means the configuration was
+        # altered after startup; failing closed keeps every gated ingress shut
+        # rather than silently open.
+        if current_app.config.get('ENV') == 'production':
+            current_app.logger.error(
+                "Turnstile verification failed closed: TURNSTILE_SECRET_KEY is not configured"
+            )
+            return False
+        # Development only: no key registered, nothing to verify against.
+        current_app.logger.info("Turnstile verification bypassed: TURNSTILE_SECRET_KEY not configured")
         return True
 
     if not token:

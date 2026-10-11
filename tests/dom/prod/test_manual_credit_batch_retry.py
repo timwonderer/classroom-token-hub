@@ -1,0 +1,94 @@
+"""Retrying a failed bulk manual credit must not re-pay the students it already
+
+credited (audit F5). Each student's credit used to carry a submission-wide
+nonce freshly randomized on every POST, so a retry after a mid-batch failure
+(a lock timeout on student 15 of 30, say) minted brand new idempotency keys
+for every student and paid the first 14 a second time. The nonce is now
+derived from the submission's own content within a bounded time window, so an
+immediate retry of the identical batch replays the same per-seat ledger
+effect instead of creating a new one.
+"""
+from __future__ import annotations
+
+from decimal import Decimal
+
+from app.extensions import db
+from app.models import PayrollEvent, Transaction
+from app.services.ledger_balance_query_service import get_available_balance
+from tests.helpers.canonical_classroom import login_teacher, provision_classroom
+from tests.helpers.class_domain import manual_payroll
+
+
+def test_retrying_the_same_batch_does_not_double_pay(client, app):
+    classroom = provision_classroom("chemistry_p1", with_payroll_settings=False)
+    login_teacher(client, classroom)
+    seats = [s.seat for s in classroom.students[:3]]
+
+    args = dict(
+        student_ids=[s.public_id for s in seats],
+        description="Weekly participation bonus", amount="5.00",
+    )
+    first = manual_payroll(client, **args)
+    assert first.status_code == 302
+
+    with app.app_context():
+        for seat in seats:
+            assert get_available_balance(seat.id, classroom.class_id, "checking") == Decimal("5.00")
+
+    # Simulate the exact retry a teacher performs after "Please try again":
+    # the same form, submitted again, immediately.
+    second = manual_payroll(client, **args)
+    assert second.status_code == 302
+
+    with app.app_context():
+        for seat in seats:
+            assert get_available_balance(seat.id, classroom.class_id, "checking") == Decimal("5.00"), (
+                "a same-batch retry must not pay the student a second time"
+            )
+            assert Transaction.query.filter_by(
+                class_id=classroom.class_id, seat_id=seat.id, type="manual_payment",
+            ).count() == 1
+            assert PayrollEvent.query.filter_by(
+                class_id=classroom.class_id, target_seat_id=seat.id, payroll_event_type="manual_credit",
+            ).count() == 1
+
+
+def test_a_different_batch_is_not_treated_as_a_replay(client, app):
+    """Control: changing the content (here, the amount) must still pay."""
+    classroom = provision_classroom("chemistry_p1", with_payroll_settings=False)
+    login_teacher(client, classroom)
+    seat = classroom.students[0].seat
+
+    first = manual_payroll(client, student_ids=[seat.public_id], description="Bonus", amount="5.00")
+    assert first.status_code == 302
+    second = manual_payroll(client, student_ids=[seat.public_id], description="Bonus", amount="7.00")
+    assert second.status_code == 302
+
+    with app.app_context():
+        assert get_available_balance(seat.id, classroom.class_id, "checking") == Decimal("12.00")
+        assert Transaction.query.filter_by(
+            class_id=classroom.class_id, seat_id=seat.id, type="manual_payment",
+        ).count() == 2
+
+
+def test_a_batch_retry_beyond_the_replay_window_pays_again(client, app, monkeypatch):
+    """Control: the replay guard is a bounded time window, not a permanent one
+    — the same weekly bonus, submitted again next week, must still pay."""
+    classroom = provision_classroom("chemistry_p1", with_payroll_settings=False)
+    login_teacher(client, classroom)
+    seat = classroom.students[0].seat
+    args = dict(student_ids=[seat.public_id], description="Weekly bonus", amount="5.00")
+
+    import app.routes.admin as admin_module
+    from app.utils.canonical_temporal_resolver import utc_now
+
+    base = utc_now()
+    monkeypatch.setattr(admin_module, "utc_now", lambda: base)
+    assert manual_payroll(client, **args).status_code == 302
+
+    from datetime import timedelta
+    monkeypatch.setattr(admin_module, "utc_now", lambda: base + timedelta(days=7))
+    assert manual_payroll(client, **args).status_code == 302
+
+    with app.app_context():
+        assert get_available_balance(seat.id, classroom.class_id, "checking") == Decimal("10.00")

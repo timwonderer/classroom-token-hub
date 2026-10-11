@@ -109,7 +109,20 @@ def _release_ownership() -> None:
 
     with _state_lock:
         if scheduler.running:
-            scheduler.shutdown(wait=False)
+            # wait=True (audit O5): shutdown(wait=False) used to return
+            # immediately, so a job already mid-run kept executing in its
+            # worker thread while the lock connection below was closed in
+            # the very next line. Postgres releases a session-level advisory
+            # lock the instant that connection closes, so a waiting successor
+            # could acquire ownership and start the same jobs again before
+            # the old run finished — most jobs tolerate a double run, but
+            # obligation assessment did not (F8, now closed at the database
+            # level by a replay-safe unique constraint regardless). Waiting
+            # here for the executor's worker threads to actually finish
+            # closes the other half: ownership is not released, and the lock
+            # connection stays open, until the jobs it was guarding are
+            # truly done, not just asked to stop.
+            scheduler.shutdown(wait=True)
         if _owner_connection is not None:
             try:
                 _owner_connection.close()

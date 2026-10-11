@@ -8020,7 +8020,31 @@ def payroll_manual_payment():
             selected_class_id = selected_scope['class_id']
 
             applied_count = 0
-            request_nonce = secrets.token_hex(12)
+            # The nonce used to be fresh on every call (secrets.token_hex(12)),
+            # so a retry after a mid-batch failure (a lock timeout, a dropped
+            # connection) carried no memory of which students were already
+            # paid: the FEAT commits each seat's credit in its own transaction
+            # (DOM-LED-001 command-scoped idempotency is per seat, never per
+            # submission), and 14 successes before seat 15 timed out meant a
+            # resubmit paid those 14 a second time (audit F5). Deriving the
+            # nonce from the submission's own content — same teacher, same
+            # class, same selection, same description and amount — makes a
+            # same-minute retry of that batch replay the same per-seat
+            # idempotency_key as the first attempt, instead of minting a new
+            # one that bypasses every existing replay guard. The content is
+            # bucketed to a 5-minute server-time window (comfortably covering
+            # "click Apply again" after a failure) rather than hashed with no
+            # time bound at all, so a teacher who runs the identical weekly
+            # bonus — same roster, same description, same amount — next week
+            # is not silently skipped as a stale "replay" of this one.
+            time_bucket = int(utc_now().timestamp() // 300)
+            request_nonce = hashlib.sha256(
+                "|".join([
+                    selected_class_id, g.canonical_context.user_id, description,
+                    format(amount, 'f'), form.account_type.data, payment_type,
+                    str(time_bucket), ",".join(sorted(student_ids)),
+                ]).encode()
+            ).hexdigest()[:24]
             for actor_public_id in student_ids:
                 student = _resolve_student_detail_seat(str(actor_public_id))
                 if student is None or student.class_id != selected_class_id:
@@ -8030,12 +8054,29 @@ def payroll_manual_payment():
                 if student.claimed_at is None or student.user_id is None:
                     continue
 
+                idempotency_key = f"manual_credit:{selected_class_id}:{student.id}:{request_nonce}"
+                # A retry of the identical batch reaches a seat this same
+                # submission already credited. The FEAT below would replay the
+                # Ledger effect but still attempt a second PayrollEvent insert
+                # under the same (class_id, target_seat_id, idempotency_key,
+                # payroll_event_type), which uq_payroll_event_replay_guard
+                # refuses — so check first and count it as already applied
+                # rather than raising mid-loop and abandoning the rest of the
+                # batch.
+                already_applied = PayrollEvent.query.filter_by(
+                    class_id=selected_class_id, target_seat_id=student.id,
+                    idempotency_key=idempotency_key, payroll_event_type="manual_credit",
+                ).first() is not None
+                if already_applied:
+                    applied_count += 1
+                    continue
+
                 record_payroll_event(
                     ctx=g.canonical_context,
                     target_seat_id=student.id,
                     payroll_event_type="manual_credit",
                     correlation_id=generate_correlation_id(),
-                    idempotency_key=f"manual_credit:{selected_class_id}:{student.id}:{request_nonce}",
+                    idempotency_key=idempotency_key,
                     # Manual credits need no payroll setting (DOM-PROD-001 §VIII).
                     mechanism="TEACHER",
                     summary_json={
