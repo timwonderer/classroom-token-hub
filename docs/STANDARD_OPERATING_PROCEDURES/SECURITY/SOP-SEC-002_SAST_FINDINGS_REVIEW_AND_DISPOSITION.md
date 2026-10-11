@@ -53,8 +53,8 @@ that the pattern is safe — only a reviewed disposition under §V.2 is.
   `security_alerts_threshold: high_or_higher`. GitHub's `code_scanning` rule has two
   independent threshold fields: `security_alerts_threshold`
   (`none`/`critical`/`high_or_higher`/`medium_or_higher`/`all`, by severity) and
-  `alerts_threshold` (`none`/`errors`/`errors_and_warnings`/`all`, by tool-execution
-  status — not a severity selector). This SOP's threshold rationale concerns
+  `alerts_threshold` (`none`/`errors`/`errors_and_warnings`/`all`, by code-scanning
+  alert severity: Error, Warning, or Note). This SOP's threshold rationale concerns
   `security_alerts_threshold` only. **Rationale:** `high_or_higher` blocks merge on a
   new Critical or High finding the PR's diff introduces, while leaving Medium/Low/Note
   findings to flow through the per-alert triage in §V.2 rather than blocking every PR
@@ -89,7 +89,9 @@ written evidence, not a bulk action:
 2. **False positive / mitigated, documented.** The finding is not exploitable as
    reported, or an existing control already mitigates it. Required evidence,
    recorded in a dated triage document under `docs/ops/audits/`:
-   - The query ID and the specific sink/source pair.
+   - The query ID and, when the rule models a taint flow, the specific source/sink pair;
+     for a rule that does not model a taint flow, the alert location and evidence
+     addressing that rule's actual condition instead.
    - A traced path (or explicit absence of one) from a real caller or input to the
      flagged code — not just "looks fine on read."
    - Trust boundary classification: public unauthenticated request, authenticated
@@ -164,8 +166,9 @@ looks at it rather than sitting indefinitely:
   count against the actual list, as a prior triage pass under-summed a group and
   reported a materially wrong total before being caught against the Security tab UI),
   group by query ID and trust boundary, and apply §V.2's per-alert disposition to any
-  alert without one yet. Also pull the dismissed-alert list (`is:closed
-  reason:false_positive,won't_fix` or equivalent) and re-walk each prior
+  alert without one yet. Also pull the complete dismissed-alert list — every
+  supported dismissal reason (`false positive`, `won't fix`, `used in tests`,
+  `mitigated`), not only the first two — and re-walk each prior
   false-positive/mitigated disposition against the current code: a dismissed alert is
   absent from the open-alert list by definition, so a mitigation invalidated by a
   later code change (the guarding check removed, the trust boundary widened) would
