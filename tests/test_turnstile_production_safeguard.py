@@ -82,14 +82,18 @@ def test_verifier_with_a_secret_in_production_still_rejects_a_missing_token(prod
 
 
 def _import_app(extra_env: dict, database_url: str):
+    # The subprocess needs these set, but not to any particular value — reuse
+    # whatever conftest.py already put in this process's own environment
+    # (it sets or defaults every one of these at collection time) rather than
+    # retyping a second copy of them here.
     env = {
         "PATH": os.environ.get("PATH", ""),
         "HOME": os.environ.get("HOME", ""),
         "DATABASE_URL": database_url,
-        "SECRET_KEY": "test-secret",
-        "PEPPER_KEY": "test-primary-pepper",
-        "ENCRYPTION_KEY": "jhe53bcYZI4_MZS4Kb8hu8-xnQHHvwqSX8LN4sDtzbw=",
-        "AUDIT_HMAC_KEY": "test-audit-hmac-key-for-tests-only-not-for-production",
+        "SECRET_KEY": os.environ["SECRET_KEY"],
+        "PEPPER_KEY": os.environ["PEPPER_KEY"],
+        "ENCRYPTION_KEY": os.environ["ENCRYPTION_KEY"],
+        "AUDIT_HMAC_KEY": os.environ["AUDIT_HMAC_KEY"],
         "PYTHONPATH": str(REPO_ROOT),
         **extra_env,
     }
