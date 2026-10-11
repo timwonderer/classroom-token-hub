@@ -93,6 +93,11 @@ jobs:
             echo "TEMPLATE_LIST_EOF"
           } >> "${GITHUB_ENV}"
 
+      - name: Guard Jinja output escaping
+        env:
+          JINJA_GUARD_BASE_SHA: ${{ github.event.pull_request.base.sha || inputs.base_sha || github.event.before }}
+        run: python -m pytest --noconftest -q tests/test_no_unsafe_jinja_markup.py
+
       - name: Run constitutional evidence runner
         env:
           TEST_DATABASE_URL: postgresql://user:password@localhost:5432/classroom_test_db

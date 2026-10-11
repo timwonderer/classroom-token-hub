@@ -18,7 +18,6 @@ broken right now.
 from __future__ import annotations
 
 from collections import Counter
-import json
 import os
 import subprocess
 from pathlib import Path
@@ -50,6 +49,17 @@ def _app_sources() -> list[Path]:
 
 def _template_sources() -> list[Path]:
     return sorted([*TEMPLATES_ROOT.rglob("*.html"), *(STATUS_ROOT / "templates").rglob("*.html")])
+
+
+def _baseline_base_ref() -> str:
+    base_sha = os.environ.get('JINJA_GUARD_BASE_SHA')
+    if base_sha:
+        if len(base_sha) != 40 or any(c not in '0123456789abcdef' for c in base_sha):
+            raise ValueError('JINJA_GUARD_BASE_SHA must be a complete commit SHA')
+        return base_sha
+    if os.environ.get('GITHUB_ACTIONS') == 'true':
+        raise ValueError('CI must provide JINJA_GUARD_BASE_SHA')
+    return 'origin/main'
 
 
 def _base_branch_baseline(repo_root: Path, base_ref: str) -> Counter[str]:
@@ -116,10 +126,9 @@ def test_no_template_has_an_unrouted_unsafe_safe_filter_or_autoescape_false():
             path.read_text(encoding="utf-8"), str(path.relative_to(REPO_ROOT))
         )
 
-    event_path = os.environ.get("GITHUB_EVENT_PATH")
-    event = json.loads(Path(event_path).read_text()) if event_path else {}
-    base_ref = event.get("pull_request", {}).get("base", {}).get("sha") or event.get("inputs", {}).get("base_sha") or "origin/main"
-    unrouted = unbaselined_violations(violations, baseline, _base_branch_baseline(REPO_ROOT, base_ref))
+    unrouted = unbaselined_violations(
+        violations, baseline, _base_branch_baseline(REPO_ROOT, _baseline_base_ref())
+    )
 
     assert not unrouted, (
         "a template marks output |safe without a proven-safe filter ahead of "
@@ -693,3 +702,39 @@ def test_real_nl2br_output_stays_escaped_without_safe_even_if_filter_regresses(p
     assert '<img' not in regressed
     assert '&lt;img' in regressed
     assert len(find_unsafe_safe_filters(source.replace('|nl2br', '|nl2br|safe'))) == 1
+
+
+@pytest.mark.parametrize('sha', ['main', '--all', 'a' * 39, 'g' * 40])
+def test_base_sha_rejects_non_commit_inputs(monkeypatch, sha):
+    monkeypatch.setenv('JINJA_GUARD_BASE_SHA', sha)
+    with pytest.raises(ValueError, match='complete commit SHA'):
+        _baseline_base_ref()
+
+
+def test_ci_requires_a_pinned_base_sha(monkeypatch):
+    monkeypatch.delenv('JINJA_GUARD_BASE_SHA', raising=False)
+    monkeypatch.setenv('GITHUB_ACTIONS', 'true')
+    with pytest.raises(ValueError, match='CI must provide'):
+        _baseline_base_ref()
+
+
+def test_local_base_ref_and_pinned_ci_sha(monkeypatch):
+    monkeypatch.delenv('JINJA_GUARD_BASE_SHA', raising=False)
+    monkeypatch.delenv('GITHUB_ACTIONS', raising=False)
+    assert _baseline_base_ref() == 'origin/main'
+    monkeypatch.setenv('JINJA_GUARD_BASE_SHA', 'a' * 40)
+    monkeypatch.setenv('GITHUB_ACTIONS', 'true')
+    assert _baseline_base_ref() == 'a' * 40
+
+
+def test_required_ci_executes_guard_with_immutable_base_evidence():
+    import yaml
+
+    workflow = yaml.safe_load((REPO_ROOT / '.github/workflows/constitutional-ci.yml').read_text())
+    steps = workflow['jobs']['constitutional-evidence']['steps']
+    guard = next(step for step in steps if step['name'] == 'Guard Jinja output escaping')
+    assert guard['run'] == 'python -m pytest --noconftest -q tests/test_no_unsafe_jinja_markup.py'
+    assert guard['env']['JINJA_GUARD_BASE_SHA'] == '${{ github.event.pull_request.base.sha || inputs.base_sha || github.event.before }}'
+    assert 'if' not in guard and not guard.get('continue-on-error')
+    checkout = next(step for step in steps if step.get('uses', '').startswith('actions/checkout@'))
+    assert checkout['with']['fetch-depth'] == 0
