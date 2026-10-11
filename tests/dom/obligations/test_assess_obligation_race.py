@@ -45,13 +45,20 @@ def test_two_overlapping_assessments_for_the_same_lineage_do_not_duplicate(app, 
         correlation_id = "rent-race-cycle-1"
 
         # Simulate the race: both callers see "not yet assessed" because
-        # neither transaction has committed when the other reads.
-        monkeypatch.setattr(obligations_service, "check_idempotency_assessment", lambda *a, **k: False)
+        # neither transaction has committed when the other reads. (This
+        # drives the two calls sequentially through the same session rather
+        # than two genuinely concurrent sessions/transactions — a real
+        # cross-session race is covered by
+        # test_the_constraint_still_rejects_a_true_duplicate_bypassing_the_feat
+        # below at the constraint level; reproducing the full cross-session
+        # timing here would be a much heavier test for the same database
+        # guarantee this one already exercises.)
+        monkeypatch.setattr(obligations_service, "check_idempotency_assessment", lambda *_a, **_k: False)
 
-        kwargs = dict(
-            seat_id=seat_id, class_id=class_id, internal_ref=internal_ref,
-            correlation_id=correlation_id, obligation_type="RENT",
-        )
+        kwargs = {
+            "seat_id": seat_id, "class_id": class_id, "internal_ref": internal_ref,
+            "correlation_id": correlation_id, "obligation_type": "RENT",
+        }
         first = execute_assess_obligation(**kwargs)
         second = execute_assess_obligation(**kwargs)
 
@@ -79,6 +86,42 @@ def test_a_different_event_type_for_the_same_correlation_id_is_unaffected(app):
             ))
 
         assert ObligationAssessment.query.filter_by(correlation_id="rent-control-cycle-1").count() == 2
+
+
+def test_multiple_partial_payments_for_the_same_obligation_are_unaffected(app):
+    """Control (Codex review on PR #1536): the backstop is a *partial* unique
+    index (event_type = 'ASSESSMENT' only), not a plain unique constraint on
+    all three columns. satisfy_obligation_feat.py's own contract is "PAYMENT
+    may occur multiple times for partial payment" — one obligation, one
+    correlation_id, many PAYMENT rows. A plain constraint on
+    (internal_ref, correlation_id, event_type) would make the *second*
+    partial payment for the same obligation an IntegrityError, which is
+    exactly the kind of outage this migration exists to prevent."""
+    classroom = initialize("chemistry_p1", app)
+    with app.app_context():
+        seat_id = classroom.students[0].seat.id
+        class_id = classroom.class_id
+        internal_ref = "rent:partial"
+        correlation_id = "rent-partial-cycle-1"
+
+        with FEATContext("FEAT-TEST-SETUP", idempotency_key="race-control:partial-assessment"):
+            db.session.add(ObligationAssessment(
+                seat_id=seat_id, class_id=class_id, internal_ref=internal_ref,
+                correlation_id=correlation_id, event_type="ASSESSMENT", obligation_type="RENT",
+            ))
+
+        # Three separate partial payments against the same obligation.
+        for i in range(3):
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"race-control:partial-payment-{i}"):
+                db.session.add(ObligationAssessment(
+                    seat_id=seat_id, class_id=class_id, internal_ref=internal_ref,
+                    correlation_id=correlation_id, event_type="PAYMENT", obligation_type="RENT",
+                ))
+
+        assert ObligationAssessment.query.filter_by(
+            internal_ref=internal_ref, correlation_id=correlation_id, event_type="PAYMENT",
+        ).count() == 3
+        assert _count(internal_ref, correlation_id) == 1  # still exactly one ASSESSMENT
 
 
 def test_the_constraint_still_rejects_a_true_duplicate_bypassing_the_feat(app):

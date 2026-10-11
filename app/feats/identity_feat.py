@@ -275,7 +275,11 @@ def _pin_is_well_formed(pin: str) -> bool:
     funnels through before hashing, so it is the only place that needs to
     enforce the rest of the contract.
     """
-    if not isinstance(pin, str) or not (4 <= len(pin) <= 6) or not pin.isdigit():
+    # str.isdigit() accepts Unicode digit-shaped characters (e.g. '²') that
+    # int() then rejects with ValueError — a PIN like "²³⁴⁵" would otherwise
+    # pass this check and crash below instead of returning INVALID_PIN
+    # (Copilot/CodeRabbit review on PR #1536). isascii() closes that gap.
+    if not isinstance(pin, str) or not (4 <= len(pin) <= 6) or not pin.isascii() or not pin.isdigit():
         return False
     if len(set(pin)) == 1:
         return False

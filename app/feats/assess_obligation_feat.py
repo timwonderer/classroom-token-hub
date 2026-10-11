@@ -116,7 +116,21 @@ def assess_obligation(
         savepoint.commit()
     except IntegrityError:
         savepoint.rollback()
-        existing = obligations_service.get_assessment_for_correlation(request.correlation_id)
+        # Filtered on internal_ref too, not just correlation_id (CodeRabbit
+        # review on PR #1536): get_assessment_for_correlation()'s own
+        # docstring already treats correlation_id as 1:1 with ASSESSMENT
+        # (DOM-OBL-001 §VII), so in the documented contract this can never
+        # differ — but the partial index this recovery exists for is keyed
+        # on (internal_ref, correlation_id), and matching that same pair
+        # here, instead of trusting correlation_id alone, means a caller
+        # that ever violated that contract gets a loud re-raised
+        # IntegrityError rather than a silently wrong row handed back as
+        # the "winner".
+        existing = ObligationAssessment.query.filter_by(
+            internal_ref=request.internal_ref,
+            correlation_id=request.correlation_id,
+            event_type='ASSESSMENT',
+        ).first()
         if existing is not None:
             return existing
         raise

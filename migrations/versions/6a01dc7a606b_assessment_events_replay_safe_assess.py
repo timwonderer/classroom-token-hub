@@ -18,16 +18,24 @@ old run having finished — see app/scheduler_ownership.py and audit O5) can
 both pass the read-then-insert check before either commits, and both insert
 an ASSESSMENT row for the same (internal_ref, correlation_id).
 
-This adds a unique constraint scoped to (internal_ref, correlation_id,
-event_type). It protects exactly the replay-safety contract FEAT-OBLI-001
-claims — one ASSESSMENT per lineage/liability — without reintroducing the
-single-column uniqueness 8a7b6c5d4e3f correctly removed: a PAYMENT or WAIVED
-row sharing the same correlation_id is a different event_type and is
-unaffected.
+This adds a **partial** unique index scoped to (internal_ref, correlation_id)
+WHERE event_type = 'ASSESSMENT'. A plain (unfiltered) unique constraint on
+(internal_ref, correlation_id, event_type) was tried first and is wrong:
+satisfy_obligation_feat.py's own docstring says "PAYMENT may occur multiple
+times for partial payment" — "one obligation → one correlation → many
+PAYMENT events" — all sharing the assessment's internal_ref and
+correlation_id with event_type='PAYMENT'. A full-column constraint would
+make the *second* partial payment for the same obligation an IntegrityError,
+which is exactly the kind of outage this migration exists to prevent, not
+cause. Filtering the index to event_type = 'ASSESSMENT' protects only the
+tuple FEAT-OBLI-001 actually promises to be unique — "one ASSESSMENT per
+lineage/liability" — and leaves PAYMENT/WAIVED/WITHDRAWN rows, including
+repeated PAYMENTs, completely unaffected regardless of how many share a
+correlation_id.
 
-Operational note before deploying: if this constraint is ever violated by
+Operational note before deploying: if this index is ever violated by
 existing rows (a duplicate ASSESSMENT already written under the race this
-closes), the ADD CONSTRAINT step fails loudly rather than silently
+closes), the CREATE UNIQUE INDEX step fails loudly rather than silently
 succeeding. Check for duplicates before running this against a database that
 has been live under the unguarded window:
 
@@ -50,7 +58,7 @@ down_revision = '35a9a0d3ab93'
 branch_labels = None
 depends_on = None
 
-CONSTRAINT_NAME = 'uq_assessment_events_internal_ref_correlation_event_type'
+INDEX_NAME = 'uq_assessment_events_assessment_internal_ref_correlation'
 
 
 def table_exists(table_name):
@@ -59,12 +67,12 @@ def table_exists(table_name):
     return table_name in inspector.get_table_names()
 
 
-def unique_constraint_exists(table_name, constraint_name):
+def index_exists(table_name, index_name):
     conn = op.get_bind()
     inspector = sa.inspect(conn)
     try:
-        names = [c['name'] for c in inspector.get_unique_constraints(table_name)]
-        return constraint_name in names
+        names = [idx['name'] for idx in inspector.get_indexes(table_name)]
+        return index_name in names
     except Exception:
         return False
 
@@ -72,22 +80,29 @@ def unique_constraint_exists(table_name, constraint_name):
 def upgrade():
     if not table_exists('assessment_events'):
         return
-    if not unique_constraint_exists('assessment_events', CONSTRAINT_NAME):
-        op.create_unique_constraint(
-            CONSTRAINT_NAME,
+    # A partial unique index, not a table-wide unique constraint: it only
+    # enforces uniqueness among rows where event_type = 'ASSESSMENT'.
+    # PAYMENT, WAIVED and WITHDRAWN rows — including multiple PAYMENT rows
+    # for the same obligation (partial payments) — are invisible to it and
+    # can repeat (internal_ref, correlation_id) freely.
+    if not index_exists('assessment_events', INDEX_NAME):
+        op.create_index(
+            INDEX_NAME,
             'assessment_events',
-            ['internal_ref', 'correlation_id', 'event_type'],
+            ['internal_ref', 'correlation_id'],
+            unique=True,
+            postgresql_where=sa.text("event_type = 'ASSESSMENT'"),
         )
-        print(f"✅ Added unique constraint {CONSTRAINT_NAME} on assessment_events")
+        print(f"✅ Added partial unique index {INDEX_NAME} on assessment_events (event_type = 'ASSESSMENT')")
     else:
-        print(f"⚠️  Constraint {CONSTRAINT_NAME} already exists on assessment_events, skipping...")
+        print(f"⚠️  Index {INDEX_NAME} already exists on assessment_events, skipping...")
 
 
 def downgrade():
     if not table_exists('assessment_events'):
         return
-    if unique_constraint_exists('assessment_events', CONSTRAINT_NAME):
-        op.drop_constraint(CONSTRAINT_NAME, 'assessment_events', type_='unique')
-        print(f"❌ Dropped unique constraint {CONSTRAINT_NAME} from assessment_events")
+    if index_exists('assessment_events', INDEX_NAME):
+        op.drop_index(INDEX_NAME, table_name='assessment_events')
+        print(f"❌ Dropped partial unique index {INDEX_NAME} from assessment_events")
     else:
-        print(f"⚠️  Constraint {CONSTRAINT_NAME} does not exist on assessment_events, skipping...")
+        print(f"⚠️  Index {INDEX_NAME} does not exist on assessment_events, skipping...")

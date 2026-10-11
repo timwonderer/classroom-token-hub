@@ -26,10 +26,12 @@ def verify_turnstile_token(token, remote_ip=None):
         - Each token can only be validated once
         - Server-side validation is mandatory for security in production
         - Bypasses verification in testing environments
-        - Bypasses verification outside production when TURNSTILE_SECRET_KEY is
-          not configured (local development without a registered key)
-        - In production a missing TURNSTILE_SECRET_KEY fails closed (returns False);
-          startup also refuses to run without it
+        - Bypasses verification when TURNSTILE_SECRET_KEY is not configured
+          and ENV is exactly 'development' (local development without a
+          registered key)
+        - Any other ENV with no TURNSTILE_SECRET_KEY configured — including
+          production and any other value such as 'staging' — fails closed
+          (returns False); production startup also refuses to run without it
     """
     secret_key = current_app.config.get('TURNSTILE_SECRET_KEY')
 
@@ -39,18 +41,21 @@ def verify_turnstile_token(token, remote_ip=None):
         return True
 
     if not secret_key:
-        # Production never skips the bot check. create_app() refuses to start
-        # without the key, so reaching this branch means the configuration was
-        # altered after startup; failing closed keeps every gated ingress shut
-        # rather than silently open.
-        if current_app.config.get('ENV') == 'production':
-            current_app.logger.error(
-                "Turnstile verification failed closed: TURNSTILE_SECRET_KEY is not configured"
-            )
-            return False
-        # Development only: no key registered, nothing to verify against.
-        current_app.logger.info("Turnstile verification bypassed: TURNSTILE_SECRET_KEY not configured")
-        return True
+        # FLASK_ENV is a free-form string with no enum validation (see
+        # create_app()), so "fail closed unless ENV != production" would
+        # silently bypass the bot check on any other externally-reachable
+        # value someone deploys with — 'staging' included — not only on
+        # actual local development (CodeRabbit review on PR #1536). The
+        # bypass is now an explicit allow-list of exactly 'development';
+        # production is already covered above by the startup gate, but
+        # checking it again here costs nothing and documents the intent.
+        if current_app.config.get('ENV') == 'development':
+            current_app.logger.info("Turnstile verification bypassed: TURNSTILE_SECRET_KEY not configured")
+            return True
+        current_app.logger.error(
+            "Turnstile verification failed closed: TURNSTILE_SECRET_KEY is not configured"
+        )
+        return False
 
     if not token:
         current_app.logger.warning("Turnstile verification failed: No token provided")

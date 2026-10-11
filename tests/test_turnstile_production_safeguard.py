@@ -57,6 +57,22 @@ def test_verifier_still_skips_without_a_key_outside_production(app):
         app.config.update(saved)
 
 
+def test_verifier_fails_closed_for_a_non_development_non_production_env_with_no_secret(app):
+    """CodeRabbit review on PR #1536: FLASK_ENV has no enum validation, so an
+    externally-reachable deploy could set it to something other than
+    'production' (e.g. 'staging') and, before this fix, silently inherit the
+    development-only bypass. The bypass is now an explicit allow-list of
+    exactly 'development'; anything else with no secret configured fails
+    closed, matching production's own behavior."""
+    saved = {key: app.config.get(key) for key in ("ENV", "TESTING", "TURNSTILE_SECRET_KEY")}
+    app.config.update(ENV="staging", TESTING=False, TURNSTILE_SECRET_KEY=None)
+    try:
+        with app.test_request_context("/"):
+            assert verify_turnstile_token("any-token") is False
+    finally:
+        app.config.update(saved)
+
+
 def test_verifier_with_a_secret_in_production_still_rejects_a_missing_token(production_config):
     """Control: the configured path is unchanged, so the fail-closed branch above
     is distinguishable from the existing no-token rejection."""

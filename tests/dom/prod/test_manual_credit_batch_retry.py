@@ -10,6 +10,7 @@ effect instead of creating a new one.
 """
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from app.extensions import db
@@ -92,3 +93,66 @@ def test_a_batch_retry_beyond_the_replay_window_pays_again(client, app, monkeypa
 
     with app.app_context():
         assert get_available_balance(seat.id, classroom.class_id, "checking") == Decimal("10.00")
+
+
+def test_a_boundary_crossing_retry_does_not_double_pay(client, app, monkeypatch):
+    """Audit F5 follow-up (Codex review on PR #1536): the replay nonce is
+    bucketed to a 5-minute server-time window, so a batch that starts just
+    before a bucket rolls over, credits some seats, and is retried a few
+    seconds later — now in the next bucket — used to compute a different
+    nonce and lose all memory of the seats it already paid, double-paying
+    them. "Already applied" must also be checked against the immediately
+    preceding bucket, not only the current one."""
+    classroom = provision_classroom("chemistry_p1", with_payroll_settings=False)
+    login_teacher(client, classroom)
+    seats = [s.seat for s in classroom.students[:3]]
+    description = "Weekly participation bonus"
+    amount = "5.00"
+    args = dict(student_ids=[s.public_id for s in seats], description=description, amount=amount)
+
+    import app.routes.admin as admin_module
+
+    now = datetime.now(timezone.utc)
+    bucket_start = (int(now.timestamp()) // 300) * 300
+    just_before_boundary = datetime.fromtimestamp(bucket_start + 298, tz=timezone.utc)
+    just_after_boundary = just_before_boundary + timedelta(seconds=4)
+    assert int(just_before_boundary.timestamp() // 300) != int(just_after_boundary.timestamp() // 300), (
+        "test setup must straddle a real 5-minute bucket boundary"
+    )
+
+    # The mid-batch failure (audit F5's original scenario): the *same* full
+    # selection is submitted both times — a real retry reselects nothing —
+    # but the third seat's credit raises (a lock timeout, a dropped
+    # connection) after the first two have already committed in their own
+    # FEAT transaction, exactly as the route's docstring describes.
+    real_record_payroll_event = admin_module.record_payroll_event
+    calls = {"n": 0}
+
+    def _flaky_record_payroll_event(*a, **kw):
+        calls["n"] += 1
+        if calls["n"] == 3:
+            raise RuntimeError("simulated mid-batch failure (audit F5)")
+        return real_record_payroll_event(*a, **kw)
+
+    monkeypatch.setattr(admin_module, "utc_now", lambda: just_before_boundary)
+    monkeypatch.setattr(admin_module, "record_payroll_event", _flaky_record_payroll_event)
+    first = manual_payroll(client, **args)
+    assert first.status_code == 302  # the route's except-block still redirects
+
+    # The retry: the identical full batch, submitted a few seconds later —
+    # now past the bucket boundary — with the failure no longer reproducing.
+    monkeypatch.setattr(admin_module, "record_payroll_event", real_record_payroll_event)
+    monkeypatch.setattr(admin_module, "utc_now", lambda: just_after_boundary)
+    second = manual_payroll(client, **args)
+    assert second.status_code == 302
+
+    with app.app_context():
+        for seat in seats:
+            assert get_available_balance(seat.id, classroom.class_id, "checking") == Decimal("5.00"), (
+                "a retry that crosses a bucket boundary must not double-pay "
+                "the seats already credited before the rollover"
+            )
+            assert PayrollEvent.query.filter_by(
+                class_id=classroom.class_id, target_seat_id=seat.id,
+                payroll_event_type="manual_credit",
+            ).count() == 1

@@ -8037,14 +8037,30 @@ def payroll_manual_payment():
             # time bound at all, so a teacher who runs the identical weekly
             # bonus — same roster, same description, same amount — next week
             # is not silently skipped as a stale "replay" of this one.
-            time_bucket = int(utc_now().timestamp() // 300)
-            request_nonce = hashlib.sha256(
-                "|".join([
-                    selected_class_id, g.canonical_context.user_id, description,
-                    format(amount, 'f'), form.account_type.data, payment_type,
-                    str(time_bucket), ",".join(sorted(student_ids)),
-                ]).encode()
-            ).hexdigest()[:24]
+            #
+            # A hard 5-minute edge has its own failure mode a Codex review on
+            # this PR caught: a batch that starts just before the boundary,
+            # credits some seats, fails, and is retried just after it would
+            # compute a *different* nonce for the retry and find no record of
+            # the earlier successes — double-paying exactly the seats this
+            # fix exists to protect. So "already applied" is checked against
+            # both the current bucket's nonce and the immediately preceding
+            # one; only the current bucket's nonce is used for new writes.
+            # That covers a retry that crosses at most one boundary (up to
+            # ~10 minutes worst case) without reaching back far enough to
+            # mistake a genuinely new, later submission for a replay.
+            def _manual_credit_nonce(bucket: int) -> str:
+                return hashlib.sha256(
+                    "|".join([
+                        selected_class_id, g.canonical_context.user_id, description,
+                        format(amount, 'f'), form.account_type.data, payment_type,
+                        str(bucket), ",".join(sorted(student_ids)),
+                    ]).encode()
+                ).hexdigest()[:24]
+
+            current_bucket = int(utc_now().timestamp() // 300)
+            request_nonce = _manual_credit_nonce(current_bucket)
+            previous_nonce = _manual_credit_nonce(current_bucket - 1)
             for actor_public_id in student_ids:
                 student = _resolve_student_detail_seat(str(actor_public_id))
                 if student is None or student.class_id != selected_class_id:
@@ -8055,17 +8071,44 @@ def payroll_manual_payment():
                     continue
 
                 idempotency_key = f"manual_credit:{selected_class_id}:{student.id}:{request_nonce}"
+                previous_idempotency_key = (
+                    f"manual_credit:{selected_class_id}:{student.id}:{previous_nonce}"
+                )
+
                 # A retry of the identical batch reaches a seat this same
-                # submission already credited. The FEAT below would replay the
-                # Ledger effect but still attempt a second PayrollEvent insert
-                # under the same (class_id, target_seat_id, idempotency_key,
-                # payroll_event_type), which uq_payroll_event_replay_guard
-                # refuses — so check first and count it as already applied
-                # rather than raising mid-loop and abandoning the rest of the
-                # batch.
-                already_applied = PayrollEvent.query.filter_by(
-                    class_id=selected_class_id, target_seat_id=student.id,
-                    idempotency_key=idempotency_key, payroll_event_type="manual_credit",
+                # submission already credited. uq_payroll_event_replay_guard
+                # does NOT catch this on its own: that constraint's tuple
+                # includes correlation_id, and generate_correlation_id() mints
+                # a fresh random one on every call throughout this codebase
+                # (it is for cross-domain tracing, never replay safety) — so
+                # the constraint would happily accept a second row under the
+                # same idempotency_key as long as its correlation_id differs,
+                # which it always will. Two literally simultaneous submissions
+                # (a double-click, two open tabs) could both read
+                # "not yet applied" below before either commits (CodeRabbit
+                # review on PR #1536). A Postgres transaction-scoped advisory
+                # lock keyed on this seat's idempotency_key serializes the
+                # check-and-insert for that exact (seat, batch) pair across
+                # concurrent requests, without changing the constraint or
+                # anything else that calls record_payroll_event. It is
+                # released automatically at the next commit on this
+                # connection (record_payroll_event's own, below) or at the
+                # request's end if this seat is skipped.
+                db.session.execute(
+                    text("SELECT pg_advisory_xact_lock(hashtext(:key))"),
+                    {"key": idempotency_key},
+                )
+
+                # Checked first (both this bucket and the one before it) and
+                # counted as already applied rather than raising mid-loop and
+                # abandoning the rest of the batch.
+                already_applied = PayrollEvent.query.filter(
+                    PayrollEvent.class_id == selected_class_id,
+                    PayrollEvent.target_seat_id == student.id,
+                    PayrollEvent.payroll_event_type == "manual_credit",
+                    PayrollEvent.idempotency_key.in_(
+                        [idempotency_key, previous_idempotency_key]
+                    ),
                 ).first() is not None
                 if already_applied:
                     applied_count += 1
