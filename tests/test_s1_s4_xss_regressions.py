@@ -28,7 +28,13 @@ from bs4 import BeautifulSoup
 from app import nl2br_filter
 from app.feats.base import FEATContext
 from app.services.entitlement_service import grant_hall_passes
-from tests.helpers.axe_wcag import authenticated_page, sync_playwright, teacher_session, wcag_live_server  # noqa: F401
+from tests.helpers.axe_wcag import (  # noqa: F401
+    authenticated_page,
+    skip_or_fail_without_browser,
+    sync_playwright,
+    teacher_session,
+    wcag_live_server,
+)
 from tests.helpers.canonical_classroom import login_student, login_teacher
 from tests.helpers.class_domain import enable_class_feature
 from tests.helpers.classroom_initializer import initialize_as_student, initialize_as_teacher
@@ -155,7 +161,11 @@ def test_hall_pass_destination_cannot_execute_in_teacher_history_view(app, clien
         seat_id=classroom.teacher_seat.id,
     )
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        try:
+            browser = p.chromium.launch(headless=True)
+        except Exception as exc:  # pragma: no cover - browser installation varies
+            skip_or_fail_without_browser(exc)
+
         try:
             page = authenticated_page(browser, wcag_live_server, sess)
             page.goto("/admin/hall-pass", wait_until="networkidle")
