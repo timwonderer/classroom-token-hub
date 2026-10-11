@@ -24,18 +24,16 @@ walk every function definition with that name.
 
 Part B — Jinja templates
 -------------------------
-The rule: a template expression may contain ``|safe`` only when every filter
-preceding it is on a small allowlist of filters Part A has already proved
-escape before returning ``Markup()`` (today: ``nl2br``). A bare ``{{ x|safe
-}}``, or ``|safe`` preceded only by filters not on that allowlist, is
-reported. An ``{% autoescape false %}`` block is reported unconditionally —
-there is no allowlist for turning off Jinja's own protection.
+The rule: every ``safe`` filter in the complete template AST is reported,
+including assignment expressions and filter blocks. Only the reviewed,
+counted pre-gate baseline may exempt a simple output sink. Autoescape
+options must be the literal ``true``; disabling or dynamically deciding
+Jinja's escaping is reported unconditionally.
 """
 
 from __future__ import annotations
 
 import ast
-import re
 from collections import Counter
 from dataclasses import dataclass
 
@@ -294,13 +292,6 @@ def find_unsafe_markup_in_filters(
 # Part B — Jinja templates
 # ---------------------------------------------------------------------------
 
-# Filters Part A's rule has proved escape before any Markup() they build is
-# returned. Only a filter proved safe this way belongs here — this is an
-# allowlist of filter *behavior*, not a list of names to trust on faith.
-SAFE_BEFORE_SAFE_FILTERS = frozenset({"nl2br"})
-
-_EXPR_RE = re.compile(r"\{\{-?(.*?)-?\}\}", re.DOTALL)
-_AUTOESCAPE_FALSE_RE = re.compile(r"\{%-?\s*autoescape\s+(?:false|False)\s*-?%\}")
 _JINJA = Environment(autoescape=True)
 
 
@@ -318,7 +309,7 @@ class TemplateViolation:
 
     def __str__(self) -> str:
         if self.kind == "autoescape_false":
-            return f"{self.path}:{self.line} — {{% autoescape false %}} disables Jinja's escaping"
+            return f"{self.path}:{self.line} — autoescape is disabled or not provably enabled: {self.excerpt}"
         if self.kind == "unsafe_card_macro_argument":
             return f"{self.path}:{self.line} — card macro receives unproved raw markup: {self.excerpt}"
         return (
@@ -327,41 +318,33 @@ class TemplateViolation:
         )
 
 
-def _line_of(source: str, offset: int) -> int:
-    return source.count("\n", 0, offset) + 1
+def _template_excerpt(source: str, line: int) -> str:
+    return source.splitlines()[line - 1][:160]
 
 
-def find_unsafe_safe_filters(
-    source: str, path: str = "<template>", allowlist: frozenset[str] = SAFE_BEFORE_SAFE_FILTERS
-) -> list[TemplateViolation]:
-    violations: list[TemplateViolation] = []
-    for match in _EXPR_RE.finditer(source):
-        expr = match.group(1).strip()
-        parsed = _JINJA.parse(match.group(0))
-        safe_filters = [n for n in parsed.find_all(jinja_nodes.Filter) if n.name == "safe"]
-        if not safe_filters:
+def _template_reference(node: jinja_nodes.Node) -> str | None:
+    if isinstance(node, jinja_nodes.Name):
+        return node.name
+    if isinstance(node, jinja_nodes.Getattr):
+        receiver = _template_reference(node.node)
+        return f"{receiver}.{node.attr}" if receiver else None
+    return None
+
+
+def find_unsafe_safe_filters(source: str, path: str = "<template>") -> list[TemplateViolation]:
+    tree = _JINJA.parse(source)
+    direct_outputs = {id(value) for output in tree.find_all(jinja_nodes.Output) for value in output.nodes}
+    violations = []
+    for filtered in tree.find_all(jinja_nodes.Filter):
+        if filtered.name != "safe":
             continue
-        for safe_filter in safe_filters:
-            preceding = []
-            value = safe_filter.node
-            while isinstance(value, jinja_nodes.Filter):
-                preceding.append(value.name)
-                value = value.node
-            if not preceding or not set(preceding) <= allowlist:
-                break
-        else:
-            continue
-        # Keep the existing baseline keys for ordinary trailing |safe usages.
-        normalized = re.sub(r"\s+", "", expr)
-        violations.append(
-            TemplateViolation(
-                path,
-                _line_of(source, match.start()),
-                "unsafe_safe_filter",
-                match.group(0)[:160],
-                key=f"{path}::{normalized}",
-            )
-        )
+        reference = _template_reference(filtered.node)
+        # Only simple direct output expressions are baseline-eligible. Moving
+        # a reviewed sink into a set/filter block cannot inherit its exemption.
+        key = f"{path}::{reference}|safe" if reference and id(filtered) in direct_outputs else None
+        violations.append(TemplateViolation(
+            path, filtered.lineno, "unsafe_safe_filter", _template_excerpt(source, filtered.lineno), key
+        ))
     return sorted(violations, key=lambda v: v.line)
 
 
@@ -470,8 +453,13 @@ def load_baseline(text: str) -> Counter[str]:
     )
 
 
-def unbaselined_violations(violations: list[TemplateViolation], baseline: Counter[str]) -> list[TemplateViolation]:
-    """Consume one reviewed baseline occurrence per matching sink."""
+def unbaselined_violations(
+    violations: list[TemplateViolation], baseline: Counter[str], approved_baseline: Counter[str]
+) -> list[TemplateViolation]:
+    """Reject added debt, then consume one reviewed occurrence per matching sink."""
+    additions = baseline - approved_baseline
+    if additions:
+        raise ValueError(f"Jinja baseline only shrinks; unapproved additions: {dict(additions)}")
     remaining = baseline.copy()
     unrouted = []
     for violation in violations:
@@ -483,13 +471,16 @@ def unbaselined_violations(violations: list[TemplateViolation], baseline: Counte
 
 
 def find_autoescape_false_blocks(source: str, path: str = "<template>") -> list[TemplateViolation]:
-    return sorted(
-        (
-            TemplateViolation(path, _line_of(source, m.start()), "autoescape_false", m.group(0))
-            for m in _AUTOESCAPE_FALSE_RE.finditer(source)
-        ),
-        key=lambda v: v.line,
-    )
+    violations = []
+    for modifier in _JINJA.parse(source).find_all(jinja_nodes.EvalContextModifier):
+        for option in modifier.options:
+            if option.key == "autoescape" and not (
+                isinstance(option.value, jinja_nodes.Const) and option.value.value is True
+            ):
+                violations.append(TemplateViolation(
+                    path, modifier.lineno, "autoescape_false", _template_excerpt(source, modifier.lineno)
+                ))
+    return sorted(violations, key=lambda v: v.line)
 
 
 def find_template_violations(source: str, path: str = "<template>") -> list[TemplateViolation]:

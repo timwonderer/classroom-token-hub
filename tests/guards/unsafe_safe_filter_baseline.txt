@@ -4,9 +4,9 @@
 # INCIDENT_2026-10-11_SEC-SAST-GAP-001.md §5). Same convention as
 # migrations/lint_baseline.txt: this records debt the guard accepted on
 # introduction, it does not pre-clear anything new. Do not add an entry here
-# to silence a new finding — fix the finding, or route the value through a
-# filter on SAFE_BEFORE_SAFE_FILTERS once that filter is proven safe the way
-# Part A proves it. An entry that stops matching a real violation must be
+# to silence a new finding — fix it through escaping or a sanitized Markup
+# producer without a redundant |safe filter. The gate compares occurrence
+# counts with the base-branch baseline (or base templates on first adoption). An entry that stops matching a real violation must be
 # deleted, not left stale. Each line covers exactly one reviewed occurrence.
 #
 # templates/docs/view.html — toc/content are built by

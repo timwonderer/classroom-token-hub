@@ -69,7 +69,7 @@
                     </div>
                 </div>
                 <div class="card-body">
-                    <p class="mb-2">{{ announcement.message|nl2br|safe }}</p>
+                    <p class="mb-2">{{ announcement.message|nl2br }}</p>
                     <div class="text-muted small">
                         <span class="material-symbols-outlined me-1" aria-hidden="true">calendar_month</span>Created: {{ announcement.created_at | fmt_timestamp }}
                         {% if announcement.expires_at %}

@@ -18,6 +18,9 @@ broken right now.
 from __future__ import annotations
 
 from collections import Counter
+import json
+import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -47,6 +50,27 @@ def _app_sources() -> list[Path]:
 
 def _template_sources() -> list[Path]:
     return sorted([*TEMPLATES_ROOT.rglob("*.html"), *(STATUS_ROOT / "templates").rglob("*.html")])
+
+
+def _base_branch_baseline(repo_root: Path, base_ref: str) -> Counter[str]:
+    """Read immutable base evidence; bootstrap only from sinks on that base."""
+    def git(*args):
+        return subprocess.run(['git', *args], cwd=repo_root, check=True, capture_output=True, text=True).stdout
+
+    revision = git('rev-parse', '--verify', f'{base_ref}^{{commit}}').strip()
+    relative_path = 'tests/guards/unsafe_safe_filter_baseline.txt'
+    if git('ls-tree', '--name-only', revision, '--', relative_path).strip():
+        return load_baseline(git('show', f'{revision}:{relative_path}'))
+    # Initial adoption has no baseline file on main. Existing base-tree sinks
+    # set the maximum reviewed debt; a branch-created template/key cannot enter.
+    approved = Counter()
+    paths = git('ls-tree', '-r', '--name-only', revision, '--', 'templates', 'status_service/templates').splitlines()
+    for path in paths:
+        if path.endswith('.html'):
+            for violation in find_unsafe_safe_filters(git('show', f'{revision}:{path}'), path):
+                if violation.key is not None:
+                    approved[violation.key] += 1
+    return approved
 
 
 # --------------------------------------------------------------------------
@@ -92,16 +116,18 @@ def test_no_template_has_an_unrouted_unsafe_safe_filter_or_autoescape_false():
             path.read_text(encoding="utf-8"), str(path.relative_to(REPO_ROOT))
         )
 
-    unrouted = unbaselined_violations(violations, baseline)
+    event_path = os.environ.get("GITHUB_EVENT_PATH")
+    event = json.loads(Path(event_path).read_text()) if event_path else {}
+    base_ref = event.get("pull_request", {}).get("base", {}).get("sha") or event.get("inputs", {}).get("base_sha") or "origin/main"
+    unrouted = unbaselined_violations(violations, baseline, _base_branch_baseline(REPO_ROOT, base_ref))
 
     assert not unrouted, (
         "a template marks output |safe without a proven-safe filter ahead of "
         "it, or disables autoescaping (the S1 dashboard-sink taint shape, "
         "GHSA-7fxj-gpw3-23g3). If this is genuinely safe (pre-sanitized before "
         "reaching the template, or author-controlled, not request/DB data), "
-        "add a justified entry to tests/guards/unsafe_safe_filter_baseline.txt "
-        "— that file only shrinks, it is not a place to silence a new finding "
-        "without review:\n  " + "\n  ".join(str(v) for v in unrouted)
+        "use a sanitized Markup producer and remove redundant |safe output. "
+        "The reviewed baseline only shrinks and cannot excuse a new sink:\n  " + "\n  ".join(str(v) for v in unrouted)
     )
 
 
@@ -122,18 +148,26 @@ def test_baseline_has_no_stale_entries():
 
 
 def test_guard_still_recognises_the_real_safe_usages():
-    """SOP-TEST-003 §IX.A(4): the allowlisted ``|nl2br|safe`` usages this repo
-    actually ships must still parse as filter usages, not silently skip."""
+    """SOP-TEST-003 §IX.A(4): actual baseline sinks must be detected."""
+    baseline = load_baseline(BASELINE_PATH.read_text())
     found = []
     for path in _template_sources():
-        found.extend(find_unsafe_safe_filters(
-            path.read_text(encoding="utf-8"), str(path.relative_to(REPO_ROOT)), allowlist=frozenset()
-        ))
-    expected = {
-        "templates/admin_announcements.html::announcement.message|nl2br|safe",
-        "templates/student_dashboard.html::announcement.message|nl2br|safe",
-    }
-    assert Counter(v.key for v in found if v.key in expected) == Counter({key: 1 for key in expected})
+        found.extend(find_unsafe_safe_filters(path.read_text(), str(path.relative_to(REPO_ROOT))))
+    assert Counter(v.key for v in found if v.key is not None) == baseline
+    assert baseline.total() == 9
+
+
+def test_real_nl2br_outputs_do_not_apply_a_redundant_safe_filter():
+    from jinja2 import Environment, nodes
+
+    found = Counter()
+    for path in _template_sources():
+        tree = Environment(autoescape=True).parse(path.read_text())
+        for filtered in tree.find_all(nodes.Filter):
+            if filtered.name == 'nl2br':
+                found[str(path.relative_to(REPO_ROOT))] += 1
+                assert not any(n.name == 'safe' for n in tree.find_all(nodes.Filter))
+    assert found == Counter({'templates/admin_announcements.html': 1, 'templates/student_dashboard.html': 1})
 
 
 def test_card_macro_baseline_premises_hold_for_every_caller():
@@ -250,9 +284,9 @@ def test_detector_reports_autoescape_false_unconditionally():
     assert len(violations) == 1
 
 
-def test_detector_is_quiet_on_the_allowlisted_nl2br_safe_usage():
+def test_detector_rejects_safe_even_after_nl2br():
     source = "<p>{{ announcement.message|nl2br|safe }}</p>\n"
-    assert find_unsafe_safe_filters(source) == []
+    assert len(find_unsafe_safe_filters(source)) == 1
 
 
 def test_detector_is_quiet_on_plain_autoescaped_output():
@@ -260,7 +294,7 @@ def test_detector_is_quiet_on_plain_autoescaped_output():
     assert find_template_violations(source) == []
 
 
-def test_detector_distinguishes_allowlisted_from_non_allowlisted_filter_before_safe():
+def test_detector_rejects_other_filters_before_safe():
     """A filter not yet proven safe must still be caught even chained with one that is."""
     source = "<p>{{ message|nl2br|striptags|safe }}</p>\n"
     violations = find_unsafe_safe_filters(source)
@@ -325,9 +359,9 @@ def test_detector_reports_alternative_safe_filter_syntax(expression):
 
 
 @pytest.mark.parametrize('expression', [
-    '{{ raw|nl2br|safe() }}',
-    '{{- raw|nl2br|safe -}}',
-    '{{ raw|nl2br|safe|upper }}',
+    '{{ raw|nl2br }}',
+    '{{- raw|nl2br -}}',
+    '{{ raw|nl2br|upper }}',
     '{{ "literal|safe" }}',
 ])
 def test_detector_accepts_safe_jinja_syntax(expression):
@@ -455,10 +489,10 @@ def test_baseline_counts_reviewed_occurrences_and_routes_duplicates():
     baseline = load_baseline(f'# Two reviewed sinks\n{key}\n{key}\n')
     assert baseline == Counter({key: 2})
     reviewed = find_template_violations('{{ toc|safe }}\n{{ toc|safe }}', 'templates/example.html')
-    assert unbaselined_violations(reviewed, baseline) == []
+    assert unbaselined_violations(reviewed, baseline, baseline) == []
     added = find_template_violations('{{ toc|safe }}\n' * 3, 'templates/example.html')
-    assert len(unbaselined_violations(added, baseline)) == 1
-    assert unbaselined_violations(added, baseline)[0].line == 3
+    assert len(unbaselined_violations(added, baseline, baseline)) == 1
+    assert unbaselined_violations(added, baseline, baseline)[0].line == 3
     assert baseline == Counter({key: 2})
     assert baseline - Counter(v.key for v in reviewed[:1]) == Counter({key: 1})
 
@@ -541,3 +575,121 @@ def test_real_announcement_macro_constrains_raw_attribute_identifier(identifier,
             assert 'onmouseover' not in dict(attrs)
 
     AttributeNames().feed(rendered)
+
+
+@pytest.mark.parametrize('source', [
+    '{% set rendered = request_value|safe %}{{ rendered }}',
+    '{% filter safe %}{{ raw }}{% endfilter %}',
+    '{% set rendered %}{{ raw|safe }}{% endset %}{{ rendered }}',
+    '{% do consume(raw|safe) %}',
+])
+def test_detector_reports_safe_filters_outside_output_expressions(source):
+    # The application does not enable the do extension; unsupported syntax must
+    # fail parsing instead of quietly escaping the guard.
+    if source.startswith('{% do'):
+        from jinja2 import TemplateSyntaxError
+        with pytest.raises(TemplateSyntaxError):
+            find_unsafe_safe_filters(source)
+    else:
+        violations = find_unsafe_safe_filters(source)
+        assert len(violations) == 1
+        assert violations[0].key is None or violations[0].key.endswith('raw|safe')
+
+
+def test_assignment_safe_cannot_inherit_a_direct_output_baseline():
+    baseline = load_baseline('templates/example.html::toc|safe\n')
+    violations = find_unsafe_safe_filters('{% set rendered = toc|safe %}{{ rendered }}', 'templates/example.html')
+    assert violations[0].key is None
+    assert len(unbaselined_violations(violations, baseline, baseline)) == 1
+
+
+@pytest.mark.parametrize('option', ['false', 'False', 'enabled', '0', 'true and false', "''"])
+def test_detector_checks_autoescape_semantically(option):
+    source = '{% autoescape ' + option + ' %}{{ raw }}{% endautoescape %}'
+    assert len(find_autoescape_false_blocks(source)) == 1
+
+
+def test_template_comments_and_quoted_filter_text_are_not_sinks():
+    source = '{# {{ raw|safe }} {% autoescape false %} #}{{ "literal|safe" }}'
+    assert find_template_violations(source) == []
+
+
+@pytest.fixture
+def base_template_repository(tmp_path):
+    def git(*args):
+        return subprocess.run(['git', *args], cwd=tmp_path, check=True, capture_output=True, text=True).stdout.strip()
+
+    git('init', '-q')
+    (tmp_path / 'templates').mkdir()
+    (tmp_path / 'templates/example.html').write_text('{{ toc|safe }}')
+    git('add', '.')
+    git('-c', 'user.name=Guard test', '-c', 'user.email=guard@example.invalid', 'commit', '-qm', 'Base templates')
+    return tmp_path, git, git('rev-parse', 'HEAD')
+
+
+def test_initial_baseline_cannot_self_suppress_a_branch_created_sink(base_template_repository):
+    root, _, revision = base_template_repository
+    approved = _base_branch_baseline(root, revision)
+    assert approved == Counter({'templates/example.html::toc|safe': 1})
+    # The branch changes the output and creates its own matching exemption.
+    (root / 'templates/example.html').write_text('{{ raw|safe }}')
+    tampered = load_baseline('templates/example.html::raw|safe\n')
+    violations = find_template_violations((root / 'templates/example.html').read_text(), 'templates/example.html')
+    with pytest.raises(ValueError, match='unapproved additions'):
+        unbaselined_violations(violations, tampered, _base_branch_baseline(root, revision))
+
+
+def test_committed_baseline_cannot_self_suppress_an_added_occurrence(base_template_repository):
+    root, git, _ = base_template_repository
+    path = root / 'tests/guards/unsafe_safe_filter_baseline.txt'
+    path.parent.mkdir(parents=True)
+    key = 'templates/example.html::toc|safe\n'
+    path.write_text(key)
+    git('add', '.')
+    git('-c', 'user.name=Guard test', '-c', 'user.email=guard@example.invalid', 'commit', '-qm', 'Approved baseline')
+    revision = git('rev-parse', 'HEAD')
+    # The branch edits both the template and its editable baseline.
+    (root / 'templates/example.html').write_text('{{ toc|safe }}\n{{ toc|safe }}')
+    path.write_text(key * 2)
+    violations = find_template_violations((root / 'templates/example.html').read_text(), 'templates/example.html')
+    with pytest.raises(ValueError, match='unapproved additions'):
+        unbaselined_violations(violations, load_baseline(path.read_text()), _base_branch_baseline(root, revision))
+
+
+def test_base_evidence_accepts_existing_debt_and_shrinkage(base_template_repository):
+    root, _, revision = base_template_repository
+    approved = _base_branch_baseline(root, revision)
+    reviewed = find_template_violations('{{ toc|safe }}', 'templates/example.html')
+    assert unbaselined_violations(reviewed, approved, approved) == []
+    assert unbaselined_violations([], Counter(), approved) == []
+
+
+def test_missing_base_revision_cannot_silently_pass(base_template_repository):
+    root, _, _ = base_template_repository
+    with pytest.raises(subprocess.CalledProcessError):
+        _base_branch_baseline(root, 'missing-base')
+
+
+@pytest.mark.parametrize('path', ['admin_announcements.html', 'student_dashboard.html'])
+def test_real_nl2br_output_stays_escaped_without_safe_even_if_filter_regresses(path):
+    import ast
+    from types import SimpleNamespace
+    from jinja2 import Environment
+
+    definition = next(n for n in ast.parse((APP_ROOT / '__init__.py').read_text()).body if isinstance(n, ast.FunctionDef) and n.name == 'nl2br_filter')
+    namespace = {}
+    exec(compile(ast.Module(body=[definition], type_ignores=[]), '<nl2br>', 'exec'), namespace)
+    env = Environment(autoescape=True)
+    env.filters['nl2br'] = namespace['nl2br_filter']
+    source = next(line for line in (TEMPLATES_ROOT / path).read_text().splitlines() if 'announcement.message|nl2br' in line)
+    announcement = SimpleNamespace(message='hello\n<img src=x onerror=alert(1)>')
+    rendered = env.from_string(source).render(announcement=announcement)
+    prior = env.from_string(source.replace('|nl2br', '|nl2br|safe')).render(announcement=announcement)
+    assert rendered == prior
+    assert '<br>' in rendered and '<img' not in rendered
+    # Even a filter changed to return raw text cannot disable output escaping.
+    env.filters['nl2br'] = lambda value: value.replace('\n', '<br>')
+    regressed = env.from_string(source).render(announcement=announcement)
+    assert '<img' not in regressed
+    assert '&lt;img' in regressed
+    assert len(find_unsafe_safe_filters(source.replace('|nl2br', '|nl2br|safe'))) == 1
