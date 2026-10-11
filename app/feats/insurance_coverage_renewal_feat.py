@@ -45,7 +45,7 @@ from types import SimpleNamespace
 from app.extensions import db
 from app.feats.assess_obligation_feat import AssessmentRequest, assess_obligation
 from app.feats.base import requires_feat_context
-from app.feats.insurance_premium_payment_feat import settle_insurance_premium
+from app.feats.insurance_premium_payment_feat import premium_is_affordable, settle_insurance_premium
 from app.feats.schedule_next_bill_cycle_feat import (
     ScheduleNextBillCycleRequest,
     schedule_next_bill_cycle,
@@ -287,15 +287,16 @@ def _attempt_autopay(
     amount = state.remaining_amount
     if amount <= Decimal("0.00"):
         return True
-    from app.services.class_configuration_query_service import get_banking_directive
-    from app.services.ledger_recovery_service import lock_recovery_scope
-    from app.services.ledger_resolution_service import build_intended_ledger_plan,resolve_intended_ledger_plan
-    lock_recovery_scope(class_id,seat_id)
-    intended=build_intended_ledger_plan(seat_id=seat_id,class_id=class_id,debit_amount=amount,
-        description='Automatic insurance premium',transaction_type='insurance_premium',
-        actor_seat_id=resolve_teacher_seat_for_class(class_id).id,target_seat_id=seat_id,mechanism='system')
-    resolved=resolve_intended_ledger_plan(plan=intended,banking_directive=get_banking_directive(class_id),fee_authority='NONE')
-    if resolved.checking_after < 0:
+    # The same affordability rule as a manual payment and the purchase's first
+    # premium (DOM-OBL-001 §II.C); a premium that cannot be covered stays owed.
+    if not premium_is_affordable(
+        class_id=class_id,
+        seat_id=seat_id,
+        amount=amount,
+        description="Automatic insurance premium",
+        mechanism="system",
+        actor_seat_id=resolve_teacher_seat_for_class(class_id).id,
+    ):
         return False
     settle_insurance_premium(
         class_id=class_id,

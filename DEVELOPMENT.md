@@ -1,7 +1,7 @@
 # Classroom Token Hub - Development Priorities
 
 **Last Updated:** 2026-10-10
-**Current Released Version:** 2.2.1 (`f98d8a206`), the latest tag; production runs the untagged `c2f16fb11` on top of it (#1532), deployed 2026-10-10. v2.0.0 launched 2026-09-26
+**Current Released Version:** 2.2.2 (`61b509b7f`), deployed 2026-10-11 UTC; includes the untagged `c2f16fb11` hotfix (#1532). v2.0.0 launched 2026-09-26
 **Engineering State:** v2 in production; post-launch hardening
 **Active Integration Branch:** `main`
 
@@ -86,7 +86,7 @@ on a custom database URL.
   can be reversed (#1526), hall passes require teacher settings (#1522), the per-render cross-class payroll
   query is gone (#1527), and the sysadmin log viewers are removed (#1528). No migration. See the `[2.2.0]`
   section of the CHANGELOG and `docs/ops/audits/DEPLOY_2026-10-09_5ebae62db.md`.
-- **v2.2.1** (`f98d8a206`, deployed 2026-10-10). Production runs this release: purchased hall passes can be
+- **v2.2.1** (`f98d8a206`, deployed 2026-10-10). Purchased hall passes can be
   reversed, using a pass writes only the hall-pass log, a pass with a request waiting is reserved, and an item
   with a request waiting can't be reversed (#1530). Migration `35a9a0d3ab93` makes a pass spendable once. See
   the `[2.2.1]` section of the CHANGELOG and `docs/ops/audits/DEPLOY_2026-10-10_f98d8a206.md`. Next: the NSF

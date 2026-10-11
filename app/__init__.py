@@ -45,6 +45,14 @@ required_env_vars = [
     "PEPPER_KEY",
     "AUDIT_HMAC_KEY",
 ]
+# The Cloudflare Turnstile pair is the only bot check on student login, seat
+# claim, student recovery and teacher recovery. verify_turnstile_token() skips
+# verification when the secret is unset (local development), so a production
+# deploy that dropped the key would start normally with every one of those
+# ingresses unguarded. Production therefore requires the pair at startup.
+# Outside production the bypass stays, so local setups need no registered key.
+if os.getenv("FLASK_ENV") == "production":
+    required_env_vars = required_env_vars + ["TURNSTILE_SECRET_KEY", "TURNSTILE_SITE_KEY"]
 missing_vars = [var for var in required_env_vars if not os.getenv(var)]
 if missing_vars:
     raise RuntimeError(
@@ -64,16 +72,24 @@ def url_encode_filter(s):
 
 
 def nl2br_filter(s):
-    """Convert newlines to <br> tags for HTML display."""
+    """Convert newlines to <br> tags for HTML display.
+
+    S4 (stored script injection via announcements): this filter previously
+    wrapped the raw string in ``Markup(...)`` with no escaping, so an
+    announcement message such as ``<img src=x onerror=...>`` was marked safe
+    and rendered as live HTML in every student's dashboard. Escape first,
+    then introduce the (trusted, filter-authored) ``<br>`` markup -- the
+    standard nl2br pattern.
     # TODO: [DEPENDABOT PR #463] MarkupSafe 3.x introduces breaking changes:
     # - soft_str and soft_unicode removed (deprecated since 2.0)
     # - Markup.striptags() behavior may differ
     # - Review Jinja2 behavior before upgrading from 2.1.5 to 3.0.3
-    from markupsafe import Markup
+    """
+    from markupsafe import Markup, escape
     if s is None:
         return ''
-    # Replace \n with <br> and return as safe HTML
-    return Markup(str(s).replace('\n', '<br>\n'))
+    escaped = str(escape(str(s)))
+    return Markup(escaped.replace('\n', '<br>\n'))
 
 
 # -------------------- APPLICATION FACTORY --------------------

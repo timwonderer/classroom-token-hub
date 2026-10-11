@@ -1,0 +1,104 @@
+# Incident record: SEC-SAST-GAP-001, SAST tooling gap behind S1/S4 (2026-10-11)
+
+**Status:** Closed. The underlying vulnerabilities (S1, S4) were fixed and deployed in v2.2.2
+(`61b509b7fd8ad680691ba733a467f2cc66bd65b0`, 2026-10-11 00:23 UTC) before this record was
+written; see GHSA-7fxj-gpw3-23g3 for the vulnerability advisory. This record covers the
+tooling-process finding only: why neither automated SAST tool blocked these two sinks before a
+manual audit found them, and the resulting change to scanning configuration.
+
+All times are UTC.
+
+## 1. Summary
+
+Two independent XSS sinks (S1: hall-pass destination rendered unescaped; S4: `nl2br_filter`
+wrapping raw text in `Markup()`) existed in production for up to ~11 months before a manual
+repository audit on 2026-10-10 found them. Checking the record after the fact:
+
+- **CodeQL** (GitHub's managed "default setup," `query_suite: default`, active since
+  2025-12-13) never flagged either sink. 126 code-scanning alerts exist for this repository's
+  history; none touch `templates/admin_hall_pass.html`, `templates/student_dashboard.html`,
+  `app/__init__.py`, or the announcement templates. The one rule built for this exact bug class,
+  `js/xss-through-dom`, fired 7 times elsewhere in the codebase (all since fixed) but never on
+  the S1 sink.
+- **Aikido** (SAST, free tier) *did* flag the S1 client-side sink —
+  `templates/admin_hall_pass.html` lines 537 and 603-610 (`tbody.innerHTML = ...`), both rated
+  High, with the first AI-upgraded to "likely exploitable." It did not flag S4 or the second S1
+  sink (the Jinja-side `attendance_state_json|safe` sink in `student_dashboard.html`).
+
+Neither tool's finding reached a merge-blocking gate. Aikido was removed from the project on
+2026-10-11 as a result (see §4). CodeQL remains, and this record's action item is to broaden its
+query suite (see §5).
+
+## 2. Timeline
+
+| Time | Event |
+|---|---|
+| 2025-11-22 | PR #288 introduces the S1 client-side sink (`admin_hall_pass.html`, hall-pass history render). CodeQL is not yet wired into the repository; Aikido's check on that PR shows no finding for it. |
+| 2025-12-13 | CodeQL ("default setup") becomes active on the repository. |
+| 2025-12-26 | S4's sink (`nl2br_filter` in `app/__init__.py`) ships with the announcement feature, ~2.5 hours after PR #732 ("Fix: Remediate XSS Vulnerability in Redirect Logic") fixes an unrelated, different-pattern XSS. |
+| 2026-07-21 | The second S1 sink (`student_dashboard.html`, `attendance_state_json|safe`) ships. CodeQL has been active for seven months at this point. |
+| 2026-10-10 | Manual repository audit (37 findings, S/F/O/C categories) identifies S1 and S4 independently of either scanning tool. |
+| 2026-10-11 00:23 | Fix deployed to production as v2.2.2 (`61b509b7f`); see `docs/ops/audits/` release record. |
+| 2026-10-11 ~02:14 | Owner checks Aikido's dashboard directly and finds the pre-existing High-severity finding for the S1 client-side sink, still open, never surfaced as a failing PR check. |
+| 2026-10-11 ~02:49 | Root cause confirmed: Aikido's PR check is diff-scoped only (confirmed via PR #1535's final-commit check output, "No new issues were introduced. No issues were solved."). It does not re-evaluate pre-existing findings in files a PR doesn't touch, so every PR after #288 showed green regardless of the open finding. Owner decides to remove Aikido from the repository. |
+| 2026-10-11 ~03:11 | Owner switches CodeQL's `code-scanning/default-setup` query suite to `security-extended` directly in Settings → Code security. Confirmed from the next scan's job logs: the Python analysis now interprets queries absent from the prior default suite (`py/csrf-protection-disabled`, `py/jinja2/autoescape-false`, `py/clear-text-logging-sensitive-data`, `py/weak-sensitive-data-hashing`, `py/template-injection`, `py/log-injection`, among others) and immediately surfaces a larger set of alerts, triaged separately (see §5). |
+
+## 3. Root cause
+
+Two independent, non-overlapping gaps, not one:
+
+1. **Aikido (S1 client-side sink only): detection without routing.** The scanner correctly
+   identified the sink and rated it High/likely-exploitable at some point after 2025-11-22. But
+   its free-tier PR check only diffs the changed lines of each PR against known issues in those
+   same lines — it does not gate on, or even surface, pre-existing findings in files a given PR
+   leaves untouched. Because no PR after #288 touched line 537 until the fix PR itself, every
+   intervening PR's Aikido check reported clean. The finding sat in Aikido's own dashboard queue,
+   visible only to someone who opened it directly — which nothing in the repository's workflow
+   required anyone to do.
+2. **CodeQL (both S1 sinks, plus S4): no coverage, not a routing failure.** CodeQL's default
+   query suite has no rule for a value that reaches Jinja output through the `safe` filter or a
+   custom filter wrapping `Markup()` — a cross-language (Python-to-Jinja) taint flow that generic
+   DOM-XSS/reflected-XSS queries don't model. This explains the dashboard sink (S1) and S4 fully.
+   It does not fully explain the client-side sink CodeQL's own `js/xss-through-dom` rule *does*
+   model and caught 7 other times in this codebase — the taint flow there crosses a
+   `fetch().then(r => r.json())` → `.map()` → template-literal boundary that none of the other 7
+   catches needed to cross, which is the most likely reason that specific instance was missed
+   even though the rule class exists.
+
+## 4. Action taken
+
+- Aikido removed from the repository (owner action, 2026-10-11). A scanner whose merge-blocking
+  check reports green regardless of its own dashboard backlog is a worse signal than no scanner:
+  the green checkmark reads as "nothing found" when it means "nothing new in this diff."
+- CodeQL's `code-scanning/default-setup` query suite switched to `security-extended` (owner
+  action in Settings → Code security, 2026-10-11). **This only partially closes the gap in §3.**
+  `js/xss-through-dom` (the client-side `innerHTML`-sink rule, which already existed in the
+  default suite and is what caught the 7 other instances in §1) is unaffected by the switch
+  either way. For the Jinja-side gap, `security-extended`'s one relevant addition is
+  `py/jinja2/autoescape-false` — which fires only on `autoescape=False`, not on the `safe` filter
+  or a custom filter that calls `Markup()` without escaping first. Neither S1's dashboard sink
+  nor S4 used `autoescape=False`; both would still go undetected by `security-extended` today. A
+  review comment on the PR accompanying this record (chatgpt-codex-connector, 2026-10-11)
+  correctly caught this overclaim in an earlier draft of this record. The Jinja-side gap remains
+  open; see the custom-query follow-up below, which is now required rather than optional.
+
+## 5. Follow-ups
+
+- [ ] Triage the alert backlog the `security-extended` switch surfaced (tracked in a separate
+      thread/PR: group by query ID and trust boundary, determine reachability from public
+      requests, untrusted CI input, scheduled production operations, or trusted local maintenance
+      only, and examine input provenance, execution privileges, and existing defenses for each
+      group).
+- [ ] Establish a recurring (not purely PR-triggered) review of any SAST tool's full dashboard
+      backlog, not just its PR-time pass/fail, so a pre-existing finding in untouched code has a
+      scheduled point where it gets looked at.
+- [ ] **Required, not optional** (see §4): neither CodeQL's default suite nor `security-extended`
+      has a query for a function registered into `jinja_env.filters[...]` that calls `Markup()`
+      without escaping first, or for `safe`-filtered output built from request- or
+      database-sourced text outside an `autoescape=False` block. Write a custom CodeQL query (or,
+      if that is not practical, a deterministic repository guard test per
+      `.claude/rules/testing.md` Mistake 6a, proven against a synthetic near-miss) for this
+      pattern before this follow-up is considered done. `js/xss-through-dom` already covers the
+      client-side `fetch(...).then(...)` → `.innerHTML` pattern in the default suite; no
+      additional query is needed there, but confirming that rule remains enabled is worth a line
+      in the same guard.

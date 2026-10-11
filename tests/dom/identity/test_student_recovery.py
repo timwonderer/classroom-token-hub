@@ -268,8 +268,8 @@ def test_DOM_IDEN_002__reset_code_invalid_after_credential_setup(client, recover
     student_create_username(client, "planet")
     student_setup_pin_passphrase(
         client,
-        pin="1234",
-        confirm_pin="1234",
+        pin="4826",
+        confirm_pin="4826",
         passphrase="updated-passphrase",
         confirm_passphrase="updated-passphrase",
     )

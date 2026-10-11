@@ -74,7 +74,12 @@
 <div id="toast-container" class="toast-container position-fixed top-0 end-0 p-3"></div>
 
 <!-- Server State for JS -->
-<div id="serverState" hidden>{{ attendance_state_json|safe }}</div>
+<!-- S1: attendance_state_json can carry a student-supplied hall-pass destination
+     (e.g. attendance_state["hall_pass"]["reason"]). It is read back via
+     serverState.textContent + JSON.parse() in static/js/attendance.js, so it
+     must NOT be marked |safe here -- Jinja's default autoescaping protects
+     this div's HTML, and .textContent decodes the entities back on read. -->
+<div id="serverState" hidden>{{ attendance_state_json }}</div>
 
 <!-- Account Recovery Request -->
 {% if pending_recovery_code %}

@@ -190,19 +190,24 @@ def test_same_idempotency_key_retry_no_duplicates(app):
 # --------------------------------------------------------------------------- #
 
 
-def test_authorized_purchase_uses_shared_funding(app):
+def test_unaffordable_first_premium_writes_nothing(app):
+    """DOM-OBL-001 3.3 §II.C / SPEC-ECON-003 §4.5.1.1 (owner ruling 2026-10-07):
+    a first premium the seat cannot cover is refused before any mutation — no
+    grant, cycle, assessment, satisfaction, or ledger row, and checking is
+    untouched."""
     classroom, policy_uuid = _setup(app, fund="5.00")  # premium is 10.00
     with app.app_context():
         result = execute_purchase_insurance(
             canonical_context=_student_ctx(classroom),
             policy_uuid=policy_uuid, idempotency_key="buy:1")
         db.session.commit()
-        assert result.success
+        assert not result.success
+        assert result.error_code == "INSUFFICIENT_FUNDS"
         assert _counts(classroom, policy_uuid) == dict(
-            grants=1, assessments=1, payments=1, cycles=1, premium_txns=1)
+            grants=0, assessments=0, payments=0, cycles=0, premium_txns=0)
         from app.services.ledger_balance_query_service import get_available_balances
         checking, savings = get_available_balances(classroom.students[0].seat.id, classroom.class_id)
-        assert checking == Decimal("-5.00")
+        assert checking == Decimal("5.00")
         assert savings == Decimal("0.00")
 
 

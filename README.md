@@ -2,11 +2,17 @@
 
 # Classroom Token Hub (CTH)
 
-A classroom behavior management and reward platform with built-in simulated financial products and economic engines (and an absurd amount of documentation, pytests, and opinions.) 
+A classroom behavior management and reward platform with built-in simulated financial products and economic engines (and an absurd amount of documentation, pytests, and opinions.)
 
 Students earn tokens for the time they work, and spend them on rent, insurance and a class store. Teachers run the class economy without handing over student email addresses, phone numbers or school SSO. Built with Flask, SQLAlchemy and PostgreSQL. Each class period is its own isolated economy.
 
-**In production:** `c2f16fb11` (untagged, on top of [v2.2.1](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.2.1)), deployed 2026-10-10 ([release record](docs/ops/audits/DEPLOY_2026-10-10_c2f16fb11.md)). **Latest tag:** v2.2.1 (v2 launched 2026-09-26) · **Branch:** `main` · **License:** [PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0)
+**In production:** [v2.2.2](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.2.2) (`61b509b7f`), deployed 2026-10-11 UTC ([release record](docs/ops/audits/DEPLOY_2026-10-11_61b509b7f.md)).
+
+**Latest tag:** ![Version](https://img.shields.io/github/v/release/timwonderer/classroom-token-hub)
+
+**Branch:** `main`
+
+**License:** [Polyform Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0)
 
 | | |
 | --- | --- |
@@ -243,7 +249,7 @@ The `314158d53` release record is [DEPLOY_2026-09-30_314158d53.md](docs/ops/audi
 
 Two untagged releases followed v2.1.0: `ad9574334` on 2026-10-03 ([DEPLOY_2026-10-03_ad9574334.md](docs/ops/audits/DEPLOY_2026-10-03_ad9574334.md)), and `4c2fc4bc4` on 2026-10-04, a hotfix carrying #1476 off `main`, recorded in the v2.1.1 record. Both are part of v2.1.1 in the CHANGELOG.
 
-Three untagged releases followed v2.1.1: `381a12d49` on 2026-10-05 ([DEPLOY_2026-10-04_381a12d49.md](docs/ops/audits/DEPLOY_2026-10-04_381a12d49.md)), then `35bad089a` on 2026-10-05 and `1cdbf03da` on 2026-10-06, neither of which has a release record. All three are part of v2.2.0 in the CHANGELOG. One untagged release followed v2.2.1: `c2f16fb11` on 2026-10-10 ([DEPLOY_2026-10-10_c2f16fb11.md](docs/ops/audits/DEPLOY_2026-10-10_c2f16fb11.md)), carrying #1532. Production currently runs it, on top of v2.2.1 (`f98d8a206`).
+Three untagged releases followed v2.1.1: `381a12d49` on 2026-10-05 ([DEPLOY_2026-10-04_381a12d49.md](docs/ops/audits/DEPLOY_2026-10-04_381a12d49.md)), then `35bad089a` on 2026-10-05 and `1cdbf03da` on 2026-10-06, neither of which has a release record. All three are part of v2.2.0 in the CHANGELOG. One untagged release followed v2.2.1: `c2f16fb11` on 2026-10-10 ([DEPLOY_2026-10-10_c2f16fb11.md](docs/ops/audits/DEPLOY_2026-10-10_c2f16fb11.md)), carrying #1532. It is included in v2.2.2 (`61b509b7f`), deployed 2026-10-11 UTC ([record](docs/ops/audits/DEPLOY_2026-10-11_61b509b7f.md)).
 
 ### Known limits of the release evidence
 
@@ -304,7 +310,7 @@ The user guides in `docs/user-guides/` are served inside the app at `/docs`. The
 
 | Line | Status | Where it lives |
 | --- | --- | --- |
-| **v2** | Current. v2.0.0 released 2026-09-26; v2.0.1 (security) released 2026-09-28; untagged releases from `main` on 2026-09-29 and 2026-09-30; v2.1.0 released 2026-10-02; untagged releases on 2026-10-03 and 2026-10-04; v2.1.1 released 2026-10-04; untagged releases on 2026-10-05 and 2026-10-06; v2.2.0 released 2026-10-09; v2.2.1 released 2026-10-10; untagged release on 2026-10-10 | `main` |
+| **v2** | Current. v2.0.0 released 2026-09-26; v2.0.1 (security) released 2026-09-28; untagged releases from `main` on 2026-09-29 and 2026-09-30; v2.1.0 released 2026-10-02; untagged releases on 2026-10-03 and 2026-10-04; v2.1.1 released 2026-10-04; untagged releases on 2026-10-05 and 2026-10-06; v2.2.0 released 2026-10-09; v2.2.1 released 2026-10-10; untagged release on 2026-10-10; v2.2.2 released 2026-10-11 UTC | `main` |
 | **v1** | Retired. v1.10.0 (2026-06-14) was the final v1 release | Branch `main_legacy_v1.10.0` and the `v1.*` tags |
 
 v2 is a ground-up rebuild. It's a clean break: no v1 accounts or data carry over. See the [v2.0.0](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.0.0), [v2.0.1](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.0.1), [v2.1.0](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.1.0), [v2.1.1](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.1.1), [v2.2.0](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.2.0) and [v2.2.1](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.2.1) release notes. Upgrading every 2.0.0 deployment to 2.0.1 is recommended: it ties each passkey to the account it was registered to.

@@ -333,8 +333,18 @@ class FEATContext:
              raise FEATContextError(f"FATAL: Test correlation ID '{self.correlation_id}' detected in PRODUCTION environment. This is strictly prohibited.")
 
         # 2. Idempotency Format Discipline (Warning level for structured keys)
+        #
+        # Logs length only, never the key itself: an idempotency_key can be
+        # built from caller-chosen content (a description, a user id, ...),
+        # so printing it verbatim is a clear-text-logging risk for whatever
+        # that content happens to be, not just a format-lint convenience
+        # (CodeQL py/clear-text-logging-sensitive-data on this line).
         if self.idempotency_key and ":" not in self.idempotency_key:
-             logger.warning(f"FEAT-FORMAT-WARNING: Unstructured idempotency key '{self.idempotency_key}' in {feat_name}. Recommended: <feat>:<op>:<uuid>")
+             logger.warning(
+                 f"FEAT-FORMAT-WARNING: Unstructured idempotency key "
+                 f"({len(self.idempotency_key)} chars) in {feat_name}. "
+                 "Recommended: <feat>:<op>:<uuid>"
+             )
 
         # MANDATORY ID GUARD: Tier 1 (HIGH blast radius) MUST have idempotency_key
         # EXCEPTION: Allow missing idempotency if we are nested inside an explicit test bypass.
