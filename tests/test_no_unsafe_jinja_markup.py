@@ -17,6 +17,7 @@ broken right now.
 
 from __future__ import annotations
 
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -28,20 +29,22 @@ from tests.guards.unsafe_jinja_filter_markup import (
     find_unsafe_safe_filters,
     find_template_violations,
     load_baseline,
+    unbaselined_violations,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 APP_ROOT = REPO_ROOT / "app"
+STATUS_ROOT = REPO_ROOT / "status_service"
 TEMPLATES_ROOT = REPO_ROOT / "templates"
 BASELINE_PATH = Path(__file__).resolve().parent / "guards" / "unsafe_safe_filter_baseline.txt"
 
 
 def _app_sources() -> list[Path]:
-    return sorted(APP_ROOT.rglob("*.py"))
+    return sorted([*APP_ROOT.rglob("*.py"), *STATUS_ROOT.rglob("*.py")])
 
 
 def _template_sources() -> list[Path]:
-    return sorted(TEMPLATES_ROOT.rglob("*.html"))
+    return sorted([*TEMPLATES_ROOT.rglob("*.html"), *(STATUS_ROOT / "templates").rglob("*.html")])
 
 
 # --------------------------------------------------------------------------
@@ -87,7 +90,7 @@ def test_no_template_has_an_unrouted_unsafe_safe_filter_or_autoescape_false():
             path.read_text(encoding="utf-8"), str(path.relative_to(REPO_ROOT))
         )
 
-    unrouted = [v for v in violations if v.key is None or v.key not in baseline]
+    unrouted = unbaselined_violations(violations, baseline)
 
     assert not unrouted, (
         "a template marks output |safe without a proven-safe filter ahead of "
@@ -105,12 +108,12 @@ def test_baseline_has_no_stale_entries():
     an entry that no longer matches a real violation must be deleted."""
     baseline = load_baseline(BASELINE_PATH.read_text(encoding="utf-8"))
 
-    live_keys = set()
+    live_keys = Counter()
     for path in _template_sources():
         for v in find_unsafe_safe_filters(
             path.read_text(encoding="utf-8"), str(path.relative_to(REPO_ROOT))
         ):
-            live_keys.add(v.key)
+            live_keys[v.key] += 1
 
     stale = baseline - live_keys
     assert not stale, f"stale baseline entries, delete them: {sorted(stale)}"
@@ -180,6 +183,7 @@ def render_whatever(raw_text):
 
 def test_detector_is_quiet_on_bleach_clean_then_markup():
     source = """
+import bleach
 def render_whatever(raw_html):
     cleaned = bleach.Cleaner(tags=['p']).clean(raw_html)
     return Markup(cleaned)
@@ -249,7 +253,7 @@ def test_detector_distinguishes_allowlisted_from_non_allowlisted_filter_before_s
     'escaped.format(raw)',
 ])
 def test_detector_reports_partially_escaped_markup(expression):
-    source = f'def render(raw):\n    escaped = escape(raw)\n    return Markup({expression})\n'
+    source = f'from markupsafe import escape\nimport bleach\ndef render(raw):\n    escaped = escape(raw)\n    return Markup({expression})\n'
     assert len(find_unsafe_markup_in_filters(source, {'render'})) == 1
 
 
@@ -266,7 +270,7 @@ def test_detector_reports_partially_escaped_markup(expression):
     'value = escape(raw)\n    try:\n        value = raw\n    finally:\n        return Markup(value)',
 ])
 def test_detector_reports_unsafe_reaching_assignment(body):
-    source = f'def render(raw, flag, rows):\n    {body}\n'
+    source = f'from markupsafe import escape\nimport bleach\ndef render(raw, flag, rows):\n    {body}\n'
     assert len(find_unsafe_markup_in_filters(source, {'render'})) == 1
 
 
@@ -278,7 +282,7 @@ def test_detector_reports_unsafe_reaching_assignment(body):
     'value = escape(raw)\n    value = value + "<br>"\n    return Markup(value)',
 ])
 def test_detector_accepts_safe_reaching_assignments(body):
-    source = f'def render(raw, flag):\n    {body}\n'
+    source = f'from markupsafe import escape\nimport bleach\ndef render(raw, flag):\n    {body}\n'
     assert find_unsafe_markup_in_filters(source, {'render'}) == []
 
 
@@ -309,3 +313,126 @@ def test_nonterminal_safe_does_not_reuse_a_trailing_safe_baseline_key():
     trailing = find_unsafe_safe_filters('{{ raw|safe }}')[0]
     nonterminal = find_unsafe_safe_filters('{{ raw|safe|replace("x", untrusted) }}')[0]
     assert trailing.key != nonterminal.key
+
+
+@pytest.mark.parametrize('setup, expression', [
+    ('def escape(value):\n    return value', 'escape(raw)'),
+    ('', 'passthrough.clean(raw)'),
+    ('from helpers import escape', 'escape(raw)'),
+    ('import helpers as bleach', 'bleach.clean(raw)'),
+    ('import markupsafe\nmarkupsafe.escape = passthrough', 'markupsafe.escape(raw)'),
+])
+def test_detector_rejects_same_named_non_sanitizers(setup, expression):
+    source = f'{setup}\ndef render(raw):\n    return Markup({expression})\n'
+    assert len(find_unsafe_markup_in_filters(source, {'render'})) == 1
+
+
+@pytest.mark.parametrize('body', [
+    'from markupsafe import escape\n    escape = passthrough\n    return Markup(escape(raw))',
+    'from markupsafe import escape\n    from .helpers import escape\n    return Markup(escape(raw))',
+    'import bleach\n    cleaner = bleach.Cleaner()\n    cleaner = passthrough\n    return Markup(cleaner.clean(raw))',
+    'from markupsafe import escape\n    if flag:\n        escape = passthrough\n    return Markup(escape(raw))',
+    'from markupsafe import escape\n    def escape(value):\n        return value\n    return Markup(escape(raw))',
+])
+def test_detector_invalidates_reassigned_sanitizer_provenance(body):
+    source = f'def render(raw, flag):\n    {body}\n'
+    assert len(find_unsafe_markup_in_filters(source, {'render'})) == 1
+
+
+@pytest.mark.parametrize('setup, expression', [
+    ('from markupsafe import escape as esc', 'esc(raw)'),
+    ('import markupsafe as ms', 'ms.escape(raw)'),
+    ('from bleach import clean as sanitize', 'sanitize(raw)'),
+    ('import bleach as sanitizer', 'sanitizer.clean(raw)'),
+    ('from bleach import Cleaner', 'Cleaner().clean(raw)'),
+    ('import bleach\n    cleaner = bleach.Cleaner()', 'cleaner.clean(raw)'),
+])
+def test_detector_accepts_imported_sanitizer_provenance(setup, expression):
+    source = f'def render(raw):\n    {setup}\n    return Markup({expression})\n'
+    assert find_unsafe_markup_in_filters(source, {'render'}) == []
+
+
+@pytest.mark.parametrize('expression', ['Markup(object=raw)', 'Markup(**kwargs)', 'Markup(*args)'])
+def test_detector_reports_keyword_or_unknown_markup_input(expression):
+    source = f'def render(raw, args, kwargs):\n    return {expression}\n'
+    assert len(find_unsafe_markup_in_filters(source, {'render'})) == 1
+
+
+def test_detector_accepts_sanitized_keyword_markup_input():
+    source = 'from markupsafe import escape\ndef render(raw):\n    return Markup(object=escape(raw))\n'
+    assert find_unsafe_markup_in_filters(source, {'render'}) == []
+
+
+@pytest.mark.parametrize('registration', [
+    "app.jinja_env.filters['x'] = filters.render_x",
+    "app.jinja_env.filters.update({'x': render_x})",
+    "app.jinja_env.filters.update(x=render_x)",
+    "app.add_template_filter(render_x, 'x')",
+    "app.add_template_filter(f=render_x, name='x')",
+    "@app.template_filter('x')\ndef render_x(raw):\n    return Markup(raw)",
+])
+def test_detector_discovers_and_scans_other_registration_forms(registration):
+    source = registration
+    if not registration.startswith('@'):
+        source += '\ndef render_x(raw):\n    return Markup(raw)\n'
+    names = find_filter_registrations(source)
+    assert names == {'render_x'}
+    assert len(find_unsafe_markup_in_filters(source, names)) == 1
+
+
+@pytest.mark.parametrize('registration', [
+    "app.jinja_env.filters['x'] = lambda raw: Markup(raw)",
+    "app.jinja_env.filters.update(dynamic_filters)",
+    "app.jinja_env.filters.update(**dynamic_filters)",
+])
+def test_detector_fails_closed_on_unknown_registration_forms(registration):
+    with pytest.raises(ValueError, match='unsupported Jinja'):
+        find_filter_registrations(registration)
+
+
+@pytest.mark.parametrize('value', ['false', 'False'])
+def test_detector_reports_jinja_false_constant_spellings(value):
+    source = f'{{%- autoescape {value} -%}}\n{{{{ raw }}}}\n{{% endautoescape %}}'
+    assert len(find_autoescape_false_blocks(source)) == 1
+
+
+@pytest.mark.parametrize('value', ['true', 'True'])
+def test_detector_accepts_enabled_autoescape(value):
+    source = f'{{% autoescape {value} %}}{{{{ raw }}}}{{% endautoescape %}}'
+    assert find_autoescape_false_blocks(source) == []
+
+
+def test_repository_guard_scans_status_service_sources_and_templates(tmp_path, monkeypatch):
+    status_root = tmp_path / 'status_service'
+    template_root = status_root / 'templates'
+    template_root.mkdir(parents=True)
+    app_path = status_root / 'app.py'
+    app_path.write_text("app.jinja_env.filters['x'] = render_x\ndef render_x(raw):\n    return Markup(raw)\n")
+    template_path = template_root / 'public_status.html'
+    template_path.write_text('{{ raw|safe }}')
+    monkeypatch.setattr(f'{__name__}.STATUS_ROOT', status_root)
+    assert app_path in _app_sources()
+    assert template_path in _template_sources()
+    names = find_filter_registrations(app_path.read_text())
+    assert len(find_unsafe_markup_in_filters(app_path.read_text(), names)) == 1
+    assert len(find_template_violations(template_path.read_text())) == 1
+
+
+def test_repository_guard_finds_real_status_filters():
+    assert STATUS_ROOT / 'app.py' in _app_sources()
+    names = find_filter_registrations((STATUS_ROOT / 'app.py').read_text())
+    assert {'format_status_time', 'iso_utc'} <= names
+    assert STATUS_ROOT / 'templates/public_status.html' in _template_sources()
+
+
+def test_baseline_counts_reviewed_occurrences_and_routes_duplicates():
+    key = 'templates/example.html::toc|safe'
+    baseline = load_baseline(f'# Two reviewed sinks\n{key}\n{key}\n')
+    assert baseline == Counter({key: 2})
+    reviewed = find_template_violations('{{ toc|safe }}\n{{ toc|safe }}', 'templates/example.html')
+    assert unbaselined_violations(reviewed, baseline) == []
+    added = find_template_violations('{{ toc|safe }}\n' * 3, 'templates/example.html')
+    assert len(unbaselined_violations(added, baseline)) == 1
+    assert unbaselined_violations(added, baseline)[0].line == 3
+    assert baseline == Counter({key: 2})
+    assert baseline - Counter(v.key for v in reviewed[:1]) == Counter({key: 1})
