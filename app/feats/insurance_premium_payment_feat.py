@@ -122,7 +122,10 @@ def premium_is_affordable(
 ) -> bool:
     """Whether checking (with a full protection transfer, if enabled) covers ``amount``.
 
-    Read-only. Call it while holding the seat serialization lock.
+    Read-only. Takes the seat serialization lock itself, so it is safe to call
+    whether or not the caller already holds it — a caller that has (e.g.
+    ``execute_insurance_premium_payment``) merely re-acquires the same row
+    lock, which is a no-op within one transaction.
     """
     from app.services.ledger_recovery_service import lock_recovery_scope
     lock_recovery_scope(class_id, seat_id)
