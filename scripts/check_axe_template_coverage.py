@@ -107,7 +107,7 @@ def main(argv: list[str] | None = None) -> int:
         rendered |= names
 
     exemptions = json.loads(args.exemptions.read_text(encoding="utf-8")) if args.exemptions.exists() else {}
-    env = Environment(loader=FileSystemLoader(str(args.templates_dir)))
+    env = Environment(loader=FileSystemLoader(str(args.templates_dir)), autoescape=True)
     covered = closure(env, rendered)
 
     problems = False
