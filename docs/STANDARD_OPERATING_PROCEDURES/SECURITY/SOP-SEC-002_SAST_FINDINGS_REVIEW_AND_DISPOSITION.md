@@ -151,8 +151,15 @@ A SAST tool's full open-alert dashboard gets a scheduled review independent of a
 PR, so a pre-existing finding in code a PR doesn't touch has a point where someone
 looks at it rather than sitting indefinitely:
 
-- **Cadence:** at minimum, following every CodeQL query-suite change (e.g. a suite
-  switch, a newly enabled query pack) and at least once per quarter otherwise.
+- **Owner:** the repository owner (or, where delegated, the named security
+  maintainer on record) is accountable for this review running on schedule. If that
+  person is unavailable when a review falls due, they MUST name a delegate before the
+  due date; an unassigned or missed review is itself a finding, recorded the same way
+  as a missed disposition.
+- **Cadence:** at minimum, following every SAST tool's query-suite or rule-pack
+  change — CodeQL's `security-extended` switch is the example this SOP was written
+  against, but the trigger applies to any configured scanner, present or future, not
+  CodeQL specifically — and at least once per quarter otherwise.
 - **Procedure:** pull the full open-alert list (not just `is:open` counts — verify the
   count against the actual list, as a prior triage pass under-summed a group and
   reported a materially wrong total before being caught against the Security tab UI),

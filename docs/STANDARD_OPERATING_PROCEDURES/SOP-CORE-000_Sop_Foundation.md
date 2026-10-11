@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level  |
 |------------------|---------|----------------|------------|------------------|
-| SOP-CORE-000 | 1.2 | 2026-09-17 | 1.1 | Constitutional |
+| SOP-CORE-000 | 1.3 | 2026-10-11 | 1.2 | Constitutional |
 
 ---
 
@@ -32,7 +32,8 @@ The `STANDARD_OPERATING_PROCEDURES` namespace is organized into the following su
 - `DEPLOYMENT/` (SOP-DEP-*): Live-test and production-transition procedures for releasing code.
 - `DEVOPS/` (SOP-DEV-*): Refactor and domain-reconstruction procedures.
 - `OPERATIONS/` (SOP-OPS-*): Operating the systems that carry out the Operations domain's purpose, including status publication and incident communication.
-- `SECURITY/` (SOP-SEC-*): Credential, key-custody, and identity-lookup operations.
+- `SECURITY/` (SOP-SEC-*): Credential, key-custody, and identity-lookup operations;
+  SAST/code-scanning configuration, alert disposition, and recurring backlog review.
 - `TESTING/` (SOP-TEST-*): Validation execution, test creation, and PR gates.
 
 `SOP-CORE-000`, `SOP-DOC-000` and `SOP-DOC-001` sit at the namespace root rather
