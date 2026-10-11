@@ -71,9 +71,16 @@ Two independent, non-overlapping gaps, not one:
   check reports green regardless of its own dashboard backlog is a worse signal than no scanner:
   the green checkmark reads as "nothing found" when it means "nothing new in this diff."
 - CodeQL's `code-scanning/default-setup` query suite switched to `security-extended` (owner
-  action in Settings → Code security, 2026-10-11). This closes the coverage gap described in §3
-  for new code; it does not retroactively evaluate every file that was last analyzed under the
-  narrower suite until each file's next scan.
+  action in Settings → Code security, 2026-10-11). **This only partially closes the gap in §3.**
+  `js/xss-through-dom` (the client-side `innerHTML`-sink rule, which already existed in the
+  default suite and is what caught the 7 other instances in §1) is unaffected by the switch
+  either way. For the Jinja-side gap, `security-extended`'s one relevant addition is
+  `py/jinja2/autoescape-false` — which fires only on `autoescape=False`, not on the `safe` filter
+  or a custom filter that calls `Markup()` without escaping first. Neither S1's dashboard sink
+  nor S4 used `autoescape=False`; both would still go undetected by `security-extended` today. A
+  review comment on the PR accompanying this record (chatgpt-codex-connector, 2026-10-11)
+  correctly caught this overclaim in an earlier draft of this record. The Jinja-side gap remains
+  open; see the custom-query follow-up below, which is now required rather than optional.
 
 ## 5. Follow-ups
 
@@ -85,7 +92,13 @@ Two independent, non-overlapping gaps, not one:
 - [ ] Establish a recurring (not purely PR-triggered) review of any SAST tool's full dashboard
       backlog, not just its PR-time pass/fail, so a pre-existing finding in untouched code has a
       scheduled point where it gets looked at.
-- [ ] Consider a small custom CodeQL query, or at minimum a standing code-review checklist item,
-      for the two patterns this incident showed are under-modeled here: (a) a function registered
-      into `jinja_env.filters[...]` that calls `Markup()` without escaping first, and (b) a
-      `fetch(...).then(...)` response assigned into `.innerHTML` in a template's inline script.
+- [ ] **Required, not optional** (see §4): neither CodeQL's default suite nor `security-extended`
+      has a query for a function registered into `jinja_env.filters[...]` that calls `Markup()`
+      without escaping first, or for `safe`-filtered output built from request- or
+      database-sourced text outside an `autoescape=False` block. Write a custom CodeQL query (or,
+      if that is not practical, a deterministic repository guard test per
+      `.claude/rules/testing.md` Mistake 6a, proven against a synthetic near-miss) for this
+      pattern before this follow-up is considered done. `js/xss-through-dom` already covers the
+      client-side `fetch(...).then(...)` → `.innerHTML` pattern in the default suite; no
+      additional query is needed there, but confirming that rule remains enabled is worth a line
+      in the same guard.
