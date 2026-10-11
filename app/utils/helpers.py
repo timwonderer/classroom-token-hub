@@ -341,6 +341,8 @@ def sanitize_for_log(value) -> str:
     into the log stream.
     """
     text = value if isinstance(value, str) else str(value)
+    # Explicit CR/LF replacements expose the log boundary to static analysis.
+    text = text.replace("\r", "\\x0d").replace("\n", "\\x0a")
     return "".join(
-        c if c.isprintable() and c not in "\r\n" else f"\\x{ord(c):02x}" for c in text
+        c if c.isprintable() else f"\\x{ord(c):02x}" for c in text
     )

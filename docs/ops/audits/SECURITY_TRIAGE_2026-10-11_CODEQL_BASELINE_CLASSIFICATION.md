@@ -66,7 +66,7 @@ content still originates from a file under `migrations/versions/`, which a PR sh
 Replaced with `ast.literal_eval()`, which only ever constructs Python literals and gives
 the identical result for every revision tuple this repo actually writes.
 
-### 1.4 `py/command-line-injection` — 2 of 10 alerts (#281, #282, #284, #285)
+### 1.4 `py/command-line-injection` — 4 of 10 alerts (#281, #282, #284, #285)
 
 `scripts/add-github-actions-to-firewall.py` and `scripts/create-github-actions-firewall.py`
 (not wired into any CI workflow — run manually when rotating GitHub's published IP ranges
@@ -76,7 +76,7 @@ string from GitHub's own `/meta` API response — one of them protected only by 
 single-quoted shell literal wrapping embedded JSON. Converted every call in both files to
 an argv list with no `shell=True`; an argv list needs no shell quoting and has nothing left
 for a shell to reinterpret, regardless of what either value contains. See §2.4 for the
-other 8 alerts in this group, which were already argv-list calls and needed no change.
+other 6 alerts in this group, which were already argv-list calls and needed no change.
 
 ## 2. False positive or already mitigated — left open, not dismissed without further review
 
@@ -120,7 +120,7 @@ only this project's own migrations create. There is no path by which an external
 supplies a value that reaches `t`. Also not wired into any CI workflow (an ops-run backup
 script).
 
-### 2.4 `py/command-line-injection` — 8 of 10 alerts (#283, #286–#290)
+### 2.4 `py/command-line-injection` — 6 of 10 alerts (#283, #286–#290)
 
 `scripts/ci_evidence_runner.py:129` (CI-reachable, `constitutional-ci.yml`),
 `scripts/policy_guardrails.py:74,93` (CI-reachable, `policy-guardrails.yml`, including with
@@ -132,7 +132,7 @@ and calls `subprocess.run(cmd, ...)`/`subprocess.Popen(cmd, ...)` with no `shell
 anywhere in any of the five files. An argv list goes straight to `execve` with no shell in
 between, so there is no shell-metacharacter interpretation for any value in the list to
 exploit, regardless of where that value came from — the one property that actually matters
-for this rule, and the one the two alerts in §1.4 lacked.
+for this rule, and the one the four alerts in §1.4 lacked.
 
 ### 2.5 `py/polynomial-redos` — the one line in §1.1's file not changed for safety reasons
 
@@ -211,7 +211,7 @@ above.
 | Rule | Open | Fixed | False positive / mitigated (documented) | Real, deferred |
 |---|---|---|---|---|
 | py/path-injection | 57 | 0 | 57 | 0 |
-| py/command-line-injection | 10 | 2 | 8 | 0 |
+| py/command-line-injection | 10 | 4 | 6 | 0 |
 | actions/unpinned-tag | 10 | 0 | 0 | 10 |
 | py/log-injection | 8 | 8 (+1 unflagged instance) | 0 | 0 |
 | py/polynomial-redos | 7 | 7 | 0 | 0 |
@@ -220,9 +220,37 @@ above.
 | py/sql-injection | 1 | 0 | 1 | 0 |
 | py/code-injection | 1 | 1 | 0 | 0 |
 | py/stack-trace-exposure | 1 | 0 | 1 | 0 |
-| **Total** | **98** | **18** | **70** | **10** |
+| **Total** | **98** | **20** | **68** | **10** |
 
 Nothing in this document reduces the 98-alert count on GitHub's own Security tab by
 itself — that requires either the repository owner or a session with `security_events`
 API access to action §2's dismissals using the per-alert reasoning above, and to open the
 deferred `actions/unpinned-tag` follow-up (§3.1).
+
+## 5. PR #1541 follow-up alerts (#304–#318)
+
+These 15 PR-head alerts are separate from the 98-alert baseline counted above.
+
+- **Command-line alerts #304–#307:** argv lists removed shell interpretation, but
+  that alone does not rule out argument injection. The firewall utilities now reject
+  non-UUID firewall IDs and non-positive decimal droplet IDs before invoking doctl.
+  GitHub API ranges are parsed and normalized with `ipaddress.ip_network()` before
+  becoming rule values; the firewall ID returned by doctl is also UUID-validated.
+  Both command helpers return a failure tuple on spawn errors, preserving the
+  missing-doctl diagnostic instead of raising `FileNotFoundError`.
+- **Log alerts #308–#318:** all four Cloudflare warning arguments and all seven
+  wsgi log arguments already call `sanitize_for_log()`. Its character-by-character
+  transformation escapes every non-printable character, including CR/LF, C0/C1,
+  Unicode line separators and terminal escapes. The original custom loop was not
+  recognized by CodeQL; these alerts did not demonstrate a bypass. Explicit CR/LF replacements now expose the same escaping
+  boundary to static analysis while preserving the sanitizer's output. Focused tests
+  execute the flagged log calls with raw controls and check the formatted output.
+  No Security-tab dismissal is performed by this repair.
+
+Validation: `.venv/bin/python -m pytest --noconftest
+ tests/test_github_actions_firewall.py tests/test_log_warning_sanitization.py -q`
+passed 27 tests. The prior PR head fails 20 firewall regression checks; replacing
+log sanitization with a raw string fails all three log checks. These isolated tests
+exercise real script functions and extracted logger calls; they do not exercise
+Flask request setup, PostgreSQL, or the DigitalOcean API. Python 3.10 syntax and
+alert-table totals were also checked.

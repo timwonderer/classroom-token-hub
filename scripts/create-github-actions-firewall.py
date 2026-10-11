@@ -9,7 +9,9 @@ Usage:
     python3 scripts/create-github-actions-firewall.py <droplet-id>
 """
 
+import ipaddress
 import json
+import re
 import subprocess
 import sys
 import urllib.request
@@ -33,12 +35,15 @@ def run_command(cmd, capture=True):
     child process exactly as given, so there is nothing left for a shell to
     reinterpret regardless of what either value contains.
     """
-    if capture:
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        return result.returncode == 0, result.stdout, result.stderr
-    else:
-        result = subprocess.run(cmd)
-        return result.returncode == 0, "", ""
+    try:
+        if capture:
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            return result.returncode == 0, result.stdout, result.stderr
+        else:
+            result = subprocess.run(cmd)
+            return result.returncode == 0, "", ""
+    except OSError as error:
+        return False, "", str(error)
 
 def fetch_github_ips():
     """Fetch GitHub Actions IP ranges from GitHub API."""
@@ -52,7 +57,7 @@ def fetch_github_ips():
         if not actions_ips:
             actions_ips = data.get('hooks', [])
 
-        return actions_ips
+        return [str(ipaddress.ip_network(ip, strict=False)) for ip in actions_ips]
     except Exception as e:
         print(f"{RED}Error fetching GitHub IPs: {e}{NC}")
         return None
@@ -109,6 +114,9 @@ def create_firewall_with_rules(droplet_id, github_ips):
         return None
 
     firewall_id = firewall_id.strip()
+    if not re.fullmatch(r'[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}', firewall_id):
+        print(f"{RED}Error: doctl returned an invalid firewall ID{NC}")
+        return None
     print(f"{GREEN}✓ Firewall created: {firewall_id}{NC}")
     print(f"  Added {len(first_batch)} rules in initial batch")
 
@@ -141,6 +149,9 @@ def main():
         sys.exit(1)
 
     droplet_id = sys.argv[1]
+    if not re.fullmatch(r'0*[1-9][0-9]*', droplet_id):
+        print(f"{RED}Error: Droplet ID must be a positive integer{NC}")
+        sys.exit(1)
 
     # Verify doctl
     success, _, _ = run_command(['doctl', 'version'])

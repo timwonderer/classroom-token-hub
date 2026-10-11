@@ -9,7 +9,9 @@ Usage:
     python3 scripts/add-github-actions-to-firewall.py <firewall-id>
 """
 
+import ipaddress
 import json
+import re
 import subprocess
 import sys
 import urllib.request
@@ -37,7 +39,10 @@ def run_command(cmd):
     has no shell-metacharacter interpretation left to exploit regardless of
     what ends up in the strings.
     """
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True)
+    except OSError as error:
+        return False, str(error)
     return result.returncode == 0, result.stderr
 
 def fetch_github_ips():
@@ -55,7 +60,7 @@ def fetch_github_ips():
             print(f"{YELLOW}Warning: No GitHub Actions IPs found, trying 'hooks' instead{NC}")
             actions_ips = data.get('hooks', [])
 
-        return actions_ips
+        return [str(ipaddress.ip_network(ip, strict=False)) for ip in actions_ips]
     except Exception as e:
         print(f"{RED}Error fetching GitHub IPs: {e}{NC}")
         return None
@@ -70,6 +75,9 @@ def main():
         sys.exit(1)
 
     firewall_id = sys.argv[1]
+    if not re.fullmatch(r'[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}', firewall_id):
+        print(f"{RED}Error: Firewall ID must be a UUID{NC}")
+        sys.exit(1)
 
     # Verify doctl is installed
     success, _ = run_command(['doctl', 'version'])
