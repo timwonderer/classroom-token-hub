@@ -24,7 +24,7 @@ walk every function definition with that name.
 
 Part B — Jinja templates
 -------------------------
-The rule: a template expression may end in ``|safe`` only when every filter
+The rule: a template expression may contain ``|safe`` only when every filter
 applied to it is on a small allowlist of filters Part A has already proved
 escape before returning ``Markup()`` (today: ``nl2br``). A bare ``{{ x|safe
 }}``, or ``|safe`` preceded only by filters not on that allowlist, is
@@ -38,12 +38,12 @@ import ast
 import re
 from dataclasses import dataclass
 
+from jinja2 import Environment, nodes as jinja_nodes
+
 _SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
 
 # markupsafe.escape(...) / escape(...), and bleach's .clean(...) / bleach.clean(...).
-# Named, not spelled against a single import style, so `from markupsafe import
-# escape` and `from app.utils.encryption import escape as esc` are both still
-# "a call named escape" by the receiver's own attribute/name.
+# This is a name-based structural check, not import/provenance resolution.
 _SAFE_CALL_NAMES = frozenset({"escape", "clean"})
 
 
@@ -71,18 +71,6 @@ def _walk_scope(scope: ast.AST):
             stack.extend(ast.iter_child_nodes(node))
 
 
-def _calls_escape_or_sanitize(node: ast.AST) -> bool:
-    for n in ast.walk(node):
-        if not isinstance(n, ast.Call):
-            continue
-        func = n.func
-        if isinstance(func, ast.Name) and func.id in _SAFE_CALL_NAMES:
-            return True
-        if isinstance(func, ast.Attribute) and func.attr in _SAFE_CALL_NAMES:
-            return True
-    return False
-
-
 def _is_markup_call(node: ast.AST) -> bool:
     if not isinstance(node, ast.Call):
         return False
@@ -94,61 +82,41 @@ def _is_markup_call(node: ast.AST) -> bool:
     return False
 
 
-def _assignments(nodes) -> list[tuple[set[str], ast.AST]]:
-    found = []
-    for node in nodes:
-        if isinstance(node, ast.Assign):
-            targets, value = node.targets, node.value
-        elif isinstance(node, (ast.AnnAssign, ast.AugAssign)) and node.value is not None:
-            targets, value = [node.target], node.value
-        elif isinstance(node, ast.NamedExpr):
-            targets, value = [node.target], node.value
-        else:
-            continue
-        names = {t.id for t in targets if isinstance(t, ast.Name)}
-        if names:
-            found.append((names, value))
-    return found
-
-
-def _all_names(node: ast.AST):
-    """Every name referenced in ``node``, receivers of ``x.attr``/``x.method()``
-    included — unlike PII-shape detection, a safety check cares whether the
-    *base object* (e.g. ``escaped`` in ``escaped.replace(...)``) is safe, not
-    just names used standalone."""
-    for n in ast.walk(node):
-        if isinstance(n, ast.Name):
-            yield n.id
-
-
-def _is_literal_text(node: ast.AST) -> bool:
-    if isinstance(node, ast.Constant):
+def _is_provably_safe(value: ast.AST, safe_locals: set[str]) -> bool:
+    """Prove the whole expression, not merely one sanitized descendant."""
+    if isinstance(value, ast.Constant):
         return True
-    if isinstance(node, ast.JoinedStr):
-        return not any(isinstance(part, ast.FormattedValue) for part in node.values)
+    if isinstance(value, ast.Name):
+        return value.id in safe_locals
+    if isinstance(value, ast.BinOp) and isinstance(value.op, ast.Add):
+        return all(_is_provably_safe(part, safe_locals) for part in (value.left, value.right))
+    if isinstance(value, ast.JoinedStr):
+        return all(
+            _is_provably_safe(part.value if isinstance(part, ast.FormattedValue) else part, safe_locals)
+            for part in value.values
+        )
+    if isinstance(value, ast.IfExp):
+        return all(_is_provably_safe(part, safe_locals) for part in (value.body, value.orelse))
+    if isinstance(value, ast.Call):
+        func = value.func
+        name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
+        if name in _SAFE_CALL_NAMES:
+            return True
+        if isinstance(func, ast.Name) and name == "str" and len(value.args) == 1:
+            return _is_provably_safe(value.args[0], safe_locals)
+        if isinstance(func, ast.Attribute) and func.attr == "replace":
+            return _is_provably_safe(func.value, safe_locals) and all(
+                _is_provably_safe(arg, safe_locals)
+                for arg in [*value.args, *(kw.value for kw in value.keywords)]
+            )
     return False
 
 
-def _is_provably_safe(value: ast.AST, safe_locals: set[str]) -> bool:
-    """A value that cannot carry unescaped attacker/DB content into Markup()."""
-    if _is_literal_text(value):
-        return True
-    if _calls_escape_or_sanitize(value):
-        return True
-    names = set(_all_names(value))
-    return bool(names) and names <= safe_locals
-
-
-def _to_fixpoint(bindings, rule) -> set[str]:
-    found: set[str] = set()
-    changed = True
-    while changed:
-        changed = False
-        for names, value in bindings:
-            if not names <= found and rule(value, found):
-                found |= names
-                changed = True
-    return found
+def _written_names(node: ast.AST) -> set[str]:
+    return {
+        n.id for n in _walk_scope(node)
+        if isinstance(n, ast.Name) and isinstance(n.ctx, (ast.Store, ast.Del))
+    }
 
 
 def find_filter_registrations(source: str) -> set[str]:
@@ -177,15 +145,42 @@ def find_unsafe_markup_in_filters(
             continue
         if node.name not in filter_names:
             continue
-        scope_nodes = list(_walk_scope(node))
-        safe_locals = _to_fixpoint(_assignments(scope_nodes), _is_provably_safe)
-        for n in scope_nodes:
-            if not _is_markup_call(n) or not n.args:
-                continue
-            arg = n.args[0]
-            if _is_provably_safe(arg, safe_locals):
-                continue
-            violations.append(Violation(path, n.lineno, node.name, ast.unparse(n)[:160]))
+        def inspect(expression, safe_locals):
+            # Expression-level writes are not ordered by ast.walk; fail closed.
+            safe_locals = safe_locals - _written_names(expression)
+            for call in [expression, *_walk_scope(expression)]:
+                if _is_markup_call(call) and call.args:
+                    if not _is_provably_safe(call.args[0], safe_locals):
+                        violations.append(
+                            Violation(path, call.lineno, node.name, ast.unparse(call)[:160])
+                        )
+
+        def visit(statements, incoming):
+            safe_locals = incoming.copy()
+            for statement in statements:
+                if isinstance(statement, ast.If):
+                    inspect(statement.test, safe_locals)
+                    safe_locals -= _written_names(statement.test)
+                    safe_locals = visit(statement.body, safe_locals) & visit(statement.orelse, safe_locals)
+                elif isinstance(statement, (ast.Assign, ast.AnnAssign)):
+                    value = statement.value
+                    if value is not None:
+                        inspect(value, safe_locals)
+                        safe = _is_provably_safe(value, safe_locals - _written_names(value))
+                    else:
+                        safe = False
+                    safe_locals -= _written_names(statement)
+                    targets = statement.targets if isinstance(statement, ast.Assign) else [statement.target]
+                    if safe:
+                        safe_locals.update(t.id for t in targets if isinstance(t, ast.Name))
+                else:
+                    # shortcut: loops/try/with use conservative write invalidation;
+                    # add control-flow modeling if a legitimate filter needs it.
+                    safe_locals -= _written_names(statement)
+                    inspect(statement, safe_locals)
+            return safe_locals
+
+        visit(node.body, set())
     return sorted(violations, key=lambda v: v.line)
 
 
@@ -198,9 +193,9 @@ def find_unsafe_markup_in_filters(
 # allowlist of filter *behavior*, not a list of names to trust on faith.
 SAFE_BEFORE_SAFE_FILTERS = frozenset({"nl2br"})
 
-_EXPR_RE = re.compile(r"\{\{(.*?)\}\}", re.DOTALL)
+_EXPR_RE = re.compile(r"\{\{-?(.*?)-?\}\}", re.DOTALL)
 _AUTOESCAPE_FALSE_RE = re.compile(r"\{%-?\s*autoescape\s+false\s*-?%\}")
-_TRAILING_SAFE_RE = re.compile(r"\|\s*safe\s*$")
+_JINJA = Environment()
 
 
 @dataclass(frozen=True)
@@ -234,21 +229,29 @@ def find_unsafe_safe_filters(
     violations: list[TemplateViolation] = []
     for match in _EXPR_RE.finditer(source):
         expr = match.group(1).strip()
-        if not _TRAILING_SAFE_RE.search(expr):
+        parsed = _JINJA.parse(match.group(0))
+        safe_filters = [n for n in parsed.find_all(jinja_nodes.Filter) if n.name == "safe"]
+        if not safe_filters:
             continue
-        before_safe = _TRAILING_SAFE_RE.sub("", expr).strip()
-        segments = before_safe.split("|")
-        filters_applied = [seg.strip().split("(", 1)[0].strip() for seg in segments[1:]]
-        if filters_applied and set(filters_applied) <= allowlist:
+        for safe_filter in safe_filters:
+            preceding = []
+            value = safe_filter.node
+            while isinstance(value, jinja_nodes.Filter):
+                preceding.append(value.name)
+                value = value.node
+            if not preceding or not set(preceding) <= allowlist:
+                break
+        else:
             continue
-        normalized = re.sub(r"\s+", "", before_safe)
+        # Keep the existing baseline keys for ordinary trailing |safe usages.
+        normalized = re.sub(r"\s+", "", expr)
         violations.append(
             TemplateViolation(
                 path,
                 _line_of(source, match.start()),
                 "unsafe_safe_filter",
                 match.group(0)[:160],
-                key=f"{path}::{normalized}|safe",
+                key=f"{path}::{normalized}",
             )
         )
     return sorted(violations, key=lambda v: v.line)

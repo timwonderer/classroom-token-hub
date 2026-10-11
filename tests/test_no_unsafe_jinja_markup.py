@@ -19,6 +19,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from tests.guards.unsafe_jinja_filter_markup import (
     find_filter_registrations,
     find_unsafe_markup_in_filters,
@@ -234,3 +236,76 @@ def test_detector_distinguishes_allowlisted_from_non_allowlisted_filter_before_s
     source = "<p>{{ message|nl2br|striptags|safe }}</p>\n"
     violations = find_unsafe_safe_filters(source)
     assert len(violations) == 1
+
+
+# Review near misses: sanitization must cover every emitted part, at the sink.
+
+
+@pytest.mark.parametrize('expression', [
+    'raw + escape("constant")',
+    'escape("constant") + raw',
+    "f'{raw}{escape(\"constant\")}'",
+    'escaped.replace("x", raw)',
+    'escaped.format(raw)',
+])
+def test_detector_reports_partially_escaped_markup(expression):
+    source = f'def render(raw):\n    escaped = escape(raw)\n    return Markup({expression})\n'
+    assert len(find_unsafe_markup_in_filters(source, {'render'})) == 1
+
+
+@pytest.mark.parametrize('body', [
+    'value = escape(raw)\n    value = raw\n    return Markup(value)',
+    'return Markup(value)\n    value = escape(raw)',
+    'value = escape(raw)\n    if flag:\n        value = raw\n    return Markup(value)',
+    'if flag:\n        value = escape(raw)\n    return Markup(value)',
+    'value = escape(raw)\n    value += raw\n    return Markup(value)',
+    'value = escape(raw)\n    for value in rows:\n        return Markup(value)',
+    'value = escape(raw)\n    while flag:\n        value = raw\n    return Markup(value)',
+    'value = escape(raw)\n    value, other = raw, ""\n    return Markup(value)',
+    'value = escape(raw)\n    return Markup((value := raw))',
+    'value = escape(raw)\n    try:\n        value = raw\n    finally:\n        return Markup(value)',
+])
+def test_detector_reports_unsafe_reaching_assignment(body):
+    source = f'def render(raw, flag, rows):\n    {body}\n'
+    assert len(find_unsafe_markup_in_filters(source, {'render'})) == 1
+
+
+@pytest.mark.parametrize('body', [
+    'value = raw\n    value = escape(value)\n    return Markup(value)',
+    'if flag:\n        value = escape(raw)\n    else:\n        value = bleach.clean(raw)\n    return Markup(value)',
+    'value = escape(raw)\n    result = Markup(value)\n    value = raw\n    return result',
+    'return Markup(escape(raw) + "<br>" + bleach.clean(raw))',
+    'value = escape(raw)\n    value = value + "<br>"\n    return Markup(value)',
+])
+def test_detector_accepts_safe_reaching_assignments(body):
+    source = f'def render(raw, flag):\n    {body}\n'
+    assert find_unsafe_markup_in_filters(source, {'render'}) == []
+
+
+@pytest.mark.parametrize('expression', [
+    '{{ raw|safe() }}',
+    '{{- raw|safe -}}',
+    '{{ raw|safe|upper }}',
+    '{{ raw|safe()|upper }}',
+    '{{ "<b>" ~ (raw|safe) }}',
+])
+def test_detector_reports_alternative_safe_filter_syntax(expression):
+    violations = find_unsafe_safe_filters('\n' + expression)
+    assert len(violations) == 1
+    assert violations[0].line == 2
+
+
+@pytest.mark.parametrize('expression', [
+    '{{ raw|nl2br|safe() }}',
+    '{{- raw|nl2br|safe -}}',
+    '{{ raw|nl2br|safe|upper }}',
+    '{{ "literal|safe" }}',
+])
+def test_detector_accepts_safe_jinja_syntax(expression):
+    assert find_unsafe_safe_filters(expression) == []
+
+
+def test_nonterminal_safe_does_not_reuse_a_trailing_safe_baseline_key():
+    trailing = find_unsafe_safe_filters('{{ raw|safe }}')[0]
+    nonterminal = find_unsafe_safe_filters('{{ raw|safe|replace("x", untrusted) }}')[0]
+    assert trailing.key != nonterminal.key
