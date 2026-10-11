@@ -13,6 +13,7 @@ the real IP from Cloudflare headers (CF-Connecting-IP).
 from flask import request
 from functools import lru_cache
 import ipaddress
+import os
 import urllib.request
 import urllib.error
 from datetime import datetime, timedelta, timezone
@@ -132,6 +133,41 @@ def is_cloudflare_ip(ip_str):
     return False
 
 
+def _trusted_proxy_networks():
+    """Networks whose connections may vouch for client-address headers.
+
+    The application runs behind a reverse proxy on the same host, so by default
+    only loopback peers are trusted. ``TRUSTED_PROXY_CIDRS`` (comma-separated)
+    widens that for a proxy on another address, such as a container network.
+    """
+    networks = [ipaddress.ip_network('127.0.0.0/8'), ipaddress.ip_network('::1/128')]
+    for cidr in os.getenv('TRUSTED_PROXY_CIDRS', '').split(','):
+        cidr = cidr.strip()
+        if not cidr:
+            continue
+        try:
+            networks.append(ipaddress.ip_network(cidr, strict=False))
+        except ValueError:
+            continue  # Skip invalid CIDR
+    return networks
+
+
+def peer_is_trusted_proxy():
+    """Whether the TCP peer of this request is a proxy we run.
+
+    ``CF-Connecting-IP`` and ``X-Forwarded-For`` are ordinary request headers.
+    They describe the client only when a proxy we control wrote or overwrote
+    them. A request that reaches the application from any other peer carries
+    whatever its sender typed, so its headers must not choose a rate-limit key
+    or an audit address (audit S7).
+    """
+    try:
+        peer = ipaddress.ip_address(request.remote_addr)
+    except (TypeError, ValueError):
+        return False
+    return any(peer in network for network in _trusted_proxy_networks())
+
+
 def get_real_ip():
     """
     Get the real client IP address from the request.
@@ -145,10 +181,17 @@ def get_real_ip():
         str: The client's real IP address
 
     Security Note:
-        This function trusts the CF-Connecting-IP header. You should ensure
-        your firewall only allows traffic from Cloudflare IPs to prevent
-        IP spoofing. Use validate_cloudflare_request() to verify.
+        Forwarding headers are honored only when the connection comes from a
+        trusted proxy (see peer_is_trusted_proxy). Behind that proxy this
+        function still trusts CF-Connecting-IP, so the firewall must only
+        admit Cloudflare to the proxy. Use validate_cloudflare_request() to
+        verify.
     """
+    # A peer that is not our reverse proxy vouches for nothing: its headers are
+    # whatever it typed. Use the address of the connection itself.
+    if not peer_is_trusted_proxy():
+        return request.remote_addr
+
     # Cloudflare sets CF-Connecting-IP to the real client IP
     real_ip = request.headers.get('CF-Connecting-IP')
 

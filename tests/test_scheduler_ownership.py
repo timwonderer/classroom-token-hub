@@ -200,6 +200,81 @@ def test_losing_the_lock_connection_stops_the_jobs_before_reacquiring(app, monke
     ), "never re-acquired the lock on a new connection"
 
 
+def test_a_job_still_executing_is_waited_out_before_ownership_is_released(app, monkeypatch):
+    """Audit O5: shutdown(wait=False) used to return the instant it was
+    called, so a job already mid-run kept executing in its worker thread
+    while the very next line closed the lock connection — releasing the
+    advisory lock for a waiting successor to take while the old job was
+    still live. Release must now wait for the executor's threads, so the
+    lock stays held (and a competitor is refused) until the job is done.
+
+    CodeRabbit review on PR #1536: synchronize on real signals — the job
+    actually starting, release actually entering shutdown() — instead of
+    fixed sleeps, and stop the background ownership-polling thread before
+    the final "lock is free again" check so it cannot win the race to
+    reacquire the lock ahead of that check, which would make the assertion
+    flaky rather than meaningful."""
+    import threading
+
+    job_started = threading.Event()
+    shutdown_entered = threading.Event()
+    job_may_finish = threading.Event()
+    job_finished = threading.Event()
+
+    def blocking_job():
+        job_started.set()
+        job_may_finish.wait(timeout=5)
+        job_finished.set()
+
+    real_shutdown = scheduler.shutdown
+
+    def _signaling_shutdown(*a, **kw):
+        shutdown_entered.set()
+        return real_shutdown(*a, **kw)
+
+    monkeypatch.setattr(scheduler, "shutdown", _signaling_shutdown)
+
+    # The module-level `scheduler` singleton is reused across every test in
+    # this file; a prior test's shutdown() leaves its default executor's
+    # stdlib ThreadPoolExecutor permanently shut down, and start() only
+    # creates a fresh one when none is registered. Drop it so this test's
+    # job actually runs on a live pool, matching the one long-lived gunicorn
+    # worker this module is designed for.
+    scheduler._executors.pop("default", None)
+
+    owner_thread = start_scheduler_when_owner(app, retry_seconds=0.1)
+    assert _wait_for(lambda: scheduler.running)
+    scheduler.add_job(blocking_job, "date", id="o5-blocker", max_instances=1)
+    assert job_started.wait(timeout=5), "the job never started"
+
+    release_thread = threading.Thread(target=scheduler_ownership._release_ownership)
+    release_thread.start()
+    assert shutdown_entered.wait(timeout=5), "release never reached shutdown()"
+
+    assert release_thread.is_alive(), "release returned before the running job finished"
+    with app.app_context():
+        assert try_acquire_scheduler_lock(db.engine) is None, (
+            "the lock was available to a competitor while the old job was still running"
+        )
+
+    job_may_finish.set()
+    release_thread.join(timeout=5)
+    assert not release_thread.is_alive(), "release never returned after the job finished"
+    assert job_finished.is_set()
+
+    # Stop the background ownership-polling thread (started above by
+    # start_scheduler_when_owner) before checking the lock is free again —
+    # left running, it polls every 0.1s and could reacquire the
+    # just-released lock before this test's own attempt does.
+    owner_thread.stop_event.set()
+    owner_thread.join(timeout=5)
+
+    with app.app_context():
+        released = try_acquire_scheduler_lock(db.engine)
+        assert released is not None
+        released.close()
+
+
 def test_the_gunicorn_worker_hook_is_the_path_that_starts_the_scheduler(monkeypatch):
     import runpy
 

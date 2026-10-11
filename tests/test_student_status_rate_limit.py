@@ -188,7 +188,11 @@ def test_seat_key_comes_from_the_validated_context_without_resolving_again(app, 
 
     monkeypatch.setattr(context_resolver, "resolve_canonical_context", _must_not_resolve)
 
-    with app.test_request_context("/api/student-status", headers=SCHOOL_ADDRESS):
+    # REMOTE_ADDR is the local reverse proxy (audit S7): only then does the
+    # fallback honor the forwarded CF-Connecting-IP header at all.
+    with app.test_request_context(
+        "/api/student-status", headers=SCHOOL_ADDRESS, environ_base={"REMOTE_ADDR": "127.0.0.1"},
+    ):
         g.canonical_context = CanonicalContext(
             user_id="u-1", class_id="class-a", seat_id=41, actor_role="student"
         )

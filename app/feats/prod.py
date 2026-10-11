@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 
+from sqlalchemy import text
+
 from app.extensions import db
 from app.feats.base import requires_feat_context, get_correlation_id, audit_protected
 from app.models import (
@@ -364,6 +366,40 @@ def _record_payroll_event_impl(
     ctx = _require_context(ctx)
     if payroll_event_type not in {"payroll", "manual_credit"}:
         raise ValueError("Compensation requires the signed payroll recovery FEAT command.")
+
+    # Replay safety for idempotency_key, done here rather than by the caller
+    # (audit F5 / CodeRabbit review on PR #1536): a check-then-insert in the
+    # caller's own query runs in a transaction this FEAT's own __enter__ may
+    # discard. FEATContext.__enter__ rolls back a prior "discardable read
+    # autobegin" and opens its own begin() — on a pooled engine that can hand
+    # the new transaction a different physical connection, so a lock taken
+    # before entering this FEAT (transaction- or session-scoped alike) is not
+    # guaranteed to still be held here. Doing the lock and the existence check
+    # as the first statements inside the FEAT's own owned transaction (this
+    # function only ever runs inside one — requires_feat_context's __enter__
+    # has already run by the time this body executes) ties both to the same
+    # transaction that performs the insert below, so two concurrent calls
+    # sharing an idempotency_key (a double-click, two open tabs) serialize on
+    # the advisory lock and the loser observes the winner's committed row.
+    if idempotency_key:
+        db.session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtext(:key))"),
+            {"key": idempotency_key},
+        )
+        existing_event = PayrollEvent.query.filter_by(
+            class_id=ctx.class_id,
+            target_seat_id=target_seat_id,
+            payroll_event_type=payroll_event_type,
+            idempotency_key=idempotency_key,
+        ).first()
+        if existing_event is not None:
+            existing_tx = (
+                Transaction.query.filter_by(idempotency_key=idempotency_key).first()
+                if idempotency_key
+                else None
+            )
+            return PayrollEventResult(payroll_event=existing_event, ledger_transaction=existing_tx)
+
     # The FEAT owns the canonical command correlation shared with Ledger effects.
     correlation_id = get_correlation_id()
     # The initiating caller states the mechanism (FEAT-PROD-004 §II.1); it is
