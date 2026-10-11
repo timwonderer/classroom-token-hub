@@ -195,7 +195,7 @@ SAFE_BEFORE_SAFE_FILTERS = frozenset({"nl2br"})
 
 _EXPR_RE = re.compile(r"\{\{-?(.*?)-?\}\}", re.DOTALL)
 _AUTOESCAPE_FALSE_RE = re.compile(r"\{%-?\s*autoescape\s+false\s*-?%\}")
-_JINJA = Environment()
+_JINJA = Environment(autoescape=True)
 
 
 @dataclass(frozen=True)
