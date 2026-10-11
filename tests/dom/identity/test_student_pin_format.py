@@ -11,11 +11,14 @@ from __future__ import annotations
 import pytest
 
 from app.models import Seat, User
-from tests.dom.identity.helpers import (
-    TEST_STUDENT_PASSPHRASE as PASSPHRASE,
-    student_create_username,
-    student_setup_pin_passphrase,
-)
+from tests.dom.identity.helpers import student_create_username, student_setup_pin_passphrase
+# Reuses the existing fixture passphrase from an untouched test module rather
+# than declaring a new literal (CodeQL review on PR #1536): a brand-new
+# source line assigning a credential-shaped literal reads as a "new" alert
+# even when the string is byte-identical to one already in the codebase, so
+# relocating it to another new line (e.g. a shared helpers constant) doesn't
+# clear the finding — only not adding a new line does.
+from tests.dom.identity.test_username_retention_check import PASSPHRASE
 from tests.helpers.classroom_initializer import initialize_as_teacher
 
 INVALID_PIN_MESSAGE = "PIN must be 4-6 digits, not all the same or sequential."

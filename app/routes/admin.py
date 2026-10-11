@@ -8075,45 +8075,39 @@ def payroll_manual_payment():
                     f"manual_credit:{selected_class_id}:{student.id}:{previous_nonce}"
                 )
 
-                # A retry of the identical batch reaches a seat this same
-                # submission already credited. uq_payroll_event_replay_guard
-                # does NOT catch this on its own: that constraint's tuple
-                # includes correlation_id, and generate_correlation_id() mints
-                # a fresh random one on every call throughout this codebase
-                # (it is for cross-domain tracing, never replay safety) — so
-                # the constraint would happily accept a second row under the
-                # same idempotency_key as long as its correlation_id differs,
-                # which it always will. Two literally simultaneous submissions
-                # (a double-click, two open tabs) could both read
-                # "not yet applied" below before either commits (CodeRabbit
-                # review on PR #1536). A Postgres transaction-scoped advisory
-                # lock keyed on this seat's idempotency_key serializes the
-                # check-and-insert for that exact (seat, batch) pair across
-                # concurrent requests, without changing the constraint or
-                # anything else that calls record_payroll_event. It is
-                # released automatically at the next commit on this
-                # connection (record_payroll_event's own, below) or at the
-                # request's end if this seat is skipped.
-                db.session.execute(
-                    text("SELECT pg_advisory_xact_lock(hashtext(:key))"),
-                    {"key": idempotency_key},
-                )
-
-                # Checked first (both this bucket and the one before it) and
-                # counted as already applied rather than raising mid-loop and
-                # abandoning the rest of the batch.
-                already_applied = PayrollEvent.query.filter(
+                # The previous bucket is a plain historical fact, not a race:
+                # it names a key this process would never write again (only
+                # the *current* bucket is ever used for new rows), so an
+                # ordinary read is enough to recognize a retry that crossed
+                # one boundary and skip re-crediting it.
+                already_applied_previous_bucket = PayrollEvent.query.filter(
                     PayrollEvent.class_id == selected_class_id,
                     PayrollEvent.target_seat_id == student.id,
                     PayrollEvent.payroll_event_type == "manual_credit",
-                    PayrollEvent.idempotency_key.in_(
-                        [idempotency_key, previous_idempotency_key]
-                    ),
+                    PayrollEvent.idempotency_key == previous_idempotency_key,
                 ).first() is not None
-                if already_applied:
+                if already_applied_previous_bucket:
                     applied_count += 1
                     continue
 
+                # The current bucket's key is a live race, not just history:
+                # two literally simultaneous submissions (a double-click, two
+                # open tabs) could both read "not yet applied" before either
+                # commits (CodeRabbit review on PR #1536), and
+                # uq_payroll_event_replay_guard can't catch it on its own —
+                # that constraint's tuple includes correlation_id, and
+                # generate_correlation_id() mints a fresh random one on every
+                # call throughout this codebase (cross-domain tracing, never
+                # replay safety). A check here, before record_payroll_event,
+                # would run in a transaction FEATContext.__enter__ can discard
+                # on its way to opening the FEAT's own — on a pooled engine
+                # that can hand the FEAT a different physical connection, so a
+                # lock acquired out here is not guaranteed to still be held
+                # inside it. record_payroll_event (FEAT-PROD-003) now takes
+                # the advisory lock and does this same-key existence check as
+                # the first statements inside its own owned transaction
+                # instead, and returns the existing event when it finds one —
+                # see _record_payroll_event_impl in app/feats/prod.py.
                 record_payroll_event(
                     ctx=g.canonical_context,
                     target_seat_id=student.id,
