@@ -41,7 +41,7 @@ that the pattern is safe — only a reviewed disposition under §V.2 is.
 - `docs/STANDARD_OPERATING_PROCEDURES/SECURITY/SOP-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_OPERATIONS.md`
 - `docs/STANDARD_OPERATING_PROCEDURES/SOP-CORE-000_Sop_Foundation.md`
 - `docs/ops/audits/INCIDENT_2026-10-11_SEC-SAST-GAP-001.md`
-- `.claude/rules/testing.md` Mistake 6a (mutation-proof requirement for structural guards), implementing `SOP-TEST-003` §IX.A
+- `docs/STANDARD_OPERATING_PROCEDURES/TESTING/SOP-TEST-003_Test_Creation.md` §IX.A (mutation-proof requirement for structural guards)
 
 ## V. Operating Controls
 
@@ -50,17 +50,22 @@ that the pattern is safe — only a reviewed disposition under §V.2 is.
 - CodeQL runs on the `security-extended` query suite (not the narrower default
   setup), configured in Settings → Code security, not as a committed workflow file.
 - `main`'s branch ruleset (id `10357616`) carries a `code_scanning` rule with
-  `security_alerts_threshold: high_or_higher`. **Rationale for the threshold:**
-  `high_or_higher` blocks merge on a new Critical or High finding the PR's diff
-  introduces, while leaving Medium/Low/Note findings to flow through the per-alert
-  triage in §V.2 rather than blocking every PR on a tool with a known false-positive
-  rate. This was chosen deliberately over `errors` (which would also block on tool
-  execution errors, not just security findings) and over no threshold (which
-  reproduces the original gap). Experimentally verified fail-closed behavior: the
-  rule blocks merge while CodeQL analysis on the PR head is missing or still running,
-  not only on an actual finding — confirmed 2026-10-11 against a draft PR.
-  A rule that only scopes to alerts the PR's diff introduces is a deliberate, narrower
-  scope than the whole-repository backlog; §V.4 exists because of that gap.
+  `security_alerts_threshold: high_or_higher`. GitHub's `code_scanning` rule has two
+  independent threshold fields: `security_alerts_threshold`
+  (`none`/`critical`/`high_or_higher`/`medium_or_higher`/`all`, by severity) and
+  `alerts_threshold` (`none`/`errors`/`errors_and_warnings`/`all`, by tool-execution
+  status — not a severity selector). This SOP's threshold rationale concerns
+  `security_alerts_threshold` only. **Rationale:** `high_or_higher` blocks merge on a
+  new Critical or High finding the PR's diff introduces, while leaving Medium/Low/Note
+  findings to flow through the per-alert triage in §V.2 rather than blocking every PR
+  on a tool with a known false-positive rate. This was chosen deliberately over
+  `critical` alone (which would let a new High-severity finding merge unblocked) and
+  over `none`/no rule (which reproduces the original gap). Missing or in-progress
+  CodeQL analysis on the PR head blocks merge separately from either threshold field,
+  and this was experimentally verified fail-closed (confirmed 2026-10-11 against a
+  draft PR). A rule that only scopes to alerts the PR's diff introduces is a
+  deliberate, narrower scope than the whole-repository backlog; §V.4 exists because of
+  that gap.
 - **What the ruleset does not do:** it has no required status check for this
   repository's own test suite. A structural guard test (such as
   `tests/guards/unsafe_jinja_filter_markup.py`'s `test_no_unsafe_jinja_markup.py`)
@@ -117,7 +122,7 @@ only-shrinks-baseline discipline as `migrations/lint_baseline.txt`: a reviewed,
 pre-existing occurrence may be recorded in the guard's baseline file to avoid
 re-litigating it, but the baseline file MUST NOT be used to silence a newly
 introduced occurrence, and every guard MUST carry a mutation proof per
-`.claude/rules/testing.md` Mistake 6a before it is trusted.
+`SOP-TEST-003` §IX.A before it is trusted.
 
 ### V.3 Query-coverage gaps
 
@@ -130,10 +135,11 @@ the finding never reached a merge-blocking gate — the Aikido diff-scope failur
 - A routing failure is fixed by gating configuration (§V.1), not by code change.
 - A coverage gap requires either a custom query for that specific taint shape, or,
   where a custom query is impractical, a deterministic repository guard test proven
-  against a synthetic near-miss per `.claude/rules/testing.md` Mistake 6a. A
-  changelog note or a comment asserting the pattern "is now covered" without a guard
-  or query that reports a synthetic violation is not sufficient — see Mistake 6a's own
-  account of a guard that passed while failing to guard.
+  against a synthetic near-miss per `SOP-TEST-003` §IX.A. A changelog note or a
+  comment asserting the pattern "is now covered" without a guard or query that
+  reports a synthetic violation is not sufficient — `SOP-TEST-003` §IX.A documents a
+  guard in this repository that passed while failing to guard, for exactly this
+  reason.
 - Confirm a rule that *should* already cover a related pattern (e.g. `js/xss-through-dom`
   for client-side `innerHTML` sinks) remains enabled rather than assuming it does,
   since the same incident found that rule class present but missing one specific
@@ -151,14 +157,21 @@ looks at it rather than sitting indefinitely:
   count against the actual list, as a prior triage pass under-summed a group and
   reported a materially wrong total before being caught against the Security tab UI),
   group by query ID and trust boundary, and apply §V.2's per-alert disposition to any
-  alert without one yet.
+  alert without one yet. Also pull the dismissed-alert list (`is:closed
+  reason:false_positive,won't_fix` or equivalent) and re-walk each prior
+  false-positive/mitigated disposition against the current code: a dismissed alert is
+  absent from the open-alert list by definition, so a mitigation invalidated by a
+  later code change (the guarding check removed, the trust boundary widened) would
+  otherwise stay invisible indefinitely.
 - **Record:** each review's output is a dated document under `docs/ops/audits/`
   (following the `SECURITY_TRIAGE_<date>_<topic>.md` naming already in use), stating
-  the total alert count at review time, the count newly dispositioned, and the count
-  still pending with its tracked follow-up.
+  the total open-alert count at review time, the count newly dispositioned, the count
+  still pending with its tracked follow-up, and the count of previously-dismissed
+  alerts re-examined and confirmed still valid (or reopened, if not).
 - A reviewer MUST NOT treat "no new alerts since last review" as equivalent to "no
   review needed" — the review's purpose includes re-examining whether a prior
-  false-positive/mitigated disposition still holds as the surrounding code changes.
+  false-positive/mitigated disposition, open or already dismissed, still holds as the
+  surrounding code changes.
 
 ## VI. Required Evidence and Handoff
 
