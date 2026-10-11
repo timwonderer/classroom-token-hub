@@ -45,6 +45,14 @@ required_env_vars = [
     "PEPPER_KEY",
     "AUDIT_HMAC_KEY",
 ]
+# The Cloudflare Turnstile pair is the only bot check on student login, seat
+# claim, student recovery and teacher recovery. verify_turnstile_token() skips
+# verification when the secret is unset (local development), so a production
+# deploy that dropped the key would start normally with every one of those
+# ingresses unguarded. Production therefore requires the pair at startup.
+# Outside production the bypass stays, so local setups need no registered key.
+if os.getenv("FLASK_ENV") == "production":
+    required_env_vars = required_env_vars + ["TURNSTILE_SECRET_KEY", "TURNSTILE_SITE_KEY"]
 missing_vars = [var for var in required_env_vars if not os.getenv(var)]
 if missing_vars:
     raise RuntimeError(

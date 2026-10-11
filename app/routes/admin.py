@@ -8020,7 +8020,47 @@ def payroll_manual_payment():
             selected_class_id = selected_scope['class_id']
 
             applied_count = 0
-            request_nonce = secrets.token_hex(12)
+            # The nonce used to be fresh on every call (secrets.token_hex(12)),
+            # so a retry after a mid-batch failure (a lock timeout, a dropped
+            # connection) carried no memory of which students were already
+            # paid: the FEAT commits each seat's credit in its own transaction
+            # (DOM-LED-001 command-scoped idempotency is per seat, never per
+            # submission), and 14 successes before seat 15 timed out meant a
+            # resubmit paid those 14 a second time (audit F5). Deriving the
+            # nonce from the submission's own content — same teacher, same
+            # class, same selection, same description and amount — makes a
+            # same-minute retry of that batch replay the same per-seat
+            # idempotency_key as the first attempt, instead of minting a new
+            # one that bypasses every existing replay guard. The content is
+            # bucketed to a 5-minute server-time window (comfortably covering
+            # "click Apply again" after a failure) rather than hashed with no
+            # time bound at all, so a teacher who runs the identical weekly
+            # bonus — same roster, same description, same amount — next week
+            # is not silently skipped as a stale "replay" of this one.
+            #
+            # A hard 5-minute edge has its own failure mode a Codex review on
+            # this PR caught: a batch that starts just before the boundary,
+            # credits some seats, fails, and is retried just after it would
+            # compute a *different* nonce for the retry and find no record of
+            # the earlier successes — double-paying exactly the seats this
+            # fix exists to protect. So "already applied" is checked against
+            # both the current bucket's nonce and the immediately preceding
+            # one; only the current bucket's nonce is used for new writes.
+            # That covers a retry that crosses at most one boundary (up to
+            # ~10 minutes worst case) without reaching back far enough to
+            # mistake a genuinely new, later submission for a replay.
+            def _manual_credit_nonce(bucket: int) -> str:
+                return hashlib.sha256(
+                    "|".join([
+                        selected_class_id, g.canonical_context.user_id, description,
+                        format(amount, 'f'), form.account_type.data, payment_type,
+                        str(bucket), ",".join(sorted(student_ids)),
+                    ]).encode()
+                ).hexdigest()[:24]
+
+            current_bucket = int(utc_now().timestamp() // 300)
+            request_nonce = _manual_credit_nonce(current_bucket)
+            previous_nonce = _manual_credit_nonce(current_bucket - 1)
             for actor_public_id in student_ids:
                 student = _resolve_student_detail_seat(str(actor_public_id))
                 if student is None or student.class_id != selected_class_id:
@@ -8030,12 +8070,50 @@ def payroll_manual_payment():
                 if student.claimed_at is None or student.user_id is None:
                     continue
 
+                idempotency_key = f"manual_credit:{selected_class_id}:{student.id}:{request_nonce}"
+                previous_idempotency_key = (
+                    f"manual_credit:{selected_class_id}:{student.id}:{previous_nonce}"
+                )
+
+                # The previous bucket is a plain historical fact, not a race:
+                # it names a key this process would never write again (only
+                # the *current* bucket is ever used for new rows), so an
+                # ordinary read is enough to recognize a retry that crossed
+                # one boundary and skip re-crediting it.
+                already_applied_previous_bucket = PayrollEvent.query.filter(
+                    PayrollEvent.class_id == selected_class_id,
+                    PayrollEvent.target_seat_id == student.id,
+                    PayrollEvent.payroll_event_type == "manual_credit",
+                    PayrollEvent.idempotency_key == previous_idempotency_key,
+                ).first() is not None
+                if already_applied_previous_bucket:
+                    applied_count += 1
+                    continue
+
+                # The current bucket's key is a live race, not just history:
+                # two literally simultaneous submissions (a double-click, two
+                # open tabs) could both read "not yet applied" before either
+                # commits (CodeRabbit review on PR #1536), and
+                # uq_payroll_event_replay_guard can't catch it on its own —
+                # that constraint's tuple includes correlation_id, and
+                # generate_correlation_id() mints a fresh random one on every
+                # call throughout this codebase (cross-domain tracing, never
+                # replay safety). A check here, before record_payroll_event,
+                # would run in a transaction FEATContext.__enter__ can discard
+                # on its way to opening the FEAT's own — on a pooled engine
+                # that can hand the FEAT a different physical connection, so a
+                # lock acquired out here is not guaranteed to still be held
+                # inside it. record_payroll_event (FEAT-PROD-003) now takes
+                # the advisory lock and does this same-key existence check as
+                # the first statements inside its own owned transaction
+                # instead, and returns the existing event when it finds one —
+                # see _record_payroll_event_impl in app/feats/prod.py.
                 record_payroll_event(
                     ctx=g.canonical_context,
                     target_seat_id=student.id,
                     payroll_event_type="manual_credit",
                     correlation_id=generate_correlation_id(),
-                    idempotency_key=f"manual_credit:{selected_class_id}:{student.id}:{request_nonce}",
+                    idempotency_key=idempotency_key,
                     # Manual credits need no payroll setting (DOM-PROD-001 §VIII).
                     mechanism="TEACHER",
                     summary_json={
