@@ -98,7 +98,7 @@ def test_sanitizer_would_neutralize_a_raw_control_character_reaching_this_site()
     assert sanitize_for_log(malicious_url) == "http://localhost/x\\x0d\\x0aFAKE-INJECTED-LINE"
 
 
-def _record_with_request_id_filter(app):
+def _record_with_request_id_filter(app, endpoint=None):
     """A bare LogRecord run through RequestIdFilter, inside the active
     request context, the way the real logging.Filter machinery does it."""
     import logging
@@ -106,6 +106,8 @@ def _record_with_request_id_filter(app):
     from app import RequestIdFilter
 
     record = logging.LogRecord("app", logging.WARNING, __file__, 1, "test", (), None)
+    if endpoint is not None:
+        record.endpoint = endpoint
     RequestIdFilter().filter(record)
     return record
 
@@ -121,6 +123,15 @@ def test_request_id_filter_endpoint_fallback_is_sanitized(app):
     assert "\r" not in record.endpoint and "\n" not in record.endpoint
     assert "\\x0d\\x0a" in record.endpoint
     assert "FAKE-INJECTED-LINE" in record.endpoint
+
+
+def test_request_id_filter_sanitizes_a_prepopulated_endpoint(app):
+    with app.test_request_context("/student/login"):
+        record = _record_with_request_id_filter(
+            app, endpoint="trusted.route\r\nFAKE-INJECTED-LINE"
+        )
+
+    assert record.endpoint == "trusted.route\\x0d\\x0aFAKE-INJECTED-LINE"
 
 
 def test_matched_route_endpoint_is_the_route_rule_not_the_path(app):

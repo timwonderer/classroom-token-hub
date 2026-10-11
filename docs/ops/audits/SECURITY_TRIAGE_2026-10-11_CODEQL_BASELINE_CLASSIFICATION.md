@@ -178,13 +178,16 @@ morning triage's own methodology, used here at finer grain (per file, not per wh
   (`tests/helpers/axe_wcag.py` and the browser test *are* CI-reachable files, but the
   specific tainted value CodeQL traces, the environment variable, is not.)
 
-- **CI-reachable, but the path only ever names a file git itself already checked out, read
-  for linting, never written or deleted (false positive):** `scripts/lint_migrations.py:179,210,214,293,298`.
-  `--files`/`--changed-files` are populated by `check-migrations.yml` from
-  `git diff --name-only`; a path git reports as changed is, by construction, a path inside
-  the checkout — git has no way to report a changed file outside the repository tree, so
-  there is no traversal surface here even though the PR's own diff nominally "chooses" the
-  filenames.
+- **CI-reachable, migration lint inputs (symlinks rejected):** `scripts/lint_migrations.py:179,210,214,293,298`.
+  `check-migrations.yml` supplies the baseline from the checkout, the comparison baseline
+  from `git show`, and the changed-file list from `git diff --name-only`. The linter rejects
+  paths containing symlinks for baseline files, changed-file lists, and migration files
+  before reading them.
+  Migration files are selected from the fixed `migrations/versions/*.py` glob; the changed
+  file list is used only to derive exemption basenames and does not select files to open.
+  The prior claim that a git-reported path alone established safe containment was incorrect;
+  the symlink checks, rather than that claim, prevent these CI inputs from redirecting reads
+  outside their intended files.
 
 - **Not wired into any CI workflow, path comes from an operator-supplied CLI argument or a
   JSON file read with that same argument (false positive / local-only):**

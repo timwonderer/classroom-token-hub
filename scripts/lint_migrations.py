@@ -205,8 +205,15 @@ def print_issue(issue: Dict, prefix: str):
     print(f"      Fix: {issue['fix']}")
 
 
+def path_contains_symlink(path: Path) -> bool:
+    return any(part.is_symlink() for part in (path, *path.parents))
+
+
 def load_baseline(path: Path) -> set:
     """Read accepted-noncompliance basenames, one per line, '#' comments allowed."""
+    if path_contains_symlink(path):
+        print(f"❌ Refusing to read symlinked baseline file: {path}")
+        sys.exit(2)
     if not path.exists():
         print(f"❌ Baseline file not found: {path}")
         sys.exit(2)
@@ -290,6 +297,9 @@ For more information, see:
     changed = set()
     if args.changed_files:
         changed_path = Path(args.changed_files)
+        if path_contains_symlink(changed_path):
+            print(f"❌ Refusing to read symlinked changed-files list: {changed_path}")
+            sys.exit(2)
         if not changed_path.exists():
             print(f"❌ Changed-files list not found: {changed_path}")
             sys.exit(2)
@@ -349,6 +359,9 @@ For more information, see:
     stale_baseline = []
 
     for migration_file in migrations:
+        if path_contains_symlink(migration_file):
+            print(f"❌ Refusing to lint symlinked migration file: {migration_file}")
+            sys.exit(2)
         if not migration_file.exists():
             print(f"❌ File not found: {migration_file}")
             continue

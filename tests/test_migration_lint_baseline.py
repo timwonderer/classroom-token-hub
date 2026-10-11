@@ -88,6 +88,49 @@ def test_an_entry_present_on_the_base_branch_still_suppresses(failing_migration,
     assert result.returncode == 0, result.stdout
 
 
+def test_symlinked_baseline_is_rejected_before_reading(failing_migration, tmp_path):
+    target = tmp_path / "target.txt"
+    target.write_text(f"{failing_migration.name}\n", encoding="utf-8")
+    baseline = tmp_path / "baseline.txt"
+    baseline.symlink_to(target)
+
+    result = _run(
+        str(failing_migration),
+        "--baseline", str(baseline),
+    )
+
+    assert result.returncode == 2
+    assert "Refusing to read symlinked baseline file" in result.stdout
+
+
+def test_symlinked_migration_is_rejected_before_reading(tmp_path):
+    target = tmp_path / "target_migration.py"
+    target.write_text(NON_IDEMPOTENT_MIGRATION, encoding="utf-8")
+    link_dir = tmp_path / "linked_dir"
+    link_dir.symlink_to(tmp_path, target_is_directory=True)
+    migration = link_dir / target.name
+
+    result = _run(str(migration))
+
+    assert result.returncode == 2
+    assert "Refusing to lint symlinked migration file" in result.stdout
+
+
+def test_symlinked_changed_files_list_is_rejected(failing_migration, tmp_path):
+    target = tmp_path / "target_changed_files.txt"
+    target.write_text(f"{failing_migration}\n", encoding="utf-8")
+    changed_files = tmp_path / "changed_files.txt"
+    changed_files.symlink_to(target)
+
+    result = _run(
+        str(failing_migration),
+        "--changed-files", str(changed_files),
+    )
+
+    assert result.returncode == 2
+    assert "Refusing to read symlinked changed-files list" in result.stdout
+
+
 def test_comments_and_blank_lines_are_not_read_as_additions(failing_migration, tmp_path):
     """Reformatting the baseline is not an addition to it."""
     baseline = tmp_path / "baseline.txt"

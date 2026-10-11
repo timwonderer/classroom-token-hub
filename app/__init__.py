@@ -124,9 +124,10 @@ class RequestIdFilter(logging.Filter):
                     # unsanitized path here is log injection on a much wider
                     # surface than the few explicit logger.warning(request.url)
                     # call sites CodeQL's py/log-injection query flagged.
-                    record.endpoint = sanitize_for_log(request.path)
+                    record.endpoint = request.path
             else:
                 record.endpoint = "-"
+        record.endpoint = sanitize_for_log(record.endpoint)
         if not hasattr(record, "method"):
             record.method = request.method if has_request_context() else "-"
         if not hasattr(record, "error_class"):
