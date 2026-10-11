@@ -149,6 +149,26 @@ def _written_names(node: ast.AST) -> set[str]:
     return names
 
 
+def resolve_filter_aliases(source: str, filter_names: set[str]) -> set[str]:
+    """Include every simple callable alias target, conservatively across writes."""
+    names = filter_names.copy()
+    aliases = []
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            value = node.value
+            origin = value.id if isinstance(value, ast.Name) else value.attr if isinstance(value, ast.Attribute) else None
+            if origin:
+                aliases.extend((target.id, origin) for target in targets if isinstance(target, ast.Name))
+        elif isinstance(node, ast.ImportFrom):
+            aliases.extend((alias.asname, alias.name) for alias in node.names if alias.asname)
+    while True:
+        expanded = names | {origin for alias, origin in aliases if alias in names}
+        if expanded == names:
+            return names
+        names = expanded
+
+
 def find_filter_registrations(source: str) -> set[str]:
     """Discover direct assignments, literal updates, and Flask filter decorators.
 
@@ -197,13 +217,14 @@ def find_filter_registrations(source: str) -> set[str]:
                 func = decorator.func if isinstance(decorator, ast.Call) else decorator
                 if isinstance(func, ast.Attribute) and func.attr == "template_filter":
                     names.add(node.name)
-    return names
+    return resolve_filter_aliases(source, names)
 
 
 def find_unsafe_markup_in_filters(
     source: str, filter_names: set[str], path: str = "<source>"
 ) -> list[Violation]:
     tree = ast.parse(source)
+    filter_names = resolve_filter_aliases(source, filter_names)
     violations: list[Violation] = []
     module_bindings: dict[str, str] = {}
     for statement in tree.body:
@@ -213,6 +234,15 @@ def find_unsafe_markup_in_filters(
             module_bindings.update(_import_bindings(statement))
         elif isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             module_bindings.pop(statement.name, None)
+        elif isinstance(statement, (ast.Assign, ast.AnnAssign)):
+            value = statement.value
+            origin = _provenance(value, module_bindings) if value is not None else None
+            for name in _written_names(statement):
+                module_bindings.pop(name, None)
+            targets = statement.targets if isinstance(statement, ast.Assign) else [statement.target]
+            for target in targets:
+                if isinstance(target, ast.Name) and origin:
+                    module_bindings[target.id] = origin
         else:
             for name in _written_names(statement):
                 module_bindings.pop(name, None)

@@ -28,6 +28,7 @@ from tests.guards.unsafe_jinja_filter_markup import (
     CARD_RAW_ARGUMENTS,
     find_unsafe_card_macro_arguments,
     find_filter_registrations,
+    resolve_filter_aliases,
     find_unsafe_markup_in_filters,
     find_autoescape_false_blocks,
     find_unsafe_safe_filters,
@@ -92,6 +93,13 @@ def test_no_registered_filter_wraps_unescaped_text_in_markup():
     filter_names: set[str] = set()
     for path in sources:
         filter_names |= find_filter_registrations(path.read_text(encoding="utf-8"))
+    while True:
+        expanded = filter_names.copy()
+        for path in sources:
+            expanded |= resolve_filter_aliases(path.read_text(encoding="utf-8"), filter_names)
+        if expanded == filter_names:
+            break
+        filter_names = expanded
 
     assert filter_names >= {"nl2br_filter", "render_markdown", "url_encode_filter"}, (
         "guard did not find the filters registered in app/__init__.py — "
@@ -733,8 +741,76 @@ def test_required_ci_executes_guard_with_immutable_base_evidence():
     workflow = yaml.safe_load((REPO_ROOT / '.github/workflows/constitutional-ci.yml').read_text())
     steps = workflow['jobs']['constitutional-evidence']['steps']
     guard = next(step for step in steps if step['name'] == 'Guard Jinja output escaping')
-    assert guard['run'] == 'python -m pytest --noconftest -q tests/test_no_unsafe_jinja_markup.py'
-    assert guard['env']['JINJA_GUARD_BASE_SHA'] == '${{ github.event.pull_request.base.sha || inputs.base_sha || github.event.before }}'
+    assert guard['run'].splitlines()[-1] == 'python -m pytest --noconftest -q tests/test_no_unsafe_jinja_markup.py'
+    assert guard['env']['JINJA_GUARD_BASE_SHA'] == '${{ github.event.pull_request.base.sha || github.event.before }}'
+    assert guard['env']['DEFAULT_BRANCH'] == '${{ github.event.repository.default_branch }}'
     assert 'if' not in guard and not guard.get('continue-on-error')
     checkout = next(step for step in steps if step.get('uses', '').startswith('actions/checkout@'))
     assert checkout['with']['fetch-depth'] == 0
+
+
+@pytest.mark.parametrize('setup', [
+    'from markupsafe import Markup\nM = Markup',
+    'import markupsafe as ms\nM = ms.Markup\nconstructor: object = M',
+])
+def test_module_constructor_alias_cannot_hide_a_sink(setup):
+    constructor = 'constructor' if 'constructor:' in setup else 'M'
+    source = setup + f'\ndef render(raw): return {constructor}(raw)\n'
+    assert len(find_unsafe_markup_in_filters(source, {'render'})) == 1
+    sanitized = 'from markupsafe import escape\n' + source.replace(f'{constructor}(raw)', f'{constructor}(escape(raw))')
+    assert find_unsafe_markup_in_filters(sanitized, {'render'}) == []
+
+
+@pytest.mark.parametrize('aliases', ['render = unsafe', 'first = unsafe\nrender: object = first'])
+def test_registered_callable_alias_cannot_hide_a_sink(aliases):
+    source = "def unsafe(raw): return Markup(raw)\n" + aliases + "\napp.jinja_env.filters['x'] = render\n"
+    names = find_filter_registrations(source)
+    assert len(find_unsafe_markup_in_filters(source, names)) == 1
+    assert len(find_unsafe_markup_in_filters(source, {'render'})) == 1
+    assert find_unsafe_markup_in_filters(source.replace('Markup(raw)', 'Markup("literal")'), names) == []
+
+
+def test_dispatch_baseline_ignores_branch_comparison_sha(base_template_repository):
+    import yaml
+
+    root, git, approved_revision = base_template_repository
+    git('update-ref', 'refs/remotes/origin/main', approved_revision)
+    git('checkout', '-qb', 'candidate')
+    path = root / 'tests/guards/unsafe_safe_filter_baseline.txt'
+    path.parent.mkdir(parents=True)
+    path.write_text('templates/example.html::raw|safe\n')
+    (root / 'templates/example.html').write_text('{{ raw|safe }}')
+    git('add', '.')
+    git('-c', 'user.name=Guard test', '-c', 'user.email=guard@example.invalid', 'commit', '-qm', 'Unapproved sink and exemption')
+    unapproved_revision = git('rev-parse', 'HEAD')
+    (root / 'other.txt').write_text('nonempty changed paths')
+    git('add', '.')
+    git('-c', 'user.name=Guard test', '-c', 'user.email=guard@example.invalid', 'commit', '-qm', 'Another branch change')
+    assert git('diff', '--name-only', f'{unapproved_revision}...HEAD')
+    workflow = yaml.safe_load((REPO_ROOT / '.github/workflows/constitutional-ci.yml').read_text())
+    guard = next(step for step in workflow['jobs']['constitutional-evidence']['steps'] if step['name'] == 'Guard Jinja output escaping')
+    assert 'inputs.base_sha' not in guard['env']['JINJA_GUARD_BASE_SHA']
+    # Execute the workflow's actual baseline selection, replacing only pytest.
+    command = guard['run'].replace('python -m pytest --noconftest -q tests/test_no_unsafe_jinja_markup.py', 'printf "%s" "$JINJA_GUARD_BASE_SHA"')
+    env = dict(os.environ, JINJA_GUARD_BASE_SHA='', DEFAULT_BRANCH='main', BASE_SHA=unapproved_revision)
+    selected = subprocess.run(['bash', '-euc', command], cwd=root, env=env, check=True, capture_output=True, text=True).stdout
+    assert selected == approved_revision
+    violations = find_template_violations((root / 'templates/example.html').read_text(), 'templates/example.html')
+    with pytest.raises(ValueError, match='unapproved additions'):
+        unbaselined_violations(violations, load_baseline(path.read_text()), _base_branch_baseline(root, selected))
+    env['JINJA_GUARD_BASE_SHA'] = approved_revision
+    assert subprocess.run(['bash', '-euc', command], cwd=root, env=env, check=True, capture_output=True, text=True).stdout == approved_revision
+
+
+def test_callable_alias_resolution_crosses_source_and_import_boundaries():
+    registrations = "app.jinja_env.filters['x'] = render"
+    aliases = 'from app.renderers import unsafe as first\nrender = first'
+    definition = 'def unsafe(raw): return Markup(raw)'
+    names = resolve_filter_aliases(aliases, find_filter_registrations(registrations))
+    assert len(find_unsafe_markup_in_filters(definition, names)) == 1
+    assert find_unsafe_markup_in_filters(definition.replace('Markup(raw)', 'Markup("literal")'), names) == []
+
+
+def test_module_sanitizer_alias_reassignment_invalidates_safety():
+    source = 'from markupsafe import escape\ne = escape\ne = lambda value: value\ndef render(raw): return Markup(e(raw))'
+    assert len(find_unsafe_markup_in_filters(source, {'render'})) == 1
