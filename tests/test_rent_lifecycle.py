@@ -543,7 +543,10 @@ class TestRentPayment:
             execute_reconcile_rent(classroom.class_id, reference_time_utc=_T_INITIAL)
             correlation_id = f"rent:{classroom.class_id}:{seat_id}:cycle:1"
 
-            for bad in (Decimal("NaN"), Decimal("Infinity"), Decimal("0.001"), Decimal("-5.00")):
+            for bad in (
+                Decimal("NaN"), Decimal("Infinity"), Decimal("0.001"), Decimal("-5.00"),
+                Decimal("1e999999"),  # absurd exponent: quantize() itself must not raise
+            ):
                 result = execute_rent_payment(
                     classroom.class_id, seat_id, correlation_id,
                     idempotency_key=f"rent-pay:{correlation_id}:bad:{bad}",
@@ -983,6 +986,67 @@ class TestRentBillGroupPayment:
             ).count()
             assert payments_after == payments_before
             assert len(_active_perk_hall_passes(classroom.class_id, seat_id)) == perks_before
+
+    def test_bill_replay_of_partial_payment_is_not_rescreened_against_spent_funds(self, app):
+        """A double-click/back-button replay of an already-accepted PARTIAL bill
+        payment must return the same outcome, not INSUFFICIENT_FUNDS, even
+        though the seat's balance this command itself already spent is now
+        lower than the (unchanged) requested amount.
+
+        Regression for a real review finding: the F1-F4 aggregate
+        affordability screen in ``pay_rent_bill`` must resolve whether this
+        exact command already posted a slice BEFORE re-checking current
+        funds — not re-screen the original request against the post-debit
+        balance, which would wrongly refuse the command's own accepted
+        charge. Uses a single obligation (no late fee) so the per-slice
+        amount on replay is bound by the unchanged remaining *budget*, not by
+        the obligation's own remaining balance — exactly the "$20 of a $50
+        bill, funded with exactly $20" scenario the fix addresses."""
+        classroom = initialize("chemistry_p1", app)
+        with app.app_context():
+            _setup_rent_class(classroom)
+            customize_rent_settings(classroom.class_id, allow_incremental_payment=True)
+            student = classroom.students[0]
+            seat_id = student.seat.id
+            execute_reconcile_rent(classroom.class_id, reference_time_utc=_T_INITIAL)
+            rent_corr = f"rent:{classroom.class_id}:{seat_id}:cycle:1"
+            key = f"bill:{rent_corr}:partial-cmd"
+
+            # Fund exactly the amount this command will request — less than
+            # the $50 rent owed — so nothing is left over afterward.
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"fund:{seat_id}"):
+                create_ledger_idempotent_transaction(
+                    idempotency_key=f"fund-seat:{seat_id}",
+                    seat_id=seat_id, class_id=classroom.class_id,
+                    amount=Decimal("20.00"), account_type="checking",
+                    type="payroll", description="Fund exactly the partial payment",
+                )
+
+            first = execute_rent_bill_payment(
+                classroom.class_id, seat_id, rent_corr,
+                idempotency_key=key, payment_amount=Decimal("20.00"),
+            )
+            assert first.success is True, first.error_message
+            assert first.fully_paid is False
+            assert first.amount_paid == Decimal("20.00")
+            assert first.remaining_after == Decimal("30.00")
+
+            from app.services.ledger_balance_query_service import get_available_balances
+            checking, _ = get_available_balances(seat_id, classroom.class_id)
+            assert checking == Decimal("0.00")  # the $20 is gone; a fresh $20 debit would fail
+
+            # Replay the SAME command (double-click / back-button). It must
+            # return the same outcome, not INSUFFICIENT_FUNDS.
+            second = execute_rent_bill_payment(
+                classroom.class_id, seat_id, rent_corr,
+                idempotency_key=key, payment_amount=Decimal("20.00"),
+            )
+            assert second.success is True, second.error_message
+            assert second.amount_paid == first.amount_paid
+            assert second.remaining_after == first.remaining_after
+
+            checking_after, _ = get_available_balances(seat_id, classroom.class_id)
+            assert checking_after == Decimal("0.00")  # the replay moved no new money
 
 
 def test_funded_rent_replay_preserves_original_principal_and_perks(app):

@@ -70,6 +70,22 @@ class PremiumNotAffordable(Exception):
     """
 
 
+def _premium_reservation(class_id: str, ledger_idempotency_key: str):
+    """The existing command reservation for this exact premium debit, if any.
+
+    A pure existence read, used only to tell a replay of an already-accepted
+    charge from a fresh one; it asserts nothing about amount or fingerprint,
+    so it never raises on a legitimate replay.
+    """
+    from app.feats.base import get_active_feat_name
+    from app.models import LedgerCommandReservation
+
+    return LedgerCommandReservation.query.filter_by(
+        class_id=class_id, feat_code=get_active_feat_name(),
+        idempotency_key=ledger_idempotency_key,
+    ).first()
+
+
 def resolve_premium_funding(
     *,
     class_id: str,
@@ -144,7 +160,14 @@ def settle_insurance_premium(
         class_id=class_id, seat_id=seat_id, amount=amount, description=description,
         mechanism=mechanism, actor_seat_id=actor_seat_id, canonical_intent=canonical_intent,
     )
-    if resolved.checking_after < 0:
+    # A command that already posted this exact debit replays through
+    # apply_resolved_ledger_plan's own idempotent reservation lookup below,
+    # regardless of what checking looks like now (often lower, precisely
+    # because this command already spent it). Only a command with no prior
+    # reservation is screened against current affordability — screening a
+    # replay would re-evaluate a balance this same command already consumed
+    # and wrongly refuse its own accepted charge.
+    if _premium_reservation(class_id, ledger_idempotency_key) is None and resolved.checking_after < 0:
         raise PremiumNotAffordable(correlation_id)
     transaction = apply_resolved_ledger_plan(
         resolved_plan=resolved, idempotency_key=ledger_idempotency_key,

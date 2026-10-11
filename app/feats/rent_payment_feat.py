@@ -136,7 +136,18 @@ def requested_amount_problem(amount) -> str | None:
         return "Enter a valid payment amount."
     if value <= Decimal("0.00"):
         return "Payment amount must be positive"
-    if value != value.quantize(Decimal("0.01")):
+    # No lawful rent bill approaches this; rejecting it here keeps the
+    # quantize() below (and every later Decimal arithmetic on this value)
+    # inside its working precision instead of raising InvalidOperation on an
+    # absurd exponent (e.g. "1e999999") and turning an invalid amount into a
+    # 500 rather than this function's own INVALID_AMOUNT result.
+    if value > Decimal("1000000.00"):
+        return "Enter a valid payment amount."
+    try:
+        in_cents = value.quantize(Decimal("0.01"))
+    except InvalidOperation:
+        return "Enter a valid payment amount."
+    if value != in_cents:
         return "Payment amount must be in whole cents."
     return None
 
@@ -509,6 +520,39 @@ class RentBillPaymentResult:
     error_message: str | None = None
 
 
+def _bill_slice_command_key(idempotency_key: str, correlation_id: str) -> str:
+    """Per-obligation command key for one slice of a bill payment: a FIXED-LENGTH
+    digest of (bill command key, obligation correlation). Command-owned and
+    stable on replay (a pure function of stable inputs), distinct per
+    obligation, and never a counted sequence. Hashing keeps the downstream
+    ledger key within its length bound regardless of how long the
+    correlations are. Shared by the replay check and the payment loop so the
+    two can never compute different keys for the same slice.
+    """
+    return "billpay:" + hashlib.sha256(
+        f"{idempotency_key}:{correlation_id}".encode()
+    ).hexdigest()[:24]
+
+
+def _bill_slice_already_posted(class_id: str, idempotency_key: str, correlation_id: str) -> bool:
+    """Whether this exact bill command already posted a debit for this slice.
+
+    A pure existence read: it names no amount and asserts nothing about
+    fingerprint, so it never raises on a legitimate replay. Used only to
+    decide whether the aggregate affordability screen below applies.
+    """
+    from app.models import LedgerCommandReservation
+
+    sub_key = _bill_slice_command_key(idempotency_key, correlation_id)
+    ledger_key = f"rent-payment:{sub_key}:principal"
+    return (
+        LedgerCommandReservation.query.filter_by(
+            class_id=class_id, feat_code=get_active_feat_name(), idempotency_key=ledger_key,
+        ).first()
+        is not None
+    )
+
+
 def _bill_obligations_in_order(class_id: str, seat_id: int, rent_correlation_id: str):
     """The bill's obligations, settlement order: rent principal, then its late
     fees oldest-first. Late fees are located via the lawful source_correlation_id
@@ -594,25 +638,41 @@ def pay_rent_bill(
             error_code="NO_SEAT", error_message="Seat not found in class scope",
         )
     lock_recovery_scope(class_id, seat_id)
-    # Read-only: safe to repeat on a command replay. It only screens the batch
-    # before any slice posts; it does not itself authorize or fund anything —
-    # each slice's own pay_rent() still resolves and applies its own plan.
-    funding = resolve_intended_ledger_plan(
-        plan=build_intended_ledger_plan(
-            seat_id=seat_id, class_id=class_id, debit_amount=budget,
-            description="Rent bill", transaction_type="rent_payment",
-            target_seat_id=resolve_teacher_seat_for_class(class_id).id,
-            actor_seat_id=seat_id, mechanism="self",
-        ),
-        banking_directive=get_banking_directive(class_id),
-        fee_authority="NONE",
-    )
-    if funding.checking_after < 0:
-        return RentBillPaymentResult(
-            success=False, rent_correlation_id=rent_correlation_id,
-            error_code="INSUFFICIENT_FUNDS",
-            error_message="Checking, with any overdraft-protection transfer, does not cover this payment",
+    # This screens a FRESH command only. A command that already posted any of
+    # its slices is a replay (in full or in part, e.g. a prior attempt that
+    # posted slice 1 and then failed before slice 2): checking has already
+    # moved to reflect that posted debit, so re-screening the ORIGINAL budget
+    # against the now-lower balance would wrongly refuse a legitimate replay
+    # (its own per-slice pay_rent() call below already replays idempotently,
+    # at no new cost). Only a command with no slice posted yet gets the
+    # up-front aggregate screen, to avoid starting a sequence that would run
+    # out of funds partway through — pay_rent_bill's own commit is not
+    # exception-gated, so a mid-sequence failure would otherwise leave an
+    # earlier slice's debit posted under an overall failure result.
+    # Checked across EVERY obligation in the lineage, not only those still
+    # owing money now: a slice this exact command already fully paid shows
+    # remaining == 0 and would otherwise look indistinguishable from a slice
+    # this command never touched.
+    if not any(
+        _bill_slice_already_posted(class_id, idempotency_key, ob.correlation_id)
+        for ob in obligations
+    ):
+        funding = resolve_intended_ledger_plan(
+            plan=build_intended_ledger_plan(
+                seat_id=seat_id, class_id=class_id, debit_amount=budget,
+                description="Rent bill", transaction_type="rent_payment",
+                target_seat_id=resolve_teacher_seat_for_class(class_id).id,
+                actor_seat_id=seat_id, mechanism="self",
+            ),
+            banking_directive=get_banking_directive(class_id),
+            fee_authority="NONE",
         )
+        if funding.checking_after < 0:
+            return RentBillPaymentResult(
+                success=False, rent_correlation_id=rent_correlation_id,
+                error_code="INSUFFICIENT_FUNDS",
+                error_message="Checking, with any overdraft-protection transfer, does not cover this payment",
+            )
 
     # Allocate the budget across obligations in order (rent first, then late fees).
     results: list[RentPaymentResult] = []
@@ -625,14 +685,7 @@ def pay_rent_bill(
         if remaining <= Decimal("0.00"):
             continue
         slice_amount = remaining if remaining <= remaining_budget else remaining_budget
-        # Per-obligation command key: a FIXED-LENGTH digest of (bill command key,
-        # obligation correlation). Command-owned and stable on replay (a pure
-        # function of stable inputs), distinct per obligation, and never a counted
-        # sequence. Hashing keeps the downstream ledger key within its length
-        # bound regardless of how long the correlations are.
-        sub_key = "billpay:" + hashlib.sha256(
-            f"{idempotency_key}:{ob.correlation_id}".encode()
-        ).hexdigest()[:24]
+        sub_key = _bill_slice_command_key(idempotency_key, ob.correlation_id)
         sub = pay_rent(
             RentPaymentRequest(
                 class_id=class_id,
@@ -654,7 +707,17 @@ def pay_rent_bill(
         passes += sub.passes_awarded
         remaining_budget -= sub.amount_paid
 
-    remaining_after = max(Decimal("0.00"), group_remaining - total_paid)
+    # Re-read remaining truth from the obligations rather than subtracting
+    # total_paid from the pre-loop group_remaining: on a replay, a slice's
+    # pay_rent() call returns the amount its ORIGINAL (already-applied)
+    # command paid, which group_remaining above already reflects having been
+    # paid off. Subtracting it again would double-count that amount and
+    # under-report what is actually still owed.
+    remaining_after = sum(
+        (obligations_service.get_obligation_state(ob.correlation_id).remaining_amount
+         for ob in obligations),
+        Decimal("0.00"),
+    )
     return RentBillPaymentResult(
         success=True,
         rent_correlation_id=rent_correlation_id,
