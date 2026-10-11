@@ -6,4 +6,4 @@ if [[ $# -lt 2 ]]; then
   exit 1
 fi
 
-python3 scripts/adversarial/reset_db.py --snapshot-dir "$1" --database-url "$2"
+python3 -m scripts.adversarial.reset_db --snapshot-dir "$1" --database-url "$2"

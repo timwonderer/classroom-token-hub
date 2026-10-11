@@ -78,3 +78,27 @@ def test_db_backup_require_matching_clients_accepts_matching_14(backup_tool, mon
     monkeypatch.setattr(backup_tool.subprocess, "run", _fake_clients({"pg_dump": 14, "pg_restore": 14}))
     monkeypatch.setattr(backup_tool, "server_major", lambda url: 14)
     backup_tool.require_matching_clients({"source database": "src", "verify database": "verify"})
+
+
+def test_db_backup_table_counts_quotes_catalog_identifiers(backup_tool, monkeypatch):
+    from psycopg2 import extensions, sql
+
+    names = ['ordinary', 'table"with"quotes', 'x"; DROP TABLE users; --']
+    queries = []
+
+    class Cursor:
+        def execute(self, query):
+            queries.append(query)
+
+        def fetchall(self):
+            return [(name,) for name in names]
+
+        def fetchone(self):
+            return (7,)
+
+    monkeypatch.setattr(extensions, "quote_ident", lambda value, context: '"' + value.replace('"', '""') + '"')
+    cursor = Cursor()
+    assert backup_tool.table_counts(cursor) == dict.fromkeys(names, 7)
+    for name, query in zip(names, queries[1:]):
+        assert isinstance(query, sql.Composed)
+        assert query.as_string(cursor) == 'SELECT count(*) FROM public."' + name.replace('"', '""') + '"'
