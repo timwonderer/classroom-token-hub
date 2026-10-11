@@ -100,7 +100,7 @@ def test_symlinked_baseline_is_rejected_before_reading(failing_migration, tmp_pa
     )
 
     assert result.returncode == 2
-    assert "Refusing to read symlinked baseline file" in result.stdout
+    assert "Symlinked lint input is not allowed" in result.stdout
 
 
 def test_symlinked_migration_is_rejected_before_reading(tmp_path):
@@ -113,7 +113,7 @@ def test_symlinked_migration_is_rejected_before_reading(tmp_path):
     result = _run(str(migration))
 
     assert result.returncode == 2
-    assert "Refusing to lint symlinked migration file" in result.stdout
+    assert "Symlinked lint input is not allowed" in result.stdout
 
 
 def test_symlinked_changed_files_list_is_rejected(failing_migration, tmp_path):
@@ -128,7 +128,7 @@ def test_symlinked_changed_files_list_is_rejected(failing_migration, tmp_path):
     )
 
     assert result.returncode == 2
-    assert "Refusing to read symlinked changed-files list" in result.stdout
+    assert "Symlinked lint input is not allowed" in result.stdout
 
 
 def test_comments_and_blank_lines_are_not_read_as_additions(failing_migration, tmp_path):
@@ -184,3 +184,34 @@ def test_an_untouched_baselined_migration_keeps_its_exemption(failing_migration,
     )
 
     assert result.returncode == 0, result.stdout
+
+
+@pytest.mark.parametrize('argument', ['--baseline', '--base-branch-baseline', '--changed-files', 'migration'])
+@pytest.mark.parametrize('link_kind', ['file', 'parent', 'broken'])
+def test_symlinked_inputs_are_rejected_without_disclosing_targets(tmp_path, failing_migration, argument, link_kind):
+    secret = tmp_path / 'private'
+    secret.mkdir()
+    target = secret / 'secret.py'
+    target.write_text('SECRET-MUST-NOT-APPEAR\n' + NON_IDEMPOTENT_MIGRATION)
+    link = tmp_path / 'input.py'
+    if link_kind == 'parent':
+        link.symlink_to(secret, target_is_directory=True)
+        link = link / target.name
+    else:
+        link.symlink_to(target if link_kind == 'file' else secret / 'absent')
+    args = [str(link)] if argument == 'migration' else [str(failing_migration), argument, str(link)]
+    result = _run(*args)
+    assert result.returncode == 2, result.stdout
+    assert 'Symlinked lint input is not allowed' in result.stdout
+    assert 'SECRET-MUST-NOT-APPEAR' not in result.stdout + result.stderr
+
+
+def test_default_glob_rejects_symlinked_migration_directory(tmp_path):
+    (tmp_path / 'migrations').mkdir()
+    private = tmp_path / 'private'
+    private.mkdir()
+    (private / 'secret.py').write_text(NON_IDEMPOTENT_MIGRATION)
+    (tmp_path / 'migrations/versions').symlink_to(private, target_is_directory=True)
+    result = subprocess.run([sys.executable, str(LINTER)], cwd=tmp_path, capture_output=True, text=True)
+    assert result.returncode == 2, result.stdout
+    assert 'Symlinked lint input is not allowed' in result.stdout

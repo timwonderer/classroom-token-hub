@@ -111,6 +111,14 @@ SKIP_PATTERNS = [
 # LINTING LOGIC
 # ============================================================================
 
+def reject_symlink_path(path: Path) -> None:
+    """Reject checkout symlinks before reading their targets into CI output."""
+    path = path.absolute()
+    if any(component.is_symlink() for component in (path, *path.parents)):
+        print("❌ Symlinked lint input is not allowed")
+        sys.exit(2)
+
+
 def should_skip_file(filepath: Path) -> bool:
     """Check if file should be skipped based on patterns."""
     filename = filepath.name
@@ -171,6 +179,7 @@ def lint_migration(filepath: Path, verbose: bool = False) -> Tuple[List[Dict], L
     errors = []
     warnings = []
 
+    reject_symlink_path(filepath)
     if should_skip_file(filepath):
         if verbose:
             print(f"⏭️  Skipping {filepath.name} (merge migration or excluded)")
@@ -205,15 +214,9 @@ def print_issue(issue: Dict, prefix: str):
     print(f"      Fix: {issue['fix']}")
 
 
-def path_contains_symlink(path: Path) -> bool:
-    return any(part.is_symlink() for part in (path, *path.parents))
-
-
 def load_baseline(path: Path) -> set:
     """Read accepted-noncompliance basenames, one per line, '#' comments allowed."""
-    if path_contains_symlink(path):
-        print(f"❌ Refusing to read symlinked baseline file: {path}")
-        sys.exit(2)
+    reject_symlink_path(path)
     if not path.exists():
         print(f"❌ Baseline file not found: {path}")
         sys.exit(2)
@@ -297,9 +300,7 @@ For more information, see:
     changed = set()
     if args.changed_files:
         changed_path = Path(args.changed_files)
-        if path_contains_symlink(changed_path):
-            print(f"❌ Refusing to read symlinked changed-files list: {changed_path}")
-            sys.exit(2)
+        reject_symlink_path(changed_path)
         if not changed_path.exists():
             print(f"❌ Changed-files list not found: {changed_path}")
             sys.exit(2)
@@ -337,6 +338,7 @@ For more information, see:
         migrations = [Path(f) for f in args.files]
     else:
         migrations_dir = Path('migrations/versions')
+        reject_symlink_path(migrations_dir)
         if not migrations_dir.exists():
             print(f"❌ Error: Migration directory not found: {migrations_dir}")
             print("   Run this script from the project root directory")
@@ -359,9 +361,7 @@ For more information, see:
     stale_baseline = []
 
     for migration_file in migrations:
-        if path_contains_symlink(migration_file):
-            print(f"❌ Refusing to lint symlinked migration file: {migration_file}")
-            sys.exit(2)
+        reject_symlink_path(migration_file)
         if not migration_file.exists():
             print(f"❌ File not found: {migration_file}")
             continue

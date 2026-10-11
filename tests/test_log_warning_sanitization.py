@@ -1,5 +1,6 @@
 """Execute the flagged warning calls without importing the app or using a DB."""
 import ast
+import logging
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -47,3 +48,24 @@ def test_sanitizer_preserves_text_and_escapes_all_control_characters():
     assert sanitize(None) == 'None'
     for codepoint in [*range(32), *range(127, 160), 0x2028, 0x2029]:
         assert sanitize(chr(codepoint)) == f'\\x{codepoint:02x}'
+
+
+@pytest.mark.parametrize('in_request_context', [True, False])
+@pytest.mark.parametrize('prepopulated', [True, False])
+def test_request_filter_sanitizes_existing_and_fallback_endpoints(in_request_context, prepopulated):
+    tree = ast.parse((ROOT / 'app/__init__.py').read_text())
+    filter_class = next(node for node in tree.body if isinstance(node, ast.ClassDef)
+                        and node.name == 'RequestIdFilter')
+    malicious = '/missing\r\nFORGED\x1b\u2028'
+    namespace = {
+        'logging': logging, 'g': SimpleNamespace(),
+        'has_request_context': lambda: in_request_context,
+        'request': SimpleNamespace(url_rule=None, path=malicious, method='GET'),
+        'sanitize_for_log': _sanitizer(),
+    }
+    exec(compile(ast.Module(body=[filter_class], type_ignores=[]), 'app/__init__.py', 'exec'), namespace)
+    record = logging.LogRecord('test', logging.ERROR, __file__, 1, 'error', (), None)
+    if prepopulated:
+        record.endpoint = malicious
+    assert namespace['RequestIdFilter']().filter(record)
+    assert record.endpoint == (_sanitizer()(malicious) if prepopulated or in_request_context else '-')

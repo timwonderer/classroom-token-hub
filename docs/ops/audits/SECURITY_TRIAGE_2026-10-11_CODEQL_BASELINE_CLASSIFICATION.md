@@ -57,7 +57,11 @@ That matters because `RequestIdFilter.filter()` falls back to raw `request.path`
 unmatched route, i.e. every 404) — not one of the 8 flagged call sites, but a wider
 surface CodeQL's taint analysis never followed into (a `logging.Filter` mutating a
 `LogRecord` attribute, not a direct `logger.warning(f"...")` call). Fixed the same way.
-Full reasoning and reproduction: `tests/test_no_log_injection.py`.
+Supplied `LogRecord.endpoint` values now pass through the sanitizer too, including
+the unhandled-exception handler's explicit endpoint. Regression tests cover existing
+and fallback endpoints with and without request context in
+`tests/test_log_warning_sanitization.py`. Full reasoning and reproduction:
+`tests/test_no_log_injection.py`.
 
 ### 1.3 `py/code-injection` — 1 alert (#272)
 
@@ -79,6 +83,19 @@ single-quoted shell literal wrapping embedded JSON. Converted every call in both
 an argv list with no `shell=True`; an argv list needs no shell quoting and has nothing left
 for a shell to reinterpret, regardless of what either value contains. See §2.4 for the
 other 6 alerts in this group, which were already argv-list calls and needed no change.
+
+### 1.5 `py/path-injection` — 5 alerts (#244–#248)
+
+`scripts/lint_migrations.py` reads migration sources, baselines, and changed-file lists
+in CI. Git paths alone do not establish containment: checkout symlinks can resolve
+outside the repository, and baseline additions are printed. The linter now rejects
+symlinks in each input and its parent directories before reading any target, including
+broken links and the default `migrations/versions` directory. `--changed-files` selects
+exemption basenames; migration sources still come from the default `*.py` glob unless
+explicit files are supplied. Tests in `tests/test_migration_lint_baseline.py` exercise
+all input kinds and confirm rejection without disclosing target contents. This protects
+the immutable CI checkout's read paths; it does not establish protection against a
+concurrent process replacing files during a lint run.
 
 ## 2. False positive or already mitigated — left open, not dismissed without further review
 
@@ -163,7 +180,7 @@ none interpolates request data, exception text, stack traces, or database intern
 Both caught paths therefore return curated denial messages. The safe classification
 covers both exception types, rather than relying on a search for only the base class.
 
-### 2.7 `py/path-injection` — 57 alerts, broken into sub-groups below
+### 2.7 `py/path-injection` — 52 remaining alerts, broken into sub-groups below (5 fixed in §1.5)
 
 Classified by file/pattern rather than alert number, since within one file the trust
 boundary and the actual sink are identical; "group by query ID and trust boundary" is the
@@ -177,17 +194,6 @@ morning triage's own methodology, used here at finer grain (per file, not per wh
   an operator's shell sets — never a value a request or a PR's diff content can reach.
   (`tests/helpers/axe_wcag.py` and the browser test *are* CI-reachable files, but the
   specific tainted value CodeQL traces, the environment variable, is not.)
-
-- **CI-reachable, migration lint inputs (symlinks rejected):** `scripts/lint_migrations.py:179,210,214,293,298`.
-  `check-migrations.yml` supplies the baseline from the checkout, the comparison baseline
-  from `git show`, and the changed-file list from `git diff --name-only`. The linter rejects
-  paths containing symlinks for baseline files, changed-file lists, and migration files
-  before reading them.
-  Migration files are selected from the fixed `migrations/versions/*.py` glob; the changed
-  file list is used only to derive exemption basenames and does not select files to open.
-  The prior claim that a git-reported path alone established safe containment was incorrect;
-  the symlink checks, rather than that claim, prevent these CI inputs from redirecting reads
-  outside their intended files.
 
 - **Not wired into any CI workflow, path comes from an operator-supplied CLI argument or a
   JSON file read with that same argument (false positive / local-only):**
@@ -223,7 +229,7 @@ above.
 
 | Rule | Open | Fixed | False positive / mitigated (documented) | Real, deferred |
 |---|---|---|---|---|
-| py/path-injection | 57 | 0 | 57 | 0 |
+| py/path-injection | 57 | 5 | 52 | 0 |
 | py/command-line-injection | 10 | 4 | 6 | 0 |
 | actions/unpinned-tag | 10 | 0 | 0 | 10 |
 | py/log-injection | 8 | 8 (+1 unflagged instance) | 0 | 0 |
@@ -233,7 +239,7 @@ above.
 | py/sql-injection | 1 | 0 | 1 | 0 |
 | py/code-injection | 1 | 1 | 0 | 0 |
 | py/stack-trace-exposure | 1 | 0 | 1 | 0 |
-| **Total** | **98** | **20** | **68** | **10** |
+| **Total** | **98** | **25** | **63** | **10** |
 
 Nothing in this document reduces the 98-alert count on GitHub's own Security tab by
 itself — that requires either the repository owner or a session with `security_events`
