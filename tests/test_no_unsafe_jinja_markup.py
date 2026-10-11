@@ -23,6 +23,8 @@ from pathlib import Path
 import pytest
 
 from tests.guards.unsafe_jinja_filter_markup import (
+    CARD_RAW_ARGUMENTS,
+    find_unsafe_card_macro_arguments,
     find_filter_registrations,
     find_unsafe_markup_in_filters,
     find_autoescape_false_blocks,
@@ -122,11 +124,34 @@ def test_baseline_has_no_stale_entries():
 def test_guard_still_recognises_the_real_safe_usages():
     """SOP-TEST-003 §IX.A(4): the allowlisted ``|nl2br|safe`` usages this repo
     actually ships must still parse as filter usages, not silently skip."""
-    total_safe_exprs = 0
+    found = []
     for path in _template_sources():
-        source = path.read_text(encoding="utf-8")
-        total_safe_exprs += source.count("|safe")
-    assert total_safe_exprs >= 2, "guard's test fixture is stale: expected the two known |nl2br|safe usages"
+        found.extend(find_unsafe_safe_filters(
+            path.read_text(encoding="utf-8"), str(path.relative_to(REPO_ROOT)), allowlist=frozenset()
+        ))
+    expected = {
+        "templates/admin_announcements.html::announcement.message|nl2br|safe",
+        "templates/student_dashboard.html::announcement.message|nl2br|safe",
+    }
+    assert Counter(v.key for v in found if v.key in expected) == Counter({key: 1 for key in expected})
+
+
+def test_card_macro_baseline_premises_hold_for_every_caller():
+    violations = []
+    for path in _template_sources():
+        violations.extend(find_unsafe_card_macro_arguments(
+            path.read_text(encoding="utf-8"), str(path.relative_to(REPO_ROOT))
+        ))
+    assert not violations, "\n".join(str(v) for v in violations)
+
+
+def test_card_macro_guard_positions_match_the_real_definitions():
+    from jinja2 import Environment, nodes
+
+    tree = Environment(autoescape=True).parse((TEMPLATES_ROOT / 'macros/cards.html').read_text())
+    definitions = {macro.name: macro for macro in tree.find_all(nodes.Macro)}
+    for name, arguments in CARD_RAW_ARGUMENTS.items():
+        assert {arg: definitions[name].args[index].name for arg, index in arguments.items()} == {arg: arg for arg in arguments}
 
 
 # --------------------------------------------------------------------------
@@ -436,3 +461,83 @@ def test_baseline_counts_reviewed_occurrences_and_routes_duplicates():
     assert unbaselined_violations(added, baseline)[0].line == 3
     assert baseline == Counter({key: 2})
     assert baseline - Counter(v.key for v in reviewed[:1]) == Counter({key: 1})
+
+
+@pytest.mark.parametrize('setup, constructor', [
+    ('from markupsafe import Markup as M', 'M'),
+    ('import markupsafe as ms\n    M = ms.Markup', 'M'),
+    ('from markupsafe import Markup\n    constructor = Markup', 'constructor'),
+])
+def test_detector_reports_aliased_markup_constructors(setup, constructor):
+    source = f'def render(raw):\n    {setup}\n    return {constructor}(raw)\n'
+    assert len(find_unsafe_markup_in_filters(source, {'render'})) == 1
+
+
+def test_detector_accepts_sanitized_aliased_markup():
+    source = 'from markupsafe import Markup as M, escape as e\ndef render(raw):\n    return M(e(raw))\n'
+    assert find_unsafe_markup_in_filters(source, {'render'}) == []
+
+
+@pytest.mark.parametrize('expression', [
+    "cards.alert_card('info', 'title', attrs=raw)",
+    "cards.alert_card('info', 'title', body_attrs=request_text)",
+    "cards.top_card('title', header_actions=db_text)",
+    "cards.nested_card('title', header_actions='<b>' ~ raw ~ '</b>')",
+    "cards.alert_card('info', 'title', None, '', None, None, 'h3', False, raw)",
+    "cards.alert_card('info', 'title', **kwargs)",
+    "cards.alert_card(*args)",
+    "cards['alert_card']('info', 'title', attrs=raw)",
+    "cards[macro_name]('info', 'title', attrs=raw)",
+    "(cards|attr('alert_card'))('info', 'title', attrs=raw)",
+    "cards.alert_card('info', 'title', attrs=raw|int(default=unsafe_text))",
+])
+def test_card_macro_guard_reports_unconstrained_markup(expression):
+    source = "{% import 'macros/cards.html' as cards %}{{ " + expression + " }}"
+    assert find_unsafe_card_macro_arguments(source)
+
+
+@pytest.mark.parametrize('expression', [
+    "cards.alert_card('info', 'title', attrs='hidden')",
+    "cards.alert_card('info', 'title', attrs='data-id=\"' ~ (announcement.id|int) ~ '\"')",
+    "cards.top_card('title', header_actions='<b>static</b>')",
+    "cards['alert_card']('info', 'title', body_attrs='tabindex=\"-1\"')",
+])
+def test_card_macro_guard_accepts_literal_and_integer_markup(expression):
+    source = "{% import 'macros/cards.html' as cards %}{{ " + expression + " }}"
+    assert find_unsafe_card_macro_arguments(source) == []
+
+
+def test_card_macro_guard_catches_imported_alias_and_forwarding():
+    imported = "{% from 'macros/cards.html' import alert_card as notice %}{{ notice('info', 'title', attrs=raw) }}"
+    assert len(find_unsafe_card_macro_arguments(imported)) == 1
+    forwarded = "{% import 'macros/cards.html' as cards %}{% set notice = cards.alert_card %}{{ notice('info', 'title', attrs=raw) }}"
+    assert find_unsafe_card_macro_arguments(forwarded)
+
+
+def test_card_macro_guard_catches_an_unsafe_default():
+    assert find_unsafe_card_macro_arguments("{% macro alert_card(level, title, attrs=raw) %}{{ attrs|safe }}{% endmacro %}")
+
+
+@pytest.mark.parametrize('identifier, expected', [(123, '123'), ('\" onmouseover=alert(1)', '0')])
+def test_real_announcement_macro_constrains_raw_attribute_identifier(identifier, expected):
+    from types import SimpleNamespace
+    from jinja2 import Environment, FileSystemLoader
+
+    source = (TEMPLATES_ROOT / 'student_dashboard.html').read_text()
+    opening = next(line for line in source.splitlines() if "attrs='data-announcement-id=" in line)
+    env = Environment(loader=FileSystemLoader(str(TEMPLATES_ROOT)), autoescape=True)
+    snippet = env.from_string("{% import 'macros/cards.html' as cards %}" + opening + "message{% endcall %}")
+    announcement = SimpleNamespace(id=identifier, title='title', get_priority_level=lambda: 'info', get_priority_icon=lambda: 'info')
+    rendered = snippet.render(announcement=announcement)
+    if isinstance(identifier, int):
+        prior_opening = opening.replace('(announcement.id | int)', 'announcement.id')
+        prior = env.from_string("{% import 'macros/cards.html' as cards %}" + prior_opening + "message{% endcall %}")
+        assert rendered == prior.render(announcement=announcement)
+    assert f'data-announcement-id="{expected}"' in rendered
+    from html.parser import HTMLParser
+
+    class AttributeNames(HTMLParser):
+        def handle_starttag(self, tag, attrs):
+            assert 'onmouseover' not in dict(attrs)
+
+    AttributeNames().feed(rendered)

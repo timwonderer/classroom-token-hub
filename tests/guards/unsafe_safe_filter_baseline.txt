@@ -18,8 +18,9 @@ templates/docs/view.html::toc|safe
 templates/docs/view.html::content|safe
 
 # templates/macros/cards.html — header_actions/attrs/body_attrs are macro
-# call arguments: literal HTML snippets written by the calling template's
-# author, never a value read from a request or the database.
+# call arguments: literal snippets plus an explicitly integer-filtered
+# announcement ID. find_unsafe_card_macro_arguments continuously verifies every
+# caller and macro default: dynamic text, forwarding and unknown arguments fail.
 templates/macros/cards.html::header_actions|safe
 templates/macros/cards.html::header_actions|safe
 templates/macros/cards.html::attrs|safe

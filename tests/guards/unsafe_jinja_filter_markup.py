@@ -70,10 +70,12 @@ def _walk_scope(scope: ast.AST):
             stack.extend(ast.iter_child_nodes(node))
 
 
-def _is_markup_call(node: ast.AST) -> bool:
+def _is_markup_call(node: ast.AST, bindings: dict[str, str]) -> bool:
     if not isinstance(node, ast.Call):
         return False
     func = node.func
+    if _provenance(func, bindings) == "markupsafe.Markup":
+        return True
     if isinstance(func, ast.Name):
         return func.id == "Markup"
     if isinstance(func, ast.Attribute):
@@ -227,7 +229,7 @@ def find_unsafe_markup_in_filters(
             safe_locals = safe_locals - writes
             bindings = {k: v for k, v in bindings.items() if k not in writes}
             for call in [expression, *_walk_scope(expression)]:
-                if not _is_markup_call(call):
+                if not _is_markup_call(call, bindings):
                     continue
                 arg = call.args[0] if call.args else next(
                     (kw.value for kw in call.keywords if kw.arg == "object"), None
@@ -306,7 +308,7 @@ _JINJA = Environment(autoescape=True)
 class TemplateViolation:
     path: str
     line: int
-    kind: str  # "unsafe_safe_filter" | "autoescape_false"
+    kind: str  # "unsafe_safe_filter" | "autoescape_false" | "unsafe_card_macro_argument"
     excerpt: str
     # Stable identity for the pre-existing-debt baseline below: None for
     # autoescape_false, which is never baseline-eligible. Line numbers drift
@@ -317,6 +319,8 @@ class TemplateViolation:
     def __str__(self) -> str:
         if self.kind == "autoescape_false":
             return f"{self.path}:{self.line} — {{% autoescape false %}} disables Jinja's escaping"
+        if self.kind == "unsafe_card_macro_argument":
+            return f"{self.path}:{self.line} — card macro receives unproved raw markup: {self.excerpt}"
         return (
             f"{self.path}:{self.line} — |safe on an expression not provably "
             f"pre-escaped: {self.excerpt}"
@@ -359,6 +363,101 @@ def find_unsafe_safe_filters(
             )
         )
     return sorted(violations, key=lambda v: v.line)
+
+
+# Baseline exemptions in cards.html are valid only while every caller obeys
+# these raw-markup argument constraints. Positions are checked against the macros.
+CARD_RAW_ARGUMENTS = {
+    "top_card": {"header_actions": 2},
+    "nested_card": {"header_actions": 2},
+    "alert_card": {"attrs": 8, "body_attrs": 9},
+}
+
+
+def _is_literal_or_integer(value: jinja_nodes.Node) -> bool:
+    if isinstance(value, jinja_nodes.Const):
+        return isinstance(value.value, (str, int))
+    if isinstance(value, jinja_nodes.Concat):
+        return all(_is_literal_or_integer(part) for part in value.nodes)
+    # A numeric ID may be embedded in markup only after the built-in int filter
+    # constrains its output; HTML-escaping alone is unsafe in unquoted attributes.
+    return (
+        isinstance(value, jinja_nodes.Filter) and value.name == "int"
+        and not value.args and not value.kwargs
+        and value.dyn_args is None and value.dyn_kwargs is None
+    )
+
+
+def find_unsafe_card_macro_arguments(source: str, path: str = "<template>") -> list[TemplateViolation]:
+    """Validate raw card-macro inputs, including positional and imported aliases."""
+    tree = _JINJA.parse(source)
+    aliases = {}
+    namespaces = {
+        imported.target for imported in tree.find_all(jinja_nodes.Import)
+        if isinstance(imported.template, jinja_nodes.Const) and imported.template.value == "macros/cards.html"
+    }
+    for imported in tree.find_all(jinja_nodes.FromImport):
+        if isinstance(imported.template, jinja_nodes.Const) and imported.template.value == "macros/cards.html":
+            for name in imported.names:
+                original, alias = name if isinstance(name, tuple) else (name, name)
+                aliases[alias] = original
+
+    def macro_name(value):
+        if isinstance(value, jinja_nodes.Getattr) and value.attr in CARD_RAW_ARGUMENTS:
+            return value.attr
+        if isinstance(value, jinja_nodes.Getitem) and isinstance(value.arg, jinja_nodes.Const):
+            if value.arg.value in CARD_RAW_ARGUMENTS:
+                return value.arg.value
+        if isinstance(value, jinja_nodes.Name):
+            name = aliases.get(value.name, value.name)
+            if name in CARD_RAW_ARGUMENTS:
+                return name
+        return None
+
+    violations = []
+    lines = source.splitlines()
+
+    def report(node):
+        violations.append(TemplateViolation(path, node.lineno, "unsafe_card_macro_argument", lines[node.lineno - 1][:160]))
+
+    calls = list(tree.find_all(jinja_nodes.Call))
+    callee_ids = {id(call.node) for call in calls}
+    # Reject forwarding/aliasing a raw-markup macro: its later call cannot be
+    # validated from a direct callee signature.
+    for reference in tree.find_all((jinja_nodes.Name, jinja_nodes.Getattr, jinja_nodes.Getitem)):
+        if macro_name(reference) and id(reference) not in callee_ids:
+            report(reference)
+    parents = {}
+
+    def index_parents(parent):
+        for child in parent.iter_child_nodes():
+            parents[id(child)] = parent
+            index_parents(child)
+
+    index_parents(tree)
+    for reference in tree.find_all(jinja_nodes.Name):
+        if reference.name in namespaces:
+            parent = parents.get(id(reference))
+            if not parent or not macro_name(parent) or id(parent) not in callee_ids:
+                report(reference)
+    for call in calls:
+        name = macro_name(call.node)
+        if not name:
+            continue
+        arguments = CARD_RAW_ARGUMENTS[name]
+        values = [call.args[index] for index in arguments.values() if len(call.args) > index]
+        values.extend(kw.value for kw in call.kwargs if kw.key in arguments)
+        if call.dyn_args is not None or call.dyn_kwargs is not None or not all(
+            _is_literal_or_integer(value) for value in values
+        ):
+            report(call)
+    for macro in tree.find_all(jinja_nodes.Macro):
+        if macro.name in CARD_RAW_ARGUMENTS:
+            defaults = dict(zip([a.name for a in macro.args[-len(macro.defaults):]], macro.defaults))
+            for name in CARD_RAW_ARGUMENTS[macro.name]:
+                if name in defaults and not _is_literal_or_integer(defaults[name]):
+                    report(macro)
+    return violations
 
 
 def load_baseline(text: str) -> Counter[str]:
