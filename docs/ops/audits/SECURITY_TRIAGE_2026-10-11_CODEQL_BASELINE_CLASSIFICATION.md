@@ -3,8 +3,10 @@
 **Status:** Companion to `docs/ops/audits/INCIDENT_2026-10-11_SEC-SAST-GAP-001.md` §5 follow-up 1
 ("triage the alert backlog the security-extended switch surfaced"). That follow-up's
 morning triage (`codeql-extended-suite-triage-2026-10-11.md`, outside the repo) grouped
-all 98 open alerts by query ID and trust boundary and concluded nothing open is reachable
-by an unauthenticated public attacker. This document goes one level further: for every
+all 98 open alerts by query ID and trust boundary. Its initial conclusion that no finding
+was reachable by an unauthenticated public attacker was disproved by the deeper review:
+decoded `request.path` reached the unmatched-route log field without authentication
+(§1.2). That public log-forging exposure is fixed in this PR. For every
 alert, it fixes the finding, or states the specific evidence for why it is a false
 positive or not exploitable, or says it is real but deferred. No alert is dismissed
 without a reason tied to that alert's own code.
@@ -100,15 +102,21 @@ reaching a page) cannot apply to an `Environment` that is only ever parsed, neve
 
 ### 2.2 `py/partial-ssrf` — 1 alert (#291)
 
-`app/routes/system_admin.py:915`, the Grafana dashboard proxy. Re-confirmed the three
-independent mitigations already in the route: gated by `@system_admin_required` (the
-highest-trust role in the app); `grafana_url`'s host comes only from the `GRAFANA_URL`
-environment variable, never from the request, so no request can redirect the proxy to an
-arbitrary external host; the request-controlled `path` is stripped of `\r`/`\n` and
-rejected unless it starts with one of ten allowlisted prefixes (`d/`, `api/`, `static/`,
-...) before it is ever concatenated into `target_url`. "Partial" in the rule name is
-accurate — `path` is tainted — but the taint never reaches the host portion of the URL,
-which is the part an SSRF needs to control.
+`app/routes/system_admin.py`, the Grafana dashboard proxy: classified as bounded,
+sysadmin-only exposure, not as a working path allowlist. `@system_admin_required`
+restricts access to the highest-trust role. The target is constructed as
+`f"{grafana_url}/{normalized_path}"`, with `grafana_url` sourced from the operator's
+`GRAFANA_URL` environment variable (default `http://localhost:3000`), so the requested
+path cannot replace the configured origin. CR/LF are stripped, absolute and
+protocol-relative input paths are rejected, and the upstream request disables redirects
+with `allow_redirects=False`.
+
+The prefix check is ineffective: `allowed_prefixes` includes `''`, which every string
+starts with. Arbitrary nonempty paths on the configured Grafana service therefore pass
+that check. It supplies no mitigation and must not be used as dismissal evidence.
+The retained classification rests on sysadmin access and the configured-origin boundary;
+it does not claim that access to sensitive paths on that service is prevented.
+No route behavior is changed by this evidence correction.
 
 ### 2.3 `py/sql-injection` — 1 alert (#280)
 
@@ -144,14 +152,16 @@ noted here since it shares a line number with a fixed alert).
 
 ### 2.6 `py/stack-trace-exposure` — 1 alert (#171)
 
-`app/routes/admin.py:6369`, inside `void_transaction()`:
-`return _void_error(str(e))` where `e` is a caught `TransactionNotReversible`. Checked
-every raise site of that exception class (`app/feats/transaction_void_feat.py`): there is
-exactly one, and it always raises with a hardcoded, deliberately user-safe string
-("This entry is part of a reversal and can't be reversed."). `str(e)` on this specific
-exception class can never surface a stack trace, a file path, or any other library/DB
-internal — it is a curated message by construction, not a caught low-level error
-propagating upward.
+`app/routes/admin.py`, inside `void_transaction()`, returns `_void_error(str(e))`
+for `TransactionNotReversible` and its subclass `PurchaseNotReversible`.
+`app/feats/transaction_void_feat.py` raises the base exception with the hardcoded
+message "This entry is part of a reversal and can't be reversed." The subclass is
+raised with `eligibility.reason` from
+`app/services/ledger_correction_service.py::resolve_purchase_resolution_eligibility()`.
+Every refusal branch in that resolver supplies a hardcoded teacher-facing reason;
+none interpolates request data, exception text, stack traces, or database internals.
+Both caught paths therefore return curated denial messages. The safe classification
+covers both exception types, rather than relying on a search for only the base class.
 
 ### 2.7 `py/path-injection` — 57 alerts, broken into sub-groups below
 

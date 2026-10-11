@@ -16,12 +16,12 @@ def _extract_assignment_value(content: str, name: str) -> Optional[str]:
     """The raw text to the right of ``name = `` on its own line, or None.
 
     A plain ``re.search(rf'^{name}\\s*=\\s*(.+)$', ...)`` is what CodeQL's
-    py/polynomial-redos flags here (alert #273-279): the trailing ``\\s*``
+    py/polynomial-redos flags here (alerts #273–#275): the trailing ``\\s*``
     and the capturing ``.+`` both match ordinary whitespace, so a line with
     many spaces/tabs after ``=`` and no terminating content gives the engine
-    several ways to split the same characters between the two groups. These
-    files run in CI (``check-migrations.yml``) against migration files added
-    by any PR, so that backtracking is attacker-reachable. Finding the ``=``
+    several ways to split the same characters between the two groups. This
+    script is local-only; ``check-migrations.yml`` invokes
+    ``validate-migrations.py``, not this analyzer. Finding the ``=``
     with a regex that has no such ambiguity (nothing after it to backtrack
     against) and then slicing the rest of the line in plain Python has
     identical behavior with no quantifier adjacent to another that can

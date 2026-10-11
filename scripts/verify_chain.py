@@ -14,8 +14,8 @@ def _extract_assignment_value(content: str, name: str) -> Optional[str]:
     the capturing ``.+`` both match ordinary whitespace, so a line with many
     spaces/tabs after ``=`` and no terminating content gives the engine
     several ways to split the same characters between the two groups. This
-    script runs in CI (``check-migrations.yml``) against migration files
-    added by any PR, so that backtracking is attacker-reachable. Finding the
+    script is local-only; ``check-migrations.yml`` invokes
+    ``validate-migrations.py``, not this verifier. Finding the
     ``=`` with a regex that has nothing after it to backtrack against, then
     slicing the rest of the line in plain Python, has identical behavior
     with no quantifier adjacent to another that can consume the same

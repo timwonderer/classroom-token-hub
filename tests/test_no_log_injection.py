@@ -1,5 +1,5 @@
 """Request-derived values can't forge log lines (CodeQL py/log-injection,
-GitHub alerts #179, #254, #288, #307, #327, #350, #387, #630).
+GitHub alerts #294 and #296–#302).
 
 The error handlers in ``wsgi.py`` and the Cloudflare-mismatch warning in
 ``app/__init__.py`` interpolate ``request.url``/``request.path`` straight
