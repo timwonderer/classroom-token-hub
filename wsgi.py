@@ -35,6 +35,7 @@ import collections
 from app import app
 from app.extensions import db, migrate, csrf, limiter
 from app.feats.base import FEATContext
+from app.utils.helpers import sanitize_for_log
 
 
 def get_validated_status_page_url():
@@ -176,7 +177,7 @@ def log_error_to_db(error_type=None, error_message=None, stack_trace=None, log_o
             app.logger.warning(
                 "Skipping DB error log outside FEAT context: %s %s",
                 error_type or "unknown",
-                request.path if in_request_context else "-",
+                sanitize_for_log(request.path) if in_request_context else "-",
             )
             return None
 
@@ -251,7 +252,7 @@ def not_found_error(error):
     Displays a user-friendly page with navigation help.
     Rate-limited database logging to prevent spam from bots/typos.
     """
-    app.logger.warning(f"404 Not Found: {request.url}")
+    app.logger.warning("404 Not Found: %s", sanitize_for_log(request.url))
 
     # Rate-limited logging: only log unique 404s once per hour
     cache_key = f"404_{request.path}"
@@ -285,7 +286,7 @@ def forbidden_error(error):
     Displays a user-friendly page with permission troubleshooting.
     Logs to database to track potential security issues.
     """
-    app.logger.warning(f"403 Forbidden: {request.url}")
+    app.logger.warning("403 Forbidden: %s", sanitize_for_log(request.url))
 
     # Log to database - permission errors could indicate security issues
     log_error_to_db(
@@ -304,7 +305,7 @@ def unauthorized_error(error):
     Displays a user-friendly page with login guidance.
     Logs to database to track authentication issues.
     """
-    app.logger.warning(f"401 Unauthorized: {request.url}")
+    app.logger.warning("401 Unauthorized: %s", sanitize_for_log(request.url))
 
     # Log to database - authentication errors help identify session/auth issues
     log_error_to_db(
@@ -324,7 +325,9 @@ def bad_request_error(error):
     Logs to database to identify UX/validation issues.
     """
     error_msg = str(error.description) if hasattr(error, 'description') else str(error)
-    app.logger.warning(f"400 Bad Request: {request.url} - {error_msg}")
+    app.logger.warning(
+        "400 Bad Request: %s - %s", sanitize_for_log(request.url), sanitize_for_log(error_msg)
+    )
 
     # Log to database - validation errors help identify UX issues
     log_error_to_db(
@@ -347,7 +350,11 @@ def too_many_requests_error(error):
     Logs to database to help spot limits that are too tight for real usage.
     """
     limit_description = str(error.description) if hasattr(error, 'description') else None
-    app.logger.warning(f"429 Too Many Requests: {request.url} - {limit_description}")
+    app.logger.warning(
+        "429 Too Many Requests: %s - %s",
+        sanitize_for_log(request.url),
+        sanitize_for_log(limit_description) if limit_description is not None else None,
+    )
 
     log_error_to_db(
         error_type='429 Too Many Requests',
@@ -384,7 +391,7 @@ def service_unavailable_error(error):
     Displays a user-friendly page for maintenance/downtime.
     Logs to database for service availability tracking.
     """
-    app.logger.error(f"503 Service Unavailable: {request.url}")
+    app.logger.error("503 Service Unavailable: %s", sanitize_for_log(request.url))
 
     # Log to database - service availability is critical to track
     log_error_to_db(

@@ -62,7 +62,7 @@ if missing_vars:
 
 # -------------------- UTILITIES --------------------
 from app.utils.encryption import PIIEncryptedType
-from app.utils.helpers import format_utc_iso, is_safe_url, render_markdown, docs_url_for
+from app.utils.helpers import format_utc_iso, is_safe_url, render_markdown, docs_url_for, sanitize_for_log
 from app.utils.constants import THEME_PROMPTS
 
 
@@ -116,7 +116,15 @@ class RequestIdFilter(logging.Filter):
                 if request.url_rule and request.url_rule.rule:
                     record.endpoint = request.url_rule.rule
                 else:
-                    record.endpoint = request.path
+                    # request.url_rule is None for any unmatched route (every
+                    # 404), so this falls back to the raw, attacker-supplied
+                    # path -- unlike url_rule.rule, which is always one of
+                    # this app's own registered route patterns. Every log
+                    # record on every request carries this field, so an
+                    # unsanitized path here is log injection on a much wider
+                    # surface than the few explicit logger.warning(request.url)
+                    # call sites CodeQL's py/log-injection query flagged.
+                    record.endpoint = sanitize_for_log(request.path)
             else:
                 record.endpoint = "-"
         if not hasattr(record, "method"):
@@ -627,8 +635,11 @@ def create_app():
                 if not validate_cloudflare_request():
                     real_ip = get_real_ip()
                     app.logger.warning(
-                        f"Request not from Cloudflare IP: {request.remote_addr} "
-                        f"(real_ip: {real_ip}, path: {request.path}, method: {request.method})"
+                        "Request not from Cloudflare IP: %s (real_ip: %s, path: %s, method: %s)",
+                        sanitize_for_log(request.remote_addr),
+                        sanitize_for_log(real_ip),
+                        sanitize_for_log(request.path),
+                        sanitize_for_log(request.method),
                     )
             except Exception as e:
                 # Don't break requests if Cloudflare monitoring fails
