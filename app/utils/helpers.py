@@ -325,3 +325,24 @@ def generate_anonymous_code(user_identifier: str) -> str:
 
     secret_bytes = secret if isinstance(secret, (bytes, bytearray)) else str(secret).encode()
     return hmac.new(secret_bytes, user_identifier.encode(), hashlib.sha256).hexdigest()
+
+
+def sanitize_for_log(value) -> str:
+    """A request-derived value, safe to interpolate into a log line.
+
+    CodeQL's py/log-injection flags any ``request.*``-derived value reaching
+    a logger call unescaped (wsgi.py's error handlers, app/__init__.py's
+    Cloudflare-IP-mismatch warning): a value carrying CR/LF can forge
+    additional, fake-looking log lines (log forging), and other control
+    characters can corrupt a log viewer's rendering. Replacing CR, LF, and
+    other C0/C1 control characters with their ``\\xNN`` escape keeps the
+    original value fully visible for debugging while making it physically
+    impossible for it to introduce a line break or terminal escape sequence
+    into the log stream.
+    """
+    text = value if isinstance(value, str) else str(value)
+    # Explicit CR/LF replacements expose the log boundary to static analysis.
+    text = text.replace("\r", "\\x0d").replace("\n", "\\x0a")
+    return "".join(
+        c if c.isprintable() else f"\\x{ord(c):02x}" for c in text
+    )
