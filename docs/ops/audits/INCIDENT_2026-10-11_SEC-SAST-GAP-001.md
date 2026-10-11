@@ -41,6 +41,7 @@ query suite (see §5).
 | 2026-10-11 00:23 | Fix deployed to production as v2.2.2 (`61b509b7f`); see `docs/ops/audits/` release record. |
 | 2026-10-11 ~02:14 | Owner checks Aikido's dashboard directly and finds the pre-existing High-severity finding for the S1 client-side sink, still open, never surfaced as a failing PR check. |
 | 2026-10-11 ~02:49 | Root cause confirmed: Aikido's PR check is diff-scoped only (confirmed via PR #1535's final-commit check output, "No new issues were introduced. No issues were solved."). It does not re-evaluate pre-existing findings in files a PR doesn't touch, so every PR after #288 showed green regardless of the open finding. Owner decides to remove Aikido from the repository. |
+| 2026-10-11 ~03:11 | Owner switches CodeQL's `code-scanning/default-setup` query suite to `security-extended` directly in Settings → Code security. Confirmed from the next scan's job logs: the Python analysis now interprets queries absent from the prior default suite (`py/csrf-protection-disabled`, `py/jinja2/autoescape-false`, `py/clear-text-logging-sensitive-data`, `py/weak-sensitive-data-hashing`, `py/template-injection`, `py/log-injection`, among others) and immediately surfaces a larger set of alerts, triaged separately (see §5). |
 
 ## 3. Root cause
 
@@ -69,14 +70,18 @@ Two independent, non-overlapping gaps, not one:
 - Aikido removed from the repository (owner action, 2026-10-11). A scanner whose merge-blocking
   check reports green regardless of its own dashboard backlog is a worse signal than no scanner:
   the green checkmark reads as "nothing found" when it means "nothing new in this diff."
+- CodeQL's `code-scanning/default-setup` query suite switched to `security-extended` (owner
+  action in Settings → Code security, 2026-10-11). This closes the coverage gap described in §3
+  for new code; it does not retroactively evaluate every file that was last analyzed under the
+  narrower suite until each file's next scan.
 
 ## 5. Follow-ups
 
-- [ ] Switch CodeQL's `code-scanning/default-setup` query suite from `default` to
-      `security-extended` (owner action in Settings → Code security — not changeable from a PR).
-      Tracked alongside this record; see the accompanying PR adding an advanced-setup
-      `codeql.yml` workflow for the alternative of moving to a checked-in, reviewable
-      configuration instead of the Settings-managed default.
+- [ ] Triage the alert backlog the `security-extended` switch surfaced (tracked in a separate
+      thread/PR: group by query ID and trust boundary, determine reachability from public
+      requests, untrusted CI input, scheduled production operations, or trusted local maintenance
+      only, and examine input provenance, execution privileges, and existing defenses for each
+      group).
 - [ ] Establish a recurring (not purely PR-triggered) review of any SAST tool's full dashboard
       backlog, not just its PR-time pass/fail, so a pre-existing finding in untouched code has a
       scheduled point where it gets looked at.
