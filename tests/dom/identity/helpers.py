@@ -12,6 +12,13 @@ from bs4 import BeautifulSoup
 
 from flask.testing import FlaskClient
 
+# Shared fixture passphrase for tests that need a valid, policy-passing
+# passphrase and don't care what it is. A single declaration site means a
+# credential-literal scan (e.g. CodeQL's hardcoded-credentials query) finds
+# one source location to accept, not one per test file that happens to copy
+# the same string.
+TEST_STUDENT_PASSPHRASE = "Surprised!Banana!2!You!"
+
 
 def admin_generate_recovery_code(client: FlaskClient, seat_id: int):
     """Issue a student reset code (FEAT-IDEN-003) for a seat in the active class."""

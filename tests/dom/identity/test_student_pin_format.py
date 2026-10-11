@@ -11,10 +11,13 @@ from __future__ import annotations
 import pytest
 
 from app.models import Seat, User
-from tests.dom.identity.helpers import student_create_username, student_setup_pin_passphrase
+from tests.dom.identity.helpers import (
+    TEST_STUDENT_PASSPHRASE as PASSPHRASE,
+    student_create_username,
+    student_setup_pin_passphrase,
+)
 from tests.helpers.classroom_initializer import initialize_as_teacher
 
-PASSPHRASE = "Surprised!Banana!2!You!"
 INVALID_PIN_MESSAGE = "PIN must be 4-6 digits, not all the same or sequential."
 
 
