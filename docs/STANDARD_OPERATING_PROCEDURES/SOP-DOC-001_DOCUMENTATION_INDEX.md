@@ -188,6 +188,7 @@ Archived material is deliberately absent; see §VI.
 
 ### Procedures — Security (SOP-SEC)
 - [SOP-SEC-001 — Credentials and Identity Lookup Operations](SECURITY/SOP-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_OPERATIONS.md)
+- [SOP-SEC-002 — SAST Findings Review and Disposition](SECURITY/SOP-SEC-002_SAST_FINDINGS_REVIEW_AND_DISPOSITION.md)
 
 ### Procedures — Testing (SOP-TEST)
 - [SOP-TEST-001 — Validation Execution and Reporting](TESTING/SOP-TEST-001_Validation_Execution_And_Reporting.md)
