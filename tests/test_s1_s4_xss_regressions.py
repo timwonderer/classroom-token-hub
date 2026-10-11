@@ -171,7 +171,7 @@ def test_hall_pass_destination_cannot_execute_in_teacher_history_view(app, clien
             page.goto("/admin/hall-pass", wait_until="networkidle")
             page.click("#history-tab")
             page.click("button[onclick='loadHistory()']")
-            page.wait_for_timeout(1500)
+            page.wait_for_selector("#historyTableBody tr", timeout=5000)
             fired = page.evaluate(f"window.{MARKER} === true")
             # The destination must still be visible to the teacher as plain text.
             row_text = page.inner_text("#historyTableBody")
