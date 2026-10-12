@@ -182,7 +182,7 @@ Don't rotate `ENCRYPTION_KEY` or `PEPPER_KEY` casually. `ENCRYPTION_KEY` protect
 
 ### Running tests
 
-Tests run against a real PostgreSQL database named by `TEST_DATABASE_URL`; there's no SQLite path. `conftest.py` drops the schema and rebuilds it through the real migration chain, so triggers and constraints are live in every test.
+Tests run against a real PostgreSQL database named by `TEST_DATABASE_URL`; there's no SQLite path. `conftest.py` builds the schema through the real migration chain once per session and gives every test a fresh copy of it, so triggers and constraints are live in every test. The test database must be local and named as a test database, and the role needs `CREATEDB` for the fast path; see CONTRIBUTING.md.
 
 ```bash
 pytest tests/dom/obligations/ -v          # one domain
