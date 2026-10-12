@@ -247,18 +247,28 @@ don't need to do anything beyond getting their pull request merged.
 ## Running Tests
 
 Tests run against a real PostgreSQL database named by `TEST_DATABASE_URL` (read from
-`.env`, then from the environment). There is no SQLite path. `tests/conftest.py` drops
-the schema and rebuilds it through the real migration chain, so **point
-`TEST_DATABASE_URL` at a dedicated test database, never at one whose data you want to
-keep.** If `TEST_DATABASE_URL` is unset, `conftest.py` falls back to `DATABASE_URL`
-(that is how CI configures it), which locally would mean your development database
-gets wiped, so always set `TEST_DATABASE_URL` explicitly.
+`.env`, then from the environment). There is no SQLite path. `tests/conftest.py`
+rebuilds that database through the real migration chain once per session, copies the
+result to a template (`<db>_tmpl_<pid>`), and then drops and recreates the test
+database from that template before every test, so **point `TEST_DATABASE_URL` at a
+dedicated test database, never at one whose data you want to keep.** If
+`TEST_DATABASE_URL` is unset, `conftest.py` falls back to `DATABASE_URL` (that is how
+CI configures it), which locally would mean your development database gets wiped, so
+always set `TEST_DATABASE_URL` explicitly.
+
+The harness refuses any `DROP DATABASE` unless the database is on a local host
+(`localhost`, `127.0.0.1`, `::1`), is named as a test database (`test` as a whole word,
+e.g. `cth_test` or `classroom_test_db`), and carries the harness's own marker comment
+(`tests/helpers/db_drop_guard.py`). Copying a template needs the `CREATEDB` privilege;
+a role without it still works, by replaying the migration chain before every test
+(much slower, with a warning). To grant it: `ALTER ROLE <role> CREATEDB;`. The role
+must own the test database's `public` schema either way.
 
 ```bash
 pytest tests/test_x.py -q      # one file
 pytest -k recovery             # by pattern
 pytest --cov=app tests/        # with coverage
-pytest                         # full suite (takes over an hour)
+pytest                         # full suite (about 50 minutes)
 ```
 
 Run the narrowest selection that proves your change while iterating, and include tests
