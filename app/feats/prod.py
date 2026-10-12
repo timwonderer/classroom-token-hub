@@ -115,6 +115,16 @@ def _enforce_hall_pass_settings(
     destination: str,
     reference_time_utc,
 ) -> str:
+    # F7: the queue/simultaneous counts below are a read over the whole class's
+    # hall-pass logs, with the actual write (the new HallPassLog, via the
+    # caller) coming later in this same transaction. Without a class-wide lock,
+    # two concurrent approvals for two different students each read the same
+    # "currently out" count before either has inserted its row, so both pass
+    # the limit check. Locking the class row here (the same idiom used for
+    # payroll/ledger class-wide serialization elsewhere in this module and in
+    # ledger_posting_service.py) makes the second approval wait for the first
+    # transaction to commit, so it then counts the first approval's row.
+    ClassEconomy.query.filter_by(class_id=ctx.class_id).with_for_update().one()
     settings = require_hall_pass_settings(ctx.class_id, reference_time_utc)
     pass_types = settings.get_pass_types()
     normalized_destination = (destination or "").strip().lower()
@@ -143,9 +153,15 @@ def _enforce_hall_pass_settings(
         .order_by(HallPassLog.timestamp.asc(), HallPassLog.id.asc())
         .all()
     )
+    # F7: an issued-but-not-yet-"left" pass still occupies a queue slot. Only
+    # counting "left" let a teacher approve many passes back to back — each
+    # approval's count was 0 because none of those students had tapped out
+    # yet — and then have all of them leave at once, exceeding the limit the
+    # earlier approvals were supposed to be checked against. "returned" is the
+    # only state that frees the slot.
     currently_out = [
         log for log in todays_logs
-        if _latest_hall_pass_attendance_state(log) == "left"
+        if _latest_hall_pass_attendance_state(log) in ("approved", "left")
     ]
 
     queue_limit = min(settings.max_queue_limit, sum(item.get("max_queue", 0) for item in pass_types)) if settings else None
