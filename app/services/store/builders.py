@@ -74,8 +74,8 @@ class StoreItemCardView:
 
     # Derived presentation state
     is_out_of_stock: bool  # inventory is not None and <= 0
-    button_disabled: bool  # True if out of stock or rent covered
-    button_text: str  # "Out of Stock", "Already Included", or "Purchase"
+    button_disabled: bool  # True if out of stock, rent covered, or collective goal joined
+    button_text: str  # "Out of Stock", "Already Included", "Joined", or "Purchase"
 
     @property
     def display_rent_perk_message(self) -> str | None:
@@ -136,6 +136,7 @@ def build_store_item_card_view(
     rent_free_entitlement_counts: dict[str, int | None],
     collective_progress_by_item: dict[str, CollectiveProgressView] | None = None,
     stock_remaining: int | None = None,
+    has_joined_collective_goal: bool = False,
 ) -> StoreItemCardView:
     """
     Build a pre-computed view model for a store item card.
@@ -156,6 +157,8 @@ def build_store_item_card_view(
         rent_free_entitlement_counts: lineage uuid -> free use count (-1 unlimited)
         collective_progress_by_item: lineage uuid -> pre-computed progress
         stock_remaining: Derived units left, or None when inventory is unlimited
+        has_joined_collective_goal: The student already holds a buy-in for this
+            collective goal, which is one per student
 
     Returns:
         Frozen StoreItemCardView ready for template consumption
@@ -202,11 +205,14 @@ def build_store_item_card_view(
     # teacher configured; what is left is derived from granted entitlements and
     # supplied by the caller, so it is never stored and never drifts.
     is_out_of_stock = stock_remaining is not None and stock_remaining <= 0
-    button_disabled = is_rent_covered or is_out_of_stock
+    has_joined = item.item_type == 'collective' and has_joined_collective_goal
+    button_disabled = is_rent_covered or is_out_of_stock or has_joined
     if is_out_of_stock:
         button_text = "Out of Stock"
     elif is_rent_covered:
         button_text = "Already Included"
+    elif has_joined:
+        button_text = "Joined"
     else:
         button_text = "Purchase"
 

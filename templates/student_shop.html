@@ -306,6 +306,8 @@
                     <input type="hidden" id="modalBulkDiscountPercentage" name="bulk_discount_percentage">
                     <input type="hidden" id="modalBasePrice" name="base_price">
                     <input type="hidden" id="modalInventory" name="inventory">
+                    {# What a purchase may spend; the server applies the same test and stays the gate. #}
+                    <input type="hidden" id="spendableAmount" value="{{ spendable_amount }}">
 
                     <div class="mb-3">
                         <label for="quantity" class="form-label">Quantity:</label>
@@ -323,6 +325,7 @@
                             <span class="material-symbols-outlined" aria-hidden="true">check_circle</span> You save $<span id="savingsAmount">0.00</span>!
                         </p>
                     {% endcall %}
+                    <p id="fundsWarning" class="text-danger small mb-3" role="status" hidden></p>
 
                     <div class="mb-3">
                         <label for="passphrase" class="form-label">Enter your Passphrase to confirm:</label>
@@ -516,9 +519,11 @@
         // Quantity is unconstrained by rent perks. Holding a free use does not
         // change what a purchase is or costs, so it must not lock the control
         // to a single unit as though one $0 unit were on offer.
-        quantityInput.readOnly = false;
-        decreaseQtyBtn.disabled = false;
-        increaseQtyBtn.disabled = false;
+        // A collective goal is one buy-in per student, so its quantity is fixed.
+        const singleUnit = currentItemData.itemType === 'collective';
+        quantityInput.readOnly = singleUnit;
+        decreaseQtyBtn.disabled = singleUnit;
+        increaseQtyBtn.disabled = singleUnit;
         quantityInput.value = 1;
         updateTotalPrice();
     });
@@ -567,6 +572,21 @@
         const savings = originalTotal - totalPrice;
 
         document.getElementById('totalPrice').textContent = totalPrice.toFixed(2);
+
+        // A purchase needs the money. Checking, plus savings when overdraft
+        // protection is on, must cover the total; otherwise the purchase cannot
+        // be confirmed. The server refuses it too, so this is a courtesy.
+        const spendable = parseFloat(document.getElementById('spendableAmount').value) || 0;
+        const fundsWarning = document.getElementById('fundsWarning');
+        const cannotAfford = totalPrice > 0 && Math.round(totalPrice * 100) > Math.round(spendable * 100);
+        document.getElementById('confirmPurchaseBtn').disabled = cannotAfford;
+        if (cannotAfford) {
+            fundsWarning.textContent = `You do not have enough money for this. You can spend up to $${spendable.toFixed(2)}.`;
+            fundsWarning.hidden = false;
+        } else {
+            fundsWarning.textContent = '';
+            fundsWarning.hidden = true;
+        }
 
         // Show savings if discount applied
         if (hasDiscount && savings > 0) {

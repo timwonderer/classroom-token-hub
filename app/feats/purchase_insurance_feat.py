@@ -67,7 +67,7 @@ from app.feats.schedule_next_bill_cycle_feat import (
     schedule_next_bill_cycle,
 )
 from app.feats.assess_obligation_feat import assess_obligation, AssessmentRequest
-from app.feats.insurance_premium_payment_feat import settle_insurance_premium
+from app.feats.insurance_premium_payment_feat import premium_is_affordable, settle_insurance_premium
 from app.utils.canonical_temporal_resolver import (
     canonical_temporal_resolver,
     CLASS_LEVEL_EVALUATION,
@@ -206,6 +206,18 @@ def execute_purchase_insurance(
                 f"Seat already holds active coverage in tier group "
                 f"'{definition.tier_group}'"
             ),
+        )
+
+    # The first premium is paid as part of acquiring the coverage, and a payment
+    # the seat cannot cover leaves nothing owed and nothing granted (DOM-OBL-001
+    # §II.C; SPEC-ECON-003 §4.5.1.1; the same refusal as a Store purchase,
+    # FEAT-STOR-001 §VI.E). Checked under the seat lock and before any mutation,
+    # so a refusal writes nothing: no grant, cycle, assessment or ledger row.
+    if not premium_is_affordable(class_id=class_id, seat_id=seat_id, amount=premium):
+        return InsurancePurchaseResult(
+            success=False, correlation_id=correlation_id,
+            error_code="INSUFFICIENT_FUNDS",
+            error_message="Checking, with any overdraft-protection transfer, does not cover the first premium",
         )
 
     # Resolve the recurring terms and cycle 1's boundaries in the read phase: a

@@ -72,5 +72,5 @@ def test_non_template_changes_need_no_coverage(tmp_path):
 
 
 def test_closure_follows_nested_references():
-    env = Environment(loader=FileSystemLoader(str(Path(__file__).resolve().parent.parent / "templates")))
+    env = Environment(loader=FileSystemLoader(str(Path(__file__).resolve().parent.parent / "templates")), autoescape=True)
     assert "layout_system_admin.html" in guard.closure(env, {"sysadmin_support_tickets.html"})

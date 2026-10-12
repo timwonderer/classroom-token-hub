@@ -455,8 +455,10 @@ class TestRentPayment:
             assert payment_count_after == payment_count_before == 1
             assert len(_active_perk_hall_passes(classroom.class_id, seat_id)) == perks_before
 
-    def test_authorized_rent_debit_can_overdraw_checking(self, app):
-        """Authorized rent uses shared funding and can debit checking below zero."""
+    def test_unaffordable_rent_payment_leaves_obligation_unpaid(self, app):
+        """DOM-OBL-001 3.3 §II.C / SPEC-ECON-003 §4.5.1.1 (owner ruling 2026-10-07):
+        a rent payment the seat cannot cover leaves rent unpaid rather than
+        overdrawing checking. No ledger write, no PAYMENT event, no perks."""
         classroom = initialize("chemistry_p1", app)
         with app.app_context():
             _setup_rent_class(classroom)
@@ -471,13 +473,90 @@ class TestRentPayment:
                 idempotency_key=f"rent-pay:{correlation_id}:cmd",
             )
 
-            assert result.success is True
-            assert result.amount_paid > 0
-            # The authorized principal records its PAYMENT and satisfaction perks.
+            assert result.success is False
+            assert result.error_code == "INSUFFICIENT_FUNDS"
             assert ObligationAssessment.query.filter_by(
                 correlation_id=correlation_id, event_type="PAYMENT"
-            ).first() is not None
-            assert len(_active_perk_hall_passes(classroom.class_id, seat_id)) > 0
+            ).first() is None
+            assert len(_active_perk_hall_passes(classroom.class_id, seat_id)) == 0
+            from app.services.ledger_balance_query_service import get_available_balances
+            checking, savings = get_available_balances(seat_id, classroom.class_id)
+            assert checking == Decimal("0.00")
+            assert savings == Decimal("0.00")
+
+    def test_rent_payment_uses_full_shortfall_savings_protection(self, app):
+        """When protection is enabled and savings can cover the whole shortfall,
+        the payment still succeeds via the full-shortfall transfer (§4.5.1.1A),
+        not by overdrawing checking."""
+        from app.feats.class_configuration.feat_class_005_economic_engine_evolution import execute_evolve_economic_engine
+        from app.services.context_resolver import CanonicalContext
+
+        classroom = initialize("chemistry_p1", app)
+        with app.app_context():
+            _setup_rent_class(classroom)
+            student = classroom.students[0]
+            seat_id = student.seat.id
+            teacher_ctx = CanonicalContext(
+                user_id=classroom.teacher_user.id, class_id=classroom.class_id,
+                seat_id=classroom.teacher_seat.id, actor_role="teacher",
+            )
+            assert execute_evolve_economic_engine(
+                canonical_context=teacher_ctx, class_id=classroom.class_id,
+                updates={"overdraft_protection_enabled": True}, feature_list=["banking"],
+                idempotency_key="rent:protection-test",
+            ).success
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"fund-savings:{seat_id}"):
+                create_ledger_idempotent_transaction(
+                    idempotency_key=f"fund-savings-seat:{seat_id}",
+                    seat_id=seat_id, class_id=classroom.class_id,
+                    amount=Decimal("100.00"), account_type="savings",
+                    type="payroll", description="Test savings funding",
+                )
+
+            execute_reconcile_rent(classroom.class_id, reference_time_utc=_T_INITIAL)
+            correlation_id = f"rent:{classroom.class_id}:{seat_id}:cycle:1"
+
+            result = execute_rent_payment(
+                classroom.class_id, seat_id, correlation_id,
+                idempotency_key=f"rent-pay:{correlation_id}:cmd",
+            )
+
+            assert result.success is True, result.error_message
+            assert result.fully_paid is True
+            from app.services.ledger_balance_query_service import get_available_balances
+            checking, savings = get_available_balances(seat_id, classroom.class_id)
+            assert checking == Decimal("0.00")
+            assert savings == Decimal("50.00")
+
+    def test_rent_payment_rejects_non_whole_cent_amount(self, app):
+        """F4: a NaN or sub-cent amount is refused before any mutation, rather
+        than raising mid-write or silently rounding to a different amount than
+        the one reported paid."""
+        classroom = initialize("chemistry_p1", app)
+        with app.app_context():
+            _setup_rent_class(classroom)
+            student = classroom.students[0]
+            seat_id = student.seat.id
+            _fund_seat(classroom, student)
+            customize_rent_settings(classroom.class_id, allow_incremental_payment=True)
+
+            execute_reconcile_rent(classroom.class_id, reference_time_utc=_T_INITIAL)
+            correlation_id = f"rent:{classroom.class_id}:{seat_id}:cycle:1"
+
+            for bad in (
+                Decimal("NaN"), Decimal("Infinity"), Decimal("0.001"), Decimal("-5.00"),
+                Decimal("1e999999"),  # absurd exponent: quantize() itself must not raise
+            ):
+                result = execute_rent_payment(
+                    classroom.class_id, seat_id, correlation_id,
+                    idempotency_key=f"rent-pay:{correlation_id}:bad:{bad}",
+                    payment_amount=bad,
+                )
+                assert result.success is False
+                assert result.error_code == "INVALID_AMOUNT"
+            assert ObligationAssessment.query.filter_by(
+                correlation_id=correlation_id, event_type="PAYMENT"
+            ).first() is None
 
 
 def _late_fee_assessments(class_id, seat_id):
@@ -907,6 +986,67 @@ class TestRentBillGroupPayment:
             ).count()
             assert payments_after == payments_before
             assert len(_active_perk_hall_passes(classroom.class_id, seat_id)) == perks_before
+
+    def test_bill_replay_of_partial_payment_is_not_rescreened_against_spent_funds(self, app):
+        """A double-click/back-button replay of an already-accepted PARTIAL bill
+        payment must return the same outcome, not INSUFFICIENT_FUNDS, even
+        though the seat's balance this command itself already spent is now
+        lower than the (unchanged) requested amount.
+
+        Regression for a real review finding: the F1-F4 aggregate
+        affordability screen in ``pay_rent_bill`` must resolve whether this
+        exact command already posted a slice BEFORE re-checking current
+        funds — not re-screen the original request against the post-debit
+        balance, which would wrongly refuse the command's own accepted
+        charge. Uses a single obligation (no late fee) so the per-slice
+        amount on replay is bound by the unchanged remaining *budget*, not by
+        the obligation's own remaining balance — exactly the "$20 of a $50
+        bill, funded with exactly $20" scenario the fix addresses."""
+        classroom = initialize("chemistry_p1", app)
+        with app.app_context():
+            _setup_rent_class(classroom)
+            customize_rent_settings(classroom.class_id, allow_incremental_payment=True)
+            student = classroom.students[0]
+            seat_id = student.seat.id
+            execute_reconcile_rent(classroom.class_id, reference_time_utc=_T_INITIAL)
+            rent_corr = f"rent:{classroom.class_id}:{seat_id}:cycle:1"
+            key = f"bill:{rent_corr}:partial-cmd"
+
+            # Fund exactly the amount this command will request — less than
+            # the $50 rent owed — so nothing is left over afterward.
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"fund:{seat_id}"):
+                create_ledger_idempotent_transaction(
+                    idempotency_key=f"fund-seat:{seat_id}",
+                    seat_id=seat_id, class_id=classroom.class_id,
+                    amount=Decimal("20.00"), account_type="checking",
+                    type="payroll", description="Fund exactly the partial payment",
+                )
+
+            first = execute_rent_bill_payment(
+                classroom.class_id, seat_id, rent_corr,
+                idempotency_key=key, payment_amount=Decimal("20.00"),
+            )
+            assert first.success is True, first.error_message
+            assert first.fully_paid is False
+            assert first.amount_paid == Decimal("20.00")
+            assert first.remaining_after == Decimal("30.00")
+
+            from app.services.ledger_balance_query_service import get_available_balances
+            checking, _ = get_available_balances(seat_id, classroom.class_id)
+            assert checking == Decimal("0.00")  # the $20 is gone; a fresh $20 debit would fail
+
+            # Replay the SAME command (double-click / back-button). It must
+            # return the same outcome, not INSUFFICIENT_FUNDS.
+            second = execute_rent_bill_payment(
+                classroom.class_id, seat_id, rent_corr,
+                idempotency_key=key, payment_amount=Decimal("20.00"),
+            )
+            assert second.success is True, second.error_message
+            assert second.amount_paid == first.amount_paid
+            assert second.remaining_after == first.remaining_after
+
+            checking_after, _ = get_available_balances(seat_id, classroom.class_id)
+            assert checking_after == Decimal("0.00")  # the replay moved no new money
 
 
 def test_funded_rent_replay_preserves_original_principal_and_perks(app):

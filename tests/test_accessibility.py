@@ -184,13 +184,6 @@ def _route_map(client) -> dict:
         "templates/error_429.html": lambda: _render_direct("error_429.html", limit_description="5 per 1 hour"),
         "templates/error_500.html": lambda: _render_direct("error_500.html", error_id="ERR-TEST-500"),
         "templates/system_admin_login.html": lambda: _render_route(client, "/sysadmin/login"),
-        "templates/system_admin_logs.html": lambda: _render_direct(
-            "system_admin_logs.html",
-            logs=[{"message": "Test log entry", "timestamp": "2026-07-31 00:00:00"}],
-            current_page=1,
-            total_pages=1,
-            total_logs=1,
-        ),
         "templates/student_login.html": lambda: _render_route(client, "/student/login"),
         "templates/student_account_claim.html": lambda: _render_route(client, "/student/claim-account"),
         "templates/student_create_username.html": lambda: _render_direct(

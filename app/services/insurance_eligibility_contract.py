@@ -202,7 +202,15 @@ def evaluate_transaction_claim_basis(
                     "Associated item was revoked or expired",
                 )
             # Item purchases are claimable only once their value is realized (USED).
-            if not _entitlement_has_event(class_id, entitlement_id, (_USED_EVENT,)):
+            # A hall pass is used when a hall-pass log names it (FEAT-PROD-002
+            # §III); it carries no CONSUMED event of its own.
+            from app.services.entitlement_read_service import hall_pass_use_log
+
+            used = _entitlement_has_event(class_id, entitlement_id, (_USED_EVENT,)) or (
+                event.entitlement_type == "HALL_PASS"
+                and hall_pass_use_log(entitlement_id, class_id) is not None
+            )
+            if not used:
                 return EligibilityVerdict(
                     False,
                     ITEM_NOT_USED,

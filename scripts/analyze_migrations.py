@@ -12,6 +12,29 @@ import ast
 from pathlib import Path
 from typing import Dict, List, Set, Optional, Tuple
 
+def _extract_assignment_value(content: str, name: str) -> Optional[str]:
+    """The raw text to the right of ``name = `` on its own line, or None.
+
+    A plain ``re.search(rf'^{name}\\s*=\\s*(.+)$', ...)`` is what CodeQL's
+    py/polynomial-redos flags here (alerts #273–#275): the trailing ``\\s*``
+    and the capturing ``.+`` both match ordinary whitespace, so a line with
+    many spaces/tabs after ``=`` and no terminating content gives the engine
+    several ways to split the same characters between the two groups. This
+    script is local-only; ``check-migrations.yml`` invokes
+    ``validate-migrations.py``, not this analyzer. Finding the ``=``
+    with a regex that has no such ambiguity (nothing after it to backtrack
+    against) and then slicing the rest of the line in plain Python has
+    identical behavior with no quantifier adjacent to another that can
+    consume the same characters.
+    """
+    m = re.search(rf'^{re.escape(name)}\s*=', content, re.MULTILINE)
+    if not m:
+        return None
+    line_end = content.find('\n', m.end())
+    rest = content[m.end():] if line_end == -1 else content[m.end():line_end]
+    return rest.strip()
+
+
 def parse_migration_file(filepath: Path) -> Optional[Dict]:
     """Parse a migration file to extract revision info."""
     try:
@@ -21,11 +44,11 @@ def parse_migration_file(filepath: Path) -> Optional[Dict]:
         # Extract revision ID
         revision_match = re.search(r'^revision\s*=\s*[\'"]([^\'"]+)[\'"]', content, re.MULTILINE)
         # Extract down_revision - can be None or a string
-        down_revision_match = re.search(r'^down_revision\s*=\s*(.+)$', content, re.MULTILINE)
+        down_rev_raw = _extract_assignment_value(content, 'down_revision')
         # Extract branch_labels
-        branch_labels_match = re.search(r'^branch_labels\s*=\s*(.+)$', content, re.MULTILINE)
+        branch_raw = _extract_assignment_value(content, 'branch_labels')
         # Extract depends_on
-        depends_on_match = re.search(r'^depends_on\s*=\s*(.+)$', content, re.MULTILINE)
+        depends_on_raw = _extract_assignment_value(content, 'depends_on')
 
         if not revision_match:
             return None
@@ -34,8 +57,8 @@ def parse_migration_file(filepath: Path) -> Optional[Dict]:
 
         # Parse down_revision
         down_revision = None
-        if down_revision_match:
-            down_rev_str = down_revision_match.group(1).strip()
+        if down_rev_raw is not None:
+            down_rev_str = down_rev_raw
             if down_rev_str != 'None':
                 # Could be a string, tuple, or list
                 try:
@@ -48,8 +71,8 @@ def parse_migration_file(filepath: Path) -> Optional[Dict]:
 
         # Parse branch_labels
         branch_labels = None
-        if branch_labels_match:
-            branch_str = branch_labels_match.group(1).strip()
+        if branch_raw is not None:
+            branch_str = branch_raw
             if branch_str != 'None':
                 try:
                     branch_labels = ast.literal_eval(branch_str)
@@ -58,8 +81,8 @@ def parse_migration_file(filepath: Path) -> Optional[Dict]:
 
         # Parse depends_on
         depends_on = None
-        if depends_on_match:
-            depends_str = depends_on_match.group(1).strip()
+        if depends_on_raw is not None:
+            depends_str = depends_on_raw
             if depends_str != 'None':
                 try:
                     depends_on = ast.literal_eval(depends_str)

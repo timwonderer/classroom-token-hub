@@ -51,17 +51,17 @@ def update_hall_pass_queue_settings(
         if parsed_limit < 1 or parsed_limit > 50:
             raise ValueError("Queue limit must be between 1 and 50")
     current = _current_hall_pass_settings(class_id)
-    current_pass_types = (
-        current.get_pass_types() if current is not None
-        else HallPassSettings.get_default_pass_types()
-    )
-    current_queue_limit = current.max_queue_limit if current is not None else 10
+    if current is None:
+        # A queue limit alone is not a hall-pass policy: the teacher sets up
+        # destinations first, and nothing is invented for them.
+        from app.feats.prod import HallPassSettingsMissing
+        raise HallPassSettingsMissing("Hall passes are not set up for this class.")
     return save_hall_pass_setup_config(
         user_id=user_id,
         class_id=class_id,
         hall_pass_enabled=True,
-        pass_type_payload=current_pass_types,
-        max_queue_limit=parsed_limit if max_queue_limit is not None else current_queue_limit,
+        pass_type_payload=current.get_pass_types(),
+        max_queue_limit=parsed_limit if max_queue_limit is not None else current.max_queue_limit,
         updated_at=updated_at,
         correlation_id=correlation_id,
         idempotency_key=idempotency_key,

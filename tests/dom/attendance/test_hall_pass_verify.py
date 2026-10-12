@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from contextlib import contextmanager
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -12,6 +13,7 @@ from app.feats.prod import record_attendance_session, record_hall_pass_log
 from app.models import AttendanceReasonCode, HallPassSettings, User
 from app.services.context_resolver import CanonicalContext
 from app.services.entitlement_service import grant_hall_passes
+from app.utils import canonical_temporal_resolver as resolver_module
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
     SYSTEM_LEVEL_EVALUATION,
@@ -25,6 +27,33 @@ def _current_utc():
         SYSTEM_LEVEL_EVALUATION,
         primitive="current_time",
     ).canonical_now_utc
+
+
+@contextmanager
+def _pinned_to_class_midday(monkeypatch, classroom):
+    """Pins the resolver's clock to noon of the class's current local day.
+
+    The verify page shows only passes inside today's class-local window, so a
+    pass issued minutes before a wall-clock "now" lands in yesterday's window
+    when the test runs just after class-local midnight. Pinning every clock read
+    (issue times, model defaults, and the verify request) to mid-day keeps the
+    whole scenario inside one class-local day.
+    """
+    day_start = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=_teacher_ctx(classroom),
+        primitive="evaluation_day_boundaries",
+    ).boundary_start_utc
+    instant = day_start + timedelta(hours=12)
+
+    class _Pinned(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return instant.astimezone(tz) if tz else instant.replace(tzinfo=None)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(resolver_module, "datetime", _Pinned)
+        yield
 
 
 def _teacher_ctx(classroom) -> CanonicalContext:
@@ -60,6 +89,10 @@ def _seed_hall_pass_settings(classroom) -> None:
     db.session.add(
         HallPassSettings(
             class_id=classroom.class_id,
+            # Tests issue passes as far back as yesterday. A pass is only issued
+            # under settings already in effect (FEAT-PROD-002 §III), so these must
+            # predate every issue time rather than take effect at insert.
+            effective_date=_current_utc() - timedelta(days=2),
             max_queue_limit=50,
             pass_type_payload=[
                 {"pass_name": "Bathroom", "max_queue": 50, "consume_pass": True},
@@ -207,18 +240,19 @@ def test_DOM_PROD_002__post_verify_no_match(client, verification_context):
     assert "No hall pass record found" in response.data.decode()
 
 
-def test_DOM_PROD_002__post_verify_match_left(client, verification_context):
+def test_DOM_PROD_002__post_verify_match_left(client, verification_context, monkeypatch):
     """POST with a matching student who is currently out returns match with status."""
     classroom = verification_context["classroom"]
-    now = _current_utc()
-    log = _issue_hall_pass(
-        classroom,
-        hall_pass_id="HP-VERIFY-LEFT",
-        issued_at=now - timedelta(minutes=15),
-    )
-    _mark_left(classroom, log, at_time=now - timedelta(minutes=9))
+    with _pinned_to_class_midday(monkeypatch, classroom):
+        now = _current_utc()
+        log = _issue_hall_pass(
+            classroom,
+            hall_pass_id="HP-VERIFY-LEFT",
+            issued_at=now - timedelta(minutes=15),
+        )
+        _mark_left(classroom, log, at_time=now - timedelta(minutes=9))
 
-    response = _post_verify(client, verification_context["token"], classroom)
+        response = _post_verify(client, verification_context["token"], classroom)
 
     assert response.status_code == 200
     html = response.data.decode()
@@ -229,20 +263,21 @@ def test_DOM_PROD_002__post_verify_match_left(client, verification_context):
     assert f"/hall-pass/{log.id}" not in html
 
 
-def test_DOM_PROD_002__post_verify_match_returned(client, verification_context):
+def test_DOM_PROD_002__post_verify_match_returned(client, verification_context, monkeypatch):
     """POST matching a student who has returned shows returned status."""
     classroom = verification_context["classroom"]
-    now = _current_utc()
-    log = _issue_hall_pass(
-        classroom,
-        hall_pass_id="HP-VERIFY-RETURNED",
-        destination="Office",
-        issued_at=now - timedelta(minutes=30),
-    )
-    _mark_left(classroom, log, at_time=now - timedelta(minutes=25))
-    _mark_returned(classroom, log, at_time=now - timedelta(minutes=10))
+    with _pinned_to_class_midday(monkeypatch, classroom):
+        now = _current_utc()
+        log = _issue_hall_pass(
+            classroom,
+            hall_pass_id="HP-VERIFY-RETURNED",
+            destination="Office",
+            issued_at=now - timedelta(minutes=30),
+        )
+        _mark_left(classroom, log, at_time=now - timedelta(minutes=25))
+        _mark_returned(classroom, log, at_time=now - timedelta(minutes=10))
 
-    response = _post_verify(client, verification_context["token"], classroom)
+        response = _post_verify(client, verification_context["token"], classroom)
 
     assert response.status_code == 200
     html = response.data.decode()

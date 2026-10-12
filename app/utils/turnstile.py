@@ -25,20 +25,37 @@ def verify_turnstile_token(token, remote_ip=None):
         - Tokens expire after 5 minutes (300 seconds)
         - Each token can only be validated once
         - Server-side validation is mandatory for security in production
-        - Bypasses verification if TURNSTILE_SECRET_KEY is not configured (for testing)
         - Bypasses verification in testing environments
+        - Bypasses verification when TURNSTILE_SECRET_KEY is not configured
+          and ENV is exactly 'development' (local development without a
+          registered key)
+        - Any other ENV with no TURNSTILE_SECRET_KEY configured — including
+          production and any other value such as 'staging' — fails closed
+          (returns False); production startup also refuses to run without it
     """
     secret_key = current_app.config.get('TURNSTILE_SECRET_KEY')
-
-    # Bypass verification if Turnstile is not configured (testing/development)
-    if not secret_key:
-        current_app.logger.info("Turnstile verification bypassed: TURNSTILE_SECRET_KEY not configured")
-        return True
 
     # Bypass verification in testing environments
     if current_app.config.get('TESTING') or current_app.config.get('ENV') == 'testing':
         current_app.logger.info("Turnstile verification bypassed: Testing environment")
         return True
+
+    if not secret_key:
+        # FLASK_ENV is a free-form string with no enum validation (see
+        # create_app()), so "fail closed unless ENV != production" would
+        # silently bypass the bot check on any other externally-reachable
+        # value someone deploys with — 'staging' included — not only on
+        # actual local development (CodeRabbit review on PR #1536). The
+        # bypass is now an explicit allow-list of exactly 'development';
+        # production is already covered above by the startup gate, but
+        # checking it again here costs nothing and documents the intent.
+        if current_app.config.get('ENV') == 'development':
+            current_app.logger.info("Turnstile verification bypassed: TURNSTILE_SECRET_KEY not configured")
+            return True
+        current_app.logger.error(
+            "Turnstile verification failed closed: TURNSTILE_SECRET_KEY is not configured"
+        )
+        return False
 
     if not token:
         current_app.logger.warning("Turnstile verification failed: No token provided")

@@ -47,10 +47,6 @@ from app.utils.helpers import is_safe_url, format_utc_iso
 from app.utils.encryption import decrypt_totp
 from app.hash_utils import hash_username_lookup
 from app.services.ledger_posting_service import create_pending_transaction
-from app.services.operational_event_service import (
-    get_error_events,
-    get_recent_error_events,
-)
 from app.utils.passwordless_client import get_public_api_key
 from app.utils.auth_username import normalize_auth_username
 from app.utils.opaque_refs import make_opaque_ref, resolve_opaque_ref
@@ -112,29 +108,6 @@ def _sysadmin_auth_username_exists(username: str, *, exclude_sysadmin_id: int | 
     if exclude_sysadmin_id is not None and admin.id == exclude_sysadmin_id:
         return False
     return True
-
-
-def _tail_log_lines(file_path: str, max_lines: int = 200, chunk_size: int = 8192):
-    """Return the last ``max_lines`` from a log file without loading the entire file."""
-
-    if not os.path.exists(file_path):
-        return []
-
-    lines = []
-    buffer = b""
-    with open(file_path, "rb") as f:
-        f.seek(0, os.SEEK_END)
-        position = f.tell()
-
-        while len(lines) <= max_lines and position > 0:
-            read_size = min(chunk_size, position)
-            position -= read_size
-            f.seek(position)
-            buffer = f.read(read_size) + buffer
-            lines = buffer.splitlines()
-
-    return [line.decode(errors="ignore") for line in lines[-max_lines:]]
-
 
 
 # -------------------- AUTHENTICATION --------------------
@@ -468,9 +441,6 @@ def dashboard():
         ])
     ).count()
 
-    # Recent errors (last 5)
-    recent_errors = get_recent_error_events(limit=5)
-
     # System admins — resolve to view dicts (no raw models in templates)
     system_admins_query = (
         User.query.filter(User.user_role == UserRole.SYSADMIN)
@@ -491,125 +461,8 @@ def dashboard():
         total_students=total_students,
         system_admin_count=system_admin_count,
         open_tickets=open_tickets,
-        recent_errors=recent_errors,
         system_admins=system_admins
     )
-
-
-# -------------------- LOGGING AND MONITORING --------------------
-
-@sysadmin_bp.route('/combined-logs')
-@system_admin_required
-def combined_logs():
-    """
-    Unified log viewer with two tabs: Error Logs and Network Activity.
-    Replaces the separate error-logs and network-activity pages.
-    """
-    active_tab = request.args.get('tab', 'errors')
-    per_page = 50
-
-    # ── Error Logs (Tab 1) ──
-    error_type_filter = request.args.get('error_type', '')
-    error_page = request.args.get('page', 1, type=int)
-    error_rows = get_error_events()
-    error_logs = error_rows[(error_page - 1) * per_page:error_page * per_page]
-    error_pagination = None
-    error_types = sorted({row.get('payload', {}).get('error_type') for row in error_rows if row.get('payload') and row.get('payload').get('error_type')})
-
-    # ── Network Activity (Tab 2) ──
-    ip_filter = request.args.get('ip', '')
-    net_page = request.args.get('net_page', 1, type=int)
-    net_rows = error_rows
-    network_logs = net_rows[(net_page - 1) * per_page:net_page * per_page]
-    net_pagination = None
-    ip_addresses = []
-    total_requests = len(error_rows)
-    total_errors = len(error_rows)
-    unique_ips = 0
-    error_type_stats = []
-
-    return render_template(
-        "sysadmin_combined_logs.html",
-        current_page="logs",
-        active_tab=active_tab,
-        # Error tab
-        error_logs=error_logs,
-        error_pagination=error_pagination,
-        error_types=error_types,
-        current_error_type=error_type_filter,
-        total_errors=total_errors,
-        # Network tab
-        network_logs=network_logs,
-        net_pagination=net_pagination,
-        ip_addresses=ip_addresses,
-        current_ip=ip_filter,
-        total_requests=total_requests,
-        unique_ips=unique_ips,
-        error_type_stats=error_type_stats,
-    )
-
-@sysadmin_bp.route('/logs')
-@system_admin_required
-def logs():
-    """
-    View system logs from the log file.
-    Parses and structures the last 200 lines of logs for display.
-    """
-    log_file = os.getenv("LOG_FILE", "app.log")
-    structured_logs = []
-    try:
-        lines = _tail_log_lines(log_file, max_lines=200)
-        log_pattern = re.compile(r'\[(.*?)\]\s+(\w+)\s+in\s+(\w+):\s+(.*)')
-        current_log = None
-        for line in lines:
-            match = log_pattern.match(line)
-            if match:
-                # Start a new log entry
-                timestamp, level, module, message = match.groups()
-                current_log = {
-                    "timestamp": timestamp,
-                    "level": level,
-                    "module": module,
-                    "message": message.strip()
-                }
-                structured_logs.append(current_log)
-            else:
-                # Continuation of the previous log entry (stack trace, etc.)
-                if current_log:
-                    current_log["message"] += "<br>" + line.strip()
-                else:
-                    # Orphan line with no preceding log; treat as its own entry
-                    current_log = {
-                        "timestamp": "",
-                        "level": "",
-                        "module": "",
-                        "message": line.strip()
-                    }
-                    structured_logs.append(current_log)
-    except Exception as e:
-        structured_logs = [{"timestamp": "", "level": "ERROR", "module": "logs", "message": f"Error reading log file: {e}"}]
-    return render_template("system_admin_logs.html", logs=structured_logs, current_page="sysadmin_logs")
-
-
-@sysadmin_bp.route('/error-logs')
-@system_admin_required
-def error_logs():
-    """Redirect the retired standalone page to the canonical log surface."""
-    return redirect(url_for("sysadmin.combined_logs", tab="errors"))
-
-
-@sysadmin_bp.route('/logs-testing')
-@system_admin_required
-def logs_testing():
-    """Redirect the retired standalone page to the canonical log surface."""
-    return redirect(url_for("sysadmin.combined_logs", tab="errors"))
-
-
-@sysadmin_bp.route('/network-activity')
-@system_admin_required
-def network_activity():
-    """Redirect the retired standalone page to the canonical log surface."""
-    return redirect(url_for("sysadmin.combined_logs", tab="network"))
 
 
 # -------------------- ERROR TESTING ROUTES --------------------

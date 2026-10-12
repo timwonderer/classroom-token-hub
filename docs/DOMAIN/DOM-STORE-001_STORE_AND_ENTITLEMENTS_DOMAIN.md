@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-STORE-001 | 5.4 | 2026-10-03 | 5.3 | Normative |
+| DOM-STORE-001 | 5.5 | 2026-10-07 | 5.4 | Normative |
 
 ## I. Purpose
 
@@ -423,6 +423,8 @@ Delayed-use entitlements SHALL:
 #### 5. Collective goal
 
 Collective-goal entitlements are granted under a configured threshold or deadline and may be consumed when the configured collective conditions are satisfied.
+
+A collective goal is one buy-in per student (owner ruling 2026-10-07, version 5.5). A seat holds at most one active collective-goal entitlement per product lineage, from any source, and a purchase is for exactly one unit. Progress counts students, not units.
 
 Collective-goal entitlements SHALL:
 

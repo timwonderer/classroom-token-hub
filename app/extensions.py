@@ -30,6 +30,14 @@ def get_real_ip_for_limiter():
     """Get real IP for rate limiting, handling Cloudflare proxy."""
     try:
         from flask import request
+        from app.utils.ip_handler import peer_is_trusted_proxy
+
+        # Forwarding headers are client-typed unless our own reverse proxy
+        # wrote them. A connection from any other peer is keyed by its own
+        # address, so rotating CF-Connecting-IP / X-Forwarded-For cannot reset
+        # a limit (audit S7).
+        if not peer_is_trusted_proxy():
+            return request.remote_addr or "unknown"
         # Check Cloudflare header first
         real_ip = request.headers.get('CF-Connecting-IP')
         if real_ip:

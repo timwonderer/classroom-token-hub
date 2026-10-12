@@ -3,12 +3,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 
+from sqlalchemy import text
+
 from app.extensions import db
 from app.feats.base import requires_feat_context, get_correlation_id, audit_protected
 from app.models import (
     AttendanceReasonCode,
     AttendanceSession,
     ClassEconomy,
+    EntitlementEvent,
     HallPassLog,
     HallPassSettings,
     PayrollEvent,
@@ -19,7 +22,6 @@ from app.services.attendance_service import (CLOSED_SESSION_SETTLEMENT_RULE, loc
 from app.services.context_resolver import CanonicalContext
 from app.services.attendance_writer_service import AttendanceSessionResult, record_attendance_session_command
 from app.services.entitlement_service import (
-    consume_hall_pass,
     get_available_hall_pass_grant,
     get_hall_pass_balance,
 )
@@ -35,6 +37,15 @@ from app.utils.canonical_temporal_resolver import (
 @dataclass(frozen=True)
 class HallPassLogResult:
     hall_pass_log: HallPassLog
+
+
+class HallPassSettingsMissing(ValueError):
+    """The class has no hall-pass settings, so there is nothing to evaluate.
+
+    FEAT-PROD-002 §III evaluates the class's ``hall_pass_settings`` before it
+    writes a log. Without a row the pass is refused: no built-in pass types and
+    no placeholder policy reference stand in for the teacher's settings.
+    """
 
 
 @dataclass(frozen=True)
@@ -77,22 +88,35 @@ def _latest_hall_pass_attendance_state(log: HallPassLog) -> str:
     return "left" if left_seen else "approved"
 
 
+def require_hall_pass_settings(class_id: str, reference_time_utc) -> HallPassSettings:
+    """The settings that govern a hall pass in this class at this instant.
+
+    Raises ``HallPassSettingsMissing`` when there are none. Request submission
+    and approval both call this, so a request can be made only when approval
+    would find settings to evaluate.
+    """
+    settings = (
+        HallPassSettings.query
+        .filter(
+            HallPassSettings.class_id == class_id,
+            HallPassSettings.effective_date <= reference_time_utc,
+        )
+        .order_by(HallPassSettings.effective_date.desc(), HallPassSettings.id.desc())
+        .first()
+    )
+    if settings is None:
+        raise HallPassSettingsMissing("Hall passes are not set up for this class.")
+    return settings
+
+
 def _enforce_hall_pass_settings(
     *,
     ctx: CanonicalContext,
     destination: str,
     reference_time_utc,
 ) -> str:
-    settings = (
-        HallPassSettings.query
-        .filter(
-            HallPassSettings.class_id == ctx.class_id,
-            HallPassSettings.effective_date <= reference_time_utc,
-        )
-        .order_by(HallPassSettings.effective_date.desc(), HallPassSettings.id.desc())
-        .first()
-    )
-    pass_types = settings.get_pass_types() if settings else HallPassSettings.get_default_pass_types()
+    settings = require_hall_pass_settings(ctx.class_id, reference_time_utc)
+    pass_types = settings.get_pass_types()
     normalized_destination = (destination or "").strip().lower()
     pass_type = next(
         (
@@ -136,7 +160,7 @@ def _enforce_hall_pass_settings(
         ]
         if len(destination_out) >= int(simultaneous_limit):
             raise ValueError("Hall-pass destination limit reached.")
-    return settings.policy_uuid if settings else "default"
+    return settings.policy_uuid
 
 
 @requires_feat_context("FEAT-PROD-001")
@@ -182,9 +206,12 @@ def _record_hall_pass_log_impl(
     reason: str,
     idempotency_key: str | None = None,
     reference_time_utc=None,
+    hall_pass_entitlement_id: str | None = None,
 ) -> HallPassLogResult:
-    """Productivity DOMAIN command: consume a hall-pass entitlement and record the
-    HallPassLog. Runs within the CALLING FEAT's single context — not a FEAT
+    """Productivity DOMAIN command: use a hall-pass entitlement and record the
+    HallPassLog. The log is the use: it names the pass's ``entitlement_id`` in
+    ``hall_pass_id``, and nothing is written to the entitlement history
+    (FEAT-PROD-002 §III; owner ruling 2026-10-09). Runs within the CALLING FEAT's single context — not a FEAT
     executor (INV-ARC-006, INV-ARC-021 §V.2). ``record_hall_pass_log`` is the thin
     FEAT-PROD-002 boundary for a top-level (route) ingress.
     """
@@ -211,7 +238,8 @@ def _record_hall_pass_log_impl(
         .order_by(HallPassSettings.effective_date.desc(), HallPassSettings.id.desc())
         .first()
     )
-    pass_types = settings.get_pass_types() if settings else HallPassSettings.get_default_pass_types()
+    # _enforce_hall_pass_settings refused above when this read finds no row.
+    pass_types = settings.get_pass_types()
     pass_type = next(
         (
             item for item in pass_types
@@ -224,27 +252,41 @@ def _record_hall_pass_log_impl(
 
     if not requested_by_seat_id or not ctx.class_id:
         raise ValueError("Hall-pass consumption requires requested_by_seat_id and class_id")
-    consume_event = None
-    hall_pass_grant = get_available_hall_pass_grant(requested_by_seat_id, ctx.class_id)
-    if consume_pass and hall_pass_grant is None:
-        raise ValueError("No available hall-pass entitlement grant")
+    used_pass = None
     if consume_pass:
-        consume_event, _balance = consume_hall_pass(
-            requested_by_seat_id,
-            ctx.class_id,
-            trigger_id=idempotency_key or f"hall_pass_log:{ctx.class_id}:{requested_by_seat_id}:{now.isoformat()}",
-        )
-        if not consume_event.correlation_id:
+        # Serialize with every other write that can end this seat's passes
+        # (other approvals, reversal, removal, perk expiry): the second waits
+        # and then sees the pass spent. The unique index on
+        # hall_pass_logs.hall_pass_id is the database's own guarantee that an
+        # entitlement_id is used at most once.
+        from app.services.entitlement_service import lock_hall_pass_holder
+
+        lock_hall_pass_holder(requested_by_seat_id, ctx.class_id)
+        if hall_pass_entitlement_id:
+            # A request is for one particular pass, and its availability was
+            # decided when it was submitted (DOM-STORE-001 §IX: submitted_at is
+            # authoritative). While it waits, nothing can remove that pass
+            # (owner ruling 2026-10-09), so approval uses exactly it.
+            used_pass = _named_hall_pass(
+                hall_pass_entitlement_id, requested_by_seat_id, ctx.class_id
+            )
+            if used_pass is None:
+                raise ValueError("The hall pass this request names has already been used")
+        else:
+            used_pass = get_available_hall_pass_grant(requested_by_seat_id, ctx.class_id)
+        if used_pass is None:
+            raise ValueError("No available hall-pass entitlement grant")
+        if not used_pass.correlation_id:
             raise ValueError("Hall-pass entitlement consumption missing correlation_id")
-        if not consume_event.entitlement_id:
+        if not used_pass.entitlement_id:
             raise ValueError("Hall-pass entitlement consumption missing entitlement_id")
 
     # A non-consuming destination has no entitlement lifecycle to reference, and
     # HallPassLog.hall_pass_id is documented as the *consumed* pass. Naming an
     # unconsumed grant there made two claims that are not true: the grant stayed
     # available, so a later consuming approval could consume and record the same
-    # entitlement_id (the column is indexed but not unique, so two logs would
-    # carry it while only one consumed a pass), and the copied correlation_id was
+    # entitlement_id (two logs would carry it while only one consumed a pass; the
+    # column is now unique where set), and the copied correlation_id was
     # the grant's own, which identifies the purchase rather than this approval.
     fallback_correlation_id = (
         idempotency_key
@@ -255,9 +297,9 @@ def _record_hall_pass_log_impl(
         approved_by_seat_id=approved_by_seat_id,
         class_id=ctx.class_id,
         timestamp=now,
-        hall_pass_id=consume_event.entitlement_id if consume_event else None,
+        hall_pass_id=used_pass.entitlement_id if used_pass else None,
         correlation_id=(
-            consume_event.correlation_id if consume_event else fallback_correlation_id
+            used_pass.correlation_id if used_pass else fallback_correlation_id
         ),
         policy_uuid=policy_uuid,
         destination=destination,
@@ -266,6 +308,19 @@ def _record_hall_pass_log_impl(
     db.session.flush()
 
     return HallPassLogResult(hall_pass_log=log)
+
+
+def _named_hall_pass(entitlement_id: str, seat_id: int, class_id: str):
+    """The seat's grant for the pass a request names, unless a log already used it."""
+    from app.services.entitlement_read_service import hall_pass_use_log
+
+    grant = EntitlementEvent.query.filter_by(
+        entitlement_id=entitlement_id, class_id=class_id, target_seat_id=seat_id,
+        entitlement_type="HALL_PASS", event_type="GRANTED",
+    ).first()
+    if grant is None or hall_pass_use_log(entitlement_id, class_id) is not None:
+        return None
+    return grant
 
 
 @requires_feat_context("FEAT-PROD-002")
@@ -311,6 +366,40 @@ def _record_payroll_event_impl(
     ctx = _require_context(ctx)
     if payroll_event_type not in {"payroll", "manual_credit"}:
         raise ValueError("Compensation requires the signed payroll recovery FEAT command.")
+
+    # Replay safety for idempotency_key, done here rather than by the caller
+    # (audit F5 / CodeRabbit review on PR #1536): a check-then-insert in the
+    # caller's own query runs in a transaction this FEAT's own __enter__ may
+    # discard. FEATContext.__enter__ rolls back a prior "discardable read
+    # autobegin" and opens its own begin() — on a pooled engine that can hand
+    # the new transaction a different physical connection, so a lock taken
+    # before entering this FEAT (transaction- or session-scoped alike) is not
+    # guaranteed to still be held here. Doing the lock and the existence check
+    # as the first statements inside the FEAT's own owned transaction (this
+    # function only ever runs inside one — requires_feat_context's __enter__
+    # has already run by the time this body executes) ties both to the same
+    # transaction that performs the insert below, so two concurrent calls
+    # sharing an idempotency_key (a double-click, two open tabs) serialize on
+    # the advisory lock and the loser observes the winner's committed row.
+    if idempotency_key:
+        db.session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtext(:key))"),
+            {"key": idempotency_key},
+        )
+        existing_event = PayrollEvent.query.filter_by(
+            class_id=ctx.class_id,
+            target_seat_id=target_seat_id,
+            payroll_event_type=payroll_event_type,
+            idempotency_key=idempotency_key,
+        ).first()
+        if existing_event is not None:
+            existing_tx = (
+                Transaction.query.filter_by(idempotency_key=idempotency_key).first()
+                if idempotency_key
+                else None
+            )
+            return PayrollEventResult(payroll_event=existing_event, ledger_transaction=existing_tx)
+
     # The FEAT owns the canonical command correlation shared with Ledger effects.
     correlation_id = get_correlation_id()
     # The initiating caller states the mechanism (FEAT-PROD-004 §II.1); it is

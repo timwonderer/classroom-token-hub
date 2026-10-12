@@ -74,7 +74,12 @@
 <div id="toast-container" class="toast-container position-fixed top-0 end-0 p-3"></div>
 
 <!-- Server State for JS -->
-<div id="serverState" hidden>{{ attendance_state_json|safe }}</div>
+<!-- S1: attendance_state_json can carry a student-supplied hall-pass destination
+     (e.g. attendance_state["hall_pass"]["reason"]). It is read back via
+     serverState.textContent + JSON.parse() in static/js/attendance.js, so it
+     must NOT be marked |safe here -- Jinja's default autoescaping protects
+     this div's HTML, and .textContent decodes the entities back on read. -->
+<div id="serverState" hidden>{{ attendance_state_json }}</div>
 
 <!-- Account Recovery Request -->
 {% if pending_recovery_code %}
@@ -103,8 +108,8 @@
 <!-- Announcements Section -->
 {% if announcements %}
 {% for announcement in announcements %}
-{% call cards.alert_card(announcement.get_priority_level(), announcement.title, icon=announcement.get_priority_icon(), body_class='mb-3 policy-announcement', role='alert', id='policy-announcement-' ~ announcement.id, dismissible=True, attrs='data-announcement-id="' ~ announcement.id ~ '"') %}
-    <p class="mb-0">{{ announcement.message|nl2br|safe }}</p>
+{% call cards.alert_card(announcement.get_priority_level(), announcement.title, icon=announcement.get_priority_icon(), body_class='mb-3 policy-announcement', role='alert', id='policy-announcement-' ~ announcement.id, dismissible=True, attrs='data-announcement-id="' ~ (announcement.id | int) ~ '"') %}
+    <p class="mb-0">{{ announcement.message|nl2br }}</p>
     {% if announcement.expires_at %}
     <small class="text-muted d-block mt-2">
         <span class="material-symbols-outlined fs-6 align-text-bottom" aria-hidden="true">schedule</span>
@@ -239,11 +244,13 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <p class="text-muted small mb-3">Choose a hall-pass destination or mark yourself done for the day.</p>
-                <div id="hallPassDestinationList" class="d-grid gap-2 mb-3">
-                    <button type="button" class="btn btn-outline-secondary" disabled>Loading destinations...</button>
+                {# Shown only when the teacher has saved hall-pass destinations; otherwise the
+                   student sees "Done for the day" alone (attendance.js showBreakDestinations). #}
+                <div id="hallPassDestinationSection" hidden>
+                    <p class="text-muted small mb-3">Choose a hall-pass destination or mark yourself done for the day.</p>
+                    <div id="hallPassDestinationList" class="d-grid gap-2 mb-3"></div>
+                    <hr>
                 </div>
-                <hr>
                 <button type="button" class="btn btn-outline-danger w-100" id="doneForDayBreakBtn">
                     <span class="material-symbols-outlined align-bottom me-1" aria-hidden="true">done_all</span>
                     Done for the day

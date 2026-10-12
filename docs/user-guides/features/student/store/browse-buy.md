@@ -63,6 +63,10 @@ Choose **Purchase** to open **Confirm Purchase**. It shows the item, the unit pr
 
 Set the **quantity** with the `-` and `+` buttons. **Total Price** updates as you change it, and if a bulk discount kicks in you will see **You save $X**. Rent-perk items lock quantity to 1.
 
+You can only buy what you can afford. If **Total Price** is more than you can spend, the confirm button turns off and the screen tells you how much you can spend. That amount is your checking, plus your savings when your teacher has turned on overdraft protection. A purchase you cannot afford is never charged, and there is no fee for trying.
+
+A **collective goal** is one per student: you buy in once, and the quantity stays at 1. After you join, the item shows **Joined**.
+
 **Total Price** is what you are charged. If the screen says **You will get N total uses**, N separate copies arrive in **My Items**, each redeemed on its own — there is no shared counter, so redeeming one leaves the rest untouched.
 
 Then enter your **passphrase** — *Enter your Passphrase to confirm:* — and choose **Confirm Purchase**.
