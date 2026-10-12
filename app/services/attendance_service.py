@@ -19,6 +19,63 @@ from app.utils.canonical_temporal_resolver import (
 )
 
 
+def _canonical_seat_rows(seat_id, class_id):
+    """One seat's full canonical row history, memoized for this request only.
+
+    Several readers in this module ran the identical unbounded query --
+    ``filter(target_seat_id=X, class_id=Y).order_by(timestamp asc, id asc)``
+    -- independently of each other: the interval projection, both day-bounded
+    worked-seconds readings, and the status snapshot. One status poll
+    (``/api/student-status``, polled roughly every 10 seconds per open tab)
+    ran it three or four times over (audit O4).
+
+    Caching it for the lifetime of one request is correct only because the
+    sole writer of this table, ``record_attendance_session_command``, drops
+    this same cache entry immediately after it flushes a new row for the
+    scope it just wrote (see :func:`invalidate_canonical_seat_rows_cache`).
+    Outside a request (a scheduled job's ``app.app_context()``, a direct
+    service call in a test with no request context) nothing is cached and
+    every call queries fresh, exactly as before this change.
+    """
+    from flask import g, has_request_context
+
+    key = (seat_id, class_id)
+    cache = None
+    if has_request_context():
+        cache = g.setdefault("_attendance_canonical_rows_cache", {})
+        if key in cache:
+            return cache[key]
+
+    with db.session.no_autoflush:
+        rows = (
+            AttendanceSession.query.filter(
+                AttendanceSession.target_seat_id == seat_id,
+                AttendanceSession.class_id == class_id,
+            )
+            .order_by(AttendanceSession.timestamp.asc(), AttendanceSession.id.asc())
+            .all()
+        )
+
+    if cache is not None:
+        cache[key] = rows
+    return rows
+
+
+def invalidate_canonical_seat_rows_cache(seat_id, class_id):
+    """Drop the per-request cache for this scope; call after writing a new row.
+
+    A no-op outside a request context, where nothing is cached in the first
+    place.
+    """
+    from flask import g, has_request_context
+
+    if not has_request_context():
+        return
+    cache = getattr(g, "_attendance_canonical_rows_cache", None)
+    if cache is not None:
+        cache.pop((seat_id, class_id), None)
+
+
 def get_attendance_session_counts_by_seat(
     class_id: str, window_start, window_end
 ) -> dict[int, int]:
@@ -257,16 +314,22 @@ def list_attendance_interval_evidence(seat_id, class_id, *, ctx, as_of_utc=None,
         as_of_utc = canonical_temporal_resolver(CLASS_LEVEL_EVALUATION,
             canonical_execution_context=ctx, primitive="current_time").canonical_now_utc
     as_of_utc = ensure_utc(as_of_utc)
-    query = AttendanceSession.query.filter_by(class_id=class_id, target_seat_id=seat_id).order_by(
-        AttendanceSession.timestamp.asc(), AttendanceSession.id.asc())
-    if source_limit is not None:
+    if source_limit is None:
+        # The unbounded case is the one every other reader in this module also
+        # runs; share the memoized fetch (audit O4) instead of a fresh query.
+        rows = _canonical_seat_rows(seat_id, class_id)
+    else:
         if type(source_limit) is not int or not 1 <= source_limit <= 2000:
             raise ValueError("INVALID_INPUT")
-        query = query.limit(source_limit + 1)
-    with db.session.no_autoflush:
-        rows = query.all()
-    if source_limit is not None and len(rows) > source_limit:
-        raise ValueError("EVIDENCE_LIMIT_EXCEEDED")
+        query = AttendanceSession.query.filter_by(
+            class_id=class_id, target_seat_id=seat_id
+        ).order_by(
+            AttendanceSession.timestamp.asc(), AttendanceSession.id.asc()
+        ).limit(source_limit + 1)
+        with db.session.no_autoflush:
+            rows = query.all()
+        if len(rows) > source_limit:
+            raise ValueError("EVIDENCE_LIMIT_EXCEEDED")
     intervals, opening = [], None
     consumed_closings = set()
     for row in rows:
@@ -517,10 +580,7 @@ def calculate_worked_attendance_seconds_for_date(seat_id: int, class_id: str, ev
     end_boundary = min(day_end_utc, now_evaluation.canonical_now_utc)
     if end_boundary <= day_start_utc:
         return 0
-    canonical_rows = AttendanceSession.query.filter(
-        AttendanceSession.target_seat_id == seat_id,
-        AttendanceSession.class_id == class_id,
-    ).order_by(AttendanceSession.timestamp.asc(), AttendanceSession.id.asc()).all()
+    canonical_rows = _canonical_seat_rows(seat_id, class_id)
     intervals = _pair_active_intervals(
         canonical_rows,
         start_boundary=day_start_utc,
@@ -547,10 +607,7 @@ def calculate_worked_attendance_seconds_today(seat_id: int, class_id: str, *, ct
     end_boundary = min(day_end_utc, now_evaluation.canonical_now_utc)
     if end_boundary <= day_start_utc:
         return 0
-    canonical_rows = AttendanceSession.query.filter(
-        AttendanceSession.target_seat_id == seat_id,
-        AttendanceSession.class_id == class_id,
-    ).order_by(AttendanceSession.timestamp.asc(), AttendanceSession.id.asc()).all()
+    canonical_rows = _canonical_seat_rows(seat_id, class_id)
     intervals = _pair_active_intervals(
         canonical_rows,
         start_boundary=day_start_utc,
@@ -620,10 +677,7 @@ def get_class_attendance_status(student, *, class_id: str, ctx=None):
     if seat is None:
         raise ValueError("Seat is not claimed in the requested class scope.")
 
-    rows = AttendanceSession.query.filter(
-        AttendanceSession.target_seat_id == seat.id,
-        AttendanceSession.class_id == class_id,
-    ).order_by(AttendanceSession.timestamp.asc(), AttendanceSession.id.asc()).all()
+    rows = _canonical_seat_rows(seat.id, class_id)
     latest = rows[-1] if rows else None
     is_active = bool(latest and latest.status == "active")
 

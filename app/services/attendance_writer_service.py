@@ -7,7 +7,11 @@ from dataclasses import dataclass
 from app.extensions import db
 from app.models import AttendanceSession, AttendanceReasonCode, Seat
 from app.services.context_resolver import CanonicalContext
-from app.services.attendance_service import is_done_for_day, lock_attendance_seat
+from app.services.attendance_service import (
+    invalidate_canonical_seat_rows_cache,
+    is_done_for_day,
+    lock_attendance_seat,
+)
 from app.utils.canonical_temporal_resolver import CLASS_LEVEL_EVALUATION, canonical_temporal_resolver
 
 @dataclass(frozen=True)
@@ -178,4 +182,10 @@ def record_attendance_session_command(
     )
     db.session.add(session)
     db.session.flush()
+    # This is the sole writer of AttendanceSession rows: a reader cached this
+    # scope's rows earlier in this same request (audit O4) must not keep
+    # answering from before this write. Invalidating here, after the flush
+    # that made this row (and, above, any closing row) visible, covers every
+    # caller later in the request regardless of which of the two branches ran.
+    invalidate_canonical_seat_rows_cache(resolved_target_seat_id, ctx.class_id)
     return AttendanceSessionResult(session=session)
