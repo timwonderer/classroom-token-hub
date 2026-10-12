@@ -24,7 +24,7 @@ from app.hash_utils import hash_password, verify_password
 import pytz
 from dateutil.relativedelta import relativedelta
 
-from app.extensions import db, limiter
+from app.extensions import db, limiter, student_login_identity_limit_key
 from app.services import student_setup
 from app.models import (
     Transaction, AttendanceSession, StoreItemVisibility,
@@ -2933,7 +2933,14 @@ def rent_pay(period):
 # -------------------- AUTHENTICATION --------------------
 
 @student_bp.route('/login', methods=['GET', 'POST'])
-@limiter.limit("60 per minute")
+# Audit O1: this address-keyed limit counted GET page loads together with
+# POST attempts, and a school NAT shares one address across every student
+# in the building, so 30 page loads plus 30 attempts exhausted the whole
+# school's budget at the 61st request. Scoping to POST frees it from GETs;
+# the per-identity limit below is what actually bounds repeated guessing
+# against ONE account, independent of how many classmates share the address.
+@limiter.limit("60 per minute", methods=["POST"])
+@limiter.limit("10 per minute", key_func=student_login_identity_limit_key, methods=["POST"])
 @requires_feat_context("FEAT-IDEN-001")
 def login():
     """Student login with username and passphrase."""
