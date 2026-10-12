@@ -69,6 +69,7 @@ from flask_migrate import upgrade
 from app import app as flask_app, db
 from flask import current_app
 from app.extensions import limiter
+from tests.helpers.db_drop_guard import droppable_test_database_refusal
 from app.models import Transaction, Seat, IdentityProfile
 
 
@@ -535,6 +536,103 @@ def _rebuild_database_state():
 
     db.session.remove()
 
+# Replaying the migration chain costs ~6 s per test; copying an already-migrated
+# database costs ~0.2 s. The first test of a session migrates the test database
+# as before and snapshots it as a template; every later test drops the test
+# database and recreates it from that template, so each test still starts from
+# a migration-built database, never from ORM metadata or a previous test.
+_TEMPLATE_DB = {"name": None}
+_ADMIN_ENGINE = {}
+# Written as the database comment on every database this session creates or
+# migrates; a DROP DATABASE refuses any database not carrying it.
+_SESSION_MARKER = f"cth-pytest-scratch:{os.getpid()}:{uuid.uuid4().hex}"
+
+
+def _quote_ident(name):
+    return '"' + name.replace('"', '""') + '"'
+
+
+def _guarded_drop_database(conn, test_db_url, name):
+    refusal = droppable_test_database_refusal(test_db_url, name, os.getpid())
+    if refusal:
+        raise RuntimeError(f"Refusing DROP DATABASE {name!r}: {refusal}")
+    marker = conn.execute(
+        text("SELECT shobj_description(oid, 'pg_database') FROM pg_database WHERE datname = :n"),
+        {"n": name},
+    ).scalar()
+    if marker is None and not conn.execute(
+        text("SELECT 1 FROM pg_database WHERE datname = :n"), {"n": name}
+    ).first():
+        return  # nothing to drop
+    if marker != _SESSION_MARKER:
+        raise RuntimeError(
+            f"Refusing DROP DATABASE {name!r}: it was not created or migrated by this pytest session"
+        )
+    conn.execute(text(f"DROP DATABASE {_quote_ident(name)} WITH (FORCE)"))
+
+
+def _mark_session_database(conn, name):
+    conn.execute(text(f"COMMENT ON DATABASE {_quote_ident(name)} IS '{_SESSION_MARKER}'"))
+
+
+def _admin_engine(test_db_url):
+    """AUTOCOMMIT engine on the maintenance database (CREATE/DROP DATABASE can't run in a transaction)."""
+    if test_db_url not in _ADMIN_ENGINE:
+        from sqlalchemy.pool import NullPool
+
+        admin_url = sa.engine.make_url(test_db_url).set(database="postgres")
+        _ADMIN_ENGINE[test_db_url] = sa.create_engine(
+            admin_url, isolation_level="AUTOCOMMIT", poolclass=NullPool
+        )
+    return _ADMIN_ENGINE[test_db_url]
+
+
+def _fresh_database_from_template(test_db_url):
+    """Give the current test a fresh migrated test database. Caller holds the advisory lock."""
+    test_db = sa.engine.make_url(test_db_url).database
+    admin = _admin_engine(test_db_url)
+
+    if _TEMPLATE_DB["name"] is None:
+        _rebuild_database_state()
+        db.engine.dispose()
+        # Per process, so concurrent sessions at different commits never share a schema.
+        template = f"{test_db}_tmpl_{os.getpid()}"
+        with admin.connect() as conn:
+            # A template copy needs the source idle; other processes' pooled
+            # connections are only idle here, since they wait on the lock.
+            conn.execute(
+                text("SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                     "WHERE datname = :db AND pid <> pg_backend_pid()"),
+                {"db": test_db},
+            )
+            _mark_session_database(conn, test_db)
+            _guarded_drop_database(conn, test_db_url, template)
+            conn.execute(text(f"CREATE DATABASE {_quote_ident(template)} TEMPLATE {_quote_ident(test_db)}"))
+            _mark_session_database(conn, template)
+        _TEMPLATE_DB["name"] = template
+        return
+
+    db.session.remove()
+    db.engine.dispose()
+    with admin.connect() as conn:
+        _guarded_drop_database(conn, test_db_url, test_db)
+        conn.execute(
+            text(f"CREATE DATABASE {_quote_ident(test_db)} TEMPLATE {_quote_ident(_TEMPLATE_DB['name'])}")
+        )
+        _mark_session_database(conn, test_db)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _drop_template_database():
+    yield
+    template = _TEMPLATE_DB["name"]
+    test_db_url = os.environ.get("TEST_DATABASE_URL") or ""
+    if template and test_db_url in _ADMIN_ENGINE:
+        with _ADMIN_ENGINE[test_db_url].connect() as conn:
+            _guarded_drop_database(conn, test_db_url, template)
+        _ADMIN_ENGINE[test_db_url].dispose()
+
+
 @pytest.fixture
 def app(request):
     """Provide the Flask app instance for tests."""
@@ -561,15 +659,19 @@ def app(request):
         try:
             if is_postgres:
                 # Serialize full test lifecycle (rebuild + execution) across
-                # concurrent pytest processes sharing one test database.
-                lock_conn = db.engine.connect()
+                # concurrent pytest processes sharing one test database. Held on
+                # the maintenance database, since the test database itself is
+                # dropped and recreated under it.
+                lock_conn = _admin_engine(test_db_url).connect()
                 lock_conn.execute(
                     text("SELECT pg_advisory_lock(:k1, :k2)"),
                     {"k1": lock_key_primary, "k2": lock_key_secondary},
                 )
-                lock_conn.commit()
 
-            _rebuild_database_state()
+            if is_postgres:
+                _fresh_database_from_template(test_db_url)
+            else:
+                _rebuild_database_state()
             yield flask_app
         finally:
             # Defensive cleanup: a fixture/setup exception (e.g. an IntegrityError
@@ -590,7 +692,6 @@ def app(request):
                     text("SELECT pg_advisory_unlock(:k1, :k2)"),
                     {"k1": lock_key_primary, "k2": lock_key_secondary},
                 )
-                lock_conn.commit()
                 lock_conn.close()
 
 
