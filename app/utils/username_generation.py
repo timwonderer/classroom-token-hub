@@ -13,9 +13,11 @@ The vocabulary is loaded once at module import and cached.
 
 from __future__ import annotations
 
-import random
+import secrets
 from functools import lru_cache
 from pathlib import Path
+
+_system_random = secrets.SystemRandom()
 
 _VOCAB_PATH = Path(__file__).parent.parent / "data" / "username_vocabulary.txt"
 
@@ -40,11 +42,13 @@ def build_username(chosen_word: str, roster_fingerprint: str) -> str:
         A username string of the form:
             {system_word_1}-{chosen_word}-{system_word_2}{fingerprint_suffix}
 
-    The two system words are drawn without replacement from the vocabulary.
+    The two system words are drawn without replacement from the vocabulary,
+    using a CSPRNG (audit S9: ``random.sample`` is a Mersenne Twister draw,
+    not cryptographically unpredictable).
     The fingerprint_suffix is the last two characters of roster_fingerprint.
     """
     vocabulary = load_vocabulary()
-    system_word_1, system_word_2 = random.sample(vocabulary, 2)
+    system_word_1, system_word_2 = _system_random.sample(vocabulary, 2)
     fingerprint_suffix = (roster_fingerprint[-2:] if roster_fingerprint else "00").upper()
     return f"{system_word_1}-{chosen_word}-{system_word_2}{fingerprint_suffix}"
 

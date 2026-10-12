@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from decimal import Decimal
 from typing import NamedTuple
-from sqlalchemy import Numeric, case, cast, func, tuple_
+from sqlalchemy import Numeric, and_, case, cast, func, literal, or_, tuple_
 
 from app.extensions import db
 from app.models import LedgerBalanceSnapshot, Transaction, TransactionStatus, _quantize_currency
@@ -136,7 +136,16 @@ def get_available_balances(seat_id: int, class_id: str) -> tuple[Decimal, Decima
 
 
 def get_batch_balances_by_class_seat(class_seat_pairs):
-    """Read scoped checking, savings, and existing earnings display totals."""
+    """Read scoped checking, savings, and existing earnings display totals.
+
+    F9: the snapshot (posted) read and the pending-sum read used to be two
+    separate statements. The single-seat read already avoids this
+    (_available_balance_expression, #1364): a settlement committing between
+    two separate round trips can move a transaction out of "pending" after
+    the first statement already read the (now-stale) posted figure, and the
+    transaction's amount is counted in neither. Here they are combined into
+    one LEFT JOIN, so Postgres evaluates both against the same snapshot.
+    """
     raw_balances = defaultdict(lambda: {"checking_cents": 0, "savings_cents": 0, "earnings": Decimal("0.00")})
     normalized_pairs = {(str(class_id), int(seat_id)) for class_id, seat_id in (class_seat_pairs or []) if class_id and seat_id}
     if not normalized_pairs:
@@ -145,34 +154,80 @@ def get_batch_balances_by_class_seat(class_seat_pairs):
     seat_ids = sorted({seat_id for _, seat_id in normalized_pairs})
     scope = tuple_(LedgerBalanceSnapshot.class_id, LedgerBalanceSnapshot.seat_id)
     tx_scope = tuple_(Transaction.class_id, Transaction.seat_id)
-    for rec in db.session.query(
-        LedgerBalanceSnapshot.class_id, LedgerBalanceSnapshot.seat_id,
-        LedgerBalanceSnapshot.account_type, LedgerBalanceSnapshot.posted_balance_cents,
+
+    pending_sums = (
+        db.session.query(
+            Transaction.class_id.label("class_id"),
+            Transaction.seat_id.label("seat_id"),
+            Transaction.account_type.label("account_type"),
+            func.sum(Transaction.amount_cents).label("pending_cents"),
+        )
+        .filter(
+            Transaction.class_id.in_(class_ids), Transaction.seat_id.in_(seat_ids),
+            tx_scope.in_(list(normalized_pairs)), Transaction.posting_state == TransactionStatus.PENDING,
+        )
+        .group_by(Transaction.class_id, Transaction.seat_id, Transaction.account_type)
+        .subquery()
+    )
+    with_snapshot = (
+        db.session.query(
+            LedgerBalanceSnapshot.class_id.label("class_id"),
+            LedgerBalanceSnapshot.seat_id.label("seat_id"),
+            LedgerBalanceSnapshot.account_type.label("account_type"),
+            LedgerBalanceSnapshot.posted_balance_cents.label("posted_cents"),
+            func.coalesce(pending_sums.c.pending_cents, 0).label("pending_cents"),
+        )
+        .outerjoin(
+            pending_sums,
+            and_(
+                LedgerBalanceSnapshot.class_id == pending_sums.c.class_id,
+                LedgerBalanceSnapshot.seat_id == pending_sums.c.seat_id,
+                LedgerBalanceSnapshot.account_type == pending_sums.c.account_type,
+            ),
+        )
+        .filter(
+            LedgerBalanceSnapshot.class_id.in_(class_ids), LedgerBalanceSnapshot.seat_id.in_(seat_ids),
+            scope.in_(list(normalized_pairs)),
+        )
+    )
+    # A seat can have pending transactions before its first snapshot row
+    # exists; without this branch those pairs would silently read as 0.
+    snapshot_scope = tuple_(LedgerBalanceSnapshot.class_id, LedgerBalanceSnapshot.seat_id, LedgerBalanceSnapshot.account_type)
+    pending_only = db.session.query(
+        pending_sums.c.class_id, pending_sums.c.seat_id, pending_sums.c.account_type,
+        literal(0), pending_sums.c.pending_cents,
     ).filter(
-        LedgerBalanceSnapshot.class_id.in_(class_ids), LedgerBalanceSnapshot.seat_id.in_(seat_ids),
-        scope.in_(list(normalized_pairs)),
-    ).all():
-        key = (str(rec.class_id), int(rec.seat_id))
-        if rec.account_type == "checking":
-            raw_balances[key]["checking_cents"] = rec.posted_balance_cents
-        elif rec.account_type == "savings":
-            raw_balances[key]["savings_cents"] = rec.posted_balance_cents
-    for rec in db.session.query(
-        Transaction.class_id, Transaction.seat_id, Transaction.account_type,
-        func.sum(Transaction.amount_cents),
-    ).filter(
-        Transaction.class_id.in_(class_ids), Transaction.seat_id.in_(seat_ids),
-        tx_scope.in_(list(normalized_pairs)), Transaction.posting_state == TransactionStatus.PENDING,
-    ).group_by(Transaction.class_id, Transaction.seat_id, Transaction.account_type).all():
-        key = (str(rec.class_id), int(rec.seat_id))
-        if str(rec.account_type).lower() in {"checking", "savings"}:
-            raw_balances[key][f"{str(rec.account_type).lower()}_cents"] += int(rec[3] or 0)
+        ~db.session.query(LedgerBalanceSnapshot.id).filter(
+            snapshot_scope == tuple_(pending_sums.c.class_id, pending_sums.c.seat_id, pending_sums.c.account_type)
+        ).exists()
+    )
+    for rec in with_snapshot.union_all(pending_only).all():
+        key = (str(rec[0]), int(rec[1]))
+        total_cents = int(rec[3] or 0) + int(rec[4] or 0)
+        if rec[2] == "checking":
+            raw_balances[key]["checking_cents"] = total_cents
+        elif rec[2] == "savings":
+            raw_balances[key]["savings_cents"] = total_cents
     for rec in db.session.query(
         Transaction.class_id, Transaction.seat_id, func.sum(Transaction.amount),
     ).filter(
         Transaction.class_id.in_(class_ids), Transaction.seat_id.in_(seat_ids),
         tx_scope.in_(list(normalized_pairs)), Transaction.amount > 0,
+        # Earnings excludes money that did not come from being paid: lateral
+        # transfers between the seat's own accounts, the automatic
+        # overdraft-protection funding leg, and reversal/refund credits
+        # (Transaction.type == "REVERSAL" is a stable category; the other
+        # two have no categorical marker distinguishing them from an
+        # ordinary payroll deposit, so description is the only signal — same
+        # limitation the pre-existing "Transfer%" exclusion already lived
+        # with). ``type`` is nullable (SPEC-LED-001), and SQL's `!=` is
+        # neither true nor false against NULL, so a bare `type != "REVERSAL"`
+        # silently dropped every untyped historical credit from earnings
+        # too (PR #1550 review) — `type IS NULL` must count as "not a
+        # reversal".
+        or_(Transaction.type.is_(None), Transaction.type != "REVERSAL"),
         ~Transaction.description.ilike("Transfer%"),
+        ~Transaction.description.ilike("Overdraft protection%"),
     ).group_by(Transaction.class_id, Transaction.seat_id).all():
         raw_balances[(str(rec.class_id), int(rec.seat_id))]["earnings"] = _quantize_currency(rec[2])
     return raw_balances
