@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from sqlalchemy import event
+
 from app.extensions import db
 from app.models import (
     AttendanceIntervalInvalidation,
@@ -74,6 +76,30 @@ def invalidate_canonical_seat_rows_cache(seat_id, class_id):
     cache = getattr(g, "_attendance_canonical_rows_cache", None)
     if cache is not None:
         cache.pop((seat_id, class_id), None)
+
+
+@event.listens_for(db.session, "after_flush")
+def _invalidate_attendance_cache_on_any_flush(session, flush_context):
+    """Backstop invalidation: catch every write path, not just the one writer.
+
+    ``record_attendance_session_command`` invalidates its own scope directly
+    after it flushes. This listener exists for everything else that puts an
+    ``AttendanceSession`` row on the session -- in particular, test fixtures
+    across the suite construct rows directly (bypassing the FEAT writer, on
+    purpose, to produce timelines the writer would normalise) -- so a request
+    that reads through more than one of those direct writes can never observe
+    a snapshot from before the earlier one.
+    """
+    changed = set(session.new) | set(session.dirty)
+    if not changed:
+        return
+    scopes = {
+        (row.target_seat_id, row.class_id)
+        for row in changed
+        if isinstance(row, AttendanceSession)
+    }
+    for seat_id, class_id in scopes:
+        invalidate_canonical_seat_rows_cache(seat_id, class_id)
 
 
 def get_attendance_session_counts_by_seat(
