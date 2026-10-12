@@ -53,6 +53,25 @@ def submit_hall_pass_request(
     from app.feats.prod import require_hall_pass_settings
     from app.services.entitlement_service import get_available_hall_pass_grant
 
+    # F6: when the seat has no pending request yet, clear_pending_hall_pass_
+    # requests_for_seat() below has no row to lock, so two concurrent
+    # submissions for the same seat can both see "nothing pending", both find
+    # the same available grant, and both insert — two pending rows reserving
+    # the same pass, instead of the second genuinely replacing the first.
+    # Locking the seat row first (same idiom as transfer_feat.py and
+    # store_purchase_feat.py) serializes them: the second submission waits for
+    # the first's commit, then its own clear() finds and removes the first's
+    # freshly-committed row before inserting its own, as the "newest request
+    # replaces the seat's earlier one" rule above intends.
+    seat = (
+        db.session.query(Seat)
+        .filter(Seat.id == ctx.seat_id, Seat.class_id == ctx.class_id)
+        .with_for_update()
+        .one_or_none()
+    )
+    if seat is None:
+        raise ValueError("FATAL: Hall pass request seat is outside the transaction class scope.")
+
     # Approval (FEAT-PROD-002 §III) is refused without settings, so a request
     # made without them could never be granted.
     require_hall_pass_settings(ctx.class_id, requested_at_utc)
