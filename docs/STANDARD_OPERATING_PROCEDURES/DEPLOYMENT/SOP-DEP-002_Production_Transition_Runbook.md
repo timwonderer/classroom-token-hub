@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-002 | 1.7 | 2026-09-30 | 1.6 | Normative |
+| SOP-DEP-002 | 1.8 | 2026-10-06 | 1.7 | Normative |
 
 ## I. Purpose
 
@@ -19,9 +19,8 @@ Normative (SOP Tier). Subordinate to `INV-CORE-000`.
 ## IV. Dependencies
 
 - `INV-CORE-000_CORE_INVARIANTS.md`
-- `SOP-DB-009_Migration_Compliance_Review.md`
+- `SOP-DB-004_Live_V2_Migration_And_Versioning_Contract.md`
 - `SOP-DEP-001_Live_Test_Runbook.md`
-- `SOP-DEP-016_Rollback_Procedures.md`
 
 ## V. Preconditions
 
@@ -190,6 +189,8 @@ Record:
 
 ## XIII. Amendment
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.
+
+**Version 1.8 (2026-10-06):** §IV dependencies: archived `SOP-DB-009` is replaced by `SOP-DB-004` (classification, evidence and rollback rules), and `SOP-DEP-016`, which does not exist, is removed; rollback decisions are `SOP-DEP-001` §XIV and `SOP-DB-004` §IX.4. No procedure changes.
 
 **Version 1.7 (2026-09-30):** §VI adds item 6, the student-setup memory store that the username-retention
 check (#1442, released 2026-09-29) requires on every production host.

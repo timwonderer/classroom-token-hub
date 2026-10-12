@@ -16,7 +16,6 @@ import sqlalchemy as sa
 
 from app import create_app
 from app.extensions import db
-from app.feats.base import FEATContext
 from app.models import LedgerBalanceSnapshot, ClassEconomy, Seat
 
 
@@ -34,13 +33,17 @@ def artifact_path(filename: str) -> Path:
 def main() -> int:
     app = create_app()
     with app.app_context():
-        class_ids = [c.class_id for c in ClassEconomy.query.limit(10).all() if c.class_id]
+        topology = json.loads(artifact_path("topology.json").read_text(encoding="utf-8"))
+        class_ids = [topology[key] for key in ("ADVA1", "ADVA2", "ADVB1")]
+        if not all(db.session.get(ClassEconomy, class_id) for class_id in class_ids):
+            raise SystemExit("Seeded classes are missing")
         if len(class_ids) < 2:
             raise SystemExit("Need at least two classes to inject cross-class impossible state")
 
         row = (
             LedgerBalanceSnapshot.query.join(Seat, Seat.id == LedgerBalanceSnapshot.seat_id)
-            .filter(LedgerBalanceSnapshot.class_id == Seat.class_id)
+            .filter(LedgerBalanceSnapshot.class_id == Seat.class_id,
+                    LedgerBalanceSnapshot.class_id.in_(class_ids))
             .with_entities(
                 LedgerBalanceSnapshot.id,
                 LedgerBalanceSnapshot.class_id,
@@ -50,38 +53,9 @@ def main() -> int:
             )
             .first()
         )
-        bootstrap_created = False
-        alt_class_id = None
         if not row:
-            # Seed topology may not include a balance cache row yet; bootstrap one safely.
-            candidate_seat = Seat.query.filter(Seat.claimed_at.isnot(None)).first()
-            if not candidate_seat:
-                raise SystemExit("No eligible Seat row found for LedgerBalanceSnapshot bootstrap")
-            cache = LedgerBalanceSnapshot.query.filter_by(
-                seat_id=candidate_seat.id,
-                class_id=candidate_seat.class_id,
-                account_type="checking",
-            ).first()
-            if not cache:
-                with FEATContext("FEAT-ADMN-001", idempotency_key="feat:adv:inject:bootstrap-balance-cache"):
-                    cache = LedgerBalanceSnapshot(
-                        seat_id=candidate_seat.id,
-                        class_id=candidate_seat.class_id,
-                        student_id=candidate_seat.student_id,
-                        join_code=candidate_seat.join_code,
-                        account_type="checking",
-                        posted_balance_cents=0,
-                    )
-                    db.session.add(cache)
-                    db.session.flush()
-            row = (
-                cache.id,
-                cache.class_id,
-                cache.seat_id,
-                candidate_seat.class_id,
-                cache.account_type,
-            )
-            bootstrap_created = True
+            raise SystemExit("Seeded ledger snapshot is required; run seed_phase1_minimal.py first")
+        alt_class_id = None
 
         bc_id, bc_class_id, seat_id, seat_class_id, bc_account_type = row
         for cid in class_ids:
@@ -101,11 +75,11 @@ def main() -> int:
             )
 
         # Deliberate corruption via raw SQL in controlled adversarial harness.
-        db.session.execute(
-            sa.text(f"UPDATE {LedgerBalanceSnapshot.__tablename__} SET class_id = :new_class WHERE id = :row_id"),
-            {"new_class": str(alt_class_id), "row_id": int(bc_id)},
-        )
-        db.session.commit()
+        with db.engine.begin() as connection:
+            connection.execute(
+                sa.text(f"UPDATE {LedgerBalanceSnapshot.__tablename__} SET class_id = :new_class WHERE id = :row_id"),
+                {"new_class": str(alt_class_id), "row_id": int(bc_id)},
+            )
 
         payload = {
             "generated_at": now_iso(),
@@ -115,7 +89,7 @@ def main() -> int:
             "old_class_id": str(bc_class_id),
             "seat_class_id": str(seat_class_id),
             "new_class_id": str(alt_class_id),
-            "bootstrap_balance_cache_created": bootstrap_created,
+            "bootstrap_balance_cache_created": False,
         }
         artifact_path("injection_report.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
         print(json.dumps({"ok": True, **payload}))

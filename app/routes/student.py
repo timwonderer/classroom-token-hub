@@ -2539,6 +2539,22 @@ def shop():
         class_id, [item.product_lineage_uuid for item in items]
     )
 
+    # What a purchase may spend: checking, plus savings when overdraft protection
+    # is on. The purchase command applies the same test (SPEC-ECON-003
+    # §4.5.1.1A: protection covers a shortfall only in full), so this quote and
+    # the server cannot disagree; the server stays the gate.
+    from app.services.class_configuration_query_service import get_banking_directive
+    from app.services.entitlement_service import get_active_holding_quantities
+    checking_available, savings_available = get_available_balances(context.seat_id, class_id)
+    spendable = checking_available + (
+        savings_available if get_banking_directive(class_id).protection_enabled else 0
+    )
+    # One query for every collective product on the page, not one per card.
+    joined_collective_lineages = set(get_active_holding_quantities(
+        class_id=class_id, seat_id=context.seat_id,
+        product_lineage_uuids=[item.product_lineage_uuid for item in collective_items],
+    ))
+
     # Phase 1: Build store item card view models (eliminates template-level rent logic)
     store_item_views = []
     for item in items:
@@ -2555,6 +2571,7 @@ def shop():
             rent_free_entitlement_counts=rent_free_entitlement_counts,
             collective_progress_by_item=collective_progress_by_item,
             stock_remaining=remaining,
+            has_joined_collective_goal=item.product_lineage_uuid in joined_collective_lineages,
         )
         store_item_views.append(view)
 
@@ -2584,6 +2601,7 @@ def shop():
         entitlements=entitlement_views,
         class_size=class_size,
         current_block=current_block,
+        spendable_amount=f"{max(spendable, 0):.2f}",
     )
 
 

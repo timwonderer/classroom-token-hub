@@ -84,7 +84,7 @@ A **long-term goal item** — an expensive reward students save toward — is a 
 > **Several bought at once are several items, not one item with uses left.** Each is redeemed, decided, and expires independently. If you are looking for a "3 of 5 remaining" counter, there isn't one, and the student's inventory showing three copies is the same information.
 
 > [!NOTE]
-> **Collective progress counts students, not purchases.** The bar moves once per student who has bought the item, within the class you are viewing. A student buying a second copy does not advance it, and each class period tracks its own progress against its own target.
+> **One buy-in per student.** Each student can buy into a collective goal once, one unit at a time. The bar moves once per student, within the class you are viewing, and each class period tracks its own progress against its own target. A student who already holds a buy-in sees the item as **Joined**.
 
 > [!TIP]
 > **Whole Class Must Purchase** is the more forgiving of the two goal types, because its target follows your roster. If a student joins or leaves mid-goal, the target moves with them instead of stranding the class one purchase short of a number you set weeks earlier.

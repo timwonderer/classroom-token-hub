@@ -7,7 +7,6 @@
 <style>
     .sa-avatar-bg { background: color-mix(in srgb, var(--secondary) 15%, transparent); }
     .sa-h-32 { height: 32px; }
-    .sa-maxw-260 { max-width: 260px; }
     .sa-text-secondary { color: var(--text-secondary); }
     .sa-w-32 { width: 32px; }
 </style>
@@ -64,68 +63,10 @@
                 </a>
             </div>
             <div class="col-6 col-md-4 col-lg-2">
-                <a href="{{ url_for('sysadmin.combined_logs') }}" class="sysadmin-quick-action">
-                    <span class="material-symbols-outlined text-secondary" aria-hidden="true">description</span>
-                    <span>View Logs</span>
-                </a>
-            </div>
-            <div class="col-6 col-md-4 col-lg-2">
                 <a href="/sysadmin/grafana" target="_blank" rel="noopener noreferrer" class="sysadmin-quick-action">
                     <span class="material-symbols-outlined text-success" aria-hidden="true">monitoring</span>
                     <span>Grafana</span><span class="visually-hidden"> (opens in a new tab)</span>
                 </a>
-            </div>
-        </div>
-    </div>
-
-    <!-- ── Recent Activity ── -->
-    <div class="row g-4 mb-4">
-        <!-- Recent Errors -->
-        <div class="col-12">
-            <div class="card h-100">
-                <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-3">
-                    <span class="material-symbols-outlined text-danger icon-md" aria-hidden="true">error</span>
-                    <h6 class="mb-0 fw-semibold">Recent Errors</h6>
-                    <a href="{{ url_for('sysadmin.combined_logs') }}" class="btn btn-sm btn-outline-secondary ms-auto type-xs">View All</a>
-                </div>
-                <div class="card-body p-0">
-                    {% if recent_errors %}
-                    <ul class="list-group list-group-flush">
-                        {% for error in recent_errors %}
-                        <li class="list-group-item border-bottom py-3">
-                            <div class="d-flex align-items-start gap-2">
-                                <span class="badge mt-1
-                                        {% if '500' in (error.error_type or '') %}bg-danger
-                                        {% elif '404' in (error.error_type or '') %}bg-secondary
-                                        {% elif '403' in (error.error_type or '') %}bg-danger
-                                        {% elif '401' in (error.error_type or '') %}bg-info
-                                        {% else %}bg-warning text-dark{% endif %} type-2xs flex-shrink-0">
-                                    {{ (error.error_type or 'ERR').split(' ')[0] }}
-                                </span>
-                                <div class="flex-grow-1 min-width-0">
-                                    <div class="text-truncate type-xs sa-maxw-260"
-                                        title="{{ error.error_message }}">
-                                        {{ error.error_message or 'No message' }}
-                                    </div>
-                                    <div class="text-muted type-2xs">
-                                        {{ error.request_method }} {{ error.request_path }}
-                                        {% if error.timestamp %}
-                                        · {{ error.timestamp|fmt_timestamp }}
-                                        {% endif %}
-                                    </div>
-                                </div>
-                            </div>
-                        </li>
-                        {% endfor %}
-                    </ul>
-                    {% else %}
-                    <div class="p-4 text-center text-muted">
-                        <span class="material-symbols-outlined d-block mb-2 text-success icon-xl"
-                            aria-hidden="true">check_circle</span>
-                        No recent errors — system is healthy
-                    </div>
-                    {% endif %}
-                </div>
             </div>
         </div>
     </div>

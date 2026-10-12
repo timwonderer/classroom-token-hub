@@ -635,6 +635,40 @@ def test_premium_description_names_the_policy_and_its_period(world):
     assert descriptions == {"Insurance premium: Cover (Jan 10 – Jan 16)"}
 
 
+def test_manual_premium_payment_without_funds_is_refused_not_overdrawn(world):
+    """A student who cannot cover an outstanding premium gets a clean
+    INSUFFICIENT_FUNDS from a manual payment attempt: the premium stays
+    outstanding, checking is untouched, and no PAYMENT or Ledger row is
+    written (DOM-OBL-001 §II.C; the F3 manual-payment affordability check)."""
+    from app.models import Transaction
+    w = world()
+    w.fund(PURCHASE - timedelta(hours=1))
+    w.buy()
+    w.renew(PREVIEW_2)
+    assert w.premium_state(2).is_outstanding
+
+    from app.services.ledger_balance_query_service import get_available_balances
+    checking_before, savings_before = get_available_balances(w.seat_id, w.class_id)
+    assert checking_before == Decimal("0.00")  # spent in full on the first premium
+
+    with _clock(PREVIEW_2):
+        result = execute_insurance_premium_payment(
+            class_id=w.class_id, seat_id=w.seat_id, entitlement_id=w.entitlement_id,
+            idempotency_key="premium:manual-unfunded",
+        )
+
+    assert result.success is False
+    assert result.error_code == "INSUFFICIENT_FUNDS"
+    assert w.premium_state(2).is_outstanding
+
+    checking_after, savings_after = get_available_balances(w.seat_id, w.class_id)
+    assert checking_after == checking_before
+    assert savings_after == savings_before
+    assert Transaction.query.filter_by(
+        idempotency_key="insurance-premium-payment:premium:manual-unfunded"
+    ).count() == 0
+
+
 def test_manual_funded_premium_replays_after_banking_change(world):
     from app.feats.class_configuration.feat_class_005_economic_engine_evolution import execute_evolve_economic_engine
     from tests.helpers.ledger import record_ledger_fixture

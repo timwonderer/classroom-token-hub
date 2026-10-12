@@ -31,12 +31,39 @@ LINK_TAG_RE = re.compile(r"<link\b[^>]*?>", re.DOTALL | re.IGNORECASE)
 GOOGLE_HOSTS = ("fonts.googleapis.com", "fonts.gstatic.com")
 
 # Comments that only made sense while the CDN links existed.
-STALE_COMMENT_RE = re.compile(
-    r"^[ \t]*<!--[^\n]*"
-    r"(preconnect|Preload Material Symbols"
-    r"|for faster loading|for faster icon rendering)[^\n]*-->[ \t]*\n",
-    re.IGNORECASE | re.MULTILINE,
+STALE_COMMENT_KEYWORDS = (
+    "preconnect",
+    "preload material symbols",
+    "for faster loading",
+    "for faster icon rendering",
 )
+
+
+def strip_stale_comments(text: str) -> str:
+    """Remove single-line ``<!-- ... -->`` comments mentioning a stale keyword.
+
+    Previously one regex, ``^[ \\t]*<!--[^\\n]*(keyword1|...)[^\\n]*-->[ \\t]*\\n``
+    (CodeQL py/polynomial-redos alert #276): the ``[^\\n]*`` on both sides of the
+    alternation match the same overlapping set of characters, so a comment line
+    containing many near-misses of a keyword gives the engine multiple ways to
+    split the same text between the two groups. Checking "starts with <!--",
+    "ends with -->", and "contains a keyword" as three independent string
+    operations on each line is equivalent here (there is never more than one
+    comment per line) and has no adjacent quantifiers to backtrack across.
+    """
+    lines = text.split("\n")
+    out = []
+    for line in lines:
+        stripped = line.strip(" \t")
+        lowered = stripped.lower()
+        if (
+            stripped.startswith("<!--")
+            and stripped.endswith("-->")
+            and any(keyword in lowered for keyword in STALE_COMMENT_KEYWORDS)
+        ):
+            continue
+        out.append(line)
+    return "\n".join(out)
 
 
 def is_google_font_tag(tag: str) -> bool:
@@ -82,7 +109,7 @@ def process(text: str) -> tuple[str, int]:
     result = "".join(out)
 
     # Remove comments that only made sense alongside the removed CDN links.
-    result = STALE_COMMENT_RE.sub("", result)
+    result = strip_stale_comments(result)
     # Strip trailing whitespace left on otherwise-blank lines.
     result = re.sub(r"[ \t]+\n", "\n", result)
     # Collapse runs of 2+ blank lines (created by removals) into one.

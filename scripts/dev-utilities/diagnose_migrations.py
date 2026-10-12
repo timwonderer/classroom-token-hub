@@ -3,6 +3,7 @@
 Diagnostic script to check Alembic migration state.
 Run this on your Digital Ocean server to diagnose migration issues.
 """
+import ast
 import os
 import sys
 from pathlib import Path
@@ -37,7 +38,16 @@ def check_migration_files():
                     if down_rev_str == 'None':
                         down_revision = None
                     elif down_rev_str.startswith('('):
-                        down_revision = eval(down_rev_str)
+                        # CodeQL py/code-injection (alert #272): this script runs
+                        # manually against migration files (the docstring says
+                        # "on your Digital Ocean server"), so down_rev_str's content
+                        # ultimately comes from a file in migrations/versions/,
+                        # which a PR could in principle shape. eval() would run
+                        # whatever expression it contained; ast.literal_eval() only
+                        # ever constructs Python literals (tuples of strings here),
+                        # with the identical result for every revision tuple this
+                        # repo actually writes.
+                        down_revision = ast.literal_eval(down_rev_str)
                     else:
                         down_revision = down_rev_str.strip("'\"")
 

@@ -27,6 +27,29 @@ PROJECT_ROOT = SCRIPT_DIR.parent
 MIGRATIONS_DIR = PROJECT_ROOT / "migrations" / "versions"
 
 
+def _extract_assignment_value(content, name):
+    r"""The raw text to the right of ``name = `` on its own line, or None.
+
+    A plain ``re.search(rf'^{name}\s*=\s*(.+)$', ...)`` is what CodeQL's
+    py/polynomial-redos flags here (alert #278): the trailing ``\s*`` and
+    the capturing ``.+`` both match ordinary whitespace, so a line with many
+    spaces/tabs after ``=`` and no terminating content gives the engine
+    several ways to split the same characters between the two groups. This
+    script runs in CI (``check-migrations.yml``) against migration files
+    added by any PR, so that backtracking is attacker-reachable. Finding the
+    ``=`` with a regex that has nothing after it to backtrack against, then
+    slicing the rest of the line in plain Python, has identical behavior
+    with no quantifier adjacent to another that can consume the same
+    characters.
+    """
+    m = re.search(rf"^{re.escape(name)}\s*=", content, re.MULTILINE)
+    if not m:
+        return None
+    line_end = content.find('\n', m.end())
+    rest = content[m.end():] if line_end == -1 else content[m.end():line_end]
+    return rest.strip()
+
+
 def extract_migration_info(filepath):
     """Extract revision info from a migration file."""
     with open(filepath, 'r', encoding='utf-8') as f:
@@ -41,9 +64,9 @@ def extract_migration_info(filepath):
     revision = revision_match.group(1) if revision_match else None
 
     # Extract down_revision (can be None, a string, or a tuple)
-    down_rev_match = re.search(r"^down_revision\s*=\s*(.+)$", content, re.MULTILINE)
-    if down_rev_match:
-        down_rev_raw = down_rev_match.group(1).strip()
+    down_rev_raw_value = _extract_assignment_value(content, 'down_revision')
+    if down_rev_raw_value is not None:
+        down_rev_raw = down_rev_raw_value
         if down_rev_raw == 'None':
             down_revision = None
         else:

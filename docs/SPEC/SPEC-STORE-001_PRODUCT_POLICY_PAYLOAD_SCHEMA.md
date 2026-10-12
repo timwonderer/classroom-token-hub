@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Authority Level |
 |------------------|---------|----------------|-----------------|
-| SPEC-STORE-001 | 1.5 | 2026-10-03 | Normative |
+| SPEC-STORE-001 | 1.6 | 2026-10-07 | Normative |
 
 ## I. Purpose
 
@@ -218,6 +218,7 @@ standing state, so neither is bought more than one at a time (`FEAT-STOR-001`).
   the store's bulk-discount rules never reach it.
 
 **COLLECTIVE_GOAL:**
+- holding limit is hard-set to 1, and a purchase is for exactly one unit: one buy-in per student (owner ruling 2026-10-07)
 - `collective_goal_type` MUST be set ("fixed" or "whole_class")
 - `collective_goal_target` MUST be > 0
 - `collective_goal_expires_at` MUST be valid future datetime
@@ -273,7 +274,7 @@ ITEM TYPE GATE
   delayed    -> redemption prompt and expiry become available
   hall_pass  -> delayed-style holding settings; grant lifecycle applies
   privilege  -> holding limit hard-set to 1; no bulk discount or goal
-  collective -> goal settings become available; bulk settings disappear
+  collective -> goal settings become available; bulk settings disappear; holding limit hard-set to 1
         |
         v
 RENT LINK GATE
@@ -431,6 +432,7 @@ If any validation step fails, raise an exception immediately. Do not attempt rec
 | 1.2 | 2026-09-13 | Declared the persisted fields Section V.D already depended on (`item_type`, `inventory_total`, `activation_at`, `auto_delist_date`, `redemption_prompt`), closing a Section III.A governance gap. Added Section IV.D distinguishing persisted inputs from derived projections and fixing `economic_role` as advisory per DOM-STORE-001 §XII. Replaced the stale `is_active` reference with the `availability_state` projection. Added `economic_role` to Examples 2-4 and corrected malformed JSON in Example 2. Renumbered Section V.C and restored A/B/C/D section order |
 | 1.3 | 2026-09-14 | `price` is nullable: required when `direct_purchase_allowed` is true and null for a grant-only product, which is not purchasable and is excluded from the student purchase catalog. Aligns Sections IV.A, V.A and V.C with the grant-only product the acquisition rules already permitted |
 | 1.5 | 2026-10-03 | Removed bundles (`bundle_quantity`). A bundle and a bulk purchase already stored the same way, as N entitlements under one charge, and the verdicts of DOM-STORE-001 §VIII.E.4 move no money for either, so a bundle added a concept with no distinct behavior; a pack of N is a purchase of N at a bulk price. Bulk discount now pairs with collective goal in Section V.B. Migration: production held no bundle product on 2026-10-03 (no row with the bundle flag set or a bundle quantity), so no policy needs upgrading; payloads carrying the field are rejected as unknown |
+| 1.6 | 2026-10-07 | A collective goal is one buy-in per student (owner ruling 2026-10-07): holding limit hard-set to 1 and purchase quantity exactly one, enforced source-independently like PRIVILEGE. Production evidence: on 2026-10-07 one student bought 32 units of a whole-class goal |
 
 ## IX. Amendment Process
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from app.feats.base import FEATContext
 from app.feats.prod import record_hall_pass_log
@@ -10,6 +10,9 @@ from app.models import HallPassSettings
 from app.services.context_resolver import CanonicalContext
 from app.services.entitlement_service import grant_hall_passes
 from tests.helpers.classroom_initializer import initialize, initialize_as_teacher
+
+
+ISSUED_AT = datetime(2026, 7, 19, 15, 0, tzinfo=timezone.utc)
 
 
 def _teacher_ctx(classroom) -> CanonicalContext:
@@ -41,6 +44,9 @@ def _seed_hall_pass_settings(classroom) -> None:
 
     db.session.add(HallPassSettings(
         class_id=classroom.class_id,
+        # A pass is issued only under settings already in effect (FEAT-PROD-002
+        # §III); the passes below are issued at ISSUED_AT, not at insert time.
+        effective_date=ISSUED_AT - timedelta(hours=1),
         max_queue_limit=10,
         pass_type_payload=[{"pass_name": "Bathroom", "max_queue": 10, "consume_pass": True}],
     ))
@@ -63,7 +69,7 @@ def _issue_hall_pass(classroom, *, hall_pass_id: str, correlation_id: str):
         destination="Bathroom",
         reason="teacher_approved",
         idempotency_key=f"hall-pass-history:{hall_pass_id}",
-        reference_time_utc=datetime(2026, 7, 19, 15, 0, tzinfo=timezone.utc),
+        reference_time_utc=ISSUED_AT,
     ).hall_pass_log
 
 

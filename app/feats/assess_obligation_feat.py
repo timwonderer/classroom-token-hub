@@ -13,6 +13,8 @@ from __future__ import annotations
 from datetime import datetime
 from dataclasses import dataclass
 
+from sqlalchemy.exc import IntegrityError
+
 from app.extensions import db
 from app.models import ObligationAssessment
 from app.services import obligations_service
@@ -98,8 +100,40 @@ def assess_obligation(
         # ledger_transaction_id is NULL for ASSESSMENT (only filled for PAYMENT)
     )
 
-    db.session.add(assessment)
-    db.session.flush()  # Get the ID before commit
+    # The read above is not exclusive: two reconcile runs (audit F8 — the
+    # scheduler losing and regaining ownership without the old run finished,
+    # audit O5) can both pass it before either commits. The database-level
+    # backstop is uq_assessment_events_internal_ref_correlation_event_type
+    # (migration 6a01dc7a606b), scoped to this event_type so it cannot
+    # resurrect the blanket correlation_id uniqueness 8a7b6c5d4e3f removed —
+    # a PAYMENT or WAIVED row sharing this correlation_id is unaffected. A
+    # savepoint lets the loser of the race recover the winner's row and
+    # return it, rather than surfacing an IntegrityError to the scheduler.
+    savepoint = db.session.begin_nested()
+    try:
+        db.session.add(assessment)
+        db.session.flush()  # Get the ID before commit
+        savepoint.commit()
+    except IntegrityError:
+        savepoint.rollback()
+        # Filtered on internal_ref too, not just correlation_id (CodeRabbit
+        # review on PR #1536): get_assessment_for_correlation()'s own
+        # docstring already treats correlation_id as 1:1 with ASSESSMENT
+        # (DOM-OBL-001 §VII), so in the documented contract this can never
+        # differ — but the partial index this recovery exists for is keyed
+        # on (internal_ref, correlation_id), and matching that same pair
+        # here, instead of trusting correlation_id alone, means a caller
+        # that ever violated that contract gets a loud re-raised
+        # IntegrityError rather than a silently wrong row handed back as
+        # the "winner".
+        existing = ObligationAssessment.query.filter_by(
+            internal_ref=request.internal_ref,
+            correlation_id=request.correlation_id,
+            event_type='ASSESSMENT',
+        ).first()
+        if existing is not None:
+            return existing
+        raise
 
     # Phase 3: Audit trace
     # Per FEAT-OBLI-001 §V, emit ACT-OBLI-001 via DOM-OPS

@@ -13,9 +13,9 @@ import pytest
 
 from app.extensions import db
 from app.feats.base import FEATContext
-from app.models import EntitlementEvent, Seat
+from app.models import EntitlementEvent, HallPassLog, Seat
+from app.services.context_resolver import CanonicalContext
 from app.services.entitlement_service import (
-    consume_hall_pass,
     expire_rent_perks,
     get_hall_pass_balance,
     grant_hall_passes,
@@ -34,6 +34,24 @@ def classroom(app):
 
 def _seat(app, classroom) -> Seat:
     return db.session.get(Seat, classroom.students[0].seat_id)
+
+
+def _use_hall_pass(classroom, seat, tag):
+    """Use one pass the only legal way: a teacher-approved hall-pass log (FEAT-PROD-002 §III)."""
+    from app.feats.prod import record_hall_pass_log
+
+    teacher = db.session.get(Seat, classroom.teacher_seat_id)
+    return record_hall_pass_log(
+        ctx=CanonicalContext(
+            user_id=teacher.user_id, class_id=classroom.class_id,
+            seat_id=teacher.id, actor_role="teacher",
+        ),
+        requested_by_seat_id=seat.id,
+        approved_by_seat_id=teacher.id,
+        destination="Bathroom",
+        reason="teacher_approved",
+        idempotency_key=f"hall-pass-use:{tag}",
+    ).hall_pass_log
 
 
 # ---------------------------------------------------------------------------
@@ -144,46 +162,87 @@ def test_remove_preserves_acquisition_type(app, classroom):
 
 
 # ---------------------------------------------------------------------------
-# consume_hall_pass
+# Using a hall pass: the log is the only consumption record (owner ruling 2026-10-09)
 # ---------------------------------------------------------------------------
 
 
-def test_consume_reuses_entitlement_id(app, classroom):
+def test_use_names_the_pass_in_the_log_and_writes_no_entitlement_event(app, classroom):
     with app.app_context():
         seat = _seat(app, classroom)
-        with FEATContext("FEAT-TEST-ENTITLEMENT", idempotency_key="consume-setup"):
+        with FEATContext("FEAT-TEST-ENTITLEMENT", idempotency_key="use-setup"):
             grant_hall_passes(seat, 1)
-
         granted = EntitlementEvent.query.filter_by(
             target_seat_id=seat.id, event_type="GRANTED",
-        ).first()
+        ).one()
 
-        with FEATContext("FEAT-TEST-ENTITLEMENT", idempotency_key="consume-exec"):
-            event, balance = consume_hall_pass(seat.id, seat.class_id, trigger_id="hp-log-1")
+        log = _use_hall_pass(classroom, seat, "use-1")
+        db.session.commit()
 
-        assert event.entitlement_id == granted.entitlement_id
-        assert event.event_type == "CONSUMED"
-        assert balance == 0
+        assert log.hall_pass_id == granted.entitlement_id
+        assert EntitlementEvent.query.filter_by(
+            entitlement_id=granted.entitlement_id, event_type="CONSUMED",
+        ).count() == 0, "using a pass writes nothing to the entitlement history"
+        assert get_hall_pass_balance(seat.id, seat.class_id) == 0
 
 
-def test_consume_preserves_correlation_id(app, classroom):
+def test_use_carries_the_pass_correlation_id(app, classroom):
     with app.app_context():
         seat = _seat(app, classroom)
-        with FEATContext("FEAT-TEST-ENTITLEMENT", idempotency_key="consume-corr-setup"):
+        with FEATContext("FEAT-TEST-ENTITLEMENT", idempotency_key="use-corr-setup"):
             grant_hall_passes(seat, 1, correlation_id="orig-corr-123")
 
-        with FEATContext("FEAT-TEST-ENTITLEMENT", idempotency_key="consume-corr-exec"):
-            event, _ = consume_hall_pass(seat.id, seat.class_id, trigger_id="hp-log-2")
+        log = _use_hall_pass(classroom, seat, "use-corr")
 
-        assert event.correlation_id == "orig-corr-123"
+        assert log.correlation_id == "orig-corr-123"
 
 
-def test_consume_fails_when_no_passes(app, classroom):
+def test_use_fails_when_no_passes(app, classroom):
     with app.app_context():
         seat = _seat(app, classroom)
         with pytest.raises(ValueError, match="No available hall-pass"):
-            with FEATContext("FEAT-TEST-ENTITLEMENT", idempotency_key="consume-empty"):
-                consume_hall_pass(seat.id, seat.class_id, trigger_id="hp-log-3")
+            _use_hall_pass(classroom, seat, "use-empty")
+
+
+def test_uses_take_passes_oldest_first_and_never_the_same_one(app, classroom):
+    with app.app_context():
+        seat = _seat(app, classroom)
+        with FEATContext("FEAT-TEST-ENTITLEMENT", idempotency_key="use-fifo-setup"):
+            grant_hall_passes(seat, 2)
+
+        first = _use_hall_pass(classroom, seat, "use-fifo-1")
+        second = _use_hall_pass(classroom, seat, "use-fifo-2")
+        db.session.commit()
+
+        assert first.hall_pass_id != second.hall_pass_id
+        assert get_hall_pass_balance(seat.id, seat.class_id) == 0
+        with pytest.raises(ValueError, match="No available hall-pass"):
+            _use_hall_pass(classroom, seat, "use-fifo-3")
+
+
+def test_a_pass_cannot_be_logged_twice(app, classroom):
+    """The pass's entitlement_id is spent at most once (uq_hall_pass_logs_hall_pass_id)."""
+    from sqlalchemy.exc import IntegrityError
+
+    with app.app_context():
+        seat = _seat(app, classroom)
+        with FEATContext("FEAT-TEST-ENTITLEMENT", idempotency_key="use-twice-setup"):
+            grant_hall_passes(seat, 1)
+        log = _use_hall_pass(classroom, seat, "use-twice")
+        db.session.commit()
+
+        with pytest.raises(IntegrityError):
+            with FEATContext("FEAT-TEST-SETUP", idempotency_key="use-twice-dup"):
+                db.session.add(HallPassLog(
+                    requested_by_seat_id=log.requested_by_seat_id,
+                    approved_by_seat_id=log.approved_by_seat_id,
+                    class_id=log.class_id,
+                    correlation_id="dup",
+                    policy_uuid=log.policy_uuid,
+                    hall_pass_id=log.hall_pass_id,
+                    destination="Bathroom",
+                ))
+                db.session.flush()
+        db.session.rollback()
 
 
 # ---------------------------------------------------------------------------
@@ -285,8 +344,7 @@ def test_expire_skips_already_consumed(app, classroom):
         with FEATContext("FEAT-TEST-ENTITLEMENT", idempotency_key="expire-consumed-setup"):
             grant_hall_passes(seat, 2, acquisition_type="PERK", correlation_id="rent-cycle-003")
 
-        with FEATContext("FEAT-TEST-ENTITLEMENT", idempotency_key="expire-consumed-use"):
-            consume_hall_pass(seat.id, seat.class_id, trigger_id="hp-used")
+        _use_hall_pass(classroom, seat, "expire-consumed-use")
 
         with FEATContext("FEAT-TEST-ENTITLEMENT", idempotency_key="expire-consumed-exec"):
             expired_count = expire_rent_perks(

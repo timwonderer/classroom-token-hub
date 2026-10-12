@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-CORE-002     | 1.16    | 2026-10-03     | 1.15       | Constitutional |
+| DOM-CORE-002     | 1.17    | 2026-10-09     | 1.16       | Constitutional |
 
 ---
 
@@ -201,6 +201,8 @@ Policy definition tables — `rent_settings`, `payroll_settings`, `payroll_rewar
 - `payroll_event`
 - `payroll_cycle_completion` — the persistent completion anchor for a class-level payroll run, resolved before any work on replay so a replay returns the original `payroll_cycle_id` (DOM-PROD-001 §XV; FEAT-PROD-004; registered in 1.10)
 
+**Hall-pass consumption registration (1.17):** `hall_pass_logs.hall_pass_id`, the used pass's `entitlement_id`, is the only consumption record for a hall pass (`FEAT-PROD-002` §III; `DOM-STORE-001` §VIII.E.6; owner ruling 2026-10-09); using a pass writes no `entitlement_events` row. Unique partial index `uq_hall_pass_logs_hall_pass_id` on `hall_pass_id` where it is not null lets each pass be consumed at most once, the guarantee the one-terminal-event-per-lineage index gave while use also wrote `CONSUMED`. Logs for non-consuming destinations carry no `hall_pass_id`. Historical `CONSUMED` rows for hall passes stay as history; a pass is spent if either names it. No column or data change.
+
 ---
 
 **Interval correction schema contract (1.13):**
@@ -377,6 +379,8 @@ No additional tables may be introduced without amendment to this document.
 ---
 
 ## VIII. Amendment
+
+Version 1.17 (2026-10-09) registers the hall-pass consumption record and its unique partial index (migration `35a9a0d3ab93`). Source authority is `FEAT-PROD-002` §III and `DOM-STORE-001` §VIII.E.6, with the owner's ruling that the hall-pass log is the only legal consumption reference.
 
 Version 1.15 (2026-10-03) registers implemented invalidation linkage and Ledger compensation persistence under the existing domain/FEAT commands and versioned audit contracts.
 

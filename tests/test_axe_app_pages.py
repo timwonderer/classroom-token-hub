@@ -134,7 +134,6 @@ def test_no_axe_violations_across_pages_needing_no_domain_setup(app, client, wca
         (f"/verify/hallpass/{hall_pass_token}", None),
         # Group H -- sysadmin, no extra setup
         ("/sysadmin/dashboard", admin_session),
-        ("/sysadmin/combined-logs", admin_session),
         ("/sysadmin/support", admin_session),
         ("/sysadmin/passkey/settings", admin_session),
     ]
