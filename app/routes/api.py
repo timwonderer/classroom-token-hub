@@ -20,7 +20,7 @@ from sqlalchemy.orm import aliased
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from app.hash_utils import verify_password
 
-from app.extensions import db, limiter, student_status_seat_limit_key
+from app.extensions import db, limiter, student_status_seat_limit_key, attendance_tap_seat_limit_key
 from app.models import (
     Transaction, AttendanceSession,
     AttendanceReasonCode, HallPassLog, HallPassSettings,
@@ -48,7 +48,7 @@ from app.feats.attendance import (
     save_hall_pass_setup_config as feat_save_hall_pass_setup_config,
     update_hall_pass_queue_settings as feat_update_hall_pass_queue_settings,
 )
-from app.feats.prod import record_attendance_session
+from app.feats.prod import HallPassSettingsMissing, record_attendance_session
 from app.routes.student import (
     get_feature_settings_for_student,
 )
@@ -286,6 +286,7 @@ _PURCHASE_ERROR_COPY = {
     "RENT_PAST_DUE_PURCHASE_BLOCKED": "Rent is overdue, so this item cannot be bought until it is paid.",
     "COLLECTIVE_GOAL_EXPIRED": "This class goal has closed, so it can no longer be bought into.",
     "QUANTITY_NOT_ALLOWED": "That quantity is not available for this item.",
+    "COLLECTIVE_GOAL_ALREADY_JOINED": "You have already joined this goal.",
     "PRODUCT_NOT_PURCHASABLE": "This item is not on sale right now.",
     "DIRECT_PURCHASE_NOT_ALLOWED": "This item cannot be bought directly — your teacher grants it.",
     "PRICE_NOT_CONFIGURED": "This item has no price set yet, so it cannot be bought.",
@@ -738,6 +739,8 @@ def complete_immediate_use():
 
 # -------------------- HALL PASS API --------------------
 
+HALL_PASS_NOT_SET_UP = "Hall passes are not set up for this class yet. Ask your teacher."
+
 @api_bp.route('/hall-pass/request', methods=['POST'])
 @login_required
 def request_hall_pass():
@@ -790,6 +793,8 @@ def request_hall_pass():
             requested_at_utc=evaluation.canonical_now_utc,
             idempotency_key=f"hall_pass_request:{context.class_id}:{student.id}:{secrets.token_urlsafe(12)}",
         )
+    except HallPassSettingsMissing:
+        return jsonify({"status": "error", "message": HALL_PASS_NOT_SET_UP}), 409
     except ValueError:
         return jsonify({"status": "error", "message": "No hall passes available."}), 403
     return jsonify({
@@ -861,6 +866,11 @@ def handle_pending_hall_pass_request(request_id, action):
         return jsonify({"status": "success", "message": "Hall pass issued."})
     except HallPassRequestNotFound:
         return jsonify({"status": "error", "message": "Pending request not found."}), 404
+    except HallPassSettingsMissing:
+        return jsonify({
+            "status": "error",
+            "message": "Hall passes are not set up for this class yet. Save hall pass settings, then approve the request.",
+        }), 409
     except ValueError as exc:
         _log_api_client_error("handle_pending_hall_pass_request", exc, extra=f"request_id={request_id}")
         return jsonify({"status": "error", "message": "Hall pass request cannot be approved."}), 400
@@ -1150,7 +1160,7 @@ def hall_pass_settings():
         "status": "success",
         "settings": {
             "max_queue_limit": settings.max_queue_limit if settings else 10,
-            "pass_type_payload": settings.get_pass_types() if settings else HallPassSettings.get_default_pass_types()
+            "pass_type_payload": settings.get_pass_types() if settings else []
         }
     })
 
@@ -1178,6 +1188,11 @@ def update_hall_pass_settings():
             correlation_id=f"corr_settings_queue_{uuid.uuid4().hex}",
             idempotency_key=f"feat:settings:hall-pass-queue:{context.user_id}:{class_id}:{uuid.uuid4().hex}",
         )
+    except HallPassSettingsMissing:
+        return jsonify({
+            "status": "error",
+            "message": "Hall passes are not set up for this class yet. Add at least one pass type first.",
+        }), 409
     except ValueError as exc:
         _log_api_client_error("update_hall_pass_settings", exc, extra=f"class_id={class_id}")
         return jsonify({"status": "error", "message": "Hall pass settings are invalid."}), 400
@@ -1337,14 +1352,14 @@ def get_hall_pass_setup():
     settings = get_hall_pass_settings(scope["class_id"])
 
     if not settings:
-        # Return default configuration
+        # Nothing is configured yet: the teacher starts from an empty list.
         return jsonify({
             "status": "success",
             "hall_pass_enabled": True,
-            "pass_type_payload": HallPassSettings.get_default_pass_types()
+            "pass_type_payload": []
         })
 
-    # Return configured pass types with fallback to defaults
+    # Return configured pass types
     return jsonify({
         "status": "success",
         "hall_pass_enabled": True,
@@ -1500,11 +1515,9 @@ def get_available_hall_pass_types():
         }), 403
 
     if not settings:
-        # Return defaults if not configured
-        return jsonify({
-            "status": "success",
-            "pass_type_payload": HallPassSettings.get_default_pass_types()
-        })
+        # No destinations are offered until the teacher saves settings: a request
+        # made now could not be approved (FEAT-PROD-002 §III).
+        return jsonify({"status": "error", "message": HALL_PASS_NOT_SET_UP}), 409
 
     # Return just the names for enabled pass types
     pass_types = settings.get_pass_types()
@@ -1669,7 +1682,12 @@ def attendance_history():
 # -------------------- ATTENDANCE API --------------------
 
 @api_bp.route('/tap', methods=['POST'])
-@limiter.limit("100 per minute")
+# Keyed by seat when a canonical context is already attached (see
+# attendance_tap_seat_limit_key), falling back to address for everything else.
+# Audit O1: a school NAT shares one address across a whole class, and the flat
+# address-keyed limit let bell-time traffic from other seats throttle one
+# busy seat's taps and vice versa.
+@limiter.limit("100 per minute", key_func=attendance_tap_seat_limit_key)
 def handle_tap():
     """Student-initiated attendance tap (FEAT-PROD-001).
 
