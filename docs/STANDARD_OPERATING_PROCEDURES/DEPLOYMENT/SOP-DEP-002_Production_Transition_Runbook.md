@@ -165,8 +165,11 @@ advisory and are recorded as such, never as the independent verifier.
     version in `README.md` and `DEVELOPMENT.md`, and make the first line of the CHANGELOG section exactly:
 
     ```text
-    Released as `<short SHA>` on <YYYY-MM-DD> at <HH:MM> UTC by release run [<run id>](<run url>). No migration.|Migration `<rev>`. Record: [DEPLOY_<date>_<sha>.md](docs/ops/audits/DEPLOY_<date>_<sha>.md).
+    Released as `<short SHA>` on <YYYY-MM-DD> at <HH:MM> UTC by release run [<run id>](<run url>). No migration.|Migration `<rev>`. Record: <record link>.
     ```
+
+    `<record link>` is a Markdown link whose text is the record's file name and whose target is
+    `docs/ops/audits/DEPLOY_<date>_<sha>.md`, relative to the repository root.
 
     Further sentences may follow on that line; nothing goes before it.
 13. **GitHub release**, after step 12's CHANGELOG is final. The notes are generated, never hand-written:

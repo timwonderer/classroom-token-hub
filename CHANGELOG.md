@@ -8,6 +8,14 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The PROD-PAY-001 payroll correction no longer reports an already-corrected student as paid again** (found by the v2.2.3 full suite). F5 (#1536) moved idempotency-key replay into `record_payroll_event` itself, which now returns the existing event where it used to raise `IntegrityError`. `_post_payroll_corrections` (`app/routes/admin.py`) still relied on that `IntegrityError` to skip a student a concurrent approval had already corrected, so it counted the replay as a new payment. No second credit was ever written; only the list of seats the approval reported as paid was wrong. `PayrollEventResult` now carries `replayed`, set by the FEAT, and the route skips replays on that flag; the database replay-guard branch remains as a fallback. Regression test: `test_PROD_PAY_001__overlapping_approvals_skip_the_student_already_paid`, which failed on v2.2.3 and passes now.
+- **Three test and docs defects the v2.2.3 full suite surfaced**, none in production behavior:
+  - `test_filed_within_window_reflects_lateness` booked a −$5 loss between two premium payments that were each funded with exactly the premium, so F1–F4 correctly refused the second as unaffordable. Both grants now precede both losses.
+  - The S1 browser regression (`test_hall_pass_destination_cannot_execute_in_teacher_history_view`) waited for any history row, and the "Select filters and click Apply" placeholder is itself a row, so it read the table before the fetched rows arrived. It now waits for its own entry. With `escapeHtml` removed the test fails with its S1 message, not a timeout.
+  - `SOP-DEP-002` §VII.A step 12's `Released as` template contained a placeholder Markdown link, which the docs link check reported as broken. It now describes the link instead of embedding one.
+
 ### Changed
 
 - **The tagged release procedure is written down and scripted** (`SOP-DEP-002` 1.9, §VII.A). v2.0.0 through v2.2.3 each ran a different variant: whether a backup was taken, where the database credential and the `age` identity came from, and whether the full suite ran before dispatch. The steps that actually worked lived in an untracked script on the operator's Mac. §VII.A is now an ordered, numbered checklist from the release PR to the release record. `infra/db-backup/prerelease.sh` runs its backup steps: `backup` (stop the app, take and verify a point, source URL read from `~/cth-backup/source_url`), `counts` (manifest table counts against live production; exits 1 on any mismatch), and `restore` (identity checked against `recipients.txt`, restored in memory, deleted with `rm -P`). Owner rulings 2026-10-12: every tagged release takes the backup and restore check, and the full suite passes before dispatch unless a security or data-integrity fix goes first. `infra/db-backup/README.md`'s hand-typed block, which asked for a password and an identity path, now points at the script.

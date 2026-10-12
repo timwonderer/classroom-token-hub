@@ -35,6 +35,10 @@ from tests.helpers.axe_wcag import (  # noqa: F401
     teacher_session,
     wcag_live_server,
 )
+try:
+    from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+except ImportError:  # without Playwright the browser test below is skipped
+    PlaywrightTimeoutError = Exception
 from tests.helpers.canonical_classroom import login_student, login_teacher
 from tests.helpers.class_domain import enable_class_feature
 from tests.helpers.classroom_initializer import initialize_as_student, initialize_as_teacher
@@ -171,7 +175,15 @@ def test_hall_pass_destination_cannot_execute_in_teacher_history_view(app, clien
             page.goto("/admin/hall-pass", wait_until="networkidle")
             page.click("#history-tab")
             page.click("button[onclick='loadHistory()']")
-            page.wait_for_selector("#historyTableBody tr", timeout=5000)
+            # The tbody starts with a placeholder row ("Select filters and click
+            # Apply..."), so waiting for any <tr> returned before the fetch did.
+            # Wait for this test's own entry: the destination rendered as text.
+            # If it never appears (an unescaped payload renders as an element, not
+            # text), fall through so the assertions below name the S1 regression.
+            try:
+                page.wait_for_selector("#historyTableBody td:has-text('onerror')", timeout=5000)
+            except PlaywrightTimeoutError:
+                pass
             fired = page.evaluate(f"window.{MARKER} === true")
             # The destination must still be visible to the teacher as plain text.
             row_text = page.inner_text("#historyTableBody")

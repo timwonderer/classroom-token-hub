@@ -7376,13 +7376,15 @@ def _post_payroll_corrections(ctx, seat_ids: set[int]) -> list[int]:
     only who is still owed. Returns the seats paid.
 
     Two approvals running at once plan the same students. The second one to post a
-    student hits the replay guard: that student is already corrected, so it is
-    skipped and the rest of this approval continues. Any other error propagates.
+    student finds that student already corrected: record_payroll_event replays the
+    existing event (its idempotency-key check), or, failing that, the database's
+    replay guard refuses the insert. Either way the student is skipped, not counted
+    as paid, and the rest of this approval continues. Any other error propagates.
     """
     paid = []
     for posting in plan_class_corrections(ctx=ctx, seat_ids=seat_ids):
         try:
-            record_payroll_event(
+            result = record_payroll_event(
                 ctx=ctx,
                 target_seat_id=posting.seat_id,
                 payroll_event_type="manual_credit",
@@ -7398,6 +7400,8 @@ def _post_payroll_corrections(ctx, seat_ids: set[int]) -> list[int]:
             if constraint != "uq_payroll_event_replay_guard":
                 raise
             db.session.rollback()
+            continue
+        if result.replayed:
             continue
         paid.append(posting.seat_id)
     return paid
