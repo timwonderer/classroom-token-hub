@@ -1,7 +1,7 @@
 # Classroom Token Hub - Development Priorities
 
-**Last Updated:** 2026-10-11 UTC
-**Current Released Version:** 2.2.2 (`61b509b7f`), deployed 2026-10-11 UTC; includes the untagged `c2f16fb11` hotfix (#1532). v2.0.0 launched 2026-09-26
+**Last Updated:** 2026-10-12 UTC
+**Current Released Version:** 2.2.3 (`5d29abb41`), deployed 2026-10-12 UTC. v2.0.0 launched 2026-09-26
 **Engineering State:** v2 in production; post-launch hardening
 **Active Integration Branch:** `main`
 
@@ -91,6 +91,13 @@ on a custom database URL.
   with a request waiting can't be reversed (#1530). Migration `35a9a0d3ab93` makes a pass spendable once. See
   the `[2.2.1]` section of the CHANGELOG and `docs/ops/audits/DEPLOY_2026-10-10_f98d8a206.md`. Next: the NSF
   fee machinery is retired in a later release.
+- **v2.2.2** (`61b509b7f`, deployed 2026-10-11): stored XSS in hall passes and announcements fixed (#1535,
+  GHSA-7fxj-gpw3-23g3), on top of the untagged `c2f16fb11` hotfix (#1532). No migration. See
+  `docs/ops/audits/DEPLOY_2026-10-11_61b509b7f.md`.
+- **v2.2.3** (`5d29abb41`, deployed 2026-10-12): the 2026-10-10 audit remediation (security S3, S5, S7–S10;
+  financial F1–F10; operational O1–O5, O8) and the CodeQL `security-extended` backlog fixes. Migration
+  `6a01dc7a606b` makes obligation assessment replay-safe. See the `[2.2.3]` section of the CHANGELOG and
+  `docs/ops/audits/DEPLOY_2026-10-12_5d29abb41.md`.
 - All ten domains (Identity, Class Configuration, Ledger, Productivity & Payroll, Obligations,
   Store & Entitlements, Operations, Interpretation, Policies, Support) run on the v2 model:
   `User` → `Seat` → `IdentityProfile`, with `ClassEconomy.class_id` as the tenant boundary and
