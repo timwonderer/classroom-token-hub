@@ -323,10 +323,12 @@ def test_requests_are_isolated_by_class(app, client):
 
 def test_concurrent_approvals_in_two_sessions_issue_one_pass(app):
     """Two approvals of the same request, each in its own session and database
-    connection. The first locks and deletes the row and then pauses inside its
-    durable write; the second is observed blocked on that row lock; when the
-    first commits, the second finds nothing. Two passes are available, so
-    without the lock both would succeed."""
+    connection. The first locks the seat, then locks and deletes the pending
+    row, then pauses inside its durable write; the second is observed blocked
+    on the seat lock (PR #1550 review: approval now locks the seat before the
+    pending row, matching submission's lock order); when the first commits,
+    the second finds nothing. Two passes are available, so without the lock
+    both would succeed."""
     import app.feats.prod as prod
     from app.feats.hall_pass_request_feat import approve_hall_pass_request
 
@@ -374,9 +376,12 @@ def test_concurrent_approvals_in_two_sessions_issue_one_pass(app):
         with app.app_context():
             waiting = 0
             for _ in range(300):
+                # Approval now locks the seat before the pending-request row
+                # (PR #1550 review), so the second approval blocks on the
+                # seat lock, not the pending_actions one.
                 waiting = db.session.execute(text(
                     "SELECT count(*) FROM pg_stat_activity "
-                    "WHERE wait_event_type = 'Lock' AND query ILIKE '%pending_actions%'"
+                    "WHERE wait_event_type = 'Lock' AND query ILIKE '%seats%'"
                 )).scalar()
                 db.session.rollback()
                 if waiting:
