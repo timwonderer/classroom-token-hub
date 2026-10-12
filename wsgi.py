@@ -245,6 +245,29 @@ def internal_error(error):
     ), 500
 
 
+_404_CACHE_MAX_ENTRIES = 10_000
+_404_CACHE_PRUNE_INTERVAL_SECONDS = 60
+# Trimming to a target below the cap (not exactly the cap) avoids pruning
+# again on almost every following request while a sustained burst holds the
+# cache right at the boundary.
+_404_CACHE_TRIM_TARGET = int(_404_CACHE_MAX_ENTRIES * 0.9)
+
+
+def _prune_404_cache(cache, current_time):
+    """Drop entries older than an hour, then enforce the size cap by age.
+
+    Factored out so a test can drive it directly without a live request.
+    """
+    cache = {
+        k: v for k, v in cache.items()
+        if (current_time - v).total_seconds() < 3600
+    }
+    if len(cache) > _404_CACHE_MAX_ENTRIES:
+        oldest_first = sorted(cache.items(), key=lambda item: item[1])
+        cache = dict(oldest_first[-_404_CACHE_TRIM_TARGET:])
+    return cache
+
+
 @app.errorhandler(404)
 def not_found_error(error):
     """
@@ -258,11 +281,26 @@ def not_found_error(error):
     cache_key = f"404_{request.path}"
     if not hasattr(app, '_404_cache'):
         app._404_cache = {}
+    if not hasattr(app, '_404_cache_last_pruned_at'):
+        app._404_cache_last_pruned_at = None
 
-    # Clean old entries (older than 1 hour)
     current_time = datetime.now(timezone.utc)
-    app._404_cache = {k: v for k, v in app._404_cache.items()
-                      if (current_time - v).total_seconds() < 3600}
+
+    # Pruning used to rescan every entry on every single 404, which made a
+    # scanner trying many distinct unique paths within the hour cost O(n^2)
+    # overall, and the cache carried no size cap of its own (audit O8).
+    # Pruning now runs at most once per interval, or immediately once the
+    # cache has grown past its cap -- so a burst can grow the cache no larger
+    # than the cap before the next prune trims it back down.
+    last_pruned_at = app._404_cache_last_pruned_at
+    should_prune = (
+        last_pruned_at is None
+        or (current_time - last_pruned_at).total_seconds() >= _404_CACHE_PRUNE_INTERVAL_SECONDS
+        or len(app._404_cache) > _404_CACHE_MAX_ENTRIES
+    )
+    if should_prune:
+        app._404_cache = _prune_404_cache(app._404_cache, current_time)
+        app._404_cache_last_pruned_at = current_time
 
     # Log to database if not recently logged
     if cache_key not in app._404_cache:
@@ -272,6 +310,12 @@ def not_found_error(error):
             stack_trace=None
         )
         app._404_cache[cache_key] = current_time
+        # The cap above was checked before this insert; re-check once after
+        # it so a single request can never leave the cache larger than the
+        # cap, not even by the one entry just added.
+        if len(app._404_cache) > _404_CACHE_MAX_ENTRIES:
+            app._404_cache = _prune_404_cache(app._404_cache, current_time)
+            app._404_cache_last_pruned_at = current_time
 
     return render_template(
         'error_404.html',
