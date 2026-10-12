@@ -94,10 +94,14 @@ def test_admin_login_account_lockout_outlasts_a_shared_ip_budget(client, app):
     app.config["RATELIMIT_ENABLED"] = True
     try:
         response = None
-        for _ in range(6):
+        for i in range(6):
+            # A distinct wrong code per attempt, so the account-lockout limit
+            # (5 per 5 minutes) is what trips here, not the separate
+            # exact-code TOTP-replay guard (1 per 2 minutes on the same
+            # (account, code) pair), which "000000" repeated would hit first.
             response = client.post(
                 "/admin/login",
-                data={"username": "s5_admin_lockout", "totp_code": "000000"},
+                data={"username": "s5_admin_lockout", "totp_code": f"{i:06d}"},
             )
         assert response.status_code == 429
     finally:
@@ -110,10 +114,11 @@ def test_sysadmin_login_account_lockout_outlasts_a_shared_ip_budget(client, app)
     app.config["RATELIMIT_ENABLED"] = True
     try:
         response = None
-        for _ in range(6):
+        for i in range(6):
+            # Distinct wrong code per attempt -- see the admin test above.
             response = client.post(
                 "/sysadmin/login",
-                data={"username": "s5_sysadmin_lockout", "totp_code": "000000"},
+                data={"username": "s5_sysadmin_lockout", "totp_code": f"{i:06d}"},
             )
         assert response.status_code == 429
     finally:
@@ -129,10 +134,11 @@ def test_admin_login_account_lockout_is_scoped_per_account(client, app):
     other, secret = _create_teacher("s5_admin_lockout_b")
     app.config["RATELIMIT_ENABLED"] = True
     try:
-        for _ in range(6):
+        for i in range(6):
+            # Distinct wrong code per attempt -- see the first test above.
             client.post(
                 "/admin/login",
-                data={"username": "s5_admin_lockout_a", "totp_code": "000000"},
+                data={"username": "s5_admin_lockout_a", "totp_code": f"{i:06d}"},
             )
         response = client.post(
             "/admin/login",

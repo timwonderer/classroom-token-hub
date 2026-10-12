@@ -32,9 +32,10 @@ def test_claim_account_is_rate_limited_per_ip(client, app):
     """
     app.config["RATELIMIT_ENABLED"] = True
     try:
-        response = None
-        for _ in range(11):
+        for _ in range(10):
             response = _post_claim(client)
+            assert response.status_code != 429
+        response = _post_claim(client)
         assert response.status_code == 429
     finally:
         app.config["RATELIMIT_ENABLED"] = False

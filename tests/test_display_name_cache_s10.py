@@ -72,6 +72,21 @@ def test_set_admin_display_name_cache_does_not_touch_the_session(app, client):
         assert ADMIN_DISPLAY_NAME_ID_KEY not in session
 
 
+def test_set_admin_display_name_cache_purges_a_legacy_session_cookie(app, client):
+    """A login that still carries a pre-fix cookie must not re-send that
+    stale plaintext name forward in its own response, rather than leaving it
+    to whatever later request happens to call the getter.
+    """
+    with app.test_request_context():
+        session[ADMIN_DISPLAY_NAME_ID_KEY] = 1
+        session[ADMIN_DISPLAY_NAME_KEY] = "Stale Plaintext Name"
+
+        set_admin_display_name_cache(user_id=1, display_name="Someone Decrypted")
+
+        assert ADMIN_DISPLAY_NAME_KEY not in session
+        assert ADMIN_DISPLAY_NAME_ID_KEY not in session
+
+
 def test_get_admin_display_name_cache_purges_a_legacy_session_cookie(app, client):
     """A browser that still carries a pre-fix cookie gets it scrubbed on the
     very next read, rather than it sitting there indefinitely.

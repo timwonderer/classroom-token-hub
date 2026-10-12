@@ -428,6 +428,15 @@ def create_app():
     def ensure_request_id():
         g.request_id = _get_request_id()
 
+    # Audit S10: "display_metadata" was once a session-cached DisplayMetadata
+    # dict holding a decrypted name (see app/utils/display_metadata.py). That
+    # setter is gone, but a browser that still carries a pre-fix signed cookie
+    # would otherwise keep that plaintext name at rest indefinitely -- nothing
+    # else in the request cycle touches this key. Scrub it unconditionally.
+    @app.before_request
+    def purge_legacy_display_metadata():
+        session.pop("display_metadata", None)
+
     # Registered before capture_correlation_context: Flask runs before_request
     # hooks in registration order, and correlation must read the principal this
     # request is admitted as, not one a superseded cookie still names. Otherwise

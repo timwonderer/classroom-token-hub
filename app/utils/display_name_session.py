@@ -33,8 +33,14 @@ def _purge_legacy_admin_display_name_cache() -> None:
 
 
 def set_admin_display_name_cache(*, user_id: int, display_name: str) -> None:
-    """No-op (audit S10) -- kept so existing call sites need no change."""
-    return
+    """No-op (audit S10) -- kept so existing call sites need no change.
+
+    Still purges any legacy plaintext name a pre-fix session cookie carries,
+    so a caller such as login -- which goes on to set other session keys and
+    redirect -- doesn't re-send that stale cookie forward unscrubbed while
+    waiting for a later request to call the getter.
+    """
+    _purge_legacy_admin_display_name_cache()
 
 
 def get_admin_display_name_cache(*, user_id: int) -> str | None:
