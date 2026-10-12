@@ -20,7 +20,7 @@ from sqlalchemy.orm import aliased
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from app.hash_utils import verify_password
 
-from app.extensions import db, limiter, student_status_seat_limit_key
+from app.extensions import db, limiter, student_status_seat_limit_key, attendance_tap_seat_limit_key
 from app.models import (
     Transaction, AttendanceSession,
     AttendanceReasonCode, HallPassLog, HallPassSettings,
@@ -1682,7 +1682,12 @@ def attendance_history():
 # -------------------- ATTENDANCE API --------------------
 
 @api_bp.route('/tap', methods=['POST'])
-@limiter.limit("100 per minute")
+# Keyed by seat when a canonical context is already attached (see
+# attendance_tap_seat_limit_key), falling back to address for everything else.
+# Audit O1: a school NAT shares one address across a whole class, and the flat
+# address-keyed limit let bell-time traffic from other seats throttle one
+# busy seat's taps and vice versa.
+@limiter.limit("100 per minute", key_func=attendance_tap_seat_limit_key)
 def handle_tap():
     """Student-initiated attendance tap (FEAT-PROD-001).
 

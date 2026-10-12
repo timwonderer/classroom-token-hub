@@ -52,20 +52,17 @@ def get_real_ip_for_limiter():
         return get_remote_address()
 
 
-def student_status_seat_limit_key():
-    """Key the student status poll by seat, not by network address.
+def _seat_or_ip_limit_key():
+    """Key on ``(class_id, seat_id)`` from ``g.canonical_context`` when present.
 
     Students in a school leave through a small pool of shared public
     addresses, so an address-keyed budget is spent by whoever else sits behind
-    the same address. The poll is authenticated, class-scoped activity: its
-    budget belongs to ``(class_id, seat_id)``.
-
-    Reads only the ``g.canonical_context`` that ``login_required`` validated
-    and attached; it never resolves context again (DOM-IDEN-006 §IX) and reads
-    neither the session nor the database. It is therefore only meaningful on a
-    limit decorator placed *below* ``@login_required``. Anything else falls
-    back to the address key, and the key is never empty: Flask-Limiter skips a
-    limit whose key is empty.
+    the same address. Reads only ``g.canonical_context`` -- never resolves
+    context itself (DOM-IDEN-006 §IX) and reads neither the session nor the
+    database -- so it is meaningful only where that context is already
+    attached and trustworthy by the time the limiter's key func runs. Falls
+    back to the address key otherwise, and the key is never empty:
+    Flask-Limiter skips a limit whose key is empty.
     """
     from flask import g
 
@@ -74,6 +71,61 @@ def student_status_seat_limit_key():
     seat_id = getattr(context, "seat_id", None)
     if class_id and seat_id:
         return f"seat:{class_id}:{seat_id}"
+    return f"ip:{get_real_ip_for_limiter() or 'unknown'}"
+
+
+def student_status_seat_limit_key():
+    """Key the student status poll by seat, not by network address.
+
+    The poll is authenticated, class-scoped activity: its budget belongs to
+    ``(class_id, seat_id)``. Meaningful only on a limit decorator placed
+    *below* ``@login_required``, which is what leaves a validated context on
+    ``g`` for :func:`_seat_or_ip_limit_key` to read.
+    """
+    return _seat_or_ip_limit_key()
+
+
+def attendance_tap_seat_limit_key():
+    """Key ``/api/tap`` by ``(class_id, seat_id)``, not by network address.
+
+    Audit O1: a shared school address pooled every student's tap budget
+    together, so one busy bell-time minute could exhaust the limit for every
+    classmate behind the same address. Unlike the student-status poll, this
+    route carries no ``@login_required``; the context it reads was still
+    resolved for every request by the app-wide ``before_request`` hook
+    (``capture_correlation_context`` in ``app/__init__.py``), which runs
+    before any route decorator, including this one. An unauthenticated or
+    malformed request -- no resolved context -- falls back to the address key,
+    which is exactly the traffic an address-keyed limit is still meant to
+    bound.
+    """
+    return _seat_or_ip_limit_key()
+
+
+def student_login_identity_limit_key():
+    """Key a student login attempt by the submitted username, not address.
+
+    Audit O1: student login's address-keyed limit counted GET page loads and
+    POST attempts together, and a school NAT shares one address across every
+    student in the building, so the whole school drew on one pool. The route
+    now scopes its address-keyed limit to POST only (the GETs that render the
+    form no longer spend it), and this second limit is what actually bounds
+    repeated guessing against ONE account, independent of how many other
+    students share the same address.
+
+    Reads the raw submitted username -- a bad or unknown username must still
+    count, so this never looks it up -- and hashes it the same way login
+    lookups are keyed (``hash_username_lookup``, PEPPER_KEY-derived) so no
+    plaintext username is ever written into the limiter's storage. Falls back
+    to the address key when no username was submitted (e.g. a GET), and the
+    key is never empty: Flask-Limiter skips a limit whose key is empty.
+    """
+    from flask import request
+    from app.hash_utils import hash_username_lookup
+
+    username = (request.form.get("username") or "").strip()
+    if username:
+        return f"login-identity:{hash_username_lookup(username)}"
     return f"ip:{get_real_ip_for_limiter() or 'unknown'}"
 
 
