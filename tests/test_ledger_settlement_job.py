@@ -186,8 +186,13 @@ def test_settlement_job_is_registered_with_the_scheduler():
     )
     spec = by_id["ledger_settlement"]
     assert spec.func is run_ledger_settlement_job
-    assert spec.trigger == "interval"
-    assert spec.trigger_kwargs == {"hours": 1}
+    # Cron on a fixed minute, not `interval, hours=1` (audit O3): an interval
+    # trigger anchors to process-start time, so all nine hourly jobs became due
+    # in the same minute every hour. A bare minute with no 'hour' key still
+    # means every hour.
+    assert spec.trigger == "cron"
+    assert "hour" not in spec.trigger_kwargs
+    assert isinstance(spec.trigger_kwargs.get("minute"), int)
 
 
 def test_settlement_is_declared_before_savings_interest():
