@@ -32,31 +32,46 @@ def enforce_daily_limits_job():
         CLASS_LEVEL_EVALUATION,
         canonical_temporal_resolver,
     )
+    from sqlalchemy import func
 
     logger = logging.getLogger('scheduled_tasks')
     logger.info("Starting scheduled daily-limit enforcement job")
 
     try:
-        events = (
-            AttendanceSession.query
-            .order_by(
-                AttendanceSession.class_id.asc(),
-                AttendanceSession.target_seat_id.asc(),
-                AttendanceSession.timestamp.asc(),
-                AttendanceSession.id.asc(),
+        # Only a seat's single LATEST row (by timestamp, then id) says whether it
+        # is currently active — the log is append-only (AttendanceSession, see
+        # models.py), so an older `active` row can be superseded by a later
+        # `inactive` one without ever being touched. Finding that latest row per
+        # seat with a window function, filtered to `status == "active"` in the
+        # same query, returns only the seats actually open right now — a small,
+        # roughly constant set — instead of loading every attendance row this
+        # class has ever produced (audit O2).
+        latest_per_seat = (
+            db.session.query(
+                AttendanceSession.target_seat_id.label("seat_id"),
+                AttendanceSession.class_id.label("class_id"),
+                AttendanceSession.status.label("status"),
+                func.row_number().over(
+                    partition_by=AttendanceSession.target_seat_id,
+                    order_by=(AttendanceSession.timestamp.desc(), AttendanceSession.id.desc()),
+                ).label("rn"),
             )
+            .subquery()
+        )
+        active_seats = (
+            db.session.query(latest_per_seat.c.seat_id, latest_per_seat.c.class_id)
+            .filter(latest_per_seat.c.rn == 1, latest_per_seat.c.status == "active")
             .all()
         )
-        rows_by_class_id = {}
-        rows_by_scope = {}
-        for event in events:
-            rows_by_class_id.setdefault(event.class_id, []).append(event)
-            rows_by_scope.setdefault((event.class_id, event.target_seat_id), []).append(event)
+
+        seat_ids_by_class_id = {}
+        for seat_id, class_id in active_seats:
+            seat_ids_by_class_id.setdefault(class_id, []).append(seat_id)
 
         checked_count = 0
         closed_count = 0
 
-        for class_id, class_events in rows_by_class_id.items():
+        for class_id, seat_ids in seat_ids_by_class_id.items():
             class_row = ClassEconomy.query.filter_by(class_id=class_id).first()
             if class_row is None:
                 continue
@@ -86,13 +101,7 @@ def enforce_daily_limits_job():
             )
             now_utc = now_evaluation.canonical_now_utc
 
-            active_latest_events = {}
-            for event in class_events:
-                active_latest_events[event.target_seat_id] = event
-
-            for seat_id, latest_event in active_latest_events.items():
-                if latest_event.status != "active":
-                    continue
+            for seat_id in seat_ids:
                 try:
                     with db.session.begin_nested():
                         checked_count += 1
@@ -775,26 +784,34 @@ def purge_expired_teacher_signups_job():
 
 
 SCHEDULED_JOB_SPECS: tuple[ScheduledJobSpec, ...] = (
+    # The nine hourly jobs below are cron-triggered on distinct minutes of the
+    # hour, not `interval, hours=1`. An interval trigger anchors to the instant
+    # the job was added — the same moment, for every job, at process start — so
+    # all nine became due in the same minute, every hour, for the life of the
+    # process (audit O3). A fixed cron minute also means the cadence survives a
+    # restart: the previous anchor-to-startup scheme could drift an hour's worth
+    # of jobs onto a different minute on every deploy. Relative order is kept
+    # (ledger settlement's minute precedes savings interest's).
     ScheduledJobSpec(
         id='expired_teacher_signups',
         name='Delete expired teacher signup staging',
         func=purge_expired_teacher_signups_job,
-        trigger='interval',
-        trigger_kwargs={'hours': 1},
+        trigger='cron',
+        trigger_kwargs={'minute': 0},
     ),
     ScheduledJobSpec(
         id='stale_teacher_accounts',
         name='Delete stale teacher accounts',
         func=purge_stale_teacher_accounts_job,
-        trigger='interval',
-        trigger_kwargs={'hours': 1},
+        trigger='cron',
+        trigger_kwargs={'minute': 6},
     ),
     ScheduledJobSpec(
         id='enforce_daily_limits',
         name='Enforce daily attendance limits',
         func=enforce_daily_limits_job,
-        trigger='interval',
-        trigger_kwargs={'hours': 1},
+        trigger='cron',
+        trigger_kwargs={'minute': 12},
     ),
     ScheduledJobSpec(
         id='database_maintenance',
@@ -817,8 +834,8 @@ SCHEDULED_JOB_SPECS: tuple[ScheduledJobSpec, ...] = (
         id='rent_reconciliation',
         name='Rent lifecycle reconciliation',
         func=run_rent_reconciliation_job,
-        trigger='interval',
-        trigger_kwargs={'hours': 1},
+        trigger='cron',
+        trigger_kwargs={'minute': 18},
     ),
     # Fires the canonical completion FEAT only for classes whose derived
     # next payroll date is due; idempotent per scheduled occurrence, so an
@@ -827,8 +844,8 @@ SCHEDULED_JOB_SPECS: tuple[ScheduledJobSpec, ...] = (
         id='automatic_payroll',
         name='Automatic payroll (due classes)',
         func=run_automatic_payroll_job,
-        trigger='interval',
-        trigger_kwargs={'hours': 1},
+        trigger='cron',
+        trigger_kwargs={'minute': 24},
     ),
     # Hourly, so each coverage period's premium is assessed (and autopaid) at
     # its bill-preview point and a CANCEL_AFTER_X_DAYS deadline is applied
@@ -837,8 +854,8 @@ SCHEDULED_JOB_SPECS: tuple[ScheduledJobSpec, ...] = (
         id='insurance_renewal',
         name='Insurance coverage renewal',
         func=run_insurance_renewal_job,
-        trigger='interval',
-        trigger_kwargs={'hours': 1},
+        trigger='cron',
+        trigger_kwargs={'minute': 30},
     ),
     # Reads the bill-cycle table for terminal insurance lineages whose coverage
     # boundary has passed and writes EXPIRED via FEAT-STOR-002. Idempotent per
@@ -857,22 +874,22 @@ SCHEDULED_JOB_SPECS: tuple[ScheduledJobSpec, ...] = (
         id='collective_goal_expiry',
         name='Collective goal expiry and refund',
         func=run_collective_goal_expiry_job,
-        trigger='interval',
-        trigger_kwargs={'hours': 1},
+        trigger='cron',
+        trigger_kwargs={'minute': 36},
     ),
     ScheduledJobSpec(
         id='ledger_settlement',
         name='Ledger settlement sweep',
         func=run_ledger_settlement_job,
-        trigger='interval',
-        trigger_kwargs={'hours': 1},
+        trigger='cron',
+        trigger_kwargs={'minute': 42},
     ),
     ScheduledJobSpec(
         id='savings_interest_payout',
         name='Savings interest payout',
         func=run_savings_interest_job,
-        trigger='interval',
-        trigger_kwargs={'hours': 1},
+        trigger='cron',
+        trigger_kwargs={'minute': 48},
     ),
 )
 
