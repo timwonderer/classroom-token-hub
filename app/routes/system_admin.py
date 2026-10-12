@@ -22,7 +22,7 @@ from sqlalchemy import delete, or_, case
 from werkzeug.exceptions import BadRequest, Unauthorized, Forbidden, NotFound, ServiceUnavailable
 import pyotp
 
-from app.extensions import db, limiter
+from app.extensions import db, limiter, login_account_limit_key, login_totp_replay_limit_key
 from app.feats.base import get_idempotency_key, requires_feat_context
 from app.models import (
     Seat, PasskeyCredential,
@@ -49,6 +49,8 @@ from app.hash_utils import hash_username_lookup
 from app.services.ledger_posting_service import create_pending_transaction
 from app.utils.passwordless_client import get_public_api_key
 from app.utils.auth_username import normalize_auth_username
+from app.utils.ip_handler import get_real_ip
+from app.utils.turnstile import verify_turnstile_token
 from app.utils.opaque_refs import make_opaque_ref, resolve_opaque_ref
 from app.services.admin_identity_service import (
     admin_has_passkeys,
@@ -125,6 +127,22 @@ def login():
     """
     form = SystemAdminLoginForm()
     if form.validate_on_submit():
+        # Ingress gate: the widget already renders here (the global
+        # turnstile_site_key context processor), but nothing was ever
+        # verifying it server-side (audit S5) -- the sysadmin login was the
+        # one unauthenticated entry point among the Turnstile-bearing forms
+        # that S3 (#1536) did not also cover.
+        turnstile_token = request.form.get('cf-turnstile-response')
+        if not verify_turnstile_token(turnstile_token, get_real_ip()):
+            flash("Security verification failed. Please complete the check and try again.", "error")
+            return render_template("system_admin_login.html", form=form)
+        # The per-account and replay budgets (audit S5) are charged only once
+        # Turnstile has passed -- see the matching comment on the teacher
+        # login (app/routes/admin.py) for why these cannot be route
+        # decorators.
+        with limiter.limit("5 per 5 minutes", key_func=login_account_limit_key()), \
+                limiter.limit("1 per 2 minutes", key_func=login_totp_replay_limit_key()):
+            pass
         username = normalize_auth_username(form.username.data)
         totp_code = form.totp_code.data.strip()
         user = find_canonical_user_by_auth_username(username, expected_role="sysadmin")
