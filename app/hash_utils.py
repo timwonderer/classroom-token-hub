@@ -55,6 +55,21 @@ def hash_username_lookup(username: str) -> str:
     return _lookup_digest("username", normalize_lookup_text(username, kind="username"))
 
 
+def hash_login_totp_replay_key(username: str, totp_code: str) -> str:
+    """Keyed digest identifying one (account, submitted TOTP code) pair.
+
+    Used only as a short-TTL rate-limit key (audit S5 replay protection) --
+    never stored, never a credential. Pepper-keyed so the raw username/code
+    pair is not reconstructable from whatever reads the limiter's backing
+    store.
+    """
+    return _lookup_digest(
+        "login-totp-replay",
+        normalize_lookup_text(username, kind="username"),
+        str(totp_code or ""),
+    )
+
+
 def hash_claim_name(value: str, *, class_id: str, field: str) -> str:
     if not isinstance(class_id, str) or not class_id.strip():
         raise ValueError("Canonical class_id is required")

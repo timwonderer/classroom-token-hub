@@ -718,6 +718,7 @@ def calculate_scoped_balances(seat_id: int | None, class_id: str | None) -> tupl
 # -------------------- STUDENT ONBOARDING --------------------
 
 @student_bp.route('/claim-account', methods=['GET', 'POST'])
+@limiter.limit("10 per minute", methods=["POST"])
 def claim_account():
     """
     PAGE 1: Claim Account - Verify identity using join code to begin setup.
@@ -735,8 +736,12 @@ def claim_account():
     form = StudentClaimAccountForm()
 
     if form.validate_on_submit():
-        # Ingress gate: join_code + name is guessable/enumerable, unauthenticated,
-        # and rate-limited by nothing else on this route.
+        # Ingress gate: join_code + name is guessable/enumerable, unauthenticated.
+        # The route-level @limiter.limit above budgets attempts per IP (audit S6:
+        # FEAT-IDEN-001's distinguishing failure responses -- invalid credentials
+        # vs. already-claimed -- are intentional claim-flow UX, per operator
+        # ruling 2026-10-12, so the mitigation is rate limiting this endpoint
+        # rather than collapsing those responses).
         turnstile_token = request.form.get('cf-turnstile-response')
         if not verify_turnstile_token(turnstile_token, get_real_ip()):
             flash("Security verification failed. Please complete the check and try again.", "claim")
@@ -1579,6 +1584,19 @@ def transfer():
         # Convert form input to Decimal for precise financial calculation
         from app.models import _quantize_currency
         amount = _quantize_currency(request.form.get('amount'))
+
+        # The dropdowns only offer 'checking'/'savings', but that is client-side
+        # only. A crafted POST with an unknown account name would otherwise reach
+        # get_available_balance(), which deliberately raises ValueError for any
+        # account_type outside that set (ledger_balance_query_service.py) rather
+        # than answering a different question. Reject it here as an ordinary
+        # invalid request instead of letting that raise become an HTTP 500.
+        if from_account not in ('checking', 'savings') or to_account not in ('checking', 'savings'):
+            message = "Invalid account selection."
+            if is_json:
+                return jsonify(status="error", message=message), 400
+            flash(message, "transfer_error")
+            return redirect(url_for("student.transfer"))
 
         # CRITICAL FIX: Calculate balances using canonical seat/class scoping
         checking_balance, savings_balance = calculate_scoped_balances(context.seat_id, context.class_id)

@@ -69,16 +69,13 @@ def _session(client):
 
 
 def _session_state(client):
-    """The session minus the display-name cache (SPEC-DISPLAY-001 §VII: not authoritative).
+    """The session as the client holds it.
 
-    Every page rendered for a signed-in student fills that cache from a context
-    processor; the refusal page is no different. Everything that carries
-    identity, onboarding, or a flashed message must be untouched.
+    Display metadata (SPEC-DISPLAY-001) is resolved fresh on every request
+    since audit S10 and is never written to the session, so there is no
+    display-name cache key left to strip here.
     """
-    from app.utils.display_metadata import DISPLAY_METADATA_SESSION_KEY
-    state = _session(client)
-    state.pop(DISPLAY_METADATA_SESSION_KEY, None)
-    return state
+    return _session(client)
 
 
 def _return_to_login(page):
