@@ -163,6 +163,23 @@ def test_display_metadata_is_never_written_to_the_session(app, client):
         assert "display_metadata" not in sess
 
 
+def test_a_legacy_display_metadata_cookie_is_purged_on_the_next_request(app, client):
+    """Audit S10 follow-up (CodeRabbit + Copilot review on PR #1549): a
+    browser that still carries a pre-fix session cookie with the old
+    ``display_metadata`` key must have it scrubbed by the very next request
+    -- including an unauthenticated one, since the purge hook is global and
+    not gated on login state.
+    """
+    with client.session_transaction() as sess:
+        sess["display_metadata"] = {"actor_first_name": "Ava", "teacher_note": CHEM_AVA_NOTE}
+
+    response = client.get("/")
+    assert response.status_code in (200, 302)
+
+    with client.session_transaction() as sess:
+        assert "display_metadata" not in sess
+
+
 def test_edit_student_persists_the_note(app, client):
     """Editing the note through the real route must survive the request.
 
