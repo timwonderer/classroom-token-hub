@@ -718,6 +718,7 @@ def calculate_scoped_balances(seat_id: int | None, class_id: str | None) -> tupl
 # -------------------- STUDENT ONBOARDING --------------------
 
 @student_bp.route('/claim-account', methods=['GET', 'POST'])
+@limiter.limit("10 per minute", methods=["POST"])
 def claim_account():
     """
     PAGE 1: Claim Account - Verify identity using join code to begin setup.
@@ -735,8 +736,12 @@ def claim_account():
     form = StudentClaimAccountForm()
 
     if form.validate_on_submit():
-        # Ingress gate: join_code + name is guessable/enumerable, unauthenticated,
-        # and rate-limited by nothing else on this route.
+        # Ingress gate: join_code + name is guessable/enumerable, unauthenticated.
+        # The route-level @limiter.limit above budgets attempts per IP (audit S6:
+        # FEAT-IDEN-001's distinguishing failure responses -- invalid credentials
+        # vs. already-claimed -- are intentional claim-flow UX, per operator
+        # ruling 2026-10-12, so the mitigation is rate limiting this endpoint
+        # rather than collapsing those responses).
         turnstile_token = request.form.get('cf-turnstile-response')
         if not verify_turnstile_token(turnstile_token, get_real_ip()):
             flash("Security verification failed. Please complete the check and try again.", "claim")

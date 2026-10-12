@@ -17,27 +17,22 @@ these tests pin:
   - it is not writable onto a seat outside the active class.
 
 `teacher_note` is a required field of `DisplayMetadata` under SPEC-DISPLAY-001
-section VI, and section VII names a teacher-note change as a cache-invalidation
-trigger. Its presence in the cache is specified, not incidental; do not remove it
-on the theory that it is PII in a session cookie. The decrypted *name* fields in
-that same object are a separate, genuine question tracked on its own.
+section VI. `DisplayMetadata` also carries decrypted name fields
+(`actor_first_name` and its siblings), and until audit S10 the whole object --
+notes included -- was cached in the Flask session, a signed but unencrypted
+cookie. SPEC-DISPLAY-001 v1.1 removed that session-cache allowance rather than
+weaken INV-CORE-000/INV-ARC-018's no-plaintext-PII-at-rest rule, so
+`resolve_display_metadata` is now the only way to get one: it is recomputed on
+every request and never persisted to the session.
 """
 from __future__ import annotations
 
 import re
 from dataclasses import fields
 
-from flask import session as flask_session
-
 from app.models import IdentityProfile
 from app.services.context_resolver import CanonicalContext
-from app.utils.display_metadata import (
-    DISPLAY_METADATA_SESSION_KEY,
-    DisplayMetadata,
-    get_cached_display_metadata,
-    resolve_display_metadata,
-    set_cached_display_metadata,
-)
+from app.utils.display_metadata import DisplayMetadata, resolve_display_metadata
 from tests.helpers.canonical_classroom import login_teacher, provision_classroom
 
 CHEM_AVA_NOTE = "Excellent lab partner"
@@ -149,43 +144,12 @@ def test_teacher_note_is_a_required_display_metadata_field(app, client):
         assert metadata.teacher_note == CHEM_AVA_NOTE
 
 
-def test_cached_note_does_not_survive_a_context_switch(app, client):
-    """The cache is class-keyed, so it cannot serve one class's note to another.
-
-    SPEC-DISPLAY-001 section VII makes context_key include class_id, which is what
-    stops the cached note from outliving the scope that authorized reading it.
-    """
-    with app.app_context():
-        chemistry = provision_classroom("chemistry_p1")
-        ava = _seat_for(chemistry, "Ava")
-        chem_ctx = CanonicalContext(
-            user_id=ava.user_id,
-            class_id=chemistry.class_id,
-            seat_id=ava.seat_id,
-            actor_role="student",
-        )
-        csp = provision_classroom("ap_csp_p3")
-        csp_ava = _seat_for(csp, "Ava")
-        csp_ctx = CanonicalContext(
-            user_id=csp_ava.user_id,
-            class_id=csp.class_id,
-            seat_id=csp_ava.seat_id,
-            actor_role="student",
-        )
-
-        with app.test_request_context():
-            set_cached_display_metadata(resolve_display_metadata(chem_ctx))
-            assert get_cached_display_metadata(chem_ctx).teacher_note == CHEM_AVA_NOTE
-            # Same student, same teacher, different class: the cache must miss.
-            assert get_cached_display_metadata(csp_ctx) is None
-
-
-def test_stale_session_metadata_is_discarded_not_fatal(app, client):
-    """A cookie carrying a field the dataclass no longer declares must not 500.
-
-    Sessions outlive deploys, so the cached shape is an external boundary. An
-    extra key would raise TypeError on DisplayMetadata(**cached) if it reached the
-    constructor, so the shape guard has to reject before that point.
+def test_display_metadata_is_never_written_to_the_session(app, client):
+    """Audit S10 regression: ``DisplayMetadata`` carries decrypted PII
+    (``actor_first_name`` and its siblings, plus this file's teacher note),
+    and a prior revision cached the whole object in the Flask session -- a
+    signed but unencrypted cookie, i.e. plaintext PII at rest. There is no
+    longer any key that would hold it.
     """
     with app.app_context():
         classroom = provision_classroom("chemistry_p1")
@@ -194,18 +158,9 @@ def test_stale_session_metadata_is_discarded_not_fatal(app, client):
     assert client.get("/admin/students").status_code == 200
 
     with client.session_transaction() as sess:
-        stale = dict(sess[DISPLAY_METADATA_SESSION_KEY])
-        stale["field_removed_in_an_earlier_release"] = "x"
-        sess[DISPLAY_METADATA_SESSION_KEY] = stale
-
-    # Serving the request again must succeed (cache rejected, then re-resolved).
-    again = client.get("/admin/students")
-    assert again.status_code == 200
-
-    with client.session_transaction() as sess:
-        refreshed = sess[DISPLAY_METADATA_SESSION_KEY]
-        assert "field_removed_in_an_earlier_release" not in refreshed
-        assert refreshed.keys() == {f.name for f in fields(DisplayMetadata)}
+        serialized = str(dict(sess))
+        assert CHEM_AVA_NOTE not in serialized
+        assert "display_metadata" not in sess
 
 
 def test_edit_student_persists_the_note(app, client):
@@ -262,12 +217,10 @@ def test_edit_student_cannot_write_a_note_outside_the_active_class(app, client):
         assert profile.notes == CSP_AVA_NOTE
 
 
-def test_cached_metadata_rejects_payload_missing_a_field(app):
-    """A cookie predating an *added* field is rejected rather than decoded.
-
-    The payload here carries a matching context_key on purpose. A mismatched one
-    would be discarded by the context check above the shape guard, so the test
-    would pass without the guard existing at all.
+def test_resolve_display_metadata_recomputes_on_every_call(app):
+    """No cache means no staleness class of bug: two calls with the same
+    context independently hit the database and agree, rather than one
+    serving a value the other wrote.
     """
     with app.app_context():
         classroom = provision_classroom("chemistry_p1")
@@ -278,13 +231,7 @@ def test_cached_metadata_rejects_payload_missing_a_field(app):
             actor_role="teacher",
         )
 
-        with app.test_request_context():
-            complete = resolve_display_metadata(ctx).to_session_dict()
-            set_cached_display_metadata(resolve_display_metadata(ctx))
-            # Sanity: the guard is not rejecting everything.
-            assert get_cached_display_metadata(ctx) is not None
-
-            truncated = {k: v for k, v in complete.items() if k != "teacher_note"}
-            assert truncated["context_key"] == complete["context_key"]
-            flask_session[DISPLAY_METADATA_SESSION_KEY] = truncated
-            assert get_cached_display_metadata(ctx) is None
+        first = resolve_display_metadata(ctx)
+        second = resolve_display_metadata(ctx)
+        assert first == second
+        assert first is not second
