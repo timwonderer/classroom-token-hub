@@ -120,16 +120,30 @@ at the repository root; database reads use read-only, aggregate-only queries wit
    `umask 077; pbpaste > ~/cth-backup/identity.txt`. Then `bash infra/db-backup/prerelease.sh restore` checks
    the key against `recipients.txt`, restores into the in-memory database, runs the manifest and no-resurrection
    checks, deletes the identity with `rm -P`, and stops the verify container. Both checks must PASS.
-8. **Balance baseline**, read with the application stopped:
+8. **Balance baseline**, read with the application stopped. Each snapshot is compared only with the ledger rows
+   at or below its `reconciled_through_posting_sequence` (`DOM-LED-001` §VIII.2); later rows are pending and are
+   reported apart:
 
    ```sql
-   WITH l AS (SELECT class_id, account_type, count(*) n, sum(amount_cents) c FROM ledger_transaction GROUP BY 1,2),
-        s AS (SELECT class_id, account_type, count(*) n, sum(posted_balance_cents) c FROM ledger_balance_snapshot GROUP BY 1,2)
-   SELECT coalesce(l.class_id, s.class_id), coalesce(l.account_type, s.account_type), l.n, l.c, s.n, s.c
-   FROM l FULL JOIN s USING (class_id, account_type) ORDER BY 1, 2;
+   WITH s AS (SELECT class_id, seat_id, account_type, posted_balance_cents, reconciled_through_posting_sequence AS cursor
+              FROM ledger_balance_snapshot),
+   l AS (SELECT t.class_id, t.account_type, count(*) AS txns,
+           coalesce(sum(t.amount_cents) FILTER (WHERE t.posting_sequence <= s.cursor), 0) AS ledger_posted_cents,
+           coalesce(sum(t.amount_cents) FILTER (WHERE s.cursor IS NULL OR t.posting_sequence IS NULL
+                                                      OR t.posting_sequence > s.cursor), 0) AS pending_cents
+         FROM ledger_transaction t
+         LEFT JOIN s ON s.class_id = t.class_id AND s.seat_id = t.seat_id AND s.account_type = t.account_type
+         GROUP BY 1, 2),
+   ss AS (SELECT class_id, account_type, count(*) AS snapshots, sum(posted_balance_cents) AS snapshot_cents
+          FROM s GROUP BY 1, 2)
+   SELECT coalesce(l.class_id, ss.class_id) AS class_id, coalesce(l.account_type, ss.account_type) AS account,
+          l.txns, l.ledger_posted_cents, ss.snapshots, ss.snapshot_cents, l.pending_cents,
+          l.ledger_posted_cents IS NOT DISTINCT FROM ss.snapshot_cents AS posted_matches
+   FROM l FULL JOIN ss ON ss.class_id = l.class_id AND ss.account_type = l.account_type
+   ORDER BY 1, 2;
    ```
 
-   Ledger equals snapshot in every row; keep the table for the record.
+   `posted_matches` is true in every row; keep the table, including `pending_cents`, for the record.
 9. **Tag and dispatch.** `git tag -a vX.Y.Z <SHA> -m "vX.Y.Z" && git push origin vX.Y.Z`, then
    `gh workflow run release-v2.yml -f revision=<full SHA> -f lineage_ref=main`. Dispatch once only: a second
    dispatch races the first. Watch the run through its health step.
@@ -137,7 +151,7 @@ at the repository root; database reads use read-only, aggregate-only queries wit
 **After the release**
 
 10. **§VIII verification.** Host HEAD is the release SHA; the service is active; `127.0.0.1:8000/health` answers
-    `ok`; the scheduler has started; the journal has no `ERROR`, `CRITICAL`, `Traceback` or `WORKER TIMEOUT` lines
+    `ok`; `/docs` followed to its final response is 200 (`curl -L`), not just its 308; the scheduler has started; the journal has no `ERROR`, `CRITICAL`, `Traceback` or `WORKER TIMEOUT` lines
     since the restart; `alembic_version` is the single head; the step 8 query matches the baseline, apart from
     what the release itself is meant to change. The operator runs the browser checks in §VIII.
 11. **Reopen** by changing the Access policy (§VI).

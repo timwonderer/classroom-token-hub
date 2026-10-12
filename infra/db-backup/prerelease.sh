@@ -21,7 +21,7 @@ PY=~/cth-backup-venv/bin/python
 TOOL="$(cd "$(dirname "$0")" && pwd)/cth_db_backup.py"
 REDACT='s#postgresql://[^ ]*@#postgresql://[redacted]@#g'
 
-latest() { ls -t ~/cth-backup/prerelease-*/points/*."$1" 2>/dev/null | head -1; }
+latest() { ls -t "$CTH_BACKUP_STATE_DIR"/points/*."$1" 2>/dev/null | head -1 || true; }   # this run's state dir only
 
 case "${1:-}" in
 backup)
@@ -37,14 +37,17 @@ backup)
   docker exec cth-verify createdb -U postgres cth_restore_check
 
   ssh -f -N -o ExitOnForwardFailure=yes -L 55433:127.0.0.1:5432 root@cth
-  ssh root@cth 'systemctl stop classroom-economy; systemctl is-active classroom-economy || true'
+  # Refuse to back up while the app could still be writing.
+  ssh root@cth 'systemctl stop classroom-economy; ! systemctl is-active --quiet classroom-economy' \
+    || { echo "classroom-economy is still active: not backing up"; exit 1; }
+  echo "classroom-economy inactive"
 
   "$PY" "$TOOL" backup --reason manual 2>&1 | sed -E "$REDACT"
   latest manifest.json
   ;;
 counts)
   # Live counts must be read with the application still stopped, or they drift from the point.
-  M=$(latest manifest.json)
+  M=$(latest manifest.json); [ -n "$M" ] || { echo "no point in $CTH_BACKUP_STATE_DIR (set CTH_BACKUP_STATE_DIR to the backup's directory)"; exit 1; }
   python3 - "$M" <<'EOF' | psql -X -q -At -F' ' "$CTH_BACKUP_SOURCE_URL" > /tmp/cth_live_counts.$$
 import json, sys
 tables = sorted(json.load(open(sys.argv[1]))["table_counts"])
@@ -68,7 +71,7 @@ restore)
   trap 'rm -P "$ID"; echo "identity deleted"' EXIT
   diff <(age-keygen -y "$ID") "$CTH_BACKUP_AGE_RECIPIENTS_FILE" >/dev/null \
     || { echo "identity does not match recipients.txt"; exit 1; }
-  P=$(latest dump.age)
+  P=$(latest dump.age); [ -n "$P" ] || { echo "no point in $CTH_BACKUP_STATE_DIR (set CTH_BACKUP_STATE_DIR to the backup's directory)"; exit 1; }
   "$PY" "$TOOL" restore \
     --artifact "$P" --manifest "${P%.dump.age}.manifest.json" --identity "$ID" \
     --target-url 'postgresql://postgres:verify@127.0.0.1:55432/cth_restore_check' \
