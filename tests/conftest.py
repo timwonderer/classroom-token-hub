@@ -5,6 +5,7 @@ import statistics
 import subprocess
 import sys
 import uuid
+import warnings
 from datetime import datetime, timezone
 from pathlib import Path
 from dotenv import dotenv_values, load_dotenv
@@ -541,18 +542,21 @@ def _rebuild_database_state():
 # as before and snapshots it as a template; every later test drops the test
 # database and recreates it from that template, so each test still starts from
 # a migration-built database, never from ORM metadata or a previous test.
-_TEMPLATE_DB = {"name": None}
+_TEMPLATE_DB = {"name": None, "can_clone": None}
 _ADMIN_ENGINE = {}
-# Written as the database comment on every database this session creates or
-# migrates; a DROP DATABASE refuses any database not carrying it.
-_SESSION_MARKER = f"cth-pytest-scratch:{os.getpid()}:{uuid.uuid4().hex}"
+# Database comments that a DROP DATABASE requires. The configured test database
+# carries one marker shared by every pytest session, because concurrent sessions
+# (serialized by the advisory lock) take turns recreating it. Each session's
+# template carries that session's own marker, so no session drops another's.
+_TEST_DB_MARKER = "cth-pytest-scratch"
+_SESSION_MARKER = f"cth-pytest-template:{os.getpid()}:{uuid.uuid4().hex}"
 
 
 def _quote_ident(name):
     return '"' + name.replace('"', '""') + '"'
 
 
-def _guarded_drop_database(conn, test_db_url, name):
+def _guarded_drop_database(conn, test_db_url, name, expected_marker):
     refusal = droppable_test_database_refusal(test_db_url, name, os.getpid())
     if refusal:
         raise RuntimeError(f"Refusing DROP DATABASE {name!r}: {refusal}")
@@ -564,15 +568,16 @@ def _guarded_drop_database(conn, test_db_url, name):
         text("SELECT 1 FROM pg_database WHERE datname = :n"), {"n": name}
     ).first():
         return  # nothing to drop
-    if marker != _SESSION_MARKER:
+    if marker != expected_marker:
         raise RuntimeError(
-            f"Refusing DROP DATABASE {name!r}: it was not created or migrated by this pytest session"
+            f"Refusing DROP DATABASE {name!r}: its comment is {marker!r}, not {expected_marker!r} "
+            "(the database was not created or migrated by the pytest harness that may drop it)"
         )
     conn.execute(text(f"DROP DATABASE {_quote_ident(name)} WITH (FORCE)"))
 
 
-def _mark_session_database(conn, name):
-    conn.execute(text(f"COMMENT ON DATABASE {_quote_ident(name)} IS '{_SESSION_MARKER}'"))
+def _mark_database(conn, name, marker):
+    conn.execute(text(f"COMMENT ON DATABASE {_quote_ident(name)} IS '{marker}'"))
 
 
 def _admin_engine(test_db_url):
@@ -592,6 +597,23 @@ def _fresh_database_from_template(test_db_url):
     test_db = sa.engine.make_url(test_db_url).database
     admin = _admin_engine(test_db_url)
 
+    if _TEMPLATE_DB["can_clone"] is None:
+        with admin.connect() as conn:
+            _TEMPLATE_DB["can_clone"] = bool(conn.execute(
+                text("SELECT rolcreatedb OR rolsuper FROM pg_roles WHERE rolname = current_user")
+            ).scalar())
+        if not _TEMPLATE_DB["can_clone"]:
+            warnings.warn(
+                "The test database role lacks CREATEDB, so every test replays the full migration "
+                "chain (slow). Grant it once to clone a migrated template instead: "
+                "ALTER ROLE <role> CREATEDB;",
+                stacklevel=2,
+            )
+    if not _TEMPLATE_DB["can_clone"]:
+        # Ownership of the test database is enough for the schema-level rebuild.
+        _rebuild_database_state()
+        return
+
     if _TEMPLATE_DB["name"] is None:
         _rebuild_database_state()
         db.engine.dispose()
@@ -605,21 +627,21 @@ def _fresh_database_from_template(test_db_url):
                      "WHERE datname = :db AND pid <> pg_backend_pid()"),
                 {"db": test_db},
             )
-            _mark_session_database(conn, test_db)
-            _guarded_drop_database(conn, test_db_url, template)
+            _mark_database(conn, test_db, _TEST_DB_MARKER)
+            _guarded_drop_database(conn, test_db_url, template, _SESSION_MARKER)
             conn.execute(text(f"CREATE DATABASE {_quote_ident(template)} TEMPLATE {_quote_ident(test_db)}"))
-            _mark_session_database(conn, template)
+            _mark_database(conn, template, _SESSION_MARKER)
         _TEMPLATE_DB["name"] = template
         return
 
     db.session.remove()
     db.engine.dispose()
     with admin.connect() as conn:
-        _guarded_drop_database(conn, test_db_url, test_db)
+        _guarded_drop_database(conn, test_db_url, test_db, _TEST_DB_MARKER)
         conn.execute(
             text(f"CREATE DATABASE {_quote_ident(test_db)} TEMPLATE {_quote_ident(_TEMPLATE_DB['name'])}")
         )
-        _mark_session_database(conn, test_db)
+        _mark_database(conn, test_db, _TEST_DB_MARKER)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -629,7 +651,7 @@ def _drop_template_database():
     test_db_url = os.environ.get("TEST_DATABASE_URL") or ""
     if template and test_db_url in _ADMIN_ENGINE:
         with _ADMIN_ENGINE[test_db_url].connect() as conn:
-            _guarded_drop_database(conn, test_db_url, template)
+            _guarded_drop_database(conn, test_db_url, template, _SESSION_MARKER)
         _ADMIN_ENGINE[test_db_url].dispose()
 
 
