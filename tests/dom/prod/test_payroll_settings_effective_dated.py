@@ -72,8 +72,11 @@ def _configured_class(client, app, monkeypatch):
     """A class whose setting in force has a schedule: first pay date Fri Oct 9,
     biweekly, $60/hour — the class's first setting, so in force at once."""
     classroom = initialize_as_teacher("chemistry_p1", client, app, with_payroll_settings=False)
-    enable_class_feature(class_id=classroom.class_id, feature="payroll")
+    # Enable payroll under the pinned clock. Class features are effective-dated,
+    # and enabling at the real time stamps them after MON once the calendar
+    # passes 2026-10-05, so the pinned-clock pages saw payroll as disabled.
     with _clock(monkeypatch, MON):
+        enable_class_feature(class_id=classroom.class_id, feature="payroll")
         _login(client, classroom, MON)
         _save_rate(client, "60.00")
     return classroom

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| FEAT-OBL-004 | 0.3 (DRAFT) | 2026-10-03 | 0.2 (DRAFT) | Normative (proposed) |
+| FEAT-OBL-004 | 0.4 (DRAFT) | 2026-10-10 | 0.3 (DRAFT) | Normative (proposed) |
 
 ## I. Purpose
 
@@ -114,8 +114,7 @@ All validation SHALL complete before any mutation begins.
    - **Hard invariant (always enforced):** a seat MUST NOT acquire a second *concurrently effective* entitlement referencing the **same** `policy_uuid`. Purchasing the exact same immutable contract twice would create duplicate recurring assessments and a duplicate entitlement lineage for one policy, and SHALL fail deterministically (`POLICY_ALREADY_HELD`). A retry with the same `idempotency_key` is not a duplicate — it returns the original result (§X).
    - **Product-rule (decided by the Insurance policy contract):** whether a seat may hold concurrently effective coverage across **different** `policy_uuid`s is governed by the Insurance policy contract, not by a global rule this FEAT invents. The one concrete rule the contract fixes is **tier-group mutual exclusion** (FEAT-CLASS-003 §VIII.3): a seat MUST NOT hold concurrently effective coverage for two policies sharing the same `tier_group`. FEAT-OBL-004 enforces it — a purchase whose policy carries a `tier_group` the seat already holds active coverage in SHALL fail with `POLICY_ALREADY_HELD_IN_GROUP`. Policies with no `tier_group` are exempt (a future replacement/upgrade model may still let a new policy be established while the old terminates at a defined boundary).
 
-Affordability is NOT pre-decided here as truth; the Ledger resolution phase
-(§VIII.3) is the sole authority on whether the premium can be paid.
+5. **Affordability.** DOM-OBL-001 3.3 §II.C and `SPEC-ECON-003` §4.5.1.1 (owner ruling 2026-10-07): the first premium is acquisition, not an independently authorized charge, and a payment that checking — together with any full overdraft-protection transfer the class enables — cannot cover leaves nothing owed and nothing granted. This is checked here, read-only, before any mutation begins, using the same Ledger resolution the Mutation Phase would otherwise use to post the debit (§VIII.3); a refusal here is `INSUFFICIENT_FUNDS` and writes nothing. §0.3's "affordability is not pre-decided here" wording is superseded by this paragraph.
 
 ## VIII. Mutation Phase
 
@@ -174,8 +173,8 @@ Through the lawful Obligations satisfaction-by-payment command (FEAT-OBL-003),
 which coordinates the Ledger posting (FEAT-LED-000 → FEAT-LED-001):
 
 - the intended plan is a premium debit against the student's account;
-- Ledger applies the shared charge-funding rule incorporated by FEAT-LED-000 §VIII/XI.5 and DOM-CLASS-001 §X. The initiating FEAT supplies resolved Identity seats and immutable Class banking directives under canonical seat → class serialization. Enabled protection covers the entire shortfall only if savings can fund it; otherwise savings is untouched and the authorized checking debit may become negative. Insufficient savings alone is not a funding denial;
-- an unlawful scope, malformed required directive or denied domain eligibility aborts the entire purchase with no assessment, grant, bill cycle or monetary effect persisted; the former `INSUFFICIENT_FUNDS` wording does not authorize checking-only affordability rejection of an otherwise lawful premium;
+- Ledger applies the shared charge-funding rule incorporated by FEAT-LED-000 §VIII/XI.5 and DOM-CLASS-001 §X. The initiating FEAT supplies resolved Identity seats and immutable Class banking directives under canonical seat → class serialization. Enabled protection covers the entire shortfall only if savings can fund it; otherwise savings is untouched;
+- **the first premium is acquisition, not an independently authorized charge.** DOM-OBL-001 3.3 §II.C and `SPEC-ECON-003` §4.5.1.1 (owner ruling 2026-10-07) govern: a payment that checking, together with any full overdraft-protection transfer, cannot cover is refused before anything posts. §VII.5 above resolves this read-only, **before** this Mutation Phase begins, so by the time this step runs the premium is already known affordable — a refusal aborts the entire purchase with no assessment, grant, bill cycle or monetary effect persisted, the same "no agreement was formed" outcome as a refused Store purchase (`FEAT-STOR-001` §VI.E). §0.3's "checking-only affordability rejection" wording is superseded by this paragraph;
 - the resulting `PAYMENT` event references the lawful `ledger_transaction_id`.
 
 Insurance premiums are not waivable (`WAIVED` is rent-only, DOM-OBL-001 §VII.1).
@@ -263,6 +262,7 @@ Representative failures (all leave zero mutations):
 - `INSURANCE_NOT_AVAILABLE_FOR_NEW_COVERAGE` (definition not `IN_USE`)
 - `POLICY_ALREADY_HELD` (seat already holds a concurrently effective grant for the **same** `policy_uuid` — hard invariant, §VII.4)
 - `POLICY_ALREADY_HELD_IN_GROUP` (seat already holds active coverage for another policy in the same `tier_group` — tier-group mutual exclusion, §VII.4)
+- `INSUFFICIENT_FUNDS` (checking, with any full overdraft-protection transfer, does not cover the first premium — §VII.5)
 - `CROSS_DOMAIN_FAILURE`
 
 ## XIII. Consequential Amendments (same architectural arc)
@@ -290,3 +290,7 @@ and cross-domain coordination invariants.
 **0.2 (2026-10-03)** incorporates universal full-shortfall charge funding and supersedes checking-only affordability denial wording. Policy availability, tier-group exclusion, duplicate acquisition, premium satisfaction, coverage timing and independently authorized fee applicability remain owning-domain decisions. No compatibility funding path, new fee or deferred liability is authorized.
 
 Version 0.3 supersedes the obsolete checking-affordability denial in §XII. Checking/savings insufficiency alone is not a denial under §VIII.3; scope, configuration and owning-domain failures remain atomic.
+
+## Amendment — 0.4
+
+**0.4 (2026-10-10)** reconciles this FEAT with `DOM-OBL-001` 3.3 §II.C and `SPEC-ECON-003` 2.3 §4.5.1.1 (owner ruling 2026-10-07), both effective after this FEAT's 0.3 draft text was written. The first premium is **acquisition**, not an independently authorized charge: the owner ruling's universal affordability rule governs it exactly as it governs a Store purchase (`FEAT-STOR-001` §VI.E), and 0.3's "checking-only affordability rejection does not apply" / "affordability is not pre-decided here" wording is withdrawn. §VII gains an explicit affordability check (read-only, before mutation) and §XII gains `INSUFFICIENT_FUNDS`. No other authority in this FEAT changes: policy availability, tier-group exclusion, duplicate acquisition, coverage timing and independently authorized fee applicability remain owning-domain decisions, and §4.5.1.1A's shared protection-transfer funding mechanics are unchanged — only whether a resulting negative checking balance is lawful for *this* charge.

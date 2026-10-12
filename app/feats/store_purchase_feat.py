@@ -330,6 +330,19 @@ def _execute_store_purchase_impl(
             error_message="Immediate-use and privilege products may only be purchased one at a time",
         )
 
+    # A collective goal is one buy-in per student (owner ruling 2026-10-07).
+    # Progress counts students, not units, so extra units buy nothing; they
+    # only move money. Refuse any quantity but one, and a second buy-in while
+    # the student still holds one (enforced below through the holding limit).
+    if policy_config.entitlement_type == 'COLLECTIVE_GOAL' and quantity != 1:
+        return StorePurchaseResult(
+            success=False,
+            correlation_id="",
+            quantity_granted=0,
+            error_code="QUANTITY_NOT_ALLOWED",
+            error_message="A collective goal is one buy-in per student",
+        )
+
     # A collective goal closes at its deadline. Past it the goal can no longer
     # be reached, so selling into it would take money for an outcome that cannot
     # occur. The deadline was configured, published, and displayed but never
@@ -366,6 +379,14 @@ def _execute_store_purchase_impl(
             grant_quantity=units_to_grant,
         )
     except HoldingLimitExceeded as exc:
+        if policy_config.entitlement_type == 'COLLECTIVE_GOAL':
+            return StorePurchaseResult(
+                success=False,
+                correlation_id="",
+                quantity_granted=0,
+                error_code="COLLECTIVE_GOAL_ALREADY_JOINED",
+                error_message="This student already holds a buy-in for this collective goal",
+            )
         return StorePurchaseResult(
             success=False,
             correlation_id="",
@@ -408,11 +429,24 @@ def _execute_store_purchase_impl(
     )
     banking_directive = get_banking_directive(canonical_context.class_id,include_fees=True)
     ledger_idempotency_key = idempotency_key or f"store-purchase:{corr_id}:ledger-plan"
+    # A store purchase needs the money (owner ruling 2026-10-07; SPEC-ECON-003
+    # §4.5.1.1). Funding still follows §4.5.1.1A: a full overdraft-protection
+    # transfer from savings may cover the shortfall. When nothing can cover it,
+    # the purchase is refused before anything posts, and a refused purchase
+    # carries no fee, as a declined card purchase would not.
     resolved_plan = resolve_intended_ledger_plan(
         plan=intended_plan,
         banking_directive=banking_directive,
-        fee_authority="FAILED_AGREEMENT",
+        fee_authority="NONE",
     )
+    if debit_amount > 0 and resolved_plan.checking_after < 0:
+        return StorePurchaseResult(
+            success=False,
+            correlation_id=corr_id,
+            quantity_granted=0,
+            error_code="INSUFFICIENT_FUNDS",
+            error_message="Checking, with any overdraft-protection transfer, does not cover this purchase",
+        )
     if resolved_plan.outcome == "DENY":
         return StorePurchaseResult(
             success=False,
@@ -432,18 +466,6 @@ def _execute_store_purchase_impl(
             quantity_granted=0,
             error_code="INSUFFICIENT_FUNDS",
             error_message=f"Purchase denied by Ledger: {ledger_result.get('reason', 'unknown')}",
-        )
-
-    # Cross-domain orchestration: if Ledger charged an NSF fee while resolving this
-    # purchase, record it as a fine obligation (Ledger stays domain-blind —
-    # DOM-LED-001 §II; the fine is Obligations-owned — SPEC-ECON-003, DOM-OBL-001 §II.C).
-    nsf_fee_txn_id = ledger_result.get("ledger_transaction_id")
-    if nsf_fee_txn_id:
-        from app.feats.nsf_fee_feat import record_nsf_fee_obligation
-        record_nsf_fee_obligation(
-            class_id=canonical_context.class_id,
-            seat_id=canonical_context.seat_id,
-            fee_transaction_id=nsf_fee_txn_id,
         )
 
     # =========================================================================

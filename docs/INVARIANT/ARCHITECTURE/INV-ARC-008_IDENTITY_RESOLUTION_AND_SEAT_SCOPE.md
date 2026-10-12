@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| INV-ARC-008      | 1.1     | 2026-06-02     | 1.0        | Foundational    |
+| INV-ARC-008      | 1.2     | 2026-10-06     | 1.1        | Foundational    |
 
 ## I. Purpose
 
@@ -42,8 +42,10 @@ active `class_id`, or fail closed.
 - **Domain Execution Boundary**: Domain code MUST NOT reconstruct or infer `seat_id` or
   `class_id`. Those anchors must be supplied by the routing and authentication layer.
 - **Student ID Quarantine**: Legacy `student_id` is transitional and load-bearing for
-  legacy records only. It MUST NOT be introduced into new V2 domains, routes, or FEATs
-  except inside explicitly approved bridge code.
+  legacy records only. It MUST NOT be introduced into new V2 domains, routes, or FEATs.
+  No bridge code, dual-write, fallback or heuristic interpretation is an exception to this
+  rule. Retained historical records may be read under an explicit immutable semantic
+  version, solely to interpret lawful historical state and never to create new state.
 - **Seat Public-ID Boundary**: Class-scoped participant URLs MUST expose
   `seats.public_id`, the UUID-encoded canonical deidentified public actor identifier,
   then resolve that identifier under the active `class_id`. A public
@@ -61,7 +63,9 @@ active `class_id`, or fail closed.
 This rule exists to prevent transitional identity bridges from becoming durable
 authority shortcuts. The rebuild must treat active class scope as authoritative and
 reject any attempt to recover meaning from alternate seats, legacy numeric IDs, or
-global identity aliases.
+global identity aliases. Physical schema coexistence during expand/contract is not a
+bridge, and read-side interpretation of versioned history is not an alternate identity
+path; neither may supply or recover `seat_id` or `class_id` for a new request.
 
 ## VIII. Downstream Consequence
 
@@ -75,3 +79,8 @@ all fail closed on scope mismatch.
 
 Revisions must preserve fail-closed active-class resolution and the prohibition on
 alias-based participant lookup.
+
+Version 1.2 (2026-10-06) removes the "explicitly approved bridge code" allowance from §VI and
+states the owner's compatibility ruling recorded in `SOP-DB-004` §VII–VIII. Supersedes only that
+allowance. Fail-closed active-class resolution and the prohibition on alias-based participant
+lookup are unchanged.

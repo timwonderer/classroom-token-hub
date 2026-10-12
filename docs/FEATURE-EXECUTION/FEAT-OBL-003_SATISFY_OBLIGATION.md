@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-OBL-003 | 1.1 | 2026-10-03 | 1.0 | Normative |
+| FEAT-OBL-003 | 1.2 | 2026-10-10 | 1.1 | Normative |
 
 ---
 
@@ -69,7 +69,7 @@ Optional context:
 
 ### 1.a Shared Payment Funding
 
-For a payment amount lawfully selected by Obligations, the originating FEAT composes the Ledger domain commands incorporated by FEAT-LED-000 §VIII/XI.5 and FEAT-LED-001. It resolves Identity seats and typed Class banking directives, acquires the canonical seat → class serialization before monetary reads, and posts principal plus any full-shortfall protection legs through one command reservation. Enabled protection uses savings only if it covers the entire checking shortfall; otherwise savings is untouched and the authorized checking debit may become negative. Insufficient savings alone does not deny a payment. Own-account transfers retain their separate sufficient-funds rule.
+For a payment amount lawfully selected by Obligations, the originating FEAT composes the Ledger domain commands incorporated by FEAT-LED-000 §VIII/XI.5 and FEAT-LED-001. It resolves Identity seats and typed Class banking directives, acquires the canonical seat → class serialization before monetary reads, and resolves principal plus any full-shortfall protection legs through the Ledger resolution path. Enabled protection uses savings only if it covers the entire checking shortfall; otherwise savings is untouched. **A payment that checking, together with any full-shortfall protection transfer, cannot cover is refused before posting** (DOM-OBL-001 3.3 §II.C; `SPEC-ECON-003` §4.5.1.1, owner ruling 2026-10-07): the obligation stays owed, accumulates with later assessments, and nothing posts. Insufficient savings alone does not by itself deny a payment — checking plus savings, under the protection rule above, is the full affordability test. Own-account transfers retain their separate sufficient-funds rule.
 
 Obligations still owns the payable slice, partial-payment permission, waiver legality, satisfaction lineage and any separately authorized fee applicability. The shared funding rule creates no waiver, new liability, deferred deduction or additional fee. A lawful payment references its actual principal Ledger effect; protection transfer legs are not satisfaction. Coverage/entitlement consequences remain with their owning domain. Replay returns the original accepted satisfaction/effect identity before repricing or further debit.
 

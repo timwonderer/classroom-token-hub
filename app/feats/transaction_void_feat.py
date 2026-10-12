@@ -7,7 +7,11 @@ from app.extensions import db
 from app.feats.base import requires_feat_context
 from app.models import EntitlementEvent, StoreProduct, Transaction
 from app.services import obligations_service
-from app.services.ledger_correction_service import reverse_transaction
+from app.services.ledger_correction_service import (
+    REVERSAL_RECORD_TYPES,
+    lock_and_resolve_purchase_eligibility,
+    reverse_transaction,
+)
 from app.services.ledger_posting_service import create_pending_transaction
 # TODO (Phase 4): store_entitlement_service deleted; must query EntitlementEvent directly
 # from app.services.store_entitlement_service import list_entitlement_history
@@ -22,12 +26,16 @@ class VoidTransactionResult:
     reversal_transaction_id: int | None
 
 
-class ImmediatePurchaseNotVoidable(ValueError):
-    pass
+class TransactionNotReversible(ValueError):
+    """Raised when a transaction cannot be reversed; the message is teacher-facing."""
 
 
-class UsedDelayedPurchaseNotVoidable(ValueError):
-    pass
+class PurchaseNotReversible(TransactionNotReversible):
+    """Raised when a Store purchase fails the reversal eligibility gate.
+
+    The message is the teacher-facing reason from
+    ``resolve_purchase_resolution_eligibility``.
+    """
 
 
 class ObligationTransactionNotVoidable(ValueError):
@@ -80,6 +88,12 @@ def execute_void_transactions(
 def _execute_void_transaction_impl(
     tx: Transaction, *, reason: str, actor_seat_id: int | None = None
 ) -> VoidTransactionResult:
+    # A reversal's own rows are terminal (SPEC-OPS-001 §3.1, §3.6).
+    if tx.type in REVERSAL_RECORD_TYPES:
+        raise TransactionNotReversible(
+            "This entry is part of a reversal and can't be reversed."
+        )
+
     # SPEC-OPS-001 §VII / INV-OPS-008: obligation-related monetary transactions are
     # neither voidable nor reversible. Reject at the canonical void/reversal boundary
     # BEFORE any compensating transaction can be created, so no ledger mutation occurs
@@ -149,66 +163,31 @@ def _void_purchase(tx: Transaction) -> None:
     """
     if not tx.class_id:
         raise ValueError("Transaction is missing class scope (class_id) and cannot be voided safely.")
-    if not tx.correlation_id:
-        raise ValueError("This purchase transaction cannot be voided automatically.")
 
-    matching_items = (
-        EntitlementEvent.query
-        .filter(
-            EntitlementEvent.correlation_id == tx.correlation_id,
-            EntitlementEvent.target_seat_id == tx.seat_id,
-            EntitlementEvent.class_id == tx.class_id,
-            EntitlementEvent.event_type == "GRANTED",
-            EntitlementEvent.acquisition_type == "PURCHASE",
-        )
-        .order_by(EntitlementEvent.timestamp.asc(), EntitlementEvent.event_id.asc())
-        .all()
-    )
-    if not matching_items:
-        raise ValueError("No matching student item was found for this purchase.")
+    # One gate decides reversibility for the Reverse control, issue resolution
+    # and this action alike. It used to be decided twice: the banking page
+    # offered Reverse on any active non-insurance purchase while this action
+    # accepted delayed-use items only, so a collective-goal buy-in, which
+    # DOM-STORE-001 §VIII.E lets a reversal revoke with a refund, showed a
+    # Reverse button that always failed. The gate also enforces SPEC-OPS-001
+    # §3.4: every grant from this charge must still be active, because a
+    # reversal is all-or-nothing and refunding units already spent would hand
+    # back money for value the student consumed.
+    eligibility = lock_and_resolve_purchase_eligibility(tx)
+    if not eligibility.eligible:
+        raise PurchaseNotReversible(eligibility.reason)
+    selected_items = list(eligibility.grants)
 
     # Every unit of one purchase shares a lineage. Any version of it answers the
-    # questions asked here, since item_type is lineage-stable, so take the newest.
-    lineage_uuid = matching_items[0].product_id
+    # question asked here (the name for the item-removal row), so take the newest.
     store_item = (
         StoreProduct.query
-        .filter_by(class_id=tx.class_id, product_lineage_uuid=lineage_uuid)
+        .filter_by(class_id=tx.class_id, product_lineage_uuid=selected_items[0].product_id)
         .order_by(StoreProduct.created_at.desc())
         .first()
     )
     if not store_item:
         raise ValueError("Purchase item record was not found. This transaction cannot be voided.")
-    if store_item.item_type == 'immediate':
-        raise ImmediatePurchaseNotVoidable
-    if store_item.item_type != 'delayed':
-        raise ValueError("Only delayed-use item purchases are voidable.")
-
-    # An entitlement that already reached a terminal state cannot be revoked —
-    # the partial unique index permits one terminal event per lineage, so a
-    # second one would fail at the database anyway.
-    terminal_ids = {
-        row[0]
-        for row in db.session.query(EntitlementEvent.entitlement_id)
-        .filter(
-            EntitlementEvent.class_id == tx.class_id,
-            EntitlementEvent.entitlement_id.in_(
-                [ev.entitlement_id for ev in matching_items]
-            ),
-            EntitlementEvent.event_type.in_(("CONSUMED", "EXPIRED", "REVOKED")),
-        )
-        .all()
-    }
-
-    selected_items = [
-        event for event in matching_items if event.entitlement_id not in terminal_ids
-    ]
-
-    # A reversal is all-or-nothing (SPEC-OPS-001 §3.4): every grant deriving
-    # authority from this transaction must still be invalidatable, or the
-    # transaction is not reversible at all. Refunding in full while some units
-    # were already spent would hand back money for value the student consumed.
-    if len(selected_items) < len(matching_items):
-        raise ValueError("Transaction cannot be voided because selected entitlements are already consumed.")
 
     # Terminate the entitlements. Without this the purchase's units stay
     # GRANTED forever: stock remaining and per-student limits are both derived

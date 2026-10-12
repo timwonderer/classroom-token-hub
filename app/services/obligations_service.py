@@ -1127,6 +1127,15 @@ def get_paid_rent_assessments_for_cycle(
     ]
 
 
+# Records in assessment_events that are not obligations. An NSF fee is a
+# Ledger fee, a side effect of a negative ledger balance; it was written here
+# only because it ran through the assessment mechanism. It is one debit, never
+# assessed and later satisfied, so it confers no obligation finality on that
+# debit, and Ledger reverses it like any other fee (DOM-OBL-001 §II.C). No new
+# NSF fee is charged; these rows are history.
+NON_OBLIGATION_ASSESSMENT_TYPES = frozenset({"NSF_FEE"})
+
+
 def is_obligation_related_transaction(transaction_id: int | None) -> bool:
     """Return True iff a ledger transaction has obligation provenance.
 
@@ -1137,6 +1146,9 @@ def is_obligation_related_transaction(transaction_id: int | None) -> bool:
     reversible; monetary remediation must be a new, independently authorized
     adjustment (INV-OPS-009).
 
+    A row in ``NON_OBLIGATION_ASSESSMENT_TYPES`` is not an obligation event, so
+    its reference makes nothing obligation-related.
+
     Args:
         transaction_id: Ledger transaction id to test (None → False).
 
@@ -1145,11 +1157,23 @@ def is_obligation_related_transaction(transaction_id: int | None) -> bool:
     """
     if transaction_id is None:
         return False
-    return (
-        db.session.query(ObligationAssessment.id)
-        .filter(ObligationAssessment.ledger_transaction_id == transaction_id)
-        .first()
-        is not None
+    return bool(obligation_related_transaction_ids([transaction_id]))
+
+
+def obligation_related_transaction_ids(transaction_ids) -> frozenset[int]:
+    """``is_obligation_related_transaction`` for many transactions in one query."""
+    ids = [tid for tid in transaction_ids if tid is not None]
+    if not ids:
+        return frozenset()
+    return frozenset(
+        row[0]
+        for row in db.session.query(ObligationAssessment.ledger_transaction_id)
+        .filter(
+            ObligationAssessment.ledger_transaction_id.in_(ids),
+            ObligationAssessment.obligation_type.notin_(NON_OBLIGATION_ASSESSMENT_TYPES),
+        )
+        .distinct()
+        .all()
     )
 
 

@@ -211,11 +211,12 @@ from app.services.payroll.cycle_completion import get_completed_cycle_window
 from app.feats.direct_entitlement_grant_feat import execute_direct_grant, execute_hall_pass_adjustment
 # execute_insurance_claim_resolution removed — insurance_claim_feat.py deleted; insurance feature broken pending DOM-OBL-001 migration
 from app.feats.transaction_void_feat import (
-    ImmediatePurchaseNotVoidable,
-    UsedDelayedPurchaseNotVoidable,
+    ObligationTransactionNotVoidable,
+    TransactionNotReversible,
     execute_void_transaction,
     execute_void_transactions,
 )
+from app.services.ledger_correction_service import REVERSAL_RECORD_TYPES
 from app.hash_utils import hash_username_lookup
 from app.services.ledger_balance_query_service import get_batch_balances_by_class_seat
 from app.services.attendance_service import calculate_unpaid_attendance_seconds
@@ -3181,17 +3182,11 @@ def _get_rent_privileges_for_student(student, class_id, seat_id):
     if not granted:
         return rent_privileges
 
-    # Drop anything already consumed, expired, or revoked.
-    terminal_ids = {
-        row[0]
-        for row in db.session.query(EntitlementEvent.entitlement_id)
-        .filter(
-            EntitlementEvent.class_id == class_id,
-            EntitlementEvent.entitlement_id.in_([e.entitlement_id for e in granted]),
-            EntitlementEvent.event_type.in_(("CONSUMED", "EXPIRED", "REVOKED")),
-        )
-        .all()
-    }
+    # Drop anything already consumed, expired, or revoked, and any hall pass a
+    # hall-pass log has used.
+    from app.services.entitlement_read_service import ended_entitlement_ids
+
+    terminal_ids = ended_entitlement_ids(class_id, [e.entitlement_id for e in granted])
 
     seen_lineages = set()
     for event in granted:
@@ -3297,6 +3292,43 @@ def set_current_class():
 # confirmation or re-set path.
 
 
+# Rows the student detail page never offers to reverse: compensations, payroll
+# (corrected through its own flow) and reversals themselves (SPEC-OPS-001 §3.6).
+_STUDENT_DETAIL_UNREVERSIBLE_TYPES = frozenset(
+    {"refund", "payroll", "manual_payment", "payroll_correction"}
+) | REVERSAL_RECORD_TYPES
+
+
+def _reversible_transaction_ids(transactions):
+    """Ids of the rows whose Reverse control the reverse action would honour.
+
+    Read-only, so the GET may call it. A row is offered only when the action
+    would accept it: not already reversed, no obligation provenance
+    (SPEC-OPS-001 §VII), and, for a Store purchase, passing the same
+    eligibility gate the action enforces. A button that can only fail is
+    worse than no button.
+    """
+    from app.services.ledger_correction_service import resolve_purchase_resolution_eligibility
+    from app.services.ledger_provenance_query_service import has_exact_reversal
+
+    candidates = [tx for tx in transactions if tx.type not in _STUDENT_DETAIL_UNREVERSIBLE_TYPES]
+    if not candidates:
+        return frozenset()
+    from app.services.obligations_service import obligation_related_transaction_ids
+
+    obligation_related = obligation_related_transaction_ids(tx.id for tx in candidates)
+    reversible = set()
+    for tx in candidates:
+        if tx.id in obligation_related:
+            continue
+        if tx.type == "purchase":
+            if resolve_purchase_resolution_eligibility(tx).eligible:
+                reversible.add(tx.id)
+        elif not has_exact_reversal(tx):
+            reversible.add(tx.id)
+    return frozenset(reversible)
+
+
 @admin_bp.route('/students/<string:actor_public_id>')
 @admin_required
 def student_detail_public(actor_public_id):
@@ -3365,6 +3397,7 @@ def student_detail_public(actor_public_id):
     transactions_query = Transaction.query.filter(tx_scope)
 
     transactions = transactions_query.order_by(Transaction.timestamp.desc()).all()
+    reversible_transaction_ids = _reversible_transaction_ids(transactions)
     _entitlement_query = (
         EntitlementEvent.query
         .filter(
@@ -3684,6 +3717,7 @@ def student_detail_public(actor_public_id):
                          reset_code_is_active=reset_code_is_active,
                          join_codes=join_codes,
                          transactions=transactions,
+                         reversible_transaction_ids=reversible_transaction_ids,
                          entitlements=store_purchases,
                          latest_attendance_event=latest_attendance_event,
                          attendance_events=attendance_display_rows,
@@ -6355,13 +6389,14 @@ def void_transaction(transaction_id):
         db.session.rollback()
         current_app.logger.info("Transaction void denied for %s: %s", transaction_id, e)
         return _void_error("You do not have permission to void this transaction.", status_code=403)
-    except ImmediatePurchaseNotVoidable:
+    except TransactionNotReversible as e:
         db.session.rollback()
-        return _void_error("Immediate-use item purchases are not voidable.")
-    except UsedDelayedPurchaseNotVoidable:
+        current_app.logger.info("Transaction reversal refused for %s: %s", transaction_id, e)
+        return _void_error(str(e))
+    except ObligationTransactionNotVoidable:
         db.session.rollback()
         return _void_error(
-            "Delayed-use item has already been used and cannot be voided.",
+            "This charge settles an obligation and cannot be reversed. Use a manual credit instead.",
         )
     except ValueError as e:
         db.session.rollback()
@@ -7985,7 +8020,47 @@ def payroll_manual_payment():
             selected_class_id = selected_scope['class_id']
 
             applied_count = 0
-            request_nonce = secrets.token_hex(12)
+            # The nonce used to be fresh on every call (secrets.token_hex(12)),
+            # so a retry after a mid-batch failure (a lock timeout, a dropped
+            # connection) carried no memory of which students were already
+            # paid: the FEAT commits each seat's credit in its own transaction
+            # (DOM-LED-001 command-scoped idempotency is per seat, never per
+            # submission), and 14 successes before seat 15 timed out meant a
+            # resubmit paid those 14 a second time (audit F5). Deriving the
+            # nonce from the submission's own content — same teacher, same
+            # class, same selection, same description and amount — makes a
+            # same-minute retry of that batch replay the same per-seat
+            # idempotency_key as the first attempt, instead of minting a new
+            # one that bypasses every existing replay guard. The content is
+            # bucketed to a 5-minute server-time window (comfortably covering
+            # "click Apply again" after a failure) rather than hashed with no
+            # time bound at all, so a teacher who runs the identical weekly
+            # bonus — same roster, same description, same amount — next week
+            # is not silently skipped as a stale "replay" of this one.
+            #
+            # A hard 5-minute edge has its own failure mode a Codex review on
+            # this PR caught: a batch that starts just before the boundary,
+            # credits some seats, fails, and is retried just after it would
+            # compute a *different* nonce for the retry and find no record of
+            # the earlier successes — double-paying exactly the seats this
+            # fix exists to protect. So "already applied" is checked against
+            # both the current bucket's nonce and the immediately preceding
+            # one; only the current bucket's nonce is used for new writes.
+            # That covers a retry that crosses at most one boundary (up to
+            # ~10 minutes worst case) without reaching back far enough to
+            # mistake a genuinely new, later submission for a replay.
+            def _manual_credit_nonce(bucket: int) -> str:
+                return hashlib.sha256(
+                    "|".join([
+                        selected_class_id, g.canonical_context.user_id, description,
+                        format(amount, 'f'), form.account_type.data, payment_type,
+                        str(bucket), ",".join(sorted(student_ids)),
+                    ]).encode()
+                ).hexdigest()[:24]
+
+            current_bucket = int(utc_now().timestamp() // 300)
+            request_nonce = _manual_credit_nonce(current_bucket)
+            previous_nonce = _manual_credit_nonce(current_bucket - 1)
             for actor_public_id in student_ids:
                 student = _resolve_student_detail_seat(str(actor_public_id))
                 if student is None or student.class_id != selected_class_id:
@@ -7995,12 +8070,50 @@ def payroll_manual_payment():
                 if student.claimed_at is None or student.user_id is None:
                     continue
 
+                idempotency_key = f"manual_credit:{selected_class_id}:{student.id}:{request_nonce}"
+                previous_idempotency_key = (
+                    f"manual_credit:{selected_class_id}:{student.id}:{previous_nonce}"
+                )
+
+                # The previous bucket is a plain historical fact, not a race:
+                # it names a key this process would never write again (only
+                # the *current* bucket is ever used for new rows), so an
+                # ordinary read is enough to recognize a retry that crossed
+                # one boundary and skip re-crediting it.
+                already_applied_previous_bucket = PayrollEvent.query.filter(
+                    PayrollEvent.class_id == selected_class_id,
+                    PayrollEvent.target_seat_id == student.id,
+                    PayrollEvent.payroll_event_type == "manual_credit",
+                    PayrollEvent.idempotency_key == previous_idempotency_key,
+                ).first() is not None
+                if already_applied_previous_bucket:
+                    applied_count += 1
+                    continue
+
+                # The current bucket's key is a live race, not just history:
+                # two literally simultaneous submissions (a double-click, two
+                # open tabs) could both read "not yet applied" before either
+                # commits (CodeRabbit review on PR #1536), and
+                # uq_payroll_event_replay_guard can't catch it on its own —
+                # that constraint's tuple includes correlation_id, and
+                # generate_correlation_id() mints a fresh random one on every
+                # call throughout this codebase (cross-domain tracing, never
+                # replay safety). A check here, before record_payroll_event,
+                # would run in a transaction FEATContext.__enter__ can discard
+                # on its way to opening the FEAT's own — on a pooled engine
+                # that can hand the FEAT a different physical connection, so a
+                # lock acquired out here is not guaranteed to still be held
+                # inside it. record_payroll_event (FEAT-PROD-003) now takes
+                # the advisory lock and does this same-key existence check as
+                # the first statements inside its own owned transaction
+                # instead, and returns the existing event when it finds one —
+                # see _record_payroll_event_impl in app/feats/prod.py.
                 record_payroll_event(
                     ctx=g.canonical_context,
                     target_seat_id=student.id,
                     payroll_event_type="manual_credit",
                     correlation_id=generate_correlation_id(),
-                    idempotency_key=f"manual_credit:{selected_class_id}:{student.id}:{request_nonce}",
+                    idempotency_key=idempotency_key,
                     # Manual credits need no payroll setting (DOM-PROD-001 §VIII).
                     mechanism="TEACHER",
                     summary_json={
@@ -10641,10 +10754,10 @@ def resolve_issue(issue_ref):
             # which options the issue page offers, so the form cannot promise an
             # outcome this handler would refuse.
             from app.services.ledger_correction_service import (
-                resolve_purchase_resolution_eligibility,
+                lock_and_resolve_purchase_eligibility,
                 reverse_transaction,
             )
-            eligibility = resolve_purchase_resolution_eligibility(transaction)
+            eligibility = lock_and_resolve_purchase_eligibility(transaction)
             if not eligibility.eligible:
                 flash(eligibility.reason, "error")
                 return redirect(url_for('admin.view_issue', issue_ref=issue_ref))

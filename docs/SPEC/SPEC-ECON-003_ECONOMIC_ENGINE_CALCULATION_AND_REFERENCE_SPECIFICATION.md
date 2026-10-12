@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-ECON-003    |  2.2    |     2026-10-03 |        2.1 |       Normative |
+| SPEC-ECON-003    |  2.3    |     2026-10-07 |        2.2 |       Normative |
 
 ---
 
@@ -632,10 +632,25 @@ Internal fines are only active if their value is not `NULL` for the economic pol
 
 ##### 4.5.1.1 Overdraft / NSF Fee Applicability
 
-An overdraft / non-sufficient-funds (NSF) fee is a fine charged for a **failed
-agreement**: a transaction that was meant to fulfill an **intended purchase**
-(a Store purchase) or an **existing obligation** (e.g. rent, insurance premium)
-and could not be covered by the seat's spendable funds.
+**No overdraft or non-sufficient-funds (NSF) fee is assessed** (owner ruling
+2026-10-07; `DOM-OBL-001` 3.3 §II.C). A payment toward an existing obligation
+(e.g. rent, insurance premium) that cannot be covered by the seat's spendable
+funds leaves the obligation unpaid: it remains owed, accumulates with later
+assessments, and is subject to late fees under its own policy. An NSF fee was
+never an obligation: it is a Ledger fee, a side effect of a negative balance, and
+a historical one may be reversed like any other fee (`DOM-OBL-001` §II.C).
+
+The rest of §4.5.1.1 (the fee's scope, amount and recording) and the economic
+engine's overdraft-fee settings describe the retired fee and are superseded by
+the paragraph above; they are removed in the next revision of this
+specification. §4.5.1.1A (charge and deduction funding, including overdraft
+protection) is unaffected.
+
+A **Store purchase** is not charged an NSF fee (owner ruling 2026-10-07). A purchase requires
+sufficient funds: when checking, together with any full overdraft-protection
+transfer under §4.5.1.1A, does not cover it, the Store refuses it before anything
+posts (`FEAT-STOR-001` §VI.E). No agreement was formed, so there is no failed
+agreement and no fee, as a declined card purchase costs nothing.
 
 An NSF fee SHALL NOT be charged for:
 
@@ -685,7 +700,9 @@ savings sweeps are prohibited. Resolution uses current authoritative available
 balances while holding the seat serialization lock through posting.
 
 Own-account transfers are excluded: insufficient source funds deny the transfer,
-with no protection transfer or fee. Fee applicability remains the separate
+with no protection transfer or fee. A Store purchase is eligible only when this
+rule leaves checking at or above zero (`FEAT-STOR-001` §VI.E); a purchase never
+takes the "applies the debit to checking, which may become negative" branch. Fee applicability remains the separate
 failed-agreement test in §4.5.1.1. Funding an NSF fee does not generate another
 NSF fee. A payroll correction always has zero NSF fee and cannot generate an
 obligation, deferred debt or future deduction.
@@ -1061,6 +1078,8 @@ Revisions to this document must:
 3. remain consistent with the class-economy authority chain.
 
 ### Revision history
+
+- **2.3 (2026-10-07)**, owner rulings 2026-10-07: no overdraft or NSF fee is assessed; a failed obligation payment leaves the obligation unpaid, accumulating, and subject to late fees (§4.5.1.1; `DOM-OBL-001` 3.3). A Store purchase requires sufficient funds and is refused before posting, with no fee, when checking and any full protection transfer do not cover it (§4.5.1.1, §4.5.1.1A; `FEAT-STOR-001` 3.2). Funding semantics for authorized charges are unchanged.
 
 - **2.2 (2026-10-03)** — Introduces §4.5.1.1A universal full-shortfall-or-no-transfer protection for charges and deductions. Supersedes the penalty savings exclusion in 2.1 and earlier. Preserves transfer sufficient-funds rules and independent failed-agreement fees; payroll correction has zero NSF fee and creates no obligation or deferred deduction. Documentation-only authority, not runtime certification.
 

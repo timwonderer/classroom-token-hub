@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-OPS-004 | 1.3 | 2026-09-29 | SPEC-OPS-004 v1.2 | Normative |
+| SPEC-OPS-004 | 1.4 | 2026-10-07 | SPEC-OPS-004 v1.3 | Normative |
 
 > [!NOTE]
 > Renumbered from `SPEC-OPS-003` on 2026-09-06. This document and
@@ -55,9 +55,9 @@ The console navigation exposes exactly four destinations plus sign-out:
 
 | Destination | Route | Purpose |
 | --- | --- | --- |
-| Dashboard | `/sysadmin/dashboard` | Platform-wide counts and recent error events |
+| Dashboard | `/sysadmin/dashboard` | Platform-wide counts |
 | Support | `/sysadmin/support` | Teacher issues and developer-escalated issues |
-| Logs | `/sysadmin/combined-logs` | Error events and network activity |
+| Grafana | `/sysadmin/grafana` | Application logs, error events and request activity, opened in a new tab (§6.5) |
 | Passkeys | `/sysadmin/passkey/settings` | The operator's own WebAuthn credentials |
 
 Routes outside this set are reachable by direct URL only and MUST NOT be treated as supported operator surfaces.
@@ -68,7 +68,6 @@ A pure read (`INV-ARC-007`). It reports:
 
 - teacher account count, seat count with student role, and sysadmin count;
 - open ticket count, defined as open teacher-submitted tickets plus tickets escalated to developer review that are not yet resolved. Only tickets visible under §6.3 are counted;
-- the five most recent error events;
 - the sysadmin roster, rendered as display view objects rather than raw models.
 
 The dashboard is display-only. It exposes no account administration action.
@@ -108,9 +107,7 @@ available; consent to disclose a frozen snapshot grants no live class authority.
 
 ### 6.4 Logs
 
-`/sysadmin/combined-logs` is the supported log surface, with error events and network activity as tabs over persisted records.
-
-`/sysadmin/logs` reads the tail of the configured application log file (`LOG_FILE`, default `app.log`) and structures it for display. It is filesystem-dependent and therefore returns nothing meaningful on deployments without a local log file.
+The console has no log viewer (owner ruling 2026-10-07). Application logs, error events and request activity are read in Grafana (§6.5). Version 1.4 removed `/sysadmin/combined-logs`, `/sysadmin/logs`, the redirects `/sysadmin/error-logs`, `/sysadmin/logs-testing` and `/sysadmin/network-activity`, and the dashboard's recent-errors panel. The `operational_events` table and its writer are unchanged; only the console's reading of it was removed.
 
 ### 6.5 Grafana proxy
 
@@ -141,7 +138,7 @@ retained as evidence, not as intended behavior or current open work:
 1. **Resolved 2026-09-08:** `/sysadmin/error-logs`, `/sysadmin/logs-testing`,
    and `/sysadmin/network-activity` no longer render hardcoded empty result
    sets. The superseded routes redirect to the supported
-   `/sysadmin/combined-logs` surface.
+   `/sysadmin/combined-logs` surface. (All of these were removed in 1.4.)
 2. **Resolved 2026-09-08:** `update_user_report` now runs under
    `FEAT-OPS-001`, uses the canonical issue-status/history helper, records
    Operations-owned review metadata, and commits the mutation atomically.
@@ -164,6 +161,13 @@ Rationale: the user guide corpus is audience-isolated at the docs route — a re
 The prior guides at `docs/user-guides/features/sysadmin/` and `docs/user-guides/sysadmin_manual.md` are superseded by this specification.
 
 ## X. Change Notes
+
+**Version 1.4 (2026-10-07):**
+- Removed log reading from the console (owner ruling 2026-10-07: logs are read in Grafana). §VI no
+  longer lists a Logs destination, §6.2 drops the recent-errors list, and §6.4 states that the console
+  has no log viewer. §6.1 now lists Grafana, which the navigation already exposed but the table
+  omitted, so the table again holds the four destinations it names. `/sysadmin/logs` read the application log file but displayed nothing in
+  production; the combined-logs network tab only repeated the error rows.
 
 **Version 1.3 (2026-09-29):**
 - §6.2 and §6.3 conform to DOM-SUP-001 and FEAT-SUP-001. Version 1.2's text for them was written

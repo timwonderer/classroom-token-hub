@@ -445,7 +445,7 @@
                                     <span class="badge bg-secondary">{{ tx.posting_state.value|title }}</span>
                                 </td>
                                 <td>
-                                    {% if tx.type not in ['refund','payroll','manual_payment','payroll_correction','REVERSAL'] %}
+                                    {% if tx.id in reversible_transaction_ids %}
                                     <button type="button" class="btn btn-sm btn-outline-danger void-btn" data-id="{{ tx.id }}">
                                         <span class="material-symbols-outlined" aria-hidden="true">cancel</span> Reverse
                                     </button>

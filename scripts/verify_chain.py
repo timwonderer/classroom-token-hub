@@ -6,6 +6,29 @@ import ast
 from pathlib import Path
 from typing import Dict, List, Set, Optional
 
+def _extract_assignment_value(content: str, name: str) -> Optional[str]:
+    """The raw text to the right of ``name = `` on its own line, or None.
+
+    A plain ``re.search(rf'^{name}\\s*=\\s*(.+)$', ...)`` is what CodeQL's
+    py/polynomial-redos flags here (alert #279): the trailing ``\\s*`` and
+    the capturing ``.+`` both match ordinary whitespace, so a line with many
+    spaces/tabs after ``=`` and no terminating content gives the engine
+    several ways to split the same characters between the two groups. This
+    script is local-only; ``check-migrations.yml`` invokes
+    ``validate-migrations.py``, not this verifier. Finding the
+    ``=`` with a regex that has nothing after it to backtrack against, then
+    slicing the rest of the line in plain Python, has identical behavior
+    with no quantifier adjacent to another that can consume the same
+    characters.
+    """
+    m = re.search(rf'^{re.escape(name)}\s*=', content, re.MULTILINE)
+    if not m:
+        return None
+    line_end = content.find('\n', m.end())
+    rest = content[m.end():] if line_end == -1 else content[m.end():line_end]
+    return rest.strip()
+
+
 def parse_migration_file(filepath: Path) -> Optional[Dict]:
     """Parse a migration file to extract revision info."""
     try:
@@ -13,7 +36,7 @@ def parse_migration_file(filepath: Path) -> Optional[Dict]:
             content = f.read()
 
         revision_match = re.search(r'^revision\s*=\s*[\'"]([^\'"]+)[\'"]', content, re.MULTILINE)
-        down_revision_match = re.search(r'^down_revision\s*=\s*(.+)$', content, re.MULTILINE)
+        down_rev_raw = _extract_assignment_value(content, 'down_revision')
 
         if not revision_match:
             return None
@@ -21,8 +44,8 @@ def parse_migration_file(filepath: Path) -> Optional[Dict]:
         revision = revision_match.group(1)
         down_revision = None
 
-        if down_revision_match:
-            down_rev_str = down_revision_match.group(1).strip()
+        if down_rev_raw is not None:
+            down_rev_str = down_rev_raw
             if down_rev_str != 'None':
                 try:
                     down_revision = ast.literal_eval(down_rev_str)

@@ -14,6 +14,9 @@ on:
     paths:
       - 'migrations/versions/**'
       - 'migrations/lint_baseline.txt'
+      - 'migrations/forward_only_register.txt'
+      - 'tests/guards/forward_only_revisions.py'
+      - 'tests/test_forward_only_revision_register.py'
       - 'app/models.py'
       - 'app/models/**'
       - 'scripts/validate-migrations.py'
@@ -23,6 +26,9 @@ on:
     paths:
       - 'migrations/versions/**'
       - 'migrations/lint_baseline.txt'
+      - 'migrations/forward_only_register.txt'
+      - 'tests/guards/forward_only_revisions.py'
+      - 'tests/test_forward_only_revision_register.py'
       - 'app/models.py'
       - 'app/models/**'
       - 'scripts/validate-migrations.py'
@@ -103,6 +109,14 @@ jobs:
             fi
           fi
           python scripts/lint_migrations.py --baseline migrations/lint_baseline.txt $COMPARE
+
+      # SOP-DB-004 §V.5: every revision whose downgrade() raises or does nothing is in
+      # migrations/forward_only_register.txt, so the operator knows before the window
+      # which revisions make code-only rollback impossible. The test needs no database.
+      - name: Check forward-only revision register
+        run: |
+          pip install pytest
+          python -m pytest tests/test_forward_only_revision_register.py -q --noconftest
 
       - name: Comment on PR (if check fails)
         if: failure() && github.event_name == 'pull_request'

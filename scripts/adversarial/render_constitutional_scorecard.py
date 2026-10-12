@@ -12,29 +12,17 @@ def read_json(path: Path) -> dict | None:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def read_jsonl(path: Path) -> list[dict]:
-    if not path.exists():
-        return []
-    rows: list[dict] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if line.strip():
-            rows.append(json.loads(line))
-    return rows
-
-
 def main() -> int:
     run_id = os.getenv("ADVERSARIAL_RUN_ID", "current")
     root = Path(os.getenv("ADVERSARIAL_ARTIFACT_DIR", "artifacts/adversarial")) / run_id
     root.mkdir(parents=True, exist_ok=True)
 
-    get_violations = read_jsonl(root / "violations.jsonl")
     cross_class = read_json(root / "cross_class_report.json")
     lineage = read_json(root / "lineage_report.json")
     runtime = read_json(root / "runtime_attacks_report.json")
     injection = read_json(root / "injection_report.json")
 
     checks = [
-        ("GET Mutation Detector", "FAIL" if get_violations else "PASS", len(get_violations)),
         (
             "Cross-Class Isolation Verifier",
             (cross_class or {}).get("status", "MISSING"),
@@ -59,7 +47,7 @@ def main() -> int:
 
     overall = "PASS"
     for _, status, _count in checks:
-        if status in {"FAIL", "MISSING"}:
+        if status != "PASS":
             overall = "FAIL"
             break
 
@@ -77,7 +65,7 @@ def main() -> int:
 
     (root / "scorecard.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(json.dumps({"run_id": run_id, "overall": overall, "scorecard": str(root / "scorecard.md")}))
-    return 0
+    return 0 if overall == "PASS" else 1
 
 
 if __name__ == "__main__":
