@@ -116,8 +116,6 @@ def _sysadmin_auth_username_exists(username: str, *, exclude_sysadmin_id: int | 
 
 @sysadmin_bp.route('/login', methods=['GET', 'POST'])
 @limiter.limit("10 per minute", methods=["POST"])
-@limiter.limit("5 per 5 minutes", key_func=login_account_limit_key(), methods=["POST"])
-@limiter.limit("1 per 2 minutes", key_func=login_totp_replay_limit_key(), methods=["POST"])
 @requires_feat_context("FEAT-OPS-001")
 def login():
     """System admin login with TOTP authentication.
@@ -138,6 +136,13 @@ def login():
         if not verify_turnstile_token(turnstile_token, get_real_ip()):
             flash("Security verification failed. Please complete the check and try again.", "error")
             return render_template("system_admin_login.html", form=form)
+        # The per-account and replay budgets (audit S5) are charged only once
+        # Turnstile has passed -- see the matching comment on the teacher
+        # login (app/routes/admin.py) for why these cannot be route
+        # decorators.
+        with limiter.limit("5 per 5 minutes", key_func=login_account_limit_key()), \
+                limiter.limit("1 per 2 minutes", key_func=login_totp_replay_limit_key()):
+            pass
         username = normalize_auth_username(form.username.data)
         totp_code = form.totp_code.data.strip()
         user = find_canonical_user_by_auth_username(username, expected_role="sysadmin")

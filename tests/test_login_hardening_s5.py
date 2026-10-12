@@ -166,6 +166,63 @@ def test_admin_login_totp_code_cannot_be_replayed(client, app):
         limiter.reset()
 
 
+def test_admin_login_turnstile_failure_does_not_spend_the_account_budget(client, app, monkeypatch):
+    """The account/replay budgets must be charged only after Turnstile
+    passes. Charging them as route decorators runs via Flask-Limiter's
+    before_request hook, ahead of the Turnstile check inside the view, so an
+    attacker with no valid token could spend a known account's whole
+    5-per-5-minutes budget and lock out its real owner (flagged in review on
+    this change).
+    """
+    teacher, secret = _create_teacher("s5_admin_turnstile_budget")
+    app.config["RATELIMIT_ENABLED"] = True
+    try:
+        monkeypatch.setattr("app.routes.admin.verify_turnstile_token", lambda *a, **k: False)
+        for _ in range(6):
+            blocked = client.post(
+                "/admin/login",
+                data={"username": "s5_admin_turnstile_budget", "totp_code": "000000"},
+            )
+            assert blocked.status_code == 200  # Turnstile rejection, not a 429
+
+        monkeypatch.setattr("app.routes.admin.verify_turnstile_token", lambda *a, **k: True)
+        response = client.post(
+            "/admin/login",
+            data={"username": "s5_admin_turnstile_budget", "totp_code": pyotp.TOTP(secret).now()},
+        )
+        assert response.status_code == 302
+        with client.session_transaction() as sess:
+            assert sess["user_id"] == teacher.id
+    finally:
+        app.config["RATELIMIT_ENABLED"] = False
+        limiter.reset()
+
+
+def test_sysadmin_login_turnstile_failure_does_not_spend_the_account_budget(client, app, monkeypatch):
+    sysadmin, secret = _create_sysadmin("s5_sysadmin_turnstile_budget")
+    app.config["RATELIMIT_ENABLED"] = True
+    try:
+        monkeypatch.setattr("app.routes.system_admin.verify_turnstile_token", lambda *a, **k: False)
+        for _ in range(6):
+            blocked = client.post(
+                "/sysadmin/login",
+                data={"username": "s5_sysadmin_turnstile_budget", "totp_code": "000000"},
+            )
+            assert blocked.status_code == 200  # re-renders the login form
+
+        monkeypatch.setattr("app.routes.system_admin.verify_turnstile_token", lambda *a, **k: True)
+        response = client.post(
+            "/sysadmin/login",
+            data={"username": "s5_sysadmin_turnstile_budget", "totp_code": pyotp.TOTP(secret).now()},
+        )
+        assert response.status_code == 302
+        with client.session_transaction() as sess:
+            assert sess["user_id"] == sysadmin.id
+    finally:
+        app.config["RATELIMIT_ENABLED"] = False
+        limiter.reset()
+
+
 def test_admin_login_a_fresh_code_after_a_typo_is_not_blocked(client, app):
     """Replay protection is keyed on the exact code value, so correcting a
     typo with a *different* code is not caught by it."""

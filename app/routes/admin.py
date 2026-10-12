@@ -2563,8 +2563,6 @@ def dismiss_unpaid_work_notice():
 
 @admin_bp.route('/login', methods=['GET', 'POST'])
 @limiter.limit("10 per minute")
-@limiter.limit("5 per 5 minutes", key_func=login_account_limit_key(), methods=["POST"])
-@limiter.limit("1 per 2 minutes", key_func=login_totp_replay_limit_key(), methods=["POST"])
 def login():
     """Admin login with TOTP authentication."""
     session.pop("user_id", None)
@@ -2580,6 +2578,16 @@ def login():
         if not verify_turnstile_token(turnstile_token, get_real_ip()):
             flash("Security verification failed. Please complete the check and try again.", "error")
             return render_template("admin_login.html", form=form)
+        # The per-account and replay budgets (audit S5) are charged only once
+        # Turnstile has passed: as route decorators they would run in
+        # Flask-Limiter's before_request hook, ahead of the Turnstile check
+        # above, letting an attacker spend a known account's whole budget
+        # with no token at all. limiter.limit() used as a context manager
+        # checks and increments on __enter__ (its __exit__ is a no-op), so
+        # this block need not wrap the rest of the function.
+        with limiter.limit("5 per 5 minutes", key_func=login_account_limit_key()), \
+                limiter.limit("1 per 2 minutes", key_func=login_totp_replay_limit_key()):
+            pass
         username = normalize_auth_username(form.username.data)
         totp_code = form.totp_code.data.strip()
         user = find_canonical_user_by_auth_username(username, expected_role="teacher")
