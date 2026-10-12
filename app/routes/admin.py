@@ -45,7 +45,7 @@ import pytz
 import bleach
 from werkzeug.exceptions import HTTPException, NotFound
 
-from app.extensions import db, limiter
+from app.extensions import db, limiter, login_account_limit_key, login_totp_replay_limit_key
 from app.feats.base import requires_feat_context, FEATContext, InvariantViolation, generate_correlation_id
 from app.access.scope import Scope
 from app.access import AccessScopeDenied, resolve_scope
@@ -2563,6 +2563,8 @@ def dismiss_unpaid_work_notice():
 
 @admin_bp.route('/login', methods=['GET', 'POST'])
 @limiter.limit("10 per minute")
+@limiter.limit("5 per 5 minutes", key_func=login_account_limit_key(), methods=["POST"])
+@limiter.limit("1 per 2 minutes", key_func=login_totp_replay_limit_key(), methods=["POST"])
 def login():
     """Admin login with TOTP authentication."""
     session.pop("user_id", None)
