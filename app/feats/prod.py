@@ -232,6 +232,18 @@ def _record_hall_pass_log_impl(
     FEAT-PROD-002 boundary for a top-level (route) ingress.
     """
     ctx = _require_context(ctx)
+    if not requested_by_seat_id or not ctx.class_id:
+        raise ValueError("Hall-pass consumption requires requested_by_seat_id and class_id")
+    # Lock the seat before _enforce_hall_pass_settings locks the class below.
+    # execute_account_transfer / allocate_creation_posting_sequence lock
+    # Seat then ClassEconomy; a hall-pass approval that locked them in the
+    # opposite order could deadlock against a concurrent transfer for the
+    # same student (PR #1550 review). Locking the seat first here, whether or
+    # not this destination consumes a pass, keeps every writer that takes
+    # both locks in the same Seat -> ClassEconomy order.
+    from app.services.entitlement_service import lock_hall_pass_holder
+
+    lock_hall_pass_holder(requested_by_seat_id, ctx.class_id)
     evaluation = canonical_temporal_resolver(
         CLASS_LEVEL_EVALUATION,
         canonical_execution_context=ctx,
@@ -266,18 +278,13 @@ def _record_hall_pass_log_impl(
     )
     consume_pass = pass_type.get("consume_pass", True) if pass_type else True
 
-    if not requested_by_seat_id or not ctx.class_id:
-        raise ValueError("Hall-pass consumption requires requested_by_seat_id and class_id")
     used_pass = None
     if consume_pass:
-        # Serialize with every other write that can end this seat's passes
-        # (other approvals, reversal, removal, perk expiry): the second waits
-        # and then sees the pass spent. The unique index on
-        # hall_pass_logs.hall_pass_id is the database's own guarantee that an
-        # entitlement_id is used at most once.
-        from app.services.entitlement_service import lock_hall_pass_holder
-
-        lock_hall_pass_holder(requested_by_seat_id, ctx.class_id)
+        # The seat lock taken above is the same serialization point every
+        # other write that can end this seat's passes uses (other approvals,
+        # reversal, removal, perk expiry): the second waits and then sees the
+        # pass spent. The unique index on hall_pass_logs.hall_pass_id is the
+        # database's own guarantee that an entitlement_id is used at most once.
         if hall_pass_entitlement_id:
             # A request is for one particular pass, and its availability was
             # decided when it was submitted (DOM-STORE-001 §IX: submitted_at is

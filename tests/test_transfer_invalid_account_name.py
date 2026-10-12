@@ -26,6 +26,11 @@ def test_transfer_with_unknown_from_account_is_rejected_not_500(client, app):
     with client.session_transaction() as sess:
         sess["transfer_token"] = "test-token"
 
+    # CodeRabbit review: a brand-new student has $0.00 checking, so a plain
+    # "did it redirect?" assertion also passes when the $10 transfer is
+    # rejected for insufficient funds — before the account-name guard ever
+    # runs — proving nothing about this fix. Following the redirect and
+    # asserting the guard's own flashed message is what actually requires it.
     resp = client.post(
         "/student/transfer",
         data={
@@ -35,11 +40,11 @@ def test_transfer_with_unknown_from_account_is_rejected_not_500(client, app):
             "transfer_token": "test-token",
             "pin": student.pin,
         },
-        follow_redirects=False,
+        follow_redirects=True,
     )
 
-    assert resp.status_code in (302, 400)
     assert resp.status_code != 500
+    assert b"Invalid account selection." in resp.data
 
     with app.app_context():
         assert Transaction.query.filter_by(class_id=class_id, seat_id=student.seat.id).count() == 0
@@ -61,11 +66,11 @@ def test_transfer_with_unknown_to_account_is_rejected_not_500(client, app):
             "transfer_token": "test-token",
             "pin": student.pin,
         },
-        follow_redirects=False,
+        follow_redirects=True,
     )
 
-    assert resp.status_code in (302, 400)
     assert resp.status_code != 500
+    assert b"Invalid account selection." in resp.data
 
     with app.app_context():
         assert Transaction.query.filter_by(class_id=class_id, seat_id=student.seat.id).count() == 0

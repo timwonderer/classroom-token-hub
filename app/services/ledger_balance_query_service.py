@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from decimal import Decimal
 from typing import NamedTuple
-from sqlalchemy import Numeric, and_, case, cast, func, literal, tuple_
+from sqlalchemy import Numeric, and_, case, cast, func, literal, or_, tuple_
 
 from app.extensions import db
 from app.models import LedgerBalanceSnapshot, Transaction, TransactionStatus, _quantize_currency
@@ -220,8 +220,12 @@ def get_batch_balances_by_class_seat(class_seat_pairs):
         # two have no categorical marker distinguishing them from an
         # ordinary payroll deposit, so description is the only signal — same
         # limitation the pre-existing "Transfer%" exclusion already lived
-        # with).
-        Transaction.type != "REVERSAL",
+        # with). ``type`` is nullable (SPEC-LED-001), and SQL's `!=` is
+        # neither true nor false against NULL, so a bare `type != "REVERSAL"`
+        # silently dropped every untyped historical credit from earnings
+        # too (PR #1550 review) — `type IS NULL` must count as "not a
+        # reversal".
+        or_(Transaction.type.is_(None), Transaction.type != "REVERSAL"),
         ~Transaction.description.ilike("Transfer%"),
         ~Transaction.description.ilike("Overdraft protection%"),
     ).group_by(Transaction.class_id, Transaction.seat_id).all():

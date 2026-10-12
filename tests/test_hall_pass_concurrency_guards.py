@@ -35,6 +35,24 @@ with this.
 The last test (the queue-limit one) IS decided correctly by a plain
 behavioral assertion with no locking tooling, and reverting the fix was
 confirmed to fail it.
+
+PR #1550 review — lock ORDER, not just presence. Taking both locks
+correctly still deadlocks if two code paths take them in opposite order:
+PostgreSQL aborts one side, and here that abort surfaced as an API 500.
+Two such inversions were found and fixed, each proven the same
+statement-order way as F6/F7 above:
+
+* ``approve_hall_pass_request`` locked the pending-request row
+  (``pop_pending_hall_pass_request``) before the seat (inside
+  ``_record_hall_pass_log_impl``), the opposite of submission's
+  Seat -> pending-request order — a resubmission racing an approval of the
+  same seat's request could deadlock.
+* ``_record_hall_pass_log_impl`` locked ClassEconomy (F7's count lock)
+  before the seat, the opposite of the ledger's Seat -> ClassEconomy order
+  (``execute_account_transfer``, ``allocate_creation_posting_sequence``) —
+  an approval racing a transfer for the same student could deadlock.
+
+Both are now Seat-first, matching every other lock pair in this module.
 """
 
 from __future__ import annotations
@@ -215,3 +233,84 @@ def test_F7__approved_but_not_left_pass_still_counts_against_the_queue_limit(app
                 reason="teacher_approved", idempotency_key="f7b-approve-2",
             )
         db.session.rollback()
+
+
+def test_PR1550_review__approving_a_request_locks_the_seat_before_the_pending_row(app, seat):
+    """``approve_hall_pass_request`` must lock the seat row before it locks
+    (and deletes) the pending-request row.
+
+    ``submit_hall_pass_request`` locks Seat, then the seat's pending-request
+    rows (``clear_pending_hall_pass_requests_for_seat``). Before this fix,
+    ``approve_hall_pass_request`` locked the pending-request row first
+    (``pop_pending_hall_pass_request``) and only locked the seat afterwards
+    (inside ``_record_hall_pass_log_impl``) — the opposite order. A student
+    resubmitting a request while a teacher approves the existing one for the
+    same seat could then deadlock: PostgreSQL aborts one side, and the API
+    surfaced the approval's abort as a 500 (PR #1550 review).
+    """
+    from app.feats.hall_pass_request_feat import approve_hall_pass_request, submit_hall_pass_request
+
+    with app.app_context():
+        grant_seat = db.session.get(Seat, seat["seat_id"])
+        with FEATContext("FEAT-TEST-ENTITLEMENT", idempotency_key="pr1550-grant"):
+            grant_hall_passes(grant_seat, 1)
+        db.session.commit()
+
+        request = submit_hall_pass_request(
+            ctx=seat["student"], destination="Bathroom",
+            requested_at_utc=datetime.now(timezone.utc),
+            idempotency_key="pr1550-submit",
+        )
+        db.session.commit()
+
+        with captured_statements() as statements:
+            approve_hall_pass_request(
+                ctx=seat["teacher"], request_id=request.request_id,
+                idempotency_key="pr1550-approve",
+            )
+        db.session.rollback()
+
+        seat_lock_index = _first_index(statements, "FROM seats", "FOR UPDATE")
+        pending_lock_index = _first_index(statements, "FROM pending_actions", "FOR UPDATE")
+        assert seat_lock_index is not None, "approval did not lock the seat row"
+        assert pending_lock_index is not None, "approval never locked the pending-request row"
+        assert seat_lock_index < pending_lock_index, (
+            "approval must lock the seat before the pending-request row, "
+            "matching submission's order, or the two can deadlock"
+        )
+
+
+def test_PR1550_review__recording_a_hall_pass_log_locks_the_seat_before_the_class(app, seat):
+    """``_record_hall_pass_log_impl`` must lock the seat before it locks the
+    class (via ``_enforce_hall_pass_settings``).
+
+    ``execute_account_transfer`` and ``allocate_creation_posting_sequence``
+    both lock Seat then ClassEconomy. Before this fix, recording a hall-pass
+    log locked ClassEconomy first (F7's class-wide count lock) and the seat
+    only afterwards — the opposite order — so an approval racing a transfer
+    for the same student could deadlock (PR #1550 review).
+    """
+    from app.feats.prod import record_hall_pass_log
+
+    with app.app_context():
+        grant_seat = db.session.get(Seat, seat["seat_id"])
+        with FEATContext("FEAT-TEST-ENTITLEMENT", idempotency_key="pr1550b-grant"):
+            grant_hall_passes(grant_seat, 1)
+        db.session.commit()
+
+        with captured_statements() as statements:
+            record_hall_pass_log(
+                ctx=seat["teacher"], requested_by_seat_id=seat["seat_id"],
+                approved_by_seat_id=seat["teacher"].seat_id, destination="Bathroom",
+                reason="teacher_approved", idempotency_key="pr1550b-approve",
+            )
+        db.session.rollback()
+
+        seat_lock_index = _first_index(statements, "FROM seats", "FOR UPDATE")
+        class_lock_index = _first_index(statements, "FROM classes", "FOR UPDATE")
+        assert seat_lock_index is not None, "recording the log did not lock the seat"
+        assert class_lock_index is not None, "recording the log did not lock the class"
+        assert seat_lock_index < class_lock_index, (
+            "the seat lock must be taken before the class lock, matching the "
+            "ledger's Seat -> ClassEconomy order, or the two can deadlock"
+        )

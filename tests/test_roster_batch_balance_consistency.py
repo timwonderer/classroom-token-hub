@@ -17,6 +17,12 @@ not the real fix is present, but there is no such table-level trick for
 Separately, "earnings" on the roster only excluded "Transfer"-prefixed
 deposits, so the automatic overdraft-protection funding leg and reversal
 refund credits (type REVERSAL) both inflated it.
+
+PR #1550 review: the REVERSAL exclusion (``Transaction.type != "REVERSAL"``)
+is not null-safe. ``type`` is nullable, and SQL's ``!=`` against NULL is
+neither true nor false, so an untyped historical credit was silently
+dropped from the WHERE clause and vanished from earnings entirely. Fixed
+with an explicit ``type IS NULL`` branch.
 """
 
 from __future__ import annotations
@@ -186,4 +192,43 @@ def test_F9__earnings_excludes_overdraft_protection_and_refund_credits(app, seat
         scoped = balances[(str(class_id), seat_id)]
         # Only the $30.00 payroll deposit is earnings; the overdraft-protection
         # transfer and the refund must not inflate it.
+        assert Decimal(scoped["earnings"]) == Decimal("30.00")
+
+
+def test_PR1550_review__earnings_includes_untyped_historical_credits(app, seat):
+    """``type`` is nullable (``Transaction.type``, no ``nullable=False``), and
+    a bare ``Transaction.type != "REVERSAL"`` is neither true nor false for a
+    NULL type in SQL, so that row is dropped from the WHERE clause entirely —
+    an untyped positive credit silently vanished from earnings, even though
+    it is an ordinary non-transfer, non-reversal credit (PR #1550 review).
+    ``type IS NULL`` must count as "not a reversal".
+    """
+    with app.app_context():
+        class_id, seat_id = seat["class_id"], seat["seat_id"]
+
+        # Transaction.type is immutable once written (app/models.py's ORM
+        # guard, backed by the prevent_ledger_transaction_rewrite() DB
+        # trigger on UPDATE) — a real untyped row only exists from before
+        # ``type`` was always populated. create_pending_transaction's
+        # non-idempotent path (no idempotency_key) writes Transaction.type
+        # through with no whitelist check and no UPDATE afterward, so it
+        # reproduces that directly rather than mutating a row after creation.
+        from app.services.ledger_posting_service import create_pending_transaction
+
+        # FEATContext.__enter__ sets the session's active_correlation_id to
+        # its own correlation_id, and the ledger insert guard rejects any
+        # first-in-flush row whose correlation_id differs from it — so the
+        # transaction's correlation_id must be the FEAT's own, read back
+        # from the session rather than guessed at.
+        with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"f9-pr1550-untyped:{seat_id}"):
+            corr = db.session.info["active_correlation_id"]
+            create_pending_transaction(
+                seat_id=seat_id, class_id=class_id, target_seat_id=seat_id, actor_seat_id=seat_id,
+                mechanism="self", amount=Decimal("30.00"), account_type="checking",
+                type=None, description="Untyped historical credit", correlation_id=corr,
+            )
+        db.session.commit()
+
+        balances = get_batch_balances_by_class_seat([(class_id, seat_id)])
+        scoped = balances[(str(class_id), seat_id)]
         assert Decimal(scoped["earnings"]) == Decimal("30.00")
