@@ -18,9 +18,12 @@ compute the response from fresh state) can never observe stale data.
 
 from __future__ import annotations
 
+from uuid import uuid4
+
 import sqlalchemy as sa
 
 from app.extensions import db
+from app.feats.base import FEATContext
 from app.models import AttendanceSession
 from app.services.attendance_service import (
     _canonical_seat_rows,
@@ -156,3 +159,74 @@ def test_invalidate_is_a_noop_outside_a_request(app):
     """No cache exists outside a request context, so this must not raise."""
     with app.app_context():
         invalidate_canonical_seat_rows_cache(1, "some-class")
+
+
+def test_a_direct_write_outside_the_writer_still_invalidates_the_cache(app):
+    """Mutation proof for the ``after_flush`` backstop listener specifically.
+
+    ``test_a_write_mid_request_invalidates_the_cache_for_that_seat`` goes
+    through ``record_attendance_session``, which invalidates its own scope
+    directly -- so that test alone would still pass if the generic
+    ``after_flush`` listener in attendance_service.py stopped working. This
+    one writes the row the way several test fixtures across the suite do
+    (direct ``db.session.add`` inside a bare ``FEATContext``, bypassing the
+    writer entirely) so only the listener can be responsible for the cache
+    reflecting it.
+    """
+    classroom = initialize("chemistry_p1", app)
+    student = classroom.students[0]
+
+    with app.test_request_context("/"):
+        before = _canonical_seat_rows(student.seat.id, classroom.class_id)
+        assert before == []
+
+        with FEATContext(
+            "FEAT-PROD-001", correlation_id=f"direct:{uuid4()}", idempotency_key=f"direct:{uuid4()}"
+        ):
+            db.session.add(AttendanceSession(
+                target_seat_id=student.seat.id, class_id=classroom.class_id,
+                actor_seat_id=student.seat.id, status="active",
+                reason_code="start_work",
+            ))
+            db.session.flush()
+
+        after = _canonical_seat_rows(student.seat.id, classroom.class_id)
+        assert len(after) == 1
+        assert after[0].status == "active"
+
+
+def test_a_rollback_after_a_cached_flush_clears_the_cache(app):
+    """Mutation proof for the ``after_rollback`` listener.
+
+    A flush is visible to a query in the same transaction, so a read between
+    a flush and a rollback can populate the cache with a row the rollback
+    then discards. Without a rollback listener, a later read in the same
+    request would keep serving that now-nonexistent row.
+    """
+    classroom = initialize("chemistry_p1", app)
+    student = classroom.students[0]
+
+    with app.test_request_context("/"):
+        assert _canonical_seat_rows(student.seat.id, classroom.class_id) == []
+
+        try:
+            with FEATContext(
+                "FEAT-PROD-001", correlation_id=f"rb:{uuid4()}", idempotency_key=f"rb:{uuid4()}"
+            ):
+                db.session.add(AttendanceSession(
+                    target_seat_id=student.seat.id, class_id=classroom.class_id,
+                    actor_seat_id=student.seat.id, status="active",
+                    reason_code="start_work",
+                ))
+                db.session.flush()
+                # Cache now holds the flushed-but-uncommitted row.
+                mid_txn = _canonical_seat_rows(student.seat.id, classroom.class_id)
+                assert len(mid_txn) == 1
+                raise ValueError("force a rollback of this FEAT")
+        except ValueError:
+            pass  # FEATContext.__exit__ already rolled back; this is expected.
+
+        after_rollback = _canonical_seat_rows(student.seat.id, classroom.class_id)
+        assert after_rollback == [], (
+            "the rolled-back row must not remain visible via a stale cache entry"
+        )

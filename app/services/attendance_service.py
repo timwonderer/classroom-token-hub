@@ -102,6 +102,23 @@ def _invalidate_attendance_cache_on_any_flush(session, flush_context):
         invalidate_canonical_seat_rows_cache(seat_id, class_id)
 
 
+@event.listens_for(db.session, "after_rollback")
+def _clear_attendance_cache_on_rollback(session):
+    """A flush is visible to later queries in the same transaction, so the
+    after_flush listener above can populate the cache with rows a rollback
+    then discards. There is no per-scope record of what a rollback undoes,
+    so clear the whole per-request cache rather than risk leaving a stale
+    entry behind.
+    """
+    from flask import g, has_request_context
+
+    if not has_request_context():
+        return
+    cache = getattr(g, "_attendance_canonical_rows_cache", None)
+    if cache is not None:
+        cache.clear()
+
+
 def get_attendance_session_counts_by_seat(
     class_id: str, window_start, window_end
 ) -> dict[int, int]:
