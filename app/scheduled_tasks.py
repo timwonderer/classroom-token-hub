@@ -797,7 +797,7 @@ SCHEDULED_JOB_SPECS: tuple[ScheduledJobSpec, ...] = (
         name='Delete expired teacher signup staging',
         func=purge_expired_teacher_signups_job,
         trigger='cron',
-        trigger_kwargs={'minute': 0},
+        trigger_kwargs={'minute': 54},
     ),
     ScheduledJobSpec(
         id='stale_teacher_accounts',

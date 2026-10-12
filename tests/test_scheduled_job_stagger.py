@@ -34,6 +34,16 @@ _FORMERLY_INTERVAL_HOURLY_IDS = frozenset({
     "savings_interest_payout",
 })
 
+# Jobs pinned to one fixed hour:minute per day (never touched by O2/O3) that
+# an every-hour job can still collide with once a day, at that hour. A job
+# scheduled every hour at the same minute as one of these fires alongside it
+# on that one hour too, competing for the same thread pool and DB connection.
+_FIXED_HOUR_DAILY_IDS = frozenset({
+    "database_maintenance",
+    "audit_invariant_check",
+    "insurance_expiry",
+})
+
 
 def _hourly_specs():
     specs = [spec for spec in SCHEDULED_JOB_SPECS if spec.id in _FORMERLY_INTERVAL_HOURLY_IDS]
@@ -69,6 +79,29 @@ def test_no_two_hourly_jobs_share_a_minute():
         f"two or more hourly jobs share a minute, reintroducing the O3 "
         f"thundering herd: {sorted(minutes)}"
     )
+
+
+def test_hourly_jobs_do_not_share_a_minute_with_a_fixed_hour_job():
+    """An every-hour job must not land on the same minute as a once-daily job.
+
+    ``database_maintenance`` (02:00), ``audit_invariant_check`` (03:00) and
+    ``insurance_expiry`` (04:00) each fire once a day at a fixed hour. If an
+    every-hour job shares that minute, it collides with each of them once a
+    day too -- the same thundering-herd failure mode O3 fixed, just rarer.
+    """
+    by_id = {spec.id: spec for spec in SCHEDULED_JOB_SPECS}
+    fixed_minutes = {
+        by_id[job_id].id: by_id[job_id].trigger_kwargs["minute"]
+        for job_id in _FIXED_HOUR_DAILY_IDS
+    }
+
+    for spec in _hourly_specs():
+        minute = spec.trigger_kwargs["minute"]
+        for fixed_id, fixed_minute in fixed_minutes.items():
+            assert minute != fixed_minute, (
+                f"{spec.id} shares minute {minute} with {fixed_id}, which "
+                "fires once a day at that minute"
+            )
 
 
 def test_settlement_minute_still_precedes_interest_minute():
