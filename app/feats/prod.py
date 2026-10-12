@@ -52,6 +52,8 @@ class HallPassSettingsMissing(ValueError):
 class PayrollEventResult:
     payroll_event: PayrollEvent
     ledger_transaction: Transaction | None
+    # True when idempotency_key matched an event already recorded: nothing was written.
+    replayed: bool = False
 
 
 def _require_context(ctx: CanonicalContext | None) -> CanonicalContext:
@@ -421,7 +423,7 @@ def _record_payroll_event_impl(
                 if idempotency_key
                 else None
             )
-            return PayrollEventResult(payroll_event=existing_event, ledger_transaction=existing_tx)
+            return PayrollEventResult(payroll_event=existing_event, ledger_transaction=existing_tx, replayed=True)
 
     # The FEAT owns the canonical command correlation shared with Ledger effects.
     correlation_id = get_correlation_id()

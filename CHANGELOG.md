@@ -8,6 +8,14 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The PROD-PAY-001 payroll correction no longer reports an already-corrected student as paid again** (found by the v2.2.3 full suite). F5 (#1536) moved idempotency-key replay into `record_payroll_event` itself, which now returns the existing event where it used to raise `IntegrityError`. `_post_payroll_corrections` (`app/routes/admin.py`) still relied on that `IntegrityError` to skip a student a concurrent approval had already corrected, so it counted the replay as a new payment. No second credit was ever written; only the list of seats the approval reported as paid was wrong. `PayrollEventResult` now carries `replayed`, set by the FEAT, and the route skips replays on that flag; the database replay-guard branch remains as a fallback. Regression test: `test_PROD_PAY_001__overlapping_approvals_skip_the_student_already_paid`, which failed on v2.2.3 and passes now.
+- **Three test and docs defects the v2.2.3 full suite surfaced**, none in production behavior:
+  - `test_filed_within_window_reflects_lateness` booked a −$5 loss between two premium payments that were each funded with exactly the premium, so F1–F4 correctly refused the second as unaffordable. Both grants now precede both losses.
+  - The S1 browser regression (`test_hall_pass_destination_cannot_execute_in_teacher_history_view`) waited for any history row, and the "Select filters and click Apply" placeholder is itself a row, so it read the table before the fetched rows arrived. It now waits for its own entry. With `escapeHtml` removed the test fails with its S1 message, not a timeout.
+  - `SOP-DEP-002` §VII.A step 12's `Released as` template contained a placeholder Markdown link, which the docs link check reported as broken. It now describes the link instead of embedding one.
+
 ### Changed
 
 - **The test suite migrates once per session and copies the result per test, instead of replaying every migration for every test** (follow-up from the v2.2.0 release record). `tests/conftest.py`'s `app` fixture dropped the `public` schema and replayed the whole Alembic chain (about 180 revisions, ~6 s) before every test, which made a full run take 4–8 hours. The first test of a session now migrates the test database exactly as before and snapshots it as `<testdb>_tmpl_<pid>`; each later test gets `DROP DATABASE … WITH (FORCE)` and `CREATE DATABASE … TEMPLATE` (~0.2 s for the 33 MB migrated database). Every test still starts from a migration-built database, not ORM metadata or a previous test's state. The cross-process advisory lock moves to the maintenance database, since the test database is now dropped under it. Measured on 454 identity, request-trace and payroll-lineage tests: 7 min 32 s, all passing, against roughly 45 minutes of setup alone under the old rebuild.
