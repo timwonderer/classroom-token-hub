@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-002 | 1.8 | 2026-10-06 | 1.7 | Normative |
+| SOP-DEP-002 | 1.9 | 2026-10-12 | 1.8 | Normative |
 
 ## I. Purpose
 
@@ -81,6 +81,69 @@ there is no application flag, sysadmin bypass, or query-token alternative.
 4. Apply migrations.
 5. Deploy application code.
 6. Run post-deploy smoke checks before reopening the app.
+
+### VII.A Tagged release procedure
+
+Every tagged release follows these steps in order, whether or not it carries a migration. A step is skipped only
+where this section says so, and the release record says which step and why. Commands run from the operator's Mac
+at the repository root; database reads use read-only, aggregate-only queries with class ids, never names.
+
+**Before the window**
+
+1. **Release PR.** Move `[Unreleased]` in `CHANGELOG.md` under `## [X.Y.Z] - <UTC date> — <title>`, and check that
+   every PR merged since the previous tag has an entry (`git log --merges vPREV..origin/main`). Required checks
+   green and review threads resolved; merge. The merge commit, now the tip of `main`, is the release SHA.
+2. **Full suite on the release SHA**, locally (about four hours; CI's run times out). It passes before dispatch.
+   Exception: a security or data-integrity fix may be dispatched first and the suite run afterwards; the release
+   record says so and later records the result.
+3. **Configuration and migration checks.**
+   - `flask db heads` shows one head; `bash scripts/check-migrations.sh` reports "Safe to deploy".
+   - `git diff vPREV <SHA> -- requirements.txt migrations/versions` lists what is new.
+   - Read the CHANGELOG for new required settings, and confirm by name only (never values) that production's
+     `/root/classroom-economy/.env` has them.
+   - For each new migration, run any pre-check its docstring names against production, read-only.
+   - Host: `ssh root@cth 'cd /root/classroom-economy && git rev-parse HEAD && git status --porcelain && systemctl
+     is-active cth-student-setup redis-server'`. HEAD is the previous release; the tree is clean apart from
+     `venv.old/`.
+
+**In the window**
+
+4. **Restrict access** with Cloudflare Access (§VI gate verification).
+5. **Backup.** `bash infra/db-backup/prerelease.sh backup` stops the application, takes one point into
+   `~/cth-backup/prerelease-<UTC date>/` and verifies it. The source URL comes from `~/cth-backup/source_url`; no
+   one types a credential. The application stays stopped until the release workflow restarts it.
+6. **Point against live.** `bash infra/db-backup/prerelease.sh counts` must report `manifest == live`.
+7. **Restore check.** The owner copies the `age` key to the clipboard and runs
+   `umask 077; pbpaste > ~/cth-backup/identity.txt`. Then `bash infra/db-backup/prerelease.sh restore` checks
+   the key against `recipients.txt`, restores into the in-memory database, runs the manifest and no-resurrection
+   checks, deletes the identity with `rm -P`, and stops the verify container. Both checks must PASS.
+8. **Balance baseline**, read with the application stopped:
+
+   ```sql
+   WITH l AS (SELECT class_id, account_type, count(*) n, sum(amount_cents) c FROM ledger_transaction GROUP BY 1,2),
+        s AS (SELECT class_id, account_type, count(*) n, sum(posted_balance_cents) c FROM ledger_balance_snapshot GROUP BY 1,2)
+   SELECT coalesce(l.class_id, s.class_id), coalesce(l.account_type, s.account_type), l.n, l.c, s.n, s.c
+   FROM l FULL JOIN s USING (class_id, account_type) ORDER BY 1, 2;
+   ```
+
+   Ledger equals snapshot in every row; keep the table for the record.
+9. **Tag and dispatch.** `git tag -a vX.Y.Z <SHA> -m "vX.Y.Z" && git push origin vX.Y.Z`, then
+   `gh workflow run release-v2.yml -f revision=<full SHA> -f lineage_ref=main`. Dispatch once only: a second
+   dispatch races the first. Watch the run through its health step.
+
+**After the release**
+
+10. **§VIII verification.** Host HEAD is the release SHA; the service is active; `127.0.0.1:8000/health` answers
+    `ok`; the scheduler has started; the journal has no `ERROR`, `CRITICAL`, `Traceback` or `WORKER TIMEOUT` lines
+    since the restart; `alembic_version` is the single head; the step 8 query matches the baseline, apart from
+    what the release itself is meant to change. The operator runs the browser checks in §VIII.
+11. **Reopen** by changing the Access policy (§VI). Publish the GitHub release for the tag.
+12. **Release record** `docs/ops/audits/DEPLOY_<UTC date>_<short SHA>.md`, in the shape of the previous one:
+    identity table, contents, migrations, §VI checks (backup stem, `taken_at`, revision, `artifact_sha256`, both
+    restore results), baseline, release run, §VIII results, rollback, follow-ups. Add the release's `Released as`
+    line to its CHANGELOG section, and update the version in `README.md` and `DEVELOPMENT.md`.
+
+Untagged hotfixes follow steps 3-12 and record any step they skip.
 
 ## VIII. Post-Migration Verification
 
@@ -189,6 +252,11 @@ Record:
 
 ## XIII. Amendment
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.
+
+**Version 1.9 (2026-10-12):** adds §VII.A, the step-by-step tagged release procedure, and
+`infra/db-backup/prerelease.sh`, which it runs. Owner rulings 2026-10-12: every tagged release takes the backup
+and restore check, with or without a migration; the full suite passes before dispatch unless a security or
+data-integrity fix goes first. v2.0.0 through v2.2.3 each followed a different variant of this procedure.
 
 **Version 1.8 (2026-10-06):** §IV dependencies: archived `SOP-DB-009` is replaced by `SOP-DB-004` (classification, evidence and rollback rules), and `SOP-DEP-016`, which does not exist, is removed; rollback decisions are `SOP-DEP-001` §XIV and `SOP-DB-004` §IX.4. No procedure changes.
 

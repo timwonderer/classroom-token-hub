@@ -96,46 +96,20 @@ Run as root. Replace every `CHANGE_ME` and `<live-db>`.
 
 ## Pre-release backup from the operator's Mac
 
-For a release before the timers run, such as v2.1.1. Same checks as the nightly job; nothing is uploaded. Plan §6
-explains why the application is stopped first.
+Every tagged release takes one point before dispatch with [`prerelease.sh`](prerelease.sh); the ordered steps,
+and where this fits among them, are `SOP-DEP-002` §VII.A. Same checks as the nightly job; nothing is uploaded.
+Plan §6 explains why the application is stopped first.
 
 ```bash
-# once: tools
-brew install age postgresql@14  # pg_dump / pg_restore matching the server's major; add its bin to PATH
-python3 -m venv ~/cth-backup-venv && ~/cth-backup-venv/bin/pip install psycopg2-binary
-
-# throwaway Postgres whose data lives in memory, so restored plaintext never reaches the disk
-docker run --rm -d --name cth-verify -e POSTGRES_PASSWORD=verify \
-  -p 127.0.0.1:55432:5432 --tmpfs /var/lib/postgresql/data postgres:14
-docker exec cth-verify createdb -U postgres cth_backup_verify
-docker exec cth-verify createdb -U postgres cth_restore_check
-
-# tunnel to production Postgres
-ssh -N -L 55433:127.0.0.1:5432 root@<prod-tailscale-host> &
-
-# stop the application and confirm it is inactive
-ssh root@<prod-tailscale-host> 'systemctl stop classroom-economy; systemctl is-active classroom-economy'
-
-export CTH_BACKUP_SOURCE_URL='postgresql://<role>:<password>@127.0.0.1:55433/<live-db>'
-export CTH_BACKUP_VERIFY_URL='postgresql://postgres:verify@127.0.0.1:55432/cth_backup_verify'
-export CTH_BACKUP_AGE_RECIPIENTS_FILE=~/cth-backup/recipients.txt
-export CTH_BACKUP_STATE_DIR=~/cth-backup/prerelease
-unset CTH_BACKUP_REMOTE
-
-# 1. take and verify the point
-~/cth-backup-venv/bin/python infra/db-backup/cth_db_backup.py backup --reason manual
-
-# 2. prove the owner's identity decrypts it and it restores whole
-P=$(ls -t ~/cth-backup/prerelease/points/*.dump.age | head -1)
-~/cth-backup-venv/bin/python infra/db-backup/cth_db_backup.py restore \
-  --artifact "$P" --manifest "${P%.dump.age}.manifest.json" --identity <path-to-identity> \
-  --target-url 'postgresql://postgres:verify@127.0.0.1:55432/cth_restore_check' \
-  --live-url "$CTH_BACKUP_SOURCE_URL"
-
-# 3. discard the in-memory database
-docker stop cth-verify
+bash infra/db-backup/prerelease.sh backup    # verify container, tunnel, stop the app, take + verify the point
+bash infra/db-backup/prerelease.sh counts    # every table count in the point equals live production's
+umask 077; pbpaste > ~/cth-backup/identity.txt   # owner: the age key, from the clipboard
+bash infra/db-backup/prerelease.sh restore   # restore + no-resurrection check; deletes the identity with rm -P
 ```
 
-`<role>` is `cth_backup_reader` once step 3 above exists; until then, the role used for the 2026-10-02 dump. Remove
-the identity file as soon as step 2 finishes. Record in the release record: the stem, `taken_at`, the revision and
+One-time setup on the Mac: `brew install age postgresql@14 colima docker`;
+`python3 -m venv ~/cth-backup-venv && ~/cth-backup-venv/bin/pip install psycopg2-binary`; the owner's public key in
+`~/cth-backup/recipients.txt`; and the dump role's connection URL, through the tunnel at `127.0.0.1:55433`, in
+`~/cth-backup/source_url` (mode 600). The role is `cth_backup_reader` once step 3 above exists. Points land in
+`~/cth-backup/prerelease-<UTC date>/`. Record in the release record: the stem, `taken_at`, the revision and
 `artifact_sha256` from the manifest, and both results. Then dispatch the release.

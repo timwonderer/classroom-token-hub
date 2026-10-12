@@ -8,6 +8,10 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Changed
+
+- **The tagged release procedure is written down and scripted** (`SOP-DEP-002` 1.9, §VII.A). v2.0.0 through v2.2.3 each ran a different variant: whether a backup was taken, where the database credential and the `age` identity came from, and whether the full suite ran before dispatch. The steps that actually worked lived in an untracked script on the operator's Mac. §VII.A is now an ordered, numbered checklist from the release PR to the release record. `infra/db-backup/prerelease.sh` runs its backup steps: `backup` (stop the app, take and verify a point, source URL read from `~/cth-backup/source_url`), `counts` (manifest table counts against live production; exits 1 on any mismatch), and `restore` (identity checked against `recipients.txt`, restored in memory, deleted with `rm -P`). Owner rulings 2026-10-12: every tagged release takes the backup and restore check, and the full suite passes before dispatch unless a security or data-integrity fix goes first. `infra/db-backup/README.md`'s hand-typed block, which asked for a password and an identity path, now points at the script.
+
 ## [2.2.3] - 2026-10-12 — Audit remediation: login hardening, financial race fixes, scheduler and attendance load
 
 ### Security
