@@ -88,6 +88,10 @@ Every tagged release follows these steps in order, whether or not it carries a m
 where this section says so, and the release record says which step and why. Commands run from the operator's Mac
 at the repository root; database reads use read-only, aggregate-only queries with class ids, never names.
 
+Roles are those of §V. A single operator may hold all three under the solo-operator exception (`SOP-DEP-001`
+§XIII), whose conditions the record must show met or name as a deviation. Checks run by an AI assistant are
+advisory and are recorded as such, never as the independent verifier.
+
 **Before the window**
 
 1. **Release PR.** Move `[Unreleased]` in `CHANGELOG.md` under `## [X.Y.Z] - <UTC date> — <title>`, and check that
