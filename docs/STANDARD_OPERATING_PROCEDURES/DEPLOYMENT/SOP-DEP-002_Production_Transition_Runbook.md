@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-002 | 1.8 | 2026-10-06 | 1.7 | Normative |
+| SOP-DEP-002 | 1.9 | 2026-10-12 | 1.8 | Normative |
 
 ## I. Purpose
 
@@ -81,6 +81,105 @@ there is no application flag, sysadmin bypass, or query-token alternative.
 4. Apply migrations.
 5. Deploy application code.
 6. Run post-deploy smoke checks before reopening the app.
+
+### VII.A Tagged release procedure
+
+Every tagged release follows these steps in order, whether or not it carries a migration. A step is skipped only
+where this section says so, and the release record says which step and why. Commands run from the operator's Mac
+at the repository root; database reads use read-only, aggregate-only queries with class ids, never names.
+
+Roles are those of §V. A single operator may hold all three under the solo-operator exception (`SOP-DEP-001`
+§XIII), whose conditions the record must show met or name as a deviation. Checks run by an AI assistant are
+advisory and are recorded as such, never as the independent verifier.
+
+**Before the window**
+
+1. **Release PR.** Move `[Unreleased]` in `CHANGELOG.md` under `## [X.Y.Z] - <UTC date> — <title>`, and check that
+   every PR merged since the previous tag has an entry (`git log --merges vPREV..origin/main`) and that every entry
+   in the section belongs to a PR in that range (`git merge-base --is-ancestor <merge> vPREV` is false). Subsections
+   appear only from this list, in this order, each once: Added, Changed, Deprecated, Removed, Fixed, Security,
+   Investigated, no code change. Required checks green and review threads resolved; merge. The merge commit, now
+   the tip of `main`, is the release SHA.
+2. **Full suite on the release SHA**, locally (about four hours; CI's run times out). It passes before dispatch.
+   Exception: a security or data-integrity fix may be dispatched first and the suite run afterwards; the release
+   record says so and later records the result.
+3. **Configuration and migration checks.**
+   - `flask db heads` shows one head; `bash scripts/check-migrations.sh` reports "Safe to deploy".
+   - `git diff vPREV <SHA> -- requirements.txt migrations/versions` lists what is new.
+   - Read the CHANGELOG for new required settings, and confirm by name only (never values) that production's
+     `/root/classroom-economy/.env` has them.
+   - For each new migration, run any pre-check its docstring names against production, read-only.
+   - Host: `ssh root@cth 'cd /root/classroom-economy && git rev-parse HEAD && git status --porcelain && systemctl
+     is-active cth-student-setup redis-server'`. HEAD is the previous release; the tree is clean apart from
+     `venv.old/`.
+
+**In the window**
+
+4. **Restrict access** with Cloudflare Access (§VI gate verification).
+5. **Backup.** `bash infra/db-backup/prerelease.sh backup` stops the application, takes one point into
+   `~/cth-backup/prerelease-<UTC date>/` and verifies it. The source URL comes from `~/cth-backup/source_url`; no
+   one types a credential. The application stays stopped until the release workflow restarts it.
+6. **Point against live.** `bash infra/db-backup/prerelease.sh counts` must report `manifest == live`.
+7. **Restore check.** The owner copies the `age` key to the clipboard and runs
+   `umask 077; pbpaste > ~/cth-backup/identity.txt`. Then `bash infra/db-backup/prerelease.sh restore` checks
+   the key against `recipients.txt`, restores into the in-memory database, runs the manifest and no-resurrection
+   checks, deletes the identity with `rm -P`, and stops the verify container. Both checks must PASS.
+8. **Balance baseline**, read with the application stopped. Each snapshot is compared only with the ledger rows
+   at or below its `reconciled_through_posting_sequence` (`DOM-LED-001` §VIII.2); later rows are pending and are
+   reported apart:
+
+   ```sql
+   WITH s AS (SELECT class_id, seat_id, account_type, posted_balance_cents, reconciled_through_posting_sequence AS cursor
+              FROM ledger_balance_snapshot),
+   l AS (SELECT t.class_id, t.account_type, count(*) AS txns,
+           coalesce(sum(t.amount_cents) FILTER (WHERE t.posting_sequence <= s.cursor), 0) AS ledger_posted_cents,
+           coalesce(sum(t.amount_cents) FILTER (WHERE s.cursor IS NULL OR t.posting_sequence IS NULL
+                                                      OR t.posting_sequence > s.cursor), 0) AS pending_cents
+         FROM ledger_transaction t
+         LEFT JOIN s ON s.class_id = t.class_id AND s.seat_id = t.seat_id AND s.account_type = t.account_type
+         GROUP BY 1, 2),
+   ss AS (SELECT class_id, account_type, count(*) AS snapshots, sum(posted_balance_cents) AS snapshot_cents
+          FROM s GROUP BY 1, 2)
+   SELECT coalesce(l.class_id, ss.class_id) AS class_id, coalesce(l.account_type, ss.account_type) AS account,
+          l.txns, l.ledger_posted_cents, ss.snapshots, ss.snapshot_cents, l.pending_cents,
+          l.ledger_posted_cents IS NOT DISTINCT FROM ss.snapshot_cents AS posted_matches
+   FROM l FULL JOIN ss ON ss.class_id = l.class_id AND ss.account_type = l.account_type
+   ORDER BY 1, 2;
+   ```
+
+   `posted_matches` is true in every row; keep the table, including `pending_cents`, for the record.
+9. **Tag and dispatch.** `git tag -a vX.Y.Z <SHA> -m "vX.Y.Z" && git push origin vX.Y.Z`, then
+   `gh workflow run release-v2.yml -f revision=<full SHA> -f lineage_ref=main`. Dispatch once only: a second
+   dispatch races the first. Watch the run through its health step.
+
+**After the release**
+
+10. **§VIII verification.** Host HEAD is the release SHA; the service is active; `127.0.0.1:8000/health` answers
+    `ok`; `/docs` followed to its final response is 200 (`curl -L`), not just its 308; the scheduler has started; the journal has no `ERROR`, `CRITICAL`, `Traceback` or `WORKER TIMEOUT` lines
+    since the restart; `alembic_version` is the single head; the step 8 query matches the baseline, apart from
+    what the release itself is meant to change. The operator runs the browser checks in §VIII.
+11. **Reopen** by changing the Access policy (§VI).
+12. **Release record PR.** `docs/ops/audits/DEPLOY_<UTC date>_<short SHA>.md`, in the shape of the previous one:
+    identity table, contents, migrations, §VI checks (backup stem, `taken_at`, revision, `artifact_sha256`, both
+    restore results), baseline, release run, §VIII results, rollback, follow-ups. In the same PR, update the
+    version in `README.md` and `DEVELOPMENT.md`, and make the first line of the CHANGELOG section exactly:
+
+    ```text
+    Released as `<short SHA>` on <YYYY-MM-DD> at <HH:MM> UTC by release run [<run id>](<run url>). No migration.|Migration `<rev>`. Record: [DEPLOY_<date>_<sha>.md](docs/ops/audits/DEPLOY_<date>_<sha>.md).
+    ```
+
+    Further sentences may follow on that line; nothing goes before it.
+13. **GitHub release**, after step 12's CHANGELOG is final. The notes are generated, never hand-written:
+
+    ```bash
+    python3 scripts/release_notes.py X.Y.Z > /tmp/notes.md
+    gh release create vX.Y.Z --verify-tag --title "$(python3 scripts/release_notes.py X.Y.Z --title)" --notes-file /tmp/notes.md
+    ```
+
+    The script refuses a section out of shape (heading, `Released as` line, subsection names and order) and a tag
+    that does not point at the `Released as` SHA. Fix the CHANGELOG, not the notes.
+
+Untagged hotfixes follow steps 3-12 and record any step they skip; they have no tag, so no step 13.
 
 ## VIII. Post-Migration Verification
 
@@ -189,6 +288,13 @@ Record:
 
 ## XIII. Amendment
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.
+
+**Version 1.9 (2026-10-12):** adds §VII.A, the step-by-step tagged release procedure, and
+`infra/db-backup/prerelease.sh`, which it runs. Owner rulings 2026-10-12: every tagged release takes the backup
+and restore check, with or without a migration; the full suite passes before dispatch unless a security or
+data-integrity fix goes first. Release notes come only from the CHANGELOG section, generated by
+`scripts/release_notes.py` in a fixed shape (owner request 2026-10-12; the first conforming section is `[2.2.3]`).
+v2.0.0 through v2.2.3 each followed a different variant of this procedure.
 
 **Version 1.8 (2026-10-06):** §IV dependencies: archived `SOP-DB-009` is replaced by `SOP-DB-004` (classification, evidence and rollback rules), and `SOP-DEP-016`, which does not exist, is removed; rollback decisions are `SOP-DEP-001` §XIV and `SOP-DB-004` §IX.4. No procedure changes.
 
