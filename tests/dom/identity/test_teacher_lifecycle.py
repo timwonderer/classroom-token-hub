@@ -167,7 +167,13 @@ def test_scheduled_sweep_deletes_never_signed_in_after_30_days(client, app, monk
         classroom.teacher_user.last_signed_in_at = None
     monkeypatch.setattr(teacher_lifecycle, 'utc_now', lambda: now)
     job = next(job for job in SCHEDULED_JOB_SPECS if job.id == 'stale_teacher_accounts')
-    assert job.trigger_kwargs == {'hours': 1}
+    # Cron on a fixed minute, not `interval, hours=1` (audit O3): an interval
+    # trigger anchors to process-start time, so all nine hourly jobs became due
+    # in the same minute every hour. A bare minute with no 'hour' key still
+    # means every hour.
+    assert job.trigger == 'cron'
+    assert 'hour' not in job.trigger_kwargs
+    assert isinstance(job.trigger_kwargs.get('minute'), int)
     assert job.func() == 1
     assert db.session.get(User, user_id) is None
     assert job.func() == 0
