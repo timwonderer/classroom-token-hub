@@ -1,16 +1,11 @@
-"""Display-only metadata resolver for canonical request contexts. (Read Specification at SPEC-DISPLAY-001)""" 
+"""Display-only metadata resolver for canonical request contexts. (Read Specification at SPEC-DISPLAY-001)"""
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, fields
-
-from flask import session
+from dataclasses import dataclass
 
 from app.models import ClassEconomy, IdentityProfile, Seat
 from app.services.context_resolver import CanonicalContext
-
-
-DISPLAY_METADATA_SESSION_KEY = "display_metadata"
 
 
 @dataclass(frozen=True)
@@ -18,8 +13,17 @@ class DisplayMetadata:
     """Display-only facts derived from canonical context.
 
     This object is never an authority source. Authorization must continue to use
-    CanonicalContext; this cache only prevents repeating display-data assembly
-    while the canonical context is unchanged.
+    CanonicalContext.
+
+    Audit S10: this object carries decrypted PII (``actor_first_name`` and its
+    siblings), and a prior revision of SPEC-DISPLAY-001 allowed caching it in
+    the Flask session -- a signed but unencrypted cookie, which put plaintext
+    PII at rest in conflict with INV-CORE-000 section 2 and INV-ARC-018
+    section VII.1. Tim's ruling (2026-10-12): resolve fresh on every request
+    rather than weaken that invariant -- decrypting a short display string per
+    request is cheap, so there was no real tradeoff to make. SPEC-DISPLAY-001
+    v1.1 removed the session-cache allowance; this module no longer writes
+    ``DisplayMetadata`` anywhere but the current request's return value.
     """
 
     context_key: str
@@ -42,9 +46,6 @@ class DisplayMetadata:
     teacher_last_name: str | None
     teacher_display_name: str | None
     teacher_note: str | None
-
-    def to_session_dict(self) -> dict[str, object]:
-        return asdict(self)
 
     def to_class_context(self) -> dict[str, object]:
         return {
@@ -147,40 +148,12 @@ def resolve_display_metadata(ctx: CanonicalContext | None) -> DisplayMetadata | 
     )
 
 
-def get_cached_display_metadata(ctx: CanonicalContext | None) -> DisplayMetadata | None:
-    if ctx is None:
-        return None
-    cached = session.get(DISPLAY_METADATA_SESSION_KEY)
-    if not isinstance(cached, dict):
-        return None
-    if cached.get("context_key") != _context_key(ctx):
-        return None
-    # Sessions outlive deploys, so a cookie signed against an older field set may
-    # still arrive. The cached shape is therefore an external boundary, not an
-    # internal invariant. Reject rather than adapt: a payload missing a field
-    # would raise TypeError on the constructor below, and one carrying a removed
-    # field would be silently retained in the re-signed cookie indefinitely.
-    # Rejecting forces a re-resolve that overwrites the cookie with the current
-    # shape. Per SPEC-DISPLAY-001 section VII the cache is not authoritative, so
-    # discarding it can only cost a recompute -- it cannot grant or deny anything.
-    if cached.keys() != {f.name for f in fields(DisplayMetadata)}:
-        return None
-    return DisplayMetadata(**cached)
-
-
-def set_cached_display_metadata(metadata: DisplayMetadata) -> None:
-    session[DISPLAY_METADATA_SESSION_KEY] = metadata.to_session_dict()
-
-
-def clear_display_metadata_cache() -> None:
-    session.pop(DISPLAY_METADATA_SESSION_KEY, None)
-
-
 def get_or_resolve_display_metadata(ctx: CanonicalContext | None) -> DisplayMetadata | None:
-    cached = get_cached_display_metadata(ctx)
-    if cached is not None:
-        return cached
-    metadata = resolve_display_metadata(ctx)
-    if metadata is not None:
-        set_cached_display_metadata(metadata)
-    return metadata
+    """Resolve display metadata for the current request.
+
+    Audit S10: this used to serve a session-cached copy first. There is no
+    longer a cache to serve -- see the ``DisplayMetadata`` docstring above.
+    The name is kept because callers (context processors in ``app/__init__.py``,
+    the student/admin route modules) already call it; only its body changed.
+    """
+    return resolve_display_metadata(ctx)

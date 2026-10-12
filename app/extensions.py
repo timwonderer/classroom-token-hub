@@ -76,6 +76,73 @@ def student_status_seat_limit_key():
         return f"seat:{class_id}:{seat_id}"
     return f"ip:{get_real_ip_for_limiter() or 'unknown'}"
 
+
+def login_account_limit_key(form_field: str = "username"):
+    """Build a per-account rate-limit key from a login POST's username field.
+
+    A limit keyed only by IP (the existing ``10 per minute`` on the teacher
+    and sysadmin login routes) does not budget a single account: many guesses
+    against one teacher's TOTP code can be spread across source addresses, or
+    simply outlast a shared-IP budget shared with other legitimate traffic
+    (audit S5). This key is independent of that IP limit, scoped to the
+    account rather than the caller, and intentionally coarser (SPEC-SEC-001's
+    unsalted lookup digest, not the salted credential hash) since it only
+    needs to recognize "the same account was just tried", not authenticate
+    anyone.
+
+    Returns a digest, never the raw username, since Flask-Limiter's storage
+    keys are visible to anything that can read the limiter's backing store.
+    The existing per-IP limit on these routes already covers a request that
+    posts no parseable username, so this key is left empty in that case
+    rather than guessing a fallback -- Flask-Limiter skips a limit whose key
+    is empty.
+    """
+    from flask import request
+
+    from app.hash_utils import hash_username_lookup
+    from app.utils.auth_username import normalize_auth_username
+
+    def _key() -> str:
+        normalized = normalize_auth_username(request.form.get(form_field, ""))
+        if not normalized:
+            return ""
+        return f"acct:{hash_username_lookup(normalized)}"
+
+    return _key
+
+
+def login_totp_replay_limit_key(username_field: str = "username", code_field: str = "totp_code"):
+    """Key that lets a given TOTP code be submitted only once per account.
+
+    ``valid_window=1`` on the teacher and sysadmin logins accepts a code for
+    up to three 30-second steps, so a captured code is otherwise usable
+    again for up to ~90 seconds after the legitimate login (audit S5). This
+    pairs a ``1 per 2 minutes`` limit (comfortably past that window) with a
+    key scoped to this exact (account, code) pair, so resubmitting the same
+    code -- whether a replay or a double-submitted form -- is refused, while
+    a different code (a genuine retry after a typo) gets its own budget.
+
+    Left empty (and so skipped by Flask-Limiter) when either field is
+    missing, rather than falling back to an IP-only key: a single IP can
+    legitimately post several different accounts' or codes' attempts within
+    the window, and the existing per-IP and per-account limits on these
+    routes already cover that traffic.
+    """
+    from flask import request
+
+    from app.hash_utils import hash_login_totp_replay_key
+    from app.utils.auth_username import normalize_auth_username
+
+    def _key() -> str:
+        normalized = normalize_auth_username(request.form.get(username_field, ""))
+        code = (request.form.get(code_field, "") or "").strip()
+        if not normalized or not code:
+            return ""
+        return f"totp-once:{hash_login_totp_replay_key(normalized, code)}"
+
+    return _key
+
+
 # Use memory storage in CI/testing environments, Redis in production
 # This prevents Redis connection errors in GitHub Actions
 if os.environ.get('RATELIMIT_STORAGE_URI'):
