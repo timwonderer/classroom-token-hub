@@ -47,3 +47,22 @@ jobs:
         with:
           sarif_file: semgrep.sarif
         if: always()
+
+  architecture-rules:
+    # The repository's own rules (semgrep/), versioned with the code. Needs no
+    # secrets, so it also runs on Dependabot pull requests. Not a hidden
+    # directory: `semgrep --test` skips dot-directories and then reports
+    # "No unit tests found" with exit 0.
+    name: Architecture rules
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Semgrep
+        run: python3 -m pip install --quiet "semgrep==1.180.0"
+      - name: Rule tests (each rule still catches its annotated cases)
+        # Fail unless tests were actually found and passed; finding none exits 0.
+        run: |
+          out="$(semgrep --test --metrics=off semgrep/ 2>&1)"; echo "$out"
+          echo "$out" | grep -q "All tests passed"
+      - name: Scan the application
+        run: semgrep scan --metrics=off --error --config semgrep/ app wsgi.py

@@ -1,0 +1,73 @@
+# CTH architecture rules (INV-ARC-007: GET must be pure).
+# Test cases: cth-get-must-be-pure.py beside this file, annotated `ruleid:` (must match)
+# and `ok:` (must not). CI ("Architecture rules" in .github/workflows/semgrep.yml) runs `semgrep --test semgrep/`, then scans app/ and wsgi.py.
+# Not covered: a GET route that calls a helper or service which commits (no
+# cross-function analysis in Semgrep OSS); the FEAT runtime guard and
+# tests/helpers/navigation_traversal.py remain the backstop for that.
+rules:
+  - id: cth-get-must-be-pure
+    languages: [python]
+    severity: ERROR
+    message: >-
+      INV-ARC-007: a GET-only route must not commit, flush or write session
+      state. Move the write to a POST command (a FEAT) or a scheduled job.
+    patterns:
+      - pattern-either:
+          # No methods= means GET (and HEAD) only.
+          - pattern-inside: |
+              @$BP.route($PATH)
+              def $F(...):
+                ...
+          - pattern-inside: |
+              @$BP.route($PATH, methods=["GET"])
+              def $F(...):
+                ...
+          - pattern-inside: |
+              @$BP.get(...)
+              def $F(...):
+                ...
+      - pattern-either:
+          - pattern: db.session.commit()
+          - pattern: db.session.flush(...)
+          - pattern: db.session.add(...)
+          - pattern: db.session.add_all(...)
+          - pattern: db.session.delete(...)
+          - pattern: db.session.merge(...)
+          - pattern: |
+              with FEATContext(...):
+                ...
+  - id: cth-feat-context-on-get-route
+    languages: [python]
+    severity: ERROR
+    message: >-
+      INV-ARC-007: @requires_feat_context wraps the whole view, so on a route that
+      accepts GET it opens a FEAT context and commits on every page load. Enter the
+      FEAT only on the mutating method (e.g. `with FEATContext(...)` under the POST branch).
+    patterns:
+      # Each decorator is matched on its own (as a pattern-inside around the same
+      # def), so their order and any decorators in between do not matter.
+      - pattern-inside: |
+          @requires_feat_context(...)
+          def $F(...):
+            ...
+      - pattern-either:
+          - pattern-inside: |
+              @$BP.route($PATH)
+              def $F(...):
+                ...
+          - pattern-inside: |
+              @$BP.get(...)
+              def $F(...):
+                ...
+          - patterns:
+              - pattern-inside: |
+                  @$BP.route(..., methods=$METHODS, ...)
+                  def $F(...):
+                    ...
+              - metavariable-regex:
+                  metavariable: $METHODS
+                  # metavariable-regex is anchored at the start; the value is a list literal.
+                  regex: (?i).*\bGET\b.*
+      - pattern: |
+          def $F(...):
+            ...
