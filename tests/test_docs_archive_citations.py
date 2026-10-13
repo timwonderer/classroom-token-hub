@@ -32,13 +32,43 @@ _LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
 
 # Code is not prose. `DOM-[DOMAIN].check_[COND](context_id)` is a function
 # signature, not a link, and treating it as one produces a failure that cannot
-# be fixed without mangling the documentation.
-_FENCE = re.compile(r"^```.*?^```", re.DOTALL | re.MULTILINE)
-_INLINE_CODE = re.compile(r"`[^`\n]*`")
+# be fixed without mangling the documentation. A fence may use ``` or ~~~, carry
+# an info string, and be indented (fences inside list items are); it closes on a
+# run of the same character at least as long. An unclosed fence runs to the end.
+_FENCE_OPEN = re.compile(r"^\s*(`{3,}|~{3,})")
+# A code span closes on a backtick run of exactly the opening run's length.
+_INLINE_CODE = re.compile(r"(?<!`)(`+)(?!`)[^\n]*?(?<!`)\1(?!`)")
 
 
 def _strip_code(text: str) -> str:
-    return _INLINE_CODE.sub("", _FENCE.sub("", text))
+    kept: list[str] = []
+    fence: str | None = None
+    for line in text.split("\n"):
+        if fence is None:
+            opened = _FENCE_OPEN.match(line)
+            if opened:
+                fence = opened.group(1)
+            else:
+                kept.append(line)
+        elif re.match(rf"^\s*{re.escape(fence[0])}{{{len(fence)},}}\s*$", line):
+            fence = None
+    return _INLINE_CODE.sub("", "\n".join(kept))
+
+
+def _broken_links(source: Path, text: str) -> list[str]:
+    """Local link targets in `text` that resolve to nothing, ignoring code."""
+    broken: list[str] = []
+    for match in _LINK.finditer(_strip_code(text)):
+        target = match.group(1)
+        resolved = _resolve(source, target)
+        if resolved is None:
+            continue
+        # Only govern links into the repository's own tracked content.
+        if not str(resolved).startswith(str(REPO_ROOT)):
+            continue
+        if not (resolved.exists() or resolved.with_suffix(".md").exists()):
+            broken.append(target)
+    return broken
 
 # A citation is labelled if the word "archived"/"superseded"/etc. appears on the
 # same line. The line is the unit a reader takes in at a glance.
@@ -161,21 +191,56 @@ def test_internal_markdown_links_resolve(doc: Path) -> None:
     rows, and it is why the documentation index rotted to 44% dead without
     anything reporting it.
     """
-    text = _strip_code(doc.read_text(encoding="utf-8"))
-    broken: list[str] = []
-
-    for match in _LINK.finditer(text):
-        target = match.group(1)
-        resolved = _resolve(doc, target)
-        if resolved is None:
-            continue
-        # Only govern links into the repository's own tracked content.
-        if not str(resolved).startswith(str(REPO_ROOT)):
-            continue
-        if not (resolved.exists() or resolved.with_suffix(".md").exists()):
-            broken.append(target)
+    broken = _broken_links(doc, doc.read_text(encoding="utf-8"))
 
     assert not broken, (
         f"{doc.relative_to(REPO_ROOT)} contains links that resolve to nothing:\n  "
         + "\n  ".join(broken)
     )
+
+
+# SOP-TEST-003 §IX.A mutation proof. The source path only anchors relative
+# targets; the text is synthetic.
+_PROBE = DOCS_ROOT / "probe.md"
+
+
+def test_broken_link_detector_reports_a_dead_link_in_prose() -> None:
+    text = "See [the record](ops/audits/DEPLOY_2099-01-01_deadbee.md) for details.\n"
+    assert _broken_links(_PROBE, text) == ["ops/audits/DEPLOY_2099-01-01_deadbee.md"]
+
+
+def test_broken_link_detector_reports_prose_between_and_after_code() -> None:
+    # Near miss: a dead link sharing a line with a code span, and one after a
+    # closed fence, must survive the stripping.
+    text = (
+        "Run `pytest` then read [a](missing-a.md).\n"
+        "  ```text\n"
+        "  [fenced](fenced.md)\n"
+        "  ```\n"
+        "Then [b](missing-b.md).\n"
+    )
+    assert _broken_links(_PROBE, text) == ["missing-a.md", "missing-b.md"]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # The SOP-DEP-002 step 12 template that the v2.2.3 suite tripped on:
+        # an info-string fence indented inside a list item.
+        "1. Write:\n\n    ```text\n    Record: [DEPLOY_<date>_<sha>.md](docs/ops/audits/DEPLOY_<date>_<sha>.md).\n    ```\n",
+        "```\n[x](missing.md)\n```\n",
+        "~~~markdown\n[x](missing.md)\n~~~\n",
+        # A shorter run does not close a longer fence.
+        "````md\n```\n[x](missing.md)\n```\n````\n",
+        # An unclosed fence runs to the end of the document.
+        "```\n[x](missing.md)\n",
+        "Write `[x](missing.md)` literally.\n",
+        "Write ``[x](missing.md) with a ` inside`` literally.\n",
+    ],
+)
+def test_broken_link_detector_ignores_links_inside_code(text: str) -> None:
+    assert _broken_links(_PROBE, text) == []
+
+
+def test_broken_link_detector_accepts_a_live_link() -> None:
+    assert _broken_links(_PROBE, "See [docs](README.md).\n") == []
