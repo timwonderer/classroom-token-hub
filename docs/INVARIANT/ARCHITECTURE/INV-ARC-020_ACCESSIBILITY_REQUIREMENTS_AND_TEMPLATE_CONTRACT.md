@@ -32,7 +32,6 @@ Constitutional. This document derives directly from `INV-CORE-000` Section III.7
 - `docs/INVARIANT/ARCHITECTURE/INV-ARC-017_GENERAL_TESTING_INVARIANTS.md`
 - `docs/STANDARD_OPERATING_PROCEDURES/TESTING/SOP-TEST-003_Test_Creation.md`
 - `docs/STANDARD_OPERATING_PROCEDURES/SOP-DOC-000_DOCUMENTATION_STANDARD.md`
-- `docs/archive/v2-tracking-2026/V2_REBUILD_VALIDATION_REPORT.md` (historical record only; `docs/archive/` holds no authority)
 
 ## V. Accessibility Principles
 
