@@ -8,6 +8,8 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+Released untagged as `79cbb2615` on 2026-10-13 at 03:19 UTC by release run [38341128952](https://github.com/timwonderer/classroom-token-hub/actions/runs/38341128952) ([record](docs/ops/audits/DEPLOY_2026-10-13_79cbb2615.md)): #1559 (PROD-PAY-001 reporting fix) and #1564 (Werkzeug 3.1.9, Mako 1.4.2).
+
 ### Fixed
 
 - **The PROD-PAY-001 payroll correction no longer reports an already-corrected student as paid again** (found by the v2.2.3 full suite). F5 (#1536) moved idempotency-key replay into `record_payroll_event` itself, which now returns the existing event where it used to raise `IntegrityError`. `_post_payroll_corrections` (`app/routes/admin.py`) still relied on that `IntegrityError` to skip a student a concurrent approval had already corrected, so it counted the replay as a new payment. No second credit was ever written; only the list of seats the approval reported as paid was wrong. `PayrollEventResult` now carries `replayed`, set by the FEAT, and the route skips replays on that flag; the database replay-guard branch remains as a fallback. Regression test: `test_PROD_PAY_001__overlapping_approvals_skip_the_student_already_paid`, which failed on v2.2.3 and passes now.
