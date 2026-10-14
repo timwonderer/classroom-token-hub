@@ -6,7 +6,10 @@ searchable: false
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| PRN-SNP-001      | 1.0     | 2026-06-16     | N/A        | Informative      |
+| PRN-SNP-001      | 1.1     | 2026-10-14     | 1.0        | Informative      |
+
+> [!IMPORTANT]
+> **v1.1 (2026-10-14), documentation modernization.** §5.1/§5.2/§6 said passwords/PINs use "bcrypt with a server-side pepper." The canonical primitive is `hash_password()` (scrypt via werkzeug, salted, NOT peppered — `SPEC-SEC-001`); the pepper keys only username/claim-name lookup HMACs. Also labelled three inline citations of the retired v1 `SEC-CORE-000`/`SEC-CONT-026` documents as archived (§7 already said so; the citations at point of use didn't). No change to the SSO rationale itself.
 
 ## 1. Purpose
 
@@ -66,7 +69,7 @@ Teacher and student actor identity is itself deidentified at the public-referenc
 
 ### 3.3 Credential storage
 
-Usernames are never persisted in plaintext and are instead stored as salted HMAC lookup hashes. Passwords/PINs use bcrypt with a server-side pepper. TOTP secrets and passkey metadata are encrypted at rest and are owned by `users.id`. All of this is only ever internal to CTH and is never exposed to any third-party identity provider.
+Usernames are never persisted in plaintext and are instead stored as salted HMAC lookup hashes. Passwords/PINs use `hash_password()` (scrypt via werkzeug, salted, NOT peppered — `SPEC-SEC-001`; the pepper keys only the username/claim-name lookup HMACs, not credentials). TOTP secrets and passkey metadata are encrypted at rest and are owned by `users.id`. All of this is only ever internal to CTH and is never exposed to any third-party identity provider.
 
 ## 4. Risk-Benefit Analysis of SSO Integration
 
@@ -78,7 +81,7 @@ SSO does not protect this asset; it changes what the asset *is*. A SAML assertio
 
 The display name itself is also weaker than typical PII in a second respect: it is not student-asserted or institution-verified identity. The first name and last initial on a seat are free-text values the teacher enters when provisioning the roster, for the sole functional purpose of letting the student recognize and claim their own seat. Nothing in the claim flow requires this value to match a legal name, cross-checks it against any system of record, or treats it as authoritative — it is an unverified label, not a verified identity attribute. This is a materially different starting point than a SAML/OIDC assertion, which is by definition sourced from and verified against the institution's system of record. Adopting SSO would not be replacing one identity system with a better one; for this specific field, it would be the first time any verified identity entered the system at all.
 
-Access to this display name is also narrow today: outside of direct database access, the only principal who can ever see a seat's decrypted first name and last initial is the teacher who owns that seat's class, through `identity_profiles`. Students do not see other students' names — they have no peer-name lookup surface. System administrators have no route that decrypts or displays `identity_profiles`; their tooling operates on `seats.public_id` and other non-identity fields only (`SEC-CONT-026`). A breach that compromises application-layer access (rather than the underlying database directly) would therefore not expose a single name beyond what one teacher could already see for their own roster.
+Access to this display name is also narrow today: outside of direct database access, the only principal who can ever see a seat's decrypted first name and last initial is the teacher who owns that seat's class, through `identity_profiles`. Students do not see other students' names — they have no peer-name lookup surface. System administrators have no route that decrypts or displays `identity_profiles`; their tooling operates on `seats.public_id` and other non-identity fields only (per the v1 authorization architecture `SEC-CONT-026`, archived — not carried into v2, see §7). A breach that compromises application-layer access (rather than the underlying database directly) would therefore not expose a single name beyond what one teacher could already see for their own roster.
 
 ### 4.2 SSO undermines tenant isolation 
 
@@ -94,7 +97,7 @@ CTH is used by individual teachers across institutions, charter schools, and hom
 
 ### 4.5 CSF 2.0 does not mandate SSO specifically, and is risk-based by design
 
-NIST CSF 2.0's `PR.AA` (Identity Management, Authentication, and Access Control) category requires that "identities and credentials for authorized users... are managed by the organization" and that access is "limited to authorized users... and authorized devices, services, and connections is managed commensurate with the assessed risk." The phrase "commensurate with the assessed risk" is load-bearing: CSF 2.0 is a risk-based framework, not a fixed control checklist, and a control's appropriateness depends on the sensitivity of the asset it protects. SSO is a common implementation pattern for satisfying `PR.AA` for systems holding grades, SIS records, financial-aid data, or other high-sensitivity education records. Applied to a system whose worst-case exposure is a first name, last initial, and play-money ledger, a blanket SSO mandate is disproportionate to the asset, and — per §5.1 — actively counterproductive to the risk it is meant to manage. CTH satisfies the same underlying control objectives — credential management, least-privilege scoping, session expiry, MFA for administrative roles — through mechanisms suited to its actual risk profile: locally salted/peppered/hashed credentials, mandatory TOTP for system administrators, strict non-sliding 10-minute session windows, and CSRF/Turnstile-protected entry points (`SEC-CORE-000` §IV).
+NIST CSF 2.0's `PR.AA` (Identity Management, Authentication, and Access Control) category requires that "identities and credentials for authorized users... are managed by the organization" and that access is "limited to authorized users... and authorized devices, services, and connections is managed commensurate with the assessed risk." The phrase "commensurate with the assessed risk" is load-bearing: CSF 2.0 is a risk-based framework, not a fixed control checklist, and a control's appropriateness depends on the sensitivity of the asset it protects. SSO is a common implementation pattern for satisfying `PR.AA` for systems holding grades, SIS records, financial-aid data, or other high-sensitivity education records. Applied to a system whose worst-case exposure is a first name, last initial, and play-money ledger, a blanket SSO mandate is disproportionate to the asset, and — per §5.1 — actively counterproductive to the risk it is meant to manage. CTH satisfies the same underlying control objectives — credential management, least-privilege scoping, session expiry, MFA for administrative roles — through mechanisms suited to its actual risk profile: locally salted, scrypt-hashed credentials (`SPEC-SEC-001`), mandatory TOTP for system administrators, strict non-sliding 10-minute session windows, and CSRF/Turnstile-protected entry points (per the v1 security precepts `SEC-CORE-000` §IV, archived — not carried into v2, see §7).
 
 ## 5. Comparative Risk Assessment
 
@@ -106,7 +109,7 @@ NIST CSF 2.0's `PR.AA` (Identity Management, Authentication, and Access Control)
 | Blast radius of a single credential compromise | Institution-wide (IdP-scoped) | Single class (`class_id`-scoped) |
 | Cross-tenant correlation risk | High — same federated identity persists across all classes/years | None by design — `seats.public_id` resolves only under its own `class_id` and carries no identity |
 | Dependency for basic operation | Requires institutional IdP availability and SAML/OIDC metadata correctness | None — fully self-contained, works for any teacher regardless of institutional IT capacity |
-| Additional attack surface | XML signature wrapping, IdP metadata spoofing, token replay, third-party IdP outages | Local bcrypt/HMAC/Fernet primitives already audited under `SEC-CORE-000` |
+| Additional attack surface | XML signature wrapping, IdP metadata spoofing, token replay, third-party IdP outages | Local scrypt/HMAC/Fernet primitives (`SPEC-SEC-001`), audited under the v1 security precepts `SEC-CORE-000` (archived — not carried into v2, see §7) |
 | Data sharing agreement scope | Requires the institution to release PII attributes to CTH via assertions | None — no PII is requested from or shared with any external identity system |
 | Alignment with `INV-CORE-000` §2 (PII minimization) | Conflicts — requires durable PII the invariant prohibits, including categories (email, persistent ID) never collected today | Native — invariant was authored around this exact model |
 
