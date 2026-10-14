@@ -114,7 +114,7 @@ def _execute_void_transaction_impl(
     # the same operation (SPEC-OPS-001 §3.5, INV-OPS-004). Doing it first means
     # an ineligible grant refuses the whole correction before any money moves.
     if tx.type == 'purchase':
-        _void_purchase(tx)
+        _void_purchase(tx, actor_seat_id=actor_seat_id)
 
     # One path, settled or not. Money is only ever reversed — a monetary
     # transaction must not be voided (INV-OPS-001), and marking the original
@@ -140,7 +140,7 @@ def _execute_void_transaction_impl(
     )
 
 
-def _void_purchase(tx: Transaction) -> None:
+def _void_purchase(tx: Transaction, *, actor_seat_id: int | None = None) -> None:
     """Revoke the grants this purchase produced, resolved by provenance.
 
     The grants are found through ``correlation_id``, not by parsing the item
@@ -175,7 +175,9 @@ def _void_purchase(tx: Transaction) -> None:
     eligibility = lock_and_resolve_purchase_eligibility(tx)
     if not eligibility.eligible:
         raise PurchaseNotReversible(eligibility.reason)
-    revoke_reversed_purchase(tx, list(eligibility.grants), reason="reversal_propagated")
+    revoke_reversed_purchase(
+        tx, list(eligibility.grants), reason="reversal_propagated", actor_seat_id=actor_seat_id
+    )
 
 
 def revoke_reversed_purchase(
@@ -219,11 +221,13 @@ def revoke_reversed_purchase(
         actor_seat_id=actor_seat_id or tx.actor_seat_id,
     )
 
+    # Attributed like the REVERSAL row beside it: the reversing actor, with the
+    # purchase's own mechanism (reverse_transaction for a debit).
     create_pending_transaction(
         seat_id=tx.seat_id,
         class_id=tx.class_id,
         target_seat_id=tx.seat_id,
-        actor_seat_id=tx.actor_seat_id or tx.seat_id,
+        actor_seat_id=actor_seat_id or tx.actor_seat_id or tx.seat_id,
         mechanism=tx.mechanism.value if getattr(tx, "mechanism", None) else "system",
         amount=Decimal('0.00'),
         account_type=tx.account_type or 'checking',

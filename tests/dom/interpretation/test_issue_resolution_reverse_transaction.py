@@ -97,6 +97,10 @@ def test_SPEC_OPS_001__issue_reversal_matches_the_banking_reverse(client, app):
     }
     (removal,) = _item_removals(tx)
     assert removal.amount == Decimal("0.00")
+    # Credited to the teacher who reversed it, like the REVERSAL row.
+    reversal = get_exact_reversal(tx)
+    assert removal.actor_seat_id == reversal.actor_seat_id == classroom.teacher_seat.id
+    assert removal.mechanism == reversal.mechanism
 
 
 def test_DOM_SUP_001__issue_refund_retains_the_item(client, app):
