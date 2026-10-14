@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-002 | 1.9 | 2026-10-12 | 1.8 | Normative |
+| SOP-DEP-002 | 1.10 | 2026-10-13 | 1.9 | Normative |
 
 ## I. Purpose
 
@@ -30,6 +30,16 @@ Normative (SOP Tier). Subordinate to `INV-CORE-000`.
 - Backup, maintenance window, and rollback contacts are confirmed.
 - Team-owned production and pre-production database targets are identified before any migration step begins.
 - Named production operator, independent verifier, and rollback approver are assigned before the maintenance window starts.
+
+### V.1 Single-maintainer limitation
+
+This project has one maintainer. The GitHub `production` environment therefore has **no required reviewers**: its
+only protection is a deployment branch policy that limits deploys to `main` (verified 2026-10-13). A release
+dispatch is not gated by a second person's approval in GitHub. Where this runbook refers to environment
+approval (§IX.1), it means the environment's branch policy plus the operator's own go-ahead, recorded under the
+solo-operator exception (`SOP-DEP-001` §XIII); it is not independent review. Each release record states this.
+When a second maintainer joins, add them as required reviewers on the `production` environment and remove this
+subsection.
 
 ## VI. Pre-Production Checklist
 
@@ -291,6 +301,10 @@ Record:
 
 ## XIII. Amendment
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.
+
+**Version 1.10 (2026-10-13):** adds §V.1, the single-maintainer limitation: the `production` environment has no
+required reviewers, and environment approval means the branch policy plus the operator's recorded go-ahead under
+the solo-operator exception. Owner decision of 2026-10-13 (Semgrep triage, priority 4). No procedure changes.
 
 **Version 1.9 (2026-10-12):** adds §VII.A, the step-by-step tagged release procedure, and
 `infra/db-backup/prerelease.sh`, which it runs. Owner rulings 2026-10-12: every tagged release takes the backup
