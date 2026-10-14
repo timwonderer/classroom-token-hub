@@ -652,7 +652,7 @@ def revoke_reversed_purchase_grants(
     *,
     reversed_transaction_id: int,
     reason: str,
-    actor_seat_id: int | None = None,
+    actor_seat_id: int,
 ) -> list[EntitlementEvent]:
     """Revoke every grant a reversed purchase produced (SPEC-OPS-001 §3.3).
 
@@ -666,7 +666,7 @@ def revoke_reversed_purchase_grants(
             entitlement_id=grant.entitlement_id,
             class_id=grant.class_id,
             target_seat_id=grant.target_seat_id,
-            actor_seat_id=actor_seat_id or grant.actor_seat_id,
+            actor_seat_id=actor_seat_id,
             product_id=grant.product_id,
             entitlement_type=grant.entitlement_type,
             acquisition_type=grant.acquisition_type,

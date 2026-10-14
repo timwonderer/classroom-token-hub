@@ -6393,6 +6393,7 @@ def void_transaction(transaction_id):
             tx,
             correlation_id=f"{tx.correlation_id}:void:{transaction_id}",
             idempotency_key=f"feat:ledger:void:{ctx.class_id}:{transaction_id}",
+            actor_seat_id=ctx.seat_id,
         )
         current_app.logger.info(f"Transaction {transaction_id} voided")
     except (AccessScopeDenied, access_policy_service.AccessPolicyDenied) as e:
@@ -10801,7 +10802,7 @@ def resolve_issue(issue_ref):
                     transaction,
                     list(item_events),
                     reason='issue_reversal',
-                    actor_seat_id=acting_seat.id if acting_seat else None,
+                    actor_seat_id=acting_seat.id,
                 )
 
             issue.teacher_resolution = (

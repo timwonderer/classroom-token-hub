@@ -231,3 +231,25 @@ def test_DOM_SUP_001__used_item_cannot_be_reversed_or_refunded(client, app):
     db.session.refresh(tx)
     assert tx.reversal_transaction_id is None
     assert get_exact_reversal(tx) is None
+
+
+def test_DOM_STORE_001__banking_reverse_credits_the_teacher(client, app):
+    """The banking page's Reverse is teacher-directed, so the revocations, the
+    item-removal row and the REVERSAL row all name the class teacher seat, not
+    the student who bought the item."""
+    classroom = initialize_as_teacher("chemistry_p1", client, app)
+    tx = unused_store_purchase(classroom, classroom.students[0], key="banking-reverse-actor")
+
+    response = client.post(
+        f"/admin/void-transaction/{tx.id}",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert response.status_code == 200, response.get_json()
+
+    teacher_seat_id = classroom.teacher_seat.id
+    revocations = _revocations(tx)
+    assert revocations
+    assert {event.actor_seat_id for event in revocations} == {teacher_seat_id}
+    (removal,) = _item_removals(tx)
+    assert removal.actor_seat_id == teacher_seat_id
+    assert get_exact_reversal(tx).actor_seat_id == teacher_seat_id

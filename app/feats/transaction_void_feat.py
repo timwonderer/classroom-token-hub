@@ -114,6 +114,10 @@ def _execute_void_transaction_impl(
     # the same operation (SPEC-OPS-001 §3.5, INV-OPS-004). Doing it first means
     # an ineligible grant refuses the whole correction before any money moves.
     if tx.type == 'purchase':
+        # A reversal is teacher-directed: its entitlement events and ledger
+        # rows name the class teacher seat, not the purchaser (DOM-STORE-001).
+        from app.services.identity_service import resolve_teacher_seat_for_class
+        actor_seat_id = actor_seat_id or resolve_teacher_seat_for_class(tx.class_id).id
         _void_purchase(tx, actor_seat_id=actor_seat_id)
 
     # One path, settled or not. Money is only ever reversed — a monetary
@@ -140,7 +144,7 @@ def _execute_void_transaction_impl(
     )
 
 
-def _void_purchase(tx: Transaction, *, actor_seat_id: int | None = None) -> None:
+def _void_purchase(tx: Transaction, *, actor_seat_id: int) -> None:
     """Revoke the grants this purchase produced, resolved by provenance.
 
     The grants are found through ``correlation_id``, not by parsing the item
@@ -185,7 +189,7 @@ def revoke_reversed_purchase(
     grants: list[EntitlementEvent],
     *,
     reason: str,
-    actor_seat_id: int | None = None,
+    actor_seat_id: int,
 ) -> None:
     """Invalidate what a reversed purchase granted and record the item removal.
 
@@ -218,16 +222,16 @@ def revoke_reversed_purchase(
         grants,
         reversed_transaction_id=tx.id,
         reason=reason,
-        actor_seat_id=actor_seat_id or tx.actor_seat_id,
+        actor_seat_id=actor_seat_id,
     )
 
-    # Attributed like the REVERSAL row beside it: the reversing actor, with the
-    # purchase's own mechanism (reverse_transaction for a debit).
+    # Attributed like the REVERSAL row beside it: the reversing teacher, with
+    # the purchase's own mechanism (reverse_transaction for a debit).
     create_pending_transaction(
         seat_id=tx.seat_id,
         class_id=tx.class_id,
         target_seat_id=tx.seat_id,
-        actor_seat_id=actor_seat_id or tx.actor_seat_id or tx.seat_id,
+        actor_seat_id=actor_seat_id,
         mechanism=tx.mechanism.value if getattr(tx, "mechanism", None) else "system",
         amount=Decimal('0.00'),
         account_type=tx.account_type or 'checking',
