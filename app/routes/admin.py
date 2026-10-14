@@ -6407,6 +6407,7 @@ def void_transaction(transaction_id):
             tx,
             correlation_id=f"{tx.correlation_id}:void:{transaction_id}",
             idempotency_key=f"feat:ledger:void:{ctx.class_id}:{transaction_id}",
+            actor_seat_id=ctx.seat_id,
         )
         current_app.logger.info(f"Transaction {transaction_id} voided")
     except (AccessScopeDenied, access_policy_service.AccessPolicyDenied) as e:
@@ -10802,21 +10803,15 @@ def resolve_issue(issue_ref):
             )
 
             if action_type == 'reverse_transaction':
-                for event in item_events:
-                    db.session.add(EntitlementEvent(
-                        class_id=event.class_id,
-                        entitlement_id=event.entitlement_id,
-                        target_seat_id=event.target_seat_id,
-                        actor_seat_id=acting_seat.id if acting_seat else event.actor_seat_id,
-                        product_id=event.product_id,
-                        entitlement_type=event.entitlement_type,
-                        acquisition_type=event.acquisition_type,
-                        event_type='REVOKED',
-                        correlation_id=event.correlation_id,
-                        payload={'reason': 'issue_reversal', 'reversed_transaction_id': reversal_tx.id},
-                        timestamp=utc_now(),
-                    ))
-                db.session.flush()
+                # Same revocation and $0 item-removal row as the banking page's
+                # Reverse; a refund keeps the item (SPEC-OPS-001 §3.3).
+                from app.feats.transaction_void_feat import revoke_reversed_purchase
+                revoke_reversed_purchase(
+                    transaction,
+                    list(item_events),
+                    reason='issue_reversal',
+                    actor_seat_id=acting_seat.id,
+                )
 
             issue.teacher_resolution = (
                 'Transaction Reversed' if action_type == 'reverse_transaction'
