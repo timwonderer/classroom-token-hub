@@ -158,6 +158,8 @@ Re-verified by the coordinating reviewer against code or live settings: app-wide
 
 Not verified: production nginx and Grafana configuration (not in the repo); GCP Workload Identity conditions; Cloudflare h2c handling; CDN content or hashes (nothing fetched); `is_safe_url` probes on production's Python 3.10.12 (probed on 3.13); whether proxied Grafana writes pass CSRF. Line mapping: the naive `main_line` (first line on `main` with identical text) pointed at a duplicate of the flagged text for 23 findings in group A, 11 in group B and 7 in group D (as reported by the analysts); in each case the scanned line itself was confirmed on `0f704e660` and the correction recorded per finding.
 
+Correction (2026-10-13): §2.3 item 2 lists `docs-links.yml:40` as holding Cloudflare Access secrets. The job references `CF_ACCESS_CLIENT_ID`/`CF_ACCESS_CLIENT_SECRET`, but neither secret exists in the repository or any environment, so the job runs unauthenticated (it passes unless the Access maintenance wall is up). The tier assignment is moot: #1576 pinned the reference regardless.
+
 ## 5. Per-finding dispositions
 
 Every open finding, individually. Evidence and recommended action per finding are in the companion JSON, `docs/ops/audits/evidence/2026-10-13_semgrep-triage/findings.json`.
