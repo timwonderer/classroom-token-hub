@@ -3,9 +3,11 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| FEAT-IDEN-107 | 1.1 | 2026-10-14 | 1.0 | Normative | NEW |
+| FEAT-IDEN-107 | 1.2 | 2026-10-14 | 1.1 | Normative | NEW |
 
 > [!IMPORTANT]
+> **v1.2 (2026-10-14), review correction.** v1.1's restated replay-safety mechanism was a read-then-act check, not a lock: two requests carrying the same `idempotency_key` can both pass Step 3's existence lookup before either audit event is written, since `audit_events` carries no uniqueness on `(feat_id, idempotency_key)` (`app/models.py` `AuditEvent.__table_args__`). §V now requires a unique constraint on that pair as part of this FEAT's schema contract, and Step 3's failure behavior is restated to rely on that constraint rather than on the lookup alone.
+>
 > **v1.1 (2026-10-14), documentation modernization.** Removed the former Mutation Phase Step 1, which inserted into an `IdempotencyRecord` entity that does not exist anywhere in the codebase (same removal already made in `FEAT-IDEN-001`/`FEAT-IDEN-002`). Replay safety is restated through the mechanism §V already described: a missing `passkey_credentials` row plus a matching `idempotency_key` in the `ACT-IDEN-107` audit event (Step 2, Mutation Phase) resolves to `ALREADY_REVOKED` rather than `CREDENTIAL_NOT_FOUND`. Renumbered the remaining Mutation Phase steps; no behavior change.
 
 ---
@@ -64,7 +66,7 @@ Before mutation, the FEAT MUST resolve:
 #### Step 3: Lookup Passkey Credential
 1. Query `passkey_credentials` where `credential_id = credential_id` and `user_id = user_id`.
 2. Verify the credential exists.
-3. **Failure Behavior**: Abort with `CREDENTIAL_NOT_FOUND` if the credential does not exist or belongs to a different user — unless this is a replay of the same `idempotency_key` per §V, in which case return success with outcome `ALREADY_REVOKED` instead.
+3. **Failure Behavior**: Abort with `CREDENTIAL_NOT_FOUND` if the credential does not exist or belongs to a different user — unless an `ACT-IDEN-107` audit event already exists for this `idempotency_key` per §V's unique constraint, in which case return success with outcome `ALREADY_REVOKED` instead. A bare existence lookup with no uniqueness behind it is not sufficient — see §V.
 
 #### Step 4: Verify Credential Ownership
 1. Ensure `passkey_credentials.user_id == user_id` (credential belongs to this teacher).
@@ -140,19 +142,18 @@ A teacher can revoke individual passkeys without affecting others. Multiple pass
 
 ## V. Idempotency
 
-**Mechanism:** The combination of `idempotency_key` and `credential_id` acts as the idempotency lock.
+**Mechanism:** A unique constraint on `audit_events (feat_id, idempotency_key)` is the idempotency lock, not the `passkey_credentials` existence check alone. A bare "does the row still exist" lookup is a read, not a lock: two concurrent requests carrying the same `idempotency_key` can both read "row gone" before either has written its `ACT-IDEN-107` audit event, and both would then emit a duplicate event. Closing that race requires the database to reject the second event, which requires uniqueness on `(feat_id, idempotency_key)` — `audit_events` carries no such constraint today (`app/models.py` `AuditEvent.__table_args__`); adding one (partial, `WHERE idempotency_key IS NOT NULL`, since the column is nullable for non-idempotent FEATs) is part of this FEAT's schema contract.
 
 **Behavior:**
 - If a retry occurs with the same `idempotency_key`:
-  - Check if `passkey_credentials` row exists for this `credential_id` and `user_id`.
-  - If false (already deleted), return success with outcome `ALREADY_REVOKED` (no duplicate state).
-  - If true (still exists), re-attempt the full deletion.
-- Replayed requests with the same `idempotency_key` **SHALL NOT** cause errors on retry if the credential is already gone.
+  - Look up an existing `ACT-IDEN-107` audit event for this `idempotency_key` (the authoritative replay signal, backed by the unique constraint above).
+  - If found, return success with outcome `ALREADY_REVOKED` without touching `passkey_credentials` again.
+  - If not found, proceed with the full deletion and audit-event insert inside the Mutation Phase's single transaction; the unique constraint turns a lost race into a constraint violation the FEAT catches and resolves to `ALREADY_REVOKED`, rather than a second audit event.
+- Replayed requests with the same `idempotency_key` **SHALL NOT** cause errors on retry, and **SHALL NOT** produce two audit events for one revocation, concurrent or not.
 
 **Client Responsibility:**
 - Generate a stable `idempotency_key` (e.g., based on session and credential ID).
 - Retry on transient errors with the same key.
-- Server stores key on audit log to detect and skip replays.
 
 ---
 

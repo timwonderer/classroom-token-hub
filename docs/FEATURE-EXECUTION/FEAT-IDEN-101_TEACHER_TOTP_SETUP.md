@@ -3,10 +3,12 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| FEAT-IDEN-101 | 1.2 | 2026-10-14 | 1.1 | Normative | NEW |
+| FEAT-IDEN-101 | 1.3 | 2026-10-14 | 1.2 | Normative | NEW |
 
 > [!IMPORTANT]
-> **v1.2 (2026-10-14), documentation modernization.** §III.B.3 and the review checklist described backup-code hashing as "bcrypt + pepper." The canonical primitive is `HASH_PASSWORD()` (scrypt via werkzeug, salted, NOT peppered — `SPEC-SEC-001`); sibling `FEAT-IDEN-106` already used the corrected wording. No behavior change.
+> **v1.3 (2026-10-14), review correction.** v1.2 named the algorithm ("scrypt via werkzeug") at three places, which `SPEC-SEC-001` §V.5 forbids: "Algorithm and parameters MUST be centralized in the canonical primitive, not duplicated in FEAT documents or route code." Reworded to name only `HASH_PASSWORD()`, matching `FEAT-IDEN-106`'s phrasing. No behavior change.
+>
+> **v1.2 (2026-10-14), documentation modernization.** §III.B.3 and the review checklist described backup-code hashing as "bcrypt + pepper." The canonical primitive is `HASH_PASSWORD()` (salted, NOT peppered, per `SPEC-SEC-001`); sibling `FEAT-IDEN-106` already used corrected wording. No behavior change.
 
 ---
 
@@ -113,12 +115,12 @@ Per DOM-IDEN-003 §III.B:
 
 Generate one-time backup codes for account recovery:
 1. Create 10 backup codes (alphanumeric, format: XXXX-XXXX-XXXX-XXXX).
-2. Hash each backup code with `HASH_PASSWORD()` (the canonical credential primitive from `SPEC-SEC-001`: scrypt via werkzeug, salted, NOT peppered — same as passwords, see FEAT-IDEN-106).
+2. Hash each backup code with `HASH_PASSWORD()` (canonical credential primitive from `SPEC-SEC-001`, same as passwords — see `FEAT-IDEN-106`).
 3. Persist hashes to `User.backup_codes_encrypted` (encrypted JSON array of hashed codes).
 4. For display, keep plaintext codes in memory (display once, then discard from memory).
 
 **Backup Code Lifecycle:**
-- Codes are stored as one-way scrypt hashes (cannot be decrypted, only verified)
+- Codes are stored as one-way `HASH_PASSWORD()` hashes (cannot be decrypted, only verified)
 - When a code is used (e.g., during account recovery), it is validated against stored hash
 - Used codes are marked with `used_at` timestamp and cannot be reused
 - All codes are invalidated when TOTP secret is reset (FEAT-IDEN-106)
@@ -295,7 +297,7 @@ Before code review, verify:
 - [ ] Secret is encrypted with `NORMALIZE_TOTP_FOR_STORAGE()` before storage
 - [ ] Seat binding is verified before setup
 - [ ] QR code generated correctly for authenticator apps
-- [ ] Backup codes are hashed with `HASH_PASSWORD()` (scrypt, salted, NOT peppered)
+- [ ] Backup codes are hashed with `HASH_PASSWORD()` (per `SPEC-SEC-001`, same as passwords)
 - [ ] Unencrypted secret displayed only once
 - [ ] All mutations occur in a single transaction
 - [ ] Audit event emitted with all required fields
