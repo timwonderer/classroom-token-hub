@@ -2,7 +2,10 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| FEAT-CLASS-005 | 1.1 | 2026-09-30 | 1.0 | Normative |
+| FEAT-CLASS-005 | 1.2 | 2026-10-14 | 1.1 | Normative |
+
+> [!IMPORTANT]
+> **v1.2 (2026-10-14), documentation modernization.** §XI's "Overdraft/NSF fees" line could be read as describing an active charge. It is not: CTH charges no NSF/overdraft fee (owner ruling 2026-10-07, `DOM-OBL-001` §II.C). `flat_overdraft_fee`/`progressive_overdraft_fee` remain real, rebalance-able `economic_engine` fields — no live FEAT currently applies them to a charge. Overdraft *protection* (the savings-covers-shortfall transfer) is a separate, unaffected mechanism and remains fully live.
 
 ---
 
@@ -200,7 +203,10 @@ range. The mutation is then delegated to the owning command:
 
 - Rent and rent late penalties use the append-only rent supersession command.
 - Store prices use Store product-version supersession.
-- Overdraft/NSF fees use the Economic Engine evolution command.
+- The `economic_engine` overdraft-protection setting and overdraft/NSF fee
+  fields use the Economic Engine evolution command. No live FEAT currently
+  applies the fee fields to a charge (`DOM-OBL-001` §II.C) — the protection
+  setting (savings-covers-shortfall transfer) is unaffected and stays live.
 - Insurance is advisory-only: it is never selectable or mutated here because
   premium changes can alter payout and coverage terms. The row links to
   Insurance Management for the complete policy edit flow.

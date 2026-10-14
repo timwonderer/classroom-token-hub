@@ -2,9 +2,11 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| DOM-CLASS-003 | 2.4 | 2026-09-30 | 2.3 | Constitutional |
+| DOM-CLASS-003 | 2.5 | 2026-10-14 | 2.4 | Constitutional |
 
 > [!IMPORTANT]
+> **v2.5 (2026-10-14), documentation modernization.** §V's table and §IX's rebalance example referred to "overdraft fee" as if it were an active charge. It is not: CTH charges no NSF/overdraft fee (owner ruling 2026-10-07, `DOM-OBL-001` §II.C). The `flat_overdraft_fee`/`progressive_overdraft_fee` fields on `economic_engine` remain real, rebalance-able configuration — no live FEAT currently applies them to a charge. Overdraft *protection* (`protection_enabled`, the savings-covers-shortfall transfer) is unaffected by the 2026-10-07 ruling and remains fully live for every payment type.
+>
 > **v2.4 (2026-09-30), operator ruling.** "policy versions is explicitly legacy, it was never authorized by me as a canonical table. any documentation that said otherwise were direct violation of my directive." The class-wide tables `policy_versions` and `policy_transitions` are **retired** and dropped (migration `dd52b19d48d8`). The owner removed them from the Policies domain on 2026-08-03 (`184910af8`, PR #1293); this document recreated them on 2026-08-08 (`abb49d75e`, PR #1321) without that authority, and v2.3 had marked them legacy. From v2.4, economic policy lineage **is** each owning domain's own append-only, effective-dated table (§V). There is no separate version table, no transition row, and no activation step.
 
 # I. Purpose
@@ -180,7 +182,7 @@ Economic policy lineage is held in the owning domain's own table. Each row is im
 | Rent | `rent_settings` | `policy_uuid`; binds when a period is issued (`DOM-OBL-001` §V.7) |
 | Insurance | `insurance_policies` | `policy_uuid`; frozen per bill cycle and entitlement (`DOM-STORE-001`) |
 | Store prices | `store_products` | `policy_uuid` within a product lineage |
-| Banking, overdraft fee, economy mode, CWI inputs | `economic_engine` | `economic_version_id`, with `effective_at` (§VII) |
+| Banking (protection, overdraft fee fields), economy mode, CWI inputs | `economic_engine` | `economic_version_id`, with `effective_at` (§VII) |
 
 Downstream facts freeze the owning row's identity (bill cycles and assessments freeze `policy_uuid`, `DOM-OBL-001`; payroll events freeze `payroll_settings.policy_uuid`, `DOM-PROD-001` §XI.3).
 
@@ -263,7 +265,7 @@ A teacher-visible rebalance groups several economic changes into one review. It 
 Examples:
 - rent rebalance → a new `rent_settings` row (scheduled: dated to the first rent period not yet issued)
 - store price correction → a superseding `store_products` version
-- overdraft fee → a new `economic_engine` version
+- overdraft-protection setting (`protection_enabled`) → a new `economic_engine` version. The engine also carries `flat_overdraft_fee`/`progressive_overdraft_fee` fields, rebalanced the same way, but no live FEAT currently applies them: CTH charges no NSF/overdraft fee (owner ruling 2026-10-07, `DOM-OBL-001` §II.C). The fields persist as configuration surface; they do not describe an active charge.
 
 Changing the class's economy mode MUST NOT cancel, supersede or otherwise revoke a scheduled rebalance, and nothing may revoke one implicitly: the scheduled change is already a row of its owning table, and it is changed, like any other row, by recording another. Owner ruling 2026-09-30: "Scheduling the rebalance was an explicit teacher action. Changing mode should not implicitly revoke a separately requested future action. If we want cancellation, that should itself be explicit."
 
