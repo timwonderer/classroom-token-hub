@@ -13,15 +13,26 @@ rules:
       state. Move the write to a POST command (a FEAT) or a scheduled job.
     patterns:
       - pattern-either:
-          # No methods= means GET (and HEAD) only.
-          - pattern-inside: |
-              @$BP.route($PATH)
-              def $F(...):
-                ...
-          - pattern-inside: |
-              @$BP.route($PATH, methods=["GET"])
-              def $F(...):
-                ...
+          # No methods= means GET (and HEAD) only, whatever other options
+          # (endpoint=, defaults=, strict_slashes=) the route carries.
+          - patterns:
+              - pattern-inside: |
+                  @$BP.route(...)
+                  def $F(...):
+                    ...
+              - pattern-not-inside: |
+                  @$BP.route(..., methods=$ANY, ...)
+                  def $F(...):
+                    ...
+          # methods= naming only GET and/or HEAD, in any case, list or tuple.
+          - patterns:
+              - pattern-inside: |
+                  @$BP.route(..., methods=$METHODS, ...)
+                  def $F(...):
+                    ...
+              - metavariable-regex:
+                  metavariable: $METHODS
+                  regex: (?i)^[\[(]\s*(['"](GET|HEAD)['"]\s*,?\s*)+[\])]$
           - pattern-inside: |
               @$BP.get(...)
               def $F(...):
@@ -51,10 +62,15 @@ rules:
           def $F(...):
             ...
       - pattern-either:
-          - pattern-inside: |
-              @$BP.route($PATH)
-              def $F(...):
-                ...
+          - patterns:
+              - pattern-inside: |
+                  @$BP.route(...)
+                  def $F(...):
+                    ...
+              - pattern-not-inside: |
+                  @$BP.route(..., methods=$ANY, ...)
+                  def $F(...):
+                    ...
           - pattern-inside: |
               @$BP.get(...)
               def $F(...):
