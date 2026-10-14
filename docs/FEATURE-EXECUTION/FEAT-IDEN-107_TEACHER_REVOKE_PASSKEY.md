@@ -3,7 +3,10 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| FEAT-IDEN-107 | 1.0 | 2026-08-09 | N/A (new) | Normative | NEW |
+| FEAT-IDEN-107 | 1.1 | 2026-10-14 | 1.0 | Normative | NEW |
+
+> [!IMPORTANT]
+> **v1.1 (2026-10-14), documentation modernization.** Removed the former Mutation Phase Step 1, which inserted into an `IdempotencyRecord` entity that does not exist anywhere in the codebase (same removal already made in `FEAT-IDEN-001`/`FEAT-IDEN-002`). Replay safety is restated through the mechanism §V already described: a missing `passkey_credentials` row plus a matching `idempotency_key` in the `ACT-IDEN-107` audit event (Step 2, Mutation Phase) resolves to `ALREADY_REVOKED` rather than `CREDENTIAL_NOT_FOUND`. Renumbered the remaining Mutation Phase steps; no behavior change.
 
 ---
 
@@ -61,7 +64,7 @@ Before mutation, the FEAT MUST resolve:
 #### Step 3: Lookup Passkey Credential
 1. Query `passkey_credentials` where `credential_id = credential_id` and `user_id = user_id`.
 2. Verify the credential exists.
-3. **Failure Behavior**: Abort with `CREDENTIAL_NOT_FOUND` if the credential does not exist or belongs to a different user.
+3. **Failure Behavior**: Abort with `CREDENTIAL_NOT_FOUND` if the credential does not exist or belongs to a different user — unless this is a replay of the same `idempotency_key` per §V, in which case return success with outcome `ALREADY_REVOKED` instead.
 
 #### Step 4: Verify Credential Ownership
 1. Ensure `passkey_credentials.user_id == user_id` (credential belongs to this teacher).
@@ -82,24 +85,18 @@ Before mutation, the FEAT MUST resolve:
 
 All mutations in this section **MUST** occur within a single database transaction.
 
-#### Step 1: Persist Idempotency Record Before Deletion
-
-Before executing the hard delete, write the idempotency record:
-1. Insert into `IdempotencyRecord`: `idempotency_key = idempotency_key`, `feat_id = "FEAT-IDEN-107"`, `credential_id = credential_id`, `user_id = user_id`, `expires_at = NOW() + 24 hours`.
-2. This ensures that if the delete succeeds but the response is lost, a retry will resolve via the idempotency check at Step 1 of the validation phase and return success rather than `CREDENTIAL_NOT_FOUND`.
-
-#### Step 2: Delete PasskeyCredential Record
+#### Step 1: Delete PasskeyCredential Record
 
 Delete from `passkey_credentials` table:
 1. WHERE `credential_id = credential_id` and `user_id = user_id`.
-2. Confirm zero or one row was deleted. Zero rows indicates the credential was already removed (acceptable for idempotent retries covered by Step 1).
+2. Confirm zero or one row was deleted. Zero rows indicates the credential was already removed (acceptable for idempotent retries — see §V).
 
 Per DOM-IDEN-003 §III.B:
 > "Passkey credentials can be revoked (deleted) at any time."
 
 **Note:** This is a hard delete. The credential is completely removed; there is no `deleted_at` soft-delete marker.
 
-#### Step 3: Audit Trace
+#### Step 2: Audit Trace
 
 Per FEAT-CORE-000 §III.4:
 

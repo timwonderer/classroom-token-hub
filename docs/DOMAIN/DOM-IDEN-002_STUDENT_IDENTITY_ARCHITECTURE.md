@@ -2,7 +2,10 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-IDEN-002 | 2.9 | 2026-09-29 | 2.8 | Constitutional |
+| DOM-IDEN-002 | 2.10 | 2026-10-14 | 2.9 | Constitutional |
+
+> [!IMPORTANT]
+> **v2.10 (2026-10-14), documentation modernization.** §IX named "balance cache" among records untouched by recovery. No `BalanceCache` model or table exists in v2 (CLAUDE.md); balances are derived from the ledger. Corrected to "ledger balance snapshot." No behavior change.
 
 ---
 
@@ -275,7 +278,7 @@ Credentials that are fully replaced during recovery:
 
 Records that are NOT touched during recovery:
 
-- Economic records (transactions, balance cache)
+- Economic records (transactions, ledger balance snapshot)
 - Entitlement records (student items, student insurance)
 - Attendance records (attendance sessions, hall pass logs, seat attendance state)
 - Obligation records (rent payments, insurance claims)
