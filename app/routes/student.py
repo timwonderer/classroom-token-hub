@@ -2941,160 +2941,169 @@ def rent_pay(period):
 # against ONE account, independent of how many classmates share the address.
 @limiter.limit("60 per minute", methods=["POST"])
 @limiter.limit("10 per minute", key_func=student_login_identity_limit_key, methods=["POST"])
-@requires_feat_context("FEAT-IDEN-001")
 def login():
-    """Student login with username and passphrase."""
+    """Student login with username and passphrase.
+
+    Only a submission runs inside FEAT-IDEN-001; rendering the form must not
+    open a FEAT, which commits on exit (INV-ARC-007: GET must be pure).
+    """
     form = StudentLoginForm()
     if form.validate_on_submit():
-        is_json = request.is_json or request.headers.get("X-Requested-With") == "XMLHttpRequest"
-
-        # Verify Turnstile token
-        turnstile_token = request.form.get('cf-turnstile-response')
-        if not verify_turnstile_token(turnstile_token, get_real_ip()):
-            current_app.logger.warning(f"Turnstile verification failed for student login attempt")
-            if is_json:
-                return jsonify(status="error", message="CAPTCHA verification failed. Please try again."), 403
-            flash("CAPTCHA verification failed. Please try again.", "error")
-            return redirect(url_for('student.login', next=request.args.get('next')))
-
-        username = form.username.data.strip()
-        passphrase = form.passphrase.data.strip()
-
-        user = find_canonical_user_by_auth_username(username, expected_role="student")
-
-        try:
-            passphrase_valid = bool(user and verify_password(passphrase, user.passphrase_hash or ''))
-            has_claimed_seat = False
-            if passphrase_valid:
-                has_claimed_seat = Seat.query.filter(
-                    Seat.user_id == user.id,
-                    Seat.role == "student",
-                    Seat.claimed_at.isnot(None),
-                ).count() > 0
-
-            if not passphrase_valid or not has_claimed_seat:
-                if is_json:
-                    return jsonify(status="error", message="Invalid credentials"), 401
-                flash("Invalid credentials", "error")
-                return redirect(url_for('student.login', next=request.args.get('next')))
-
-        except Exception as e:
-            db.session.rollback()
-            current_app.logger.error("Error during student login authentication")
-            if is_json:
-                return jsonify(status="error", message="An error occurred during login. Please try again."), 500
-            flash("An error occurred during login. Please try again.", "error")
-            return redirect(url_for('student.login'))
-
-        # --- Establish canonical session ---
-        # Clear old student-specific session keys without wiping the CSRF token.
-        _reset_student_login_session()
-        session.pop('onboarding_seat_ref', None)
-        session.pop('onboarding_claim_generation', None)
-        session.pop('onboarding_user_ref', None)
-        session.pop('recovery_setup_authorization', None)
-        session.pop('generated_username', None)
-        clear_teacher_display_name_cache()
-
-        now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
-        session['login_time'] = now.isoformat()
-        session['last_activity'] = session['login_time']
-
-        from app.auth import SESSION_TIMEOUT_MINUTES
-        user.current_session_started_at = now
-        user.current_session_expires_at = now + timedelta(minutes=SESSION_TIMEOUT_MINUTES)
-
-        # Mirror the authoritative expiry onto the cookie so the browser evicts
-        # it at the same instant login_required stops honoring it. Without this
-        # the cookie outlives the session by Flask's 31-day default whenever the
-        # student closes the tab, since the server-side check only runs on a
-        # request. Set here rather than in either branch below: both the
-        # class-selection path and the direct-dashboard path pass through this
-        # line, and no session.clear() intervenes.
-        session[SESSION_EXPIRES_AT_KEY] = user.current_session_expires_at.isoformat()
-
-        linked_user = user
-
-        # Find all classes this user has claimed seats in.
-        seat_options = _get_identity_bound_seat_options(linked_user.id)
-        if not seat_options:
-            return _student_login_hard_fail(
-                student_id=linked_user.id,
-                reason=f"User {linked_user.id} login has no valid class seats.",
-                is_json=is_json,
-            )
-
-        # Restore the user's previously-selected class if still valid.
-        persisted_class_id = getattr(linked_user, "last_active_class_id", None)
-        valid_persisted_selection = None
-        if persisted_class_id:
-            valid_persisted_selection = next(
-                (item for item in seat_options if item["class_id"] == persisted_class_id),
-                None,
-            )
-            if valid_persisted_selection is None:
-                current_app.logger.error(
-                    "TLCP-INVARIANT-VIOLATION: User %s login has invalid persisted class %s.",
-                    linked_user.id,
-                    persisted_class_id,
-                    extra={
-                        "actor_type": "student",
-                        "actor_public_id": "-",
-                        "class_id": "-",
-                        "error_class": "InvariantViolation",
-                        "correlation_version": "v1",
-                    },
-                )
-                linked_user.last_active_class_id = None
-
-        if valid_persisted_selection is None:
-            # No valid class selection — establish minimal session and send to class selector.
-            session['user_id'] = linked_user.id
-            session['role'] = 'student'
-            session.permanent = True
-            nonce = secrets.token_urlsafe(32)
-            session['current_session_nonce'] = nonce
-            linked_user.current_session_nonce = nonce
-            # The surrounding FEAT-IDEN-001 context owns the transaction boundary.
-            return redirect(url_for('student.select_class_context'))
-
-        # Resolve the canonical seat for the selected class.
-        target_seat = Seat.query.filter(
-            Seat.user_id == linked_user.id,
-            Seat.class_id == valid_persisted_selection["class_id"],
-            Seat.claimed_at.isnot(None),
-        ).first()
-        if target_seat is None:
-            return _student_login_hard_fail(
-                student_id=linked_user.id,
-                reason=f"User {linked_user.id} login failed to resolve seat for class {valid_persisted_selection['class_id']}.",
-                is_json=is_json,
-            )
-
-        # Update canonical DB pointers before establishing session.
-        linked_user.last_active_class_id = valid_persisted_selection["class_id"]
-        linked_user.last_active_seat_id = target_seat.id
-
-        # Establish canonical session (user_id + class_id + role + nonce).
-        # The surrounding FEAT-IDEN-001 context owns the transaction boundary.
-        establish_student_session(linked_user, class_id=valid_persisted_selection["class_id"])
-        nonce = secrets.token_urlsafe(32)
-        session['current_session_nonce'] = nonce
-        linked_user.current_session_nonce = nonce
-
-        _prime_seat_teacher_display_name_cache(linked_user.id)
-
-        if is_json:
-            return jsonify(status="success", message="Login successful")
-
-        next_url = request.args.get('next')
-        if not is_safe_url(next_url):
-            return redirect(url_for('student.dashboard'))
-        return redirect(next_url or url_for('student.dashboard'))  # nosec # Safe: validated by is_safe_url()
+        return _complete_student_login(form)
 
     # Always display CTA to claim/create account for first-time users
     setup_cta = True
     return render_template('student_login.html', setup_cta=setup_cta, form=form)
+
+
+@requires_feat_context("FEAT-IDEN-001")
+def _complete_student_login(form):
+    """The validated login submission: authenticate and establish the session."""
+    is_json = request.is_json or request.headers.get("X-Requested-With") == "XMLHttpRequest"
+
+    # Verify Turnstile token
+    turnstile_token = request.form.get('cf-turnstile-response')
+    if not verify_turnstile_token(turnstile_token, get_real_ip()):
+        current_app.logger.warning(f"Turnstile verification failed for student login attempt")
+        if is_json:
+            return jsonify(status="error", message="CAPTCHA verification failed. Please try again."), 403
+        flash("CAPTCHA verification failed. Please try again.", "error")
+        return redirect(url_for('student.login', next=request.args.get('next')))
+
+    username = form.username.data.strip()
+    passphrase = form.passphrase.data.strip()
+
+    user = find_canonical_user_by_auth_username(username, expected_role="student")
+
+    try:
+        passphrase_valid = bool(user and verify_password(passphrase, user.passphrase_hash or ''))
+        has_claimed_seat = False
+        if passphrase_valid:
+            has_claimed_seat = Seat.query.filter(
+                Seat.user_id == user.id,
+                Seat.role == "student",
+                Seat.claimed_at.isnot(None),
+            ).count() > 0
+
+        if not passphrase_valid or not has_claimed_seat:
+            if is_json:
+                return jsonify(status="error", message="Invalid credentials"), 401
+            flash("Invalid credentials", "error")
+            return redirect(url_for('student.login', next=request.args.get('next')))
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error("Error during student login authentication")
+        if is_json:
+            return jsonify(status="error", message="An error occurred during login. Please try again."), 500
+        flash("An error occurred during login. Please try again.", "error")
+        return redirect(url_for('student.login'))
+
+    # --- Establish canonical session ---
+    # Clear old student-specific session keys without wiping the CSRF token.
+    _reset_student_login_session()
+    session.pop('onboarding_seat_ref', None)
+    session.pop('onboarding_claim_generation', None)
+    session.pop('onboarding_user_ref', None)
+    session.pop('recovery_setup_authorization', None)
+    session.pop('generated_username', None)
+    clear_teacher_display_name_cache()
+
+    now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
+    session['login_time'] = now.isoformat()
+    session['last_activity'] = session['login_time']
+
+    from app.auth import SESSION_TIMEOUT_MINUTES
+    user.current_session_started_at = now
+    user.current_session_expires_at = now + timedelta(minutes=SESSION_TIMEOUT_MINUTES)
+
+    # Mirror the authoritative expiry onto the cookie so the browser evicts
+    # it at the same instant login_required stops honoring it. Without this
+    # the cookie outlives the session by Flask's 31-day default whenever the
+    # student closes the tab, since the server-side check only runs on a
+    # request. Set here rather than in either branch below: both the
+    # class-selection path and the direct-dashboard path pass through this
+    # line, and no session.clear() intervenes.
+    session[SESSION_EXPIRES_AT_KEY] = user.current_session_expires_at.isoformat()
+
+    linked_user = user
+
+    # Find all classes this user has claimed seats in.
+    seat_options = _get_identity_bound_seat_options(linked_user.id)
+    if not seat_options:
+        return _student_login_hard_fail(
+            student_id=linked_user.id,
+            reason=f"User {linked_user.id} login has no valid class seats.",
+            is_json=is_json,
+        )
+
+    # Restore the user's previously-selected class if still valid.
+    persisted_class_id = getattr(linked_user, "last_active_class_id", None)
+    valid_persisted_selection = None
+    if persisted_class_id:
+        valid_persisted_selection = next(
+            (item for item in seat_options if item["class_id"] == persisted_class_id),
+            None,
+        )
+        if valid_persisted_selection is None:
+            current_app.logger.error(
+                "TLCP-INVARIANT-VIOLATION: User %s login has invalid persisted class %s.",
+                linked_user.id,
+                persisted_class_id,
+                extra={
+                    "actor_type": "student",
+                    "actor_public_id": "-",
+                    "class_id": "-",
+                    "error_class": "InvariantViolation",
+                    "correlation_version": "v1",
+                },
+            )
+            linked_user.last_active_class_id = None
+
+    if valid_persisted_selection is None:
+        # No valid class selection — establish minimal session and send to class selector.
+        session['user_id'] = linked_user.id
+        session['role'] = 'student'
+        session.permanent = True
+        nonce = secrets.token_urlsafe(32)
+        session['current_session_nonce'] = nonce
+        linked_user.current_session_nonce = nonce
+        # The surrounding FEAT-IDEN-001 context owns the transaction boundary.
+        return redirect(url_for('student.select_class_context'))
+
+    # Resolve the canonical seat for the selected class.
+    target_seat = Seat.query.filter(
+        Seat.user_id == linked_user.id,
+        Seat.class_id == valid_persisted_selection["class_id"],
+        Seat.claimed_at.isnot(None),
+    ).first()
+    if target_seat is None:
+        return _student_login_hard_fail(
+            student_id=linked_user.id,
+            reason=f"User {linked_user.id} login failed to resolve seat for class {valid_persisted_selection['class_id']}.",
+            is_json=is_json,
+        )
+
+    # Update canonical DB pointers before establishing session.
+    linked_user.last_active_class_id = valid_persisted_selection["class_id"]
+    linked_user.last_active_seat_id = target_seat.id
+
+    # Establish canonical session (user_id + class_id + role + nonce).
+    # The surrounding FEAT-IDEN-001 context owns the transaction boundary.
+    establish_student_session(linked_user, class_id=valid_persisted_selection["class_id"])
+    nonce = secrets.token_urlsafe(32)
+    session['current_session_nonce'] = nonce
+    linked_user.current_session_nonce = nonce
+
+    _prime_seat_teacher_display_name_cache(linked_user.id)
+
+    if is_json:
+        return jsonify(status="success", message="Login successful")
+
+    next_url = request.args.get('next')
+    if not is_safe_url(next_url):
+        return redirect(url_for('student.dashboard'))
+    return redirect(next_url or url_for('student.dashboard'))  # nosec # Safe: validated by is_safe_url()
 
 
 @student_bp.route('/select-class-context', methods=['GET', 'POST'])
