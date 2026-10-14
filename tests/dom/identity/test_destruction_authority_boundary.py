@@ -184,6 +184,8 @@ def test_account_delete_targets_only_the_canonical_user(client, app):
         {"gate_hold_seconds": 9},
         # float("nan") < 10 is False: a non-finite hold must not satisfy the gate.
         {"gate_hold_seconds": "nan"},
+        # Parses as an int but is beyond float range: math.isfinite() overflows.
+        {"gate_countdown_seconds": "1" + "0" * 400},
     ],
 )
 def test_account_delete_gate_fails_closed(client, app, overrides):
@@ -291,6 +293,7 @@ def test_class_delete_class_display_name_is_not_an_authority_key(client, app):
         # check, and int(inf) raised an uncaught OverflowError (a 500, not a 400).
         {"gate_hold_seconds": float("nan")},
         {"gate_countdown_seconds": float("inf")},
+        {"gate_countdown_seconds": 10**400},
     ],
 )
 def test_class_delete_gate_fails_closed(client, app, overrides):

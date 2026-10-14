@@ -1215,13 +1215,14 @@ def _gate_seconds(value, cast):
     """A gate timer value, or 0 (which fails the gate) when it is unusable.
 
     `float("nan") < 10` is False, so a non-finite value would satisfy a
-    "too short" check; `int(float("inf"))` raises OverflowError.
+    "too short" check; `int(float("inf"))` raises OverflowError, and so does
+    `math.isfinite` on an int beyond float range.
     """
     try:
         seconds = cast(value)
+        return seconds if math.isfinite(seconds) else 0
     except (TypeError, ValueError, OverflowError):
         return 0
-    return seconds if math.isfinite(seconds) else 0
 
 
 def _validate_destruction_gate(data, expected_phrase):
