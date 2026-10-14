@@ -28,6 +28,9 @@ exclude_links = [
   # historical security fix. The vendor has since removed the post; the entry
   # records where the finding came from, not a page readers must still reach.
   "https://www.aikido.dev/blog/promptpwnd-ai-prompt-injection-in-github-actions",
+  # Code-scanning alert pages are private: without a signed-in maintainer
+  # GitHub answers 404, so the dated triage records citing them read as dead.
+  "https://github.com/timwonderer/classroom-token-hub/security/code-scanning/*",
 ]
 force_get_requests_for_links = ["https://app.classroomtokenhub.com/*"]
 throttle_groups = 40
