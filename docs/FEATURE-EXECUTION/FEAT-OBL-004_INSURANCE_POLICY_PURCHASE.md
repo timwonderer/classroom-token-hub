@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| FEAT-OBL-004 | 0.4 (DRAFT) | 2026-10-10 | 0.3 (DRAFT) | Normative (proposed) |
+| FEAT-OBL-004 | 1.0| 2026-10-13 | 0.4  | Normative|
 
 ## I. Purpose
 
