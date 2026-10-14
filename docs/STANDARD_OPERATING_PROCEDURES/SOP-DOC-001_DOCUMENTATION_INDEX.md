@@ -280,7 +280,7 @@ Their surviving content lives at:
 **Version 3.26 (2026-10-14), developer-documentation modernization pass:**
 - Register SOP-SEC-002 v1.0 (2026-10-11): CodeQL gating configuration, per-alert disposition and recurring backlog review, written off `INCIDENT_2026-10-11_SEC-SAST-GAP-001.md`. This index had already listed SOP-SEC-002 but carried no Change Note for it.
 - Register SOP-DEP-002 v1.11: corrected its post-migration verification checklist from `join_code`-keyed routes to the actual route contract, matching SOP-DEP-001 §XI.
-- Register SOP-DB-003 v1.3: added SOP-DB-004 to Dependencies and a pointer to its `M2 DATA` classification, which SOP-DB-003's own three-box classification doesn't cover.
+- Register SOP-DB-003 v1.4: added SOP-DB-004 to Dependencies and a pointer to its `M2 DATA` classification, which SOP-DB-003's own three-box classification doesn't cover.
 
 **Version 3.25 (2026-10-06):**
 - Register INV-ARC-008 v1.2, DOM-OPS-002 v1.11, SPEC-PROD-002 v1.4 and SOP-DB-004 v1.2: the owner's compatibility ruling (no bridge, dual-write, fallback or heuristic interpretation; versioned read-side interpretation of retained history only) now stands in the governing documents. INV-ARC-008 drops its "approved bridge code" allowance.
