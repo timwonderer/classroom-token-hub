@@ -34,6 +34,12 @@ def _revocations(tx):
     ).all()
 
 
+def _item_removals(tx):
+    return Transaction.query.filter_by(
+        class_id=tx.class_id, seat_id=tx.seat_id, type="void_item_removed"
+    ).all()
+
+
 def test_DOM_SUP_001__issue_reverse_transaction_creates_reversal_for_unused_purchase(client, app):
     """In-scope reversal: submitter owns the referenced unused Store purchase
     and the teacher's active class matches the issue's class, so the reversal
@@ -71,6 +77,28 @@ def test_DOM_SUP_001__issue_reverse_transaction_creates_reversal_for_unused_purc
     }
 
 
+def test_SPEC_OPS_001__issue_reversal_matches_the_banking_reverse(client, app):
+    """An issue reversal leaves the record a teacher's Reverse leaves: each
+    revocation names the reversed purchase (INV-OPS-002), not the compensating
+    row, and the item removal is booked as a $0 row."""
+    classroom, student, issue, tx = issue_reverse_success_state(client, app)
+
+    response = client.post(
+        f"/admin/issues/{make_opaque_ref('issue', issue.id)}/resolve",
+        data={"action_type": "reverse_transaction"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+
+    revocations = _revocations(tx)
+    assert revocations
+    assert {(e.payload["reason"], e.payload["reversed_transaction_id"]) for e in revocations} == {
+        ("issue_reversal", tx.id)
+    }
+    (removal,) = _item_removals(tx)
+    assert removal.amount == Decimal("0.00")
+
+
 def test_DOM_SUP_001__issue_refund_retains_the_item(client, app):
     classroom, student, issue, tx = issue_reverse_success_state(client, app)
 
@@ -89,6 +117,7 @@ def test_DOM_SUP_001__issue_refund_retains_the_item(client, app):
     assert reversal.correlation_id == tx.correlation_id
     assert reversal.amount == -tx.amount
     assert _revocations(tx) == []
+    assert _item_removals(tx) == []
 
 
 def test_DOM_SUP_001__issue_reverse_transaction_rejects_scope_mismatch(client, app):
