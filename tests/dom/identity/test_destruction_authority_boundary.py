@@ -182,6 +182,8 @@ def test_account_delete_targets_only_the_canonical_user(client, app):
         {"gate_countdown_seconds": 29},
         {"gate_hold_seconds": 0},
         {"gate_hold_seconds": 9},
+        # float("nan") < 10 is False: a non-finite hold must not satisfy the gate.
+        {"gate_hold_seconds": "nan"},
     ],
 )
 def test_account_delete_gate_fails_closed(client, app, overrides):
@@ -285,6 +287,10 @@ def test_class_delete_class_display_name_is_not_an_authority_key(client, app):
         {"gate_phrase": ""},
         {"gate_countdown_seconds": 29},
         {"gate_hold_seconds": 9},
+        # JSON NaN/Infinity parse to non-finite floats: NaN slipped past the hold
+        # check, and int(inf) raised an uncaught OverflowError (a 500, not a 400).
+        {"gate_hold_seconds": float("nan")},
+        {"gate_countdown_seconds": float("inf")},
     ],
 )
 def test_class_delete_gate_fails_closed(client, app, overrides):
