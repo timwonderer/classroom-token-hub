@@ -2,7 +2,10 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| INV-ARC-015      | 2.1     | 2026-09-22    | 1.0, 2.0    | Foundational    |
+| INV-ARC-015      | 2.2     | 2026-10-14     | 2.1        | Constitutional   |
+
+> [!IMPORTANT]
+> **v2.2 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: this is a Tier 1 (`INV-ARC`) document and must read **Constitutional**, not Foundational -- "Foundational" is reserved for `INV-CORE` (Tier 0). No substantive rule in this document changed.
 
 ---
 
@@ -30,7 +33,7 @@ It is binding on all DOM and FEAT specifications.
 
 ## III. Authority Level
 
-Foundational within the INV-ARC namespace. Derived from `INV-CORE-000` Section III.1, `` `class_id` Centric Isolation``, and Section III.3, `Deterministic and Traceable Financial Logic`, and governed within the hierarchy described by `INV-CORE-001`.
+Constitutional within the INV-ARC namespace. Derived from `INV-CORE-000` Section III.1, `` `class_id` Centric Isolation``, and Section III.3, `Deterministic and Traceable Financial Logic`, and governed within the hierarchy described by `INV-CORE-001`.
 
 ---
 

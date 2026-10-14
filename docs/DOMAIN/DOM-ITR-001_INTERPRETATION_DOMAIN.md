@@ -2,11 +2,14 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-ITR-001      | 1.7     | 2026-09-30     | 1.6        | Normative       |
+| DOM-ITR-001      | 1.8     | 2026-10-14     | 1.7        | Constitutional  |
+
+> [!IMPORTANT]
+> **v1.8 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: `DOM-*` documents are Tier 1 (Constitutional), not Tier 2 (Normative) — Normative is reserved for `SPEC-*`/`FEAT-*`/`SOP-*`. No substantive rule in this document changed.
 
 ## I-A. Authority Level and Dependencies
 
-Normative. Subordinate to `INV-CORE-000` and `INV-ARC-009`.
+Constitutional. Subordinate to `INV-CORE-000` and `INV-ARC-009`.
 
 ### Dependencies
 

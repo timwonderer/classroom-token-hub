@@ -2,7 +2,10 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| INV-ARC-009      | 1.0     | 2026-04-13     | N/A        | Foundational    |
+| INV-ARC-009      | 1.1     | 2026-10-14     | 1.0        | Constitutional   |
+
+> [!IMPORTANT]
+> **v1.1 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: this is a Tier 1 (`INV-ARC`) document and must read **Constitutional**, not Foundational -- "Foundational" is reserved for `INV-CORE` (Tier 0). No substantive rule in this document changed.
 
 ## I. Purpose
 
@@ -14,7 +17,7 @@ Applies to all state evaluation used by runtime decisions.
 
 ## III. Authority Level
 
-Foundational within `INV-ARC`. Derived from `INV-CORE-000` Section III.3, `Deterministic and Traceable Financial Logic`, and governed within the hierarchy described by `INV-CORE-001`.
+Constitutional within `INV-ARC`. Derived from `INV-CORE-000` Section III.3, `Deterministic and Traceable Financial Logic`, and governed within the hierarchy described by `INV-CORE-001`.
 
 ## IV. Dependencies
 

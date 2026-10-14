@@ -2,7 +2,10 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-STORE-001 | 5.5 | 2026-10-07 | 5.4 | Normative |
+| DOM-STORE-001 | 5.6 | 2026-10-14 | 5.5 | Constitutional |
+
+> [!IMPORTANT]
+> **v5.6 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: the header table said Normative while §III (below) already, correctly, says "Tier 1 — Constitutional." The header now matches the body. No substantive rule in this document changed.
 
 ## I. Purpose
 

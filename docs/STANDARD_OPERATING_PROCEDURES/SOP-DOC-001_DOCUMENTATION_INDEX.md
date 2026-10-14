@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.25 | 2026-10-06 | 3.24 | Normative |
+| SOP-DOC-001 | 3.26 | 2026-10-14 | 3.25 | Normative |
 
 ---
 
@@ -276,6 +276,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.26 (2026-10-14):**
+- Register the Authority Level correction from the developer-documentation modernization pass: `INV-ARC-000` through `INV-ARC-016`, `INV-ARC-021` and `INV-ARC-022` (all v+0.1, "Foundational" → "Constitutional"), and `DOM-OPS-001` v2.13, `DOM-ITR-001` v1.8, `DOM-STORE-001` v5.6, `DOM-SUP-001` v1.9 (all "Normative" → "Constitutional," `DOM-STORE-001`'s header now matching its own already-correct body). Label corrections only; no dependency, scope, or rule changed in any of the 23 documents.
 
 **Version 3.25 (2026-10-06):**
 - Register INV-ARC-008 v1.2, DOM-OPS-002 v1.11, SPEC-PROD-002 v1.4 and SOP-DB-004 v1.2: the owner's compatibility ruling (no bridge, dual-write, fallback or heuristic interpretation; versioned read-side interpretation of retained history only) now stands in the governing documents. INV-ARC-008 drops its "approved bridge code" allowance.
