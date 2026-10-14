@@ -1211,6 +1211,20 @@ def _admin_owns_class(canonical_context, class_id):
     ).scalar()
 
 
+def _gate_seconds(value, cast):
+    """A gate timer value, or 0 (which fails the gate) when it is unusable.
+
+    `float("nan") < 10` is False, so a non-finite value would satisfy a
+    "too short" check; `int(float("inf"))` raises OverflowError, and so does
+    `math.isfinite` on an int beyond float range.
+    """
+    try:
+        seconds = cast(value)
+        return seconds if math.isfinite(seconds) else 0
+    except (TypeError, ValueError, OverflowError):
+        return 0
+
+
 def _validate_destruction_gate(data, expected_phrase):
     """Require timed in-app gate proof for destructive operations."""
     phrase = str((data or {}).get("gate_phrase", "")).strip().upper()
@@ -1220,15 +1234,8 @@ def _validate_destruction_gate(data, expected_phrase):
             "message": "Confirmation failed: confirmation phrase did not match."
         }), 400
 
-    try:
-        countdown_seconds = int((data or {}).get("gate_countdown_seconds", 0))
-    except (TypeError, ValueError):
-        countdown_seconds = 0
-
-    try:
-        hold_seconds = float((data or {}).get("gate_hold_seconds", 0))
-    except (TypeError, ValueError):
-        hold_seconds = 0.0
+    countdown_seconds = _gate_seconds((data or {}).get("gate_countdown_seconds", 0), int)
+    hold_seconds = _gate_seconds((data or {}).get("gate_hold_seconds", 0), float)
 
     if countdown_seconds < 30:
         return jsonify({
@@ -9058,18 +9065,12 @@ def account_delete():
             flash('Account deletion blocked: confirmation phrase did not match.', 'error')
             return redirect(url_for('admin.account_delete'))
 
-        try:
-            gate_countdown_seconds = int(request.form.get('gate_countdown_seconds', 0))
-        except (TypeError, ValueError):
-            gate_countdown_seconds = 0
+        gate_countdown_seconds = _gate_seconds(request.form.get('gate_countdown_seconds', 0), int)
         if gate_countdown_seconds < 30:
             flash('Account deletion blocked: 30-second safety countdown is required.', 'error')
             return redirect(url_for('admin.account_delete'))
 
-        try:
-            gate_hold_seconds = float(request.form.get('gate_hold_seconds', 0))
-        except (TypeError, ValueError):
-            gate_hold_seconds = 0.0
+        gate_hold_seconds = _gate_seconds(request.form.get('gate_hold_seconds', 0), float)
         if gate_hold_seconds < 10:
             flash('Account deletion blocked: 10-second hold is required.', 'error')
             return redirect(url_for('admin.account_delete'))
