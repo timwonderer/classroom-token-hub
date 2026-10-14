@@ -1,0 +1,30 @@
+# A repository .semgrepignore REPLACES Semgrep's built-in default ignore list
+# (https://docs.semgrep.dev/ignoring-files-folders-code), so the defaults are
+# reproduced verbatim below. Only the last entry is ours.
+.git
+.svn
+.hg
+_darcs
+CVS
+build/
+vendor/
+dist/
+*.min.js
+.env/
+.tox/
+node_modules/
+.npm/
+.yarn/
+.venv/
+_opam/
+_build/
+_cargo/
+test/
+tests/
+testsuite/
+*_test.go
+
+# Historical v1 migrations: Alembic never loads this folder (Flask-Migrate's
+# default script location reads migrations/versions/ only). Owner-approved
+# 2026-10-13; see docs/ops/audits/SECURITY_TRIAGE_2026-10-13_SEMGREP_OPEN_FINDINGS.md.
+migrations/archive/

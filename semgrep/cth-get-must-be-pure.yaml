@@ -1,6 +1,6 @@
 # CTH architecture rules (INV-ARC-007: GET must be pure).
 # Test cases: cth-get-must-be-pure.py beside this file, annotated `ruleid:` (must match)
-# and `ok:` (must not). CI ("Architecture rules" in .github/workflows/semgrep.yml) runs `semgrep --test semgrep/`, then scans app/ and wsgi.py.
+# and `ok:` (must not). CI (.github/workflows/architecture-rules.yml) runs `semgrep --test semgrep/`, then scans app/ and wsgi.py.
 # Not covered: a GET route that calls a helper or service which commits (no
 # cross-function analysis in Semgrep OSS); the FEAT runtime guard and
 # tests/helpers/navigation_traversal.py remain the backstop for that.
