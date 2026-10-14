@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.25 | 2026-10-06 | 3.24 | Normative |
+| SOP-DOC-001 | 3.26 | 2026-10-14 | 3.25 | Normative |
 
 ---
 
@@ -276,6 +276,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.26 (2026-10-14), developer-documentation modernization pass:**
+- Register FEAT-IDEN-101 v1.3, FEAT-IDEN-107 v1.2, DOM-IDEN-007 v1.3, DOM-IDEN-002 v2.10, FEAT-OBL-002 v2.2 and FEAT-OBL-004 v0.5 (DRAFT): staleness corrections (credential-hashing wording, an idempotency-lock gap, a table-name typo, and a broken dependency citation) — see `CHANGELOG.md` for detail.
 
 **Version 3.25 (2026-10-06):**
 - Register INV-ARC-008 v1.2, DOM-OPS-002 v1.11, SPEC-PROD-002 v1.4 and SOP-DB-004 v1.2: the owner's compatibility ruling (no bridge, dual-write, fallback or heuristic interpretation; versioned read-side interpretation of retained history only) now stands in the governing documents. INV-ARC-008 drops its "approved bridge code" allowance.
