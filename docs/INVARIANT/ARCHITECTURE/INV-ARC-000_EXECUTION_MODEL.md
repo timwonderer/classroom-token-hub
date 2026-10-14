@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| INV-ARC-000      | 1.1     | 2026-04-13     | 1.0        | Foundational    |
+| INV-ARC-000      | 1.2     | 2026-10-13     | 1.1        | Foundational    |
 
 ## I. Purpose
 
@@ -64,6 +64,12 @@ This execution model is elaborated by the following `INV-ARC` documents:
 - `INV-ARC-014_NO_LABEL_BASED_LOGIC.md`
 - `INV-ARC-015_TEMPORAL_MODEL_AND_BOUNDARY_ENFORCEMENT.md`
 - `INV-ARC-016_LAWFUL_EXISTENCE_AND_AUDIT_LINEAGE.md`
+- `INV-ARC-017_GENERAL_TESTING_INVARIANTS.md`
+- `INV-ARC-018_PII_STORAGE_AND_RETENTION_ENFORCEMENT.md`
+- `INV-ARC-019_IDENTITY_AND_OWNERSHIP_MODEL.md`
+- `INV-ARC-020_ACCESSIBILITY_REQUIREMENTS_AND_TEMPLATE_CONTRACT.md`
+- `INV-ARC-021_CROSS_DOMAIN_REFERENCE_AND_COORDINATION.md`
+- `INV-ARC-022_REQUEST_CONTEXT_AND_PAGE_RENDERING.md`
 
 ## VII. Rebuild Intent
 
