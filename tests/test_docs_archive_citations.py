@@ -35,7 +35,9 @@ _LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
 # be fixed without mangling the documentation. A fence may use ``` or ~~~, carry
 # an info string, and be indented (fences inside list items are); it closes on a
 # run of the same character at least as long. An unclosed fence runs to the end.
-_FENCE_OPEN = re.compile(r"^\s*(`{3,}|~{3,})")
+# A backtick fence's info string may not contain a backtick, so a line opening
+# with a code span such as ```` ``` ```` is prose (CommonMark 4.5).
+_FENCE_OPEN = re.compile(r"^\s*(`{3,}(?=[^`]*$)|~{3,})")
 # A code span closes on a backtick run of exactly the opening run's length.
 _INLINE_CODE = re.compile(r"(?<!`)(`+)(?!`)[^\n]*?(?<!`)\1(?!`)")
 
@@ -220,6 +222,13 @@ def test_broken_link_detector_reports_prose_between_and_after_code() -> None:
         "Then [b](missing-b.md).\n"
     )
     assert _broken_links(_PROBE, text) == ["missing-a.md", "missing-b.md"]
+
+
+def test_broken_link_detector_does_not_open_a_fence_on_a_code_span() -> None:
+    # Near miss: a line that starts with a triple-backtick code span (how a
+    # doc shows a fence marker) must not swallow the prose after it.
+    text = "```` ``` ```` opens a fence.\nThen [dead](missing.md).\n"
+    assert _broken_links(_PROBE, text) == ["missing.md"]
 
 
 @pytest.mark.parametrize(
