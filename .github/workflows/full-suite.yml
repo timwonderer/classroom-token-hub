@@ -46,7 +46,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Historical reconstruction tests archive immutable predecessor commits.
           fetch-depth: 0
@@ -55,7 +55,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y redis-server
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           # Production runs Python 3.10 (runtime.txt). The one run that has
           # to mean "every test passes" should run it on that runtime.
@@ -90,7 +90,7 @@ jobs:
       - name: Upload pytest artifacts
         # An 82-minute run is too expensive to repeat just to read the failure.
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: pytest-results
           path: pytest_result/
