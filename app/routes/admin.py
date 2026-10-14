@@ -2210,7 +2210,6 @@ def _get_validated_teacher_class_options(user_id: int) -> list[dict]:
 
 
 @admin_bp.route('/select-class-context', methods=['GET', 'POST'])
-@requires_feat_context("FEAT-IDEN-001")
 def select_class_context():
     """Explicit teacher class-selection gate before dashboard access."""
     ctx = getattr(g, "canonical_context", None)
@@ -2223,47 +2222,9 @@ def select_class_context():
         return redirect(url_for("admin.onboarding"))
 
     if request.method == "POST":
-        selected_class_id = (request.form.get("class_id") or "").strip()
-        selected = next((item for item in raw_options if item["class_id"] == selected_class_id), None)
-        if not selected:
-            flash("Invalid class selection.", "error")
-            from app.services.identity.builders import build_admin_class_selection_view
-            from app.utils.display_name_session import get_admin_display_name_cache
-            admin_name = get_admin_display_name_cache(user_id=ctx.user_id)
-            class_selection_view = build_admin_class_selection_view(admin_name, raw_options)
-            return render_template(
-                "admin_select_class_context.html",
-                class_selection_view=class_selection_view,
-            ), 400
-
-        session["last_activity"] = utc_now().isoformat()
-        user = db.session.get(User, ctx.user_id)
-        if user:
-            # Move BOTH canonical pointers together. Updating last_active_class_id
-            # alone leaves last_active_seat_id pointing at the previous class's
-            # teacher seat, which the context resolver rejects with ContextMismatch
-            # (seat.class_id != last_active_class_id) — the class switch then fails.
-            # `selected["seat_id"]` is the teacher seat for the newly chosen class,
-            # validated by _get_validated_teacher_class_options.
-            user.last_active_class_id = selected["class_id"]
-            user.last_active_seat_id = selected["seat_id"]
-            # A teacher has a distinct Seat + IdentityProfile per class, so
-            # switching classes switches identity. Invalidate the session
-            # identity caches carried over from the previous class, then
-            # re-establish the display name from the newly selected class's
-            # teacher profile so the layout renders the correct identity on the
-            # next request (the canonical context is already re-pointed above).
-            clear_admin_display_name_cache()
-            clear_teacher_display_name_cache()
-            new_profile = IdentityProfile.query.filter_by(
-                seat_id=selected["seat_id"]
-            ).first()
-            if new_profile:
-                set_admin_display_name_cache(
-                    user_id=user.id,
-                    display_name=new_profile.full_name,
-                )
-        return redirect(url_for("admin.dashboard"))
+        # Only the selection runs inside FEAT-IDEN-001; a FEAT commits on exit,
+        # and rendering the selector must not (INV-ARC-007: GET must be pure).
+        return _apply_teacher_class_selection(ctx, raw_options)
 
     from app.services.identity.builders import build_admin_class_selection_view
     from app.utils.display_name_session import get_admin_display_name_cache
@@ -2273,6 +2234,52 @@ def select_class_context():
         "admin_select_class_context.html",
         class_selection_view=class_selection_view,
     )
+
+
+@requires_feat_context("FEAT-IDEN-001")
+def _apply_teacher_class_selection(ctx, raw_options):
+    """The submitted class selection: move the teacher's canonical pointers."""
+    selected_class_id = (request.form.get("class_id") or "").strip()
+    selected = next((item for item in raw_options if item["class_id"] == selected_class_id), None)
+    if not selected:
+        flash("Invalid class selection.", "error")
+        from app.services.identity.builders import build_admin_class_selection_view
+        from app.utils.display_name_session import get_admin_display_name_cache
+        admin_name = get_admin_display_name_cache(user_id=ctx.user_id)
+        class_selection_view = build_admin_class_selection_view(admin_name, raw_options)
+        return render_template(
+            "admin_select_class_context.html",
+            class_selection_view=class_selection_view,
+        ), 400
+
+    session["last_activity"] = utc_now().isoformat()
+    user = db.session.get(User, ctx.user_id)
+    if user:
+        # Move BOTH canonical pointers together. Updating last_active_class_id
+        # alone leaves last_active_seat_id pointing at the previous class's
+        # teacher seat, which the context resolver rejects with ContextMismatch
+        # (seat.class_id != last_active_class_id) — the class switch then fails.
+        # `selected["seat_id"]` is the teacher seat for the newly chosen class,
+        # validated by _get_validated_teacher_class_options.
+        user.last_active_class_id = selected["class_id"]
+        user.last_active_seat_id = selected["seat_id"]
+        # A teacher has a distinct Seat + IdentityProfile per class, so
+        # switching classes switches identity. Invalidate the session
+        # identity caches carried over from the previous class, then
+        # re-establish the display name from the newly selected class's
+        # teacher profile so the layout renders the correct identity on the
+        # next request (the canonical context is already re-pointed above).
+        clear_admin_display_name_cache()
+        clear_teacher_display_name_cache()
+        new_profile = IdentityProfile.query.filter_by(
+            seat_id=selected["seat_id"]
+        ).first()
+        if new_profile:
+            set_admin_display_name_cache(
+                user_id=user.id,
+                display_name=new_profile.full_name,
+            )
+    return redirect(url_for("admin.dashboard"))
 
 @admin_bp.route('/')
 @admin_required
@@ -6400,6 +6407,7 @@ def void_transaction(transaction_id):
             tx,
             correlation_id=f"{tx.correlation_id}:void:{transaction_id}",
             idempotency_key=f"feat:ledger:void:{ctx.class_id}:{transaction_id}",
+            actor_seat_id=ctx.seat_id,
         )
         current_app.logger.info(f"Transaction {transaction_id} voided")
     except (AccessScopeDenied, access_policy_service.AccessPolicyDenied) as e:
@@ -10795,21 +10803,15 @@ def resolve_issue(issue_ref):
             )
 
             if action_type == 'reverse_transaction':
-                for event in item_events:
-                    db.session.add(EntitlementEvent(
-                        class_id=event.class_id,
-                        entitlement_id=event.entitlement_id,
-                        target_seat_id=event.target_seat_id,
-                        actor_seat_id=acting_seat.id if acting_seat else event.actor_seat_id,
-                        product_id=event.product_id,
-                        entitlement_type=event.entitlement_type,
-                        acquisition_type=event.acquisition_type,
-                        event_type='REVOKED',
-                        correlation_id=event.correlation_id,
-                        payload={'reason': 'issue_reversal', 'reversed_transaction_id': reversal_tx.id},
-                        timestamp=utc_now(),
-                    ))
-                db.session.flush()
+                # Same revocation and $0 item-removal row as the banking page's
+                # Reverse; a refund keeps the item (SPEC-OPS-001 §3.3).
+                from app.feats.transaction_void_feat import revoke_reversed_purchase
+                revoke_reversed_purchase(
+                    transaction,
+                    list(item_events),
+                    reason='issue_reversal',
+                    actor_seat_id=acting_seat.id,
+                )
 
             issue.teacher_resolution = (
                 'Transaction Reversed' if action_type == 'reverse_transaction'

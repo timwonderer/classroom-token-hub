@@ -5,7 +5,13 @@ Classroom Token Hub (CTH) takes security and privacy reports seriously.
 CTH is classroom software and may be used by students. If you believe you have
 found a security vulnerability, please report it responsibly and avoid accessing,
 collecting, modifying, or retaining data beyond what is necessary to demonstrate
-the issue.
+the issue. This policy provides guidance for responsible reporting. It does not authorize testing against accounts, classes, systems, or data beyond those you are explicitly permitted to access.
+
+> [!IMPORTANT]
+> If you are a student currently using Classroom Token Hub and wish to report a credible or suspected security vulnerability, you may use the private reporting feature on GitHub or open a support ticket in-app so it may be escalated by your teacher. Please avoid publicly sharing what you have found besides from your teachers, parents or guardians, or appropriate school staff.
+
+> [!IMPORTANT]
+> If you are a teacher currently using Classroom Token Hub and wish to report a credible or suspected security vulnerability, you may use the private reporting feature on GitHub or open a support ticket in-app. In addition, if a ticket related to security vulnerability has been opened by your student, we urge you to escalate them as quickly as possible. Depending on your local policies, regulations, and laws, there may be additional requirements that may compel you to stop using Classroom Token Hub and remove all data from the platform to protect student data. Please refer to your local educational agencies for guidance on educational data protection and reporting requirements.
 
 ## Reporting a Vulnerability
 
