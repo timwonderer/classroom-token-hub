@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| INV-ARC-020      | 1.0     | 2026-06-13     | None       | Constitutional |
+| INV-ARC-020      | 1.1     | 2026-10-13     | 1.0        | Constitutional |
 
 ## I. Purpose
 
@@ -30,9 +30,8 @@ Constitutional. This document derives directly from `INV-CORE-000` Section III.7
 - `docs/INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS.md`
 - `docs/INVARIANT/CORE/INV-CORE-001_CAPABILITY_BASED_ARCHITECTURE_AND_AUTHORITY_MODEL.md`
 - `docs/INVARIANT/ARCHITECTURE/INV-ARC-017_GENERAL_TESTING_INVARIANTS.md`
-- `docs/TESTING/SOP-TEST-003_Test_Creation.md`
+- `docs/STANDARD_OPERATING_PROCEDURES/TESTING/SOP-TEST-003_Test_Creation.md`
 - `docs/STANDARD_OPERATING_PROCEDURES/SOP-DOC-000_DOCUMENTATION_STANDARD.md`
-- `docs/TRACKING/V2_REBUILD_VALIDATION_REPORT.md`
 
 ## V. Accessibility Principles
 

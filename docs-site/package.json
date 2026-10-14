@@ -29,6 +29,8 @@
     "joi": "^17.13.6",
     "colord": "^2.9.4",
     "qs": "^6.16.0",
-    "image-size": "^2.0.4"
+    "image-size": "^2.0.4",
+    "tinypool": "^2.1.2",
+    "postcss-selector-parser": "^7.1.6"
   }
 }

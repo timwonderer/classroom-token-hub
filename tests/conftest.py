@@ -615,6 +615,14 @@ def _fresh_database_from_template(test_db_url):
         return
 
     if _TEMPLATE_DB["name"] is None:
+        # A session killed between DROP and CREATE below leaves the test database
+        # missing; recreate it (same name and host checks as a drop) before migrating.
+        refusal = droppable_test_database_refusal(test_db_url, test_db, os.getpid())
+        if refusal:
+            raise RuntimeError(f"Refusing to create test database {test_db!r}: {refusal}")
+        with admin.connect() as conn:
+            if not conn.execute(text("SELECT 1 FROM pg_database WHERE datname = :n"), {"n": test_db}).first():
+                conn.execute(text(f"CREATE DATABASE {_quote_ident(test_db)}"))
         _rebuild_database_state()
         db.engine.dispose()
         # Per process, so concurrent sessions at different commits never share a schema.
