@@ -2,10 +2,12 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| FEAT-CLASS-005 | 1.2 | 2026-10-14 | 1.1 | Normative |
+| FEAT-CLASS-005 | 1.3 | 2026-10-14 | 1.2 | Normative |
 
 > [!IMPORTANT]
-> **v1.2 (2026-10-14), documentation modernization.** §XI's "Overdraft/NSF fees" line could be read as describing an active charge. It is not: CTH charges no NSF/overdraft fee (owner ruling 2026-10-07, `DOM-OBL-001` §II.C). `flat_overdraft_fee`/`progressive_overdraft_fee` remain real, rebalance-able `economic_engine` fields — no live FEAT currently applies them to a charge. Overdraft *protection* (the savings-covers-shortfall transfer) is a separate, unaffected mechanism and remains fully live.
+> **v1.3 (2026-10-14), review correction.** v1.2's §XI bullet overstated the rebalance preview's reach by including the overdraft-protection setting and the progressive fee as if the rebalance selected them. It does not: `_build_rebalance_preview`/`_apply_change_list` (`app/routes/admin.py`, `app/utils/economy_rebalance.py`) support only the flat overdraft fee as a rebalance change type. §XI corrected to name only that field; the protection setting and progressive fee are changed through the Economic Engine evolution command directly, outside this rebalance surface.
+>
+> **v1.2 (2026-10-14), documentation modernization.** §XI's "Overdraft/NSF fees" line could be read as describing an active charge. It is not: CTH charges no NSF/overdraft fee (owner ruling 2026-10-07, `DOM-OBL-001` §II.C). The flat overdraft fee remains a real, rebalance-able `economic_engine` field — no live FEAT currently applies it to a charge. Overdraft *protection* (the savings-covers-shortfall transfer) is a separate, unaffected mechanism and remains fully live.
 
 ---
 
@@ -203,10 +205,15 @@ range. The mutation is then delegated to the owning command:
 
 - Rent and rent late penalties use the append-only rent supersession command.
 - Store prices use Store product-version supersession.
-- The `economic_engine` overdraft-protection setting and overdraft/NSF fee
-  fields use the Economic Engine evolution command. No live FEAT currently
-  applies the fee fields to a charge (`DOM-OBL-001` §II.C) — the protection
-  setting (savings-covers-shortfall transfer) is unaffected and stays live.
+- The `economic_engine` flat overdraft/NSF fee uses the Economic Engine
+  evolution command; this is the only overdraft-related field this rebalance
+  surface selects or mutates. No live FEAT currently applies that fee field to
+  a charge (`DOM-OBL-001` §II.C). Overdraft protection (`overdraft_protection_enabled`,
+  the savings-covers-shortfall transfer) and the progressive fee schedule are
+  separate `economic_engine` fields, changed only through the Economic Engine
+  evolution command directly, not through this rebalance preview; protection
+  is unaffected by either the fee's dormancy or this rebalance flow and stays
+  live.
 - Insurance is advisory-only: it is never selectable or mutated here because
   premium changes can alter payout and coverage terms. The row links to
   Insurance Management for the complete policy edit flow.
