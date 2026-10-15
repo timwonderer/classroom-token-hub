@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.26 | 2026-10-14 | 3.25 | Normative |
+| SOP-DOC-001 | 3.27 | 2026-10-14 | 3.26 | Normative |
 
 ---
 
@@ -276,6 +276,13 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.27 (2026-10-14), developer-documentation modernization pass:**
+- Register SOP-SEC-002 v1.0 (2026-10-11): CodeQL gating configuration, per-alert disposition and recurring backlog review, written off `INCIDENT_2026-10-11_SEC-SAST-GAP-001.md`. This index had already listed SOP-SEC-002 but carried no Change Note for it.
+- Register SOP-DEP-002 v1.11: corrected its post-migration verification checklist from `join_code`-keyed routes to the actual route contract, matching SOP-DEP-001 §XI.
+- Register SOP-DB-003 v1.4: added SOP-DB-004 to Dependencies and a pointer to its `M2 DATA` classification, which SOP-DB-003's own three-box classification doesn't cover.
+- Register INV-ARC-020 v1.2: a later edit reintroduced the same archived `docs/TRACKING/V2_REBUILD_VALIDATION_REPORT.md` citation an earlier revision had already dropped from its Dependencies; removed again.
+- Register FEAT-OBL-004 v1.0: promoted from DRAFT to final Normative (owner ruling), resolving the open question that `FEAT-STOR-001` v3.2 already shipped assuming its authority.
 
 **Version 3.26 (2026-10-14), developer-documentation modernization pass:**
 - Register DOM-CLASS-003 v2.6 and FEAT-CLASS-005 v1.3: §V/§IX and §XI stopped describing the overdraft/NSF fee as an active charge (CTH charges none, owner ruling 2026-10-07, `DOM-OBL-001` §II.C), and now name only the flat fee as rebalance-selectable — the overdraft-protection setting (`economic_engine.overdraft_protection_enabled`) and the progressive fee are changed through the Economic Engine evolution command directly, not through the rebalance preview.

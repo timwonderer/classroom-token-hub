@@ -2,10 +2,12 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| FEAT-OBL-004 | 0.5 (DRAFT) | 2026-10-14 | 0.4 (DRAFT) | Normative (proposed) |
+| FEAT-OBL-004 | 1.0 | 2026-10-14 | 0.5 (DRAFT) | Normative |
 
-> [!NOTE]
-> **v0.5 (2026-10-14), documentation modernization.** Fixed two Dependencies/body citations that named a nonexistent file, `FEAT-OBLI-001_ASSESS_OBLIGATION.md`; the real file is `FEAT-OBL-001_ASSESS_OBLIGATION.md`. No content change. This revision does **not** resolve §XIII's open question that `FEAT-STOR-001` v3.2 already ships assuming this document's authority while it remains DRAFT — that is left for an owner decision.
+> [!IMPORTANT]
+> **v1.0 (2026-10-14), owner ruling.** Promoted from DRAFT to final, resolving §XIII's open question: `FEAT-STOR-001` v3.2 already shipped assuming this document's authority, and the owner ruled this document final rather than the other way around. Incorporates v0.5 below.
+>
+> **v0.5 (2026-10-14), documentation modernization.** Fixed two Dependencies/body citations that named a nonexistent file, `FEAT-OBLI-001_ASSESS_OBLIGATION.md`; the real file is `FEAT-OBL-001_ASSESS_OBLIGATION.md`. No content change.
 
 ## I. Purpose
 
