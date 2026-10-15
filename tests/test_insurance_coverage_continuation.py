@@ -287,3 +287,12 @@ def test_withdrawn_plan_says_ending(world, client):
     html = _my_coverage(client, local(1, 15))
     assert "This plan is ending" in html
     assert "You cancelled this coverage" not in html
+
+
+def test_student_cancel_after_an_edit_still_reads_as_cancelled(world, client):
+    w = _logged_in(world, client)
+    _edit(w, title="Cover Plus")
+    _cancel(w, local(1, 12))
+    html = _my_coverage(client, local(1, 12, 12))
+    assert "You cancelled this coverage" in html
+    assert "This plan is ending" not in html

@@ -2107,19 +2107,27 @@ def _coverage_change(class_id, grant, definition, renews_on, last_covered_day):
             ),
             on=insurance_coverage.class_local_date(class_id, follow_on.timestamp),
         )
-    off_sale = definition.availability_state != insurance_defs.IN_USE
-    if last_covered_day:
-        return SimpleNamespace(kind="withdrawn") if off_sale else None
     successor = insurance_defs.get_latest_successor(definition.policy_uuid, class_id=class_id)
-    if successor is not None and successor.availability_state == insurance_defs.IN_USE:
-        preview = int(definition.bill_preview_days or 0)
+    successor_on_sale = successor is not None and successor.availability_state == insurance_defs.IN_USE
+    withdrawn = definition.availability_state != insurance_defs.IN_USE and not successor_on_sale
+    if last_covered_day:
+        # Renewal stopped. The job stops it only for a withdrawn plan; with a
+        # version on sale to move to, the student cancelled (FEAT-OBL-005).
+        return SimpleNamespace(kind="withdrawn") if withdrawn else None
+    if successor_on_sale:
+        from app.services import obligations_service
+
+        cycle = obligations_service.get_latest_bill_cycle(
+            insurance_coverage.premium_lineage_ref(grant.entitlement_id)
+        )
+        bill_at = obligations_service.get_assessment_point(cycle) if cycle is not None else None
         return SimpleNamespace(
             kind="moving",
             successor=successor,
             on=renews_on,
-            bill_on=renews_on - timedelta(days=preview) if renews_on else None,
+            bill_on=insurance_coverage.class_local_date(class_id, bill_at) if bill_at else None,
         )
-    if off_sale:
+    if withdrawn:
         return SimpleNamespace(kind="ending", on=renews_on)
     return None
 
