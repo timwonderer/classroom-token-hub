@@ -46,6 +46,7 @@ from app.feats.base import requires_feat_context
 from app.models import InsurancePolicy, Seat
 from app.services import insurance_definition_service as defs
 from app.services import economic_engine as ee
+from app.services.insurance_policy_service import MARKETING_BADGES
 from app.services.policy_reference_service import insurance_recurring_terms_violation
 
 
@@ -275,6 +276,12 @@ def _validate_and_build_definition(submission: dict) -> dict:
         val = submission.get(field)
         if val not in (None, ""):
             definition[field] = str(val)
+
+    badge = submission.get("marketing_badge")
+    if badge not in (None, ""):
+        if badge not in MARKETING_BADGES:
+            raise InsuranceContractViolation(f"unknown marketing_badge {badge!r}")
+        definition["marketing_badge"] = badge
 
     return definition
 

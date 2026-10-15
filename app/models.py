@@ -2844,6 +2844,7 @@ class InsurancePolicy(db.Model):
     description = db.Column(db.Text, nullable=True)
     tier_name = db.Column(db.String(60), nullable=True)
     tier_group = db.Column(db.String(60), nullable=True)
+    marketing_badge = db.Column(db.String(40), nullable=True)  # key into insurance_policy_service.MARKETING_BADGES
 
     # Availability projection over the immutable row (DOM-POL-001 §IX).
     availability_state = db.Column(db.String(16), nullable=False, server_default='IN_USE')

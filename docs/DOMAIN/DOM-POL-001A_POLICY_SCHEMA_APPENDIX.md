@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-POL-001A | 2.2 | 2026-09-30 | 2.1 | Constitutional Appendix |
+| DOM-POL-001A | 2.3 | 2026-10-14 | 2.2 | Constitutional Appendix |
 
 ## I. Purpose
 
@@ -134,6 +134,13 @@ prior row); a partial unique index
 IS NOT NULL` backstops the FEAT-CLASS-003 command guard. The group-level semantics
 (rank set, three-tier cap, one-active-coverage-per-group at purchase) are specified in
 FEAT-CLASS-003 §VIII.
+
+The rows also carry an optional `marketing_badge` (string key; NULL = none): marketplace
+flair a teacher may pin on an offering (owner approval 2026-10-14, ported from v1). It is
+presentation metadata only and never enters premium, coverage or claim evaluation.
+FEAT-CLASS-003 accepts only a key from the fixed catalog
+`app/services/insurance_policy_service.MARKETING_BADGES`. Like every other field it is
+frozen with the definition, so changing a badge mints a new `policy_uuid`.
 
 ### E. Recurring billing terms (rent and insurance)
 

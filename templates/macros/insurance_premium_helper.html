@@ -1,0 +1,19 @@
+{#- Economic Engine Helper for the insurance policy form (SPEC-ECON-003 §4.4.8, §4.9).
+    Include inside the policy <form>; static/js/insurance-premium-helper.js reads the
+    form's premium, charge_frequency, insurance_type, tier_level and payout_multiple
+    fields and fills this box as the teacher types. `helper` comes from
+    app/services/insurance_premium_helper.build_insurance_premium_helper (None when
+    CWI is not yet calculable). -#}
+{% macro premium_helper(helper) -%}
+<div class="border rounded p-3 mb-3 bg-body-tertiary" id="insurance-premium-helper" aria-live="polite">
+  <div class="fw-bold mb-2"><span class="material-symbols-outlined align-middle" aria-hidden="true">insights</span> Economic Engine suggestion</div>
+  {% if helper %}
+  <script type="application/json" id="insurance-premium-helper-data">{{ helper | tojson }}</script>
+  <div data-helper-body></div>
+  <p class="small text-muted mb-0 mt-2">Figures model a student with full attendance; they are not a prediction. The range is guidance, not a limit.</p>
+  <script src="{{ url_for('static', filename='js/insurance-premium-helper.js') }}"></script>
+  {% else %}
+  <p class="small text-muted mb-0">Set the pay rate and expected weekly hours in Payroll to see a suggested premium.</p>
+  {% endif %}
+</div>
+{%- endmacro %}

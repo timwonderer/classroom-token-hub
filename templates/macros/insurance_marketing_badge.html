@@ -1,0 +1,12 @@
+{#- Optional marketplace badge picker for the insurance policy form (DOM-POL-001A §D).
+    `badges` is insurance_policy_service.MARKETING_BADGES: key -> (label, colour, icon). -#}
+{% macro marketing_badge_select(badges, current) -%}
+<label class="form-label fw-bold" for="marketing_badge">Badge <span class="fw-normal text-muted">(optional)</span></label>
+<select class="form-select" id="marketing_badge" name="marketing_badge" aria-describedby="marketing_badge_help">
+  <option value="">None</option>
+  {% for key, badge in badges.items() %}
+  <option value="{{ key }}" {% if current == key %}selected{% endif %}>{{ badge[0] }}</option>
+  {% endfor %}
+</select>
+<div class="form-text" id="marketing_badge_help">Just for fun: a label students see next to the plan. It doesn't change what the plan costs or covers.</div>
+{%- endmacro %}

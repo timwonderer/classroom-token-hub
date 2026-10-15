@@ -69,6 +69,7 @@ _DEFINITION_FIELDS = frozenset(
         "description",
         "tier_name",
         "tier_group",
+        "marketing_badge",
     }
 )
 

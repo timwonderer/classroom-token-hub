@@ -72,6 +72,11 @@
 {{ 'the wages you lose' if (policy.insurance_type or '')|upper == 'PRODUCTIVITY' else 'what you lose' }}
 {%- endmacro %}
 
+{% macro badge_pill(policy) -%}
+{%- set b = marketing_badges.get(policy.marketing_badge) if policy.marketing_badge else none -%}
+{%- if b %}<span class="badge text-bg-{{ b[1] }} d-inline-flex align-items-center gap-1"><span class="material-symbols-outlined" aria-hidden="true" style="font-size:1em">{{ b[2] }}</span>{{ b[0] }}</span>{% endif -%}
+{%- endmacro %}
+
 {% macro days(n) -%}{{ n }} day{{ '' if n == 1 else 's' }}{%- endmacro %}
 
 {% macro payout_cap(policy) -%}
@@ -118,6 +123,10 @@
 {% call passphrase_modal('buy-' ~ policy.policy_uuid, 'Buy ' ~ policy.title ~ '?',
         url_for('student.purchase_insurance', policy_uuid=policy.policy_uuid),
         'Buy for $' ~ ('%.2f'|format(policy.premium)), 'btn-primary', 'Not now', 'insurance-passphrase-' ~ policy.policy_uuid) %}
+{% if policy.description and policy.description != policy.title %}
+<p class="mb-1 fw-semibold">Your teacher's terms</p>
+<p class="mb-3">{{ policy.description }}</p>
+{% endif %}
 <ul class="mb-0">
   <li class="mb-2"><strong>${{ "%.2f"|format(policy.premium) }}</strong> comes out of checking now, and again every {{ per(policy) }} until you cancel.</li>
   {% if policy.reimbursement_percentage is not none %}
@@ -170,6 +179,7 @@
           <div class="col-lg-8">
             <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
               <h2 class="h5 mb-0">{{ cov.title }}</h2>
+              {{ badge_pill(cov) }}
               {% if not cov.premiums_current %}
               <span class="badge bg-danger">Premium overdue</span>
               {% elif cov.claims_open_on %}
@@ -277,8 +287,12 @@
               <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
                 <span class="badge bg-primary-subtle text-primary-emphasis border">{{ rank_label.get(policy.tier_level, policy.tier_name or 'Tier') }}</span>
                 <span class="fw-semibold">{{ policy.title }}</span>
+                {{ badge_pill(policy) }}
               </div>
               <div class="fw-semibold">${{ "%.2f"|format(policy.premium) }} <span class="fw-normal text-muted">/ {{ policy.charge_frequency|lower }}</span></div>
+              {% if policy.description and policy.description != policy.title %}
+              <p class="small mb-1">{{ policy.description }}</p>
+              {% endif %}
               <div class="small text-muted">{{ policy_terms(policy) }}</div>
             </div>
             <div class="col-md-4">
@@ -310,6 +324,7 @@
               <h2 class="h6 mb-0">{{ policy.title }}</h2>
               <span class="badge bg-light text-dark border">{{ policy.insurance_type|capitalize }}</span>
             </div>
+            {% if policy.marketing_badge %}<div class="mb-1">{{ badge_pill(policy) }}</div>{% endif %}
             {% if policy.description and policy.description != policy.title %}
             <p class="text-muted small mb-2">{{ policy.description }}</p>
             {% endif %}

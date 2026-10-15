@@ -89,3 +89,30 @@ def test_ungrouped_policies_not_group_excluded(app):
         assert _buy(classroom, p1, "s1").success
         # A different ungrouped policy is not blocked by group exclusion.
         assert _buy(classroom, p2, "s2").success
+
+
+def test_tier_description_shown_before_purchase(app, client):
+    """A tiered plan's teacher description is readable in the Buy tab and the buy
+    confirmation — terms must not first appear after purchase."""
+    from tests.helpers.canonical_classroom import provision_classroom, login_student
+
+    terms = "Covers up to two absences per week, eight per month."
+    with app.app_context():
+        classroom = provision_classroom("chemistry_p1")
+        enable_class_feature(class_id=classroom.class_id, feature="insurance")
+        row = configure_insurance_definition(
+            class_id=classroom.class_id,
+            submission=_submission(tier_group="Paycheck Protection", tier_level=1, description=terms),
+            canonical_context=_teacher_ctx(classroom),
+            correlation_id=f"corr_{uuid4().hex}",
+            idempotency_key=f"cfg:{uuid4().hex}",
+        )
+        db.session.commit()
+        policy_uuid = row.policy_uuid
+        login_student(client, classroom.students[0])
+
+    resp = client.get("/student/insurance")
+    html = resp.get_data(as_text=True)
+    modal = html[html.index(f'id="buy-{policy_uuid}"'):]
+    assert html.count(terms) >= 2  # tier row + buy modal
+    assert terms in modal[: modal.index("</form>")]
