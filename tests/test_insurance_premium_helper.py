@@ -39,11 +39,21 @@ def test_monthly_uses_30_day_authoring_normalization(class_id):
     assert monthly["income"] == 857.14
 
 
-def test_rent_is_scaled_to_each_billing_frequency(class_id, monkeypatch):
+def _weekly_rent_row(monkeypatch, *, enabled):
+    monkeypatch.setattr(helper_mod, "is_feature_enabled", lambda cid, feature: enabled and feature == "rent")
     monkeypatch.setattr(helper_mod, "get_rent_settings", lambda cid: SimpleNamespace(
         rent_amount=Decimal("70.00"), frequency_type="weekly",
         custom_frequency_value=None, custom_frequency_unit=None))
+
+
+def test_rent_is_scaled_to_each_billing_frequency(class_id, monkeypatch):
+    _weekly_rent_row(monkeypatch, enabled=True)
     assert build_insurance_premium_helper(class_id)["rent"] == {"WEEKLY": 70.0, "MONTHLY": 300.0}
+
+
+def test_retained_rent_row_ignored_while_rent_is_off(class_id, monkeypatch):
+    _weekly_rent_row(monkeypatch, enabled=False)
+    assert build_insurance_premium_helper(class_id)["rent"] is None
 
 
 def test_no_rent_settings_means_no_remaining_after(class_id, monkeypatch):
@@ -51,11 +61,12 @@ def test_no_rent_settings_means_no_remaining_after(class_id, monkeypatch):
     assert build_insurance_premium_helper(class_id)["rent"] is None
 
 
-def test_helper_absent_without_cwi(app, monkeypatch):
+@pytest.mark.parametrize("cwi", [None, Decimal("0.00"), Decimal("-5.00")])
+def test_helper_absent_without_positive_cwi(app, monkeypatch, cwi):
     with app.app_context():
         classroom = provision_classroom("chemistry_p1")
         base = ee.resolve_base(classroom.class_id)
-        monkeypatch.setattr(ee, "resolve_base", lambda cid: replace(base, cwi=None))
+        monkeypatch.setattr(ee, "resolve_base", lambda cid: replace(base, cwi=cwi))
         assert build_insurance_premium_helper(classroom.class_id) is None
 
 
@@ -77,4 +88,5 @@ def test_policy_form_embeds_helper(app, client, monkeypatch):
     monkeypatch.setattr(ee, "resolve_base", lambda cid: replace(base, cwi=CWI, economy_policy_mode="default"))
     html = client.get("/admin/insurance/new").get_data(as_text=True)
     assert 'id="insurance-premium-helper-data"' in html
-    assert "insurance-premium-helper.js" in html
+    # Deferred, so it reads the tier controls rendered later in the form.
+    assert '<script defer src="/static/js/insurance-premium-helper.js">' in html

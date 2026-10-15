@@ -11,7 +11,8 @@
   <script type="application/json" id="insurance-premium-helper-data">{{ helper | tojson }}</script>
   <div data-helper-body></div>
   <p class="small text-muted mb-0 mt-2">Figures model a student with full attendance; they are not a prediction. The range is guidance, not a limit.</p>
-  <script src="{{ url_for('static', filename='js/insurance-premium-helper.js') }}"></script>
+  {#- defer: the tier controls render later in the form, and the form's own script sets their state. -#}
+  <script defer src="{{ url_for('static', filename='js/insurance-premium-helper.js') }}"></script>
   {% else %}
   <p class="small text-muted mb-0">Set the pay rate and expected weekly hours in Payroll to see a suggested premium.</p>
   {% endif %}

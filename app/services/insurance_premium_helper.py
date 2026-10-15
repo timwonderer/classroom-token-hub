@@ -14,7 +14,7 @@ from typing import Optional
 
 from app.models import _quantize_currency
 from app.services import economic_engine as ee
-from app.services.class_configuration_query_service import get_rent_settings
+from app.services.class_configuration_query_service import get_rent_settings, is_feature_enabled
 
 # Authoring-time week-equivalent per billing frequency. MONTHLY uses the fixed 30-day
 # authoring normalization of SPEC-ECON-003 §4.4.8; it never defines a billing period.
@@ -22,9 +22,9 @@ _AUTHORING_DAYS = {"WEEKLY": 7, "MONTHLY": 30}
 
 
 def build_insurance_premium_helper(class_id: str) -> Optional[dict]:
-    """Helper inputs for ``class_id``, or ``None`` when CWI is not yet calculable."""
+    """Helper inputs for ``class_id``, or ``None`` without a positive CWI."""
     base = ee.resolve_base(class_id)
-    if base.cwi is None:
+    if not base.has_cwi:  # a zero or negative pay rate yields a CWI no share can be taken of
         return None
 
     band = ee._PREMIUM_BANDS[base.economy_policy_mode]
@@ -50,7 +50,8 @@ def build_insurance_premium_helper(class_id: str) -> Optional[dict]:
         }
 
     rent = None
-    rent_settings = get_rent_settings(class_id)
+    # A retained settings row is not a current expense while rent is switched off.
+    rent_settings = get_rent_settings(class_id) if is_feature_enabled(class_id, "rent") else None
     if rent_settings is not None and rent_settings.rent_amount is not None:
         from app.utils.economy_balance import EconomyBalanceChecker
 
