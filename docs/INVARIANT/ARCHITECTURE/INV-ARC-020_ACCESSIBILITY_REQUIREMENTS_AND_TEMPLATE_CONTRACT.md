@@ -7,7 +7,7 @@
 > [!IMPORTANT]
 > **Review correction (2026-10-14, v1.2):** a later edit reintroduced `docs/TRACKING/V2_REBUILD_VALIDATION_REPORT.md`
 > as a Dependency — the same citation v1.1 had already dropped for the same reason. That file no longer exists
-> at that path; it was moved to `docs/archive/v2-tracking-2026/V2_REBUILD_VALIDATION_REPORT.md` during the v2
+> at that path; it was moved to `docs/archive/v2-tracking-2026/V2_REBUILD_VALIDATION_REPORT.md` (archived) during the v2
 > tracking archival, and its content (a general migration-validation log) never discussed this document's
 > subject matter (it contains no mention of `INV-ARC-020`, WCAG, axe, or accessibility conformance). Per
 > `SOP-DOC-000` §V, a live document must not cite archived material in a Dependencies section, and the stated
