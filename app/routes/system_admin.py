@@ -116,7 +116,6 @@ def _sysadmin_auth_username_exists(username: str, *, exclude_sysadmin_id: int | 
 
 @sysadmin_bp.route('/login', methods=['GET', 'POST'])
 @limiter.limit("10 per minute", methods=["POST"])
-@requires_feat_context("FEAT-OPS-001")
 def login():
     """System admin login with TOTP authentication.
 
@@ -127,72 +126,80 @@ def login():
     """
     form = SystemAdminLoginForm()
     if form.validate_on_submit():
-        # Ingress gate: the widget already renders here (the global
-        # turnstile_site_key context processor), but nothing was ever
-        # verifying it server-side (audit S5) -- the sysadmin login was the
-        # one unauthenticated entry point among the Turnstile-bearing forms
-        # that S3 (#1536) did not also cover.
-        turnstile_token = request.form.get('cf-turnstile-response')
-        if not verify_turnstile_token(turnstile_token, get_real_ip()):
-            flash("Security verification failed. Please complete the check and try again.", "error")
-            return render_template("system_admin_login.html", form=form)
-        # The per-account and replay budgets (audit S5) are charged only once
-        # Turnstile has passed -- see the matching comment on the teacher
-        # login (app/routes/admin.py) for why these cannot be route
-        # decorators.
-        with limiter.limit("5 per 5 minutes", key_func=login_account_limit_key()), \
-                limiter.limit("1 per 2 minutes", key_func=login_totp_replay_limit_key()):
-            pass
-        username = normalize_auth_username(form.username.data)
-        totp_code = form.totp_code.data.strip()
-        user = find_canonical_user_by_auth_username(username, expected_role="sysadmin")
-        if user:
+        # Only a submission runs inside FEAT-OPS-001; a FEAT commits on exit, and
+        # rendering the form must not (INV-ARC-007: GET must be pure).
+        return _complete_sysadmin_login(form)
+    return render_template("system_admin_login.html", form=form)
+
+
+@requires_feat_context("FEAT-OPS-001")
+def _complete_sysadmin_login(form):
+    """The validated sysadmin login submission."""
+    # Ingress gate: the widget already renders here (the global
+    # turnstile_site_key context processor), but nothing was ever
+    # verifying it server-side (audit S5) -- the sysadmin login was the
+    # one unauthenticated entry point among the Turnstile-bearing forms
+    # that S3 (#1536) did not also cover.
+    turnstile_token = request.form.get('cf-turnstile-response')
+    if not verify_turnstile_token(turnstile_token, get_real_ip()):
+        flash("Security verification failed. Please complete the check and try again.", "error")
+        return render_template("system_admin_login.html", form=form)
+    # The per-account and replay budgets (audit S5) are charged only once
+    # Turnstile has passed -- see the matching comment on the teacher
+    # login (app/routes/admin.py) for why these cannot be route
+    # decorators.
+    with limiter.limit("5 per 5 minutes", key_func=login_account_limit_key()), \
+            limiter.limit("1 per 2 minutes", key_func=login_totp_replay_limit_key()):
+        pass
+    username = normalize_auth_username(form.username.data)
+    totp_code = form.totp_code.data.strip()
+    user = find_canonical_user_by_auth_username(username, expected_role="sysadmin")
+    if user:
+        try:
+            decrypted_secret = decrypt_totp(user.totp_secret_encrypted)
+        except (TypeError, ValueError):
+            current_app.logger.warning(
+                "System admin login failed: invalid encrypted TOTP secret for user_id=%s",
+                user.id,
+            )
+            decrypted_secret = None
+        if decrypted_secret:
+            totp_valid = False
             try:
-                decrypted_secret = decrypt_totp(user.totp_secret_encrypted)
-            except (TypeError, ValueError):
+                totp = pyotp.TOTP(decrypted_secret)
+                totp_valid = totp.verify(totp_code, valid_window=1)
+            except (binascii.Error, TypeError, ValueError):
                 current_app.logger.warning(
-                    "System admin login failed: invalid encrypted TOTP secret for user_id=%s",
+                    "System admin login failed: TOTP secret is not valid base32 for sysadmin_id=%s",
                     user.id,
                 )
-                decrypted_secret = None
-            if decrypted_secret:
                 totp_valid = False
-                try:
-                    totp = pyotp.TOTP(decrypted_secret)
-                    totp_valid = totp.verify(totp_code, valid_window=1)
-                except (binascii.Error, TypeError, ValueError):
-                    current_app.logger.warning(
-                        "System admin login failed: TOTP secret is not valid base32 for sysadmin_id=%s",
-                        user.id,
-                    )
-                    totp_valid = False
-                if totp_valid:
-                    # A new principal: nothing of the previous one (a teacher's
-                    # class, nonce, or username) carries over.
-                    session.clear()
-                    establish_sysadmin_session(user)
-                    nonce = secrets.token_urlsafe(32)
-                    session["current_session_nonce"] = nonce
-                    user.current_session_nonce = nonce
-                    session["sysadmin_auth_username"] = username
-                    session['last_activity'] = utc_now().isoformat()
-                    flash("System admin login successful.")
-                    next_url = request.args.get("next")
-                    redirect_target = None
-                    if next_url:
-                        # Normalize backslashes and only allow relative in-app redirects.
-                        normalized_next = next_url.replace('\\', '')
-                        parsed_next = urlparse(normalized_next)
-                        if (not parsed_next.scheme and not parsed_next.netloc and is_safe_url(normalized_next)):
-                            redirect_target = normalized_next
-                        else:
-                            redirect_target = url_for("sysadmin.dashboard")
+            if totp_valid:
+                # A new principal: nothing of the previous one (a teacher's
+                # class, nonce, or username) carries over.
+                session.clear()
+                establish_sysadmin_session(user)
+                nonce = secrets.token_urlsafe(32)
+                session["current_session_nonce"] = nonce
+                user.current_session_nonce = nonce
+                session["sysadmin_auth_username"] = username
+                session['last_activity'] = utc_now().isoformat()
+                flash("System admin login successful.")
+                next_url = request.args.get("next")
+                redirect_target = None
+                if next_url:
+                    # Normalize backslashes and only allow relative in-app redirects.
+                    normalized_next = next_url.replace('\\', '')
+                    parsed_next = urlparse(normalized_next)
+                    if (not parsed_next.scheme and not parsed_next.netloc and is_safe_url(normalized_next)):
+                        redirect_target = normalized_next
                     else:
                         redirect_target = url_for("sysadmin.dashboard")
-                    return redirect(redirect_target)
-        flash("Invalid credentials or TOTP.", "error")
-        return redirect(url_for("sysadmin.login"))
-    return render_template("system_admin_login.html", form=form)
+                else:
+                    redirect_target = url_for("sysadmin.dashboard")
+                return redirect(redirect_target)
+    flash("Invalid credentials or TOTP.", "error")
+    return redirect(url_for("sysadmin.login"))
 
 
 @sysadmin_bp.route('/logout', methods=['POST'])
