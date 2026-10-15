@@ -2,7 +2,17 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| INV-ARC-020      | 1.1     | 2026-10-13     | 1.0        | Constitutional |
+| INV-ARC-020      | 1.2     | 2026-10-14     | 1.1        | Constitutional |
+
+> [!IMPORTANT]
+> **Review correction (2026-10-14, v1.2):** a later edit reintroduced `docs/TRACKING/V2_REBUILD_VALIDATION_REPORT.md`
+> as a Dependency — the same citation v1.1 had already dropped for the same reason. That file no longer exists
+> at that path; it was moved to `docs/archive/v2-tracking-2026/V2_REBUILD_VALIDATION_REPORT.md` during the v2
+> tracking archival, and its content (a general migration-validation log) never discussed this document's
+> subject matter (it contains no mention of `INV-ARC-020`, WCAG, axe, or accessibility conformance). Per
+> `SOP-DOC-000` §V, a live document must not cite archived material in a Dependencies section, and the stated
+> remedy is to remove the entry when no live replacement exists. The entry is removed below; the `SPEC-DES-001`
+> addition from the same edit is retained, since that target exists at the cited path.
 
 ## I. Purpose
 
@@ -32,6 +42,7 @@ Constitutional. This document derives directly from `INV-CORE-000` Section III.7
 - `docs/INVARIANT/ARCHITECTURE/INV-ARC-017_GENERAL_TESTING_INVARIANTS.md`
 - `docs/STANDARD_OPERATING_PROCEDURES/TESTING/SOP-TEST-003_Test_Creation.md`
 - `docs/STANDARD_OPERATING_PROCEDURES/SOP-DOC-000_DOCUMENTATION_STANDARD.md`
+- `docs/SPEC/SPEC-DES-001_DESIGN_SYSTEM_AND_VISUAL_IDENTITY.md`
 
 ## V. Accessibility Principles
 
