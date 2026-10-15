@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.25 | 2026-10-06 | 3.24 | Normative |
+| SOP-DOC-001 | 3.26 | 2026-10-14 | 3.25 | Normative |
 
 ---
 
@@ -276,6 +276,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.26 (2026-10-14), developer-documentation modernization pass:**
+- Register DOM-CLASS-003 v2.6 and FEAT-CLASS-005 v1.3: §V/§IX and §XI stopped describing the overdraft/NSF fee as an active charge (CTH charges none, owner ruling 2026-10-07, `DOM-OBL-001` §II.C), and now name only the flat fee as rebalance-selectable — the overdraft-protection setting (`economic_engine.overdraft_protection_enabled`) and the progressive fee are changed through the Economic Engine evolution command directly, not through the rebalance preview.
 
 **Version 3.25 (2026-10-06):**
 - Register INV-ARC-008 v1.2, DOM-OPS-002 v1.11, SPEC-PROD-002 v1.4 and SOP-DB-004 v1.2: the owner's compatibility ruling (no bridge, dual-write, fallback or heuristic interpretation; versioned read-side interpretation of retained history only) now stands in the governing documents. INV-ARC-008 drops its "approved bridge code" allowance.
