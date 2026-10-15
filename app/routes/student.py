@@ -113,7 +113,11 @@ from app.feats.base import requires_feat_context, FEATContext
 from app.feats.rent_payment_feat import execute_rent_payment, execute_rent_bill_payment
 from app.feats.transfer_feat import InsufficientFunds, execute_account_transfer
 from app.feats.store_purchase_feat import execute_store_purchase
-from app.feats.insurance_claim_feat import coverage_effective_start_utc, submit_insurance_claim
+from app.feats.insurance_claim_feat import (
+    coverage_effective_start_utc,
+    submit_insurance_claim,
+    waiting_period_days,
+)
 from app.services.payroll.settings import current_pay_rate_per_second
 from app.utils.join_code import get_display_join_code
 from app.utils.canonical_temporal_resolver import utc_now, ensure_utc
@@ -1829,6 +1833,10 @@ def insurance_marketplace():
             continue
         claims_open_on, renews_on = _coverage_card_dates(context, grant, d)
         last_covered_day = _last_covered_day(class_id, grant.entitlement_id)
+        starts_on = (
+            insurance_coverage.class_local_date(class_id, grant.timestamp)
+            if ensure_utc(grant.timestamp) > utc_now() else None
+        )
         owned_coverage.append(
             SimpleNamespace(
                 entitlement_id=grant.entitlement_id,
@@ -1854,6 +1862,10 @@ def insurance_marketplace():
                 ),
                 # Set once renewal is stopped: the last day the coverage runs.
                 last_covered_day=last_covered_day,
+                # A continuation granted ahead of its boundary: the day it begins.
+                starts_on=starts_on,
+                # What happens at the boundary (FEAT-STOR-007 §V.A), else None.
+                change=_coverage_change(class_id, grant, d, renews_on, last_covered_day),
                 # If cancelled now: the last day it would still cover. Same
                 # derivation the cancel command uses (DOM-OBL-001 §V.7).
                 cancel_covers_through=(
@@ -2043,7 +2055,7 @@ def _coverage_card_dates(context, grant, definition):
     )
 
     claims_open_on = None
-    wait = int(definition.waiting_period_days or 0)
+    wait = waiting_period_days(definition, grant)  # none for a continuation
     if wait > 0:
         open_date, open_utc = coverage_effective_start_utc(
             context, ensure_utc(grant.timestamp), wait
@@ -2066,6 +2078,50 @@ def _coverage_card_dates(context, grant, definition):
     if period is not None and period.end_utc is not None:
         renews_on = insurance_coverage.class_local_date(context.class_id, period.end_utc)
     return claims_open_on, renews_on
+
+
+def _coverage_change(class_id, grant, definition, renews_on, last_covered_day):
+    """What happens to this coverage at its boundary, for its card, or None.
+
+    FEAT-STOR-007 §V.A, so the student sees it before the next premium is billed
+    (SPEC-ECON-003 §4.4.2): ``moving`` (the teacher's edit takes over at the
+    boundary), ``ending`` (the plan was withdrawn and will not renew),
+    ``continued`` (already moved: a new entitlement starts at the boundary) or
+    ``withdrawn`` (renewal stopped while the plan is off sale).
+    """
+    from app.feats.insurance_coverage_renewal_feat import continuation_correlation_id
+    from app.models import EntitlementEvent
+
+    follow_on = EntitlementEvent.query.filter_by(
+        class_id=class_id,
+        target_seat_id=grant.target_seat_id,
+        entitlement_type="INSURANCE",
+        event_type="GRANTED",
+        correlation_id=continuation_correlation_id(grant.entitlement_id),
+    ).first()
+    if follow_on is not None:
+        return SimpleNamespace(
+            kind="continued",
+            successor=insurance_defs.get_insurance_definition(
+                (follow_on.payload or {}).get("policy_uuid"), class_id=class_id
+            ),
+            on=insurance_coverage.class_local_date(class_id, follow_on.timestamp),
+        )
+    off_sale = definition.availability_state != insurance_defs.IN_USE
+    if last_covered_day:
+        return SimpleNamespace(kind="withdrawn") if off_sale else None
+    successor = insurance_defs.get_latest_successor(definition.policy_uuid, class_id=class_id)
+    if successor is not None and successor.availability_state == insurance_defs.IN_USE:
+        preview = int(definition.bill_preview_days or 0)
+        return SimpleNamespace(
+            kind="moving",
+            successor=successor,
+            on=renews_on,
+            bill_on=renews_on - timedelta(days=preview) if renews_on else None,
+        )
+    if off_sale:
+        return SimpleNamespace(kind="ending", on=renews_on)
+    return None
 
 
 def _cancel_covers_through(class_id, entitlement_id):
@@ -2372,7 +2428,7 @@ def view_policy(policy_uuid):
         _, coverage_start_date = coverage_effective_start_utc(
             context,
             purchase_date,
-            placeholder_policy.waiting_period_days,
+            waiting_period_days(placeholder_policy, entitlement),
         )
     enrollment = SimpleNamespace(
         id=policy_uuid,

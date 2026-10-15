@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| FEAT-CLASS-003 | 0.1 | 2026-07-23 | N/A | Normative |
+| FEAT-CLASS-003 | 0.2 | 2026-10-14 | 0.1 | Normative |
 
 ## I. Purpose
 
@@ -100,7 +100,8 @@ semantics attach to a bare `tier_level`). A grouped policy MUST carry a rank in
 
 Within one group, at most one **available (`IN_USE`)** policy may occupy each rank,
 so a group holds **at most three** active tiers. Because definitions are immutable
-(an edit mints a new `policy_uuid` and retires the old — DOM-POL-001), the constraint
+(an edit mints a new `policy_uuid`, records the old one as its `supersedes_policy_uuid`,
+and retires the old — DOM-POL-001, DOM-POL-001A §D), the constraint
 is over `IN_USE` rows only: retired/hidden versions never occupy a slot, and
 re-adding a rank after retiring its prior tier is lawful.
 
@@ -133,3 +134,10 @@ This FEAT guarantees:
 - Policy definitions are not mutated here (a new immutable row per lawful change);
 - a tier group holds at most three active tiers, one per rank;
 - downstream entitlement, obligation, and ledger facts are not rewritten by this FEAT.
+- an edit, and putting a hidden policy back on sale, record the replaced version as
+  `supersedes_policy_uuid` on the new row; existing holders move to it only through a new
+  entitlement at their coverage boundary (`DOM-STORE-001` §VIII.E.1), never by a change to
+  their existing entitlement.
+
+**0.2 (2026-10-14)** records the successor link on edit and reactivation (owner ruling
+2026-10-14).

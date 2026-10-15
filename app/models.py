@@ -2845,6 +2845,9 @@ class InsurancePolicy(db.Model):
     tier_name = db.Column(db.String(60), nullable=True)
     tier_group = db.Column(db.String(60), nullable=True)
     marketing_badge = db.Column(db.String(40), nullable=True)  # key into insurance_policy_service.MARKETING_BADGES
+    # The version this row replaces (edit or reactivation), same class; NULL = replaces nothing.
+    # Set at creation, never changed (DOM-POL-001A §D). Decides where holders continue.
+    supersedes_policy_uuid = db.Column(db.String(36), nullable=True, index=True)
 
     # Availability projection over the immutable row (DOM-POL-001 §IX).
     availability_state = db.Column(db.String(16), nullable=False, server_default='IN_USE')

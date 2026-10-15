@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-STOR-002 | 2.3 | 2026-10-03 | 2.2 | Normative |
+| FEAT-STOR-002 | 2.4 | 2026-10-14 | 2.3 | Normative |
 
 ## I. Purpose
 
@@ -183,6 +183,8 @@ A lawfully purchased insurance entitlement SHALL NOT be revoked or refunded.
 
 Teacher cancellation affects future acquisition or renewal only.
 
+Withdrawing an offering (hiding or retiring its version) with no successor on sale stops renewal of every entitlement granted under it; each ends at its next coverage boundary. Superseding a version by an edit ends each holder's entitlement at its boundary and continues the coverage under the successor through a new entitlement (`DOM-STORE-001` §VIII.E.1, `FEAT-STOR-007` §V.A). Neither expires coverage early.
+
 Existing coverage remains valid until its configured coverage boundary and then expires normally. Nonpayment expiry (§VIII) is an expiry at a lawful coverage-end boundary, not a revocation.
 
 ### D. Obligations-derived perks
@@ -299,5 +301,7 @@ On successful Store-owned termination:
 5. any required cross-domain coordinated effect has completed atomically.
 
 ## XVI. Amendment
+
+**2.4 (2026-10-14)** §IX.C states what withdrawing and superseding an insurance offering do to existing holders (owner ruling 2026-10-14).
 
 Revisions must remain consistent with `DOM-STORE-001`, `FEAT-STOR-001`, `DOM-CLASS-001`, `DOM-POL-001`, `DOM-LED-001`, and the governing FEAT and temporal invariants.

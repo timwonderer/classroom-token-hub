@@ -328,8 +328,13 @@ def grant_insurance_entitlement(
     actor_seat_id: int | None = None,
     correlation_id: str | None = None,
     granted_at=None,
+    continues_entitlement_id: str | None = None,
 ) -> str:
     """Grant one INSURANCE coverage entitlement (acquisition_type=PURCHASE).
+
+    ``continues_entitlement_id`` marks a continuation after a policy edit
+    (DOM-STORE-001 §VIII.E.1): coverage the student already held, carried onto
+    the successor version, so no waiting period applies to it.
 
     ``granted_at`` is the purchase instant the coordinating FEAT resolved
     canonically (the start of the first coverage period, DOM-STORE-001
@@ -380,6 +385,7 @@ def grant_insurance_entitlement(
         payload={
             "source": "grant_insurance_entitlement",
             "policy_uuid": policy_uuid,
+            **({"continues_entitlement_id": continues_entitlement_id} if continues_entitlement_id else {}),
         },
         timestamp=granted_at or _current_utc(),
     )

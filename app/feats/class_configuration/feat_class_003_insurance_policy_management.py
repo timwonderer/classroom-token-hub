@@ -445,9 +445,11 @@ def configure_insurance_definition(
     An edit passes ``supersedes_policy_uuid``: the predecessor is retired in the
     same context, so it leaves the shelf as the replacement arrives and a grouped
     tier's rank is free for its own replacement (FEAT-CLASS-003 §VIII.2).
-    Retirement is an availability projection only — seats already covered under
-    the superseded terms keep them until their coverage period ends, because
-    entitlements freeze ``policy_uuid`` at purchase (DOM-POL-001 §VII). Validation is hard-legality only — recommendation-range overrides
+    The new row records the predecessor as ``supersedes_policy_uuid``. Seats
+    covered under the superseded terms keep them until their coverage period
+    ends (entitlements freeze ``policy_uuid`` at purchase, DOM-POL-001 §VII);
+    FEAT-STOR-007 §V.A then continues them under the successor through a new
+    entitlement. Validation is hard-legality only — recommendation-range overrides
     are permitted; hard-bound / per-type-structure violations raise
     :class:`InsuranceContractViolation` BEFORE the POL write.
 
@@ -476,6 +478,8 @@ def configure_insurance_definition(
             policy_uuid=supersedes_policy_uuid,
             class_id=class_id,
         )
+        # Where existing holders continue at their boundary (DOM-POL-001A §D).
+        definition["supersedes_policy_uuid"] = supersedes_policy_uuid
 
     _enforce_tier_group_rules(class_id, definition)
 

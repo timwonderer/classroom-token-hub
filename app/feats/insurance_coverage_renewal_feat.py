@@ -24,7 +24,11 @@ One run, per entitlement, as of the canonically resolved reference time:
    nonpayment cause effective at the deadline and the lineage is terminated
    with the deadline as its termination instant. ``ACCUMULATE`` never
    terminates for nonpayment.
-2. **Advance assessment** while succession is due: schedule the next period
+2. **Superseded or withdrawn version** (§V.A), once succession is due: a
+   version superseded by an edit continues under its latest successor on sale
+   through a new entitlement starting at the boundary; a version no longer on
+   sale with no successor on sale stops renewing, so coverage ends there.
+3. **Advance assessment** while succession is due: schedule the next period
    (boundaries from anchored recurrence, never from the previous boundary),
    assess its frozen per-period premium, and attempt automatic payment. A
    failed attempt leaves the premium outstanding and still commits the
@@ -53,6 +57,7 @@ from app.feats.schedule_next_bill_cycle_feat import (
 from app.feats.terminate_bill_cycle_feat import TerminateBillCycleRequest, terminate_bill_cycle
 from app.models import BillCycle, ObligationAssessment, Seat
 from app.services import entitlement_service, obligations_service
+from app.services import insurance_definition_service as insurance_defs
 from app.services.identity_service import resolve_teacher_seat_for_class
 from app.services.insurance_coverage_service import (
     class_local_date,
@@ -96,11 +101,15 @@ class InsuranceRenewalResult:
     premiums_left_outstanding: list[str] = field(default_factory=list)
     terminated_for_nonpayment: bool = False
     nonpayment_deadline: datetime | None = None
+    renewal_stopped_at: datetime | None = None  # §V.A: superseded or withdrawn version
+    continued_as: "InsuranceRenewalResult | None" = None  # the continuing entitlement's run
     skipped_reason: str | None = None
 
     @property
     def wrote_anything(self) -> bool:
-        return bool(self.cycles_scheduled or self.terminated_for_nonpayment)
+        return bool(
+            self.cycles_scheduled or self.terminated_for_nonpayment or self.renewal_stopped_at
+        )
 
 
 def premium_correlation_id(entitlement_id: str, cycle_number: int) -> str:
@@ -310,6 +319,92 @@ def _attempt_autopay(
     return True
 
 
+def continuation_correlation_id(entitlement_id: str) -> str:
+    """Correlation of the grant continuing ``entitlement_id`` (one per entitlement)."""
+    return f"insurance-continuation:{entitlement_id}"
+
+
+def _stop_renewal(class_id: str, entitlement_id: str, reference: datetime) -> datetime:
+    """End the lineage at the end of its last committed period; return that instant.
+
+    The same Obligations command a student's cancellation uses, so the same
+    committed-period and withdrawal rules apply (DOM-STORE-001 §VIII.E.1).
+    """
+    terminal = terminate_bill_cycle(
+        TerminateBillCycleRequest(
+            class_id=class_id,
+            internal_ref=premium_lineage_ref(entitlement_id),
+            reference_time_utc=reference,
+        ),
+        context=None,
+    )
+    return ensure_utc(terminal.cycle_boundary_at)
+
+
+def _continue_under_successor(
+    *,
+    class_id: str,
+    entitlement_id: str,
+    seat: Seat,
+    successor,
+    boundary: datetime,
+    reference: datetime,
+) -> str:
+    """FEAT-STOR-007 §V.A continuation: a new entitlement under ``successor`` from ``boundary``.
+
+    Its lineage is anchored at the boundary's class-local date, and its first
+    premium is an advance premium due at the boundary, attempted at once.
+    """
+    new_id = entitlement_service.grant_insurance_entitlement(
+        seat,
+        successor.policy_uuid,
+        actor_seat_id=resolve_teacher_seat_for_class(class_id).id,
+        correlation_id=continuation_correlation_id(entitlement_id),
+        granted_at=boundary,
+        continues_entitlement_id=entitlement_id,
+    )
+    terms = get_insurance_recurring_terms(successor.policy_uuid, class_id=class_id)
+    internal_ref = premium_lineage_ref(new_id)
+    cycle = schedule_next_bill_cycle(
+        ScheduleNextBillCycleRequest(
+            class_id=class_id,
+            internal_ref=internal_ref,
+            cycle_boundary_at=boundary,
+            next_assessment_at=coverage_boundary(
+                class_id,
+                anchor_date=class_local_date(class_id, boundary),
+                charge_frequency=terms.charge_frequency,
+                index=1,
+            ),
+            idempotency_key=succession_command_identity(new_id, 1),
+            policy_uuid=successor.policy_uuid,
+            reference_time_utc=reference,
+        ),
+        context=None,
+    )
+    correlation_id = premium_correlation_id(new_id, 1)
+    assess_obligation(
+        AssessmentRequest(
+            seat_id=seat.id,
+            class_id=class_id,
+            internal_ref=internal_ref,
+            correlation_id=correlation_id,
+            obligation_type="INSURANCE_PREMIUM",
+            policy_uuid=successor.policy_uuid,
+            bill_cycle_id=cycle.id,
+        ),
+        context=None,
+    )
+    _attempt_autopay(
+        class_id=class_id,
+        seat_id=seat.id,
+        entitlement_id=new_id,
+        cycle_number=1,
+        correlation_id=correlation_id,
+    )
+    return new_id
+
+
 def renew_insurance_coverage(
     *,
     class_id: str,
@@ -385,7 +480,31 @@ def renew_insurance_coverage(
         if eligibility is not SuccessionEligibility.DUE:
             return result  # the next assessment point is still ahead
 
-        # (2) Advance assessment of the next period.
+        # (2) §V.A: a superseded or withdrawn version does not renew. The
+        #     existing entitlement keeps its version to the end (DOM-POL-001 §VII).
+        version = insurance_defs.get_insurance_definition(latest.policy_uuid, class_id=class_id)
+        successor = insurance_defs.get_latest_successor(latest.policy_uuid, class_id=class_id)
+        if successor is not None and successor.availability_state == insurance_defs.IN_USE:
+            boundary = _stop_renewal(class_id, entitlement_id, reference)
+            result.renewal_stopped_at = boundary
+            new_id = _continue_under_successor(
+                class_id=class_id,
+                entitlement_id=entitlement_id,
+                seat=seat,
+                successor=successor,
+                boundary=boundary,
+                reference=reference,
+            )
+            # A late run catches the continuing lineage up in the same unit.
+            result.continued_as = renew_insurance_coverage(
+                class_id=class_id, entitlement_id=new_id, reference_time_utc=reference
+            )
+            return result
+        if version is None or version.availability_state != insurance_defs.IN_USE:
+            result.renewal_stopped_at = _stop_renewal(class_id, entitlement_id, reference)
+            return result
+
+        # (3) Advance assessment of the next period.
         cycle_number = latest.cycle_number + 1
         start = coverage_boundary(
             class_id, anchor_date=anchor,
@@ -423,7 +542,7 @@ def renew_insurance_coverage(
         result.cycles_scheduled.append(cycle.cycle_number)
         result.premiums_assessed.append(correlation_id)
 
-        # (3) Automatic payment; a failed attempt is an expected outcome.
+        # (4) Automatic payment; a failed attempt is an expected outcome.
         if _attempt_autopay(
             class_id=class_id,
             seat_id=grant.target_seat_id,
