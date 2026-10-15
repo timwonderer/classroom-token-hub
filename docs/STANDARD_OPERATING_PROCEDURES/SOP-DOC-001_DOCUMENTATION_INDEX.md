@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.26 | 2026-10-14 | 3.25 | Normative |
+| SOP-DOC-001 | 3.28 | 2026-10-14 | 3.27 | Normative |
 
 ---
 
@@ -277,8 +277,19 @@ Their surviving content lives at:
 
 ## VIII. Change Notes
 
-**Version 3.26 (2026-10-14):**
-- Register the Authority Level correction from the developer-documentation modernization pass: `INV-ARC-000` through `INV-ARC-016`, `INV-ARC-021` and `INV-ARC-022` (all v+0.1, "Foundational" → "Constitutional"), and `DOM-OPS-001` v2.13, `DOM-ITR-001` v1.8, `DOM-STORE-001` v5.6, `DOM-SUP-001` v1.9 (all "Normative" → "Constitutional," `DOM-STORE-001`'s header now matching its own already-correct body). Label corrections only; no dependency, scope, or rule changed in any of the 23 documents.
+**Version 3.28 (2026-10-14), developer-documentation modernization pass:**
+- Register the Authority Level correction: `INV-ARC-000` through `INV-ARC-016`, `INV-ARC-021` and `INV-ARC-022` (all v+0.1, "Foundational" → "Constitutional"), and `DOM-OPS-001` v2.13, `DOM-ITR-001` v1.8, `DOM-STORE-001` v5.6, `DOM-SUP-001` v1.9 (all "Normative" → "Constitutional," `DOM-STORE-001`'s header now matching its own already-correct body). Label corrections only; no dependency, scope, or rule changed in any of the 23 documents. Also registers `SOP-DOC-000` v3.5, carved out of the same reconciliation since it is the document defining the tier scheme: corrected from "Foundational (Tier 0)" to "Normative (Tier 2 — SOP Tier)," matching its own §V/§VI taxonomy.
+
+**Version 3.27 (2026-10-14), developer-documentation modernization pass:**
+- Register SOP-SEC-002 v1.0 (2026-10-11): CodeQL gating configuration, per-alert disposition and recurring backlog review, written off `INCIDENT_2026-10-11_SEC-SAST-GAP-001.md`. This index had already listed SOP-SEC-002 but carried no Change Note for it.
+- Register SOP-DEP-002 v1.11: corrected its post-migration verification checklist from `join_code`-keyed routes to the actual route contract, matching SOP-DEP-001 §XI.
+- Register SOP-DB-003 v1.4: added SOP-DB-004 to Dependencies and a pointer to its `M2 DATA` classification, which SOP-DB-003's own three-box classification doesn't cover.
+- Register INV-ARC-020 v1.2: a later edit reintroduced the same archived `docs/TRACKING/V2_REBUILD_VALIDATION_REPORT.md` citation an earlier revision had already dropped from its Dependencies; removed again.
+- Register FEAT-OBL-004 v1.0: promoted from DRAFT to final Normative (owner ruling), resolving the open question that `FEAT-STOR-001` v3.2 already shipped assuming its authority.
+
+**Version 3.26 (2026-10-14), developer-documentation modernization pass:**
+- Register DOM-CLASS-003 v2.6 and FEAT-CLASS-005 v1.3: §V/§IX and §XI stopped describing the overdraft/NSF fee as an active charge (CTH charges none, owner ruling 2026-10-07, `DOM-OBL-001` §II.C), and now name only the flat fee as rebalance-selectable — the overdraft-protection setting (`economic_engine.overdraft_protection_enabled`) and the progressive fee are changed through the Economic Engine evolution command directly, not through the rebalance preview.
+- Register FEAT-IDEN-101 v1.3, FEAT-IDEN-107 v1.2, DOM-IDEN-007 v1.3, DOM-IDEN-002 v2.10, FEAT-OBL-002 v2.2 and FEAT-OBL-004 v0.5 (DRAFT): staleness corrections (credential-hashing wording, an idempotency-lock gap, a table-name typo, and a broken dependency citation) — see `CHANGELOG.md` for detail.
 
 **Version 3.25 (2026-10-06):**
 - Register INV-ARC-008 v1.2, DOM-OPS-002 v1.11, SPEC-PROD-002 v1.4 and SOP-DB-004 v1.2: the owner's compatibility ruling (no bridge, dual-write, fallback or heuristic interpretation; versioned read-side interpretation of retained history only) now stands in the governing documents. INV-ARC-008 drops its "approved bridge code" allowance.

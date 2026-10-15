@@ -2,7 +2,10 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| REF-TERM-002     | 1.1     | 2026-09-28     | 1.0        | Informative     |
+| REF-TERM-002     | 1.2     | 2026-10-14     | 1.1        | Informative     |
+
+> [!IMPORTANT]
+> **v1.2 (2026-10-14), documentation modernization.** §V listed `policy_versions`/`policy_transitions` as internal developer terms not used in user-facing text. `REF-TERM-001` v1.1 (2026-09-30) retired both outright; this document predated that and hadn't caught up. Removed them from the "developer term, keep internal" list and added a note that they are retired, not merely internal.
 
 ## I. Purpose
 
@@ -180,7 +183,9 @@ A measure of how quickly money circulates through the classroom economy. High ve
 
 The following terms from the developer vocabulary (`REF-TERM-001`) do not appear in user interfaces and should not be used in student- or teacher-facing text:
 
-`class_id`, `seat_id`, `correlation_id`, `idempotency_key`, `FEAT`, `domain guard`, `ledger_transaction`, `audit_log`, `policy_versions`, `policy_transitions`, `append-only policy evolution`, `domain blindness`, `operational events`, `TemporalContext`.
+`class_id`, `seat_id`, `correlation_id`, `idempotency_key`, `FEAT`, `domain guard`, `ledger_transaction`, `audit_log`, `append-only policy evolution`, `domain blindness`, `operational events`, `TemporalContext`.
+
+(`policy_versions` and `policy_transitions` were retired outright by operator ruling 2026-09-30 — `REF-TERM-001` §IV — and are not merely internal developer terms; do not use either even in developer-facing text.)
 
 If user-facing text needs to refer to the concept behind one of these terms, use the corresponding plain-language term from this glossary instead.
 
