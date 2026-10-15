@@ -278,6 +278,17 @@ def _sum_approved_payouts(
     return _quantize_currency(total)
 
 
+def waiting_period_days(policy_terms, granted_event) -> int:
+    """The waiting period that applies to one entitlement, in days.
+
+    A continuation after a policy edit carries coverage the student already
+    held, so no wait applies to it (FEAT-STOR-003 1.5, DOM-STORE-001 §VIII.E.1).
+    """
+    if (granted_event.payload or {}).get("continues_entitlement_id"):
+        return 0
+    return int(policy_terms.waiting_period_days or 0)
+
+
 def covered_from_utc(canonical_context: CanonicalContext, policy_terms, granted_event) -> datetime:
     """The first instant a loss can be covered: purchase, or the end of the wait.
 
@@ -286,7 +297,7 @@ def covered_from_utc(canonical_context: CanonicalContext, policy_terms, granted_
     """
     granted = ensure_utc(granted_event.timestamp)
     _, effective_start = coverage_effective_start_utc(
-        canonical_context, granted, policy_terms.waiting_period_days or 0
+        canonical_context, granted, waiting_period_days(policy_terms, granted_event)
     )
     return max(granted, effective_start)
 
@@ -365,7 +376,7 @@ def describe_claim_contract(claim, *, canonical_context: CanonicalContext) -> Cl
 
     coverage_start_utc = ensure_utc(grant.timestamp)
     effective_date, _ = coverage_effective_start_utc(
-        canonical_context, coverage_start_utc, policy.waiting_period_days or 0
+        canonical_context, coverage_start_utc, waiting_period_days(policy, grant)
     )
     period = _period_for_claim(claim)
     week_equiv = _coverage_week_equivalent(
@@ -474,14 +485,14 @@ def _enforce_waiting_period(
     superseded coverage is unaffected. The period is read from the frozen
     policy_terms contract, never the live definition.
     """
-    waiting_period_days = policy_terms.waiting_period_days
-    if not waiting_period_days:
+    wait_days = waiting_period_days(policy_terms, granted_event)
+    if not wait_days:
         return None
 
     effective_date, effective_start = coverage_effective_start_utc(
         canonical_context,
         ensure_utc(granted_event.timestamp),
-        waiting_period_days,
+        wait_days,
     )
     if submitted_at >= effective_start:
         return None
@@ -490,7 +501,7 @@ def _enforce_waiting_period(
         success=False,
         error_code="WAITING_PERIOD_NOT_ELAPSED",
         error_message=(
-            f"Coverage begins after a {int(waiting_period_days)}-day waiting period "
+            f"Coverage begins after a {wait_days}-day waiting period "
             f"(on {effective_date.isoformat()})"
         ),
     )

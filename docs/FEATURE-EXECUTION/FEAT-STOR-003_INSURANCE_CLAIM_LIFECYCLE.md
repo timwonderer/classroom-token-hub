@@ -2,7 +2,13 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-STOR-003 | 1.4 | 2026-09-24 | 1.3 | Normative |
+| FEAT-STOR-003 | 1.5 | 2026-10-14 | 1.4 | Normative |
+
+> **1.5 revision note.** Continuation (`DOM-STORE-001` v5.7 §VIII.E.1). An entitlement
+> granted by continuation after a policy edit continues coverage the student already held,
+> so the policy's waiting period does not apply to it: a loss is covered from the
+> boundary where it begins. Its claim terms resolve from its own grant's `policy_uuid`,
+> like any entitlement. Every other entitlement's waiting period runs from its own grant.
 
 > **1.4 revision note.** Recurring coverage (`DOM-STORE-001` v5.2 §VIII.E.1). A claim
 > may be filed only while the entitlement is usable, which includes Obligations

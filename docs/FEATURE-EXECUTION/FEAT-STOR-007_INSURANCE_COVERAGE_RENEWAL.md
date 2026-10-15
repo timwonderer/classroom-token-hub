@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-STOR-007 | 1.1 | 2026-10-03 | 1.0 | Normative |
+| FEAT-STOR-007 | 1.2 | 2026-10-14 | 1.1 | Normative |
 
 ## I. Purpose
 
@@ -35,7 +35,7 @@ Ledger owns money movement.
 
 ## IV. Cadence
 
-The purchase instant begins the first period. The purchase's class-local calendar date is the cadence anchor. Boundary `n` is `anchored_recurrence_boundary(anchor, cadence, n, overflow = roll_forward)` at class-local midnight (`SPEC-TIME-001` §IX.12); `WEEKLY` is seven class-local calendar days, `MONTHLY` rolls forward when the anchor day does not exist. Every boundary is derived from the anchor, never from the previous boundary.
+The purchase instant begins the first period. The purchase's class-local calendar date is the cadence anchor; for an entitlement granted by continuation (§V.A) the anchor is the class-local date of the boundary where it begins, and its first period begins at that boundary. Boundary `n` is `anchored_recurrence_boundary(anchor, cadence, n, overflow = roll_forward)` at class-local midnight (`SPEC-TIME-001` §IX.12); `WEEKLY` is seven class-local calendar days, `MONTHLY` rolls forward when the anchor day does not exist. Every boundary is derived from the anchor, never from the previous boundary.
 
 ## V. Advance Assessment and Automatic Payment
 
@@ -50,6 +50,21 @@ Automatic satisfaction has the independent available-funds eligibility required 
 If automatic satisfaction fails, the premium remains outstanding and the transaction still commits steps 1–2. The student may satisfy it manually at any later time, before or after its due boundary, through the ordinary obligation payment path. Whether a fee applies to the failed attempt is governed by `SPEC-ECON-003` §4.5.1.1, unchanged by this FEAT.
 
 The FEAT SHALL NOT assess a premium for a period that begins after the lineage's termination.
+
+### V.A Superseded or withdrawn version
+
+Before step 1, the FEAT resolves the version the lineage would renew under. Starting from the current cycle's `policy_uuid`, it follows the successor links (`DOM-POL-001A` §D) to the last version that supersedes it.
+
+- **No successor, and the current version is on sale (`IN_USE`).** Ordinary renewal: steps 1–3 above.
+- **A successor that is on sale.** Continuation (`DOM-STORE-001` §VIII.E.1), in the same transaction, instead of steps 1–3:
+  1. stop renewal of this lineage through the Obligations termination command, as of the reference time, so coverage ends at the current period's end;
+  2. grant a new `INSURANCE` entitlement to the same seat under the successor, effective at that boundary, carrying the entitlement it continues;
+  3. start its lineage: cycle 1 is `[boundary, anchored boundary 1)`, anchored at the boundary's class-local date (§IV), carrying the successor's `policy_uuid`;
+  4. assess cycle 1's premium (the successor's frozen premium, due at the boundary) and attempt automatic satisfaction as in step 3.
+  The new entitlement is then renewed by this FEAT like any other. A continuation is idempotent on the entitlement it continues: a rerun grants nothing further.
+- **Otherwise** (the current version is hidden or retired, and no version superseding it is on sale): stop renewal as in continuation step 1, and grant nothing. Coverage ends at the boundary (`FEAT-STOR-002` §IX.C).
+
+Nonpayment (§VII) is examined first, as always: a lineage terminated for nonpayment neither renews nor continues.
 
 ## VI. Rollover
 
@@ -93,7 +108,9 @@ A run that finds nothing due for an entitlement writes nothing.
 
 ## XI. Postconditions
 
-- After an assessment point: exactly one successor cycle and one premium assessment exist for the next period, and a satisfaction exists if and only if automatic payment succeeded.
+- After an assessment point under ordinary renewal: exactly one successor cycle and one premium assessment exist for the next period, and a satisfaction exists if and only if automatic payment succeeded.
+- After an assessment point under continuation: the lineage is terminated at the current period's end, and exactly one continuing entitlement exists, effective at that boundary, with one cycle and one assessed premium.
+- After an assessment point for a withdrawn version: the lineage is terminated at the current period's end and nothing is granted.
 - After a boundary: the entitlement is usable if and only if Obligations reports its required premiums satisfied and it has not expired.
 - After a nonpayment deadline under `CANCEL_AFTER_X_DAYS` with the triggering premium unsatisfied: the entitlement is `EXPIRED` with a nonpayment cause, the lineage is terminated at the deadline, every premium for a period that began before the deadline is still outstanding or satisfied as before, any unpaid advance premium for a later period is withdrawn, and no later premium is ever assessed.
 
@@ -105,12 +122,15 @@ A run that finds nothing due for an entitlement writes nothing.
 - `SPEC-TIME-001` §IX.12–13
 - `SPEC-ECON-003` §4.4.2, §4.5.1.1
 - `FEAT-OBL-002` (bill-cycle succession)
-- `FEAT-STOR-002` (entitlement expiry)
+- `FEAT-STOR-002` (entitlement expiry; §IX.C teacher cancellation)
+- `FEAT-CLASS-003` (successor link on edit)
 - `FEAT-STOR-003` (claims; eligibility at filing, per-period scope)
 - `FEAT-LED-000` §VIII/XI.5 (typed shared funding, with independent available-funds automatic eligibility)
 - `DOM-CLASS-001` §X (pure banking directives)
 
 ## XIII. Amendment
+
+**1.2 (2026-10-14)** adds §V.A (owner ruling 2026-10-14): a holder of a superseded version continues under the successor through a new entitlement at the boundary, and a withdrawn version with no successor on sale stops renewing. Previously a superseded or withdrawn version renewed indefinitely. Terms still resolve only from the exact `policy_uuid` each lineage carries.
 
 **1.1 (2026-10-03)** clarifies available-funds eligibility using Ledger-owned full-funding evidence including eligible protection. Retains failed automatic attempts, coverage gating and nonpayment lifecycle; universal funding does not create an unconditional automatic debit.
 

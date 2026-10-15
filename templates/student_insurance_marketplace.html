@@ -180,8 +180,14 @@
             <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
               <h2 class="h5 mb-0">{{ cov.title }}</h2>
               {{ badge_pill(cov) }}
-              {% if not cov.premiums_current %}
+              {% if cov.starts_on %}
+              <span class="badge bg-info text-dark">Starts {{ cov.starts_on.strftime('%b %d') }}</span>
+              {% elif not cov.premiums_current %}
               <span class="badge bg-danger">Premium overdue</span>
+              {% elif cov.change and cov.change.kind in ('moving', 'continued') %}
+              <span class="badge bg-info text-dark">Plan changing</span>
+              {% elif cov.change and cov.change.kind in ('ending', 'withdrawn') %}
+              <span class="badge bg-warning text-dark">Ending</span>
               {% elif cov.claims_open_on %}
               <span class="badge bg-warning text-dark">Waiting period</span>
               {% elif cov.last_covered_day %}
@@ -204,10 +210,13 @@
               </div>
               <div class="insurance-fact">
                 <dt>Claims</dt>
-                <dd>{% if cov.claims_open_on %}Open {{ cov.claims_open_on.strftime('%b %d') }}{% elif not cov.premiums_current %}Paused{% else %}Open now{% endif %}</dd>
+                <dd>{% if cov.starts_on %}From {{ cov.starts_on.strftime('%b %d') }}{% elif cov.claims_open_on %}Open {{ cov.claims_open_on.strftime('%b %d') }}{% elif not cov.premiums_current %}Paused{% else %}Open now{% endif %}</dd>
               </div>
               <div class="insurance-fact">
-                {% if cov.last_covered_day %}
+                {% if cov.starts_on %}
+                <dt>Coverage starts</dt>
+                <dd>{{ cov.starts_on.strftime('%b %d, %Y') }}</dd>
+                {% elif cov.last_covered_day %}
                 <dt>Covered through</dt>
                 <dd>{{ cov.last_covered_day.strftime('%b %d, %Y') }}</dd>
                 {% else %}
@@ -219,7 +228,27 @@
 
             <p class="small text-muted mb-0">{{ policy_terms(cov) }}</p>
 
-            {% if cov.last_covered_day %}
+            {% if cov.change and cov.change.kind == 'moving' %}
+            {% call cards.alert_card('info', 'Your teacher changed this plan', icon='update', body_class='mt-3') %}
+            <p class="mb-2">{% if cov.change.on %}From <strong>{{ cov.change.on.strftime('%B %-d, %Y') }}</strong>{% else %}At your next renewal{% endif %}, your coverage moves to <strong>{{ cov.change.successor.title or 'the updated plan' }}</strong>: ${{ "%.2f"|format(cov.change.successor.premium) }} / {{ cov.change.successor.charge_frequency|lower }}.</p>
+            {% set new_terms = policy_terms(cov.change.successor) %}
+            {% if new_terms %}<p class="small mb-2">{{ new_terms }}</p>{% endif %}
+            {% if cov.change.successor.description and cov.change.successor.description != cov.change.successor.title %}<p class="small mb-2">{{ cov.change.successor.description }}</p>{% endif %}
+            <p class="mb-0">{% if cov.change.bill_on %}Its first premium is charged on <strong>{{ cov.change.bill_on.strftime('%B %-d') }}</strong>. {% endif %}If you don't want the new plan, cancel this coverage before then. You stay covered under your current terms until it changes.</p>
+            {% endcall %}
+            {% elif cov.change and cov.change.kind == 'ending' %}
+            {% call cards.alert_card('warning', 'This plan is ending', icon='event_busy', body_class='mt-3') %}
+            <p class="mb-0">Your teacher stopped offering this plan, so it won't renew and you won't be charged again. {% if cov.change.on %}Your coverage ends on <strong>{{ cov.change.on.strftime('%B %-d, %Y') }}</strong>.{% endif %}</p>
+            {% endcall %}
+            {% elif cov.change and cov.change.kind == 'continued' %}
+            {% call cards.alert_card('info', 'Moving to ' ~ (cov.change.successor.title if cov.change.successor else 'the updated plan'), icon='update', body_class='mt-3') %}
+            <p class="mb-0">Your teacher changed this plan. These terms cover you through <strong>{{ cov.last_covered_day.strftime('%B %-d, %Y') if cov.last_covered_day else 'the end of this period' }}</strong>, and the new plan starts on <strong>{{ cov.change.on.strftime('%B %-d, %Y') }}</strong>.</p>
+            {% endcall %}
+            {% elif cov.change and cov.change.kind == 'withdrawn' %}
+            {% call cards.alert_card('warning', 'This plan is ending', icon='event_busy', body_class='mt-3') %}
+            <p class="mb-0">It won't renew, so you won't be charged again. You're still covered — and can file claims for losses — through <strong>{{ cov.last_covered_day.strftime('%B %-d, %Y') }}</strong>.</p>
+            {% endcall %}
+            {% elif cov.last_covered_day %}
             {% call cards.alert_card('warning', 'You cancelled this coverage', icon='event_busy', body_class='mt-3') %}
             <p class="mb-0">It won't renew, so you won't be charged again. You're still covered — and can file claims for losses — through <strong>{{ cov.last_covered_day.strftime('%B %-d, %Y') }}</strong>. After that it ends.</p>
             {% endcall %}

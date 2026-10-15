@@ -15,7 +15,7 @@ related:
 
 ## Overview
 
-A policy is a contract template. Students buy from it; what they buy is frozen at the moment of purchase. That is why the app never lets you change a policy in place — **every save creates a new version with a new identity**, and the old one carries on unchanged for everyone already holding it.
+A policy is a contract template. Students buy from it; what they buy is frozen at the moment of purchase. That is why the app never lets you change a policy in place — **every save creates a new version with a new identity**. Students already holding the old version finish their current period on it, then move to the new version at their next renewal.
 
 **Bills > Insurance** lists what you have built. The list shows policies that are for sale and policies you have hidden; retired ones drop off it entirely.
 
@@ -78,7 +78,7 @@ Pick an existing group from the dropdown or choose **＋ New group…** and name
 Selecting a policy from the list opens the same form, prefilled, with the button relabelled **Save as new version**. That label is literal:
 
 - A **new policy** is written, with its own identifier and your edited terms. It takes over the old one's place on the shelf — same state, and for a grouped policy the same rank.
-- The **old policy is retired**. It stops being purchasable, but it stays readable, because it is still the contract for everyone who bought it.
+- The **old policy is retired**. It stops being purchasable, but it stays readable, because it is still the contract for each holder's current period. At their next renewal, holders move to the new version; they see the change on their insurance page before it's billed and can cancel first.
 
 So an edit is one action, not two: the revision goes on sale and the version it replaced comes off, together. Students only ever see one version of the product for sale.
 
@@ -86,7 +86,7 @@ Grouped policies edit exactly the same way. The original vacates its rank as the
 
 ### Withdrawing a policy
 
-Each row carries **Hide** and **Retire**. Both stop new purchases and neither touches anyone's existing coverage. [Insurance Coverage and Enrollment](insurance-enrollment.md) covers what those states mean for policyholders.
+Each row carries **Hide** and **Retire**. Both stop new purchases, and current holders' coverage stops renewing: it ends when their current period does. [Insurance Coverage and Enrollment](insurance-enrollment.md) covers what those states mean for policyholders.
 
 A hidden policy also carries **Put back on sale**. Hiding is not reversible in the literal sense — a policy row never changes back — so this writes a new policy carrying the hidden one's exact terms and retires the hidden one. The result is the product back on the shelf on the terms you hid it with. Retired policies have no such control; retiring is final.
 
@@ -96,9 +96,9 @@ A hidden policy also carries **Put back on sale**. Hiding is not reversible in t
 > **An edit retires the version you edited, and retiring is permanent.** You cannot go back to the previous terms by undoing the edit — the old policy is closed to new purchases for good. To return to them you would build them again as a new policy. Read your changes back before saving.
 
 > [!IMPORTANT]
-> **Waiting Period delays when a policyholder can claim.** On any policy type, coverage becomes claimable at the start of the class day *N* days after purchase — a seven-day wait bought on a Monday opens the following Monday. A claim filed earlier is refused. Set it to zero if you want coverage effective immediately. Switching tiers within a group is a new purchase, so the new plan's wait starts over.
+> **Waiting Period delays when a policyholder can claim.** On any policy type, coverage becomes claimable at the start of the class day *N* days after purchase — a seven-day wait bought on a Monday opens the following Monday. A claim filed earlier is refused. Set it to zero if you want coverage effective immediately. Switching tiers within a group is a new purchase, so the new plan's wait starts over. Moving to a new version after you edit a policy is not a purchase, so no new wait applies.
 >
-> **Terms are frozen at purchase.** A new version changes what *future* buyers get. Everyone holding the old version keeps the terms they bought until their coverage period ends. This is the lesson the feature exists to teach, and it is why there is no in-place edit.
+> **A period's terms are fixed when it starts.** A new version never changes a period a student has already started; it reaches current holders at their next renewal, and new buyers at once. That is why there is no in-place edit.
 > 
 > **Choose the unpaid-premium rule deliberately.** *Keep billing* never ends a policy, so a student who stops paying piles up premiums while uncovered. *Cancel after N days* ends it and stops the pile-up, but the student loses the coverage. Neither refunds anything.
 

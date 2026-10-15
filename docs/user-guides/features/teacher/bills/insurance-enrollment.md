@@ -39,20 +39,21 @@ On **Bills > Insurance**, each policy in **Existing Policies** shows its state a
 | State | Meaning |
 | --- | --- |
 | For sale | Students can buy it |
-| Hidden — winding down | No new purchases; existing holders keep their coverage |
+| Hidden — ending | No new purchases; current holders' coverage ends with their current period |
 | Retired | Permanently unavailable for new enrollment |
 
-- **Hide** stops new purchases while leaving current policyholders untouched. Use this when you want to phase a product out.
+- **Hide** stops new purchases. Current holders finish the period they're in, and their coverage doesn't renew. Put it back on sale before a student's period ends and their coverage carries on. Use this when you want to phase a product out.
 - **Retire** does the same thing permanently. You are asked to confirm.
 
-Neither one touches anybody's existing coverage. Both are about the shelf, not the contracts already sold.
+Neither one cuts coverage short: a period a student has started always runs to its end.
 
 ### How coverage actually ends
 
-Coverage ends in one of two ways, and never by your hand:
+Coverage ends in one of three ways, and never partway through a period:
 
 - **The student cancels.** Their coverage runs to the end of the last period they are committed to — the current one, or next period if they already paid toward it — and then expires. An unpaid bill for next period is cancelled.
 - **The policy cancels for nonpayment**, if it uses that rule. Coverage expires when the unpaid limit runs out.
+- **You hide or retire the policy.** Coverage doesn't renew; it ends when the student's current period does.
 
 Either way, premiums for periods that had already started stay owed, and paying them later does not restore the coverage. If you turn insurance off for the class, nothing new can be bought, but students who still owe a premium keep their insurance page so they can pay it.
 
@@ -61,7 +62,7 @@ There is no early termination, no refund, and no way for you to revoke a policy 
 ## Important notes
 
 > [!IMPORTANT]
-> **Purchased policies are enforceable contracts.** Editing a policy changes what *future* buyers get. Everyone already holding it keeps the terms they bought until their coverage period ends. This is deliberate — it is the lesson the feature exists to teach.
+> **A period a student has paid for runs on the terms they bought.** When you edit a policy, current holders move to the new version at their next renewal: from then on they're billed its premium and covered by its terms. Students see the change on their insurance page before it's billed and can cancel first. No new waiting period applies when they move.
 
 > [!IMPORTANT]
 > **A Waiting Period is enforced on every policy type.** Claims filed before it elapses are refused. Set it to zero for coverage that is claimable from purchase. See [Insurance Policies](insurance-policies.md).
@@ -70,7 +71,7 @@ There is no early termination, no refund, and no way for you to revoke a policy 
 > **Editing retires the version you edited.** The revision takes the original's place on the shelf and the original comes off, in one action — you do not hide or retire it yourself. [Insurance Policies](insurance-policies.md) covers this.
 
 > [!IMPORTANT]
-> **You cannot revoke a student's coverage.** Not for discipline, not for a policy change, not by hiding or retiring the product. If you need a consequence, use a different tool — insurance is not one of them.
+> **You cannot revoke a student's coverage.** Not for discipline, and not by editing, hiding or retiring the product: those only change what happens at the next renewal. If you need a consequence, use a different tool — insurance is not one of them.
 
 > [!NOTE]
 > **Hiding is reversible, retiring is not.** A hidden policy carries **Put back on sale**, which re-offers its exact terms. A retired policy is permanently unavailable for new enrollment. If you are unsure, hide it.
