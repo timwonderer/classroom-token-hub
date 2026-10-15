@@ -2,13 +2,16 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-OPS-001      | 2.12    | 2026-10-02     | 2.11       | Normative       |
+| DOM-OPS-001      | 2.13    | 2026-10-14     | 2.12       | Constitutional  |
+
+> [!IMPORTANT]
+> **v2.13 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: `DOM-*` documents are Tier 1 (Constitutional), not Tier 2 (Normative) — Normative is reserved for `SPEC-*`/`FEAT-*`/`SOP-*`. No substantive rule in this document changed.
 
 *Revision 2.12 (2026-10-02; ratified by the owner 2026-10-02): §1 Public Request Monitoring — the closed component registry gains `hall_pass`. A 404 on a request-resolution route that `SPEC-OPS-006` designates is a failed request. It is never an outage or an incident. When such 404s reach `SPEC-OPS-006`'s rate-plus-minimum rule, they are a signal of a possible problem: they are reported on that component, and they qualify the overall summary as `Detected problems`, as a fresh 5xx does. Motivated by 2026-10-01, when a teacher's Approve or Reject and a student's Cancel answered 404 "Pending request not found." about half the time while the status page showed nothing: hall passes had no component, and no 404 counted.*
 
 ## 0. Authority Level and Dependencies
 
-Normative. Subordinate to `INV-CORE-000` and `INV-ARC-009`.
+Constitutional. Subordinate to `INV-CORE-000` and `INV-ARC-009`.
 
 ### Dependencies
 

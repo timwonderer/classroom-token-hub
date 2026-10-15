@@ -2,7 +2,10 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-000      | 3.4     | 2026-09-28     | SOP-DOC-000 v3.3 | Foundational |
+| SOP-DOC-000      | 3.5     | 2026-10-14     | SOP-DOC-000 v3.4 | Normative |
+
+> [!IMPORTANT]
+> **v3.5 (2026-10-14), review correction.** The header and §III labelled this document "Foundational (Tier 0)," but its own §V places `docs/STANDARD_OPERATING_PROCEDURES/` (Prefix `SOP-*`) in Tier 2, and §VI's Directory Taxonomy says so explicitly for this document by name: "plus the documentation SOPs at its root (Tier 2)." This document never carved itself out as an exception to the scheme it defines — it is a `SOP-*` document at that root, and its own rule places it in Tier 2 like any other. Corrected the header and §III to agree with §V/§VI. No change to the tier definitions themselves, the directory taxonomy, or any other document's classification.
 
 ---
 
@@ -20,7 +23,7 @@ This standard governs all documentation in the repository, including core invari
 
 ## III. Authority Level
 
-Foundational (Tier 0). Subordinate only to `INV-CORE-000` and `INV-CORE-001`.
+Normative (Tier 2 — SOP Tier), per this document's own §V/§VI classification of the documentation SOPs at the root of `docs/STANDARD_OPERATING_PROCEDURES/`. Subordinate to `INV-CORE-000`, `INV-CORE-001`, and Tier 1 (`INV-ARC-*`, `DOM-*`).
 
 ---
 

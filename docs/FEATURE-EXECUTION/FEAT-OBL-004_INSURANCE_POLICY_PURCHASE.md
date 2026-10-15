@@ -2,7 +2,12 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| FEAT-OBL-004 | 0.4 (DRAFT) | 2026-10-10 | 0.3 (DRAFT) | Normative (proposed) |
+| FEAT-OBL-004 | 1.0 | 2026-10-14 | 0.5 (DRAFT) | Normative |
+
+> [!IMPORTANT]
+> **v1.0 (2026-10-14), owner ruling.** Promoted from DRAFT to final, resolving §XIII's open question: `FEAT-STOR-001` v3.2 already shipped assuming this document's authority, and the owner ruled this document final rather than the other way around. Incorporates v0.5 below.
+>
+> **v0.5 (2026-10-14), documentation modernization.** Fixed two Dependencies/body citations that named a nonexistent file, `FEAT-OBLI-001_ASSESS_OBLIGATION.md`; the real file is `FEAT-OBL-001_ASSESS_OBLIGATION.md`. No content change.
 
 ## I. Purpose
 
@@ -49,7 +54,7 @@ are removed.
 - `DOM-POL-001_POLICIES_DOMAIN.md`
 - `DOM-STORE-001_STORE_AND_ENTITLEMENTS_DOMAIN.md`
 - `DOM-LED-001_LEDGER_DOMAIN.md`
-- `FEAT-OBLI-001_ASSESS_OBLIGATION.md` (premium assessment)
+- `FEAT-OBL-001_ASSESS_OBLIGATION.md` (premium assessment)
 - `FEAT-OBL-003_SATISFY_OBLIGATION.md` (premium satisfaction via payment)
 - `FEAT-OBL-002_ADVANCE_BILL_CYCLE.md` (bill-cycle lineage)
 - `FEAT-LED-000_CANONICAL_MONETARY_RESOLUTION_WORKFLOW.md`, `FEAT-LED-001_POST_LEDGER_TRANSACTION.md`
@@ -156,7 +161,7 @@ arc; FEAT-OBL-002 stays advancement-only.)
 
 ### 2. Assess the first premium obligation (against cycle 1)
 
-Through the lawful Obligations assessment command (FEAT-OBLI-001), write the
+Through the lawful Obligations assessment command (FEAT-OBL-001), write the
 single `ASSESSMENT` event for premium #1:
 
 - `seat_id` = purchasing seat;
