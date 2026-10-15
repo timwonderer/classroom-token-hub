@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.27 | 2026-10-14 | 3.26 | Normative |
+| SOP-DOC-001 | 3.28 | 2026-10-14 | 3.27 | Normative |
 
 ---
 
@@ -276,6 +276,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.28 (2026-10-14), developer-documentation modernization pass:**
+- Register the Authority Level correction: `INV-ARC-000` through `INV-ARC-016`, `INV-ARC-021` and `INV-ARC-022` (all v+0.1, "Foundational" → "Constitutional"), and `DOM-OPS-001` v2.13, `DOM-ITR-001` v1.8, `DOM-STORE-001` v5.6, `DOM-SUP-001` v1.9 (all "Normative" → "Constitutional," `DOM-STORE-001`'s header now matching its own already-correct body). Label corrections only; no dependency, scope, or rule changed in any of the 23 documents. Also registers `SOP-DOC-000` v3.5, carved out of the same reconciliation since it is the document defining the tier scheme: corrected from "Foundational (Tier 0)" to "Normative (Tier 2 — SOP Tier)," matching its own §V/§VI taxonomy.
 
 **Version 3.27 (2026-10-14), developer-documentation modernization pass:**
 - Register SOP-SEC-002 v1.0 (2026-10-11): CodeQL gating configuration, per-alert disposition and recurring backlog review, written off `INCIDENT_2026-10-11_SEC-SAST-GAP-001.md`. This index had already listed SOP-SEC-002 but carried no Change Note for it.
