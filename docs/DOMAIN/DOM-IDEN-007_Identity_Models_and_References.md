@@ -3,7 +3,10 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-IDEN-007 | 1.2 | 2026-09-15 | 1.1 | Constitutional |
+| DOM-IDEN-007 | 1.3 | 2026-10-14 | 1.2 | Constitutional |
+
+> [!IMPORTANT]
+> **v1.3 (2026-10-14), documentation modernization.** §V named the table `identity_profile` (singular); every other reference in the repo (`DOM-CORE-002` §V.1, CLAUDE.md, the model itself) uses `identity_profiles` (plural). Corrected to match. No schema change.
 
 ---
 
@@ -244,7 +247,7 @@ seat_id
 ---
 
 ### `IdentityProfile`
-*(table name: `identity_profile`)*
+*(table name: `identity_profiles`)*
 
 #### Question Answered
 

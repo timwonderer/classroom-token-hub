@@ -2,7 +2,10 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-OBL-002 | 2.1 | 2026-09-24 | 2.0 | Normative |
+| FEAT-OBL-002 | 2.2 | 2026-10-14 | 2.1 | Normative |
+
+> [!IMPORTANT]
+> **v2.2 (2026-10-14), documentation modernization.** Fixed a Dependencies citation that named a nonexistent file, `FEAT-OBLI-001_ASSESS_OBLIGATION.md`; the real file is `FEAT-OBL-001_ASSESS_OBLIGATION.md`. No content change.
 
 ---
 
@@ -100,5 +103,5 @@ If the authoritative source has terminated, no successor cycle is created. Termi
 - `docs/DOMAIN/DOM-OBL-001_OBLIGATIONS_DOMAIN.md`
 - `docs/DOMAIN/DOM-CLASS-001_CLASS_CONFIGURATION_DOMAIN.md`
 - `docs/DOMAIN/DOM-STORE-001_STORE_AND_ENTITLEMENTS_DOMAIN.md`
-- `docs/FEATURE-EXECUTION/FEAT-OBLI-001_ASSESS_OBLIGATION.md`
+- `docs/FEATURE-EXECUTION/FEAT-OBL-001_ASSESS_OBLIGATION.md`
 - `schedule_next_bill_cycle` (Obligations bill-cycle succession command; DOM-OBL-001 §V.7, §VII.2)

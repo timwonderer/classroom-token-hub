@@ -279,6 +279,7 @@ Their surviving content lives at:
 
 **Version 3.26 (2026-10-14), developer-documentation modernization pass:**
 - Register DOM-CLASS-003 v2.6 and FEAT-CLASS-005 v1.3: §V/§IX and §XI stopped describing the overdraft/NSF fee as an active charge (CTH charges none, owner ruling 2026-10-07, `DOM-OBL-001` §II.C), and now name only the flat fee as rebalance-selectable — the overdraft-protection setting (`economic_engine.overdraft_protection_enabled`) and the progressive fee are changed through the Economic Engine evolution command directly, not through the rebalance preview.
+- Register FEAT-IDEN-101 v1.3, FEAT-IDEN-107 v1.2, DOM-IDEN-007 v1.3, DOM-IDEN-002 v2.10, FEAT-OBL-002 v2.2 and FEAT-OBL-004 v0.5 (DRAFT): staleness corrections (credential-hashing wording, an idempotency-lock gap, a table-name typo, and a broken dependency citation) — see `CHANGELOG.md` for detail.
 
 **Version 3.25 (2026-10-06):**
 - Register INV-ARC-008 v1.2, DOM-OPS-002 v1.11, SPEC-PROD-002 v1.4 and SOP-DB-004 v1.2: the owner's compatibility ruling (no bridge, dual-write, fallback or heuristic interpretation; versioned read-side interpretation of retained history only) now stands in the governing documents. INV-ARC-008 drops its "approved bridge code" allowance.
