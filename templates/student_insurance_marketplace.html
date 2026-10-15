@@ -74,7 +74,7 @@
 
 {% macro badge_pill(policy) -%}
 {%- set b = marketing_badges.get(policy.marketing_badge) if policy.marketing_badge else none -%}
-{%- if b %}<span class="badge text-bg-{{ b[1] }} d-inline-flex align-items-center gap-1"><span class="material-symbols-outlined" aria-hidden="true" style="font-size:1em">{{ b[2] }}</span>{{ b[0] }}</span>{% endif -%}
+{%- if b %}<span class="badge text-bg-{{ b[1] }} d-inline-flex align-items-center gap-1"><span class="material-symbols-outlined icon-inherit" aria-hidden="true">{{ b[2] }}</span>{{ b[0] }}</span>{% endif -%}
 {%- endmacro %}
 
 {% macro days(n) -%}{{ n }} day{{ '' if n == 1 else 's' }}{%- endmacro %}
