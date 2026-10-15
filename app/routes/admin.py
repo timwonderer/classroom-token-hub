@@ -108,6 +108,8 @@ from app.services.announcement_service import (
     update_class_announcement,
 )
 from app.services import insurance_definition_service as insurance_defs
+from app.services.insurance_policy_service import MARKETING_BADGES
+from app.services.insurance_premium_helper import build_insurance_premium_helper
 from app.feats.class_configuration import (
     configure_insurance_definition,
     set_insurance_definition_availability,
@@ -5833,6 +5835,7 @@ def _insurance_definition_view(row):
         insurance_type=row.insurance_type,
         title=row.title or "(untitled policy)",
         description=row.description or "",
+        marketing_badge=row.marketing_badge,
         premium=row.premium,
         charge_frequency=row.charge_frequency,
         reimbursement_percentage=row.reimbursement_percentage,
@@ -5896,6 +5899,7 @@ def _insurance_submission_from_form(form):
         "tier_group": tier_group,
         "title": _v("title"),
         "description": _v("description"),
+        "marketing_badge": _v("marketing_badge"),
     }
 
 
@@ -5923,6 +5927,7 @@ def _insurance_submission_from_row(row):
         "tier_group": row.tier_group,
         "title": row.title,
         "description": row.description,
+        "marketing_badge": row.marketing_badge,
     }
 
 
@@ -6026,6 +6031,8 @@ def new_insurance_policy():
                 charge_frequency_choices=_CHARGE_FREQUENCY_CHOICES,
                 nonpayment_mode_choices=_NONPAYMENT_MODE_CHOICES,
                 tier_groups=_existing_tier_groups(class_id),
+                premium_helper=build_insurance_premium_helper(class_id),
+                marketing_badges=MARKETING_BADGES,
             )
         flash(f"Insurance policy '{row.title or row.policy_uuid}' created.", "success")
         return redirect(url_for("admin.insurance_management"))
@@ -6040,6 +6047,8 @@ def new_insurance_policy():
         charge_frequency_choices=_CHARGE_FREQUENCY_CHOICES,
         nonpayment_mode_choices=_NONPAYMENT_MODE_CHOICES,
         tier_groups=_existing_tier_groups(class_id),
+        premium_helper=build_insurance_premium_helper(class_id),
+        marketing_badges=MARKETING_BADGES,
     )
 
 
@@ -6083,6 +6092,8 @@ def edit_insurance_policy(policy_uuid):
                 charge_frequency_choices=_CHARGE_FREQUENCY_CHOICES,
                 nonpayment_mode_choices=_NONPAYMENT_MODE_CHOICES,
                 tier_groups=_existing_tier_groups(class_id),
+                premium_helper=build_insurance_premium_helper(class_id),
+                marketing_badges=MARKETING_BADGES,
             )
         flash(f"Insurance policy '{new_row.title or new_row.policy_uuid}' updated (new version).", "success")
         return redirect(url_for("admin.insurance_management"))
@@ -6097,6 +6108,8 @@ def edit_insurance_policy(policy_uuid):
         charge_frequency_choices=_CHARGE_FREQUENCY_CHOICES,
         nonpayment_mode_choices=_NONPAYMENT_MODE_CHOICES,
         tier_groups=_existing_tier_groups(class_id),
+        premium_helper=build_insurance_premium_helper(class_id),
+        marketing_badges=MARKETING_BADGES,
     )
 
 

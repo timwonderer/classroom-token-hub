@@ -97,18 +97,14 @@ A hidden policy also carries **Put back on sale**. Hiding is not reversible in t
 
 > [!IMPORTANT]
 > **Waiting Period delays when a policyholder can claim.** On any policy type, coverage becomes claimable at the start of the class day *N* days after purchase — a seven-day wait bought on a Monday opens the following Monday. A claim filed earlier is refused. Set it to zero if you want coverage effective immediately. Switching tiers within a group is a new purchase, so the new plan's wait starts over.
-
-> [!IMPORTANT]
+>
 > **Terms are frozen at purchase.** A new version changes what *future* buyers get. Everyone holding the old version keeps the terms they bought until their coverage period ends. This is the lesson the feature exists to teach, and it is why there is no in-place edit.
-
-> [!IMPORTANT]
+> 
 > **Choose the unpaid-premium rule deliberately.** *Keep billing* never ends a policy, so a student who stops paying piles up premiums while uncovered. *Cancel after N days* ends it and stops the pile-up, but the student loses the coverage. Neither refunds anything.
 
 > [!NOTE]
 > **Values outside the recommended range are allowed.** The Economic Engine's suggestions are advisory. Only hard limits are enforced — premium at or above zero, reimbursement at or below 100%, no negative terms.
 
-> [!TIP]
-> Because each revision closes the version before it, it is worth getting a policy right before you announce it. Build it, buy nothing, read it back on the list, and only then tell students it exists.
 
 ## Related guides
 

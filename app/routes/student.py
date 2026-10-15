@@ -1756,7 +1756,7 @@ def insurance_marketplace():
     insurance_for_sale = is_feature_enabled('insurance')
     if not insurance_for_sale and not _has_surviving_premium_state(resolve_canonical_context()):
         abort(404)
-    from app.services.insurance_policy_service import normalize_insurance_type
+    from app.services.insurance_policy_service import MARKETING_BADGES, normalize_insurance_type
     context = resolve_canonical_context()
     if not context:
         flash("No class selected. Please select a class to continue.", "error")
@@ -1776,6 +1776,7 @@ def insurance_marketplace():
                 policy_uuid=d.policy_uuid,
                 title=d.title or "Insurance policy",
                 description=d.description or "",
+                marketing_badge=d.marketing_badge,
                 insurance_type=d.insurance_type,
                 premium=d.premium,
                 charge_frequency=d.charge_frequency,
@@ -1834,6 +1835,7 @@ def insurance_marketplace():
                 policy_uuid=policy_uuid,
                 title=d.title or "Insurance policy",
                 description=d.description or "",
+                marketing_badge=d.marketing_badge,
                 insurance_type=d.insurance_type,
                 premium=d.premium,
                 charge_frequency=d.charge_frequency,
@@ -1886,6 +1888,7 @@ def insurance_marketplace():
         ungrouped_policies=ungrouped_policies,
         owned_coverage=owned_coverage,
         insurance_for_sale=insurance_for_sale,
+        marketing_badges=MARKETING_BADGES,
         my_claims=[_claim_display_row(claim) for claim in _list_insurance_claims(class_id=class_id, target_seat_id=seat_id)],
         now=utc_now(),
     )
