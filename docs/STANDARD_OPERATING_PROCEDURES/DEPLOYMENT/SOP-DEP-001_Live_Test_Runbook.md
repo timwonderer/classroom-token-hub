@@ -269,7 +269,8 @@ flask db current
 ## XI. Full-App First Test
 
 Exercise these in a real browser while the Cloudflare Access gate remains restricted. Each
-line records owner, timestamp, pass/fail/blocked, and notes or defect link.
+line records owner, timestamp, one result from the set defined below this list, and its
+evidence or defect link.
 
 - `/admin/login` renders and submits.
 - `/student/login` renders and submits.
@@ -295,12 +296,24 @@ line records owner, timestamp, pass/fail/blocked, and notes or defect link.
 - Accessibility smoke checks cover the public, login, teacher and student
   surfaces reached in this test (INV-ARC-020).
 
-**What counts as evidence for a line.** A line is *evidenced* when the features
-the operator exercised ran through it, whether or not it was a separate step: a
-student sign-in that passes Turnstile's server-side check could not have done so
-unless the widget rendered and issued a token. A line with several parts, some of
-which no exercised feature reached, is *in part*. A line nothing reached is *not
-exercised*. Record every line under one of these, or as *failed* with its defect.
+**Results.** Every line takes exactly one of these five results:
+
+- *Evidenced*: the features the operator exercised ran through the line and it
+  behaved as the line asserts, whether or not it was a separate step. A student
+  sign-in that passes Turnstile's server-side check could not have done so unless
+  the widget rendered and issued a token.
+- *In part*: a line with several parts, some of which ran and behaved as asserted
+  while no exercised feature reached the others. The evidence names both.
+- *Failed*: the line ran and did not behave as it asserts. The row links the
+  defect.
+- *Blocked*: the line could not be run, for a reason outside the application
+  under test (a missing credential, an unavailable dependency, the Access gate).
+  The row names the blocker.
+- *Not exercised*: nothing the operator ran reached the line, and nothing
+  prevented it.
+
+Only *evidenced* satisfies a line for §XIII; every other result is stated as a
+known risk or deviation before the go/no-go decision.
 
 **Results are recorded as the checks run, not reconstructed afterward.** The
 release record carries one row per line above, in this order, with the columns
@@ -511,7 +524,7 @@ revision; where they disagree, the code wins and this document is corrected.
 
 | Version | Date | Change |
 |---------|------|--------|
-| 2.9 | 2026-10-16 | §XI: evidence standard (a line is evidenced when the exercised features ran through it; *in part* and *not exercised* otherwise) and a per-line results table, recorded during the checks and complete before go/no-go. §XI.A: no deliberate cross-scope attempt on a host serving live classes; the negative half of a "cannot" line is evidenced by the release suite, the positive half by normal use. Both owner rulings of 2026-10-16, after the v2.2.4 record had to reconstruct §XI from logs. |
+| 2.9 | 2026-10-16 | §XI: one result set for every line (*evidenced*, *in part*, *failed*, *blocked*, *not exercised*), replacing pass/fail/blocked; a line is evidenced when the exercised features ran through it and behaved as asserted; a per-line results table, recorded during the checks and complete before go/no-go. §XI.A: no deliberate cross-scope attempt on a host serving live classes; the negative half of a "cannot" line is evidenced by the release suite, the positive half by normal use. Both owner rulings of 2026-10-16, after the v2.2.4 record had to reconstruct §XI from logs. |
 | 2.8 | 2026-10-06 | §XIV: the forward-only list is `migrations/forward_only_register.txt`, enforced against the chain by a test; the prose list was incomplete. Dependencies: `SOP-DB-009` (archived) replaced by `SOP-DB-004`. |
 | 2.7 | 2026-10-04 | §XIV: register the three attendance/payroll recovery revisions that reject all downgrades; preserve snapshot restore or reviewed fix-forward recovery. |
 | 2.6 | 2026-10-01 | §VII: production runs one worker, reverted 2026-10-01 after pending hall-pass requests held in per-process memory failed under two. More than one worker is permitted only when no request or workflow state is held in process memory (enforced by `tests/test_process_local_state_guard.py`). Two workers may be restored after pending hall-pass requests, now `pending_actions` rows, are deployed and verified. |
