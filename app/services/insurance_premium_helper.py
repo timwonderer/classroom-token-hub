@@ -61,8 +61,14 @@ def build_insurance_premium_helper(class_id: str) -> Optional[dict]:
             rent_settings.custom_frequency_value,
             getattr(rent_settings, "custom_frequency_unit", None),
         )
+        # Rent billed at the policy's own frequency is a fixed amount per period, like the premium:
+        # show what students are charged, not a 30-day rescaling of it.
         rent = {
-            frequency: float(_quantize_currency(weekly_rent * Decimal(days) / Decimal(7)))
+            frequency: float(_quantize_currency(
+                Decimal(str(rent_settings.rent_amount))
+                if rent_settings.frequency_type == frequency.lower()
+                else weekly_rent * Decimal(days) / Decimal(7)
+            ))
             for frequency, days in _AUTHORING_DAYS.items()
         }
 
