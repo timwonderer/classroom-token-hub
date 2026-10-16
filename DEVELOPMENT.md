@@ -1,7 +1,7 @@
 # Classroom Token Hub - Development Priorities
 
 **Last Updated:** 2026-10-16 UTC
-**Current Released Version:** 2.2.4 (`68ead4230`), deployed 2026-10-16 UTC. v2.0.0 launched 2026-09-26
+**Current Released Version:** 2.2.4 (`68ead4230`), deployed 2026-10-16 UTC; includes the untagged `03a6feed2` (2026-10-16 UTC: #1592). v2.0.0 launched 2026-09-26
 **Engineering State:** v2 in production; post-launch hardening
 **Active Integration Branch:** `main`
 

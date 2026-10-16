@@ -6,7 +6,7 @@ A classroom behavior management and reward platform with built-in simulated fina
 
 Students earn tokens for the time they work, and spend them on rent, insurance and a class store. Teachers run the class economy without handing over student email addresses, phone numbers or school SSO. Built with Flask, SQLAlchemy and PostgreSQL. Each class period is its own isolated economy.
 
-**In production:** [v2.2.4](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.2.4) (`68ead4230`, deployed 2026-10-16 UTC, [release record](docs/ops/audits/DEPLOY_2026-10-16_68ead4230.md)).
+**In production:** [v2.2.4](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.2.4) (`68ead4230`, deployed 2026-10-16 UTC, [release record](docs/ops/audits/DEPLOY_2026-10-16_68ead4230.md)) plus the untagged `03a6feed2` (2026-10-16 UTC, [release record](docs/ops/audits/DEPLOY_2026-10-16_03a6feed2.md)).
 
 **Latest tag:** ![Version](https://img.shields.io/github/v/release/timwonderer/classroom-token-hub)
 
@@ -244,7 +244,7 @@ Tags mark the exact commit of each tagged release: `v2.0.0` is `26d1792b5` (rele
 - v2.2.1: [DEPLOY_2026-10-10_f98d8a206.md](docs/ops/audits/DEPLOY_2026-10-10_f98d8a206.md)
 - v2.2.2: [DEPLOY_2026-10-11_61b509b7f.md](docs/ops/audits/DEPLOY_2026-10-11_61b509b7f.md)
 - v2.2.3: [DEPLOY_2026-10-12_5d29abb41.md](docs/ops/audits/DEPLOY_2026-10-12_5d29abb41.md), and the untagged `79cbb2615` that followed it: [DEPLOY_2026-10-13_79cbb2615.md](docs/ops/audits/DEPLOY_2026-10-13_79cbb2615.md)
-- v2.2.4: [DEPLOY_2026-10-16_68ead4230.md](docs/ops/audits/DEPLOY_2026-10-16_68ead4230.md)
+- v2.2.4: [DEPLOY_2026-10-16_68ead4230.md](docs/ops/audits/DEPLOY_2026-10-16_68ead4230.md), and the untagged `03a6feed2` that followed it: [DEPLOY_2026-10-16_03a6feed2.md](docs/ops/audits/DEPLOY_2026-10-16_03a6feed2.md)
 
 Five untagged releases from `main` followed v2.0.1, each through the release workflow. On 2026-09-29: `bc5c07a2` (#1439, the payroll fix for the 2026-09-28 incident), `eaca2a7e` (#1440, a one-time payroll correction for teachers to review), `29b99b14` (#1442, the username retention check) and `00166e56` (#1443). None of these four has a release record in `docs/ops/audits/` yet. On 2026-09-30: `314158d53` (#1438, #1449, #1451).
 
