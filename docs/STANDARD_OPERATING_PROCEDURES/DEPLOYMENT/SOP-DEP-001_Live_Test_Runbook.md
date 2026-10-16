@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-001      | 2.8     | 2026-10-06     | 2.7 | Normative |
+| SOP-DEP-001      | 2.9     | 2026-10-16     | 2.8 | Normative |
 
 ## I. Purpose
 
@@ -295,10 +295,36 @@ line records owner, timestamp, pass/fail/blocked, and notes or defect link.
 - Accessibility smoke checks cover the public, login, teacher and student
   surfaces reached in this test (INV-ARC-020).
 
+**What counts as evidence for a line.** A line is *evidenced* when the features
+the operator exercised ran through it, whether or not it was a separate step: a
+student sign-in that passes Turnstile's server-side check could not have done so
+unless the widget rendered and issued a token. A line with several parts, some of
+which no exercised feature reached, is *in part*. A line nothing reached is *not
+exercised*. Record every line under one of these, or as *failed* with its defect.
+
+**Results are recorded as the checks run, not reconstructed afterward.** The
+release record carries one row per line above, in this order, with the columns
+*§XI line*, *Result*, *Owner*, *Time (UTC)* and *Evidence or defect*, filled in
+during the checks and complete before the go/no-go decision (§XIII). A row's
+evidence names what ran (route, action, status, the build it ran on), not a
+verdict (§XI.A item 6). The table lives in the record under `docs/ops/audits/`,
+never in a copy of this runbook (§II).
+
 ### XI.A How to exercise the adversarial items
 
 Several §XI lines assert that something **cannot** happen — a query parameter
-cannot choose the class, an action cannot cross the class boundary. A negative
+cannot choose the class, an action cannot cross the class boundary.
+
+**On a host serving live classes, no deliberate cross-scope attempt is made.**
+A crafted request against another class, or a stale form submitted into a class
+other than the one it was rendered for, is a vulnerability test against real
+classrooms, and that is not the operator's role, even for classes the operator
+owns (owner ruling, 2026-10-16). There, such a line is split: its positive half
+is evidenced by normal use (every exercised action landed in its own class, as
+item 5 confirms at the data layer), and its negative half by the release suite's
+class-isolation tests, named in the record with their result on the suite run.
+Items 2 and 3 below apply as written only on a host holding no live classroom
+data, such as a rehearsal deployment. A negative
 result is weak evidence by default, because "the protection worked" and "the
 request never really arrived" look identical from the outside. The techniques
 below exist to tell those apart, and were derived from the 2026-09-20 session
@@ -485,6 +511,7 @@ revision; where they disagree, the code wins and this document is corrected.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.9 | 2026-10-16 | §XI: evidence standard (a line is evidenced when the exercised features ran through it; *in part* and *not exercised* otherwise) and a per-line results table, recorded during the checks and complete before go/no-go. §XI.A: no deliberate cross-scope attempt on a host serving live classes; the negative half of a "cannot" line is evidenced by the release suite, the positive half by normal use. Both owner rulings of 2026-10-16, after the v2.2.4 record had to reconstruct §XI from logs. |
 | 2.8 | 2026-10-06 | §XIV: the forward-only list is `migrations/forward_only_register.txt`, enforced against the chain by a test; the prose list was incomplete. Dependencies: `SOP-DB-009` (archived) replaced by `SOP-DB-004`. |
 | 2.7 | 2026-10-04 | §XIV: register the three attendance/payroll recovery revisions that reject all downgrades; preserve snapshot restore or reviewed fix-forward recovery. |
 | 2.6 | 2026-10-01 | §VII: production runs one worker, reverted 2026-10-01 after pending hall-pass requests held in per-process memory failed under two. More than one worker is permitted only when no request or workflow state is held in process memory (enforced by `tests/test_process_local_state_guard.py`). Two workers may be restored after pending hall-pass requests, now `pending_actions` rows, are deployed and verified. |

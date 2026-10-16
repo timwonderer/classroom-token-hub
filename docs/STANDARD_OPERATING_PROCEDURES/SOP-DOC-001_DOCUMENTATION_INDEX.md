@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.28 | 2026-10-14 | 3.27 | Normative |
+| SOP-DOC-001 | 3.29 | 2026-10-16 | 3.28 | Normative |
 
 ---
 
@@ -175,7 +175,7 @@ Archived material is deliberately absent; see §VI.
 - [SOP-DB-004 — Live-v2 Migration and Semantic-Versioning Contract](DATABASE/SOP-DB-004_Live_V2_Migration_And_Versioning_Contract.md)
 
 ### Procedures — Deployment (SOP-DEP)
-- [SOP-DEP-001 — v2 Live-Test Runbook](DEPLOYMENT/SOP-DEP-001_Live_Test_Runbook.md) — v2.7: §XIV lists the forward-only Ledger posting, compensation provenance, and attendance invalidation revisions.
+- [SOP-DEP-001 — v2 Live-Test Runbook](DEPLOYMENT/SOP-DEP-001_Live_Test_Runbook.md) — v2.9: §XI evidence standard and per-line results table; §XI.A no cross-scope attempts on a host serving live classes.
 - [SOP-DEP-002 — v2 Production Transition Runbook](DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md)
 
 ### Procedures — DevOps (SOP-DEV)
@@ -276,6 +276,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.29 (2026-10-16):**
+- Register SOP-DEP-001 v2.9: §XI evidence standard and per-line results table recorded during the checks; §XI.A forbids deliberate cross-scope attempts on a host serving live classes (owner rulings, 2026-10-16).
 
 **Version 3.28 (2026-10-14), developer-documentation modernization pass:**
 - Register the Authority Level correction: `INV-ARC-000` through `INV-ARC-016`, `INV-ARC-021` and `INV-ARC-022` (all v+0.1, "Foundational" → "Constitutional"), and `DOM-OPS-001` v2.13, `DOM-ITR-001` v1.8, `DOM-STORE-001` v5.6, `DOM-SUP-001` v1.9 (all "Normative" → "Constitutional," `DOM-STORE-001`'s header now matching its own already-correct body). Label corrections only; no dependency, scope, or rule changed in any of the 23 documents. Also registers `SOP-DOC-000` v3.5, carved out of the same reconciliation since it is the document defining the tier scheme: corrected from "Foundational (Tier 0)" to "Normative (Tier 2 — SOP Tier)," matching its own §V/§VI taxonomy.
