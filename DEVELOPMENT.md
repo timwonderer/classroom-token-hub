@@ -1,7 +1,7 @@
 # Classroom Token Hub - Development Priorities
 
-**Last Updated:** 2026-10-13 UTC
-**Current Released Version:** 2.2.3 (`5d29abb41`), deployed 2026-10-12 UTC; includes the untagged `79cbb2615` (2026-10-13 UTC: #1559, #1564). v2.0.0 launched 2026-09-26
+**Last Updated:** 2026-10-16 UTC
+**Current Released Version:** 2.2.4 (`68ead4230`), deployed 2026-10-16 UTC. v2.0.0 launched 2026-09-26
 **Engineering State:** v2 in production; post-launch hardening
 **Active Integration Branch:** `main`
 
@@ -98,6 +98,11 @@ on a custom database URL.
   financial F1–F10; operational O1–O5, O8) and the CodeQL `security-extended` backlog fixes. Migration
   `6a01dc7a606b` makes obligation assessment replay-safe. See the `[2.2.3]` section of the CHANGELOG and
   `docs/ops/audits/DEPLOY_2026-10-12_5d29abb41.md`.
+- **v2.2.4** (`68ead4230`, deployed 2026-10-16): insurance descriptions before purchase, marketing badges and the
+  Economic Engine premium suggestion (#1587); editing a policy moves its holders to the new version at renewal,
+  and hiding or retiring one ends coverage at the boundary (#1588). Includes the untagged `79cbb2615` (#1559,
+  #1564). Migrations `e5b7c9d1f3a4` and `f6c8d0e2a4b5` add two nullable insurance-policy columns. See the
+  `[2.2.4]` section of the CHANGELOG and `docs/ops/audits/DEPLOY_2026-10-16_68ead4230.md`.
 - All ten domains (Identity, Class Configuration, Ledger, Productivity & Payroll, Obligations,
   Store & Entitlements, Operations, Interpretation, Policies, Support) run on the v2 model:
   `User` → `Seat` → `IdentityProfile`, with `ClassEconomy.class_id` as the tenant boundary and

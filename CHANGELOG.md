@@ -10,7 +10,7 @@ and this project follows semantic versioning principles.
 
 ## [2.2.4] - 2026-10-16 — Insurance: descriptions before purchase, badges, premium suggestion, and edits that reach current holders
 
-Includes `79cbb2615`, released untagged on 2026-10-13 at 03:19 UTC by release run [38341128952](https://github.com/timwonderer/classroom-token-hub/actions/runs/38341128952) ([record](docs/ops/audits/DEPLOY_2026-10-13_79cbb2615.md)): #1559 (PROD-PAY-001 reporting fix) and #1564 (Werkzeug 3.1.9, Mako 1.4.2).
+Released as `68ead4230` on 2026-10-16 at 03:57 UTC by release run [38848094348](https://github.com/timwonderer/classroom-token-hub/actions/runs/38848094348). Migrations `e5b7c9d1f3a4`, `f6c8d0e2a4b5`. Record: [DEPLOY_2026-10-16_68ead4230.md](docs/ops/audits/DEPLOY_2026-10-16_68ead4230.md). Includes `79cbb2615`, released untagged on 2026-10-13 at 03:19 UTC by release run [38341128952](https://github.com/timwonderer/classroom-token-hub/actions/runs/38341128952) ([record](docs/ops/audits/DEPLOY_2026-10-13_79cbb2615.md)): #1559 (PROD-PAY-001 reporting fix) and #1564 (Werkzeug 3.1.9, Mako 1.4.2).
 
 ### Added
 
