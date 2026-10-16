@@ -51,6 +51,17 @@ def test_rent_is_scaled_to_each_billing_frequency(class_id, monkeypatch):
     assert build_insurance_premium_helper(class_id)["rent"] == {"WEEKLY": 70.0, "MONTHLY": 300.0}
 
 
+def test_monthly_rent_shows_the_billed_amount_on_a_monthly_policy(class_id, monkeypatch):
+    """$600/month rent is $600 against a monthly premium, not a 30-day rescaling ($591.39)."""
+    monkeypatch.setattr(helper_mod, "is_feature_enabled", lambda cid, feature: feature == "rent")
+    monkeypatch.setattr(helper_mod, "get_rent_settings", lambda cid: SimpleNamespace(
+        rent_amount=Decimal("600.00"), frequency_type="monthly",
+        custom_frequency_value=None, custom_frequency_unit=None))
+    rent = build_insurance_premium_helper(class_id)["rent"]
+    assert rent["MONTHLY"] == 600.0
+    assert rent["WEEKLY"] < 600.0 / 4  # still the weekly equivalent for a weekly policy
+
+
 def test_retained_rent_row_ignored_while_rent_is_off(class_id, monkeypatch):
     _weekly_rent_row(monkeypatch, enabled=False)
     assert build_insurance_premium_helper(class_id)["rent"] is None
