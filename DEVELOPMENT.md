@@ -103,6 +103,9 @@ on a custom database URL.
   and hiding or retiring one ends coverage at the boundary (#1588). Includes the untagged `79cbb2615` (#1559,
   #1564). Migrations `e5b7c9d1f3a4` and `f6c8d0e2a4b5` add two nullable insurance-policy columns. See the
   `[2.2.4]` section of the CHANGELOG and `docs/ops/audits/DEPLOY_2026-10-16_68ead4230.md`.
+- **Untagged `03a6feed2`** (deployed 2026-10-16): the insurance premium suggestion shows monthly rent as billed
+  on a monthly policy, not rescaled over 30 days (#1592), found by the v2.2.4 browser checks. No migration. See
+  `docs/ops/audits/DEPLOY_2026-10-16_03a6feed2.md`.
 - All ten domains (Identity, Class Configuration, Ledger, Productivity & Payroll, Obligations,
   Store & Entitlements, Operations, Interpretation, Policies, Support) run on the v2 model:
   `User` → `Seat` → `IdentityProfile`, with `ClassEconomy.class_id` as the tenant boundary and
