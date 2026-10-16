@@ -8,13 +8,15 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+Released untagged as `03a6feed2` on 2026-10-16 at 04:29 UTC by release run [38850886428](https://github.com/timwonderer/classroom-token-hub/actions/runs/38850886428) ([record](docs/ops/audits/DEPLOY_2026-10-16_03a6feed2.md)): #1592 (premium helper monthly rent).
+
 ### Fixed
 
 - **The insurance premium suggestion showed monthly rent as slightly less than students are billed.** On a monthly policy, "After rent" converted the class's monthly rent to a weekly figure and back over a 30-day month, so $600.00 a month read as $591.39 (reported by the owner on production after the v2.2.4 release). Rent billed at the policy's own frequency is a fixed amount per period, like the premium, so `app/services/insurance_premium_helper.py` now shows the billed amount when the frequencies match, and still scales when they differ (weekly rent on a monthly policy, monthly rent on a weekly one). Test: `test_monthly_rent_shows_the_billed_amount_on_a_monthly_policy`, confirmed to fail without the fix (`591.39 == 600.0`).
 
 ## [2.2.4] - 2026-10-16 — Insurance: descriptions before purchase, badges, premium suggestion, and edits that reach current holders
 
-Includes `79cbb2615`, released untagged on 2026-10-13 at 03:19 UTC by release run [38341128952](https://github.com/timwonderer/classroom-token-hub/actions/runs/38341128952) ([record](docs/ops/audits/DEPLOY_2026-10-13_79cbb2615.md)): #1559 (PROD-PAY-001 reporting fix) and #1564 (Werkzeug 3.1.9, Mako 1.4.2).
+Released as `68ead4230` on 2026-10-16 at 03:57 UTC by release run [38848094348](https://github.com/timwonderer/classroom-token-hub/actions/runs/38848094348). Migrations `e5b7c9d1f3a4`, `f6c8d0e2a4b5`. Record: [DEPLOY_2026-10-16_68ead4230.md](docs/ops/audits/DEPLOY_2026-10-16_68ead4230.md). Includes `79cbb2615`, released untagged on 2026-10-13 at 03:19 UTC by release run [38341128952](https://github.com/timwonderer/classroom-token-hub/actions/runs/38341128952) ([record](docs/ops/audits/DEPLOY_2026-10-13_79cbb2615.md)): #1559 (PROD-PAY-001 reporting fix) and #1564 (Werkzeug 3.1.9, Mako 1.4.2).
 
 ### Added
 
