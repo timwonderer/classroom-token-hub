@@ -10,6 +10,10 @@ and this project follows semantic versioning principles.
 
 Released untagged as `03a6feed2` on 2026-10-16 at 04:29 UTC by release run [38850886428](https://github.com/timwonderer/classroom-token-hub/actions/runs/38850886428) ([record](docs/ops/audits/DEPLOY_2026-10-16_03a6feed2.md)): #1592 (premium helper monthly rent).
 
+### Changed
+
+- **`SOP-DEP-001` 2.9: how browser-check lines are evidenced, recorded and kept off live classes** (owner rulings 2026-10-16). §XI: every line takes one of five results, *evidenced*, *in part*, *failed*, *blocked* or *not exercised*, replacing pass/fail/blocked; a line counts as evidenced when the features the operator exercised ran through it and behaved as asserted, whether or not it was a separate step. Results go in a per-line table in the release record (line, result, owner, time, evidence), filled in during the checks and complete before go/no-go, so a record no longer has to reconstruct them from logs as v2.2.4's did. §XI.A: no deliberate cross-scope attempt is made on a host serving live classes, even against the operator's own classes; the positive half of a "cannot" line comes from normal use and the negative half from the release suite's class-isolation tests. Registered in `SOP-DOC-001` 3.29. The v2.2.4 deployed full-suite artifacts are now preserved under `docs/ops/audits/evidence/2026-10-15_pytest-full_388ffdb91/`, as §XV requires.
+
 ### Fixed
 
 - **The insurance premium suggestion showed monthly rent as slightly less than students are billed.** On a monthly policy, "After rent" converted the class's monthly rent to a weekly figure and back over a 30-day month, so $600.00 a month read as $591.39 (reported by the owner on production after the v2.2.4 release). Rent billed at the policy's own frequency is a fixed amount per period, like the premium, so `app/services/insurance_premium_helper.py` now shows the billed amount when the frequencies match, and still scales when they differ (weekly rent on a monthly policy, monthly rent on a weekly one). Test: `test_monthly_rent_shows_the_billed_amount_on_a_monthly_policy`, confirmed to fail without the fix (`591.39 == 600.0`).
