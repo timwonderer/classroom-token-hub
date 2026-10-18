@@ -71,3 +71,50 @@ def test_DOM_CLASS_001__apply_savings_interest_with_canonical_historical_admissi
     days = round((window.end_utc - claim_day.boundary_start_utc).total_seconds() / 86400)
     expected = (Decimal("100") * Decimal("0.045") / 365 * days).quantize(Decimal("0.01"))
     assert interest_tx.amount == expected
+
+
+def test_INV_LED_016__scheduled_interest_posts_mechanism_system(client, app):
+    """Scheduled interest is a system-triggered process no human decided to
+    trigger in the moment (DOM-LED-001 INV-LED-016) -- never mechanism=SELF,
+    which would misclassify it as the student's own voluntary act and make it
+    invisible to Interpretation's student-originated exclusion (SPEC-ITR-001
+    §6.3)."""
+    classroom = initialize("chemistry_p1", app)
+    test_student = classroom.students[0].seat
+    past_date = datetime.now(timezone.utc) - timedelta(days=31)
+    from tests.helpers.ledger import record_ledger_fixture
+    with FEATContext("FEAT-LED-001", idempotency_key="interest:test_mechanism_system"):
+        record_ledger_fixture(
+            seat_id=test_student.id, class_id=test_student.class_id,
+            amount=Decimal("100.00"), account_type="savings",
+            description="Initial savings deposit", timestamp=past_date,
+            posted=True,
+        )
+
+    from app.services.ledger_interest_service import (
+        apply_savings_interest,
+        payout_window_containing,
+    )
+    window = payout_window_containing(
+        test_student.class_id, "monthly", datetime.now(timezone.utc)
+    )
+    with FEATContext("FEAT-LED-001", idempotency_key="interest:test_mechanism_system_run"):
+        apply_savings_interest(
+            test_student,
+            annual_rate=Decimal("0.045"),
+            reference_time_utc=window.end_utc + timedelta(hours=1),
+        )
+
+    interest_tx = (
+        Transaction.query.filter_by(
+            seat_id=test_student.id,
+            class_id=test_student.class_id,
+            description="Monthly Savings Interest",
+            account_type='savings',
+        )
+        .order_by(Transaction.id.desc())
+        .first()
+    )
+
+    assert interest_tx is not None
+    assert interest_tx.mechanism == "system"
