@@ -2,11 +2,13 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-LED-005 | 1.1 | 2026-10-18 | 1.0 | Normative |
+| FEAT-LED-005 | 1.2 | 2026-10-18 | 1.1 | Normative |
 
 ---
 
 > [!IMPORTANT]
+> **v1.2 (2026-10-18).** The cutover PR has landed: `FEAT-LED-005` is registered in `app/feats/base.py`'s FEAT registry, and `app/routes/student.py`'s internal-transfer route now opens `FEATContext("FEAT-LED-005", ...)`. A structural guard (`tests/guards/feat_led_000_route_usage.py`, `tests/test_feat_led_000_route_guard.py`) fails the build if any `app/routes/` file reopens `FEAT-LED-000`. §VIII's invariants now describe live runtime behavior, not a target state. §IX's DB `CHECK` constraint and write-time casing validator remain not yet deployed — that enforcement is still a separate, not-yet-landed PR.
+>
 > **v1.1 (2026-10-18).** This contract is prospective: it establishes the design this FEAT must satisfy once a later PR performs the runtime cutover. As of this revision, `app/routes/student.py`'s internal-transfer route still opens `FEATContext("FEAT-LED-000")`, and `FEAT-LED-005` is not yet registered in `app/feats/base.py`'s FEAT registry. Attempting to open `FEATContext("FEAT-LED-005")` today raises `FEATContextError` (unregistered FEAT). §VIII's invariants describe the target state this FEAT's cutover PR must achieve, not current runtime behavior. Also restructures this document to the required section order (`SOP-DOC-000` §VIII): Purpose, Scope, Authority Level, Dependencies, content, Amendment — v1.0 omitted Scope and Authority Level and ended with Change Notes instead of Amendment.
 
 ## I. Purpose
@@ -85,13 +87,13 @@ This FEAT SHALL NOT persist a transfer "status," "history summary," or any proje
 
 ## VIII. Invariants
 
-These describe the target state the cutover PR must achieve; see the v1.1 note above for current runtime status.
+These describe live runtime behavior as of v1.2; see the v1.2 note above.
 
 1. An internal transfer's two legs share exactly one `correlation_id` and are created and committed atomically (`DOM-LED-001` INV-LED-014).
 2. `mechanism = SELF` on both legs — this is always a student's own voluntary act; this FEAT supplies that value explicitly, never inferring it (`DOM-LED-001` INV-LED-016).
 3. An internal transfer never crosses seats: `target_seat_id == actor_seat_id == seat_id` for both legs.
 4. No protection transfer, fee, or obligation is evaluated or created by this FEAT.
-5. Once the cutover PR lands, this FEAT is the only lawful top-level `FEATContext` for the internal-transfer route; no code path may open `FEAT-LED-000` for this purpose.
+5. This FEAT is the only lawful top-level `FEATContext` for the internal-transfer route; no code path may open `FEAT-LED-000` for this purpose (enforced by the structural guard named in the v1.2 note above).
 
 ## IX. Enforcement Scope for the DB `CHECK` Constraint and Write-Time Validator
 
@@ -99,9 +101,11 @@ The DB `CHECK` constraint and write-time casing validator for `Transaction.type`
 
 ## X. Amendment
 
-Increment the version and effective date, identify superseded rules, and preserve the governing INV and DOM hierarchy. Runtime implementation requires separate code work, tracked by the cutover PR referenced throughout this document.
+Increment the version and effective date, identify superseded rules, and preserve the governing INV and DOM hierarchy. The §IX DB `CHECK` constraint and write-time casing validator are separate code work, tracked by their own not-yet-landed PR.
 
 ### Change Notes
+
+**1.2 (2026-10-18)** records that the cutover PR landed: `FEAT-LED-005` is registered and the internal-transfer route runs under it, guarded against regression back to `FEAT-LED-000`. §VIII and §X updated from prospective to live-runtime phrasing. No change to transfer mechanics, funding rules, or the effect-pair shape. §IX's DB `CHECK`/casing-validator enforcement remains undeployed.
 
 **1.0 (2026-10-18)** establishes `FEAT-LED-005` as the dedicated top-level orchestration identity for the internal-transfer route, replacing its prior (incorrect) use of `FEAT-LED-000`. No change to transfer mechanics, funding rules, or the effect-pair shape — this is an identity/orchestration-boundary correction, not a behavior change.
 
