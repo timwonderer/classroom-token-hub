@@ -2,11 +2,13 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-LED-005 | 1.1 | 2026-10-18 | 1.0 | Normative |
+| FEAT-LED-005 | 1.2 | 2026-10-18 | 1.1 | Normative |
 
 ---
 
 > [!IMPORTANT]
+> **v1.2 (2026-10-18).** §IX's DB `CHECK` constraint has landed (migration `a4d7e9c2f1b6`); its write-time casing validator has not. This FEAT's own route/registry cutover (described by the v1.1 note below) is unaffected by this PR and remains prospective until its own cutover PR lands.
+>
 > **v1.1 (2026-10-18).** This contract is prospective: it establishes the design this FEAT must satisfy once a later PR performs the runtime cutover. As of this revision, `app/routes/student.py`'s internal-transfer route still opens `FEATContext("FEAT-LED-000")`, and `FEAT-LED-005` is not yet registered in `app/feats/base.py`'s FEAT registry. Attempting to open `FEATContext("FEAT-LED-005")` today raises `FEATContextError` (unregistered FEAT). §VIII's invariants describe the target state this FEAT's cutover PR must achieve, not current runtime behavior. Also restructures this document to the required section order (`SOP-DOC-000` §VIII): Purpose, Scope, Authority Level, Dependencies, content, Amendment — v1.0 omitted Scope and Authority Level and ended with Change Notes instead of Amendment.
 
 ## I. Purpose
@@ -95,7 +97,9 @@ These describe the target state the cutover PR must achieve; see the v1.1 note a
 
 ## IX. Enforcement Scope for the DB `CHECK` Constraint and Write-Time Validator
 
-The DB `CHECK` constraint and write-time casing validator for `Transaction.type` (`DOM-LED-001` INV-LED-017) are deployed by the cutover PR this contract anticipates, not by this document. That PR's allow-list MUST be drawn from INV-LED-017's canonical/legacy enumeration table, not re-derived from current writers.
+The DB `CHECK` constraint for `Transaction.type` (`DOM-LED-001` INV-LED-017) is deployed: migration `a4d7e9c2f1b6` adds `ck_ledger_transaction_type_closed_vocabulary`, enumerating INV-LED-017's full canonical/legacy table (`NULL` still permitted). It accepts either spelling of an aliased value (`Interest`/`interest`, `REVERSAL`/`reversal`, `Withdrawal`/`withdrawal`, `Deposit`/`deposit`) on a new row — it closes the set of lawful values, not the spelling a new row must use within that set.
+
+The write-time casing validator — rejecting a legacy-cased value on a *new* row while the CHECK constraint continues to accept it on historical rows — remains undeployed. It is separate, later scope: it requires every current legacy-cased writer (`ledger_transfer_service.py`, `ledger_interest_service.py`, `ledger_recovery_service.py`, `ledger_correction_service.py`) to switch to canonical spelling, and every read/comparison site that still expects the legacy spelling — most critically `app/utils/transaction_idempotency.py`'s `IDEMPOTENT_TRANSACTION_TYPES` and `_AMOUNT_EXCLUDED_FROM_FINGERPRINT_TYPES`, whose silent mis-update would break interest-posting idempotency — to accept both spellings or be updated in lockstep. That PR's allow-list MUST still be drawn from INV-LED-017's canonical/legacy enumeration table, not re-derived from current writers.
 
 ## X. Amendment
 
@@ -106,3 +110,5 @@ Increment the version and effective date, identify superseded rules, and preserv
 **1.0 (2026-10-18)** establishes `FEAT-LED-005` as the dedicated top-level orchestration identity for the internal-transfer route, replacing its prior (incorrect) use of `FEAT-LED-000`. No change to transfer mechanics, funding rules, or the effect-pair shape — this is an identity/orchestration-boundary correction, not a behavior change.
 
 **1.1 (2026-10-18)** restructures the document to `SOP-DOC-000` §VIII's required section order and corrects v1.0's description of this FEAT as a live context: it is prospective until its cutover PR registers it in `app/feats/base.py` and moves `app/routes/student.py`'s transfer route onto it. Adds §IX clarifying that the `type` enforcement mechanisms belong to that same later PR, not to this contract. No change to transfer mechanics, funding rules, or the effect-pair shape.
+
+**1.2 (2026-10-18)** records that the DB `CHECK` constraint half of §IX has landed (migration `a4d7e9c2f1b6`), independently of this FEAT's own route/registry cutover (tracked separately; see the v1.1 note above for that status). The write-time casing validator remains the one item of §IX's original scope still undeployed. No change to transfer mechanics, funding rules, the effect-pair shape, or this FEAT's own orchestration status.

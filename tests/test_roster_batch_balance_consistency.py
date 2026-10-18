@@ -71,7 +71,7 @@ def test_F9__batch_balance_read_is_one_statement(app, seat):
         with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"f9-pending:{seat['seat_id']}"):
             create_ledger_pending_transaction(
                 seat_id=seat["seat_id"], class_id=seat["class_id"], amount=Decimal("5.00"),
-                account_type="checking", type="manual_credit", description="Pending credit",
+                account_type="checking", type="manual_payment", description="Pending credit",
             )
         db.session.commit()
 
@@ -108,7 +108,7 @@ def test_F9__balance_reflects_posted_plus_pending(app, seat):
         with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"f9-pending2:{seat['seat_id']}"):
             create_ledger_pending_transaction(
                 seat_id=seat["seat_id"], class_id=seat["class_id"], amount=Decimal("5.00"),
-                account_type="checking", type="manual_credit", description="Pending credit",
+                account_type="checking", type="manual_payment", description="Pending credit",
             )
         db.session.commit()
 
@@ -132,7 +132,7 @@ def test_F9__pending_transaction_before_any_snapshot_still_counts(app, seat):
         with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"f9-nosnap:{seat['seat_id']}"):
             create_ledger_pending_transaction(
                 seat_id=seat["seat_id"], class_id=seat["class_id"], amount=Decimal("7.00"),
-                account_type="checking", type="manual_credit", description="Pending credit",
+                account_type="checking", type="manual_payment", description="Pending credit",
             )
         db.session.commit()
 

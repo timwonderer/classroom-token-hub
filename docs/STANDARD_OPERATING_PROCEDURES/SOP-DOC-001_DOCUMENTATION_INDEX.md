@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.31 | 2026-10-18 | 3.30 | Normative |
+| SOP-DOC-001 | 3.32 | 2026-10-18 | 3.31 | Normative |
 
 ---
 
@@ -277,6 +277,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.32 (2026-10-18):**
+- Register DOM-LED-001 v2.17: deploys the DB `CHECK` constraint half of INV-LED-017 (migration `a4d7e9c2f1b6`, `ck_ledger_transaction_type_closed_vocabulary`), enumerating the invariant's own canonical/legacy table as the only lawful `ledger_transaction.type` values (`NULL` still permitted). Closes the set of lawful values; does not yet enforce canonical spelling on new rows (the write-time casing validator is separate, later scope). Also registers FEAT-LED-005 v1.2 (records the constraint's landing independently of this FEAT's own still-pending route/registry cutover) and SPEC-ITR-001 v1.6 (§6.6/P4 updated to reflect the constraint's partial enforcement). No existing row's `type` value changes. PR 5 of the approved PR sequence from the SYSTEM_ORIGINATED_FEAT_CODES investigation.
 
 **Version 3.31 (2026-10-18):**
 - Register DOM-LED-001 v2.16: INV-LED-014 names `build_transfer_effect_pair` (`app/services/ledger_transfer_service.py`) as the sole pure constructor of a transfer's two-leg effect vector's shared fields, replacing the standalone internal-transfer command's and the overdraft-protection funding legs' independent inline effect-dict construction with one shared builder. `create_transfer_pair` keeps its own dedicated `_command_fingerprint` reservation/replay path (SPEC-LED-002 §4.2); only the two effects' shared fields are now built in common. No effect shape, invariant, or historical row changes. PR 3 of the approved PR sequence from the SYSTEM_ORIGINATED_FEAT_CODES investigation.

@@ -590,6 +590,36 @@ class Transaction(db.Model):
         ),
         db.UniqueConstraint('class_id', 'posting_sequence', name='uq_ledger_transaction_class_posting_sequence'),
         db.CheckConstraint("compensation_amount_cents IS NULL OR (compensation_amount_cents >= 0 AND (compensation_amount_cents = 0 OR (amount_cents = -compensation_amount_cents AND compensation_origin_locator IS NOT NULL AND correction_intent_locator IS NOT NULL)))", name='ck_ledger_attributable_recovery'),
+        # Closed Transaction.type vocabulary (DOM-LED-001 INV-LED-017). NULL is
+        # still permitted. Legacy casings (REVERSAL/Interest/Withdrawal/Deposit)
+        # remain lawful alongside their canonical lowercase_snake spelling until
+        # the separate write-time casing validator (FEAT-LED-005 §IX) retires
+        # them; this constraint only closes the vocabulary, it does not enforce
+        # canonical spelling on new rows. Migration a4d7e9c2f1b6 adds this NOT
+        # VALID so it is documentation here, not itself re-applied by Alembic.
+        db.CheckConstraint(
+            "type IS NULL OR type IN ("
+            "'interest', 'Interest', "
+            "'reversal', 'REVERSAL', "
+            "'withdrawal', 'Withdrawal', "
+            "'deposit', 'Deposit', "
+            "'internal_transfer', "
+            "'insurance_reimbursement', "
+            "'insurance_premium', "
+            "'purchase', "
+            "'refund', "
+            "'overdraft_fee', "
+            "'payroll', "
+            "'payroll_correction', "
+            "'manual_payment', "
+            "'bug_reward', "
+            "'issue_reversal', "
+            "'issue_compensation', "
+            "'rent_payment', "
+            "'void_item_removed'"
+            ")",
+            name='ck_ledger_transaction_type_closed_vocabulary',
+        ),
         db.Index('uq_ledger_exact_reversal_origin', 'original_transaction_id', unique=True, postgresql_where=sa.text("type = 'REVERSAL'")),
         db.Index('uq_ledger_recovery_intent', 'class_id', 'target_seat_id', 'compensation_origin_locator', 'correction_intent_locator', unique=True, postgresql_where=sa.text('compensation_amount_cents > 0')),
     )

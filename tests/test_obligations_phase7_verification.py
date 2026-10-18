@@ -49,7 +49,7 @@ def obligations_test_context(app, client):
                 target_seat_id=student.seat.id,
                 actor_seat_id=student.seat.id,
                 class_id=classroom.class_id,
-                type='credit',
+                type='rent_payment',
                 amount=Decimal('100.00'),
                 mechanism='self',
                 timestamp=utc_now(),
@@ -151,7 +151,7 @@ class TestObligationsSurfaces:
                     txn = db.session.get(Transaction, payment.ledger_transaction_id)
                     if txn:
                         # This should work without schema errors
-                        amount = txn.amount if txn.type == 'credit' else Decimal('0.00')
+                        amount = txn.amount if txn.type == 'rent_payment' else Decimal('0.00')
                         payment_date = payment.timestamp
                         assert amount == Decimal('100.00'), "Amount should come from Ledger"
                         assert payment_date is not None, "Payment date should be accessible"
@@ -229,7 +229,7 @@ class TestPhase8Summary:
             for payment in payment_events:
                 if payment.ledger_transaction_id:
                     txn = Transaction.query.get(payment.ledger_transaction_id)
-                    if txn and txn.type == 'credit':
+                    if txn and txn.type == 'rent_payment':
                         total += txn.amount
 
             assert total == Decimal('100.00'), f"Should calculate from Ledger: {total}"
