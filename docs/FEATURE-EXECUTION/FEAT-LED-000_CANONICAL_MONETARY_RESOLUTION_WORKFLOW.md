@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 | :--- | :--- | :--- | :--- | :--- |
-| FEAT-LED-000 | 0.5 | 2026-10-07 | 0.4 | Normative |
+| FEAT-LED-000 | 0.6 | 2026-10-18 | 0.5 | Normative |
 
 ---
 
@@ -316,6 +316,8 @@ This FEAT does not:
 ---
 
 ## XV. Change Notes
+
+**0.6 (2026-10-18)** explicitly disclaims that `FEAT-LED-000` is, or has ever correctly been, a route-level top-level orchestration identity. Per the "Execution-model reconciliation" notice above this document's own body, it is a workflow expressed as Ledger domain commands that a money-moving business FEAT composes **inside its own single FEAT context** — never an identity a route opens `FEATContext` under directly. The internal-transfer route (`app/routes/student.py`) had been doing exactly that. Its own dedicated top-level identity, `FEAT-LED-005` (`docs/FEATURE-EXECUTION/FEAT-LED-005_INTERNAL_ACCOUNT_TRANSFER.md`), is defined by contract; the route's cutover onto it — no longer naming `FEAT-LED-000` as its `FEATContext` — is a separate, not-yet-landed PR (see `FEAT-LED-005`'s own v1.1 note for current runtime status). This note is prose-only: it does not change this FEAT's own contract, authority, or any invariant above.
 
 **0.5 (2026-10-07)**, owner ruling 2026-10-07: a Store purchase requires sufficient funds (`FEAT-STOR-001` 3.2, `SPEC-ECON-003` 2.3). Refusing a purchase that the full-shortfall rule cannot cover is a business-eligibility decision of the originating FEAT, made before anything posts. It is not a Ledger funding alternative, a partial sweep or a compatibility path, so 0.3's statement about purchase rejection governs Ledger funding only. Ledger funding semantics are unchanged.
 
