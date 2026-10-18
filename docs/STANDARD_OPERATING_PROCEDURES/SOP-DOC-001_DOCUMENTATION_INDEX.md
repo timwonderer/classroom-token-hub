@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.30 | 2026-10-18 | 3.29 | Normative |
+| SOP-DOC-001 | 3.31 | 2026-10-18 | 3.30 | Normative |
 
 ---
 
@@ -277,6 +277,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.31 (2026-10-18):**
+- Register DOM-LED-001 v2.16: INV-LED-014 names `build_transfer_effect_pair` (`app/services/ledger_transfer_service.py`) as the sole pure constructor of a transfer's two-leg effect vector, replacing the standalone internal-transfer command's hand-rolled reservation and the overdraft-protection funding legs' inline effect-dict construction with one shared builder. Code change: `create_transfer_pair` now reserves through `create_reserved_effects` like the funding-leg path. No effect shape, invariant, or historical row changes. PR 3 of the approved PR sequence from the SYSTEM_ORIGINATED_FEAT_CODES investigation.
 
 **Version 3.30 (2026-10-18):**
 - Register DOM-LED-001 v2.15 (INV-LED-016 mechanism actor attribution, INV-LED-017 closed type vocabulary with its authoritative canonical/legacy enumeration table), FEAT-LED-000 v0.6 (disclaims prior route-level orchestration misuse), and the new FEAT-LED-005 v1.1 (Internal Account Transfer; prospective pending its own cutover PR). Contracts only; no code changed. Part of the approved PR sequence from the SYSTEM_ORIGINATED_FEAT_CODES investigation.

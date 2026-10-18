@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-LED-001 | 2.15 | 2026-10-18 | 2.14 | Constitutional |
+| DOM-LED-001 | 2.16 | 2026-10-18 | 2.15 | Constitutional |
 
 ---
 
@@ -112,7 +112,12 @@ No other domain may define fields or mutate these tables. Mutation is permitted 
   `correlation_id`, and MUST be created and committed atomically. A transfer
   `correlation_id` MUST NOT be reused to create another transfer pair. This
   invariant governs the current internal checking/savings transfer semantics;
-  cross-seat transfers are not authorized by this contract.
+  cross-seat transfers are not authorized by this contract. Ledger owns
+  `build_transfer_effect_pair` (`app/services/ledger_transfer_service.py`) as the
+  sole pure constructor of this two-leg effect vector; every caller — the
+  standalone internal-transfer command and the overdraft-protection funding legs
+  inside `apply_resolved_ledger_plan` alike — composes it with
+  `create_reserved_effects` rather than hand-building the pair's effect dicts.
 
 Multi-seat balance-dependent commands MUST acquire every affected seat anchor in ascending seat-ID order before acquiring any ClassEconomy lock or applying monetary effects. Ledger owns `lock_ledger_seats(class_id, seat_ids)` for this scoped complete-set validation and locking; FEAT orchestration supplies the affected seats. This extends the seat-first order without changing immutable sequence allocation or settlement authority.
 
@@ -298,6 +303,8 @@ Every origin independently enforces §VII.1A: total attributable recovery never 
 `resolve_reconstructed_recovery` derives one combined monetary plan under current authorized banking directives: aggregate positive debits in stable origin order, evaluate shortfall/protection once over the complete debit, and retain one principal/intent per origin. `apply_reconstructed_recovery` revalidates the complete reconstruction and all per-origin caps under target seat → ClassEconomy → stable original-credit → monetary-source locks, and applies all funding and recovery legs with one SPEC-LED-002 command reservation. No separate independently resolved plan may reuse starting balances. Exact full/residual/interval commands serialize together. Revalidate full preview evidence and balances; any changed evidence or failure rolls back everything. Current canonical creation protocol and all nineteen v3 fields protect new effects; no correction fee, obligation or deferred recovery occurs. No old signature, sequence, reservation or compensation linkage is rewritten.
 
 ## X. Change Notes
+
+**2.16 (2026-10-18)** names `build_transfer_effect_pair` in INV-LED-014 as the sole pure constructor of a transfer's two-leg effect vector. Before this revision the standalone internal-transfer command (`create_transfer_pair`) hand-rolled its own `LedgerCommandReservation` and a single-effect `_command_fingerprint`, while the overdraft-protection funding legs inside `apply_resolved_ledger_plan` built the same shape inline and bundled it into `create_reserved_effects` alongside the principal/fee effects. Both call sites now build the pair with this one constructor; `create_transfer_pair` also now reserves through `create_reserved_effects` like the funding-leg path always did, rather than hand-rolling a separate reservation mechanism. No existing effect shape, invariant or historical row changes — this closes the "two independent implementations" gap identified in the 2026-10-17 provenance investigation, §7.1/§7.3.
 
 **2.15 (2026-10-18)** adds the authoritative canonical/legacy enumeration table to INV-LED-017, closing the gap where the invariant declared a closed vocabulary without listing its members. The DB `CHECK` constraint and write-time validator planned for a later PR must draw from this table rather than infer an allow-list from current writers.
 
