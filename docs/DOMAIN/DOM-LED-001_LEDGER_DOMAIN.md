@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-LED-001 | 2.15 | 2026-10-18 | 2.14 | Constitutional |
+| DOM-LED-001 | 2.16 | 2026-10-18 | 2.15 | Constitutional |
 
 ---
 
@@ -112,7 +112,17 @@ No other domain may define fields or mutate these tables. Mutation is permitted 
   `correlation_id`, and MUST be created and committed atomically. A transfer
   `correlation_id` MUST NOT be reused to create another transfer pair. This
   invariant governs the current internal checking/savings transfer semantics;
-  cross-seat transfers are not authorized by this contract.
+  cross-seat transfers are not authorized by this contract. Ledger owns
+  `build_transfer_effect_pair` (`app/services/ledger_transfer_service.py`) as the
+  sole pure constructor of this two-leg effect vector's shared fields; every
+  caller — the standalone internal-transfer command and the overdraft-protection
+  funding legs inside `apply_resolved_ledger_plan` alike — composes it instead of
+  hand-building the pair's effect dicts. This does not change how either caller
+  reserves or fingerprints the pair: per `SPEC-LED-002` §4.2, the standalone
+  internal-transfer command (`create_transfer_pair`) keeps its own dedicated
+  `_command_fingerprint` replay serializer, never the general effect-plan
+  `create_reserved_effects` fingerprint, so a reservation accepted before this
+  constructor existed still replay-matches on retry.
 
 Multi-seat balance-dependent commands MUST acquire every affected seat anchor in ascending seat-ID order before acquiring any ClassEconomy lock or applying monetary effects. Ledger owns `lock_ledger_seats(class_id, seat_ids)` for this scoped complete-set validation and locking; FEAT orchestration supplies the affected seats. This extends the seat-first order without changing immutable sequence allocation or settlement authority.
 
@@ -298,6 +308,8 @@ Every origin independently enforces §VII.1A: total attributable recovery never 
 `resolve_reconstructed_recovery` derives one combined monetary plan under current authorized banking directives: aggregate positive debits in stable origin order, evaluate shortfall/protection once over the complete debit, and retain one principal/intent per origin. `apply_reconstructed_recovery` revalidates the complete reconstruction and all per-origin caps under target seat → ClassEconomy → stable original-credit → monetary-source locks, and applies all funding and recovery legs with one SPEC-LED-002 command reservation. No separate independently resolved plan may reuse starting balances. Exact full/residual/interval commands serialize together. Revalidate full preview evidence and balances; any changed evidence or failure rolls back everything. Current canonical creation protocol and all nineteen v3 fields protect new effects; no correction fee, obligation or deferred recovery occurs. No old signature, sequence, reservation or compensation linkage is rewritten.
 
 ## X. Change Notes
+
+**2.16 (2026-10-18)** names `build_transfer_effect_pair` in INV-LED-014 as the sole pure constructor of a transfer's two-leg effect vector's shared fields. Before this revision the standalone internal-transfer command (`create_transfer_pair`) and the overdraft-protection funding legs inside `apply_resolved_ledger_plan` each built the same effect-dict shape independently, free to drift apart. Both now build it with this one constructor. `create_transfer_pair` keeps its own dedicated `_command_fingerprint` reservation/replay path exactly as before — per `SPEC-LED-002` §4.2 the internal-transfer family's fingerprint serializer is never the general effect-plan one, so an existing reservation's replay-match is unaffected. No existing effect shape, invariant, or historical row changes — this closes the "two independent implementations" gap identified in the 2026-10-17 provenance investigation, §7.1/§7.3, without touching either path's reservation semantics.
 
 **2.15 (2026-10-18)** adds the authoritative canonical/legacy enumeration table to INV-LED-017, closing the gap where the invariant declared a closed vocabulary without listing its members. The DB `CHECK` constraint and write-time validator planned for a later PR must draw from this table rather than infer an allow-list from current writers.
 
