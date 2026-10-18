@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.29 | 2026-10-16 | 3.28 | Normative |
+| SOP-DOC-001 | 3.30 | 2026-10-18 | 3.29 | Normative |
 
 ---
 
@@ -117,6 +117,7 @@ Archived material is deliberately absent; see §VI.
 - [FEAT-LED-000 — Canonical Monetary Resolution Workflow](../FEATURE-EXECUTION/FEAT-LED-000_CANONICAL_MONETARY_RESOLUTION_WORKFLOW.md)
 - [FEAT-LED-001 — Post Ledger Transaction](../FEATURE-EXECUTION/FEAT-LED-001_POST_LEDGER_TRANSACTION.md)
 - [FEAT-LED-002 — Reversal of Monetary Transaction](../FEATURE-EXECUTION/FEAT-LED-002_VOID_REVERSE_TRANSACTION.md)
+- [FEAT-LED-005 — Internal Account Transfer](../FEATURE-EXECUTION/FEAT-LED-005_INTERNAL_ACCOUNT_TRANSFER.md)
 - [FEAT-OBL-002 — Schedule Next Bill Cycle](../FEATURE-EXECUTION/FEAT-OBL-002_ADVANCE_BILL_CYCLE.md)
 - [FEAT-OBL-003 — Satisfy Obligation](../FEATURE-EXECUTION/FEAT-OBL-003_SATISFY_OBLIGATION.md)
 - [FEAT-OBL-004 — Insurance Policy Purchase / Enrollment](../FEATURE-EXECUTION/FEAT-OBL-004_INSURANCE_POLICY_PURCHASE.md)
@@ -276,6 +277,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.30 (2026-10-18):**
+- Register DOM-LED-001 v2.15 (INV-LED-016 mechanism actor attribution, INV-LED-017 closed type vocabulary with its authoritative canonical/legacy enumeration table), FEAT-LED-000 v0.6 (disclaims prior route-level orchestration misuse), and the new FEAT-LED-005 v1.1 (Internal Account Transfer; prospective pending its own cutover PR). Contracts only; no code changed. Part of the approved PR sequence from the SYSTEM_ORIGINATED_FEAT_CODES investigation.
 
 **Version 3.29 (2026-10-16):**
 - Register SOP-DEP-001 v2.9: §XI evidence standard and per-line results table recorded during the checks; §XI.A forbids deliberate cross-scope attempts on a host serving live classes (owner rulings, 2026-10-16).
