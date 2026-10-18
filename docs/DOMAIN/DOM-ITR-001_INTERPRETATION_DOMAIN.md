@@ -2,7 +2,10 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-ITR-001      | 1.8     | 2026-10-14     | 1.7        | Constitutional  |
+| DOM-ITR-001      | 1.9     | 2026-10-18     | 1.8        | Constitutional  |
+
+> [!IMPORTANT]
+> **v1.9 (2026-10-18), owner ruling.** INV-ITR-015 inverted: Interpretation now classifies Ledger event origin by `mechanism` and a closed, schema-validated `Transaction.type` (`DOM-LED-001` INV-LED-017), not by `feat_code`. The prior rule's own rationale — `type` was unconstrained free text with inconsistent casing, "ruled untrustworthy for semantics" — is resolved by that constraint, not dropped; `feat_code` is retained as provenance metadata but is no longer part of this classification. No change to any other invariant in this document.
 
 > [!IMPORTANT]
 > **v1.8 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: `DOM-*` documents are Tier 1 (Constitutional), not Tier 2 (Normative) — Normative is reserved for `SPEC-*`/`FEAT-*`/`SOP-*`. No substantive rule in this document changed.
@@ -158,7 +161,7 @@ Configuration input ranges, permissible policy-mode bands, and configured recomm
 
   *Example of prohibited pattern:* using a policy-mode's `savings_weekly.min` (a configuration target) as the reference for an observational "students are or aren't saving enough" signal without an owning-domain declaration authorizing that use.
 
-- **INV-ITR-015: Provenance via Canonical Fields**. Interpretation SHALL classify Ledger event origin using `mechanism`, `feat_code`, `correlation_id`, and reversal linkage fields, plus the authoritative event tables of the owning domains (`AttendanceSession`, `AssessmentEvent`, `EntitlementEvent`, `PayrollEvent`). Interpretation SHALL NOT treat `Transaction.type` as authoritative semantic classification.
+- **INV-ITR-015: Provenance via Canonical Fields**. Interpretation SHALL classify Ledger event origin using `mechanism`, the closed `Transaction.type` vocabulary (`DOM-LED-001` INV-LED-017), `correlation_id`, and reversal linkage fields, plus the authoritative event tables of the owning domains (`AttendanceSession`, `AssessmentEvent`, `EntitlementEvent`, `PayrollEvent`). `feat_code` is provenance metadata, not a classification input: it identifies which FEAT composed a row, which has drifted across this app's history for at least one writer, and is not a reliable semantic signature on its own.
 
 - **INV-ITR-016: Source Domain Precedence**. When an authoritative fact is persisted by a source domain, Interpretation SHALL consume that fact directly rather than reconstruct it from Ledger rows or other secondary sources. STORE establishes purchases; OBLIGATIONS establishes assessment / payment / waiver; ATTENDANCE / PRODUCTIVITY establishes labor participation; LEDGER establishes monetary movement and its provenance. Interpretation queries the owning domain first. This invariant does not itself decide domain ownership of any given fact; where ownership is unresolved, Interpretation MUST NOT infer it (see §XIII.c).
 
@@ -344,7 +347,7 @@ Non-normative appendix. Records the divergences between doctrine and current run
 | Historical Configuration Binding | §VII requires historical windows to be evaluated against their authoritative historical configuration. | **Contract resolved (§VII, §VIII, §IX):** cycle-bound materialization persists the governing reference values in an immutable `interpretation_cycle_record`, so cycles produced under the contract are self-describing and never reinterpreted. Runtime remains noncompliant only until the record is built; pre-contract cycles are declared **not replayable**, tracked toward zero. |
 | Completed-cycle window discipline | §VII requires completed cycles only. | Runtime accepts arbitrary caller-supplied windows without enforcement. |
 | Output Property Declaration (INV-ITR-012) | Every output SHALL declare Semantic Kind, Subject / Observation Basis / Aggregation, and Reference Dependency. | Current outputs declare none of these. |
-| Provenance via canonical fields (INV-ITR-015) | Classification of Ledger events uses `mechanism`, `feat_code`, `correlation_id`, reversal linkage, and authoritative source-domain event tables. `Transaction.type` is not authoritative. | `Transaction.type` is consulted in some current calculations. |
+| Provenance via canonical fields (INV-ITR-015) | Classification of Ledger events uses `mechanism`, the closed `Transaction.type` vocabulary, `correlation_id`, reversal linkage, and authoritative source-domain event tables. `feat_code` is not used for this classification. | Runtime still uses `SYSTEM_ORIGINATED_FEAT_CODES`'s `feat_code` membership test (`ledger_provenance_query_service.py`). The doctrine changed at v1.9 (2026-10-18); the code cutover is a separate, scheduled PR, not yet landed. |
 | Source Domain Precedence (INV-ITR-016) | Authoritative facts consumed directly from owning domains. | `participation_rate` derives from Ledger + Attendance without domain-fact preference; other metrics similar. |
 | Threshold Ownership (INV-ITR-017) | Every threshold has an explicit semantic owner; computation and presentation layers do not invent them locally. | **RESOLVED (slice 8.4d).** The duplicated V1 thresholds are retired: `ANALYTICS_POLICY_DEFAULTS`, `analytics_engine.py`, and `app/services/analytics/builders.py` are deleted. The Interpretation surface (SPEC-ITR-001) declares no numeric thresholds; the page presents contract-bound observations and non-prescriptive guiding questions only. |
 

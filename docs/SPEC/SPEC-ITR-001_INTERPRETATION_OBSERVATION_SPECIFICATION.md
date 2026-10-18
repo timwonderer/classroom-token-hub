@@ -2,9 +2,12 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-ITR-001     |  1.3    |     2026-08-30 |        1.2 |       Normative |
+| SPEC-ITR-001     |  1.4    |     2026-10-18 |        1.3 |       Normative |
 
 ---
+
+> [!IMPORTANT]
+> **v1.4 (2026-10-18), owner ruling.** §6.3's event-origin classifier drops the `feat_code`-based system-FEAT exclusion set and adds a closed `Transaction.type` exclusion instead (`DOM-ITR-001` INV-ITR-015 v1.9, `DOM-LED-001` INV-LED-017). The `type` clause is redundant with, not a replacement for, the `mechanism` clause — see §6.3's note. No candidate quantity, formula, or threshold changes.
 
 ## 1. Purpose
 
@@ -64,7 +67,7 @@ The following are restated for engineering convenience. They are not created her
 - Every output declares Reference Dependency: **None**, **Class Configuration observational reference**, or **Interpretation-declared reference** (§IV.3).
 - Configuration input ranges are not observational references (INV-ITR-014).
 - Descriptive observations are not silently promoted to interpretive conclusions (INV-ITR-013).
-- Ledger provenance is classified via `mechanism`, `feat_code`, `correlation_id`, reversal linkage, and authoritative source-domain event tables. `Transaction.type` is not authoritative (INV-ITR-015).
+- Ledger provenance is classified via `mechanism`, the closed `Transaction.type` vocabulary, `correlation_id`, reversal linkage, and authoritative source-domain event tables. `feat_code` is provenance metadata, not a classification input (INV-ITR-015).
 - Authoritative facts are consumed from the owning domain, not reconstructed from Ledger rows (INV-ITR-016).
 - Every threshold has an explicit semantic owner (INV-ITR-017).
 - Only completed economic cycles are evaluated (§VII).
@@ -161,7 +164,7 @@ To what extent did students exercise economic agency (voluntary transfers, purch
 
 ### 6.2 Authoritative Sources
 
-- `DOM-LED-001` — `Transaction` rows with `mechanism = SELF` and non-reversal, filtered by `feat_code` to exclude system-originated FEATs.
+- `DOM-LED-001` — `Transaction` rows with `mechanism = SELF` and non-reversal, excluding the closed system-type set (§6.3).
 - `DOM-STORE-001` — `EntitlementEvent` rows with `acquisition_type = 'PURCHASE'`, `event_type = 'GRANTED'`.
 - `DOM-OBL-001` — `AssessmentEvent` rows with `event_type = 'PAYMENT'` where the referenced Ledger row has `mechanism = SELF`.
 
@@ -171,13 +174,13 @@ Per INV-ITR-016, when the same act is recorded both by a source domain (Entitlem
 
 The event-origin classifier used throughout §6, §7, and §9 is:
 
-- **Student-originated:** `Transaction.mechanism = SELF` AND `Transaction.original_transaction_id IS NULL` AND `Transaction.status != VOID` AND `Transaction.feat_code` is not in the system-FEAT set (payroll accrual, interest accrual, obligation assessment, admin adjustment, ledger resolution).
+- **Student-originated:** `Transaction.mechanism = SELF` AND `Transaction.original_transaction_id IS NULL` AND `Transaction.status != VOID` AND `Transaction.type` is not in the closed system-type set: `{payroll, payroll_correction, interest, overdraft_fee}` (both the canonical and legacy casing of each, per `DOM-LED-001` INV-LED-017 — e.g. `interest` and `Interest` are the same value for this test).
 - **Teacher-originated:** `Transaction.mechanism = TEACHER`.
 - **System-originated:** `Transaction.mechanism = SYSTEM`.
 - **Reversal:** `Transaction.original_transaction_id IS NOT NULL` (per `DOM-LED-001` INV-LED-003).
 - **Void:** a monetary transaction has no lawful void state; corrections are represented by a linked reversal transaction.
 
-Per INV-ITR-015, `Transaction.type` is not consulted for this classification.
+Per INV-ITR-015 (v1.9), `feat_code` is not consulted for this classification — it identifies which FEAT composed a row, not what the row economically is, and has drifted at least once in this app's history for a writer whose `type` never changed. The `type` clause above is deliberately redundant with the `mechanism` clause, not a replacement for it: every type in the closed system-type set is already produced only under `mechanism != SELF` by a correctly-attributing writer (`DOM-LED-001` INV-LED-016). It exists as a second, independent check against the one way this has gone wrong before — a writer supplying the wrong `mechanism` for an otherwise-recognizable system event — not because `mechanism` alone is insufficient today.
 
 ### 6.4 Minimum Raw Observations
 
@@ -202,7 +205,7 @@ Per enrolled seat in the completed window:
 
 ### 6.6 Preconditions and Gaps
 
-None blocking. The system-FEAT set in §6.3 is enumerable from `app/feats/base.py` and stable enough to specify; SPEC-ITR-001 defers the concrete enumeration to the implementing FEAT.
+None blocking. The closed system-type set in §6.3 is enumerable from `DOM-LED-001`'s schema-enforced `type` vocabulary (INV-LED-017) and stable by construction — a value outside it is rejected at write time, not merely by convention.
 
 ---
 
@@ -781,9 +784,9 @@ The following are preconditions to lawful implementation of the candidates in th
 | # | Precondition | Owner | Status |
 |---|---|---|---|
 | P1 | `DOM-ITR-001` v1.2 is the governing authority | Interpretation | **Satisfied** |
-| P2 | Ledger provenance available via `mechanism`, `feat_code`, `correlation_id`, reversal linkage | Ledger | **Satisfied** |
+| P2 | Ledger provenance available via `mechanism`, the closed `Transaction.type` vocabulary, `correlation_id`, reversal linkage | Ledger | **Satisfied** |
 | P3 | Authoritative source-domain event tables consulted before Ledger reconstruction (INV-ITR-016) | Interpretation | Runtime noncompliance per `DOM-ITR-001` §XIII.b — must be closed by implementing FEAT |
-| P4 | System-FEAT set enumerable (for §6.3 classifier) | Interpretation FEAT | Enumerable from `app/feats/base.py` |
+| P4 | Closed system-type set enumerable (for §6.3 classifier) | Interpretation FEAT | Enumerable from `DOM-LED-001`'s schema-enforced `type` vocabulary (INV-LED-017) |
 | P5 | Overdraft / NSF ownership resolved between LEDGER and OBLIGATIONS | Cross-domain (not Interpretation) | **Resolved** (`SPEC-ECON-003` §4.6.1.1, `DOM-ITR-001` §XIII.c) — OBLIGATIONS owns the NSF fee, surfaced as an `AssessmentEvent`; Q3 and Q9 admit it (§8.6, §13.5). Transitional coverage gap for legacy pre-orchestration overdraft rows only. |
 | P6 | Historical Configuration Binding schema and provenance surface | Interpretation + PROD + CLASS | **Resolved by contract** (`DOM-ITR-001` §VII, §IX) — cycle-bound `interpretation_cycle_record` persists the governing `reference_configuration` projection at payroll completion (`FEAT-PROD-004`), so cycles under the contract are self-describing and never reinterpreted. Table build is a downstream slice. Pre-contract cycles have no frozen configuration projection and are therefore explicitly **not reinterpreted or replayable**; they do not become replayable merely because the table now exists. |
 | P7 | Threshold owners declared for any implementing FEAT that needs thresholds | Implementing FEAT | Deferred to FEAT specification |
