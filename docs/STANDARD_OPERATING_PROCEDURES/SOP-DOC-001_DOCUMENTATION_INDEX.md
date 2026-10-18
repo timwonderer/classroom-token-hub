@@ -279,7 +279,7 @@ Their surviving content lives at:
 ## VIII. Change Notes
 
 **Version 3.30 (2026-10-18):**
-- Register DOM-LED-001 v2.14 (INV-LED-016 mechanism actor attribution, INV-LED-017 closed type vocabulary), FEAT-LED-000 v0.6 (disclaims prior route-level orchestration misuse), and the new FEAT-LED-005 v1.0 (Internal Account Transfer). Contracts only; no code changed. Part of the approved PR sequence from the SYSTEM_ORIGINATED_FEAT_CODES investigation.
+- Register DOM-LED-001 v2.15 (INV-LED-016 mechanism actor attribution, INV-LED-017 closed type vocabulary with its authoritative canonical/legacy enumeration table), FEAT-LED-000 v0.6 (disclaims prior route-level orchestration misuse), and the new FEAT-LED-005 v1.1 (Internal Account Transfer; prospective pending its own cutover PR). Contracts only; no code changed. Part of the approved PR sequence from the SYSTEM_ORIGINATED_FEAT_CODES investigation.
 
 **Version 3.29 (2026-10-16):**
 - Register SOP-DEP-001 v2.9: §XI evidence standard and per-line results table recorded during the checks; §XI.A forbids deliberate cross-scope attempts on a host serving live classes (owner rulings, 2026-10-16).

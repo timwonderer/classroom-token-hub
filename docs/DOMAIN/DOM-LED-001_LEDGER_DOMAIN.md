@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-LED-001 | 2.14 | 2026-10-18 | 2.13 | Constitutional |
+| DOM-LED-001 | 2.15 | 2026-10-18 | 2.14 | Constitutional |
 
 ---
 
@@ -79,6 +79,31 @@ No other domain may define fields or mutate these tables. Mutation is permitted 
 - **INV-LED-013: Reversal Uniqueness**. A transaction may be the target of at most **one** reversal transaction. Ledger enforces this with a unique immutable reversal-origin locator, including accepted pending reversals. The original row is never updated to represent reversal; matching state is derived from the new reversal effect.
 - **INV-LED-016: Mechanism Actor Attribution**. `mechanism` identifies the actor substantively responsible for a transaction, not who clicked or which process executed it. It is supplied explicitly by the initiating caller and never inferred from FEAT identity, route, or execution context. This generalizes `DOM-PROD-001` §VIII's payroll-scoped rule to every `ledger_transaction` writer: `SELF` for a student's own voluntary act, `TEACHER` for a decision a teacher made (including one the platform computed on the teacher's behalf, e.g. an approved correction), and `SYSTEM` for a scheduled or automatic process no human decided to trigger in the moment. A writer that cannot state which of the three applies has not yet determined its own actor attribution and must not default to `SELF`.
 - **INV-LED-017: Closed Transaction Type Vocabulary**. `type` SHALL be drawn from a closed, schema-enforced vocabulary, not free text. New rows (`transient`/`pending` at flush time) MUST use the canonical spelling; a row using a retired legacy spelling for the same value MUST be rejected before insert. Historical rows are never rewritten to the canonical spelling solely to correct casing — the schema constraint accepts both the canonical and legacy spellings for read compatibility, and nothing in this invariant authorizes an `UPDATE` against an existing row's `type` for cosmetic normalization.
+
+  The closed vocabulary is the union of the canonical spellings below and their listed legacy aliases. A value not on this list is not a lawful `type` under any spelling.
+
+  | Canonical (lowercase_snake) | Legacy alias also accepted on existing rows |
+  |---|---|
+  | `interest` | `Interest` |
+  | `reversal` | `REVERSAL` |
+  | `withdrawal` | `Withdrawal` |
+  | `deposit` | `Deposit` |
+  | `internal_transfer` | — |
+  | `insurance_reimbursement` | — |
+  | `insurance_premium` | — |
+  | `purchase` | — |
+  | `refund` | — |
+  | `overdraft_fee` | — |
+  | `payroll` | — |
+  | `payroll_correction` | — |
+  | `manual_payment` | — |
+  | `bug_reward` | — |
+  | `issue_reversal` | — |
+  | `issue_compensation` | — |
+  | `rent_payment` | — |
+  | `void_item_removed` | — |
+
+  This table is the single authoritative enumeration. The DB `CHECK` constraint and the write-time casing validator (both introduced by a later PR against this contract; see `FEAT-LED-005` §IX) MUST draw their allow-lists from this table, not re-derive them from current writers — a value this table omits is a gap in this contract to amend, not a value for either enforcement mechanism to infer or admit on its own.
 - **INV-LED-014: Transfer Correlation Identity**. An internal account transfer is one
   class-scoped operation identified by one `correlation_id`. It MUST contain exactly
   two `ledger_transaction` legs: one debit from the source account and one credit
@@ -273,6 +298,8 @@ Every origin independently enforces §VII.1A: total attributable recovery never 
 `resolve_reconstructed_recovery` derives one combined monetary plan under current authorized banking directives: aggregate positive debits in stable origin order, evaluate shortfall/protection once over the complete debit, and retain one principal/intent per origin. `apply_reconstructed_recovery` revalidates the complete reconstruction and all per-origin caps under target seat → ClassEconomy → stable original-credit → monetary-source locks, and applies all funding and recovery legs with one SPEC-LED-002 command reservation. No separate independently resolved plan may reuse starting balances. Exact full/residual/interval commands serialize together. Revalidate full preview evidence and balances; any changed evidence or failure rolls back everything. Current canonical creation protocol and all nineteen v3 fields protect new effects; no correction fee, obligation or deferred recovery occurs. No old signature, sequence, reservation or compensation linkage is rewritten.
 
 ## X. Change Notes
+
+**2.15 (2026-10-18)** adds the authoritative canonical/legacy enumeration table to INV-LED-017, closing the gap where the invariant declared a closed vocabulary without listing its members. The DB `CHECK` constraint and write-time validator planned for a later PR must draw from this table rather than infer an allow-list from current writers.
 
 **2.14 (2026-10-18)** adds INV-LED-016 (Mechanism Actor Attribution), generalizing `DOM-PROD-001` §VIII's payroll-scoped rule to every `ledger_transaction` writer, and INV-LED-017 (Closed Transaction Type Vocabulary), closing `type` to a schema-enforced set without rewriting any existing row's casing. Neither changes `mechanism` or `type`'s existing values on any row; both formalize rules this document previously left to a single other domain or to convention.
 
