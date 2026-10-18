@@ -44,37 +44,31 @@ def has_exact_reversal(transaction):
 
 # --- Ledger provenance classifier (SPEC-ITR-001 §6.3) ----------------------
 #
-# The Interpretation domain classifies ledger rows by origin without ever
-# consulting ``Transaction.type`` (INV-ITR-015). A row is *student-originated*
-# iff it is a self-mechanism, non-reversal, non-void row whose ``feat_code`` is
-# NOT one of the system-originated FEATs enumerated below. SPEC-ITR-001 §6.6
-# defers the concrete enumeration to the implementing surface; the Ledger domain
-# owns the provenance of its own rows, so the set lives here.
+# A row is *student-originated* iff ``Transaction.mechanism == SELF``, it is
+# not a reversal (``original_transaction_id IS NULL``), and its ``type`` is
+# not in the closed system-type exclusion set below (SPEC-ITR-001 v1.4 owner
+# ruling; ``DOM-ITR-001`` INV-ITR-015 v1.9).
 #
-# Categories (SPEC-ITR-001 §6.3): payroll accrual, interest accrual, obligation
-# assessment, admin adjustment, ledger resolution. Student-agency FEATs
-# (FEAT-STOR-001 purchase, FEAT-OBL-001 rent self-payment, transfers) are
-# deliberately excluded so those acts remain student-originated.
-SYSTEM_ORIGINATED_FEAT_CODES: frozenset[str] = frozenset(
+# ``feat_code`` is deliberately never consulted here: it identifies which FEAT
+# composed a row, not what the row economically is, and it drifted from
+# ``mechanism`` at least once in this app's history (the prior
+# ``SYSTEM_ORIGINATED_FEAT_CODES`` membership test this replaces). The
+# ``type`` clause below is explicitly redundant with, not a replacement for,
+# the ``mechanism`` clause: every type in the set is already produced only
+# under ``mechanism != SELF`` by a correctly-attributing writer
+# (``DOM-LED-001`` INV-LED-016). It is a second, independent check against
+# the one way this has gone wrong before -- a writer supplying the wrong
+# ``mechanism`` for an otherwise-recognizable system event -- not evidence
+# that ``mechanism`` alone is insufficient today.
+#
+# Both the canonical spelling and any legacy alias accepted on existing rows
+# (``DOM-LED-001`` INV-LED-017) count as the same value for this test.
+SYSTEM_ORIGINATED_TYPE_VALUES: frozenset[str] = frozenset(
     {
-        # payroll accrual
-        "FEAT-LED-004",   # Payroll Execution
-        "FEAT-PROD-003",  # Record Payroll Event
-        # interest accrual / ledger resolution (Ledger authority posts these)
-        "FEAT-LED-000",   # Canonical Monetary Resolution
-        "FEAT-LED-003",   # Settlement Sweep
-        # system-imposed fees
-        "FEAT-LED-001",   # Overdraft/NSF Fee Application
-        # obligation assessment (scheduled cycles, not self-payment)
-        "FEAT-OBL-002",   # Scheduled Rent Cycle
-        # FEAT-OBL-003 is Satisfy Obligation. It was admitted here under its old
-        # registry label, "Scheduled Insurance Cycle". Insurance premium payments
-        # post under it (insurance_premium_payment_feat.py), including a
-        # student's manual payment, which is not system-originated. Whether it
-        # belongs here is undecided.
-        "FEAT-OBL-003",   # Satisfy Obligation
-        # admin adjustment
-        "FEAT-ADMN-001",  # Bulk administration
+        "payroll",
+        "payroll_correction",
+        "interest", "Interest",  # legacy alias
+        "overdraft_fee",
     }
 )
 
@@ -85,8 +79,8 @@ def _student_originated_filter():
         Transaction.mechanism == LedgerMechanism.SELF,
         Transaction.original_transaction_id.is_(None),
         db.or_(
-            Transaction.feat_code.is_(None),
-            Transaction.feat_code.notin_(SYSTEM_ORIGINATED_FEAT_CODES),
+            Transaction.type.is_(None),
+            Transaction.type.notin_(SYSTEM_ORIGINATED_TYPE_VALUES),
         ),
     )
 
@@ -347,4 +341,4 @@ def get_student_savings_contribution_rows(
 
 
 
-__all__ = ["exact_reversal_query", "get_exact_reversal", "has_exact_reversal", "SYSTEM_ORIGINATED_FEAT_CODES", "get_seat_ids_with_student_originated_activity", "get_student_originated_rows", "get_inbound_ledger_rows", "get_student_originated_transaction_ids", "get_posted_balances_as_of", "get_student_savings_contribution_rows"]
+__all__ = ["exact_reversal_query", "get_exact_reversal", "has_exact_reversal", "SYSTEM_ORIGINATED_TYPE_VALUES", "get_seat_ids_with_student_originated_activity", "get_student_originated_rows", "get_inbound_ledger_rows", "get_student_originated_transaction_ids", "get_posted_balances_as_of", "get_student_savings_contribution_rows"]

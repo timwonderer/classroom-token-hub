@@ -205,6 +205,7 @@ FEAT_REGISTRY = {
     "FEAT-LED-002": {"domain": "Ledger", "blast_radius": "HIGH", "desc": "Void Transaction"},
     "FEAT-LED-003": {"domain": "Ledger", "blast_radius": "HIGH", "desc": "Settlement Sweep"},
     "FEAT-LED-004": {"domain": "Ledger", "blast_radius": "HIGH", "desc": "Payroll Execution"},
+    "FEAT-LED-005": {"domain": "Ledger", "blast_radius": "HIGH", "desc": "Internal Account Transfer"},
     "FEAT-IDEN-001": {"domain": "Identity", "blast_radius": "LOW", "desc": "Unauthenticated Student Seat Claim"},
     "FEAT-IDEN-002": {"domain": "Identity", "blast_radius": "HIGH", "desc": "Student Credential Setup"},
     "FEAT-IDEN-003": {"domain": "Identity", "blast_radius": "MED", "desc": "Teacher Reset Code Generation"},
