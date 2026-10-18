@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-LED-001 | 2.13 | 2026-10-03 | 2.12 | Constitutional |
+| DOM-LED-001 | 2.14 | 2026-10-18 | 2.13 | Constitutional |
 
 ---
 
@@ -77,6 +77,8 @@ No other domain may define fields or mutate these tables. Mutation is permitted 
 - **INV-LED-011: Signed Magnitude**. Direction is defined strictly by sign: **Positive (+) = Credit**, **Negative (-) = Debit**.
 - **INV-LED-012: Domain Blindness**. The `account_type` field classifies the target account and must not be used to encode business meaning (e.g., "RENT").
 - **INV-LED-013: Reversal Uniqueness**. A transaction may be the target of at most **one** reversal transaction. Ledger enforces this with a unique immutable reversal-origin locator, including accepted pending reversals. The original row is never updated to represent reversal; matching state is derived from the new reversal effect.
+- **INV-LED-016: Mechanism Actor Attribution**. `mechanism` identifies the actor substantively responsible for a transaction, not who clicked or which process executed it. It is supplied explicitly by the initiating caller and never inferred from FEAT identity, route, or execution context. This generalizes `DOM-PROD-001` §VIII's payroll-scoped rule to every `ledger_transaction` writer: `SELF` for a student's own voluntary act, `TEACHER` for a decision a teacher made (including one the platform computed on the teacher's behalf, e.g. an approved correction), and `SYSTEM` for a scheduled or automatic process no human decided to trigger in the moment. A writer that cannot state which of the three applies has not yet determined its own actor attribution and must not default to `SELF`.
+- **INV-LED-017: Closed Transaction Type Vocabulary**. `type` SHALL be drawn from a closed, schema-enforced vocabulary, not free text. New rows (`transient`/`pending` at flush time) MUST use the canonical spelling; a row using a retired legacy spelling for the same value MUST be rejected before insert. Historical rows are never rewritten to the canonical spelling solely to correct casing — the schema constraint accepts both the canonical and legacy spellings for read compatibility, and nothing in this invariant authorizes an `UPDATE` against an existing row's `type` for cosmetic normalization.
 - **INV-LED-014: Transfer Correlation Identity**. An internal account transfer is one
   class-scoped operation identified by one `correlation_id`. It MUST contain exactly
   two `ledger_transaction` legs: one debit from the source account and one credit
@@ -182,7 +184,7 @@ The canonical, immutable record of financial intent and execution.
 - `target_seat_id` (FK to seats)
 - `actor_seat_id` (FK to seats)
 - `class_id` (FK to classes.class_id)
-- `mechanism` (Enum: `SELF`, `TEACHER`, `SYSTEM`)
+- `mechanism` (Enum: `SELF`, `TEACHER`, `SYSTEM`; actor attribution per INV-LED-016, never inferred)
 - `amount_cents` (Integer; Signed)
 - `timestamp` (Timestamp; UTC)
 - `account_type` (String or Enum; canonical account target)
@@ -192,7 +194,7 @@ The canonical, immutable record of financial intent and execution.
 - `idempotency_key` (String; Command reservation key; required for canonical
   idempotent command paths)
 - `policy_id` (UUID; Frozen policy reference when applicable)
-- `type` (Text; Required; `payroll_correction` identifies authorized fresh interval/residual payroll recovery, distinct from exact `REVERSAL`)
+- `type` (Text; Required; closed vocabulary per INV-LED-017 — schema-enforced, not free text; `payroll_correction` identifies authorized fresh interval/residual payroll recovery, distinct from exact `REVERSAL`)
 - `compensation_origin_locator` (Nullable String(128), opaque Ledger public locator identifying the original transaction; resolved only by Ledger within the same class/target-seat scope)
 - `compensation_amount_cents` (Integer; historical rows may remain NULL; new effects explicitly record nonnegative attributable recovered cents, zero for non-recovery effects including funding-transfer legs; no historical/default backfill)
 - `correction_intent_locator` (Nullable String(128), opaque originating-command intent locator; cannot reference or enforce another domain's internal table)
@@ -271,6 +273,8 @@ Every origin independently enforces §VII.1A: total attributable recovery never 
 `resolve_reconstructed_recovery` derives one combined monetary plan under current authorized banking directives: aggregate positive debits in stable origin order, evaluate shortfall/protection once over the complete debit, and retain one principal/intent per origin. `apply_reconstructed_recovery` revalidates the complete reconstruction and all per-origin caps under target seat → ClassEconomy → stable original-credit → monetary-source locks, and applies all funding and recovery legs with one SPEC-LED-002 command reservation. No separate independently resolved plan may reuse starting balances. Exact full/residual/interval commands serialize together. Revalidate full preview evidence and balances; any changed evidence or failure rolls back everything. Current canonical creation protocol and all nineteen v3 fields protect new effects; no correction fee, obligation or deferred recovery occurs. No old signature, sequence, reservation or compensation linkage is rewritten.
 
 ## X. Change Notes
+
+**2.14 (2026-10-18)** adds INV-LED-016 (Mechanism Actor Attribution), generalizing `DOM-PROD-001` §VIII's payroll-scoped rule to every `ledger_transaction` writer, and INV-LED-017 (Closed Transaction Type Vocabulary), closing `type` to a schema-enforced set without rewriting any existing row's casing. Neither changes `mechanism` or `type`'s existing values on any row; both formalize rules this document previously left to a single other domain or to convention.
 
 **2.12 (2026-10-03)** supersedes v2.9–2.11 blanket legacy creation-field and future-only recovery denial for independently validated immutable-source reconstruction. Adds distinct reconstruction evidence and complete graph recovery; modern strict proof, actual integrity rejection, per-origin caps and current new-effect audit remain binding. No INV or original monetary fact changes.
 
