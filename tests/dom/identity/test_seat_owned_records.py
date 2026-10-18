@@ -192,42 +192,16 @@ def test_authors_cannot_be_borrowed_from_another_class(client, record):
 
 
 def test_migration_preserves_legacy_transfer_replay_without_principal_material(client):
-    # This migration inspects reservations written before FINGERPRINT_VERSION 3
-    # (SPEC-LED-002 S4.2), under the single-effect `_command_fingerprint`
-    # transfer serializer `create_transfer_pair` used at that time. Since that
-    # PR, `create_transfer_pair` composes `build_transfer_effect_pair` with
-    # `create_reserved_effects` and writes the current multi-effect fingerprint
-    # instead, so it can no longer stand in for the legacy shape this migration
-    # guards. Build that historical row directly, replicating exactly what the
-    # pre-refactor code wrote, rather than relying on current code to produce it.
-    from app.models import LedgerCommandReservation, _quantize_currency
-    from app.services.ledger_command_service import _command_fingerprint
+    # create_transfer_pair keeps the internal-transfer family's own dedicated
+    # _command_fingerprint replay serializer (SPEC-LED-002 S4.2) across the
+    # build_transfer_effect_pair consolidation, so it still stands in for a
+    # pre-FINGERPRINT_VERSION-3 legacy row here.
+    from app.services.ledger_transfer_service import create_transfer_pair
     classroom = initialize('chemistry_p1', client.application)
-    seat_id = classroom.students[0].seat.id
-    class_id = classroom.class_id
-    amount = _quantize_currency(Decimal('2.00'))
-    legacy_fingerprint = _command_fingerprint(
-        target_seat_id=seat_id, actor_seat_id=seat_id, amount=amount,
-        account_type='checking->savings', type='internal_transfer',
-        original_transaction_id=None, policy_id=None, version=2,
-    )
     with FEATContext('FEAT-TEST-SETUP', idempotency_key='migration:transfer'):
-        reservation = LedgerCommandReservation(
-            class_id=class_id, feat_code='FEAT-TEST-SETUP', idempotency_key='migration:transfer',
-            replay_fingerprint=legacy_fingerprint, fingerprint_version=2,
-        )
-        db.session.add(reservation)
-        db.session.flush()
-        debit = create_pending_transaction(
-            seat_id=seat_id, class_id=class_id, target_seat_id=seat_id, actor_seat_id=seat_id,
-            mechanism='self', amount=-amount, account_type='checking', type='Withdrawal',
-            description='Transfer', command_reservation=reservation,
-        )
-        create_pending_transaction(
-            seat_id=seat_id, class_id=class_id, target_seat_id=seat_id, actor_seat_id=seat_id,
-            mechanism='self', amount=amount, account_type='savings', type='Deposit',
-            description='Transfer', command_reservation=reservation,
-        )
+        debit, credit = create_transfer_pair(seat_id=classroom.students[0].seat.id,
+            class_id=classroom.class_id, amount=Decimal('2.00'), from_account='checking',
+            to_account='savings', withdraw_description='Transfer', deposit_description='Transfer')
         reservation_id = debit.command_reservation_id
     with db.engine.connect() as conn:
         transaction = conn.begin()

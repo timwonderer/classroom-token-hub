@@ -1,16 +1,27 @@
 """build_transfer_effect_pair is the one Ledger-owned constructor for the
-two-leg transfer effect vector (DOM-LED-001 INV-LED-014). Both the standalone
-internal-transfer route (create_transfer_pair) and the overdraft-protection
-funding legs inside apply_resolved_ledger_plan compose it; these tests pin the
-builder's own validation and the standalone path's idempotency/replay/scoping
-behavior under the new composition onto create_reserved_effects."""
+two-leg transfer effect vector's shared fields (DOM-LED-001 INV-LED-014). Both
+the standalone internal-transfer route (create_transfer_pair) and the
+overdraft-protection funding legs inside apply_resolved_ledger_plan compose it;
+these tests pin the builder's own validation and the standalone path's
+idempotency/replay/scoping behavior.
+
+create_transfer_pair keeps its own dedicated reservation and
+_command_fingerprint replay path (SPEC-LED-002 S4.2: "the internal-transfer
+family retains its existing canonical _command_fingerprint representation") —
+it does NOT delegate reservation/fingerprinting to create_reserved_effects,
+only the two effects' shared field construction is delegated to the builder.
+test_create_transfer_pair_replays_a_pre_existing_reservation_fingerprint below
+guards exactly this: a reservation built with the family's own serializer,
+predating this consolidation, must still replay-match."""
 
 from decimal import Decimal
 
 import pytest
 
 from app.feats.base import FEATContext
-from app.models import LedgerCommandReservation, Transaction
+from app.models import LedgerCommandReservation, Transaction, _quantize_currency
+from app.services.ledger_command_service import _command_fingerprint
+from app.services.ledger_posting_service import create_pending_transaction
 from app.services.ledger_transfer_service import (
     build_transfer_effect_pair,
     create_transfer_pair,
@@ -165,3 +176,56 @@ def test_create_transfer_pair_scoped_by_class_not_shared_across_classes(app):
     assert LedgerCommandReservation.query.filter_by(
         id=second_reservation, class_id=second.class_id
     ).one_or_none() is not None
+
+
+def test_create_transfer_pair_replays_a_pre_existing_reservation_fingerprint(app):
+    """SPEC-LED-002 S4.2: the internal-transfer family's _command_fingerprint
+    replay serializer is never superseded by create_reserved_effects' general
+    effect-plan one. A reservation accepted under that dedicated serializer —
+    built here exactly as a pre-consolidation caller would have, with no
+    dependency on create_transfer_pair's current internals — must still
+    replay-match and return its original two effects, not raise a fingerprint
+    mismatch."""
+    classroom = provision_ledger_classroom("chemistry_p1", app)
+    seat_id = classroom.students[0].seat.id
+    class_id = classroom.class_id
+    amount = _quantize_currency(Decimal("15.00"))
+    idempotency_key = "transfer:pre-existing-reservation"
+    feat_code = "FEAT-LED-000"
+    legacy_fingerprint = _command_fingerprint(
+        target_seat_id=seat_id, actor_seat_id=seat_id, amount=amount,
+        account_type="checking->savings", type="internal_transfer",
+        original_transaction_id=None, policy_id=None, version=5,
+    )
+    with FEATContext("FEAT-LED-001", idempotency_key="transfer:pre-existing-seed"):
+        create_ledger_idempotent_transaction(
+            idempotency_key=f"fund-pre:{seat_id}", seat_id=seat_id, class_id=class_id,
+            amount=Decimal("50.00"), account_type="checking", type="payroll",
+            description="seed",
+        )
+    with FEATContext("FEAT-TEST-SETUP", idempotency_key="transfer:pre-existing-fixture"):
+        reservation = LedgerCommandReservation(
+            class_id=class_id, feat_code=feat_code, idempotency_key=idempotency_key,
+            replay_fingerprint=legacy_fingerprint, fingerprint_version=5,
+        )
+        from app.extensions import db
+        db.session.add(reservation)
+        db.session.flush()
+        original_debit = create_pending_transaction(
+            seat_id=seat_id, class_id=class_id, target_seat_id=seat_id, actor_seat_id=seat_id,
+            mechanism="self", amount=-amount, account_type="checking", type="Withdrawal",
+            description="Transfer", command_reservation=reservation,
+        )
+        original_credit = create_pending_transaction(
+            seat_id=seat_id, class_id=class_id, target_seat_id=seat_id, actor_seat_id=seat_id,
+            mechanism="self", amount=amount, account_type="savings", type="Deposit",
+            description="Transfer", command_reservation=reservation,
+        )
+    with FEATContext(feat_code, idempotency_key=idempotency_key):
+        replayed_debit, replayed_credit = create_transfer_pair(
+            seat_id=seat_id, class_id=class_id, amount=Decimal("15.00"),
+            from_account="checking", to_account="savings",
+            withdraw_description="Transfer", deposit_description="Transfer",
+        )
+    assert replayed_debit.id == original_debit.id
+    assert replayed_credit.id == original_credit.id
