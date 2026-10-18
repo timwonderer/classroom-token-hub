@@ -192,6 +192,10 @@ def test_authors_cannot_be_borrowed_from_another_class(client, record):
 
 
 def test_migration_preserves_legacy_transfer_replay_without_principal_material(client):
+    # create_transfer_pair keeps the internal-transfer family's own dedicated
+    # _command_fingerprint replay serializer (SPEC-LED-002 S4.2) across the
+    # build_transfer_effect_pair consolidation, so it still stands in for a
+    # pre-FINGERPRINT_VERSION-3 legacy row here.
     from app.services.ledger_transfer_service import create_transfer_pair
     classroom = initialize('chemistry_p1', client.application)
     with FEATContext('FEAT-TEST-SETUP', idempotency_key='migration:transfer'):
