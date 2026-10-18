@@ -223,13 +223,13 @@ def _seed_q2_window(classroom):
     window_start = now - timedelta(days=2)
     window_end = now + timedelta(hours=1)
 
-    def _tx(feat, corr, seat, amount, mechanism="self"):
+    def _tx(feat, corr, seat, amount, mechanism="self", type="act"):
         with FEATContext(feat, correlation_id=corr, idempotency_key=corr):
             create_pending_transaction(
                 seat_id=seat.seat_id, class_id=cid, target_seat_id=seat.seat_id,
                 actor_seat_id=seat.seat_id, mechanism=mechanism,
                 amount=Decimal(amount), account_type="checking",
-                type="act", description="q2",
+                type=type, description="q2",
             )
 
     # seat A: two student-originated acts (outbound purchase + transfer).
@@ -237,8 +237,9 @@ def _seed_q2_window(classroom):
     _tx("FEAT-STOR-001", "q2:A2", sA, "-3.00")
     # seat B: one student-originated act.
     _tx("FEAT-STOR-001", "q2:B1", sB, "-2.00")
-    # seat C: system-FEAT payroll row → excluded by §6.3 classifier.
-    _tx("FEAT-LED-004", "q2:C1", sC, "10.00")
+    # seat C: payroll row → excluded by §6.3 classifier's closed Transaction.type
+    # exclusion set (SYSTEM_ORIGINATED_TYPE_VALUES), not by feat_code.
+    _tx("FEAT-LED-004", "q2:C1", sC, "10.00", type="payroll")
     # seat D: teacher-mechanism row → excluded (not SELF).
     _tx("FEAT-ADMN-001", "q2:D1", sD, "5.00", mechanism="teacher")
 

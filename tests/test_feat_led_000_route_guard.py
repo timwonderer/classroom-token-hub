@@ -56,6 +56,18 @@ def test_mutation_single_line_feat_context_is_reported(tmp_path):
     assert [(h.path, h.line) for h in hits] == [("app/routes/new_route.py", 1)]
 
 
+def test_mutation_whitespace_before_paren_is_reported(tmp_path):
+    """`FEATContext (...)` — unconventional spacing, still a legal call — must
+    not slip past the guard (CodeRabbit finding on #1599)."""
+    _plant(
+        tmp_path,
+        "app/routes/new_route.py",
+        'with FEATContext ("FEAT-LED-000", idempotency_key=key):\n    ...\n',
+    )
+    hits = scan_routes(tmp_path)
+    assert [(h.path, h.line) for h in hits] == [("app/routes/new_route.py", 1)]
+
+
 def test_lawful_neighbours_are_not_reported():
     """A FEAT-LED-005 opening, and a bare mention in a comment, are not violations."""
     text = (

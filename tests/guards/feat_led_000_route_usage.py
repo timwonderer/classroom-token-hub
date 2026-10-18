@@ -6,7 +6,9 @@ Factored out of the test so it can be fed a synthetic violation and proved to
 report it (SOP-TEST-003 §IX.A). A route can spell the call across several
 lines (``with FEATContext(\\n    "FEAT-LED-000",\\n    ...\\n):``), so this
 matches over each whole file's text rather than one line at a time, and
-reports the line the ``FEATContext(`` call itself starts on.
+reports the line the ``FEATContext(`` call itself starts on. Tolerates
+whitespace between the name and the opening paren (``FEATContext (...)``\\``)
+so an unconventional but legal spelling doesn't slip past the guard.
 """
 
 from __future__ import annotations
@@ -15,7 +17,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-_PATTERN = re.compile(r"FEATContext\(\s*[\"']FEAT-LED-000[\"']")
+_PATTERN = re.compile(r"FEATContext\s*\(\s*[\"']FEAT-LED-000[\"']")
 
 
 @dataclass(frozen=True)

@@ -15,7 +15,7 @@
 
 This FEAT is the top-level orchestration identity for a student's own voluntary checking/savings transfer.
 
-It exists to give the internal-transfer route a real, dedicated `FEATContext` of its own. Before this FEAT, `app/routes/student.py` opened its transfer `FEATContext` under `FEAT-LED-000` — the canonical monetary-resolution **workflow** identity, which `FEAT-LED-000` §0 (Execution-model reconciliation) and its v0.6 Change Note explicitly disclaim as ever having been a route-level orchestration identity. `FEAT-LED-005` corrects that: once its cutover PR lands, it is the one live top-level `FEATContext` an internal transfer actually runs under.
+It exists to give the internal-transfer route a real, dedicated `FEATContext` of its own. Before this FEAT, `app/routes/student.py` opened its transfer `FEATContext` under `FEAT-LED-000` — the canonical monetary-resolution **workflow** identity, which `FEAT-LED-000` §0 (Execution-model reconciliation) and its v0.6 Change Note explicitly disclaim as ever having been a route-level orchestration identity. `FEAT-LED-005` corrects that: following its cutover PR (#1599), it is the one live top-level `FEATContext` an internal transfer actually runs under.
 
 This FEAT does not define transfer *mechanics* — the exact two-leg shape, correlation identity, and atomicity are `DOM-LED-001` INV-LED-014's, enforced by the Ledger-owned `build_transfer_effect_pair` primitive this FEAT composes. This FEAT defines the orchestration boundary around that primitive: who may invoke it, under what context, and what it does and does not touch.
 
@@ -97,7 +97,7 @@ These describe live runtime behavior as of v1.2; see the v1.2 note above.
 
 ## IX. Enforcement Scope for the DB `CHECK` Constraint and Write-Time Validator
 
-The DB `CHECK` constraint and write-time casing validator for `Transaction.type` (`DOM-LED-001` INV-LED-017) are deployed by the cutover PR this contract anticipates, not by this document. That PR's allow-list MUST be drawn from INV-LED-017's canonical/legacy enumeration table, not re-derived from current writers.
+The route/registry cutover above (v1.2) is independent of this section: it does not deploy the DB `CHECK` constraint or write-time casing validator for `Transaction.type` (`DOM-LED-001` INV-LED-017). Both remain a separate, not-yet-landed PR. That PR's allow-list MUST be drawn from INV-LED-017's canonical/legacy enumeration table, not re-derived from current writers.
 
 ## X. Amendment
 

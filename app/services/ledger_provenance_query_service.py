@@ -94,7 +94,7 @@ def get_seat_ids_with_student_originated_activity(
     (SPEC-ITR-001 §6.2 first source, §6.3 classifier). Scoped by ``class_id``
     (multi-tenancy) and the half-open completed-cycle window. Uses the canonical
     ledger anchor (``Transaction.seat_id``) as the acting seat. Never consults
-    ``Transaction.type`` (INV-ITR-015).
+    ``feat_code`` (INV-ITR-015).
     """
     if not class_id or window_start is None or window_end is None:
         return set()
@@ -162,7 +162,7 @@ def get_student_originated_rows(
     student-originated classifier as :func:`get_seat_ids_with_student_originated_activity`,
     but projects the per-row ``amount_cents`` so Q2-C1 (frequency) and Q2-C2
     (monetary volume) can be computed from a single scoped read. Never consults
-    ``Transaction.type`` (INV-ITR-015).
+    ``feat_code`` (INV-ITR-015).
     """
     if not class_id or window_start is None or window_end is None:
         return []
@@ -245,7 +245,7 @@ def get_student_originated_transaction_ids(
     the ledger ids a PAYMENT event settled and receives back only those that pass
     the §6.3 classifier. This never infers where a seat's *balance* originally
     came from — it classifies the payment row itself, nothing more (§8.5).
-    Scoped by ``class_id``; ``Transaction.type`` is never consulted (INV-ITR-015).
+    Scoped by ``class_id``; ``feat_code`` is never consulted (INV-ITR-015).
     """
     if not class_id or not transaction_ids:
         return set()
@@ -316,7 +316,7 @@ def get_student_savings_contribution_rows(
     positive amount (inbound to the savings account, ``DOM-LED-001`` INV-LED-007).
     Both legs of a transfer pair carry ``original_transaction_id IS NULL``, so the
     §6.3 classifier applies to the savings-credit leg directly. Projects
-    ``seat_id`` and ``amount_cents``; ``Transaction.type`` is never consulted
+    ``seat_id`` and ``amount_cents``; ``feat_code`` is never consulted
     (INV-ITR-015). Scoped by ``class_id`` and the half-open completed-cycle window.
     """
     if not class_id or window_start is None or window_end is None:
