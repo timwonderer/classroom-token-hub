@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.32 | 2026-10-18 | 3.31 | Normative |
+| SOP-DOC-001 | 3.33 | 2026-10-19 | 3.32 | Normative |
 
 ---
 
@@ -278,8 +278,11 @@ Their surviving content lives at:
 
 ## VIII. Change Notes
 
+**Version 3.33 (2026-10-19):**
+- Register DOM-LED-001 v2.17: deploys the DB `CHECK` constraint half of INV-LED-017 (migration `a4d7e9c2f1b6`, `ck_ledger_transaction_type_closed_vocabulary`), enumerating the invariant's own canonical/legacy table as the only lawful `ledger_transaction.type` values (`NULL` still permitted). Closes the set of lawful values; does not yet enforce canonical spelling on new rows (the write-time casing validator is separate, later scope). Also registers FEAT-LED-005 v1.3 (reconciles this PR's and #1599's independently-recorded v1.2 histories into one: both the route/registry cutover and the DB `CHECK` constraint have now landed) and SPEC-ITR-001 v1.6 (§6.6/P4 updated to reflect the constraint's partial enforcement). No existing row's `type` value changes. PR 5 of the approved PR sequence from the SYSTEM_ORIGINATED_FEAT_CODES investigation.
+
 **Version 3.32 (2026-10-18):**
-- Register DOM-LED-001 v2.17: deploys the DB `CHECK` constraint half of INV-LED-017 (migration `a4d7e9c2f1b6`, `ck_ledger_transaction_type_closed_vocabulary`), enumerating the invariant's own canonical/legacy table as the only lawful `ledger_transaction.type` values (`NULL` still permitted). Closes the set of lawful values; does not yet enforce canonical spelling on new rows (the write-time casing validator is separate, later scope). Also registers FEAT-LED-005 v1.2 (records the constraint's landing independently of this FEAT's own still-pending route/registry cutover) and SPEC-ITR-001 v1.6 (§6.6/P4 updated to reflect the constraint's partial enforcement). No existing row's `type` value changes. PR 5 of the approved PR sequence from the SYSTEM_ORIGINATED_FEAT_CODES investigation.
+- Register the `FEAT-LED-005` route cutover (internal-transfer route now opens `FEAT-LED-005`, not `FEAT-LED-000`; `app/feats/base.py` registry entry added; `FEAT-LED-005` v1.2 and `FEAT-LED-000` v0.7 update from prospective to live-runtime status) and the SPEC-ITR-001 v1.4/DOM-ITR-001 v1.9 code cutover: `ledger_provenance_query_service.py`'s §6.3 classifier now uses the closed `Transaction.type` exclusion set (`SYSTEM_ORIGINATED_TYPE_VALUES`) instead of the removed `SYSTEM_ORIGINATED_FEAT_CODES` `feat_code` membership test. DOM-ITR-001 §XIII's INV-ITR-015 row moves from KNOWN NONCOMPLIANCE to RESOLVED. The DB `CHECK` constraint and write-time casing validator on `Transaction.type` remain a separate, not-yet-landed PR (SPEC-ITR-001 §6.6). PR 4 of the approved PR sequence from the SYSTEM_ORIGINATED_FEAT_CODES investigation (#1599).
 
 **Version 3.31 (2026-10-18):**
 - Register DOM-LED-001 v2.16: INV-LED-014 names `build_transfer_effect_pair` (`app/services/ledger_transfer_service.py`) as the sole pure constructor of a transfer's two-leg effect vector's shared fields, replacing the standalone internal-transfer command's and the overdraft-protection funding legs' independent inline effect-dict construction with one shared builder. `create_transfer_pair` keeps its own dedicated `_command_fingerprint` reservation/replay path (SPEC-LED-002 §4.2); only the two effects' shared fields are now built in common. No effect shape, invariant, or historical row changes. PR 3 of the approved PR sequence from the SYSTEM_ORIGINATED_FEAT_CODES investigation.
