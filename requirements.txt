@@ -22,7 +22,7 @@ markdown==3.10.3
 # - soft_str and soft_unicode removed (deprecated since 2.0)
 # - Markup.striptags() behavior may differ
 # Review Jinja2 compatibility before upgrading from 2.1.5 to 3.0.3
-MarkupSafe==2.1.5
+MarkupSafe==3.0.4
 packaging==26.3
 pluggy==1.6.0
 psycopg2-binary==2.9.13
