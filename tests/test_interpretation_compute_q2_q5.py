@@ -229,7 +229,7 @@ def _seed_q2_window(classroom):
                 seat_id=seat.seat_id, class_id=cid, target_seat_id=seat.seat_id,
                 actor_seat_id=seat.seat_id, mechanism=mechanism,
                 amount=Decimal(amount), account_type="checking",
-                type="act", description="q2",
+                type="manual_payment", description="q2",
             )
 
     # seat A: two student-originated acts (outbound purchase + transfer).
@@ -291,7 +291,7 @@ def _seed_q5_window(classroom):
                 seat_id=seat.seat_id, class_id=cid, target_seat_id=seat.seat_id,
                 actor_seat_id=seat.seat_id, mechanism=mechanism,
                 amount=Decimal(amount), account_type=account_type,
-                type="act", description="q5",
+                type="manual_payment", description="q5",
                 original_transaction_id=original_transaction_id,
             )
 

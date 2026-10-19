@@ -55,7 +55,7 @@ def _post(cid, seat, account_type, amount, ts, mechanism=LedgerMechanism.SELF):
     record_ledger_fixture(
         seat_id=seat.seat_id, target_seat_id=seat.seat_id, actor_seat_id=seat.seat_id,
         class_id=cid, amount=Decimal(amount), account_type=account_type,
-        mechanism=mechanism, posted=True, type="test", timestamp=ts,
+        mechanism=mechanism, posted=True, type="manual_payment", timestamp=ts,
     )
 
 
