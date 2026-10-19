@@ -27,7 +27,7 @@ Constitutional within `INV-ARC`. Derived from `INV-CORE-000` Section III.1, `` `
 
 ## V. Core Rule
 
-Requests referencing non-existent `join_code` MUST fail.
+Requests referencing non-existent `class_id` MUST fail.
 
 No fallback or recovery logic is permitted.
 
