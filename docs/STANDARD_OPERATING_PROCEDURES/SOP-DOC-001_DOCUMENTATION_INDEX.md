@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.28 | 2026-10-14 | 3.27 | Normative |
+| SOP-DOC-001 | 3.33 | 2026-10-19 | 3.32 | Normative |
 
 ---
 
@@ -117,6 +117,7 @@ Archived material is deliberately absent; see §VI.
 - [FEAT-LED-000 — Canonical Monetary Resolution Workflow](../FEATURE-EXECUTION/FEAT-LED-000_CANONICAL_MONETARY_RESOLUTION_WORKFLOW.md)
 - [FEAT-LED-001 — Post Ledger Transaction](../FEATURE-EXECUTION/FEAT-LED-001_POST_LEDGER_TRANSACTION.md)
 - [FEAT-LED-002 — Reversal of Monetary Transaction](../FEATURE-EXECUTION/FEAT-LED-002_VOID_REVERSE_TRANSACTION.md)
+- [FEAT-LED-005 — Internal Account Transfer](../FEATURE-EXECUTION/FEAT-LED-005_INTERNAL_ACCOUNT_TRANSFER.md)
 - [FEAT-OBL-002 — Schedule Next Bill Cycle](../FEATURE-EXECUTION/FEAT-OBL-002_ADVANCE_BILL_CYCLE.md)
 - [FEAT-OBL-003 — Satisfy Obligation](../FEATURE-EXECUTION/FEAT-OBL-003_SATISFY_OBLIGATION.md)
 - [FEAT-OBL-004 — Insurance Policy Purchase / Enrollment](../FEATURE-EXECUTION/FEAT-OBL-004_INSURANCE_POLICY_PURCHASE.md)
@@ -175,7 +176,7 @@ Archived material is deliberately absent; see §VI.
 - [SOP-DB-004 — Live-v2 Migration and Semantic-Versioning Contract](DATABASE/SOP-DB-004_Live_V2_Migration_And_Versioning_Contract.md)
 
 ### Procedures — Deployment (SOP-DEP)
-- [SOP-DEP-001 — v2 Live-Test Runbook](DEPLOYMENT/SOP-DEP-001_Live_Test_Runbook.md) — v2.7: §XIV lists the forward-only Ledger posting, compensation provenance, and attendance invalidation revisions.
+- [SOP-DEP-001 — v2 Live-Test Runbook](DEPLOYMENT/SOP-DEP-001_Live_Test_Runbook.md) — v2.9: §XI evidence standard and per-line results table; §XI.A no cross-scope attempts on a host serving live classes.
 - [SOP-DEP-002 — v2 Production Transition Runbook](DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md)
 
 ### Procedures — DevOps (SOP-DEV)
@@ -276,6 +277,21 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.33 (2026-10-19):**
+- Register DOM-LED-001 v2.17: deploys the DB `CHECK` constraint half of INV-LED-017 (migration `a4d7e9c2f1b6`, `ck_ledger_transaction_type_closed_vocabulary`), enumerating the invariant's own canonical/legacy table as the only lawful `ledger_transaction.type` values (`NULL` still permitted). Closes the set of lawful values; does not yet enforce canonical spelling on new rows (the write-time casing validator is separate, later scope). Also registers FEAT-LED-005 v1.3 (reconciles this PR's and #1599's independently-recorded v1.2 histories into one: both the route/registry cutover and the DB `CHECK` constraint have now landed) and SPEC-ITR-001 v1.6 (§6.6/P4 updated to reflect the constraint's partial enforcement). No existing row's `type` value changes. PR 5 of the approved PR sequence from the SYSTEM_ORIGINATED_FEAT_CODES investigation.
+
+**Version 3.32 (2026-10-18):**
+- Register the `FEAT-LED-005` route cutover (internal-transfer route now opens `FEAT-LED-005`, not `FEAT-LED-000`; `app/feats/base.py` registry entry added; `FEAT-LED-005` v1.2 and `FEAT-LED-000` v0.7 update from prospective to live-runtime status) and the SPEC-ITR-001 v1.4/DOM-ITR-001 v1.9 code cutover: `ledger_provenance_query_service.py`'s §6.3 classifier now uses the closed `Transaction.type` exclusion set (`SYSTEM_ORIGINATED_TYPE_VALUES`) instead of the removed `SYSTEM_ORIGINATED_FEAT_CODES` `feat_code` membership test. DOM-ITR-001 §XIII's INV-ITR-015 row moves from KNOWN NONCOMPLIANCE to RESOLVED. The DB `CHECK` constraint and write-time casing validator on `Transaction.type` remain a separate, not-yet-landed PR (SPEC-ITR-001 §6.6). PR 4 of the approved PR sequence from the SYSTEM_ORIGINATED_FEAT_CODES investigation (#1599).
+
+**Version 3.31 (2026-10-18):**
+- Register DOM-LED-001 v2.16: INV-LED-014 names `build_transfer_effect_pair` (`app/services/ledger_transfer_service.py`) as the sole pure constructor of a transfer's two-leg effect vector's shared fields, replacing the standalone internal-transfer command's and the overdraft-protection funding legs' independent inline effect-dict construction with one shared builder. `create_transfer_pair` keeps its own dedicated `_command_fingerprint` reservation/replay path (SPEC-LED-002 §4.2); only the two effects' shared fields are now built in common. No effect shape, invariant, or historical row changes. PR 3 of the approved PR sequence from the SYSTEM_ORIGINATED_FEAT_CODES investigation.
+
+**Version 3.30 (2026-10-18):**
+- Register DOM-LED-001 v2.15 (INV-LED-016 mechanism actor attribution, INV-LED-017 closed type vocabulary with its authoritative canonical/legacy enumeration table), FEAT-LED-000 v0.6 (disclaims prior route-level orchestration misuse), and the new FEAT-LED-005 v1.1 (Internal Account Transfer; prospective pending its own cutover PR). Contracts only; no code changed. Part of the approved PR sequence from the SYSTEM_ORIGINATED_FEAT_CODES investigation.
+
+**Version 3.29 (2026-10-16):**
+- Register SOP-DEP-001 v2.9: §XI evidence standard and per-line results table recorded during the checks; §XI.A forbids deliberate cross-scope attempts on a host serving live classes (owner rulings, 2026-10-16).
 
 **Version 3.28 (2026-10-14), developer-documentation modernization pass:**
 - Register the Authority Level correction: `INV-ARC-000` through `INV-ARC-016`, `INV-ARC-021` and `INV-ARC-022` (all v+0.1, "Foundational" → "Constitutional"), and `DOM-OPS-001` v2.13, `DOM-ITR-001` v1.8, `DOM-STORE-001` v5.6, `DOM-SUP-001` v1.9 (all "Normative" → "Constitutional," `DOM-STORE-001`'s header now matching its own already-correct body). Label corrections only; no dependency, scope, or rule changed in any of the 23 documents. Also registers `SOP-DOC-000` v3.5, carved out of the same reconciliation since it is the document defining the tier scheme: corrected from "Foundational (Tier 0)" to "Normative (Tier 2 — SOP Tier)," matching its own §V/§VI taxonomy.

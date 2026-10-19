@@ -14,8 +14,8 @@ whether a seat acted *at all*, the union is idempotent under that precedence.
 
 Architectural rule (INV-ARC-009, INV-ITR-016): this module consumes source-domain
 read surfaces, never arbitrary ORM. The §6.3 classifier itself lives in the
-Ledger domain (``ledger_provenance_query_service.SYSTEM_ORIGINATED_FEAT_CODES``) because the
-Ledger owns the provenance of its own rows; ``Transaction.type`` is never
+Ledger domain (``ledger_provenance_query_service.SYSTEM_ORIGINATED_TYPE_VALUES``)
+because the Ledger owns the provenance of its own rows; ``feat_code`` is never
 consulted here (INV-ITR-015).
 """
 
