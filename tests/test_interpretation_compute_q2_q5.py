@@ -223,7 +223,7 @@ def _seed_q2_window(classroom):
     window_start = now - timedelta(days=2)
     window_end = now + timedelta(hours=1)
 
-    def _tx(feat, corr, seat, amount, mechanism="self", type="act"):
+    def _tx(feat, corr, seat, amount, mechanism="self", type="manual_payment"):
         with FEATContext(feat, correlation_id=corr, idempotency_key=corr):
             create_pending_transaction(
                 seat_id=seat.seat_id, class_id=cid, target_seat_id=seat.seat_id,
@@ -292,7 +292,7 @@ def _seed_q5_window(classroom):
                 seat_id=seat.seat_id, class_id=cid, target_seat_id=seat.seat_id,
                 actor_seat_id=seat.seat_id, mechanism=mechanism,
                 amount=Decimal(amount), account_type=account_type,
-                type="act", description="q5",
+                type="manual_payment", description="q5",
                 original_transaction_id=original_transaction_id,
             )
 

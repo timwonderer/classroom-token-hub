@@ -214,7 +214,7 @@ def test_student_detail_offers_reverse_only_where_the_action_would_accept(app, g
         purchase = db.session.get(Transaction, goal_purchase["purchase_id"])
 
         rent_id = _post_charge(class_id, seat_id, key="rent", amount="-20.00",
-                               type="Rent Payment", description="Rent Payment")
+                               type="rent_payment", description="Rent Payment")
         _settle_obligation(class_id, seat_id, obligation_type="RENT", internal_ref="rent:monthly",
                            correlation_id="goal-reversal:rent", ledger_id=rent_id)
         fee_id = _post_charge(class_id, seat_id, key="fee", amount="-25.00",
@@ -275,7 +275,7 @@ def test_a_rent_payment_stays_final(app, goal_purchase):
     with app.app_context():
         class_id, seat_id = goal_purchase["class_id"], goal_purchase["seat_id"]
         rent_id = _post_charge(class_id, seat_id, key="rent-final", amount="-20.00",
-                               type="Rent Payment", description="Rent Payment")
+                               type="rent_payment", description="Rent Payment")
         _settle_obligation(class_id, seat_id, obligation_type="RENT", internal_ref="rent:final",
                            correlation_id="goal-reversal:rent-final", ledger_id=rent_id)
         assert obligations_service.is_obligation_related_transaction(rent_id) is True

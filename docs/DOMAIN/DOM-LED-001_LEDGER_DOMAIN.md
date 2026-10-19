@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-LED-001 | 2.16 | 2026-10-18 | 2.15 | Constitutional |
+| DOM-LED-001 | 2.17 | 2026-10-18 | 2.16 | Constitutional |
 
 ---
 
@@ -308,6 +308,8 @@ Every origin independently enforces §VII.1A: total attributable recovery never 
 `resolve_reconstructed_recovery` derives one combined monetary plan under current authorized banking directives: aggregate positive debits in stable origin order, evaluate shortfall/protection once over the complete debit, and retain one principal/intent per origin. `apply_reconstructed_recovery` revalidates the complete reconstruction and all per-origin caps under target seat → ClassEconomy → stable original-credit → monetary-source locks, and applies all funding and recovery legs with one SPEC-LED-002 command reservation. No separate independently resolved plan may reuse starting balances. Exact full/residual/interval commands serialize together. Revalidate full preview evidence and balances; any changed evidence or failure rolls back everything. Current canonical creation protocol and all nineteen v3 fields protect new effects; no correction fee, obligation or deferred recovery occurs. No old signature, sequence, reservation or compensation linkage is rewritten.
 
 ## X. Change Notes
+
+**2.17 (2026-10-18)** deploys the DB `CHECK` constraint half of INV-LED-017 (migration `a4d7e9c2f1b6`, `ck_ledger_transaction_type_closed_vocabulary`), enumerating this invariant's own canonical/legacy table as the only lawful `type` values (`NULL` still permitted). This closes the *set* of lawful values; it does not yet enforce the *spelling* a new row must use within that set — the write-time casing validator (rejecting a legacy spelling on a new row) remains separate, later scope, since it requires retiring every current legacy-cased writer and updating every read-site comparison that still expects the legacy spelling (most critically `app/utils/transaction_idempotency.py`'s idempotent-type and fingerprint-exclusion sets). No existing row's `type` value changes.
 
 **2.16 (2026-10-18)** names `build_transfer_effect_pair` in INV-LED-014 as the sole pure constructor of a transfer's two-leg effect vector's shared fields. Before this revision the standalone internal-transfer command (`create_transfer_pair`) and the overdraft-protection funding legs inside `apply_resolved_ledger_plan` each built the same effect-dict shape independently, free to drift apart. Both now build it with this one constructor. `create_transfer_pair` keeps its own dedicated `_command_fingerprint` reservation/replay path exactly as before — per `SPEC-LED-002` §4.2 the internal-transfer family's fingerprint serializer is never the general effect-plan one, so an existing reservation's replay-match is unaffected. No existing effect shape, invariant, or historical row changes — this closes the "two independent implementations" gap identified in the 2026-10-17 provenance investigation, §7.1/§7.3, without touching either path's reservation semantics.
 

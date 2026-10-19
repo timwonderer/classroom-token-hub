@@ -61,7 +61,7 @@ def _make_obligation_related_payment(seat, *, correlation_id, amount, idempotenc
     """
     tx = _create_transaction(
         seat,
-        type='Rent Payment',
+        type='rent_payment',
         amount=amount,
         description='Rent Payment',
         idempotency_key=idempotency_key,
@@ -176,7 +176,7 @@ def test_DOM_OPS_001__non_obligation_transaction_still_voids_lawfully(client, ap
 
     tx = _create_transaction(
         seat,
-        type='adjustment',
+        type='manual_payment',
         amount=Decimal('-5.00'),
         description='teacher adjustment',
         idempotency_key='void-guard:d:paytx',
