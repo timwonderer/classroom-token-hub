@@ -31,8 +31,8 @@ KEY_FETCH_TIMEOUT_SECONDS = 10
 # clock just before forwarding, so with none a fresh assertion reads as issued
 # in the future and is rejected.
 IAP_CLOCK_SKEW_SECONDS = 30
-# Wide enough that no iat or exp can fail: used only to tell a bad signature
-# from a bad time when naming why an assertion was rejected.
+# Wide enough that google-auth's own iat and exp checks never fail, so the
+# skew checks above run once, against one clock reading.
 _IGNORE_TIME_SECONDS = 10**10
 
 _MAX_AGE = re.compile(r"(?:^|[\s,])max-age\s*=\s*\"?(\d+)", re.IGNORECASE)
@@ -103,7 +103,6 @@ def _verify_iap_assertion(assertion: str, audience: str) -> tuple[dict | None, s
     The reason is always one of a fixed set of codes, never exception text:
     google-auth's messages can quote the token itself.
     """
-    keys = None
     try:
         header = jwt.decode_header(assertion)
         key_id = header.get("kid")
@@ -114,34 +113,25 @@ def _verify_iap_assertion(assertion: str, audience: str) -> tuple[dict | None, s
         if not isinstance(key_id, (str, type(None))):
             return None, "invalid_key_id"
         keys = _IAP_KEYS.keys_for(key_id, requests.Request())
-        # Signature and expiry here; the audience below, so that a mismatch,
-        # the likeliest misconfiguration, gets its own reason code.
-        claims = jwt.decode(assertion, certs=keys, audience=None, clock_skew_in_seconds=IAP_CLOCK_SKEW_SECONDS)
+        # Signature and required claims only; the times are checked below
+        # against one clock reading, so each failure gets its own reason code.
+        claims = jwt.decode(assertion, certs=keys, audience=None, clock_skew_in_seconds=_IGNORE_TIME_SECONDS)
     except google_auth_exceptions.TransportError:
         return None, "key_fetch_failed"
     except (ValueError, google_auth_exceptions.GoogleAuthError):
-        return None, _failed_check(assertion, keys)
+        return None, "invalid_token"
+    now = time.time()
+    if claims["iat"] - IAP_CLOCK_SKEW_SECONDS > now:
+        return None, "issued_in_future"
+    if claims["exp"] + IAP_CLOCK_SKEW_SECONDS < now:
+        return None, "expired"
+    # The audience after the times, so that a mismatch, the likeliest
+    # misconfiguration, gets its own reason code.
     if claims.get("aud") != audience:
         return None, "wrong_audience"
     if claims.get("iss") != IAP_ISSUER:
         return None, "wrong_issuer"
     return claims, "verified"
-
-
-def _failed_check(assertion: str, keys: dict[str, str] | None) -> str:
-    """Why a rejected assertion failed: a bad time only if its signature verifies, else invalid_token."""
-    if keys is None:
-        return "invalid_token"
-    try:
-        claims = jwt.decode(assertion, certs=keys, audience=None, clock_skew_in_seconds=_IGNORE_TIME_SECONDS)
-    except (ValueError, google_auth_exceptions.GoogleAuthError):
-        return "invalid_token"
-    now = time.time()
-    if claims["iat"] - IAP_CLOCK_SKEW_SECONDS > now:
-        return "issued_in_future"
-    if claims["exp"] + IAP_CLOCK_SKEW_SECONDS < now:
-        return "expired"
-    return "invalid_token"
 
 
 def authenticated_operator_email(assertion: str | None, authenticated_email: str | None = None) -> str | None:
