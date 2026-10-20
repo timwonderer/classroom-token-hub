@@ -83,33 +83,34 @@ as required by `SPEC-OPS-006`.
    gcloud scheduler jobs pause cth-status-app-health-collector --location us-west2 --project cth-production-status
    gcloud scheduler jobs update http cth-status-app-health-collector --location us-west2 --project cth-production-status --uri="$SERVICE_URL/collect" --http-method=POST --oidc-service-account-email=status-scheduler@cth-production-status.iam.gserviceaccount.com --oidc-token-audience="$SERVICE_URL" --attempt-deadline=180s
    gcloud scheduler jobs describe cth-status-app-health-collector --location us-west2 --project cth-production-status --format=json
-   gcloud scheduler jobs run cth-status-app-health-collector --location us-west2 --project cth-production-status
+   gcloud scheduler jobs resume cth-status-app-health-collector --location us-west2 --project cth-production-status
    ```
 
-   Confirm the updated job is still paused and its next forced run received
-   HTTP 204. Check a new `telemetry_snapshots` minute (or a bounded
-   `telemetry_attempts` failure), a new `platform_observations` entry, current
-   pointers, and the rendered public page. A 204 alone does not establish that
-   source evidence was available.
-4. Resume the Scheduler job with `gcloud scheduler jobs resume
-   cth-status-app-health-collector --location us-west2 --project
-   cth-production-status` and observe at least five consecutive scheduled
-   minutes. Verify no missing or duplicated source-minute history, current
-   platform freshness, and no unexpected retries. Only then leave the Job
-   unused for rollback. A later cleanup can remove the old Job and disable
-   its deployment flag after the service has remained stable.
+   Check the `describe` output reports `PAUSED` before resuming. Cloud
+   Scheduler rejects a forced run while paused. Observe the next scheduled run
+   and confirm it received HTTP 204. Check a new `telemetry_snapshots` minute
+   (or a bounded `telemetry_attempts` failure), a new `platform_observations`
+   entry, current pointers, and the rendered public page. A 204 alone does not
+   establish that source evidence was available.
+
+4. Observe at least five consecutive scheduled minutes. Verify no missing or
+   duplicated source-minute history, current platform freshness, and no
+   unexpected retries. Only then leave the Job unused for rollback. A later
+   cleanup can remove the old Job and disable its deployment flag after the
+   service has remained stable.
 
 Rollback: pause the Scheduler job, restore the saved Job API URI and OAuth
-`cloud-platform` token configuration, confirm it remains paused, force one
-Job run, inspect fresh Firestore evidence, then resume the minute schedule:
+`cloud-platform` token configuration, confirm it remains paused, then resume
+the minute schedule:
 
 ```bash
 gcloud scheduler jobs pause cth-status-app-health-collector --location us-west2 --project cth-production-status
 gcloud scheduler jobs update http cth-status-app-health-collector --location us-west2 --project cth-production-status --uri='https://run.googleapis.com/v2/projects/cth-production-status/locations/us-west2/jobs/cth-status-app-health-collector:run' --http-method=POST --oauth-service-account-email=status-scheduler@cth-production-status.iam.gserviceaccount.com --oauth-token-scope=https://www.googleapis.com/auth/cloud-platform --attempt-deadline=180s
 gcloud scheduler jobs describe cth-status-app-health-collector --location us-west2 --project cth-production-status --format=json
-gcloud scheduler jobs run cth-status-app-health-collector --location us-west2 --project cth-production-status
 gcloud scheduler jobs resume cth-status-app-health-collector --location us-west2 --project cth-production-status
 ```
+
+Verify the next scheduled Job run and fresh Firestore evidence after resuming.
 
 Keep the old Job provisioned during this period. Do not rewrite retained
 snapshots, attempts, or platform observations.
