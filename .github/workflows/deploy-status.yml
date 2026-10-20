@@ -226,7 +226,8 @@ jobs:
               "identity": template.get("serviceAccountName") == "status-probe@cth-production-status.iam.gserviceaccount.com",
               "command": container.get("command") == ["gunicorn"] and container.get("args") == ["--bind", "0.0.0.0:8080", "--workers", "1", "--timeout", "110", "status_service.collector_app:app"],
               "request_billing": revision_annotations.get("run.googleapis.com/cpu-throttling") in (None, "true"),
-              "resources": container.get("resources", {}).get("limits", {}) == {"cpu": "1000m", "memory": "512Mi"},
+              "resources": container.get("resources", {}).get("limits", {}) in (
+                  {"cpu": "1", "memory": "512Mi"}, {"cpu": "1000m", "memory": "512Mi"}),
               "concurrency": template.get("containerConcurrency") == 1,
               "readiness": conditions.get("Ready") == "True" and bool(ready) and ready == status.get("latestCreatedRevisionName") and sum(
                   target.get("percent", 0) for target in status.get("traffic", []) if target.get("revisionName") == ready) == 100,
