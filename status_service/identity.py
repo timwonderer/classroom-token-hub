@@ -27,6 +27,13 @@ IAP_ALGORITHM = "ES256"
 # Key fetches hold the cache lock, so a hung endpoint must not stall every
 # operator request for google-auth's 120-second default.
 KEY_FETCH_TIMEOUT_SECONDS = 10
+# Google's documented allowance for iat and exp. IAP stamps iat on its own
+# clock just before forwarding, so with none a fresh assertion reads as issued
+# in the future and is rejected.
+IAP_CLOCK_SKEW_SECONDS = 30
+# Wide enough that google-auth's own iat and exp checks never fail, so the
+# skew checks above run once, against one clock reading.
+_IGNORE_TIME_SECONDS = 10**10
 
 _MAX_AGE = re.compile(r"(?:^|[\s,])max-age\s*=\s*\"?(\d+)", re.IGNORECASE)
 
@@ -106,13 +113,20 @@ def _verify_iap_assertion(assertion: str, audience: str) -> tuple[dict | None, s
         if not isinstance(key_id, (str, type(None))):
             return None, "invalid_key_id"
         keys = _IAP_KEYS.keys_for(key_id, requests.Request())
-        # Signature and expiry here; the audience below, so that a mismatch,
-        # the likeliest misconfiguration, gets its own reason code.
-        claims = jwt.decode(assertion, certs=keys, audience=None)
+        # Signature and required claims only; the times are checked below
+        # against one clock reading, so each failure gets its own reason code.
+        claims = jwt.decode(assertion, certs=keys, audience=None, clock_skew_in_seconds=_IGNORE_TIME_SECONDS)
     except google_auth_exceptions.TransportError:
         return None, "key_fetch_failed"
     except (ValueError, google_auth_exceptions.GoogleAuthError):
         return None, "invalid_token"
+    now = time.time()
+    if claims["iat"] - IAP_CLOCK_SKEW_SECONDS > now:
+        return None, "issued_in_future"
+    if claims["exp"] + IAP_CLOCK_SKEW_SECONDS < now:
+        return None, "expired"
+    # The audience after the times, so that a mismatch, the likeliest
+    # misconfiguration, gets its own reason code.
     if claims.get("aud") != audience:
         return None, "wrong_audience"
     if claims.get("iss") != IAP_ISSUER:
