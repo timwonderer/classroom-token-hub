@@ -212,6 +212,7 @@ jobs:
           revision_annotations = service["spec"]["template"].get("metadata", {}).get("annotations", {})
           container = template["containers"][0]
           status = service.get("status", {})
+          conditions = {condition.get("type"): condition.get("status") for condition in status.get("conditions", [])}
           ready = status.get("latestReadyRevisionName")
           checks = {
               "ingress": service_annotations.get("run.googleapis.com/ingress") == "internal",
@@ -227,7 +228,7 @@ jobs:
               "request_billing": revision_annotations.get("run.googleapis.com/cpu-throttling") in (None, "true"),
               "resources": container.get("resources", {}).get("limits", {}) == {"cpu": "1000m", "memory": "512Mi"},
               "concurrency": template.get("containerConcurrency") == 1,
-              "readiness": bool(ready) and ready == status.get("latestCreatedRevisionName") and sum(
+              "readiness": conditions.get("Ready") == "True" and bool(ready) and ready == status.get("latestCreatedRevisionName") and sum(
                   target.get("percent", 0) for target in status.get("traffic", []) if target.get("revisionName") == ready) == 100,
           }
           for name, passed in checks.items():

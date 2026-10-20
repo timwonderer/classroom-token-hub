@@ -183,8 +183,12 @@ def _run_readiness_check(tmp_path, public, operator):
 
 
 def _run_collector_verify(tmp_path, *, ingress="internal", members=(), cpu_throttling="true",
-                          service_max="1", revision_max="1", service_min="0", revision_min="0"):
-    service = _described(COLLECTOR_SERVICE)
+                          service_max="1", revision_max="1", service_min="0", revision_min="0",
+                          ready="True", missing_ready=False):
+    service = _described(COLLECTOR_SERVICE, ready=ready)
+    if missing_ready:
+        service["status"]["conditions"] = [condition for condition in service["status"]["conditions"]
+                                           if condition["type"] != "Ready"]
     service["metadata"]["annotations"] = {"run.googleapis.com/ingress": ingress,
                                             "run.googleapis.com/maxScale": service_max,
                                             "run.googleapis.com/minScale": service_min}
@@ -297,6 +301,13 @@ def test_collector_verification_rejects_scaling_drift(tmp_path, overrides, faile
     result = _run_collector_verify(tmp_path, **overrides)
     assert result.returncode == 1
     assert f"collector {failed_check}: FAIL" in result.stdout
+
+
+@pytest.mark.parametrize("overrides", [{"ready": "False"}, {"ready": "Unknown"}, {"missing_ready": True}])
+def test_collector_verification_requires_ready_condition(tmp_path, overrides):
+    result = _run_collector_verify(tmp_path, **overrides)
+    assert result.returncode == 1
+    assert "collector readiness: FAIL" in result.stdout
 
 
 @pytest.mark.parametrize(
