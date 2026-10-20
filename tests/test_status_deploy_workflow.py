@@ -101,7 +101,7 @@ def test_collector_service_is_private_and_opt_in():
     assert '--service-account "status-probe@cth-production-status.iam.gserviceaccount.com"' in command
     assert "--args=--bind,0.0.0.0:8080,--workers,1,--timeout,110,status_service.collector_app:app" in command
     for flag in ("--ingress internal", "--no-allow-unauthenticated", "--concurrency 1",
-                 "--cpu-throttling", "--max-instances 1", "--min 0", "--min-instances 0", "--timeout 120s"):
+                 "--cpu-throttling", "--max 1", "--max-instances 1", "--min 0", "--min-instances 0", "--timeout 120s"):
         assert flag in command
     assert "FIRESTORE_DATABASE=cth-status-prod" in command
     assert "CF_ACCESS_CLIENT_ID=cth-status-cf-access-client-id:latest" in command
@@ -182,11 +182,18 @@ def _run_readiness_check(tmp_path, public, operator):
     )
 
 
-def _run_collector_verify(tmp_path, *, ingress="internal", members=(), cpu_throttling="true"):
+def _run_collector_verify(tmp_path, *, ingress="internal", members=(), cpu_throttling="true",
+                          service_max="1", revision_max="1", service_min="0", revision_min="0"):
     service = _described(COLLECTOR_SERVICE)
-    service["metadata"]["annotations"] = {"run.googleapis.com/ingress": ingress}
+    service["metadata"]["annotations"] = {"run.googleapis.com/ingress": ingress,
+                                            "run.googleapis.com/maxScale": service_max,
+                                            "run.googleapis.com/minScale": service_min}
     template = service["spec"]["template"]["spec"]
-    service["spec"]["template"]["metadata"] = {"annotations": {"run.googleapis.com/cpu-throttling": cpu_throttling}}
+    service["spec"]["template"]["metadata"] = {"annotations": {
+        "run.googleapis.com/cpu-throttling": cpu_throttling,
+        "autoscaling.knative.dev/maxScale": revision_max,
+        "autoscaling.knative.dev/minScale": revision_min,
+    }}
     template.update(serviceAccountName="status-probe@cth-production-status.iam.gserviceaccount.com",
                     containerConcurrency=1)
     template["containers"][0].update(command=["gunicorn"],
@@ -278,6 +285,18 @@ def test_collector_verification_rejects_instance_based_billing(tmp_path):
     result = _run_collector_verify(tmp_path, cpu_throttling="false")
     assert result.returncode == 1
     assert "collector request_billing: FAIL" in result.stdout
+
+
+@pytest.mark.parametrize("overrides,failed_check", [
+    ({"service_max": "2"}, "service_max_instances"),
+    ({"revision_max": "2"}, "revision_max_instances"),
+    ({"service_min": "1"}, "service_min_instances"),
+    ({"revision_min": "1"}, "revision_min_instances"),
+])
+def test_collector_verification_rejects_scaling_drift(tmp_path, overrides, failed_check):
+    result = _run_collector_verify(tmp_path, **overrides)
+    assert result.returncode == 1
+    assert f"collector {failed_check}: FAIL" in result.stdout
 
 
 @pytest.mark.parametrize(

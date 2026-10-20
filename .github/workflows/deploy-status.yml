@@ -146,6 +146,7 @@ jobs:
           --cpu 1
           --memory 512Mi
           --concurrency 1
+          --max 1
           --max-instances 1
           --min 0
           --min-instances 0
@@ -207,17 +208,23 @@ jobs:
           with open(sys.argv[2]) as handle:
               policy = json.load(handle)
           template = service["spec"]["template"]["spec"]
+          service_annotations = service.get("metadata", {}).get("annotations", {})
+          revision_annotations = service["spec"]["template"].get("metadata", {}).get("annotations", {})
           container = template["containers"][0]
           status = service.get("status", {})
           ready = status.get("latestReadyRevisionName")
           checks = {
-              "ingress": service["metadata"]["annotations"].get("run.googleapis.com/ingress") == "internal",
+              "ingress": service_annotations.get("run.googleapis.com/ingress") == "internal",
+              "service_max_instances": service_annotations.get("run.googleapis.com/maxScale") == "1",
+              "revision_max_instances": revision_annotations.get("autoscaling.knative.dev/maxScale") == "1",
+              "service_min_instances": service_annotations.get("run.googleapis.com/minScale") in (None, "0"),
+              "revision_min_instances": revision_annotations.get("autoscaling.knative.dev/minScale") in (None, "0"),
               "invoker": all(not ({"allUsers", "allAuthenticatedUsers"} & set(binding.get("members", [])))
                              for binding in policy.get("bindings", []) if binding.get("role") == "roles/run.invoker"),
               "image": container.get("image") == os.environ["IMAGE_URI"],
               "identity": template.get("serviceAccountName") == "status-probe@cth-production-status.iam.gserviceaccount.com",
               "command": container.get("command") == ["gunicorn"] and container.get("args") == ["--bind", "0.0.0.0:8080", "--workers", "1", "--timeout", "110", "status_service.collector_app:app"],
-              "request_billing": service["spec"]["template"].get("metadata", {}).get("annotations", {}).get("run.googleapis.com/cpu-throttling") in (None, "true"),
+              "request_billing": revision_annotations.get("run.googleapis.com/cpu-throttling") in (None, "true"),
               "resources": container.get("resources", {}).get("limits", {}) == {"cpu": "1000m", "memory": "512Mi"},
               "concurrency": template.get("containerConcurrency") == 1,
               "readiness": bool(ready) and ready == status.get("latestCreatedRevisionName") and sum(
