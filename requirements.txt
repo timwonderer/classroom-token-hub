@@ -65,4 +65,4 @@ opentelemetry-exporter-otlp-proto-http==1.44.0
 opentelemetry-semantic-conventions==0.65b0
 opentelemetry-instrumentation-flask==0.65b0
 opentelemetry-instrumentation-requests==0.65b0
-opentelemetry-instrumentation-sqlalchemy==0.65b0
+opentelemetry-instrumentation-sqlalchemy==0.66b1
