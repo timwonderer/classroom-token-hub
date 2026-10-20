@@ -2,9 +2,11 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| INV-ARC-011      | 1.1     | 2026-10-14     | 1.0        | Constitutional   |
+| INV-ARC-011      | 1.2     | 2026-10-18     | 1.1        | Constitutional   |
 
 > [!IMPORTANT]
+> **v1.2 (2026-10-18).** §V's core rule now names `class_id`, not `join_code`: a request referencing a non-existent `class_id` MUST fail. `class_id` is the isolation key and `join_code` only an ingress alias that resolves to it (`INV-CORE-000` §III.1), so phantom scope is defined against the canonical key.
+>
 > **v1.1 (2026-10-14), developer-documentation modernization pass.** Corrected a mislabeled Authority Level: this is a Tier 1 (`INV-ARC`) document and must read **Constitutional**, not Foundational -- "Foundational" is reserved for `INV-CORE` (Tier 0). No substantive rule in this document changed.
 
 ## I. Purpose

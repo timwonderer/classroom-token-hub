@@ -2,7 +2,10 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-|INV-CORE-000| 2.1 | 2026-09-15 | 2.0 |Foundational|
+|INV-CORE-000| 2.2 | 2026-10-18 | 2.1 |Foundational|
+
+> [!IMPORTANT]
+> **v2.2 (2026-10-18).** §I no longer claims this document is the top-level authority from which all other authority derives. §II now states its precedence directly: within the `INVARIANT` family it outranks `INV-ARC-*` and `INV-CORE-001`. The title gains "of Classroom Token Hub", and the document is reformatted for markdownlint. No invariant in §III changed.
 
 ## I. Purpose
 
