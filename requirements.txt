@@ -35,7 +35,7 @@ pytz==2026.2
 PyYAML==6.0.3
 soupsieve==2.9.2
 SQLAlchemy==2.0.52
-tomli==2.4.1
+tomli==2.5.0
 typing_extensions==4.16.0
 Werkzeug==3.1.9
 # TODO: [DEPENDABOT PR #847] zope.event 6.x is a major version change. Review for
