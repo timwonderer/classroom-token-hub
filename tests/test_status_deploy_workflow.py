@@ -184,7 +184,7 @@ def _run_readiness_check(tmp_path, public, operator):
 
 def _run_collector_verify(tmp_path, *, ingress="internal", members=(), cpu_throttling="true",
                           service_max="1", revision_max="1", service_min="0", revision_min="0",
-                          ready="True", missing_ready=False):
+                          ready="True", missing_ready=False, cpu="1000m"):
     service = _described(COLLECTOR_SERVICE, ready=ready)
     if missing_ready:
         service["status"]["conditions"] = [condition for condition in service["status"]["conditions"]
@@ -202,7 +202,7 @@ def _run_collector_verify(tmp_path, *, ingress="internal", members=(), cpu_throt
                     containerConcurrency=1)
     template["containers"][0].update(command=["gunicorn"],
                                       args=["--bind", "0.0.0.0:8080", "--workers", "1", "--timeout", "110", "status_service.collector_app:app"],
-                                      resources={"limits": {"cpu": "1000m", "memory": "512Mi"}})
+                                      resources={"limits": {"cpu": cpu, "memory": "512Mi"}})
     service_path = tmp_path / "collector.json"
     policy_path = tmp_path / "policy.json"
     service_path.write_text(json.dumps(service))
@@ -270,8 +270,9 @@ def test_status_deploy_workflow_readiness_passes_when_both_services_serve_this_c
     assert result.stdout.count(" serving") == 2
 
 
-def test_collector_verification_accepts_private_ready_service(tmp_path):
-    result = _run_collector_verify(tmp_path, members=["serviceAccount:status-scheduler@example.com"])
+@pytest.mark.parametrize("cpu", ["1", "1000m"])
+def test_collector_verification_accepts_private_ready_service(tmp_path, cpu):
+    result = _run_collector_verify(tmp_path, members=["serviceAccount:status-scheduler@example.com"], cpu=cpu)
     assert result.returncode == 0, result.stdout + result.stderr
 
 
