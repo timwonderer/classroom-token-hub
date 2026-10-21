@@ -36,17 +36,17 @@
                 <div class="position-sticky pt-3">
                     <!-- Back Navigation -->
                     <div class="mb-3">
-                        {% if session.get('student_id') %}
+                        {% if session.get('role') == 'student' %}
                         <a href="{{ url_for('student.dashboard') }}" class="btn btn-sm btn-primary w-100">
                             <span class="material-symbols-outlined icon-align" aria-hidden="true">arrow_back</span>
                             Back to Dashboard
                         </a>
-                        {% elif session.get('user_id') and not session.get('student_id') and not session.get('is_system_admin') %}
+                        {% elif session.get('role') == 'admin' %}
                         <a href="{{ url_for('admin.dashboard') }}" class="btn btn-sm btn-primary w-100">
                             <span class="material-symbols-outlined icon-align" aria-hidden="true">arrow_back</span>
                             Back to Dashboard
                         </a>
-                        {% elif session.get('is_system_admin') and session.get('sysadmin_id') %}
+                        {% elif session.get('role') == 'sysadmin' %}
                         <a href="{{ url_for('sysadmin.dashboard') }}" class="btn btn-sm btn-primary w-100">
                             <span class="material-symbols-outlined icon-align" aria-hidden="true">arrow_back</span>
                             Back to Dashboard
@@ -57,7 +57,7 @@
                     <!-- Docs Home (always show) -->
                     <div class="mb-3">
                         <a href="{{ url_for('docs.index') }}"
-                        class="btn btn-sm {% if session.get('student_id') or session.get('user_id') or session.get('is_system_admin') %}btn-outline-secondary{% else %}btn-primary{% endif %} w-100">
+                        class="btn btn-sm {% if session.get('user_id') %}btn-outline-secondary{% else %}btn-primary{% endif %} w-100">
                             <span class="material-symbols-outlined icon-align" aria-hidden="true">home</span>
                             Docs Home
                         </a>
