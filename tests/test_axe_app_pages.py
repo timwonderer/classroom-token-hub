@@ -128,6 +128,8 @@ def test_no_axe_violations_across_pages_needing_no_domain_setup(app, client, wca
         ("/docs/", None),
         ("/docs/search", None),
         ("/docs/user-guides/teacher_manual", None),
+        # A guide with a table of contents and related articles
+        ("/docs/user-guides/features/teacher/classroom/class-setup", None),
         ("/offline", None),
         ("/recovery/lookup", None),
         # Group G -- public, needs a real minted token

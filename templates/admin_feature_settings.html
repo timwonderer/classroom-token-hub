@@ -28,10 +28,10 @@
 {% block content %}
 <div class="card shadow mb-4">
   <div class="card-header bg-info text-white">
-    <h5 class="mb-0">
+    <h2 class="h5 mb-0">
       <span class="material-symbols-outlined me-2 icon-middle" aria-hidden="true">tune</span>
       Feature Settings — {{ view.class_label }}
-    </h5>
+    </h2>
   </div>
   <div class="card-body">
     <p class="text-muted mb-4">Changes are saved automatically.</p>
@@ -39,7 +39,7 @@
     {# ---- Core: always on. Payroll DEFINES the class economy; banking is core.
          These are not optional, so they are shown at the top without a toggle. ---- #}
     {% if view.essential_features %}
-    <h6 class="text-uppercase text-muted small fw-bold mb-2">Core &middot; always on</h6>
+    <h3 class="h6 text-uppercase text-muted small fw-bold mb-2">Core &middot; always on</h3>
     <div class="d-flex flex-column gap-2 mb-4">
       {% for feat in view.essential_features %}
       <div class="card h-100">
@@ -62,7 +62,7 @@
 
     {# ---- Standard features: no CWI dependency, freely toggleable. ---- #}
     {% if view.standard_features %}
-    <h6 class="text-uppercase text-muted small fw-bold mb-2">Features</h6>
+    <h3 class="h6 text-uppercase text-muted small fw-bold mb-2">Features</h3>
     <div class="d-flex flex-column gap-2 mb-4">
       {% for feat in view.standard_features %}
       <div class="card h-100">
@@ -92,9 +92,9 @@
          readiness — grouped and grayed out until payroll AND the economic engine
          are configured. Uniform treatment (no per-feature special-casing). ---- #}
     {% if view.pricing_features %}
-    <h6 class="text-uppercase text-muted small fw-bold mb-2">Pricing features</h6>
+    <h3 class="h6 text-uppercase text-muted small fw-bold mb-2">Pricing features</h3>
     {% if not view.cwi_ready %}
-    {% call cards.alert_card('warning', 'Set up payroll and the economic engine first', icon='lock', body_class='mb-3') %}
+    {% call cards.alert_card('warning', 'Set up payroll and the economic engine first', icon='lock', body_class='mb-3', heading_tag='h4') %}
       <p class="mb-2">
         In order to use these features, you must first set up payroll and configure your
         economic engine.

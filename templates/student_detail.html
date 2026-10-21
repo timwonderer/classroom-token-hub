@@ -212,8 +212,8 @@
             <div class="col-lg-6 mb-4">
                 <div class="card shadow h-100">
                     <div class="card-header bg-info text-white">
-                        <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">person</span>Student Information
-                        </h5>
+                        <h2 class="h5 mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">person</span>Student Information
+                        </h2>
                     </div>
                     <div class="card-body">
                 <table class="table table-borderless mb-0">
@@ -351,8 +351,8 @@
             <div class="col-lg-6 mb-4">
                 <div class="card shadow h-100">
                     <div class="card-header bg-secondary text-white">
-                        <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">history</span>Recent Attendance
-                        </h5>
+                        <h2 class="h5 mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">history</span>Recent Attendance
+                        </h2>
                     </div>
                     <div class="card-body">
                         {% if latest_attendance_event %}
@@ -401,8 +401,8 @@
     <div class="tab-pane fade" id="transactions" role="tabpanel" aria-labelledby="transactions-tab">
         <div class="card shadow">
             <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">receipt_long</span>Transaction History
-                </h5>
+                <h2 class="h5 mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">receipt_long</span>Transaction History
+                </h2>
                 <div>
                     <span class="badge bg-light text-dark me-2">{{ transactions|length }} total</span>
                 </div>
@@ -469,7 +469,7 @@
     <div class="tab-pane fade" id="items" role="tabpanel" aria-labelledby="items-tab">
         <div class="card shadow">
             <div class="card-header bg-success text-white">
-                <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">shopping_bag</span>Purchased Items</h5>
+                <h2 class="h5 mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">shopping_bag</span>Purchased Items</h2>
             </div>
             <div class="card-body">
                 {% if entitlements %}
@@ -611,7 +611,7 @@
             <div class="col-lg-12 mb-4">
                 <div class="card shadow h-100">
                     <div class="card-header bg-primary text-white">
-                        <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">home</span>Rent Information</h5>
+                        <h2 class="h5 mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">home</span>Rent Information</h2>
                     </div>
                     <div class="card-body">
                         {% if rent_period %}
@@ -662,7 +662,7 @@
     <div class="tab-pane fade" id="payroll" role="tabpanel" aria-labelledby="payroll-tab">
         <div class="card shadow">
             <div class="card-header bg-success text-white">
-                <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">payments</span>Earnings & Payroll</h5>
+                <h2 class="h5 mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">payments</span>Earnings & Payroll</h2>
             </div>
             <div class="card-body">
                 <div class="row mb-4">
@@ -685,7 +685,7 @@
                 {% if attendance_historical_evidence_limited %}
                 <p>Historical contributions are reconstructed from attendance, payroll windows and the settings used at payment. A correction is available when that reconstruction matches the original payment; unresolved evidence is shown on the interval.</p>
                 {% endif %}
-                <h6 class="mb-3">Recent Earnings</h6>
+                <h3 class="h6 mb-3">Recent Earnings</h3>
                 {% if payroll_event_history %}
                 <div class="table-responsive">
                     <table class="table table-striped js-sortable">
@@ -736,8 +736,8 @@
             <div class="col-lg-8 mb-4">
                 <div class="card shadow">
                     <div class="card-header bg-warning text-dark">
-                        <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">confirmation_number</span>Hall
-                            Pass Management</h5>
+                        <h2 class="h5 mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">confirmation_number</span>Hall
+                            Pass Management</h2>
                     </div>
                     <div class="card-body">
                         <p><strong>Current Balance:</strong> <span class="badge bg-primary fs-5">{{ hall_pass_balance }}</span></p>
@@ -779,9 +779,9 @@
         <form action="{{ url_for('admin.edit_student') }}" method="post">
             <div class="modal-content">
                 <div class="modal-header bg-primary text-white">
-                    <h5 class="modal-title" id="editBasicInfoModalLabel">
+                    <h2 class="h5 modal-title" id="editBasicInfoModalLabel">
                         <span class="material-symbols-outlined me-2" aria-hidden="true">edit</span>Edit Student Information
-                    </h5>
+                    </h2>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
                         aria-label="Close"></button>
                 </div>
@@ -792,8 +792,8 @@
                     <!-- Basic Information -->
                     <div class="card border-primary mb-3">
                         <div class="card-header bg-primary-subtle">
-                            <h6 class="mb-0 text-primary"><span
-                                    class="material-symbols-outlined me-2" aria-hidden="true">person</span>Basic Information</h6>
+                            <h3 class="h6 mb-0 text-primary"><span
+                                    class="material-symbols-outlined me-2" aria-hidden="true">person</span>Basic Information</h3>
                         </div>
                         <div class="card-body">
                             <div class="row">

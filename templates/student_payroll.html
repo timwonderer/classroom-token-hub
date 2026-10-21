@@ -51,13 +51,13 @@
     <!-- Attendance Record Tab -->
     <div class="tab-pane fade show active" id="attendance" role="tabpanel" aria-labelledby="attendance-tab">
         <div class="card mb-4">
-            <div class="card-header">
+            <h2 class="card-header h6 mb-0">
                 <span class="material-symbols-outlined icon-middle" aria-hidden="true">schedule</span> Attendance Overview
-            </div>
+            </h2>
             <div class="card-body">
                 {% if class_label %}
                 <div class="mb-4">
-                    <h5 class="mb-3">{{ class_label }}</h5>
+                    <h3 class="h5 mb-3">{{ class_label }}</h3>
                     <div class="row mb-3">
                         <div class="col-md-6">
                             <div class="p-3 bg-light rounded">
@@ -147,26 +147,26 @@
             <!-- Overall Stats -->
             <div class="col-md-6 mb-4">
                 <div class="card">
-                    <div class="card-header">
+                    <h2 class="card-header h6 mb-0">
                         <span class="material-symbols-outlined" aria-hidden="true">trending_up</span> Overall Productivity
-                    </div>
+                    </h2>
                     <div class="card-body">
                         <div class="mb-3 pb-3 border-bottom">
                             <div class="d-flex justify-content-between align-items-center">
                                 <span class="text-muted">Total Unpaid Time</span>
-                                <h5 class="mb-0 text-primary">{{ (unpaid_seconds // 3600)|int }}h {{ ((unpaid_seconds % 3600) // 60)|int }}m</h5>
+                                <h3 class="h5 mb-0 text-primary">{{ (unpaid_seconds // 3600)|int }}h {{ ((unpaid_seconds % 3600) // 60)|int }}m</h3>
                             </div>
                         </div>
                         <div class="mb-3 pb-3 border-bottom">
                             <div class="d-flex justify-content-between align-items-center">
                                 <span class="text-muted">Total Projected Earnings</span>
-                                <h5 class="mb-0 text-success">${{ "%.2f"|format(projected_pay) }}</h5>
+                                <h3 class="h5 mb-0 text-success">${{ "%.2f"|format(projected_pay) }}</h3>
                             </div>
                         </div>
                         <div class="mb-3 pb-3 border-bottom">
                             <div class="d-flex justify-content-between align-items-center">
                                 <span class="text-muted">Total Lifetime Earnings</span>
-                                <h5 class="mb-0 text-info">${{ "%.2f"|format(scoped_total_earnings) }}</h5>
+                                <h3 class="h5 mb-0 text-info">${{ "%.2f"|format(scoped_total_earnings) }}</h3>
                             </div>
                         </div>
                     </div>
@@ -176,28 +176,28 @@
 
         <!-- Attendance History Stats -->
         <div class="card">
-            <div class="card-header">
+            <h2 class="card-header h6 mb-0">
                 <span class="material-symbols-outlined" aria-hidden="true">history</span> Attendance History
-            </div>
+            </h2>
             <div class="card-body">
                 {% if attendance_events %}
                 <div class="row mb-3">
                     <div class="col-md-4">
                         <div class="text-center p-3 bg-light rounded">
-                            <h6 class="text-muted mb-1">Total Events</h6>
-                            <h3 class="mb-0">{{ attendance_events|length }}</h3>
+                            <h3 class="h6 text-muted mb-1">Total Events</h3>
+                            <h4 class="h3 mb-0">{{ attendance_events|length }}</h4>
                         </div>
                     </div>
                     <div class="col-md-4">
                         <div class="text-center p-3 bg-light rounded">
-                            <h6 class="text-muted mb-1">Start Work</h6>
-                            <h3 class="mb-0 text-success">{{ attendance_start_count }}</h3>
+                            <h3 class="h6 text-muted mb-1">Start Work</h3>
+                            <h4 class="h3 mb-0 text-success">{{ attendance_start_count }}</h4>
                         </div>
                     </div>
                     <div class="col-md-4">
                         <div class="text-center p-3 bg-light rounded">
-                            <h6 class="text-muted mb-1">Break</h6>
-                            <h3 class="mb-0 text-danger">{{ attendance_inactive_count }}</h3>
+                            <h3 class="h6 text-muted mb-1">Break</h3>
+                            <h4 class="h3 mb-0 text-danger">{{ attendance_inactive_count }}</h4>
                         </div>
                     </div>
                 </div>
@@ -216,13 +216,13 @@
             <!-- Current Projected Earnings -->
             <div class="col-md-6 mb-4">
                 <div class="card">
-                    <div class="card-header">
+                    <h2 class="card-header h6 mb-0">
                         <span class="material-symbols-outlined" aria-hidden="true">account_balance_wallet</span> Current Projections
-                    </div>
+                    </h2>
                     <div class="card-body">
                         <div class="text-center mb-4">
-                            <h6 class="text-muted text-uppercase mb-2">Total Projected Earnings</h6>
-                            <h1 class="display-4 text-success mb-0">${{ "%.2f"|format(projected_pay) }}</h1>
+                            <h3 class="h6 text-muted text-uppercase mb-2">Total Projected Earnings</h3>
+                            <p class="display-4 text-success mb-0">${{ "%.2f"|format(projected_pay) }}</p>
                             <small class="text-muted">Based on current unpaid time</small>
                         </div>
                     </div>
@@ -232,14 +232,14 @@
             <!-- Pay Rate Info -->
             <div class="col-md-6 mb-4">
                         <div class="card">
-                    <div class="card-header">
+                    <h2 class="card-header h6 mb-0">
                         <span class="material-symbols-outlined" aria-hidden="true">attach_money</span> Pay Rate Information
-                    </div>
+                    </h2>
                     <div class="card-body">
                         {% call cards.alert_card('info', 'Current pay rate', icon='attach_money', body_class='mb-3') %}
                             <p class="mb-0">${{ "%.2f"|format(pay_rate_per_minute) }} per minute</p>
                         {% endcall %}
-                        <h6 class="mb-3">Time Value Calculator:</h6>
+                        <h3 class="h6 mb-3">Time Value Calculator:</h3>
                         <div class="table-responsive">
                             <table class="table table-sm table-striped">
                                 <caption class="visually-hidden">Time value and projected earnings</caption>
@@ -270,27 +270,27 @@
         <!-- Last Payroll Information -->
         {% if last_payroll_event %}
         <div class="card">
-            <div class="card-header">
+            <h2 class="card-header h6 mb-0">
                 <span class="material-symbols-outlined" aria-hidden="true">history</span> Last Payroll Processed
-            </div>
+            </h2>
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-4">
                         <div class="text-center p-3 bg-light rounded">
-                            <h6 class="text-muted mb-1">Last Payment Date</h6>
-                            <h5 class="mb-0">{{ last_payroll_event.recorded_at | fmt_date }}</h5>
+                            <h3 class="h6 text-muted mb-1">Last Payment Date</h3>
+                            <h4 class="h5 mb-0">{{ last_payroll_event.recorded_at | fmt_date }}</h4>
                         </div>
                     </div>
                     <div class="col-md-4">
                         <div class="text-center p-3 bg-light rounded">
-                            <h6 class="text-muted mb-1">Time Since Last Payroll</h6>
-                            <h5 class="mb-0">{{ days_since_last_payroll }} days</h5>
+                            <h3 class="h6 text-muted mb-1">Time Since Last Payroll</h3>
+                            <h4 class="h5 mb-0">{{ days_since_last_payroll }} days</h4>
                         </div>
                     </div>
                     <div class="col-md-4">
                         <div class="text-center p-3 bg-light rounded">
-                            <h6 class="text-muted mb-1">Total Earnings to Date</h6>
-                            <h5 class="mb-0 text-success">${{ "%.2f"|format(scoped_total_earnings) }}</h5>
+                            <h3 class="h6 text-muted mb-1">Total Earnings to Date</h3>
+                            <h4 class="h5 mb-0 text-success">${{ "%.2f"|format(scoped_total_earnings) }}</h4>
                         </div>
                     </div>
                 </div>
