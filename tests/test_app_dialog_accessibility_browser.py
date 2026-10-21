@@ -49,6 +49,12 @@ PAGE = """<!doctype html><html lang="en"><head><title>Dialogs</title>
           data-confirm-title="Pay toward bill" data-confirm-label="Pay">Pay</button>
 </form>
 </main>
+<div id="flashToastContainer" class="position-fixed bottom-0 end-0 p-3">
+  <div class="toast show" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="toast-body">Settings saved</div>
+    <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Dismiss earlier toast"></button>
+  </div>
+</div>
 <script src="/static/vendor/bootstrap/bootstrap.bundle.min.js"></script>
 <script src="/static/js/app-core.js"></script>
 </body></html>"""
@@ -144,6 +150,31 @@ def test_content_behind_the_dialog_is_hidden_from_assistive_technology(page):
     open_from_opener(page, "AppCore.confirm('Go?', {title: 'Confirm'})")
 
     assert not exposed(ax_tree(page), "button", "Background action")
+
+
+def test_toasts_stay_announced_but_their_controls_stay_outside_reach(page):
+    # Review on #1625: exempting the toast container from inert kept toasts
+    # announced, but also left each toast's Close button browsable outside
+    # the dialog. Toasts already shown and toasts raised mid-dialog both count.
+    open_from_opener(page, "AppCore.confirm('Go?', {title: 'Confirm'})")
+    page.evaluate("() => AppCore.toast('Request sent')")
+    page.get_by_text("Request sent").wait_for()
+    page.wait_for_timeout(50)  # the observer runs after the toast is inserted
+    nodes = ax_tree(page)
+
+    assert not exposed(nodes, "button", "Dismiss earlier toast")
+    toast_closes = page.evaluate(
+        "() => [...document.querySelectorAll('#flashToastContainer .btn-close')].map(b => b.inert)"
+    )
+    assert toast_closes == [True, True]
+    assert len(exposed(nodes, "button", "Close")) == 1  # the dialog's own
+    texts = {ax_value(n, "name") for n in nodes if not n.get("ignored")}
+    assert "Settings saved" in texts and "Request sent" in texts
+
+    page.keyboard.press("Escape")
+    result(page)
+    assert page.evaluate("() => document.querySelectorAll('[inert]').length") == 0
+    assert exposed(ax_tree(page), "button", "Dismiss earlier toast")
 
 
 def test_focus_starts_on_confirm_and_on_cancel_for_a_destructive_action(page):

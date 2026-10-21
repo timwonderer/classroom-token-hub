@@ -203,22 +203,52 @@
   const INERT_EXEMPT = '#flashToastContainer, #toast-container, #app-live-feedback, [aria-live]';
   const inertedBy = new WeakMap();
 
+  // A live region stays live, but its controls (a toast's Close button) are
+  // still outside the dialog, so they go inert, including any added while
+  // the modal is open.
+  const CONTROLS = 'a[href], button, input, select, textarea, [contenteditable], [tabindex]:not([tabindex="-1"])';
+  const observersBy = new WeakMap();
+
+  function inertControls(root, inerted) {
+    const found = root.matches && root.matches(CONTROLS) ? [root] : [];
+    found.concat(Array.from(root.querySelectorAll ? root.querySelectorAll(CONTROLS) : [])).forEach((el) => {
+      if (el.inert) return;
+      el.inert = true;
+      inerted.push(el);
+    });
+  }
+
   function isolateModal(modalEl) {
     const inerted = [];
+    const observers = [];
     for (let node = modalEl; node && node !== document.body; node = node.parentElement) {
       const parent = node.parentElement;
       if (!parent) break;
       Array.from(parent.children).forEach((sibling) => {
-        if (sibling === node || sibling.inert || sibling.matches(INERT_EXEMPT)) return;
+        if (sibling === node || sibling.inert) return;
         if (sibling.tagName === 'SCRIPT' || sibling.classList.contains('modal-backdrop')) return;
+        if (sibling.matches(INERT_EXEMPT)) {
+          inertControls(sibling, inerted);
+          const observer = new MutationObserver((records) => records.forEach((record) => {
+            record.addedNodes.forEach((added) => {
+              if (added.nodeType === Node.ELEMENT_NODE) inertControls(added, inerted);
+            });
+          }));
+          observer.observe(sibling, { childList: true, subtree: true });
+          observers.push(observer);
+          return;
+        }
         sibling.inert = true;
         inerted.push(sibling);
       });
     }
     inertedBy.set(modalEl, inerted);
+    observersBy.set(modalEl, observers);
   }
 
   function releaseModal(modalEl) {
+    (observersBy.get(modalEl) || []).forEach((observer) => observer.disconnect());
+    observersBy.delete(modalEl);
     (inertedBy.get(modalEl) || []).forEach((el) => { el.inert = false; });
     inertedBy.delete(modalEl);
   }
