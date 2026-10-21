@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.33 | 2026-10-19 | 3.32 | Normative |
+| SOP-DOC-001 | 3.34 | 2026-10-21 | 3.33 | Normative |
 
 ---
 
@@ -154,7 +154,7 @@ Archived material is deliberately absent; see §VI.
 - [SPEC-OPS-003 — Application Observability Contract](../SPEC/SPEC-OPS-003_APPLICATION_OBSERVABILITY_CONTRACT.md)
 - [SPEC-OPS-004 — System Administration Console](../SPEC/SPEC-OPS-004_SYSTEM_ADMINISTRATION_CONSOLE.md)
 - [SPEC-OPS-005 — Feature Health Evidence (internal integrity)](../SPEC/SPEC-OPS-005_FEATURE_HEALTH_EVIDENCE.md)
-- [SPEC-OPS-006 — Public Request Monitoring](../SPEC/SPEC-OPS-006_PUBLIC_REQUEST_MONITORING.md) — v1.4 (ratified 2026-10-02): a Hall passes line; 404s on the hall-pass approve, reject and cancel routes count as failed requests at 3 or more and above 2%, on the card and the hero. v1.3: plain-language hero states and area labels, Under maintenance from the access-gate check.
+- [SPEC-OPS-006 — Public Request Monitoring](../SPEC/SPEC-OPS-006_PUBLIC_REQUEST_MONITORING.md) — v1.5 (owner ruling 2026-10-21): the endpoint check fails only on an HTTP 5xx; a 429, 404 or other refusal is UNKNOWN `HTTP_REFUSED`, never `Mostly unavailable`. v1.4 (ratified 2026-10-02): a Hall passes line; 404s on the hall-pass approve, reject and cancel routes count as failed requests at 3 or more and above 2%, on the card and the hero. v1.3: plain-language hero states and area labels, Under maintenance from the access-gate check.
 - [SPEC-PROD-001 — Attendance Interval Eligibility and Payroll Correction](../SPEC/SPEC-PROD-001_ATTENDANCE_INTERVAL_ELIGIBILITY_AND_PAYROLL_CORRECTION.md) — incorporated by DOM-PROD-001/DOM-LED-001 and FEAT-PROD-003/005/006 for canonical interval eligibility, exact historical reconstruction/graph attribution and atomic correction.
 - [SPEC-PROD-002 — Historical Attendance Proof Assessment](../SPEC/SPEC-PROD-002_HISTORICAL_ATTENDANCE_PROOF_ASSESSMENT.md) — incorporated by owning PROD/Ledger/Operations/Policies contracts and FEAT-PROD-006/005/003: pure assessment, distinct immutable-source historical reconstruction and existing atomic correction; original canonical lineage remains separately reported.
 - [SPEC-SEC-001 — Credentials and Identity Lookup Code Contract](../SPEC/SPEC-SEC-001_CREDENTIALS_AND_IDENTITY_LOOKUP_CODE_CONTRACT.md)
@@ -277,6 +277,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.34 (2026-10-21):**
+- Register SPEC-OPS-006 v1.5: the endpoint check is FAIL (`HTTP_UNAVAILABLE`) only on an HTTP 5xx; any other non-redirect, non-authentication HTTP error (e.g. 429, 404) is UNKNOWN under the new closed diagnostic `HTTP_REFUSED` (owner ruling 2026-10-21).
 
 **Version 3.33 (2026-10-19):**
 - Register DOM-LED-001 v2.17: deploys the DB `CHECK` constraint half of INV-LED-017 (migration `a4d7e9c2f1b6`, `ck_ledger_transaction_type_closed_vocabulary`), enumerating the invariant's own canonical/legacy table as the only lawful `ledger_transaction.type` values (`NULL` still permitted). Closes the set of lawful values; does not yet enforce canonical spelling on new rows (the write-time casing validator is separate, later scope). Also registers FEAT-LED-005 v1.3 (reconciles this PR's and #1599's independently-recorded v1.2 histories into one: both the route/registry cutover and the DB `CHECK` constraint have now landed) and SPEC-ITR-001 v1.6 (§6.6/P4 updated to reflect the constraint's partial enforcement). No existing row's `type` value changes. PR 5 of the approved PR sequence from the SYSTEM_ORIGINATED_FEAT_CODES investigation.

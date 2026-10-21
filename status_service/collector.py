@@ -127,8 +127,11 @@ def collect_platform(store, *, client_id: str, client_secret: str,
     except HTTPError as exc:
         if exc.code in (301, 302, 303, 307, 308, 401, 403):
             transport = "ACCESS_DENIED"
-        else:
+        elif 500 <= exc.code <= 599:
             transport, http_failure = "TRANSPORT_UNAVAILABLE", True
+        else:
+            # SPEC-OPS-006 1.5: a refusal (429, 404, ...) observed no health; UNKNOWN, never FAIL.
+            transport = "HTTP_REFUSED"
     # http.client.HTTPException (e.g. BadStatusLine from a broken proxy) is not
     # an OSError; it is still a transport failure, never a lost record.
     except (OSError, TimeoutError, HTTPException):
