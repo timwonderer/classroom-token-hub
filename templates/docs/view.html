@@ -35,6 +35,14 @@
             <aside class="docs-sidebar col-md-3 col-lg-2 d-md-block bg-light collapse" id="docsSidebar">
                 <div class="position-sticky pt-3">
                     <!-- Back Navigation -->
+                    {#
+                       admin.logout()/sysadmin.logout() pop user_id but leave
+                       role in the session (student.logout() calls
+                       session.clear()), so role alone is not "signed in" --
+                       gate on both, or a logged-out teacher/sysadmin sees a
+                       Back to Dashboard button that only bounces them to login.
+                    #}
+                    {% if session.get('user_id') %}
                     <div class="mb-3">
                         {% if session.get('role') == 'student' %}
                         <a href="{{ url_for('student.dashboard') }}" class="btn btn-sm btn-primary w-100">
@@ -53,6 +61,7 @@
                         </a>
                         {% endif %}
                     </div>
+                    {% endif %}
 
                     <!-- Docs Home (always show) -->
                     <div class="mb-3">
