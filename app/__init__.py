@@ -516,7 +516,9 @@ def create_app():
             response.headers.setdefault("X-Request-Id", request_id)
         # Prometheus is an infrastructure caller, not a CTH user request. It
         # has no canonical actor/class context and must not enter TLCP traces.
-        if request.path == "/metrics":
+        # Static assets are not relevant traces (DOM-SUP-001): ~20 per page
+        # crowded real routes out of the ticket correlation pack.
+        if request.path == "/metrics" or request.endpoint == "static":
             return response
         if not app.config.get("TLCP_REQUEST_TRACE_ENABLED", not app.config.get("TESTING")):
             # Off under TESTING unless a test opts in (the tlcp_trace_enabled

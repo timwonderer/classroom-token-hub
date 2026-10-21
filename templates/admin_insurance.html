@@ -115,7 +115,8 @@
           </form>
           {% endif %}
           <form method="POST" action="{{ url_for('admin.delete_insurance_policy', policy_uuid=policy.policy_uuid) }}" class="d-inline"
-                onsubmit="return confirm('Retire this policy? It will be permanently unavailable for new enrollment.');">
+                data-confirm="Retire this policy? It will be permanently unavailable for new enrollment."
+                data-confirm-title="Retire policy" data-confirm-label="Retire" data-confirm-danger>
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
             <button type="submit" class="btn btn-sm btn-outline-danger" title="Retire permanently">Retire</button>
           </form>

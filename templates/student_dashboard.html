@@ -249,6 +249,14 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
+                {# In-page PIN, not the browser's own prompt dialog: in-app browsers (e.g. the
+                   Google app on iOS) returned no PIN from one opened inside this modal (2026-10-20). #}
+                <div class="mb-3">
+                    <label for="breakPinInput" class="form-label">Your PIN</label>
+                    <input type="password" class="form-control" id="breakPinInput" inputmode="numeric"
+                           autocomplete="off">
+                    <div class="invalid-feedback" id="breakPinError">Enter your PIN first.</div>
+                </div>
                 {# Shown only when the teacher has saved hall-pass destinations; otherwise the
                    student sees "Done for the day" alone (attendance.js showBreakDestinations). #}
                 <div id="hallPassDestinationSection" hidden>

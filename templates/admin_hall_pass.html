@@ -615,8 +615,10 @@ function showHistoryError(message) {
     `;
 }
 
-function rotateVerifyToken() {
-    if (!confirm('Regenerate the hall pass verification link? The current link will be immediately invalid.')) {
+async function rotateVerifyToken() {
+    if (!(await window.AppCore.confirm('Regenerate the hall pass verification link? The current link will be immediately invalid.', {
+        title: 'Regenerate link', confirmLabel: 'Regenerate', danger: true,
+    }))) {
         return;
     }
     // csrfFetch, not fetch: this call previously omitted X-CSRFToken entirely and

@@ -134,7 +134,7 @@
             const credentialId = this.dataset.credentialId;
             const credentialName = this.dataset.credentialName;
 
-            if (!confirm(`Delete "${credentialName}"?`)) {
+            if (!(await window.AppCore.confirm(`Delete "${credentialName}"?`, { title: 'Delete passkey', confirmLabel: 'Delete', danger: true }))) {
                 return;
             }
 
