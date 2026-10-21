@@ -35,6 +35,7 @@ function showTimedDeleteGate(options) {
         const phraseHint = document.getElementById('timed-delete-phrase-hint');
         const holdBtn = document.getElementById('timed-delete-hold-btn');
         const holdStatus = document.getElementById('timed-delete-hold-status');
+        const holdTimerEl = document.getElementById('timed-delete-hold-timer');
         const cancelBtn = modalEl.querySelector('[data-bs-dismiss="modal"]');
 
         const expectedPhrase = String(options.expectedPhrase || '').toUpperCase();
@@ -67,8 +68,13 @@ function showTimedDeleteGate(options) {
         phraseInput.value = '';
         phraseInput.disabled = true;
         phraseHint.textContent = `Required phrase: ${expectedPhrase}`;
+        // The button's name never changes: it holds focus during the hold, and
+        // renaming it every 100ms made VoiceOver restart it each time
+        // ("hhhhho", 2026-10-20). The ticking countdown is a separate,
+        // aria-hidden element; the live status speaks only on events.
         holdBtn.textContent = 'Hold to Confirm — click and hold, or hold Space or Enter';
         holdStatus.textContent = 'Hold button unlocks after countdown + exact phrase match.';
+        holdTimerEl.textContent = '';
         setHoldAvailable(false);
 
         const cleanup = () => {
@@ -99,7 +105,7 @@ function showTimedDeleteGate(options) {
             if (available === holdAvailable) return;
             holdAvailable = available;
             holdStatus.textContent = available
-                ? 'Phrase matches. Hold the button for 10 seconds to confirm.'
+                ? `Phrase matches. ${holdPrompt}`
                 : 'Hold button unlocks after countdown + exact phrase match.';
         }
 
@@ -130,7 +136,7 @@ function showTimedDeleteGate(options) {
             if (holdTimer) clearTimeout(holdTimer);
             if (holdTicker) clearInterval(holdTicker);
             isHolding = false;
-            holdBtn.textContent = holdPrompt;
+            holdTimerEl.textContent = '';
             holdStatus.textContent = 'Hold must be continuous for 10 seconds.';
         };
 
@@ -158,12 +164,12 @@ function showTimedDeleteGate(options) {
             event.preventDefault();
             isHolding = true;
             holdStartAt = Date.now();
-            holdStatus.textContent = 'Keep holding...';
+            holdStatus.textContent = 'Holding. Keep holding for 10 seconds.';
 
             holdTicker = setInterval(() => {
                 const elapsed = Date.now() - holdStartAt;
                 const remainingMs = Math.max(0, holdMs - elapsed);
-                holdBtn.textContent = `Keep Holding... ${(remainingMs / 1000).toFixed(1)}s`;
+                holdTimerEl.textContent = `Keep holding… ${(remainingMs / 1000).toFixed(1)}s`;
             }, 100);
 
             holdTimer = setTimeout(() => {

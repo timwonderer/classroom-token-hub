@@ -147,7 +147,7 @@ def test_typing_the_phrase_announces_the_unlock_once(page):
     assert "unlocks after countdown" in status.inner_text()
     page.keyboard.type("B")
 
-    assert status.inner_text() == "Phrase matches. Hold the button for 10 seconds to confirm."
+    assert status.inner_text().startswith("Phrase matches. To proceed, hold this button for 10 seconds")
     assert page.get_attribute("#timed-delete-hold-btn", "aria-disabled") == "false"
 
 
@@ -163,6 +163,35 @@ def test_a_keyboard_hold_of_ten_seconds_confirms(page):
     assert page.evaluate("() => window.__gate") == {
         "gate_phrase": "DELETE GOONER CLUB", "gate_countdown_seconds": 30, "gate_hold_seconds": 10,
     }
+
+
+def test_holding_does_not_rename_the_focused_button_or_flood_the_live_region(page):
+    # VoiceOver, 2026-10-20: the button's own text was rewritten every 100ms
+    # during the hold, so the screen reader restarted it each time ("hhhhho").
+    finish_countdown(page)
+    page.keyboard.type("DELETE GOONER CLUB")
+    page.keyboard.press("Tab")
+    page.evaluate("""() => {
+        window.__mutations = {button: 0, status: 0};
+        const watch = (id, key) => new MutationObserver((records) => { window.__mutations[key] += records.length; })
+            .observe(document.getElementById(id), {childList: true, characterData: true, subtree: true});
+        watch('timed-delete-hold-btn', 'button');
+        watch('timed-delete-hold-status', 'status');
+    }""")
+    timer_texts = set()
+
+    page.keyboard.down(" ")
+    for _ in range(9):
+        page.clock.run_for(1_000)
+        timer_texts.add(page.locator("#timed-delete-hold-timer").inner_text())
+    page.keyboard.up(" ")
+    page.clock.run_for(100)
+
+    mutations = page.evaluate("() => window.__mutations")
+    assert mutations["button"] == 0
+    assert mutations["status"] <= 2  # "Holding..." on press, the reset message on release
+    assert len(timer_texts) >= 8  # sighted users still see it count down
+    assert page.get_attribute("#timed-delete-hold-timer", "aria-hidden") == "true"
 
 
 def test_releasing_early_resets_and_announces_it(page):

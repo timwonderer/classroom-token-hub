@@ -41,6 +41,8 @@
                         aria-disabled="true" aria-describedby="timed-delete-hold-status">
                     Click and Hold this Button to Confirm
                 </button>
+                {# Visual countdown only; screen readers get the live status below instead. #}
+                <div class="small fw-semibold mt-2" id="timed-delete-hold-timer" aria-hidden="true"></div>
                 <div class="small text-muted mt-2" id="timed-delete-hold-status" aria-live="polite">
                     The delete button will be enabled after you enter the correct confirmation phrase.
                 </div>
