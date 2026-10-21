@@ -65,6 +65,7 @@ def home():
 
 
 @main_bp.route('/health')
+@limiter.exempt
 def health_check():
     """Simple health check endpoint for uptime monitoring."""
     try:
@@ -76,6 +77,7 @@ def health_check():
 
 
 @main_bp.route('/health/status')
+@limiter.exempt
 def health_status():
     """Return bounded capability and platform signals for status publication.
 
