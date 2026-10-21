@@ -33,10 +33,11 @@ Passes are not free and they do not refill on their own. You get them by buying 
 ### Requesting a pass
 
 1. Press **Break**. The **Choose Break Type** dialog opens: *Choose a hall-pass destination or mark yourself done for the day.*
-2. Pick a destination from the list of buttons. Your teacher decides what is on that list.
-3. The dialog closes and you see *Hall pass request sent.*
+2. Type your PIN in the **Your PIN** box at the top of the dialog.
+3. Pick a destination from the list of buttons. Your teacher decides what is on that list.
+4. The dialog closes and you see *Hall pass request sent.*
 
-No PIN is required to request a pass.
+If you pick a destination with the PIN box empty, the dialog stays open and asks you to *Enter your PIN first.* A wrong PIN is refused with *Incorrect PIN.*
 
 ### Waiting
 
@@ -59,7 +60,7 @@ Checking out greets you with *Checked out for {destination}. Have a safe trip!* 
 
 ### Done for the day is not a hall pass
 
-The same **Choose Break Type** dialog has a separate **Done for the day** button below a divider. It ends your day rather than requesting a pass, it costs no passes, and it asks for your PIN. See [Start and End Work](start-end-work.md).
+The same **Choose Break Type** dialog has a separate **Done for the day** button below a divider. It ends your day rather than requesting a pass, it costs no passes, and it uses the PIN you type in the same **Your PIN** box. See [Start and End Work](start-end-work.md).
 
 ## Important notes
 

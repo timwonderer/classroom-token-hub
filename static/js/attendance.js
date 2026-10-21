@@ -358,6 +358,11 @@ function configureBreakButton(button, isActive, hallPass, doneForDay = false) {
 
 function openBreakChoiceModal() {
   hideBreakDestinations();
+  const pinInput = document.getElementById('breakPinInput');
+  if (pinInput) {
+    pinInput.value = '';
+    pinInput.classList.remove('is-invalid');
+  }
 
   const modalEl = document.getElementById('breakChoiceModal');
   if (modalEl && window.bootstrap) {
@@ -408,8 +413,10 @@ function renderBreakDestinations(passTypes) {
     button.className = 'btn btn-outline-primary text-start';
     button.textContent = destination;
     button.addEventListener('click', () => {
-      requestHallPass(destination);
+      const pin = readBreakPin();
+      if (!pin) return;
       closeBreakChoiceModal();
+      requestHallPass(destination, pin);
     });
     list.appendChild(button);
   });
@@ -420,7 +427,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const doneBtn = document.getElementById('doneForDayBreakBtn');
   if (!doneBtn) return;
   doneBtn.addEventListener('click', () => {
-    const pin = prompt("Enter your PIN to mark done for the day:");
+    const pin = readBreakPin();
     if (!pin) return;
     closeBreakChoiceModal();
     performTap('break', pin, "Done for the day");
@@ -517,15 +524,23 @@ function cancelHallPass(passId) {
     });
 }
 
-function requestHallPass(destination) {
-  if (!destination || !destination.trim()) {
+// FEAT-IDEN-002 "Credential boundary": hall-pass use and "done for the day"
+// take the PIN, read from the break modal's own field. An empty field keeps
+// the modal open with an error rather than closing it silently.
+function readBreakPin() {
+  const input = document.getElementById('breakPinInput');
+  const pin = input ? input.value.trim() : '';
+  if (!pin && input) {
+    input.classList.add('is-invalid');
+    input.focus();
+  }
+  return pin || null;
+}
+
+function requestHallPass(destination, pin) {
+  if (!destination || !destination.trim() || !pin) {
     return;
   }
-
-  // FEAT-IDEN-002 "Credential boundary": hall-pass use takes the PIN. Prompted
-  // the same way as "done for the day", which is the neighbouring break action.
-  const pin = prompt(`Enter your PIN to request a hall pass to ${destination.trim()}:`);
-  if (!pin) return;
 
   window.AppCore.csrfFetch('/api/hall-pass/request', {
     method: 'POST',
