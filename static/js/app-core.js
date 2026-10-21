@@ -419,7 +419,7 @@
   }
 
   // Declarative confirm for plain form posts: `data-confirm="…"` on the form
-  // or its submit button (optional data-confirm-title, -label, -danger, and
+  // or its submit button (optional data-confirm-title, -label, -cancel-label, -danger, and
   // -value-from="<input id>" to fill a "{value}" placeholder). Capture phase,
   // so it runs before any other submit listener and cancelling leaves the
   // form untouched.
@@ -443,6 +443,7 @@
     const confirmed = await confirmDialog(message, {
       title: source.dataset.confirmTitle || 'Please confirm',
       confirmLabel: source.dataset.confirmLabel || 'OK',
+      cancelLabel: source.dataset.confirmCancelLabel || 'Cancel',
       danger: 'confirmDanger' in source.dataset,
     });
     if (!confirmed) return;

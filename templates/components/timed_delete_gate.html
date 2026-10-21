@@ -39,12 +39,12 @@
                    screen-reader user could not find it or learn why it is locked. #}
                 <button type="button" class="btn btn-danger w-100 disabled" id="timed-delete-hold-btn"
                         aria-disabled="true" aria-describedby="timed-delete-hold-status">
-                    Click and Hold this Button to Confirm
+                    Hold to Confirm — click and hold, or hold Space or Enter
                 </button>
                 {# Visual countdown only; screen readers get the live status below instead. #}
                 <div class="small fw-semibold mt-2" id="timed-delete-hold-timer" aria-hidden="true"></div>
                 <div class="small text-muted mt-2" id="timed-delete-hold-status" aria-live="polite">
-                    The delete button will be enabled after you enter the correct confirmation phrase.
+                    Hold button unlocks after countdown + exact phrase match.
                 </div>
             </div>
             <div class="modal-footer">

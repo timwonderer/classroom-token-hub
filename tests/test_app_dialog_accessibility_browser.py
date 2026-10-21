@@ -46,7 +46,8 @@ PAGE = """<!doctype html><html lang="en"><head><title>Dialogs</title>
   <input id="amount" name="amount" value="12.50" aria-label="Amount">
   <button type="submit" id="payBtn" name="choice" value="part"
           data-confirm="Pay ${value} toward this bill?" data-confirm-value-from="amount"
-          data-confirm-title="Pay toward bill" data-confirm-label="Pay">Pay</button>
+          data-confirm-title="Pay toward bill" data-confirm-label="Pay"
+          data-confirm-cancel-label="Not now">Pay</button>
 </form>
 </main>
 <div id="flashToastContainer" class="position-fixed bottom-0 end-0 p-3">
@@ -286,6 +287,8 @@ def test_data_confirm_cancel_submits_nothing_and_confirm_submits_with_its_button
     dialog.wait_for()
     page.wait_for_function("() => document.activeElement.closest('.modal.show')")
     assert dialog.get_by_text("Pay $12.50 toward this bill?").is_visible()
+    # A destructive "Cancel X" next to a plain "Cancel" is ambiguous when read alone.
+    assert dialog.get_by_role("button", name="Not now").is_visible()
     page.keyboard.press("Escape")
     dialog.wait_for(state="detached")
     page.wait_for_function("() => document.activeElement.id === 'payBtn'")
@@ -324,7 +327,7 @@ CONTRAST_JS = """(el) => {
 
 
 @pytest.mark.parametrize("shell", ["", "student-shell", "sysadmin-shell"])
-def test_buttons_keep_aa_contrast_under_keyboard_focus_and_hover(page, shell):
+def test_buttons_keep_aa_contrast_under_keyboard_focus_hover_and_active(page, shell):
     # The dialog's Cancel (.btn-outline-secondary) measured 2.3:1 when focused
     # from the keyboard: style.css forced its text dark but not its focus fill.
     # axe audits the resting state, so it never saw it.
@@ -355,7 +358,11 @@ def test_buttons_keep_aa_contrast_under_keyboard_focus_and_hover(page, shell):
         page.wait_for_timeout(250)
         hovered = button.evaluate(CONTRAST_JS)
         page.mouse.move(0, 0)
-        for state, ratio in (("focus-visible", focused), ("hover", hovered)):
+        page.evaluate("(id) => document.getElementById(id).classList.add('active')", variant)
+        page.wait_for_timeout(250)
+        selected = button.evaluate(CONTRAST_JS)
+        page.evaluate("(id) => document.getElementById(id).classList.remove('active')", variant)
+        for state, ratio in (("focus-visible", focused), ("hover", hovered), ("active", selected)):
             if ratio < 4.5:
                 failures.append(f"{variant} {state}: {ratio:.2f}:1")
     assert failures == [], failures
