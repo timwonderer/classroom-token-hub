@@ -321,6 +321,10 @@
         error.id = `${id}-error`;
         error.textContent = String(input.requiredMessage || 'This field is required.');
         body.append(label, field, error);
+        // The error stops applying once there is input, so stop announcing it.
+        field.addEventListener('input', () => {
+          if (field.value.trim()) clearInvalid(field);
+        });
       }
 
       const footer = document.createElement('div');

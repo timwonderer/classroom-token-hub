@@ -116,6 +116,10 @@ def test_an_empty_pin_is_announced_only_once_it_applies(page):
     assert field.get_attribute("aria-describedby") == "breakPinError"
     assert page.evaluate("() => document.activeElement.id") == "breakPinInput"
 
+    field.type("1")  # stops announcing an error that no longer applies
+    assert field.get_attribute("aria-invalid") is None
+    assert field.get_attribute("aria-describedby") is None
+
 
 def test_choosing_a_destination_returns_focus_to_the_break_button(page):
     page.fill("#breakPinInput", "1234")

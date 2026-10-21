@@ -214,6 +214,11 @@ def test_prompt_field_is_labelled_and_announces_its_error_only_once_it_applies(p
     node = [n for n in exposed(ax_tree(page), "textbox", "Your PIN")]
     assert node and ax_value(node[0], "description") == "Enter your PIN first."
 
+    field.type("1")  # the error no longer applies once there is input
+    assert field.get_attribute("aria-invalid") is None
+    assert field.get_attribute("aria-describedby") is None
+    assert "is-invalid" not in field.get_attribute("class")
+
     field.fill("1234")
     page.keyboard.press("Enter")
     assert result(page) == "1234"

@@ -35,7 +35,7 @@ SCRIPTS = {
     "/static/js/timed-delete-gate.js": "static/js/timed-delete-gate.js",
 }
 GATE = (
-    Environment(loader=FileSystemLoader(REPO / "templates"))
+    Environment(loader=FileSystemLoader(REPO / "templates"), autoescape=True)
     .get_template("components/timed_delete_gate.html")
     .module.timed_delete_gate()
 )

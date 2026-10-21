@@ -535,6 +535,14 @@ async function cancelHallPass(passId) {
     });
 }
 
+document.addEventListener('DOMContentLoaded', () => {
+  const pinInput = document.getElementById('breakPinInput');
+  if (!pinInput) return;
+  pinInput.addEventListener('input', () => {
+    if (pinInput.value.trim()) window.AppCore.clearInvalid(pinInput);
+  });
+});
+
 // FEAT-IDEN-002 "Credential boundary": hall-pass use and "done for the day"
 // take the PIN, read from the break modal's own field. An empty field keeps
 // the modal open with an error rather than closing it silently.
