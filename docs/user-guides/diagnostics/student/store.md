@@ -20,7 +20,7 @@ If something doesn't look right with your Store and Purchases, check this guide 
 
 ## If a purchase fails, check these first:
 - Did you enter the correct passphrase?
-- Do you have enough funds, or do overdraft settings allow it?
+- Do you have enough funds in checking? A purchase that checking cannot cover is refused before it posts — it is not completed with a fee, even if your teacher allows a savings-to-checking overdraft-protection transfer. That transfer only helps if it closes the gap completely.
 - Are you late on rent, and are purchases restricted when late?
 - Have you hit the per-student purchase limit?
 - Is the inventory empty? Inventory may be zero even if the item still shows.
