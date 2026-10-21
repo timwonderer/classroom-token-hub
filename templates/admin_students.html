@@ -49,7 +49,7 @@
 </ul>
 <div class="card shadow-sm mb-0">
   <div class="card-header bg-warning text-dark py-3">
-    <h6 class="mb-0 fw-semibold text-dark"><span class="material-symbols-outlined me-2 icon-text-bottom" aria-hidden="true">warning</span>Avoid Sensitive Information</h6>
+    <h4 class="h6 mb-0 fw-semibold text-dark"><span class="material-symbols-outlined me-2 icon-text-bottom" aria-hidden="true">warning</span>Avoid Sensitive Information</h4>
   </div>
   <div class="card-body">
     Although all personal information is stored encrypted, we do not recommend storing any private or sensitive information in the notes field.
@@ -140,7 +140,7 @@
 
 {% macro recovery_readiness_warning() %}
 {% if roster.recovery_at_risk %}
-            {% call cards.alert_card('danger', 'Your account may be at risk of being unrecoverable', icon='shield_lock', role='note', id='recovery-readiness-warning', body_class='mb-3') %}
+            {% call cards.alert_card('danger', 'Your account may be at risk of being unrecoverable', icon='shield_lock', role='note', id='recovery-readiness-warning', body_class='mb-3', heading_tag='h2') %}
                 <p class="mb-0">Classroom Token Hub uses student-assisted teacher account recovery. Recovery requires enough claimed students across the classes you own, including at least {{ roster.recovery_min_students }} claimed students in each class.
                   <strong>You currently have {{ roster.claimed_count }} claimed students in this class.</strong>
                   Until this class reaches {{ roster.recovery_min_students }}, teacher account recovery will not be available if you lose access.</p>
@@ -187,10 +187,10 @@
             {% if roster.students %}
             <div class="card border-primary mb-3">
               <div class="card-header bg-primary">
-                <h3 class="mb-0 text-inverse h6 fs-4">
+                <h2 class="mb-0 text-inverse h6 fs-4">
                   <span class="material-symbols-outlined me-2 align-middle" aria-hidden="true">check_circle</span>
                   ({{ roster.claimed_count }}) Active Students for {{ roster.class_label }}
-                </h3>
+                </h2>
               </div>
               <div class="card-body">
                 <!-- Bulk Actions Toolbar -->
@@ -333,7 +333,7 @@
             </div>
             {% else %}
             {{ recovery_readiness_warning() }}
-            {% call cards.alert_card('info', 'No claimed accounts yet', icon='group', body_class='mb-3') %}
+            {% call cards.alert_card('info', 'No claimed accounts yet', icon='group', body_class='mb-3', heading_tag='h2') %}
               <p class="mb-0">No students have claimed accounts in {{ roster.class_label }} yet.</p>
             {% endcall %}
             {% endif %}
@@ -343,7 +343,7 @@
             {% if roster.has_unclaimed_seats or roster.join_code %}
             <div class="card border-secondary mb-3">
               <div class="card-header bg-secondary">
-                <h3 class="mb-0 text-dark h6 fs-4 fw-bold">
+                <h2 class="mb-0 text-dark h6 fs-4 fw-bold">
                   <button class="btn btn-link p-0 text-dark text-decoration-none d-flex align-items-center justify-content-between gap-2 w-100 h6 fs-4 fw-medium mb-0 lh-base"
                     type="button" data-bs-toggle="collapse" data-bs-target="#unclaimedSeatsPanel"
                     aria-expanded="{{ 'true' if roster.has_unclaimed_seats else 'false' }}"
@@ -357,7 +357,7 @@
                     </span>
                     <span class="material-symbols-outlined align-middle" aria-hidden="true">unfold_more</span>
                   </button>
-                </h3>
+                </h2>
               </div>
               <div id="unclaimedSeatsPanel" class="collapse{% if roster.has_unclaimed_seats %} show{% endif %}">
                 <div class="card-body">

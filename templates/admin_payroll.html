@@ -144,7 +144,7 @@
   <div class="tab-pane fade show active" id="overview" role="tabpanel" aria-labelledby="overview-tab">
     <div class="card shadow mb-4">
       <div class="card-header bg-success text-white">
-        <h5 class="mb-0 text-white"><span class="material-symbols-outlined me-2 text-white" aria-hidden="true">trending_up</span>Quick Stats</h5>
+        <h2 class="h5 mb-0 text-white"><span class="material-symbols-outlined me-2 text-white" aria-hidden="true">trending_up</span>Quick Stats</h2>
       </div>
       <div class="card-body">
         <div class="row text-center">
@@ -188,7 +188,7 @@
     <!-- Recent Payroll Activity -->
     <div class="card shadow">
       <div class="card-header">
-        <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">format_list_bulleted</span>Recent Payroll Activity</h5>
+        <h2 class="h5 mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">format_list_bulleted</span>Recent Payroll Activity</h2>
       </div>
       <div class="card-body">
         {% if recent_payrolls %}
@@ -238,7 +238,7 @@
   <div class="tab-pane fade" id="history" role="tabpanel" aria-labelledby="history-tab">
     <div class="card shadow">
       <div class="card-header">
-        <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">history</span>Payroll History</h5>
+        <h2 class="h5 mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">history</span>Payroll History</h2>
       </div>
       <div class="card-body">
         <!-- History Table -->
@@ -326,7 +326,7 @@
            the one alert about missing payroll (DOM-PROD-001 §XV.6). Static on
            load, so no live-region role, and no browser-only close button that
            would look like a recorded dismissal. #}
-        {% call cards.alert_card('info', 'Set up payroll', icon='settings') %}
+        {% call cards.alert_card('info', 'Set up payroll', icon='settings', heading_tag='h2') %}
           <p class="mb-2">No payroll setting has been created yet. Students who use Start Work before then are paid at your first rate. Do you want to use preset amounts?</p>
           <button type="button" class="btn btn-sm btn-warning" id="usePresetBtn">
             <span class="material-symbols-outlined me-1" aria-hidden="true">check_circle</span>Yes, Use Preset Values
@@ -335,7 +335,7 @@
       </div>
       {% elif current_setting %}
       <div class="col-12 mb-3">
-        {% call cards.alert_card('info', 'Changes take effect on the next payroll date', icon='info', role='alert', dismissible=True) %}
+        {% call cards.alert_card('info', 'Changes take effect on the next payroll date', icon='info', role='alert', dismissible=True, heading_tag='h2') %}
           {# DOM-CLASS-003 §VII: a change never reprices the open cycle. #}
           <p class="mb-0">Settings you save now take effect on
           <strong>{% if next_change_effective %}{{ next_change_effective|fmt_timestamp }}{% else %}the next payroll date{% endif %}</strong>.
@@ -348,7 +348,7 @@
       <div class="col-lg-8 mb-4">
         <div class="card shadow">
           <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-            <h5 class="mb-0 text-white"><span class="material-symbols-outlined me-2 text-white" aria-hidden="true">settings</span>Payroll Settings</h5>
+            <h2 class="h5 mb-0 text-white"><span class="material-symbols-outlined me-2 text-white" aria-hidden="true">settings</span>Payroll Settings</h2>
             <!-- Mode Toggle -->
             <div class="form-check form-switch">
               <input class="form-check-input" type="checkbox" id="settingsModeToggle" role="switch" {% if
@@ -595,7 +595,7 @@
       <div class="col-lg-4 mb-4">
         <div class="card shadow border-success">
           <div class="card-header bg-success text-white">
-            <h5 class="mb-0 text-white"><span class="material-symbols-outlined me-2 text-white" aria-hidden="true">calculate</span>Pay Simulator</h5>
+            <h2 class="h5 mb-0 text-white"><span class="material-symbols-outlined me-2 text-white" aria-hidden="true">calculate</span>Pay Simulator</h2>
           </div>
           <div class="card-body">
             <p class="text-muted small">Estimate student earnings based on your current settings.</p>
@@ -638,7 +638,7 @@
 
             <!-- Settings Summary (Plain English) -->
             <div class="mt-4 pt-3 border-top" id="settingsSummary">
-              <h6 class="fw-bold mb-2"><span class="material-symbols-outlined me-2" aria-hidden="true">description</span>Current Settings:</h6>
+              <h3 class="h6 fw-bold mb-2"><span class="material-symbols-outlined me-2" aria-hidden="true">description</span>Current Settings:</h3>
               <div id="settingsSummaryText" class="small text-muted">
                 <p class="mb-0"><em>Configure your payroll settings above to see a summary here.</em></p>
               </div>
@@ -657,7 +657,7 @@
       <div class="col-lg-6 mb-4">
         <div class="card shadow h-100">
           <div class="card-header bg-primary text-white">
-            <h5 class="mb-0 text-white"><span class="material-symbols-outlined me-2 text-white" aria-hidden="true">group</span>Select Students</h5>
+            <h2 class="h5 mb-0 text-white"><span class="material-symbols-outlined me-2 text-white" aria-hidden="true">group</span>Select Students</h2>
           </div>
           <div class="card-body">
             <!-- Student Table -->
@@ -668,6 +668,7 @@
                   <tr>
                     <th scope="col" width="40">
                       <input type="checkbox" id="selectAllStudents" class="form-check-input" aria-label="Select all students">
+                      <span class="visually-hidden">Select</span>
                     </th>
                     <th scope="col">Student</th>
                     <th scope="col" class="text-end">Checking</th>
@@ -711,7 +712,7 @@
       <div class="col-lg-6 mb-4">
         <div class="card shadow h-100">
           <div class="card-header bg-success text-white">
-            <h5 class="mb-0 text-white"><span class="material-symbols-outlined me-2 text-white" aria-hidden="true">payments</span>Payment Details</h5>
+            <h2 class="h5 mb-0 text-white"><span class="material-symbols-outlined me-2 text-white" aria-hidden="true">payments</span>Payment Details</h2>
           </div>
           <div class="card-body">
             <form id="manualPaymentForm">
@@ -719,7 +720,7 @@
 
               <!-- Description -->
               <div class="mb-3">
-                {{ manual_payment_form.description.label(class="form-label fw-bold") }}
+                <label for="manualDescription" class="form-label fw-bold">{{ manual_payment_form.description.label.text }}</label>
                 {{ manual_payment_form.description(class="form-control form-control-lg", id="manualDescription", placeholder="Manual credit note") }}
               </div>
 
@@ -734,7 +735,7 @@
 
               <!-- Amount -->
               <div class="mb-3">
-                {{ manual_payment_form.amount.label(class="form-label fw-bold") }}
+                <label for="manualAmount" class="form-label fw-bold">{{ manual_payment_form.amount.label.text }}</label>
                 <div class="input-group input-group-lg">
                   <span class="input-group-text fw-bold amount-sign-symbol" id="amountSignSymbol">+</span>
                   <span class="input-group-text">$</span>

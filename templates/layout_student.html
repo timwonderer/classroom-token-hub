@@ -297,7 +297,7 @@
                     {% else %}
                         {% set flash_level, flash_title, flash_icon = 'info', 'For your information', 'info' %}
                     {% endif %}
-                    {% call cards.alert_card(flash_level, flash_title, icon=flash_icon, body_class='mb-4', role='alert', dismissible=True) %}
+                    {% call cards.alert_card(flash_level, flash_title, icon=flash_icon, body_class='mb-4', role='alert', dismissible=True, heading_tag='h2') %}
                         <p class="mb-0">{{ message }}</p>
                     {% endcall %}
                     {% endif %}

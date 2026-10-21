@@ -16,9 +16,9 @@
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-primary text-white">
                     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
-                        <h4 class="mb-0 h5">
+                        <h2 class="mb-0 h5">
                             <span class="material-symbols-outlined me-2" aria-hidden="true">confirmation_number</span>Ticket {{ issue_ref[:12] }}...
-                        </h4>
+                        </h2>
                         <span class="badge
                             {% if issue.status in ['ESCALATED_TO_DEV', 'elevated', 'developer_review'] %}bg-warning text-dark
                             {% elif issue.status in ['DEV_RESOLVED', 'developer_resolved'] %}bg-info
@@ -31,7 +31,7 @@
                 <div class="card-body">
                     <!-- Reporter Reference -->
                     <div class="mb-3">
-                        <h6 class="text-muted mb-2">Reporter Reference</h6>
+                        <h3 class="h6 text-muted mb-2">Reporter Reference</h3>
                         <p class="mb-0">
                             <span class="material-symbols-outlined me-2" aria-hidden="true">tag</span>
                             <code>{{ issue.actor_public_id }}</code>
@@ -46,7 +46,7 @@
 
                     <!-- Category -->
                     <div class="mb-3">
-                        <h6 class="text-muted mb-2">Category</h6>
+                        <h3 class="h6 text-muted mb-2">Category</h3>
                         <span class="badge bg-secondary">{{ issue.category_name }}</span>
                         <span class="badge bg-light text-dark ms-2">{{ issue.issue_type|title }}</span>
                     </div>
@@ -56,7 +56,7 @@
 
                     <!-- Escalation Info (only present once a teacher has escalated this ticket) -->
                     <div class="mb-3">
-                        <h6 class="text-muted mb-2">Escalated By</h6>
+                        <h3 class="h6 text-muted mb-2">Escalated By</h3>
                         <p class="mb-0">
                             <span class="material-symbols-outlined me-2" aria-hidden="true">badge</span>
                             <strong>{% if issue.reviewer_public_id %}{{ issue.reviewer_public_id[:8] }}...{% else %}Unattributed{% endif %}</strong>
@@ -67,14 +67,14 @@
                     </div>
 
                     {% if issue.escalation_reason %}
-                    {% call cards.alert_card('warning', 'Escalation reason', icon='arrow_circle_up', body_class='mb-3', heading_tag='h6') %}
+                    {% call cards.alert_card('warning', 'Escalation reason', icon='arrow_circle_up', body_class='mb-3', heading_tag='h3') %}
                         <p class="mb-0 fw-bold">{{ issue.escalation_reason }}</p>
                     {% endcall %}
                     {% endif %}
 
                     {% if issue.teacher_diagnostic_note %}
                     <div class="mb-3">
-                        <h6 class="text-muted mb-2">Teacher's Diagnostic Notes</h6>
+                        <h3 class="h6 text-muted mb-2">Teacher's Diagnostic Notes</h3>
                         <div class="bg-light p-3 rounded">
                             <p class="mb-0">{{ issue.teacher_diagnostic_note }}</p>
                         </div>
@@ -84,11 +84,11 @@
 
                     <hr>
 
-                    <h5 class="mt-2 mb-3">{{ issue.title }}</h5>
+                    <h3 class="h5 mt-2 mb-3">{{ issue.title }}</h3>
 
                     <!-- Original Report -->
                     <div class="mb-3">
-                        <h6 class="text-muted mb-2">Original Report</h6>
+                        <h4 class="h6 text-muted mb-2">Original Report</h4>
                         <div class="bg-light p-3 rounded">
                             <p class="mb-0">{{ issue.student_explanation or 'The teacher has not shared this report’s content.' }}</p>
                         </div>
@@ -96,7 +96,7 @@
 
                     {% if issue.student_expected_outcome %}
                     <div class="mb-3">
-                        <h6 class="text-muted mb-2">Expected Outcome</h6>
+                        <h4 class="h6 text-muted mb-2">Expected Outcome</h4>
                         <div class="bg-light p-3 rounded">
                             <p class="mb-0">{{ issue.student_expected_outcome }}</p>
                         </div>
@@ -134,7 +134,7 @@
                     <!-- Timestamps -->
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <h6 class="text-muted mb-2">Submitted</h6>
+                            <h4 class="h6 text-muted mb-2">Submitted</h4>
                             <p class="mb-0">
                                 <span class="material-symbols-outlined me-2" aria-hidden="true">schedule</span>
                                 {{ issue.submitted_at|fmt_timestamp }}
@@ -142,7 +142,7 @@
                         </div>
                         {% if issue.escalated_at %}
                         <div class="col-md-6 mb-3">
-                            <h6 class="text-muted mb-2">Escalated</h6>
+                            <h4 class="h6 text-muted mb-2">Escalated</h4>
                             <p class="mb-0">
                                 <span class="material-symbols-outlined me-2" aria-hidden="true">arrow_circle_up</span>
                                 {{ issue.escalated_at|fmt_timestamp }}
@@ -151,7 +151,7 @@
                         {% endif %}
                         {% if issue.sysadmin_reviewed_at %}
                         <div class="col-md-6 mb-3">
-                            <h6 class="text-muted mb-2">Reviewed</h6>
+                            <h4 class="h6 text-muted mb-2">Reviewed</h4>
                             <p class="mb-0">
                                 <span class="material-symbols-outlined me-2" aria-hidden="true">visibility</span>
                                 {{ issue.sysadmin_reviewed_at|fmt_timestamp }}
@@ -160,7 +160,7 @@
                         {% endif %}
                         {% if issue.sysadmin_resolved_at %}
                         <div class="col-md-6 mb-3">
-                            <h6 class="text-muted mb-2">Resolved</h6>
+                            <h4 class="h6 text-muted mb-2">Resolved</h4>
                             <p class="mb-0">
                                 <span class="material-symbols-outlined me-2" aria-hidden="true">check_circle</span>
                                 {{ issue.sysadmin_resolved_at|fmt_timestamp }}
@@ -172,7 +172,7 @@
                     <!-- Sysadmin Notes (if any decision has been recorded) -->
                     {% if issue.sysadmin_notes %}
                     <hr>
-                    {% call cards.alert_card('success', 'Resolution notes', icon='task_alt', body_class='mb-3', heading_tag='h6') %}
+                    {% call cards.alert_card('success', 'Resolution notes', icon='task_alt', body_class='mb-3', heading_tag='h3') %}
                         <p class="mb-0">{{ issue.sysadmin_notes }}</p>
                     {% endcall %}
                     {% endif %}
@@ -183,9 +183,9 @@
             {% if issue.context_snapshot %}
             <div class="card shadow-sm mb-4">
                 <div class="card-header">
-                    <h5 class="mb-0">
+                    <h2 class="h5 mb-0">
                         <span class="material-symbols-outlined me-2" aria-hidden="true">info</span>System Context Snapshot
-                    </h5>
+                    </h2>
                 </div>
                 <div class="card-body">
                     <dl>
@@ -194,7 +194,7 @@
                         <dt>Browser details</dt><dd>{{ issue.context_snapshot.user_agent or 'Unavailable' }}</dd>
                     </dl>
                     {% if issue.context_snapshot.balances %}
-                    <h6 class="text-muted mb-2">Balances at Time of Report</h6>
+                    <h3 class="h6 text-muted mb-2">Balances at Time of Report</h3>
                     <div class="row mb-3">
                         <div class="col-md-4">
                             <p class="mb-0"><strong>Checking:</strong> ${{ "%.2f"|format(issue.context_snapshot.balances.checking) }}</p>
@@ -210,7 +210,7 @@
 
                     {% if issue.context_snapshot.transaction %}
                     <hr>
-                    <h6 class="text-muted mb-2">Related Transaction</h6>
+                    <h3 class="h6 text-muted mb-2">Related Transaction</h3>
                     <div class="row">
                         <div class="col-md-6">
                             <p class="mb-1"><strong>ID:</strong> #{{ issue.context_snapshot.transaction.id }}</p>
@@ -236,7 +236,7 @@
 
             {% if issue.context_snapshot.recent_transactions %}
             <div class="card shadow-sm mb-4">
-                <div class="card-header"><h5 class="mb-0">Recent Transactions Shared by the Teacher</h5></div>
+                <div class="card-header"><h2 class="h5 mb-0">Recent Transactions Shared by the Teacher</h2></div>
                 <div class="card-body table-responsive">
                     <table class="table table-sm">
                         <caption>Transactions saved at the time of the report</caption>
@@ -252,9 +252,9 @@
             {% if correlation_pack %}
             <div class="card shadow-sm mb-4">
                 <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">
+                    <h2 class="h5 mb-0">
                         <span class="material-symbols-outlined me-2" aria-hidden="true">hub</span>Correlation Pack
-                    </h5>
+                    </h2>
                     <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#correlationPackBody" aria-expanded="false" aria-controls="correlationPackBody">
                         Toggle
                     </button>
@@ -274,7 +274,7 @@
                             </div>
                         </div>
 
-                        <h6 class="text-muted mb-2">Recent Requests</h6>
+                        <h3 class="h6 text-muted mb-2">Recent Requests</h3>
                         {% if correlation_pack.request_trace_json %}
                         <div class="table-responsive mb-3">
                     <table class="table table-sm align-middle">
@@ -308,7 +308,7 @@
                         <p class="text-muted">No recent request traces captured.</p>
                         {% endif %}
 
-                        <h6 class="text-muted mb-2">Recent Errors</h6>
+                        <h3 class="h6 text-muted mb-2">Recent Errors</h3>
                         {% if correlation_pack.error_refs_json %}
                         <div class="list-group">
                             {% for error_ref in correlation_pack.error_refs_json %}
@@ -345,9 +345,9 @@
             {% if issue.status in ['ESCALATED_TO_DEV', 'elevated', 'developer_review'] %}
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-success text-white">
-                    <h5 class="mb-0">
+                    <h2 class="h5 mb-0">
                         <span class="material-symbols-outlined me-2" aria-hidden="true">check_circle</span>Record Technical Resolution
-                    </h5>
+                    </h2>
                 </div>
                 <div class="card-body">
                     <form method="POST" action="{{ url_for('sysadmin.resolve_escalated_issue', issue_ref=issue_ref) }}">
@@ -386,7 +386,7 @@
             {% elif direct_lifecycle and issue.status in ['OPEN', 'DEV_RESOLVED', 'CLOSED', 'submitted', 'developer_resolved'] %}
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">edit_square</span>Update Ticket</h5>
+                    <h2 class="h5 mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">edit_square</span>Update Ticket</h2>
                 </div>
                 <div class="card-body">
                     <form method="POST" action="{{ url_for('sysadmin.update_issue', issue_ref=issue_ref) }}">
@@ -426,7 +426,7 @@
             <!-- Reporter Stats -->
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-info text-white">
-                    <h5 class="mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">bar_chart</span>Reporter Stats</h5>
+                    <h2 class="h5 mb-0"><span class="material-symbols-outlined me-2" aria-hidden="true">bar_chart</span>Reporter Stats</h2>
                 </div>
                 <div class="card-body">
                     <div class="mb-0">
@@ -439,9 +439,9 @@
             {% if history %}
             <div class="card shadow-sm">
                 <div class="card-header">
-                    <h5 class="mb-0">
+                    <h2 class="h5 mb-0">
                         <span class="material-symbols-outlined me-2" aria-hidden="true">history</span>Status History
-                    </h5>
+                    </h2>
                 </div>
                 <div class="card-body">
                     <div class="timeline">

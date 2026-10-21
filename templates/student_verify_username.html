@@ -31,7 +31,7 @@
             <p>Type the username you just saved. This makes sure you'll be able to find it the next time you sign in.</p>
 
             {% if error_message %}
-            {% call cards.alert_card('danger', 'Check your saved copy', icon='error', id='retention-check-error', role='alert', body_class='mb-3', attrs='tabindex="-1"') %}
+            {% call cards.alert_card('danger', 'Check your saved copy', icon='error', id='retention-check-error', role='alert', body_class='mb-3', attrs='tabindex="-1"', heading_tag='h2') %}
                 <p class="mb-0">{{ error_message }}</p>
             {% endcall %}
             {% endif %}

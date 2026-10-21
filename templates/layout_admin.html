@@ -402,7 +402,7 @@
            finds the active class changed. `.card` sets its own display, so the
            `hidden` attribute relies on style.css forcing `[hidden]` to
            `display: none !important` globally. #}
-        {% call cards.alert_card('warning', 'This page is showing a different class', icon='sync_problem', body_class='mb-3', role='alert', id='stale-class-context', attrs='hidden') %}
+        {% call cards.alert_card('warning', 'This page is showing a different class', icon='sync_problem', body_class='mb-3', role='alert', id='stale-class-context', attrs='hidden', heading_tag='h2') %}
           <p class="mb-2">Your active class changed in another tab or window. Anything you submit from
           this page applies to your <em>current</em> class, not the one shown here, so a
           student picked from this list may simply be skipped.</p>

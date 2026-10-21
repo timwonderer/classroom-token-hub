@@ -38,11 +38,11 @@
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-primary text-white">
                     <div class="d-flex justify-content-between align-items-center">
-                        <h4 class="mb-0">
+                        <h2 class="h4 mb-0">
                             <span class="material-symbols-outlined me-2 icon-xl icon-middle" aria-hidden="true">
                                 description
                             </span>Issue Descriptions
-                        </h4>
+                        </h2>
                         <span class="badge
                             {% if issue.status in ['OPEN', 'TEACHER_REVIEW', 'submitted', 'teacher_review'] %}bg-warning text-dark
                             {% elif issue.status in ['TEACHER_FINAL_REVIEW', 'teacher_resolved'] %}bg-primary
@@ -57,7 +57,7 @@
                 <div class="card-body">
                     <!-- Student Info -->
                     <div class="mb-3">
-                        <h6 class="text-muted mb-2">Student</h6>
+                        <h3 class="h6 text-muted mb-2">Student</h3>
                         <p class="mb-0">
                             <span class="material-symbols-outlined me-2" aria-hidden="true">person</span>
                             <strong>{{ issue.student_display_name }}</strong>
@@ -71,7 +71,7 @@
 
                     <!-- Category -->
                     <div class="mb-3">
-                        <h6 class="text-muted mb-2">Category</h6>
+                        <h3 class="h6 text-muted mb-2">Category</h3>
                         <span class="badge bg-secondary">{{ issue.category.name }}</span>
                         <span class="badge bg-light text-dark ms-2">{{ issue.issue_type|title }}</span>
                     </div>
@@ -80,7 +80,7 @@
 
                     <!-- Student Explanation -->
                     <div class="mb-3">
-                        <h6 class="text-muted mb-2">Student's Explanation</h6>
+                        <h3 class="h6 text-muted mb-2">Student's Explanation</h3>
                         <div class="bg-light p-3 rounded">
                             <p class="mb-0">{{ issue.student_explanation }}</p>
                         </div>
@@ -88,7 +88,7 @@
 
                     {% if issue.student_expected_outcome %}
                     <div class="mb-3">
-                        <h6 class="text-muted mb-2">Expected Outcome</h6>
+                        <h3 class="h6 text-muted mb-2">Expected Outcome</h3>
                         <div class="bg-light p-3 rounded">
                             <p class="mb-0">{{ issue.student_expected_outcome }}</p>
                         </div>
@@ -100,7 +100,7 @@
                     <!-- Timestamps -->
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <h6 class="text-muted mb-2">Submitted</h6>
+                            <h3 class="h6 text-muted mb-2">Submitted</h3>
                             <p class="mb-0">
                                 <span class="material-symbols-outlined me-2" aria-hidden="true">schedule</span>
                                 {{ issue.submitted_at|fmt_timestamp }}
@@ -108,7 +108,7 @@
                         </div>
                         {% if issue.teacher_reviewed_at %}
                         <div class="col-md-6 mb-3">
-                            <h6 class="text-muted mb-2">First Reviewed</h6>
+                            <h3 class="h6 text-muted mb-2">First Reviewed</h3>
                             <p class="mb-0">
                                 <span class="material-symbols-outlined me-2" aria-hidden="true">visibility</span>
                                 {{ issue.teacher_reviewed_at|fmt_timestamp }}
@@ -123,19 +123,19 @@
             {% if issue.related_transaction_id %}
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">
+                    <h2 class="h5 mb-0">
                         <span class="material-symbols-outlined me-2" aria-hidden="true">receipt_long</span>Related Transaction
-                    </h5>
+                    </h2>
                 </div>
                 <div class="card-body">
                     {% if issue.context_snapshot and issue.context_snapshot.transaction %}
                     <div class="row">
                         <div class="col-md-6">
-                            <h6 class="text-muted mb-2">Transaction ID</h6>
+                            <h3 class="h6 text-muted mb-2">Transaction ID</h3>
                             <p class="mb-0"><strong>#{{ issue.context_snapshot.transaction.id }}</strong></p>
                         </div>
                         <div class="col-md-6">
-                            <h6 class="text-muted mb-2">Amount</h6>
+                            <h3 class="h6 text-muted mb-2">Amount</h3>
                             <p class="mb-0">
                                 <strong class="{% if issue.context_snapshot.transaction.amount > 0 %}text-success{% else %}text-danger{% endif %}">
                                     ${{ "%.2f"|format(issue.context_snapshot.transaction.amount) }}
@@ -145,11 +145,11 @@
                     </div>
                     <div class="row mt-3">
                         <div class="col-md-6">
-                            <h6 class="text-muted mb-2">Description</h6>
+                            <h3 class="h6 text-muted mb-2">Description</h3>
                             <p class="mb-0">{{ issue.context_snapshot.transaction.description }}</p>
                         </div>
                         <div class="col-md-6">
-                            <h6 class="text-muted mb-2">Account Type</h6>
+                            <h3 class="h6 text-muted mb-2">Account Type</h3>
                             <p class="mb-0">{{ issue.context_snapshot.transaction.account_type|title }}</p>
                         </div>
                     </div>
@@ -167,14 +167,14 @@
             {% if issue.context_snapshot %}
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">
+                    <h2 class="h5 mb-0">
                         <span class="material-symbols-outlined me-2" aria-hidden="true">info</span>System Context
-                    </h5>
+                    </h2>
                 </div>
                 <div class="card-body">
                     <!-- Balances at time of submission -->
                     {% if issue.context_snapshot.balances %}
-                    <h6 class="text-muted mb-2">Balances at Time of Submission</h6>
+                    <h3 class="h6 text-muted mb-2">Balances at Time of Submission</h3>
                     <div class="row mb-3">
                         <div class="col-md-4">
                             <div class="bg-light p-2 rounded text-center">
@@ -199,7 +199,7 @@
 
                     <!-- Recent Transactions -->
                     {% if issue.context_snapshot.recent_transactions %}
-                    <h6 class="text-muted mb-2">Recent Transaction History</h6>
+                    <h3 class="h6 text-muted mb-2">Recent Transaction History</h3>
                     <div class="table-responsive">
                         <table class="table table-sm table-hover">
                             <caption class="visually-hidden">Recent transaction history</caption>
@@ -234,9 +234,9 @@
             {% if issue.resolution_actions|length > 0 %}
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-secondary text-white">
-                    <h5 class="mb-0">
+                    <h2 class="h5 mb-0">
                         <span class="material-symbols-outlined me-2" aria-hidden="true">checklist</span>Resolution Actions
-                    </h5>
+                    </h2>
                 </div>
                 <div class="card-body">
                     <div class="list-group list-group-flush">
@@ -244,7 +244,7 @@
                         <div class="list-group-item">
                             <div class="d-flex justify-content-between align-items-start">
                                 <div>
-                                    <h6 class="mb-1">{{ action.action_type|replace('_', ' ')|title }}</h6>
+                                    <h3 class="h6 mb-1">{{ action.action_type|replace('_', ' ')|title }}</h3>
                                     {% if action.action_description %}
                                     <p class="mb-1 text-muted small">{{ action.action_description }}</p>
                                     {% endif %}
@@ -267,9 +267,9 @@
             {% if issue.status in ['OPEN', 'TEACHER_REVIEW', 'DEV_RESOLVED', 'submitted', 'teacher_review', 'developer_resolved'] %}
             <div class="card shadow-sm mb-4 border-warning">
                 <div class="card-header bg-warning text-dark">
-                    <h5 class="mb-0">
+                    <h2 class="h5 mb-0">
                         <span class="material-symbols-outlined me-2" aria-hidden="true">build</span>Actions
-                    </h5>
+                    </h2>
                 </div>
                 <div class="card-body">
                     <p class="text-muted small mb-3">Choose how to handle this issue:</p>
@@ -327,9 +327,9 @@
             {% elif issue.status in ['TEACHER_FINAL_REVIEW', 'teacher_resolved'] %}
             <div class="card shadow-sm mb-4 border-primary">
                 <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">
+                    <h2 class="h5 mb-0">
                         <span class="material-symbols-outlined me-2" aria-hidden="true">fact_check</span>Teacher Final Review
-                    </h5>
+                    </h2>
                 </div>
                 <div class="card-body">
                     <p class="mb-2"><strong>Resolution:</strong> {{ issue.teacher_resolution }}</p>
@@ -354,9 +354,9 @@
             {% elif issue.status in ['DEV_RESOLVED', 'developer_resolved'] %}
             <div class="card shadow-sm mb-4 border-info">
                 <div class="card-header bg-info text-white">
-                    <h5 class="mb-0">
+                    <h2 class="h5 mb-0">
                         <span class="material-symbols-outlined me-2" aria-hidden="true">build_circle</span>Developer Fix Applied
-                    </h5>
+                    </h2>
                 </div>
                 <div class="card-body">
                     {% call cards.alert_card('info', 'Teacher review required', icon='rate_review', body_class='mb-3') %}
@@ -386,9 +386,9 @@
             {% elif issue.status in ['ESCALATED_TO_DEV', 'elevated', 'developer_review'] %}
             <div class="card shadow-sm mb-4 border-warning">
                 <div class="card-header bg-warning">
-                    <h5 class="mb-0 text-black">
+                    <h2 class="h5 mb-0 text-black">
                         <span class="material-symbols-outlined me-2" aria-hidden="true">arrow_circle_up</span>Escalated
-                    </h5>
+                    </h2>
                 </div>
                 <div class="card-body">
                     <p class="mb-2"><strong>Reason:</strong> {{ issue.escalation_reason }}</p>
@@ -406,9 +406,9 @@
             {% elif issue.status == 'CLOSED' %}
             <div class="card shadow-sm mb-4 border-success">
                 <div class="card-header bg-success text-white">
-                    <h5 class="mb-0">
+                    <h2 class="h5 mb-0">
                         <span class="material-symbols-outlined me-2" aria-hidden="true">task_alt</span>Closed
-                    </h5>
+                    </h2>
                 </div>
                 <div class="card-body">
                     <p class="mb-2"><strong>Closure Summary:</strong></p>
@@ -427,9 +427,9 @@
             <!-- Status History -->
             <div class="card shadow-sm">
                 <div class="card-header bg-primary text-white">
-                    <h6 class="mb-0">
+                    <h2 class="h6 mb-0">
                         <span class="material-symbols-outlined me-2" aria-hidden="true">history</span>Status History
-                    </h6>
+                    </h2>
                 </div>
                 <div class="card-body">
                     <div class="timeline">
@@ -464,9 +464,9 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header bg-warning text-dark">
-                <h5 class="modal-title" id="escalateModalLabel">
+                <h2 class="h5 modal-title" id="escalateModalLabel">
                     <span class="material-symbols-outlined me-2" aria-hidden="true">arrow_circle_up</span>Escalate to Developer
-                </h5>
+                </h2>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form method="POST" action="{{ url_for('admin.escalate_issue', issue_ref=issue_ref) }}">

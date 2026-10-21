@@ -366,7 +366,7 @@
                     </button>
                     <div class="collapse mt-2" id="mobileTOC">
                         <div class="toc-wrapper">
-                            <h3 class="h5 toclabel">Navigation</h3>
+                            <h2 class="h5 toclabel">Navigation</h2>
                             {{ toc | safe }}
                         </div>
                     </div>
@@ -404,21 +404,21 @@
                             <!-- Related Articles -->
                             {% if related and related|length > 0 %}
                             <div class="related-articles mt-5 pt-4 border-top">
-                                <h4 class="mb-3">
+                                <h2 class="h4 mb-3">
                                     <span class="material-symbols-outlined icon-align" aria-hidden="true">bookmark</span>
                                     Related Articles
-                                </h4>
+                                </h2>
                                 <div class="row g-3">
                                     {% for article in related %}
                                     <div class="col-md-6">
                                         <div class="card h-100 border-primary border-opacity-25">
                                             <div class="card-body">
-                                                <h6 class="card-title">
+                                                <h3 class="h6 card-title">
                                                     <a href="{{ article.url }}"
                                                         class="text-decoration-none stretched-link">
                                                         {{ article.title }}
                                                     </a>
-                                                </h6>
+                                                </h3>
                                             </div>
                                         </div>
                                     </div>
@@ -433,7 +433,7 @@
                         <aside class="col-lg-3 docs-toc-column">
                             <div class="sticky-top toc-sticky">
                                 <div class="toc-wrapper">
-                                    <h3 class="h5  toclabel">Navigation</h3>
+                                    <h2 class="h5 toclabel">Navigation</h2>
                                     {{ toc | safe }}
 
                                 </div>
