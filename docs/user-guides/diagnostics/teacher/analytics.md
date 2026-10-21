@@ -19,6 +19,7 @@ Diagnostic guide for the teacher **Interpretation** page (`/admin/interpretation
 - The page shows an empty state instead of any sections or cards.
 
 ### Causes & Solutions
+
 **Cause 1: No payroll cycle has completed yet**
 - **Check:** Has this class run and completed at least one payroll cycle?
 - **Fix:** This is expected for a new class. Interpretation appears automatically the first time a payroll cycle completes — there is nothing to configure or trigger manually.
@@ -33,10 +34,11 @@ Diagnostic guide for the teacher **Interpretation** page (`/admin/interpretation
 - A section renders, but one or more observations read "not applicable" rather than showing a value.
 
 ### Causes & Solutions
+
 **Cause 1: The required feature is disabled for this class**
-- **Check:** Open **Class Tools → Economy Features** and check whether the feature that observation depends on (savings, insurance, a given obligation type, etc.) is enabled.
-- **Fix:** Nothing to fix if that's intentional. "Not applicable" means the feature itself was off for the class during that cycle — it is not a zero, and not an error. Enabling the feature only affects cycles that complete afterward; a closed cycle is never recomputed.
-- **Note:** If the feature was enabled but there was simply no activity of that kind during the cycle, the observation is a computed value of zero, not "not applicable" — if you see "not applicable" on a feature you're sure was enabled, that is a real discrepancy worth reporting.
+- **Check:** Open **Class Tools → Economy Features** and check the current state of the feature that observation depends on (savings, insurance, a given obligation type, etc.). This shows the feature's state *now* — it does not tell you whether the feature was enabled when the cycle you're viewing closed.
+- **Fix:** Nothing to fix if that historical state was intentional. "Not applicable" means the feature was off for the class during that cycle — it is not a zero, and not an error. Enabling the feature only affects cycles that complete afterward; a closed cycle is never recomputed.
+- **Note:** If the feature was enabled during that cycle but there was simply no activity of that kind, the observation is a computed value of zero, not "not applicable." Because the current setting alone can't establish what the historical state was, report the class and cycle to support if you need to confirm whether "not applicable" is a real discrepancy — don't assume it is just because the feature is enabled today.
 
 ## Numbers look different from a cycle you remember
 
@@ -44,6 +46,7 @@ Diagnostic guide for the teacher **Interpretation** page (`/admin/interpretation
 - A past cycle's figures don't match what you expected, or seem to have "changed."
 
 ### Causes & Solutions
+
 **Cause 1: You're looking at a different cycle**
 - **Check:** Use the cycle selector to confirm which completed cycle you're viewing.
 - **Fix:** Each cycle is interpreted exactly as it stood when that cycle closed. Switching cycles in the selector shows a different frozen snapshot, not a live recalculation.
@@ -58,9 +61,11 @@ Diagnostic guide for the teacher **Interpretation** page (`/admin/interpretation
 - A guiding question under a section reads like advice ("you should…") rather than a question.
 
 ### Causes & Solutions
+
 - Guiding questions are written to invite reflection, never to recommend a change or label a number good or bad. If one reads as an instruction or a judgment rather than a genuine question, that is a defect in the question itself — report it with the exact section and wording so it can be corrected.
 
 ## When to Contact Support
+
 Report this issue if:
 - The page errors instead of showing the empty state or a completed cycle.
 - An observation's number is clearly wrong given the transactions you can see in that cycle.
