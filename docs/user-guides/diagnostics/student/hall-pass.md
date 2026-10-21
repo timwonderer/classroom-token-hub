@@ -1,6 +1,6 @@
 ---
 title: Troubleshooting Hall Passes
-description: Why a pass request is denied or vanishes, and which destinations deduct from your pass balance.
+description: Why a pass request is denied or vanishes, and when a pass deducts from your pass balance.
 category: diagnostics
 roles: [student]
 related:
@@ -19,7 +19,7 @@ If something doesn't look right with your Hall Passes, check this guide first be
 
 ## This is normal and expected when:
 - A teacher approves a pass and a pass number appears.
-- Whether an approved pass costs you one depends on the destination you picked — your teacher sets each destination to deduct a pass or not, there's no fixed list. When a destination does deduct, your balance drops when your teacher approves the request, not when you leave.
+- Every approved pass costs one pass, whichever destination you picked. Your balance drops when your teacher approves the request, not when you leave.
 - Your request is refused if someone else is already out for that destination, or if the class has hit its overall limit for how many people can be out at once. Wait for them to return and ask again.
 - **Done for the day** never deducts a pass — it ends your session rather than requesting one.
 - The **Break** button changes label as your request moves along: **Pending** while you wait, **Leave** once your teacher approves, **Return** once you have left. You press it yourself on your dashboard — there is no separate terminal to visit.

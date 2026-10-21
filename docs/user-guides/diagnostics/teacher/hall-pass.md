@@ -58,9 +58,9 @@ Diagnostic guide for resolving issues with hall pass approvals, tracking, and te
 - **Check:** Verify if the student scanned the pass at the terminal.
 - **Fix:** The queue shows approved passes that haven't left yet. Terminal scans move passes from approved to left, then returned. If a student forgets to scan, manually mark them returned.
 
-**Cause 2: Passes not deducted from balance**
-- **Check:** Open **Configure** and check whether that destination is set to use a pass. Each destination you create has its own on/off setting for this — there is no fixed list of destinations that are exempt.
-- **Fix:** A destination set to not use a pass never deducts one, no matter what it's named. Change that destination's setting if you want it to deduct. ("Done for the day" is not a hall pass destination at all — it ends the student's work session and never touches the pass balance.)
+**Cause 2: A pass deducted when you didn't expect it to**
+- **Check:** Every destination configured on the **Configure** tab deducts one pass when you approve a request for it — there is no setting on that tab to exempt a destination, and no fixed list of destination names (like "Office" or "Summons") that are treated differently.
+- **Fix:** This is expected: approving any pass deducts one from the student's balance, regardless of destination or reason. ("Done for the day" is not a hall pass destination at all — it ends the student's work session and never touches the pass balance.)
 
 ## When to Contact Support
 Report this issue if:
