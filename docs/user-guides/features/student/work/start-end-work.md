@@ -32,7 +32,7 @@ The card sits on your **Dashboard** and shows:
 ### Starting work
 
 1. Select **Start Work**, the green button.
-2. Enter your PIN when prompted.
+2. A **Start Work** window opens. Type your PIN in **Your PIN** and select **Start Work**.
 3. The badge flips to **Active** and **Time Today** starts counting.
 
 **Break** stays greyed out until you are active. You cannot take a break from a clock that is not running.

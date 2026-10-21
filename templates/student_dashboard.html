@@ -244,12 +244,12 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                {# In-page PIN, not window.prompt(): in-app browsers (e.g. the Google app on
-                   iOS) returned no PIN from a prompt opened inside this modal (2026-10-20). #}
+                {# In-page PIN, not the browser's own prompt dialog: in-app browsers (e.g. the
+                   Google app on iOS) returned no PIN from one opened inside this modal (2026-10-20). #}
                 <div class="mb-3">
                     <label for="breakPinInput" class="form-label">Your PIN</label>
                     <input type="password" class="form-control" id="breakPinInput" inputmode="numeric"
-                           autocomplete="off" aria-describedby="breakPinError">
+                           autocomplete="off">
                     <div class="invalid-feedback" id="breakPinError">Enter your PIN first.</div>
                 </div>
                 {# Shown only when the teacher has saved hall-pass destinations; otherwise the

@@ -1278,7 +1278,7 @@
     if (button) deleteStudentsWithPreview([button.dataset.studentId]);
   });
 
-  function bulkTapIn() {
+  async function bulkTapIn() {
     const table = currentClassStudentTable();
     const checkboxes = table.querySelectorAll('.student-checkbox:checked');
     const seatIds = Array.from(checkboxes).map(cb => parseInt(cb.dataset.seatId)).filter(Number.isInteger);
@@ -1289,8 +1289,9 @@
     }
 
     const count = seatIds.length;
-    const confirmation = confirm(
-      `Are you sure you want to start work for ${count} selected student(s)?`
+    const confirmation = await window.AppCore.confirm(
+      `Are you sure you want to start work for ${count} selected student(s)?`,
+      { title: 'Start work', confirmLabel: 'Start work' }
     );
 
     if (!confirmation) return;
@@ -1324,7 +1325,7 @@
       });
   }
 
-  function bulkTapOut() {
+  async function bulkTapOut() {
     const table = currentClassStudentTable();
     const checkboxes = table.querySelectorAll('.student-checkbox:checked');
     const seatIds = Array.from(checkboxes).map(cb => parseInt(cb.dataset.seatId)).filter(Number.isInteger);
@@ -1335,8 +1336,9 @@
     }
 
     const count = seatIds.length;
-    const confirmation = confirm(
-      `Are you sure you want to mark ${count} selected student(s) as on break?`
+    const confirmation = await window.AppCore.confirm(
+      `Are you sure you want to mark ${count} selected student(s) as on break?`,
+      { title: 'Mark on break', confirmLabel: 'Mark on break' }
     );
 
     if (!confirmation) return;
@@ -1376,7 +1378,7 @@
       });
   }
 
-  function bulkUpdateHallPass() {
+  async function bulkUpdateHallPass() {
     const table = currentClassStudentTable();
     const checkboxes = table.querySelectorAll('.student-checkbox:checked');
     const studentIds = Array.from(checkboxes)
@@ -1389,12 +1391,14 @@
     }
 
     const count = studentIds.length;
-    const action = prompt(
-      `Adjust hall-pass entitlements for ${count} student(s):\n\n` +
-      `Enter:\n` +
-      `• +N to ADD new hall-pass grant events (e.g., "+3")\n` +
-      `• -N to REMOVE passes by reversing unconsumed grant correlations (e.g., "-2")`
-    );
+    const action = await window.AppCore.prompt([
+      `Adjust hall-pass entitlements for ${count} student(s).`,
+      'Enter +N to add new hall-pass grant events (for example, +3).',
+      'Enter -N to remove passes by reversing unconsumed grant correlations (for example, -2).',
+    ], {
+      title: 'Adjust hall passes', label: 'Change', placeholder: '+3 or -2',
+      confirmLabel: 'Apply', requiredMessage: 'Enter a change such as +3 or -2.',
+    });
 
     if (!action) return;
 

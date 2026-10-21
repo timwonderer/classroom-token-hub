@@ -23,25 +23,31 @@ except ImportError:  # pragma: no cover - environment-dependent dependency
 pytestmark = pytest.mark.skipif(sync_playwright is None, reason="Playwright Python package is unavailable")
 
 ORIGIN = "http://cth.test"
-ATTENDANCE_SCRIPT = (
-    Path(__file__).resolve().parent.parent / "static" / "js" / "attendance.js"
-).read_text(encoding="utf-8")
+REPO = Path(__file__).resolve().parent.parent
+SCRIPTS = {
+    "/static/vendor/bootstrap/bootstrap.bundle.min.js": "static/vendor/bootstrap/bootstrap.bundle.min.js",
+    "/static/js/app-core.js": "static/js/app-core.js",
+    "/static/js/attendance.js": "static/js/attendance.js",
+}
 
-# The break modal from student_dashboard.html, without Bootstrap.
-DASHBOARD = """<!doctype html><html><body>
-<div id="breakChoiceModal">
+# The break modal from student_dashboard.html, on the real Bootstrap and app-core.
+DASHBOARD = """<!doctype html><html lang="en"><body>
+<button type="button" class="attendance-action-btn" id="breakBtn" data-action="break">Break</button>
+<div class="modal fade" id="breakChoiceModal" tabindex="-1" aria-labelledby="breakChoiceModalLabel"><div class="modal-dialog"><div class="modal-content">
+  <h2 id="breakChoiceModalLabel">Choose Break Type</h2>
+  <label for="breakPinInput">Your PIN</label>
   <input type="password" id="breakPinInput">
+  <div class="invalid-feedback" id="breakPinError">Enter your PIN first.</div>
   <div id="hallPassDestinationSection" hidden><div id="hallPassDestinationList"></div></div>
   <button type="button" id="doneForDayBreakBtn">Done for the day</button>
-</div>
+</div></div></div>
+<script src="/static/vendor/bootstrap/bootstrap.bundle.min.js"></script>
+<script src="/static/js/app-core.js"></script>
 <script>
   window.__posts = [];
-  window.AppCore = {
-    toast() {}, buildAlertCard() { return document.createElement('div'); },
-    csrfFetch(url, options) {
-      window.__posts.push({ url, body: JSON.parse(options.body) });
-      return Promise.resolve({ json: () => ({ status: 'success' }) });
-    },
+  window.AppCore.csrfFetch = (url, options) => {
+    window.__posts.push({ url, body: JSON.parse(options.body) });
+    return Promise.resolve({ json: () => ({ status: 'success' }) });
   };
 </script>
 <script src="/static/js/attendance.js"></script>
@@ -64,15 +70,20 @@ def page():
             page.on("dialog", lambda dialog: (page.dialogs.append(dialog.message), dialog.dismiss()))
             page.route(f"{ORIGIN}/student/dashboard", lambda route: route.fulfill(
                 status=200, content_type="text/html", body=DASHBOARD))
-            page.route(f"{ORIGIN}/static/js/attendance.js", lambda route: route.fulfill(
-                status=200, content_type="application/javascript", body=ATTENDANCE_SCRIPT))
+            def serve(source):
+                body = (REPO / source).read_bytes()
+                return lambda route: route.fulfill(status=200, content_type="application/javascript", body=body)
+
+            for path, source in SCRIPTS.items():
+                page.route(f"{ORIGIN}{path}", serve(source))
             page.route(f"{ORIGIN}/api/hall-pass/available-types", lambda route: route.fulfill(
                 status=200, content_type="application/json", body=json.dumps(TYPES)))
             page.route(f"{ORIGIN}/api/student-status", lambda route: route.fulfill(
                 status=200, content_type="application/json", body=json.dumps(OK_STATE)))
             page.goto(f"{ORIGIN}/student/dashboard")
-            page.evaluate("openBreakChoiceModal()")
+            page.click("#breakBtn")
             page.get_by_role("button", name="Bathroom").wait_for()
+            page.wait_for_function("() => document.activeElement.closest('.modal.show')")
             yield page
 
 
@@ -93,3 +104,22 @@ def test_hall_pass_without_a_pin_shows_an_error_instead_of_doing_nothing(page):
     assert page.evaluate("() => window.__posts") == []
     assert "is-invalid" in page.get_attribute("#breakPinInput", "class")
     assert page.dialogs == []
+
+
+def test_an_empty_pin_is_announced_only_once_it_applies(page):
+    field = page.get_by_label("Your PIN")
+    assert field.get_attribute("aria-describedby") is None
+
+    page.get_by_role("button", name="Bathroom").click()
+
+    assert field.get_attribute("aria-invalid") == "true"
+    assert field.get_attribute("aria-describedby") == "breakPinError"
+    assert page.evaluate("() => document.activeElement.id") == "breakPinInput"
+
+
+def test_choosing_a_destination_returns_focus_to_the_break_button(page):
+    page.fill("#breakPinInput", "1234")
+    page.get_by_role("button", name="Bathroom").click()
+
+    page.wait_for_function("() => document.activeElement.id === 'breakBtn'")
+    assert page.evaluate("() => document.querySelectorAll('[inert]').length") == 0

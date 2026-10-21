@@ -292,7 +292,8 @@
                                name="passphrase" autocomplete="current-password" required>
                     </div>
                     <button type="submit" class="btn btn-danger w-100"
-                        onclick="return confirm('Are you sure you want to cancel this insurance policy?')">
+                        data-confirm="Are you sure you want to cancel this insurance policy?"
+                        data-confirm-title="Cancel policy" data-confirm-label="Cancel policy" data-confirm-danger>
                         Cancel This Policy
                     </button>
                 </form>

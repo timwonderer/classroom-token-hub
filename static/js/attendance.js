@@ -25,11 +25,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Handle contextual productivity actions.
   document.querySelectorAll(".attendance-action-btn").forEach(button => {
-    button.addEventListener("click", () => {
+    button.addEventListener("click", async () => {
       const action = button.dataset.action;
 
       if (action === 'start_work') {
-        const pin = prompt("Enter your PIN to Start Work:");
+        const pin = await window.AppCore.prompt('Enter your PIN to start work.', {
+          title: 'Start Work', label: 'Your PIN', type: 'password', inputmode: 'numeric',
+          confirmLabel: 'Start Work', requiredMessage: 'Enter your PIN first.',
+        });
         if (!pin) return;
         performTap(action, pin);
         return;
@@ -361,11 +364,16 @@ function openBreakChoiceModal() {
   const pinInput = document.getElementById('breakPinInput');
   if (pinInput) {
     pinInput.value = '';
-    pinInput.classList.remove('is-invalid');
+    window.AppCore.clearInvalid(pinInput);
   }
 
   const modalEl = document.getElementById('breakChoiceModal');
   if (modalEl && window.bootstrap) {
+    // Opened from script, so Bootstrap will not return focus on close.
+    const opener = document.activeElement;
+    modalEl.addEventListener('hidden.bs.modal', () => {
+      if (opener && opener.isConnected && typeof opener.focus === 'function') opener.focus();
+    }, { once: true });
     bootstrap.Modal.getOrCreateInstance(modalEl).show();
   }
 
@@ -500,8 +508,11 @@ function refreshUi() {
   return pollStatusSoon();
 }
 
-function cancelHallPass(passId) {
-  if (!confirm('Are you sure you want to cancel this hall pass request?')) {
+async function cancelHallPass(passId) {
+  const confirmed = await window.AppCore.confirm('Are you sure you want to cancel this hall pass request?', {
+    title: 'Cancel hall pass request', confirmLabel: 'Cancel request', cancelLabel: 'Keep request', danger: true,
+  });
+  if (!confirmed) {
     return;
   }
 
@@ -531,8 +542,7 @@ function readBreakPin() {
   const input = document.getElementById('breakPinInput');
   const pin = input ? input.value.trim() : '';
   if (!pin && input) {
-    input.classList.add('is-invalid');
-    input.focus();
+    window.AppCore.markInvalid(input, 'breakPinError');
   }
   return pin || null;
 }
@@ -562,8 +572,11 @@ function requestHallPass(destination, pin) {
     });
 }
 
-function checkOutHallPass(passId) {
-  if (!confirm('Ready to check out? This will mark you as leaving the classroom.')) {
+async function checkOutHallPass(passId) {
+  const confirmed = await window.AppCore.confirm('Ready to check out? This will mark you as leaving the classroom.', {
+    title: 'Leave the classroom', confirmLabel: 'Leave',
+  });
+  if (!confirmed) {
     return;
   }
 
@@ -587,8 +600,11 @@ function checkOutHallPass(passId) {
     });
 }
 
-function checkInHallPass(passId) {
-  if (!confirm('Ready to check in? This will mark you as returned to class.')) {
+async function checkInHallPass(passId) {
+  const confirmed = await window.AppCore.confirm('Ready to check in? This will mark you as returned to class.', {
+    title: 'Return to class', confirmLabel: 'Return',
+  });
+  if (!confirmed) {
     return;
   }
 
