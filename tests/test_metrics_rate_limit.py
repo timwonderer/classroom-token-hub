@@ -39,7 +39,9 @@ def test_health_probes_are_exempt_from_default_rate_limits(app, client, path):
             limiter.reset()
         statuses = {
             client.get(path, environ_base={"REMOTE_ADDR": "2600:1900:0:2e01::e00"}).status_code
-            for _ in range(201)  # one past the "200 per hour" default
+            # One past "500 per day", the limit production hit, and so past
+            # "200 per hour" too.
+            for _ in range(501)
         }
     finally:
         limiter.enabled = was_enabled
