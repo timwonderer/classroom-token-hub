@@ -33,9 +33,10 @@ Diagnostic guide for the teacher **Interpretation** page (`/admin/interpretation
 - A section renders, but one or more observations read "not applicable" rather than showing a value.
 
 ### Causes & Solutions
-**Cause 1: The cycle had no activity of that kind**
-- **Check:** Did the relevant activity (a given transaction type, obligation, etc.) actually occur during that cycle?
-- **Fix:** Nothing to fix. "Not applicable" means the cycle did not contain the activity needed to compute that observation — it is not a zero, and not an error.
+**Cause 1: The required feature is disabled for this class**
+- **Check:** Open **Class Tools → Economy Features** and check whether the feature that observation depends on (savings, insurance, a given obligation type, etc.) is enabled.
+- **Fix:** Nothing to fix if that's intentional. "Not applicable" means the feature itself was off for the class during that cycle — it is not a zero, and not an error. Enabling the feature only affects cycles that complete afterward; a closed cycle is never recomputed.
+- **Note:** If the feature was enabled but there was simply no activity of that kind during the cycle, the observation is a computed value of zero, not "not applicable" — if you see "not applicable" on a feature you're sure was enabled, that is a real discrepancy worth reporting.
 
 ## Numbers look different from a cycle you remember
 
