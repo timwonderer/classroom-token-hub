@@ -39,6 +39,8 @@ Passes are not free and they do not refill on their own. You get them by buying 
 
 If you pick a destination with the PIN box empty, the dialog stays open and asks you to *Enter your PIN first.* A wrong PIN is refused with *Incorrect PIN.*
 
+Requesting a pass asks for your PIN, the same as every other clock action — it stops anyone else sending a request in your name.
+
 ### Waiting
 
 A yellow banner appears above the buttons reading **Hall Pass: Pending Approval**, with the destination you chose and a **Cancel** button. The **Break** button becomes **Pending** and stops responding — pressing it just reminds you *Your hall pass request is pending approval.*

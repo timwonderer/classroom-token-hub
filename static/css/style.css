@@ -616,6 +616,14 @@ a:hover {
     flex-direction: column;
 }
 
+/* Bootstrap's default --bs-offcanvas-width (400px) overflows the viewport on
+   phones narrower than that, clipping the help drawer's right edge. */
+@media (max-width: 400px) {
+    .offcanvas {
+        width: 100vw;
+    }
+}
+
 .offcanvas .contextual-help-resources {
     order: 999;
     margin-top: auto !important;
