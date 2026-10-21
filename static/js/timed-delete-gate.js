@@ -54,6 +54,7 @@ function showTimedDeleteGate(options) {
         let holdStartAt = null;
         let isHolding = false;
         let phraseUnlocked = false;
+        let holdAvailable = false;
 
         titleEl.textContent = title;
         warningEl.textContent = warning;
@@ -68,6 +69,7 @@ function showTimedDeleteGate(options) {
         phraseHint.textContent = `Required phrase: ${expectedPhrase}`;
         holdBtn.textContent = 'Hold to Confirm — click and hold, or hold Space or Enter';
         holdStatus.textContent = 'Hold button unlocks after countdown + exact phrase match.';
+        setHoldAvailable(false);
 
         const cleanup = () => {
             if (countdownTimer) clearInterval(countdownTimer);
@@ -89,9 +91,21 @@ function showTimedDeleteGate(options) {
             modalEl.removeEventListener('hidden.bs.modal', onHidden);
         };
 
+        // The status line is a polite live region; it changes only when
+        // availability flips, so a screen reader hears the unlock once.
+        function setHoldAvailable(available) {
+            holdBtn.setAttribute('aria-disabled', String(!available));
+            holdBtn.classList.toggle('disabled', !available);
+            if (available === holdAvailable) return;
+            holdAvailable = available;
+            holdStatus.textContent = available
+                ? 'Phrase matches. Hold the button for 10 seconds to confirm.'
+                : 'Hold button unlocks after countdown + exact phrase match.';
+        }
+
         const updateHoldAvailability = () => {
             const phraseOk = phraseInput.value.trim().toUpperCase() === expectedPhrase;
-            holdBtn.disabled = !(countdownComplete && phraseOk);
+            setHoldAvailable(countdownComplete && phraseOk);
         };
 
         const updateCountdownUi = () => {
@@ -140,7 +154,7 @@ function showTimedDeleteGate(options) {
         const onPhraseInput = () => updateHoldAvailability();
 
         const startHold = (event) => {
-            if (holdBtn.disabled || isHolding) return;
+            if (!holdAvailable || isHolding) return;
             event.preventDefault();
             isHolding = true;
             holdStartAt = Date.now();

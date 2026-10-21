@@ -10,12 +10,15 @@
 {% macro timed_delete_gate() %}
 <div id="delete-gate-feedback" class="visually-hidden" role="alert" aria-live="assertive" aria-atomic="true" tabindex="-1"></div>
 
+{# Screen readers (VoiceOver, 2026-10-20): Tab reaches only controls, so every
+   piece of text a teacher must hear is tied to the dialog or to a control. #}
 <div class="modal fade" id="timedDeleteGateModal" tabindex="-1" aria-labelledby="timedDeleteGateModalLabel"
+     aria-describedby="timed-delete-gate-warning timed-delete-gate-bullets"
      aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header bg-danger-subtle text-danger-emphasis">
-                <h5 class="modal-title" id="timedDeleteGateModalLabel">Confirm Deletion</h5>
+                <h2 class="modal-title h5" id="timedDeleteGateModalLabel">Confirm Deletion</h2>
             </div>
             <div class="modal-body">
                 <p class="mb-2" id="timed-delete-gate-warning"></p>
@@ -28,13 +31,17 @@
                 </div>
 
                 <label for="timed-delete-phrase" class="form-label mb-1">Enter the confirmation phrase shown below:</label>
-                <input type="text" class="form-control mb-2" id="timed-delete-phrase" autocomplete="off">
+                <input type="text" class="form-control mb-2" id="timed-delete-phrase" autocomplete="off"
+                       aria-describedby="timed-delete-countdown-text timed-delete-phrase-hint">
                 <div class="small text-muted mb-3" id="timed-delete-phrase-hint"></div>
 
-                <button type="button" class="btn btn-danger w-100" id="timed-delete-hold-btn" disabled>
+                {# aria-disabled, not disabled: a disabled button leaves the Tab order, so a
+                   screen-reader user could not find it or learn why it is locked. #}
+                <button type="button" class="btn btn-danger w-100 disabled" id="timed-delete-hold-btn"
+                        aria-disabled="true" aria-describedby="timed-delete-hold-status">
                     Click and Hold this Button to Confirm
                 </button>
-                <div class="small text-muted mt-2" id="timed-delete-hold-status">
+                <div class="small text-muted mt-2" id="timed-delete-hold-status" aria-live="polite">
                     The delete button will be enabled after you enter the correct confirmation phrase.
                 </div>
             </div>
