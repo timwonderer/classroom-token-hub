@@ -168,9 +168,8 @@
             showFeedback('Pass type added. Don\'t forget to save!', false, 'Pass type added');
         }
 
-        function removePassType(index) {
-            // For delete operations, confirm() is acceptable UX
-            if (confirm('Are you sure you want to remove this pass type?')) {
+        async function removePassType(index) {
+            if (await window.AppCore.confirm('Are you sure you want to remove this pass type?', { title: 'Remove pass type', confirmLabel: 'Remove', danger: true })) {
                 passTypesData.splice(index, 1);
                 renderPassTypes();
                 showFeedback('Pass type removed. Don\'t forget to save!', false, 'Pass type removed');

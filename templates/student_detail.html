@@ -877,8 +877,8 @@
         return container;
     }
 
-    function voidTransaction(id) {
-        if (!confirm('Are you sure you want to reverse this transaction?')) return;
+    async function voidTransaction(id) {
+        if (!(await window.AppCore.confirm('Are you sure you want to reverse this transaction?', { title: 'Reverse transaction', confirmLabel: 'Reverse', danger: true }))) return;
 
         fetch(`/admin/void-transaction/${id}`, {
             method: 'POST',

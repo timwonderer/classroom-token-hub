@@ -563,8 +563,10 @@
       }).catch((error) => console.error('Error skipping task:', error));
     }
 
-    function dismissWidget() {
-      if (!confirm('Dismiss the getting started guide? You can still reach every setting from the navigation menu.')) {
+    async function dismissWidget() {
+      if (!(await window.AppCore.confirm('Dismiss the getting started guide? You can still reach every setting from the navigation menu.', {
+        title: 'Dismiss guide', confirmLabel: 'Dismiss',
+      }))) {
         return;
       }
       try {

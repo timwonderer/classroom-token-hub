@@ -195,11 +195,280 @@
     });
   }
 
+  // Every Bootstrap modal: make everything outside it `inert` while it is open.
+  // Chromium keeps content outside an aria-modal element in the accessibility
+  // tree, so a screen reader's browse mode could leave the dialog, and Tab past
+  // the last control reached the page behind it. Inert closes both. Live
+  // regions stay live so a toast raised behind the modal is still announced.
+  const INERT_EXEMPT = '#flashToastContainer, #toast-container, #app-live-feedback, [aria-live]';
+  const inertedBy = new WeakMap();
+
+  // A live region stays live, but its controls (a toast's Close button) are
+  // still outside the dialog, so they go inert, including any added while
+  // the modal is open.
+  const CONTROLS = 'a[href], button, input, select, textarea, [contenteditable], [tabindex]:not([tabindex="-1"])';
+  const observersBy = new WeakMap();
+
+  function inertControls(root, mark) {
+    const found = root.matches && root.matches(CONTROLS) ? [root] : [];
+    found.concat(Array.from(root.querySelectorAll ? root.querySelectorAll(CONTROLS) : [])).forEach((el) => {
+      if (!el.inert) mark(el);
+    });
+  }
+
+  function isolateModal(modalEl) {
+    const inerted = [];
+    // Another component may take over an element's inert state while the
+    // modal is open (the mobile sidebar does on a resize). Any write to the
+    // attribute after ours makes it that component's, and release leaves it.
+    const claimed = new Set();
+    const ownership = new MutationObserver((records) => records.forEach((r) => claimed.add(r.target)));
+    const mark = (el) => {
+      el.inert = true;
+      inerted.push(el);
+      ownership.observe(el, { attributes: true, attributeFilter: ['inert'] });
+    };
+    const observers = [ownership];
+    for (let node = modalEl; node && node !== document.body; node = node.parentElement) {
+      const parent = node.parentElement;
+      if (!parent) break;
+      Array.from(parent.children).forEach((sibling) => {
+        if (sibling === node || sibling.inert) return;
+        if (sibling.tagName === 'SCRIPT' || sibling.classList.contains('modal-backdrop')) return;
+        if (sibling.matches(INERT_EXEMPT)) {
+          inertControls(sibling, mark);
+          const observer = new MutationObserver((records) => records.forEach((record) => {
+            record.addedNodes.forEach((added) => {
+              if (added.nodeType === Node.ELEMENT_NODE) inertControls(added, mark);
+            });
+          }));
+          observer.observe(sibling, { childList: true, subtree: true });
+          observers.push(observer);
+          return;
+        }
+        mark(sibling);
+      });
+    }
+    inertedBy.set(modalEl, { inerted, claimed, ownership });
+    observersBy.set(modalEl, observers);
+  }
+
+  function releaseModal(modalEl) {
+    const state = inertedBy.get(modalEl);
+    if (state) state.ownership.takeRecords().forEach((r) => state.claimed.add(r.target));
+    (observersBy.get(modalEl) || []).forEach((observer) => observer.disconnect());
+    observersBy.delete(modalEl);
+    if (state) state.inerted.forEach((el) => { if (!state.claimed.has(el)) el.inert = false; });
+    inertedBy.delete(modalEl);
+  }
+
+  // Released on `hide`, not `hidden`: focus goes back to the opener on
+  // `hidden`, and an inert element cannot take it. A vetoed event changes nothing.
+  document.addEventListener('show.bs.modal', (event) => {
+    if (!event.defaultPrevented) isolateModal(event.target);
+  });
+  document.addEventListener('hide.bs.modal', (event) => {
+    if (!event.defaultPrevented) releaseModal(event.target);
+  });
+
+  // In-app replacements for the browser's own confirm and prompt dialogs
+  // (SPEC-DES-001 §X). Those are drawn by the browser, not the page: they are
+  // off-system visually, and in-app browsers may not show them at all. On
+  // 2026-10-20 the Google app's iOS browser returned an empty PIN from one
+  // without displaying it, and a student's hall-pass request never left the page.
+  //
+  // `message` is text only (set through textContent, never parsed), a string
+  // or an array of strings, one paragraph each. Resolves true/false for a
+  // confirm, the entered string or null for a prompt; never rejects.
+  let dialogSeq = 0;
+
+  // The error is linked only once it applies: aria-describedby reads hidden
+  // text too, so a static link would announce the error on first focus.
+  function markInvalid(field, errorId) {
+    field.classList.add('is-invalid');
+    field.setAttribute('aria-invalid', 'true');
+    field.setAttribute('aria-describedby', errorId);
+    field.focus();
+  }
+
+  function clearInvalid(field) {
+    field.classList.remove('is-invalid');
+    field.removeAttribute('aria-invalid');
+    field.removeAttribute('aria-describedby');
+  }
+
+  function openDialog(message, { title = 'Please confirm', confirmLabel = 'OK', cancelLabel = 'Cancel', danger = false, input = null } = {}) {
+    return new Promise((resolve) => {
+      // Programmatic Bootstrap modals do not hand focus back, so a screen
+      // reader would be left on <body>. Return it to whatever opened the dialog.
+      const opener = document.activeElement;
+      const id = `app-dialog-${++dialogSeq}`;
+      const modalEl = document.createElement('div');
+      modalEl.className = 'modal fade';
+      modalEl.id = id;
+      modalEl.tabIndex = -1;
+      modalEl.setAttribute('aria-labelledby', `${id}-title`);
+      modalEl.setAttribute('aria-describedby', `${id}-body`);
+
+      const dialogEl = document.createElement('div');
+      dialogEl.className = 'modal-dialog modal-dialog-centered';
+      const content = document.createElement('form');
+      content.className = 'modal-content';
+      content.noValidate = true;
+
+      const header = document.createElement('div');
+      header.className = 'modal-header';
+      const heading = document.createElement('h2');
+      heading.className = 'modal-title h5';
+      heading.id = `${id}-title`;
+      heading.textContent = String(title);
+      const close = document.createElement('button');
+      close.type = 'button';
+      close.className = 'btn-close';
+      close.setAttribute('data-bs-dismiss', 'modal');
+      close.setAttribute('aria-label', 'Close');
+      header.append(heading, close);
+
+      const body = document.createElement('div');
+      body.className = 'modal-body';
+      const text = document.createElement('div');
+      text.id = `${id}-body`;
+      (Array.isArray(message) ? message : [message]).forEach((part) => {
+        if (part === undefined || part === null || part === '') return;
+        const p = document.createElement('p');
+        p.className = 'mb-2';
+        p.textContent = String(part);
+        text.appendChild(p);
+      });
+      body.appendChild(text);
+
+      let field = null;
+      if (input) {
+        const label = document.createElement('label');
+        label.className = 'form-label';
+        label.htmlFor = `${id}-input`;
+        label.textContent = String(input.label || 'Value');
+        field = document.createElement('input');
+        field.className = 'form-control';
+        field.id = `${id}-input`;
+        field.type = input.type || 'text';
+        field.autocomplete = input.autocomplete || 'off';
+        if (input.inputmode) field.inputMode = input.inputmode;
+        if (input.placeholder) field.placeholder = input.placeholder;
+        const error = document.createElement('div');
+        error.className = 'invalid-feedback';
+        error.id = `${id}-error`;
+        error.textContent = String(input.requiredMessage || 'This field is required.');
+        body.append(label, field, error);
+        // The error stops applying once there is input, so stop announcing it.
+        field.addEventListener('input', () => {
+          if (field.value.trim()) clearInvalid(field);
+        });
+      }
+
+      const footer = document.createElement('div');
+      footer.className = 'modal-footer';
+      const cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.className = 'btn btn-outline-secondary';
+      cancel.setAttribute('data-bs-dismiss', 'modal');
+      cancel.textContent = String(cancelLabel);
+      const ok = document.createElement('button');
+      ok.type = 'submit';
+      ok.className = `btn ${danger ? 'btn-danger' : 'btn-primary'}`;
+      ok.textContent = String(confirmLabel);
+      footer.append(cancel, ok);
+
+      content.append(header, body, footer);
+      dialogEl.appendChild(content);
+      modalEl.appendChild(dialogEl);
+      document.body.appendChild(modalEl);
+
+      let result = input ? null : false;
+      content.addEventListener('submit', (event) => {
+        event.preventDefault();
+        if (field) {
+          const value = field.value.trim();
+          if (!value) {
+            markInvalid(field, `${id}-error`);
+            return;
+          }
+          result = value;
+        } else {
+          result = true;
+        }
+        instance.hide();
+      });
+
+      // A destructive action starts on Cancel, so Enter alone cannot confirm it.
+      modalEl.addEventListener('shown.bs.modal', () => (field || (danger ? cancel : ok)).focus());
+      modalEl.addEventListener('hidden.bs.modal', () => {
+        instance.dispose();
+        modalEl.remove();
+        if (opener && opener !== document.body && opener.isConnected && typeof opener.focus === 'function') {
+          opener.focus();
+        }
+        resolve(result);
+      });
+      const instance = new bootstrap.Modal(modalEl);
+      instance.show();
+    });
+  }
+
+  function confirmDialog(message, options = {}) {
+    return openDialog(message, options);
+  }
+
+  function promptDialog(message, options = {}) {
+    const { label, type, inputmode, autocomplete, placeholder, requiredMessage, ...rest } = options;
+    return openDialog(message, {
+      title: 'Enter a value', confirmLabel: 'Continue', ...rest,
+      input: { label, type, inputmode, autocomplete, placeholder, requiredMessage },
+    });
+  }
+
+  // Declarative confirm for plain form posts: `data-confirm="…"` on the form
+  // or its submit button (optional data-confirm-title, -label, -cancel-label, -danger, and
+  // -value-from="<input id>" to fill a "{value}" placeholder). Capture phase,
+  // so it runs before any other submit listener and cancelling leaves the
+  // form untouched.
+  document.addEventListener('submit', async (event) => {
+    const form = event.target;
+    if (!(form instanceof HTMLFormElement)) return;
+    const submitter = event.submitter || null;
+    const source = submitter && submitter.dataset.confirm ? submitter : (form.dataset.confirm ? form : null);
+    if (!source) return;
+    if (form.dataset.confirmed === '1') {
+      delete form.dataset.confirmed;
+      return;
+    }
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    let message = source.dataset.confirm;
+    if (source.dataset.confirmValueFrom) {
+      const valueEl = document.getElementById(source.dataset.confirmValueFrom);
+      message = message.replace('{value}', valueEl ? valueEl.value : '');
+    }
+    const confirmed = await confirmDialog(message, {
+      title: source.dataset.confirmTitle || 'Please confirm',
+      confirmLabel: source.dataset.confirmLabel || 'OK',
+      cancelLabel: source.dataset.confirmCancelLabel || 'Cancel',
+      danger: 'confirmDanger' in source.dataset,
+    });
+    if (!confirmed) return;
+    form.dataset.confirmed = '1';
+    form.requestSubmit(submitter);
+  }, true);
+
   window.AppCore = {
     getCsrfToken,
     csrfFetch,
     toast,
     buildAlertCard,
+    confirm: confirmDialog,
+    prompt: promptDialog,
+    markInvalid,
+    clearInvalid,
   };
   window.toast = toast;
 })();
