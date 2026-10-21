@@ -321,10 +321,15 @@
                 'admin.resume_credentials': 'user-guides/features/teacher/settings/account-recovery',
                 'analytics.dashboard': 'user-guides/features/teacher/economy/interpretation'
                 } %}
+                {# Endpoint-keyed entries are the specific ones (e.g. a single
+                   action page within a broader nav section like "insurance"),
+                   so they must win over a current_page-keyed entry when both
+                   exist. current_page is only a fallback for pages that set
+                   it purely for sidebar nav highlighting. #}
                 {% set help_doc_key = current_page or request.endpoint %}
+                {% set help_doc_path = request.endpoint and help_doc_map.get(request.endpoint) %}
+                {% if not help_doc_path %}
                 {% set help_doc_path = help_doc_map.get(help_doc_key) %}
-                {% if not help_doc_path and request.endpoint %}
-                {% set help_doc_path = help_doc_map.get(request.endpoint) %}
                 {% endif %}
                 {% set help_diagnostic_map = {
                 'dashboard': 'user-guides/diagnostics/teacher/analytics',
