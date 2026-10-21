@@ -28,10 +28,6 @@ Diagnostic guide for resolving errors with ledgers, student balances, and bankin
 - **Check:** Check the student's transaction ledger for voided entries.
 - **Fix:** Voided transactions are removed from the totals but remain visible in the ledger for transparency.
 
-**Cause 3: Out of sync legacy data**
-- **Check:** Are these transactions from before version 1.6?
-- **Fix:** Use the "Backfill Join Codes" tool in Admin System Settings to repair legacy transactions that lack proper join_code scoping.
-
 ## Students cannot transfer funds
 
 ### Symptoms
