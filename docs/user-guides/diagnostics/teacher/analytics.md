@@ -1,385 +1,74 @@
 ---
-title: Analytics Dashboard Troubleshooting
-description: Why analytics figures look empty, stale, or inconsistent with the ledger.
+title: Interpretation Troubleshooting
+description: Why the Interpretation page is empty, shows "not applicable," or doesn't match what you expected.
 category: diagnostics
 subcategory: teacher
 roles: [teacher]
+related:
+  - user-guides/features/teacher/economy/interpretation
+  - user-guides/diagnostics/teacher/attendance-payroll
 ---
 
-# Analytics Dashboard Troubleshooting
+# Interpretation Troubleshooting
 
-**Quick diagnostic guide for common analytics dashboard issues.**
+Diagnostic guide for the teacher **Interpretation** page (`/admin/interpretation`). This page reads what a completed payroll cycle recorded; it does not recompute live and has no alerts, thresholds, or per-student drill-down.
 
-**Version:** 1.7.0+
-**Route:** `/admin/interpretation`
-
----
-
-## Dashboard Won't Load
+## The page says "No completed interpretation yet"
 
 ### Symptoms
-- Analytics page shows error or blank screen
-- Loading spinner never completes
-- Page times out
-
-### Quick Fixes
-
-**1. Check if analytics data exists:**
-
-- Navigate to different time window (try monthly if weekly doesn't work)
-- Ensure you have transactions in the selected period
-- Wait 24 hours after first setup for initial data computation
-
-**2. Verify you're viewing correct class:**
-
-- Check class selector in header
-- Switch to a class with active students
-- Ensure class has join_code properly configured
-
-**3. Clear browser cache:**
-```
-Chrome: Ctrl+Shift+Del (Cmd+Shift+Del on Mac)
-Select "Cached images and files" → Clear data
-```
-
-**4. Try different browser:**
-
-- Test in incognito/private mode
-- Switch to different browser (Chrome, Firefox, Safari)
-
-### Still Not Working?
-Report via Help & Support with:
-
-- Browser and version
-- Screenshot of error (if any)
-- Which class period you're viewing
-
----
-
-## Metrics Show "No Data"
-
-### Symptoms
-- Dashboard loads but all metrics show zero or "No data available"
-- Charts are empty
-- No alerts showing
+- The page shows an empty state instead of any sections or cards.
 
 ### Causes & Solutions
 
-**Cause 1: No Student Activity**
+**Cause 1: No payroll cycle has completed yet**
+- **Check:** Has this class run and completed at least one payroll cycle?
+- **Fix:** This is expected for a new class. Interpretation appears automatically the first time a payroll cycle completes — there is nothing to configure or trigger manually.
 
-- **Check:** Do students have any transactions?
-- **Fix:** Run a test transaction (manual adjustment)
-- **Fix:** Ensure students are tapping in/out
+**Cause 2: Wrong class selected**
+- **Check:** Confirm which class is active in the class selector.
+- **Fix:** Interpretation is scoped to one class at a time. Switch to the class whose payroll has actually run.
 
-**Cause 2: Wrong Time Window**
-
-- **Check:** Are you viewing weekly data for a month-old period?
-- **Fix:** Switch to monthly view
-- **Fix:** Select "current week" or "current month"
-
-**Cause 3: Data Not Yet Computed**
-
-- **Check:** Is this a brand new class?
-- **Fix:** Wait 24 hours for initial computation
-- **Fix:** Make some transactions to trigger calculations
-
-**Cause 4: All Students Inactive**
-
-- **Check:** Number of enrolled students vs. active students
-- **Fix:** Review student roster - mark inactive students appropriately
-- **Fix:** Ensure students know how to participate
-
----
-
-## Metrics Seem Inaccurate
-
-### Participation Rate Issues
-
-**Too Low (below expected):**
-
-- Check if students understand how to tap in/out
-- Verify tap devices/buttons working
-- Review recent absences (holiday, testing week?)
-- Check if inactive students included in calculation
-
-**Too High (100% seems wrong):**
-
-- Verify student count is correct
-- Check for test/dummy accounts
-- Review active vs. inactive student flags
-
-### Money Velocity Issues
-
-**Too Low (stagnant economy):**
-
-- Are store items appealing?
-- Is rent too high (students hoarding)?
-- Check if students know how to make purchases
-- Review store item availability
-
-**Too High (chaotic activity):**
-
-- Check for unusual transaction patterns
-- Look for test transactions or errors
-- Review if prices need adjustment
-
-### CWI Deviation Issues
-
-**Metrics say balanced but doesn't feel right:**
-
-- Recalculate your CWI - has economy changed?
-- Check if you're comparing to old CWI
-- Verify CWI setting in Economic Engine page
-
-**All students deviating:**
-
-- **Strong indicator:** CWI needs recalibration
-- Compare current average balance to CWI
-- Adjust CWI to match new reality
-- Then adjust economy settings gradually
-
-### Budget Survival Rate Issues
-
-**Rate dropping suddenly:**
-
-- Check recent rent/insurance changes
-- Review if wage changes needed
-- Look for unexpected fees accumulating
-- Check timeline for correlation with events
-
----
-
-## Alerts Not Showing
+## An observation says "not applicable" instead of a number
 
 ### Symptoms
-- Dashboard shows metrics but no alert cards
-- Expected to see warnings but none appear
+- A section renders, but one or more observations read "not applicable" rather than showing a value.
 
 ### Causes & Solutions
 
-**Cause 1: Metrics in Healthy Range**
+**Cause 1: The required feature is disabled for this class**
+- **Check:** Open **Class Tools → Economy Features** and check the current state of the feature that observation depends on (savings, insurance, a given obligation type, etc.). This shows the feature's state *now* — it does not tell you whether the feature was enabled when the cycle you're viewing closed.
+- **Fix:** Nothing to fix if that historical state was intentional. "Not applicable" means the feature was off for the class during that cycle — it is not a zero, and not an error. Enabling the feature only affects cycles that complete afterward; a closed cycle is never recomputed.
+- **Note:** If the feature was enabled during that cycle but there was simply no activity of that kind, the observation is a computed value of zero, not "not applicable." Because the current setting alone can't establish what the historical state was, report the class and cycle to support if you need to confirm whether "not applicable" is a real discrepancy — don't assume it is just because the feature is enabled today.
 
-- **Good news:** Economy is balanced!
-- **Action:** Monitor for changes
-- **Note:** Alerts only show when action needed
-
-**Cause 2: Alert Dismissed**
-
-- **Check:** Were alerts previously dismissed?
-- **Fix:** Alerts may reappear if condition worsens
-- **Note:** Dismissed alerts can be reviewed in history
-
-**Cause 3: Not Meeting Alert Thresholds**
-
-- **Details:** Alerts trigger at specific levels:
-  - Critical: Survival <50%, Participation <40%
-  - Warning: Deviation >20%, Velocity dropping 50%+
-- **Action:** Review metrics directly even without alerts
-
----
-
-## Events Not Showing on Timeline
+## Numbers look different from a cycle you remember
 
 ### Symptoms
-- Made economy changes but timeline empty
-- Recent adjustments not reflected in events
+- A past cycle's figures don't match what you expected, or seem to have "changed."
 
 ### Causes & Solutions
 
-**Cause 1: Events Not Auto-Tracked Yet**
+**Cause 1: You're looking at a different cycle**
+- **Check:** Use the cycle selector to confirm which completed cycle you're viewing.
+- **Fix:** Each cycle is interpreted exactly as it stood when that cycle closed. Switching cycles in the selector shows a different frozen snapshot, not a live recalculation.
 
-- **Currently:** Some changes don't auto-generate events
-- **Workaround:** Track major changes manually in notes
-- **Future:** More auto-tracking coming in v1.8
+**Cause 2: Expecting a live recomputation**
+- **Check:** Did something change in the class (a setting, a correction) after the cycle closed?
+- **Fix:** A closed cycle's interpretation is a historical record and is never recomputed after the fact, even if later activity would change the picture. The next completed cycle will reflect the new state.
 
-**Cause 2: Wrong Time Window**
-
-- **Check:** Are you viewing weekly but made changes last month?
-- **Fix:** Switch to monthly view
-- **Fix:** Adjust date range if available
-
-**Cause 3: Change Type Not Tracked**
-
-- **Tracked:** Rent changes, wage changes, bonus payroll
-- **Not Tracked:** Individual store item changes, minor tweaks
-- **Note:** Major economy events tracked, minor changes aren't
-
----
-
-## Trends Show "Stable" When Things Changed
+## Guiding questions look like a verdict or a recommendation
 
 ### Symptoms
-- Made significant economy changes but trend shows stable
-- Expected to see "improving" or "worsening"
+- A guiding question under a section reads like advice ("you should…") rather than a question.
 
-### Explanation
+### Causes & Solutions
 
-**Trend Detection Requirements:**
-
-- Needs 2-4 weeks of data to identify trends
-- Compares current period to previous period
-- "Stable" means <10% change
-
-**Solutions:**
-
-- **Wait:** Give it 2+ weeks after major changes
-- **Check:** Look at actual metric values, not just trend
-- **Remember:** Stable can be good if metrics healthy
-
----
-
-## Numbers Don't Match Expectations
-
-### Common Misunderstandings
-
-**"Participation shows 80% but only 15/25 students active"**
-
-- **Explanation:** Percentage of students with ANY activity
-- **Check:** Are 20 students active? 20/25 = 80%
-- **Note:** Doesn't measure frequency, just participation
-
-**"Money velocity shows 3.2 but I see way more transactions"**
-
-- **Explanation:** Average transactions PER STUDENT
-- **Math:** If 100 total transactions ÷ 30 students = 3.3
-- **Note:** Not total transactions, per-student average
-
-**"CWI deviation shows 25% but I think more students off-track"**
-
-- **Explanation:** % of students MORE than 50% away from CWI
-- **Example:** If CWI is $100, students at $40-$160 not counted
-- **Note:** Only counts significant deviations (>50%)
-
-**"Survival rate 90% but I know students struggling"**
-
-- **Explanation:** Can afford rent+insurance RIGHT NOW
-- **Example:** Student has $60, rent+insurance=$50 → counts as surviving
-- **Note:** Doesn't mean thriving, just surviving current cycle
-
----
-
-## Performance Issues
-
-### Symptoms
-- Dashboard slow to load
-- Takes more than 5-10 seconds
-- Animations laggy
-
-### Quick Fixes
-
-**1. Switch Time Window:**
-
-- Try weekly (faster) vs. monthly (more data)
-- Monthly view processes more transactions
-
-**2. Check Network:**
-
-- Slow internet connection?
-- Try different WiFi network
-- Use wired connection if possible
-
-**3. Browser Issues:**
-
-- Close other tabs
-- Restart browser
-- Update to latest version
-- Disable browser extensions temporarily
-
-**4. Device Resources:**
-
-- Close other applications
-- Check if device running slow overall
-- Restart computer if needed
-
-### Expected Load Times
-- **Acceptable:** 2-5 seconds
-- **Slow:** 5-10 seconds (check network)
-- **Too Slow:** 10+ seconds (report issue)
-
----
-
-## Error Messages
-
-### "Unable to load analytics data"
-
-**Causes:**
-
-- Server error during computation
-- Database connection issue
-- Permission problem
-
-**Solutions:**
-
-1. Refresh page (F5)
-2. Try again in 5 minutes
-3. Switch to different class then back
-4. Report if persists
-
-### "Analytics data outdated"
-
-**Meaning:** Cached data is old
-
-**Solutions:**
-
-- Normal if just made major changes
-- Wait 1 hour for recomputation
-- Data updates daily automatically
-- Contact support if shows as "outdated" for 24+ hours
-
-### "Not enough data for trend analysis"
-
-**Meaning:** Need more historical data
-
-**Solutions:**
-
-- Need 2+ weeks of data
-- Continue normal operations
-- Check back in a week
-- Metrics still shown, just no trends yet
-
----
+- Guiding questions are written to invite reflection, never to recommend a change or label a number good or bad. If one reads as an instruction or a judgment rather than a genuine question, that is a defect in the question itself — report it with the exact section and wording so it can be corrected.
 
 ## When to Contact Support
 
-Report to Help & Support if:
+Report this issue if:
+- The page errors instead of showing the empty state or a completed cycle.
+- An observation's number is clearly wrong given the transactions you can see in that cycle.
+- A guiding question reads as a recommendation or a value judgment rather than a question.
 
-- Dashboard completely broken for 24+ hours
-- Data clearly incorrect (impossible values)
-- Alerts triggering incorrectly
-- Performance consistently terrible
-- Error messages persisting after troubleshooting
-
-**Include in Report:**
-
-- Screenshot of issue
-- Which class/join_code
-- Time window selected
-- Browser and version
-- Steps to reproduce
-
----
-
-## Quick Checks Checklist
-
-Before reporting an issue, verify:
-
-- [ ] Tried different time window (weekly/monthly)
-- [ ] Checked in different browser/incognito mode
-- [ ] Cleared browser cache
-- [ ] Verified students have recent activity
-- [ ] Waited 24 hours after major changes
-- [ ] Checked if other teachers having same issue
-- [ ] Read relevant documentation
-
----
-
-## Related Documentation
-
-- **[Classroom Economy Guide](../../economy_guide.md)** - Designing balanced economies
-- **[Teacher Manual](../../teacher_manual.md)** - Complete reference
-
----
-
-**Last Updated:** 2026-01-09
-**Version:** 1.7.0
-**Quick Help:** Most issues resolve by trying different time window or waiting 24 hours for data update.
+Include the class, the cycle you were viewing (or that none had completed yet), and a screenshot if possible.
