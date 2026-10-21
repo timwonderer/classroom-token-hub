@@ -41,10 +41,14 @@ function showTimedDeleteGate(options) {
         const expectedPhrase = String(options.expectedPhrase || '').toUpperCase();
         const title = options.title || 'Confirm Deletion';
         const warning = options.warning || 'You are about to permanently delete this record.';
-        const holdPrompt = options.holdPrompt || 'To proceed, hold this button for 10 seconds — press and hold with the pointer, or hold Space or Enter. Any interruption will reset the timer.';
         const countdownSeconds = 30;
         const holdMs = 10000;
         const holdSeconds = 10;
+        // Owner wording, 2026-10-20. Spoken once on unlock; then silence until
+        // COMPLETE, which is held on screen briefly so a screen reader can say
+        // it before the dialog closes and the page moves on.
+        const HOLD_INSTRUCTION = 'Hold the Space or Enter key for 10 seconds. You will hear "complete" when the timer is done.';
+        const COMPLETE_ANNOUNCE_MS = 1000;
 
         let remaining = countdownSeconds;
         let countdownComplete = false;
@@ -105,7 +109,7 @@ function showTimedDeleteGate(options) {
             if (available === holdAvailable) return;
             holdAvailable = available;
             holdStatus.textContent = available
-                ? `Phrase matches. ${holdPrompt}`
+                ? HOLD_INSTRUCTION
                 : 'Hold button unlocks after countdown + exact phrase match.';
         }
 
@@ -164,7 +168,6 @@ function showTimedDeleteGate(options) {
             event.preventDefault();
             isHolding = true;
             holdStartAt = Date.now();
-            holdStatus.textContent = 'Holding. Keep holding for 10 seconds.';
 
             holdTicker = setInterval(() => {
                 const elapsed = Date.now() - holdStartAt;
@@ -174,14 +177,19 @@ function showTimedDeleteGate(options) {
 
             holdTimer = setTimeout(() => {
                 if (resolved) return;
-                resolved = true;
-                cleanup();
-                modal.hide();
-                resolve({
-                    gate_phrase: expectedPhrase,
-                    gate_countdown_seconds: countdownSeconds,
-                    gate_hold_seconds: holdSeconds,
-                });
+                resolved = true;  // a late release or Cancel can no longer undo it
+                if (holdTicker) clearInterval(holdTicker);
+                holdTimerEl.textContent = '';
+                holdStatus.textContent = 'Complete';
+                setTimeout(() => {
+                    cleanup();
+                    modal.hide();
+                    resolve({
+                        gate_phrase: expectedPhrase,
+                        gate_countdown_seconds: countdownSeconds,
+                        gate_hold_seconds: holdSeconds,
+                    });
+                }, COMPLETE_ANNOUNCE_MS);
             }, holdMs);
         };
 

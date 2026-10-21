@@ -147,7 +147,9 @@ def test_typing_the_phrase_announces_the_unlock_once(page):
     assert "unlocks after countdown" in status.inner_text()
     page.keyboard.type("B")
 
-    assert status.inner_text().startswith("Phrase matches. To proceed, hold this button for 10 seconds")
+    assert status.inner_text() == (
+        'Hold the Space or Enter key for 10 seconds. You will hear "complete" when the timer is done.'
+    )
     assert page.get_attribute("#timed-delete-hold-btn", "aria-disabled") == "false"
 
 
@@ -157,9 +159,18 @@ def test_a_keyboard_hold_of_ten_seconds_confirms(page):
     page.keyboard.press("Tab")
 
     page.keyboard.down(" ")
-    page.clock.run_for(10_500)
-    page.wait_for_function("() => window.__gate !== undefined")
+    page.clock.run_for(10_100)
 
+    # "Complete" is spoken while the dialog is still open, before anything moves on.
+    assert page.locator("#timed-delete-hold-status").inner_text() == "Complete"
+    assert page.locator("#timedDeleteGateModal.show").count() == 1
+    assert page.evaluate("() => window.__gate") is None
+    page.keyboard.up(" ")  # a late release cannot undo it
+    page.clock.run_for(500)
+    assert page.evaluate("() => window.__gate") is None
+
+    page.clock.run_for(600)
+    page.wait_for_function("() => window.__gate !== undefined")
     assert page.evaluate("() => window.__gate") == {
         "gate_phrase": "DELETE GOONER CLUB", "gate_countdown_seconds": 30, "gate_hold_seconds": 10,
     }
@@ -189,7 +200,7 @@ def test_holding_does_not_rename_the_focused_button_or_flood_the_live_region(pag
 
     mutations = page.evaluate("() => window.__mutations")
     assert mutations["button"] == 0
-    assert mutations["status"] <= 2  # "Holding..." on press, the reset message on release
+    assert mutations["status"] == 1  # silent while holding; only the early-release message
     assert len(timer_texts) >= 8  # sighted users still see it count down
     assert page.get_attribute("#timed-delete-hold-timer", "aria-hidden") == "true"
 
