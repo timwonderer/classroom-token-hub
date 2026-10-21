@@ -4191,8 +4191,9 @@ def bulk_delete_students():
 # the join-code deletion route below.
 
 
+# One rule only: a second rule `/join-code` (DELETE) was registered first, so
+# url_for built it and the Delete Class page POSTed there and got 405.
 @admin_bp.route('/join-code/delete', methods=['POST'])
-@admin_bp.route('/join-code', methods=['DELETE'])
 @admin_required
 def delete_join_code():
     """Hard-delete the *active* class economy and every record scoped to it.
