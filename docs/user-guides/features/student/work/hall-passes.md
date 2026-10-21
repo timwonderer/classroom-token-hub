@@ -34,9 +34,10 @@ Passes are not free and they do not refill on their own. You get them by buying 
 
 1. Press **Break**. The **Choose Break Type** dialog opens: *Choose a hall-pass destination or mark yourself done for the day.*
 2. Pick a destination from the list of buttons. Your teacher decides what is on that list.
-3. The dialog closes and you see *Hall pass request sent.*
+3. Enter your PIN when prompted.
+4. The dialog closes and you see *Hall pass request sent.*
 
-No PIN is required to request a pass.
+Requesting a pass asks for your PIN, the same as every other clock action — it stops anyone else sending a request in your name.
 
 ### Waiting
 
