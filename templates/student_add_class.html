@@ -6,14 +6,14 @@
 {% block page_icon %}group_add{% endblock %}
 
 {% block contextual_help_body %}
-{{ help.panel_lead("Join a second class using the code and seat details that teacher gave you.") }}
+{{ help.panel_lead("Join a second class using the join code your teacher gave you and the name on their roster.") }}
 
 {% call help.topic('addcls-need', 'key', 'What you need from your teacher') %}
-<p class="mb-0">The <strong>join code</strong> identifies the class, and the <strong>seat code</strong> identifies which place on the roster is yours. Both come from that teacher. Nothing here is something you can guess or work out yourself.</p>
+<p class="mb-0">The <strong>join code</strong> identifies the class. It comes from your teacher, and nothing here is something you can guess or work out yourself.</p>
 {% endcall %}
 
 {% call help.topic('addcls-name', 'badge', 'Enter your name as the roster has it') %}
-<p class="mb-0">Your first and last name have to match the seat your teacher set aside for you. If it will not match, check for a nickname, a different spelling, or a swapped first and last name before assuming the code is wrong.</p>
+<p class="mb-0">Your first and last name have to match the seat your teacher set aside for you. If it will not match, check for a nickname, a different spelling, or a swapped first and last name before assuming the code is wrong. If another student in the class shares your name, your teacher gives you a <strong>Deduplication Code</strong> to tell the two seats apart — leave it blank unless they told you to use one.</p>
 {% endcall %}
 
 {% call help.topic('addcls-separate', 'account_balance_wallet', 'Each class is its own economy') %}
