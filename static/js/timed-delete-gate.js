@@ -217,7 +217,8 @@ function showTimedDeleteGate(options) {
         };
 
         const cancelHold = () => {
-            if (!isHolding) return;
+            // Once complete, a late release (pointer or key) changes nothing.
+            if (!isHolding || resolved) return;
             resetHoldState();
             updateHoldAvailability();
         };

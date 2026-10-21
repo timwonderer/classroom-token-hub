@@ -205,6 +205,23 @@ def test_holding_does_not_rename_the_focused_button_or_flood_the_live_region(pag
     assert page.get_attribute("#timed-delete-hold-timer", "aria-hidden") == "true"
 
 
+def test_a_pointer_release_during_complete_changes_nothing(page):
+    # Review on #1626: releasing the mouse during the one-second "Complete"
+    # announcement replaced it with "Hold must be continuous" just before the
+    # deletion went ahead anyway.
+    finish_countdown(page)
+    page.keyboard.type("DELETE GOONER CLUB")
+    page.locator("#timed-delete-hold-btn").hover()
+    page.mouse.down()
+    page.clock.run_for(10_100)
+    page.mouse.up()
+
+    assert page.locator("#timed-delete-hold-status").inner_text() == "Complete"
+    page.clock.run_for(1_100)
+    page.wait_for_function("() => window.__gate !== undefined")
+    assert page.evaluate("() => window.__gate")["gate_hold_seconds"] == 10
+
+
 def test_releasing_early_resets_and_announces_it(page):
     finish_countdown(page)
     page.keyboard.type("DELETE GOONER CLUB")

@@ -38,7 +38,9 @@ PAGE = """<!doctype html><html lang="en"><head><title>Dialogs</title>
 <link href="/static/vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
 <link href="/static/css/tokens.css" rel="stylesheet">
 <link href="/static/css/style.css" rel="stylesheet">
-</head><body class="student-shell"><main>
+</head><body class="student-shell">
+<nav id="sidebar" aria-label="Sidebar"><a href="#top">Dashboard</a></nav>
+<main>
 <h1>Page</h1>
 <button type="button" id="opener">Open</button>
 <button type="button" id="background">Background action</button>
@@ -176,6 +178,19 @@ def test_toasts_stay_announced_but_their_controls_stay_outside_reach(page):
     result(page)
     assert page.evaluate("() => document.querySelectorAll('[inert]').length") == 0
     assert exposed(ax_tree(page), "button", "Dismiss earlier toast")
+
+
+def test_closing_leaves_inert_that_another_component_took_over(page):
+    # Review on #1626: the mobile sidebar inerts itself when the viewport
+    # crosses the breakpoint. If that happened while a dialog was open,
+    # closing the dialog cleared it, and Tab reached the off-screen links.
+    open_from_opener(page, "AppCore.confirm('Go?', {title: 'Confirm'})")
+    page.evaluate("() => document.getElementById('sidebar').setAttribute('inert', '')")  # its owner's write
+    page.keyboard.press("Escape")
+    result(page)
+
+    assert page.evaluate("() => document.getElementById('sidebar').inert") is True
+    assert page.evaluate("() => document.getElementById('background').closest('[inert]')") is None
 
 
 def test_focus_starts_on_confirm_and_on_cancel_for_a_destructive_action(page):

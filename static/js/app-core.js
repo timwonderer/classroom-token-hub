@@ -209,18 +209,26 @@
   const CONTROLS = 'a[href], button, input, select, textarea, [contenteditable], [tabindex]:not([tabindex="-1"])';
   const observersBy = new WeakMap();
 
-  function inertControls(root, inerted) {
+  function inertControls(root, mark) {
     const found = root.matches && root.matches(CONTROLS) ? [root] : [];
     found.concat(Array.from(root.querySelectorAll ? root.querySelectorAll(CONTROLS) : [])).forEach((el) => {
-      if (el.inert) return;
-      el.inert = true;
-      inerted.push(el);
+      if (!el.inert) mark(el);
     });
   }
 
   function isolateModal(modalEl) {
     const inerted = [];
-    const observers = [];
+    // Another component may take over an element's inert state while the
+    // modal is open (the mobile sidebar does on a resize). Any write to the
+    // attribute after ours makes it that component's, and release leaves it.
+    const claimed = new Set();
+    const ownership = new MutationObserver((records) => records.forEach((r) => claimed.add(r.target)));
+    const mark = (el) => {
+      el.inert = true;
+      inerted.push(el);
+      ownership.observe(el, { attributes: true, attributeFilter: ['inert'] });
+    };
+    const observers = [ownership];
     for (let node = modalEl; node && node !== document.body; node = node.parentElement) {
       const parent = node.parentElement;
       if (!parent) break;
@@ -228,28 +236,29 @@
         if (sibling === node || sibling.inert) return;
         if (sibling.tagName === 'SCRIPT' || sibling.classList.contains('modal-backdrop')) return;
         if (sibling.matches(INERT_EXEMPT)) {
-          inertControls(sibling, inerted);
+          inertControls(sibling, mark);
           const observer = new MutationObserver((records) => records.forEach((record) => {
             record.addedNodes.forEach((added) => {
-              if (added.nodeType === Node.ELEMENT_NODE) inertControls(added, inerted);
+              if (added.nodeType === Node.ELEMENT_NODE) inertControls(added, mark);
             });
           }));
           observer.observe(sibling, { childList: true, subtree: true });
           observers.push(observer);
           return;
         }
-        sibling.inert = true;
-        inerted.push(sibling);
+        mark(sibling);
       });
     }
-    inertedBy.set(modalEl, inerted);
+    inertedBy.set(modalEl, { inerted, claimed, ownership });
     observersBy.set(modalEl, observers);
   }
 
   function releaseModal(modalEl) {
+    const state = inertedBy.get(modalEl);
+    if (state) state.ownership.takeRecords().forEach((r) => state.claimed.add(r.target));
     (observersBy.get(modalEl) || []).forEach((observer) => observer.disconnect());
     observersBy.delete(modalEl);
-    (inertedBy.get(modalEl) || []).forEach((el) => { el.inert = false; });
+    if (state) state.inerted.forEach((el) => { if (!state.claimed.has(el)) el.inert = false; });
     inertedBy.delete(modalEl);
   }
 
