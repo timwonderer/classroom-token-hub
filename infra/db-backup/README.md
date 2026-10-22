@@ -104,8 +104,13 @@ Plan §6 explains why the application is stopped first.
 bash infra/db-backup/prerelease.sh backup    # verify container, tunnel, stop the app, take + verify the point
 bash infra/db-backup/prerelease.sh counts    # every table count in the point equals live production's
 umask 077; pbpaste > ~/cth-backup/identity.txt   # owner: the age key, from the clipboard
-bash infra/db-backup/prerelease.sh restore   # restore + no-resurrection check; deletes the identity with rm -P
+bash infra/db-backup/prerelease.sh restore   # restore + no-resurrection check; deletes the identity, closes the tunnel
+bash infra/db-backup/prerelease.sh close-tunnel   # only if a run is abandoned before restore
 ```
+
+The three steps share one SSH tunnel to production, owned through the control socket `~/cth-backup/tunnel.sock`:
+`backup` opens it, `counts` and `restore` reuse it (or reopen it), and `restore` closes it on exit. Until
+2026-10-22 nothing closed it; the v2.2.4 tunnel was still listening six days later and blocked the next backup.
 
 One-time setup on the Mac: `brew install age postgresql@14 colima docker`;
 `python3 -m venv ~/cth-backup-venv && ~/cth-backup-venv/bin/pip install psycopg2-binary`; the owner's public key in
