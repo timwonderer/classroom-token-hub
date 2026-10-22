@@ -2,7 +2,9 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |---|---|---|---|---|
-| SPEC-OPS-006 | 1.4 | 2026-10-02 | 1.3 | Subordinate implementation contract |
+| SPEC-OPS-006 | 1.5 | 2026-10-21 | 1.4 | Subordinate implementation contract |
+
+*Revision 1.5 (2026-10-21; owner ruling 2026-10-21): the endpoint check is FAIL (`HTTP_UNAVAILABLE`) only on an HTTP 5xx response. Any other non-redirect, non-authentication HTTP error, such as 429 (rate limited) or 404, means the check could not observe health: it is UNKNOWN under the new closed diagnostic `HTTP_REFUSED`, for the endpoint and the database alike, and so can never make the hero `Mostly unavailable` (§VIII Independent platform checks). Prompted by 2026-10-20, when the collector's health read was rate limited and the hero read `Mostly unavailable` while the app was up.*
 
 *Revision 1.4 (2026-10-02; ratified by the owner 2026-10-02, under DOM-OPS-001 2.12): adds the `hall_pass` component and its route group (§V, §VI); adds `http_404_failure_count` and the closed list of failed-request routes, which at 1.4 is the hall-pass approve, reject and cancel routes only (§V, §VI); the failed-request rule — at least 3 in the window and more than 2% of the component's requests (owner ruling 2026-10-02) — governing classification, the card and the hero (§VI, §VIII); schema `request-telemetry-v2`, with `request-telemetry-v1` snapshots still read (§V, §VII).*
 
@@ -272,10 +274,19 @@ first two and is read as carrying no gate evidence. Each result has `key`,
 `outcome` (PASS/FAIL/UNKNOWN), `checked_at` (UTC ISO or null), and a closed diagnostic.
 Endpoint HTTP_OK is PASS; HTTP_UNAVAILABLE is FAIL. Actual database
 DATABASE_REACHABLE is PASS and DATABASE_UNAVAILABLE is FAIL. ACCESS_DENIED,
-TRANSPORT_UNAVAILABLE and INVALID_RESPONSE are UNKNOWN for either check;
+TRANSPORT_UNAVAILABLE, HTTP_REFUSED and INVALID_RESPONSE are UNKNOWN for either check;
 STALE_SOURCE is additionally permitted for database UNKNOWN. UNKNOWN carries null
 checked_at; proven checks preserve their source timestamp, never later than receipt.
 Current results expire after 300 seconds; future or malformed evidence is unknown.
+
+The health read's HTTP status maps to exactly one endpoint diagnostic. A 2xx body
+that validates is HTTP_OK. HTTP_UNAVAILABLE is an HTTP 5xx response and nothing
+else: a server failure is the only response that establishes the application is
+failing. A redirect (301, 302, 303, 307, 308), 401 or 403 is ACCESS_DENIED. Any
+other HTTP error status, for example 429 (rate limited) or 404, is HTTP_REFUSED:
+the request was refused before health was observed, so the check is UNKNOWN with
+null `checked_at`, never FAIL, and the database result carries the same
+diagnostic. A refusal is not executed evidence of failure (INV-ARC-017).
 A bounded read of the existing health endpoint may obtain these two actual checks
 without collecting its feature placeholders. This is connectivity, not domain proof.
 
@@ -306,7 +317,8 @@ responses, no/low traffic, thresholds and their boundaries, 404 versus semantic
 failure, failed-request 404s on the designated routes against 404s elsewhere, both
 schema versions, every hall-pass route falling in the hall-pass group and no other, stale/future timestamps, retry idempotency, monotonic current pointer,
 UTC rollover, history denominators/gaps, independent notices, auth/CSRF and pure
-GET. Gate tests cover an Access redirect, an open response, an application error,
+GET. Endpoint tests cover 5xx as FAIL and a 429 or 404 as UNKNOWN `HTTP_REFUSED`,
+which leaves the hero `Unknown`, not `Mostly unavailable`. Gate tests cover an Access redirect, an open response, an application error,
 401/403, transport failure, and a lapsed service token with an open gate. Render
 populated/idle/stale history and cards for keyboard/touch access.
 A deployed claim requires source → collector → Firestore → rendered evidence.

@@ -7,6 +7,7 @@ import pytest
 
 from status.platform import platform_rows, validate_platform
 from status_service.collector import collect, collect_platform
+from status_service.presentation import overall_observation
 from tests.test_status_measurements import NOW, snapshot
 
 
@@ -51,6 +52,28 @@ def test_http_failure_never_invents_database_failure(code, endpoint):
     assert result["checks"][0]["outcome"] == endpoint
     assert result["checks"][1]["outcome"] == "UNKNOWN"
     assert result["checks"][1]["checked_at"] is None
+
+
+@pytest.mark.parametrize("code", [500, 502, 503])
+def test_server_error_is_an_endpoint_failure(code):
+    def fetch(*_):
+        raise HTTPError("private", code, "private", {}, None)
+    result = collect_platform(Store(), client_id="id", client_secret="secret", now=NOW, fetch_gate=OPEN, fetch=fetch)
+    assert result["checks"][0] == {"key": "endpoint", "outcome": "FAIL", "checked_at": NOW.isoformat(), "diagnostic": "HTTP_UNAVAILABLE"}
+
+
+@pytest.mark.parametrize("code", [429, 404])
+def test_refused_request_is_unknown_never_failure(code):
+    """SPEC-OPS-006 1.5: a refusal observed no health, so it is UNKNOWN, not FAIL."""
+    def fetch(*_):
+        raise HTTPError("private", code, "private", {}, None)
+    result = collect_platform(Store(), client_id="id", client_secret="secret", now=NOW, fetch_gate=OPEN, fetch=fetch)
+    endpoint, database = result["checks"][:2]
+    assert endpoint == {"key": "endpoint", "outcome": "UNKNOWN", "checked_at": None, "diagnostic": "HTTP_REFUSED"}
+    assert database == {"key": "database", "outcome": "UNKNOWN", "checked_at": None, "diagnostic": "HTTP_REFUSED"}
+    rows = platform_rows(result, now=NOW)
+    hero = overall_observation(rows, [], [], now=NOW)
+    assert hero["state"] == "unknown"
 
 
 def test_platform_outage_does_not_discard_request_telemetry():
