@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-001      | 2.9     | 2026-10-16     | 2.8 | Normative |
+| SOP-DEP-001      | 2.10    | 2026-10-22     | 2.9 | Normative |
 
 ## I. Purpose
 
@@ -266,62 +266,19 @@ flask db current
 7. Point Nginx at the service only after local health passes, then confirm
    HTTPS certificate, host routing, and security headers.
 
-## XI. Full-App First Test
+## XI. Browser Validation
 
-Exercise these in a real browser while the Cloudflare Access gate remains restricted. Each
-line records owner, timestamp, one result from the set defined below this list, and its
-evidence or defect link.
+Browser validation follows one of two templates:
 
-- `/admin/login` renders and submits.
-- `/student/login` renders and submits.
-- `/docs` renders.
-- Passwordless enrollment and authentication with deployment credentials.
-- Turnstile renders on every configured route and real verification succeeds.
-- Teacher creates or accesses a class boundary.
-- Student seat claim, then a student session.
-- Teacher current-class switching via `POST /admin/current-class`.
-- Student add-class via `/student/add-class`, and switch-class via
-  `POST /student/switch-class/<class_id>`. The route takes the canonical
-  `class_id`; a `join_code` in that position is the retired alias form.
-- Selected-class export via `/admin/export-students`. The export scopes to the
-  session's active class — a query parameter does not choose the class — and
-  lists claimed seats only.
-- Hall-pass verification via `/verify/hallpass/<teacher_public_token>`.
-- Class-scoped admin actions cannot cross the selected class boundary.
-- Attendance, productivity, payroll, obligations, ledger and store paths load
-  and execute through their canonical routes.
-- Audit/lineage records are produced for protected mutations.
-- Export and support/operations surfaces load without 500 responses.
-- No PII appears in URLs, logs, errors, or browser-visible diagnostics.
-- Accessibility smoke checks cover the public, login, teacher and student
-  surfaces reached in this test (INV-ARC-020).
+- **`SOP-DEP-001A`, Initial Deployment Browser Validation:** the first deployment of the v2 application onto a
+  host, a rehearsal host or fresh database, or a release the owner designates as full. Every item is checked and
+  evidenced before the gate opens.
+- **`SOP-DEP-001B`, Release Functional Browser Validation:** every other release. The scope comes from the release
+  diff: features the release changes directly, features connected to those changes, and features with a known
+  problem. A feature outside that scope needs no row.
 
-**Results.** Every line takes exactly one of these five results:
-
-- *Evidenced*: the features the operator exercised ran through the line and it
-  behaved as the line asserts, whether or not it was a separate step. A student
-  sign-in that passes Turnstile's server-side check could not have done so unless
-  the widget rendered and issued a token.
-- *In part*: a line with several parts, some of which ran and behaved as asserted
-  while no exercised feature reached the others. The evidence names both.
-- *Failed*: the line ran and did not behave as it asserts. The row links the
-  defect.
-- *Blocked*: the line could not be run, for a reason outside the application
-  under test (a missing credential, an unavailable dependency, the Access gate).
-  The row names the blocker.
-- *Not exercised*: nothing the operator ran reached the line, and nothing
-  prevented it.
-
-Only *evidenced* satisfies a line for §XIII; every other result is stated as a
-known risk or deviation before the go/no-go decision.
-
-**Results are recorded as the checks run, not reconstructed afterward.** The
-release record carries one row per line above, in this order, with the columns
-*§XI line*, *Result*, *Owner*, *Time (UTC)* and *Evidence or defect*, filled in
-during the checks and complete before the go/no-go decision (§XIII). A row's
-evidence names what ran (route, action, status, the build it ran on), not a
-verdict (§XI.A item 6). The table lives in the record under `docs/ops/audits/`,
-never in a copy of this runbook (§II).
+Both record results during or after the checks from contemporaneous evidence, and both use §XI.A below for items
+that assert something cannot happen.
 
 ### XI.A How to exercise the adversarial items
 
@@ -433,9 +390,9 @@ Named roles for each rehearsal or smoke pass:
 
 Primary operator and escalation owner may be the same person. In a
 single-operator environment the operator MAY assume all three roles provided
-the test suite passes with no unexplained failures, every §XI line is executed
-and recorded, results are written into the record, and known risks or
-deviations are stated before the go/no-go decision.
+the test suite passes with no unexplained failures, the browser validation the
+deployment requires (`SOP-DEP-001A` or `SOP-DEP-001B`) is executed and recorded,
+and results and known risks are written into the record.
 
 AI assistance MAY be used to look for defects or invariant violations. Its
 output is advisory only and is **not** independent verification authority.
@@ -476,7 +433,7 @@ output is advisory only and is **not** independent verification authority.
 ## XV. Record Storage
 
 Capture: migration head before and after, the `pytest_result/` artifact
-reference, health output, §XI results, failures, and the go/no-go decision.
+reference, health output, browser validation results (`SOP-DEP-001A` or `SOP-DEP-001B`), failures, and the go/no-go decision.
 
 Store the finalized record as a repository artifact under `docs/ops/audits/`,
 or as a retained PR/ticket comment. **Do not create `docs/LOGS/`** — that root
@@ -510,7 +467,7 @@ immutable once finalized.
 ## XVI. Completion Condition
 
 The first test deployment is complete only when the exact SHA runs from a fresh
-database, the required integrations work, every §XI path has recorded evidence,
+database, the required integrations work, every `SOP-DEP-001A` item has recorded evidence,
 and the operator/verifier decision is stored.
 
 ## XVII. Amendment
@@ -524,6 +481,7 @@ revision; where they disagree, the code wins and this document is corrected.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.10 | 2026-10-22 | §XI's checklist is extracted into two templates with separate mechanisms: `SOP-DEP-001A` (initial deployment: every item evidenced before the gate opens) and `SOP-DEP-001B` (release: scope from the diff, covering directly changed, connected and known-problem features; out-of-scope features need no row). Both allow results recorded after the checks from contemporaneous evidence. §XI.A stays here. §XIII, §XV and §XVI cite the templates; §XIII drops the before-go/no-go ordering for known risks. Owner rulings, 2026-10-22 (v2.3.0). |
 | 2.9 | 2026-10-16 | §XI: one result set for every line (*evidenced*, *in part*, *failed*, *blocked*, *not exercised*), replacing pass/fail/blocked; a line is evidenced when the exercised features ran through it and behaved as asserted; a per-line results table, recorded during the checks and complete before go/no-go. §XI.A: no deliberate cross-scope attempt on a host serving live classes; the negative half of a "cannot" line is evidenced by the release suite, the positive half by normal use. Both owner rulings of 2026-10-16, after the v2.2.4 record had to reconstruct §XI from logs. |
 | 2.8 | 2026-10-06 | §XIV: the forward-only list is `migrations/forward_only_register.txt`, enforced against the chain by a test; the prose list was incomplete. Dependencies: `SOP-DB-009` (archived) replaced by `SOP-DB-004`. |
 | 2.7 | 2026-10-04 | §XIV: register the three attendance/payroll recovery revisions that reject all downgrades; preserve snapshot restore or reviewed fix-forward recovery. |

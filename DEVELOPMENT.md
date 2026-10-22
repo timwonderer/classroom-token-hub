@@ -1,7 +1,7 @@
 # Classroom Token Hub - Development Priorities
 
-**Last Updated:** 2026-10-16 UTC
-**Current Released Version:** 2.2.4 (`68ead4230`), deployed 2026-10-16 UTC; includes the untagged `03a6feed2` (2026-10-16 UTC: #1592). v2.0.0 launched 2026-09-26
+**Last Updated:** 2026-10-22 UTC
+**Current Released Version:** 2.3.0 (`339c775cd`), deployed 2026-10-22 UTC. v2.0.0 launched 2026-09-26
 **Engineering State:** v2 in production; post-launch hardening
 **Active Integration Branch:** `main`
 
@@ -50,7 +50,7 @@ Run once after clone:
 `hooks/post-checkout` rewrites `DATABASE_URL` in `.env` on every checkout. Check it before relying
 on a custom database URL.
 
-## Current State (2026-10-09)
+## Current State (2026-10-22)
 
 ### In production
 
@@ -106,6 +106,12 @@ on a custom database URL.
 - **Untagged `03a6feed2`** (deployed 2026-10-16): the insurance premium suggestion shows monthly rent as billed
   on a monthly policy, not rescaled over 30 days (#1592), found by the v2.2.4 browser checks. No migration. See
   `docs/ops/audits/DEPLOY_2026-10-16_03a6feed2.md`.
+- **v2.3.0** (`339c775cd`, deployed 2026-10-22): in-app dialogs replace the browser's own, and the delete safety
+  gate is readable by screen readers (#1626); Delete Class works again and the status page no longer reports a
+  false outage (#1624); Ledger provenance by mechanism and a closed transaction type vocabulary (#1596 to #1600);
+  contextual-help corrections (#1619 to #1622). Migration `a4d7e9c2f1b6` adds a `NOT VALID` CHECK constraint on
+  `ledger_transaction.type`. See the `[2.3.0]` section of the CHANGELOG and
+  `docs/ops/audits/DEPLOY_2026-10-22_339c775cd.md`.
 - All ten domains (Identity, Class Configuration, Ledger, Productivity & Payroll, Obligations,
   Store & Entitlements, Operations, Interpretation, Policies, Support) run on the v2 model:
   `User` → `Seat` → `IdentityProfile`, with `ClassEconomy.class_id` as the tenant boundary and

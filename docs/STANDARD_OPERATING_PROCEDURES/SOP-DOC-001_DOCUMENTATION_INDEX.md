@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.34 | 2026-10-21 | 3.33 | Normative |
+| SOP-DOC-001 | 3.35 | 2026-10-22 | 3.34 | Normative |
 
 ---
 
@@ -176,7 +176,9 @@ Archived material is deliberately absent; see §VI.
 - [SOP-DB-004 — Live-v2 Migration and Semantic-Versioning Contract](DATABASE/SOP-DB-004_Live_V2_Migration_And_Versioning_Contract.md)
 
 ### Procedures — Deployment (SOP-DEP)
-- [SOP-DEP-001 — v2 Live-Test Runbook](DEPLOYMENT/SOP-DEP-001_Live_Test_Runbook.md) — v2.9: §XI evidence standard and per-line results table; §XI.A no cross-scope attempts on a host serving live classes.
+- [SOP-DEP-001 — v2 Live-Test Runbook](DEPLOYMENT/SOP-DEP-001_Live_Test_Runbook.md) — v2.10: §XI points to the two browser-validation templates; §XI.A no cross-scope attempts on a host serving live classes.
+- [SOP-DEP-001A — Initial Deployment Browser Validation](DEPLOYMENT/SOP-DEP-001A_Initial_Deployment_Browser_Validation.md) — v1.0: first deployment, rehearsal host or owner-designated full validation; every item evidenced before the gate opens.
+- [SOP-DEP-001B — Release Functional Browser Validation](DEPLOYMENT/SOP-DEP-001B_Release_Functional_Browser_Validation.md) — v1.0: every other release; scope from the release diff (directly changed, connected, known problem); out-of-scope features need no row.
 - [SOP-DEP-002 — v2 Production Transition Runbook](DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md)
 
 ### Procedures — DevOps (SOP-DEV)
@@ -277,6 +279,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.35 (2026-10-22):**
+- Register SOP-DEP-001A v1.0 (Initial Deployment Browser Validation) and SOP-DEP-001B v1.0 (Release Functional Browser Validation), extracted from SOP-DEP-001 §XI with separate mechanisms: initial deployment requires every item; a release checks directly changed, connected and known-problem features. Register SOP-DEP-001 v2.10 (§XI points to the templates) and SOP-DEP-002 v1.12 (§VIII uses them). Owner rulings, 2026-10-22 (v2.3.0).
 
 **Version 3.34 (2026-10-21):**
 - Register SPEC-OPS-006 v1.5: the endpoint check is FAIL (`HTTP_UNAVAILABLE`) only on an HTTP 5xx; any other non-redirect, non-authentication HTTP error (e.g. 429, 404) is UNKNOWN under the new closed diagnostic `HTTP_REFUSED` (owner ruling 2026-10-21).
