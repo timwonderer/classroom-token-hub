@@ -123,3 +123,13 @@ def test_render_hides_the_tags_and_links_the_deployment_record_last():
 def test_render_refuses_an_entry_without_a_known_section(mutate, reason):
     with pytest.raises(ValueError, match=reason):
         _rendered(mutate(TAGGED))
+
+
+def test_title_mode_works_for_a_release_from_before_the_notes_tags():
+    # Review on #1633: --title rendered the body first, so an untagged historical release (v2.2.4) failed.
+    import subprocess, sys
+    root = Path(__file__).resolve().parents[1]
+    result = subprocess.run([sys.executable, "scripts/release_notes.py", "2.2.4", "--title"],
+                            cwd=root, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.startswith("v2.2.4 — ")

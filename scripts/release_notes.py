@@ -168,11 +168,13 @@ def main():
     tag = subprocess.run(["git", "rev-parse", f"v{args.version}^{{commit}}"], capture_output=True, text=True)
     if tag.returncode or not tag.stdout.startswith(sha):
         sys.exit(f"tag v{args.version} does not point at `{sha}` from the Released-as line")
+    if args.title:  # the title needs no rendering, so releases from before the notes tags still have one
+        print(title)
+        return
     try:
-        notes = body if args.raw else render(body)
+        print(body if args.raw else render(body))
     except ValueError as exc:
         sys.exit(f"CHANGELOG [{args.version}]: {exc}")
-    print(title if args.title else notes)
 
 
 if __name__ == "__main__":
