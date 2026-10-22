@@ -32,8 +32,9 @@ for a in "$@"; do [ "$prev" = "-S" ] && sock="$a"; prev="$a"; done
 case "$args" in
   *"-O check"*) [ -f "$STUB_STATE/tunnel" ] && exit 0 || exit 255 ;;
   *"-O exit"*)  rm -f "$STUB_STATE/tunnel"; exit 0 ;;
-  *" -M "*)     touch "$STUB_STATE/tunnel"
-                python3 -c "import socket,sys; socket.socket(socket.AF_UNIX).bind(sys.argv[1])" "$sock"; exit 0 ;;
+  # Like OpenSSH: if the ControlPath is taken, the forward still starts, but with no master (an orphan).
+  *" -M "*)     if python3 -c "import socket,sys; socket.socket(socket.AF_UNIX).bind(sys.argv[1])" "$sock" 2>/dev/null
+                then touch "$STUB_STATE/tunnel"; else touch "$STUB_STATE/orphan"; fi; exit 0 ;;
   *"systemctl stop"*) exit "${FAKE_APP_STAYS_ACTIVE:-0}" ;;
 esac
 exit 0
@@ -84,7 +85,8 @@ def run(env, *args, **extra):
 
 
 def tunnel_open(env):
-    return (env["state"] / "tunnel").exists()
+    """A forward to production is listening, with or without a master that can close it."""
+    return (env["state"] / "tunnel").exists() or (env["state"] / "orphan").exists()
 
 
 def ssh_calls(env):
@@ -158,3 +160,24 @@ def test_backup_refuses_a_port_held_by_something_it_does_not_own(env):
     assert result.returncode != 0
     assert "does not own" in result.stdout
     assert not opened_with_control_socket(env)
+
+
+def test_a_stale_control_socket_is_replaced_not_reused(env):
+    # Review on #1632: a socket left by a reboot has no master behind it; starting a master on that path makes
+    # ssh continue without one, leaving a tunnel nothing can close.
+    import socket
+    sock = env["home"] / "cth-backup" / "tunnel.sock"
+    socket.socket(socket.AF_UNIX).bind(str(sock))   # a dead socket: no master, so `-O check` fails
+    result = run(env, "backup")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert opened_with_control_socket(env) and tunnel_open(env)
+    assert run(env, "close-tunnel").returncode == 0 and not tunnel_open(env)
+
+
+def test_restore_without_an_identity_still_closes_the_tunnel(env):
+    # Review on #1632: the identity guard exited before the cleanup trap existed.
+    assert run(env, "backup").returncode == 0 and tunnel_open(env)
+    result = run(env, "restore")
+    assert result.returncode != 0
+    assert "missing" in result.stdout
+    assert not tunnel_open(env)

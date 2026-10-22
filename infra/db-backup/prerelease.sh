@@ -31,7 +31,11 @@ SOCK=~/cth-backup/tunnel.sock
 tunnel_up() { [ -S "$SOCK" ] && ssh -S "$SOCK" -O check root@cth 2>/dev/null; }
 open_tunnel() {
   tunnel_up && return 0
+  # A socket left by a reboot or an unclean exit has no master behind it. Starting a new master on that path
+  # would make ssh continue without one, an uncontrollable tunnel, so remove it first and check the result.
+  rm -f "$SOCK"
   ssh -f -N -M -S "$SOCK" -o ExitOnForwardFailure=yes -L 55433:127.0.0.1:5432 root@cth
+  tunnel_up || { echo "the tunnel started without its control socket; close it: lsof -nP -iTCP:55433 -sTCP:LISTEN"; exit 1; }
 }
 close_tunnel() {
   if tunnel_up; then ssh -S "$SOCK" -O exit root@cth 2>/dev/null || true; echo "tunnel closed"; fi
@@ -88,9 +92,9 @@ EOF
   ;;
 restore)
   ID=~/cth-backup/identity.txt
+  # Last step: the tunnel is closed and any identity deleted however this exits, including the guards below.
+  trap 'if [ -f "$ID" ]; then { rm -P "$ID" 2>/dev/null || rm -f "$ID"; }; echo "identity deleted"; fi; close_tunnel' EXIT
   [ -f "$ID" ] || { echo "missing $ID"; exit 1; }
-  # Last step: the identity is deleted and the tunnel closed however this exits.
-  trap '{ rm -P "$ID" 2>/dev/null || rm -f "$ID"; }; echo "identity deleted"; close_tunnel' EXIT
   diff <(age-keygen -y "$ID") "$CTH_BACKUP_AGE_RECIPIENTS_FILE" >/dev/null \
     || { echo "identity does not match recipients.txt"; exit 1; }
   P=$(latest dump.age); [ -n "$P" ] || { echo "no point in $CTH_BACKUP_STATE_DIR (set CTH_BACKUP_STATE_DIR to the backup's directory)"; exit 1; }
