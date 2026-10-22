@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.34 | 2026-10-21 | 3.33 | Normative |
+| SOP-DOC-001 | 3.35 | 2026-10-22 | 3.34 | Normative |
 
 ---
 
@@ -176,7 +176,7 @@ Archived material is deliberately absent; see §VI.
 - [SOP-DB-004 — Live-v2 Migration and Semantic-Versioning Contract](DATABASE/SOP-DB-004_Live_V2_Migration_And_Versioning_Contract.md)
 
 ### Procedures — Deployment (SOP-DEP)
-- [SOP-DEP-001 — v2 Live-Test Runbook](DEPLOYMENT/SOP-DEP-001_Live_Test_Runbook.md) — v2.9: §XI evidence standard and per-line results table; §XI.A no cross-scope attempts on a host serving live classes.
+- [SOP-DEP-001 — v2 Live-Test Runbook](DEPLOYMENT/SOP-DEP-001_Live_Test_Runbook.md) — v2.10: §XI scoped by risk (full list for a first deployment; a routine release checks what it changes or what has a known problem), results recorded during or after the checks from contemporaneous evidence; §XI.A no cross-scope attempts on a host serving live classes.
 - [SOP-DEP-002 — v2 Production Transition Runbook](DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md)
 
 ### Procedures — DevOps (SOP-DEV)
@@ -277,6 +277,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.35 (2026-10-22):**
+- Register SOP-DEP-001 v2.10: §XI is scoped by risk. The full list is the first-deployment test; a routine release browser-checks only the lines its changes touch or that have a known problem, and an out-of-scope line needs no row. Results may be recorded during or after the checks from contemporaneous evidence. Owner rulings, 2026-10-22 (v2.3.0 release).
 
 **Version 3.34 (2026-10-21):**
 - Register SPEC-OPS-006 v1.5: the endpoint check is FAIL (`HTTP_UNAVAILABLE`) only on an HTTP 5xx; any other non-redirect, non-authentication HTTP error (e.g. 429, 404) is UNKNOWN under the new closed diagnostic `HTTP_REFUSED` (owner ruling 2026-10-21).

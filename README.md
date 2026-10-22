@@ -6,7 +6,7 @@ A classroom behavior management and reward platform with built-in simulated fina
 
 Students earn tokens for the time they work, and spend them on rent, insurance and a class store. Teachers run the class economy without handing over student email addresses, phone numbers or school SSO. Built with Flask, SQLAlchemy and PostgreSQL. Each class period is its own isolated economy.
 
-**In production:** [v2.2.4](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.2.4) (`68ead4230`, deployed 2026-10-16 UTC, [release record](docs/ops/audits/DEPLOY_2026-10-16_68ead4230.md)) plus the untagged `03a6feed2` (2026-10-16 UTC, [release record](docs/ops/audits/DEPLOY_2026-10-16_03a6feed2.md)).
+**In production:** [v2.3.0](https://github.com/timwonderer/classroom-token-hub/releases/tag/v2.3.0) (`339c775cd`, deployed 2026-10-22 UTC, [release record](docs/ops/audits/DEPLOY_2026-10-22_339c775cd.md)).
 
 **Latest tag:** ![Version](https://img.shields.io/github/v/release/timwonderer/classroom-token-hub)
 
@@ -234,7 +234,7 @@ curl http://localhost:5000/health/status   # bounded status signals; no tenant d
 gunicorn wsgi:app --workers 4 --bind 0.0.0.0:8000
 ```
 
-Tags mark the exact commit of each tagged release: `v2.0.0` is `26d1792b5` (released 2026-09-26) `v2.0.1` is `ad64a473f` (released 2026-09-28), `v2.1.0` is `5ac05ea6f` (released 2026-10-02), the merge commit of its release PR, `v2.1.1` is `2bdfac65e` (released 2026-10-04), the tip of `main` at release, `v2.2.0` is `5ebae62db` (released 2026-10-09), the tip of `main` at release, `v2.2.1` is `f98d8a206` (released 2026-10-10), the tip of `main` at release, `v2.2.2` is `61b509b7f` (released 2026-10-11 UTC), the tip of `main` at release, `v2.2.3` is `5d29abb41` (released 2026-10-12 UTC), the tip of `main` at release, and `v2.2.4` is `68ead4230` (released 2026-10-16 UTC), the tip of `main` at release. The full procedure is [SOP-DEP-002](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md), and each release is recorded under [docs/ops/audits/](docs/ops/audits/):
+Tags mark the exact commit of each tagged release: `v2.0.0` is `26d1792b5` (released 2026-09-26) `v2.0.1` is `ad64a473f` (released 2026-09-28), `v2.1.0` is `5ac05ea6f` (released 2026-10-02), the merge commit of its release PR, `v2.1.1` is `2bdfac65e` (released 2026-10-04), the tip of `main` at release, `v2.2.0` is `5ebae62db` (released 2026-10-09), the tip of `main` at release, `v2.2.1` is `f98d8a206` (released 2026-10-10), the tip of `main` at release, `v2.2.2` is `61b509b7f` (released 2026-10-11 UTC), the tip of `main` at release, `v2.2.3` is `5d29abb41` (released 2026-10-12 UTC), the tip of `main` at release, `v2.2.4` is `68ead4230` (released 2026-10-16 UTC), the tip of `main` at release, and `v2.3.0` is `339c775cd` (released 2026-10-22 UTC), the tip of `main` at release. The full procedure is [SOP-DEP-002](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md), and each release is recorded under [docs/ops/audits/](docs/ops/audits/):
 
 - v2.0.0: [TRANSITION_2026-09-26_26d1792b5.md](docs/ops/audits/TRANSITION_2026-09-26_26d1792b5.md)
 - v2.0.1: [DEPLOY_2026-09-28_ad64a473f.md](docs/ops/audits/DEPLOY_2026-09-28_ad64a473f.md), which also covers the unrecorded `efdf09eda` release of 2026-09-27
@@ -245,6 +245,7 @@ Tags mark the exact commit of each tagged release: `v2.0.0` is `26d1792b5` (rele
 - v2.2.2: [DEPLOY_2026-10-11_61b509b7f.md](docs/ops/audits/DEPLOY_2026-10-11_61b509b7f.md)
 - v2.2.3: [DEPLOY_2026-10-12_5d29abb41.md](docs/ops/audits/DEPLOY_2026-10-12_5d29abb41.md), and the untagged `79cbb2615` that followed it: [DEPLOY_2026-10-13_79cbb2615.md](docs/ops/audits/DEPLOY_2026-10-13_79cbb2615.md)
 - v2.2.4: [DEPLOY_2026-10-16_68ead4230.md](docs/ops/audits/DEPLOY_2026-10-16_68ead4230.md), and the untagged `03a6feed2` that followed it: [DEPLOY_2026-10-16_03a6feed2.md](docs/ops/audits/DEPLOY_2026-10-16_03a6feed2.md)
+- v2.3.0: [DEPLOY_2026-10-22_339c775cd.md](docs/ops/audits/DEPLOY_2026-10-22_339c775cd.md)
 
 Five untagged releases from `main` followed v2.0.1, each through the release workflow. On 2026-09-29: `bc5c07a2` (#1439, the payroll fix for the 2026-09-28 incident), `eaca2a7e` (#1440, a one-time payroll correction for teachers to review), `29b99b14` (#1442, the username retention check) and `00166e56` (#1443). None of these four has a release record in `docs/ops/audits/` yet. On 2026-09-30: `314158d53` (#1438, #1449, #1451).
 
