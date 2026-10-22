@@ -234,7 +234,7 @@ curl http://localhost:5000/health/status   # bounded status signals; no tenant d
 gunicorn wsgi:app --workers 4 --bind 0.0.0.0:8000
 ```
 
-The full procedure is [SOP-DEP-002](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md). Every release, tagged or not, has a dated record under [docs/ops/audits/](docs/ops/audits/), and each tagged release has [GitHub release notes](https://github.com/timwonderer/classroom-token-hub/releases) and a section in [CHANGELOG.md](CHANGELOG.md). The release in production is named at the top of this page.
+The full procedure is [SOP-DEP-002](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_Production_Transition_Runbook.md). Each release has a dated record under [docs/ops/audits/](docs/ops/audits/), except six untagged releases from before the recording procedure was settled: `bc5c07a2`, `eaca2a7e`, `29b99b14` and `00166e56` (2026-09-29), and `35bad089a` and `1cdbf03da` (2026-10-05 and 2026-10-06). All six are covered by the CHANGELOG, and the later records note the gap. Each tagged release has [GitHub release notes](https://github.com/timwonderer/classroom-token-hub/releases) and a section in [CHANGELOG.md](CHANGELOG.md). The release in production is named at the top of this page.
 
 ### Known limits of the release evidence
 
