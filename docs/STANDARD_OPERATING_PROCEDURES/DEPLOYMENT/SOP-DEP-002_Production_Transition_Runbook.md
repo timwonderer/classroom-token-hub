@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-002 | 1.11 | 2026-10-14 | 1.10 | Normative |
+| SOP-DEP-002 | 1.12 | 2026-10-22 | 1.11 | Normative |
 
 > [!IMPORTANT]
 > **v1.11 (2026-10-14), documentation modernization.** §VIII and §X's verification checklist cited verification routes by `join_code`: `/admin/export-students?join_code=<owned-join-code>` and `POST /student/switch-class/<join_code>`. Checked against the live routes — `/admin/export-students` takes no query parameter at all (the class comes from the admin's session/sidebar context via `_resolve_admin_class_context`), and `/student/switch-class/<class_id>` takes `class_id` as its path parameter, not `join_code`. Corrected both to match, bringing this document in line with `SOP-DEP-001` §XI, which already states the canonical route takes `class_id` and that `join_code` there is the retired alias form.
@@ -199,17 +199,16 @@ Untagged hotfixes follow steps 3-12 and record any step they skip; they have no 
 
 ## VIII. Post-Migration Verification
 
-Verify:
+Verify on the host:
 
 - app boots normally
-- `/admin/login` and `/student/login` load
-- `/docs` loads
-- teacher current-class switching works via `POST /admin/current-class`
-- student add-class and switch-class flows work
-- class-scoped admin actions respect membership
-- selected-class export works via `/admin/export-students` (class comes from the admin's session/sidebar context, not a query parameter)
-- hall-pass verification path works via `/verify/hallpass/<teacher_public_token>`
+- `/admin/login`, `/student/login` and `/docs` load
 - no unexpected migration head drift is present
+
+Then the browser validation: `SOP-DEP-001B` for a release (the features the release changes, features connected
+to those changes, and features with a known problem), or `SOP-DEP-001A` for a first deployment or a release the
+owner designates as full. Features outside a release's scope are covered by the release suite, not checked in the
+browser.
 
 ## IX. Rollback Policy
 
@@ -304,6 +303,8 @@ Record:
 
 ## XIII. Amendment
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.
+
+**Version 1.12 (2026-10-22):** §VIII's fixed browser list is replaced by `SOP-DEP-001B` for releases and `SOP-DEP-001A` for a first deployment or a release the owner designates as full; the host checks stay. Owner rulings, 2026-10-22 (v2.3.0).
 
 **Version 1.10 (2026-10-13):** adds §V.1, the single-maintainer limitation: the `production` environment has no
 required reviewers, and environment approval means the branch policy plus the operator's recorded go-ahead under
