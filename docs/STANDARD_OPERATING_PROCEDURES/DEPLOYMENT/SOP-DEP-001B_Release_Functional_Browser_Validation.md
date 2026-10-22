@@ -35,9 +35,14 @@ feature is in scope when any of these holds:
 1. **Directly changed.** The release changes the feature's route, template, page script or stylesheet, its service
    or FEAT, or the migration behind the table it writes.
 2. **Connected.** The feature runs through something the release changes without being its subject: a shared
-   layout, component, macro, script or stylesheet; a shared service, model or table; a dependency upgrade on its
-   path (an authentication or session library for sign-in, the WSGI server for every request); or a new constraint
-   on a table it writes.
+   layout, component, macro, script or stylesheet; a shared service, model or table; a dependency that the feature
+   specifically uses (a payment, export or rendering library); or a new constraint on a table it writes.
+
+   A **platform-wide** dependency, one every request passes through (the WSGI server, the database driver, the
+   session or cryptography library, the cache client), does not pull every feature into scope. It is evidenced
+   representatively: any feature the release exercises on that build ran through it. Record it as one row, with
+   the requests that evidence it. A platform dependency puts a particular feature in scope only when its changelog
+   names a change that feature relies on.
 3. **Known problem.** The feature has an open defect report or support ticket, or the release fixes a reported
    defect in it.
 
