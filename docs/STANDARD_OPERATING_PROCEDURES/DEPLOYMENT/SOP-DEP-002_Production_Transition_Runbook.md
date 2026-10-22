@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-002 | 1.12 | 2026-10-22 | 1.11 | Normative |
+| SOP-DEP-002 | 1.13 | 2026-10-22 | 1.12 | Normative |
 
 > [!IMPORTANT]
 > **v1.11 (2026-10-14), documentation modernization.** §VIII and §X's verification checklist cited verification routes by `join_code`: `/admin/export-students?join_code=<owned-join-code>` and `POST /student/switch-class/<join_code>`. Checked against the live routes — `/admin/export-students` takes no query parameter at all (the class comes from the admin's session/sidebar context via `_resolve_admin_class_context`), and `/student/switch-class/<class_id>` takes `class_id` as its path parameter, not `join_code`. Corrected both to match, bringing this document in line with `SOP-DEP-001` §XI, which already states the canonical route takes `class_id` and that `join_code` there is the retired alias form.
@@ -136,7 +136,8 @@ advisory and are recorded as such, never as the independent verifier.
 7. **Restore check.** The owner copies the `age` key to the clipboard and runs
    `umask 077; pbpaste > ~/cth-backup/identity.txt`. Then `bash infra/db-backup/prerelease.sh restore` checks
    the key against `recipients.txt`, restores into the in-memory database, runs the manifest and no-resurrection
-   checks, deletes the identity with `rm -P`, and stops the verify container. Both checks must PASS.
+   checks, deletes the identity with `rm -P`, closes the SSH tunnel to production, and stops the verify container.
+   Both checks must PASS. A run abandoned before `restore` closes the tunnel with `prerelease.sh close-tunnel`.
 8. **Balance baseline**, read with the application stopped. Each snapshot is compared only with the ledger rows
    at or below its `reconciled_through_posting_sequence` (`DOM-LED-001` §VIII.2); later rows are pending and are
    reported apart:
@@ -303,6 +304,8 @@ Record:
 
 ## XIII. Amendment
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.
+
+**Version 1.13 (2026-10-22):** §VII.A step 7: `prerelease.sh restore` also closes the SSH tunnel to production, and an abandoned run closes it with `prerelease.sh close-tunnel`. The tunnel had never been closed: the v2.2.4 one was still listening six days later and blocked the v2.3.0 backup.
 
 **Version 1.12 (2026-10-22):** §VIII's fixed browser list is replaced by `SOP-DEP-001B` for releases and `SOP-DEP-001A` for a first deployment or a release the owner designates as full; the host checks stay. Owner rulings, 2026-10-22 (v2.3.0).
 

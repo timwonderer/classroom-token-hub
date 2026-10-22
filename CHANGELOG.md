@@ -8,6 +8,10 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The pre-release backup script left an SSH tunnel to the production database open indefinitely** (`infra/db-backup/prerelease.sh`). `backup` started `ssh -f -N -L 55433:…` and nothing closed it; the v2.2.4 tunnel was still listening six days later and made the v2.3.0 backup refuse to start. The tunnel is now owned through a control socket (`~/cth-backup/tunnel.sock`). `backup` keeps it on success, because `counts` and `restore` need it, and closes it on failure. `counts` and `restore` reuse or reopen it. `restore`, the last step, closes it on exit alongside deleting the identity, which now falls back to `rm -f` so a failed `rm -P` cannot skip the close. `close-tunnel` handles an abandoned run. `tests/test_prerelease_tunnel.py` runs the real script against stub `ssh`, `docker` and tools in a throwaway HOME; 6 of its 7 tests fail on the previous script. `SOP-DEP-002` 1.13 step 7 and `infra/db-backup/README.md` describe the lifecycle.
+
 ## [2.3.0] - 2026-10-22 — Accessible in-app dialogs, Delete Class and status page fixes, closed ledger type vocabulary
 
 Released as `339c775cd` on 2026-10-22 at 04:38 UTC by release run [39723426818](https://github.com/timwonderer/classroom-token-hub/actions/runs/39723426818). Migration `a4d7e9c2f1b6`. Record: [DEPLOY_2026-10-22_339c775cd.md](docs/ops/audits/DEPLOY_2026-10-22_339c775cd.md). Includes `03a6feed2`, released untagged on 2026-10-16 at 04:29 UTC by release run [38850886428](https://github.com/timwonderer/classroom-token-hub/actions/runs/38850886428) ([record](docs/ops/audits/DEPLOY_2026-10-16_03a6feed2.md)): #1592 (premium helper monthly rent).
