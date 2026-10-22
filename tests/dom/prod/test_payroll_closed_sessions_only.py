@@ -18,6 +18,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -47,6 +48,7 @@ from app.services.payroll.settlement import (
     NoPayableAttendanceError,
     settle_class_payroll_cycle,
 )
+from app.utils import canonical_temporal_resolver as resolver_module
 from app.utils.canonical_temporal_resolver import utc_now
 from tests.helpers.classroom_initializer import initialize, initialize_as_teacher
 
@@ -264,7 +266,30 @@ def test_DOM_PROD_001__run_payroll_route_explains_a_refused_run(client):
     assert PayrollCycleCompletion.query.filter_by(class_id=cid).count() == 0
 
 
-def test_DOM_PROD_001__automatic_payroll_waits_for_a_closed_session(app):
+@pytest.fixture
+def class_local_noon(monkeypatch):
+    """Shift the resolver clock to noon of today's class-local day.
+
+    Every active session closes at the class-day boundary (FEAT-PROD-001), so a
+    session opened 20 minutes ago would start on the previous day for a run in
+    the first 20 minutes after midnight. Shifted, not frozen: two settings rows
+    stamped at one instant would collide on uq_payroll_settings_class_effective_created.
+    """
+    base = resolver_module.datetime
+    now = base.now(timezone.utc)
+    # The provisioned class's timezone (tests/helpers/canonical_identities.py).
+    noon = now.astimezone(ZoneInfo("America/Los_Angeles")).replace(hour=12, minute=0, second=0, microsecond=0)
+    offset = noon - now
+
+    class _Shifted(base):
+        @classmethod
+        def now(cls, tz=None):
+            return base.now(tz) + offset
+
+    monkeypatch.setattr(resolver_module, "datetime", _Shifted)
+
+
+def test_DOM_PROD_001__automatic_payroll_waits_for_a_closed_session(app, class_local_noon):
     classroom = initialize("chemistry_p1", app)
     cid = classroom.class_id
     seat_id = classroom.students[0].seat.id
