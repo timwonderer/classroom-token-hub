@@ -283,6 +283,9 @@ Their surviving content lives at:
 **Version 3.37 (2026-10-22):**
 - Register SOP-DEP-002 v1.14: CHANGELOG entries carry a release-notes section tag; release notes are rendered as Highlights, Fixed, Security & Reliability, Accessibility and Internal Changes.
 
+**Version 3.36 (2026-10-22):**
+- Register SOP-DEP-002 v1.13: §VII.A step 7 closes the pre-release SSH tunnel to production (`prerelease.sh restore`, or `close-tunnel` for an abandoned run).
+
 **Version 3.35 (2026-10-22):**
 - Register SOP-DEP-001A v1.0 (Initial Deployment Browser Validation) and SOP-DEP-001B v1.0 (Release Functional Browser Validation), extracted from SOP-DEP-001 §XI with separate mechanisms: initial deployment requires every item; a release checks directly changed, connected and known-problem features. Register SOP-DEP-001 v2.10 (§XI points to the templates) and SOP-DEP-002 v1.12 (§VIII uses them). Owner rulings, 2026-10-22 (v2.3.0).
 

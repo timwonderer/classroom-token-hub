@@ -138,7 +138,8 @@ advisory and are recorded as such, never as the independent verifier.
 7. **Restore check.** The owner copies the `age` key to the clipboard and runs
    `umask 077; pbpaste > ~/cth-backup/identity.txt`. Then `bash infra/db-backup/prerelease.sh restore` checks
    the key against `recipients.txt`, restores into the in-memory database, runs the manifest and no-resurrection
-   checks, deletes the identity with `rm -P`, and stops the verify container. Both checks must PASS.
+   checks, deletes the identity with `rm -P`, closes the SSH tunnel to production, and stops the verify container.
+   Both checks must PASS. A run abandoned before `restore` closes the tunnel with `prerelease.sh close-tunnel`.
 8. **Balance baseline**, read with the application stopped. Each snapshot is compared only with the ledger rows
    at or below its `reconciled_through_posting_sequence` (`DOM-LED-001` §VIII.2); later rows are pending and are
    reported apart:
@@ -311,6 +312,8 @@ Record:
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.
 
 **Version 1.14 (2026-10-22):** §VII.A steps 1 and 13: each CHANGELOG entry carries an invisible release-notes tag (`fixed`, `security-reliability`, `accessibility`, `internal`, optionally `highlight`); `scripts/release_notes.py` renders Highlights, Fixed, Security & Reliability, Accessibility and Internal Changes with full entries collapsed and the deployment record linked last, and refuses an untagged entry. Owner, 2026-10-22: the verbatim notes were unreadable. Follows 1.13 (#1632).
+
+**Version 1.13 (2026-10-22):** §VII.A step 7: `prerelease.sh restore` also closes the SSH tunnel to production, and an abandoned run closes it with `prerelease.sh close-tunnel`. The tunnel had never been closed: the v2.2.4 one was still listening six days later and blocked the v2.3.0 backup.
 
 **Version 1.12 (2026-10-22):** §VIII's fixed browser list is replaced by `SOP-DEP-001B` for releases and `SOP-DEP-001A` for a first deployment or a release the owner designates as full; the host checks stay. Owner rulings, 2026-10-22 (v2.3.0).
 
