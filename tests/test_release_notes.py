@@ -52,3 +52,84 @@ def test_release_notes_extracts_title_body_and_sha():
 def test_release_notes_refuses_a_section_out_of_shape(mutate, reason):
     with pytest.raises(ValueError, match=reason):
         release_notes.extract(mutate(GOOD), "9.9.9")
+
+
+TAGGED = f"""## [9.9.9] - 2026-10-22 — A title
+
+Released as `abc1234` on 2026-10-22 at 04:38 UTC by release run [123]({RUN}). Migration `a1b2c3d4`. Record: [DEPLOY_2026-10-22_abc1234.md](docs/ops/audits/DEPLOY_2026-10-22_abc1234.md). Includes `def5678`.
+
+### Changed
+
+- <!-- notes: internal --> **Dependencies.** gunicorn 26.2.0 (#1380), mentioned for context only.
+- <!-- notes: security-reliability --> **Ledger type vocabulary is closed** (`DOM-LED-001`). Follows #1599.
+
+### Fixed
+
+- <!-- notes: fixed, highlight --> **Delete Class works again** (#1624). A long paragraph of detail.
+  - a sub-bullet that stays with its entry
+- <!-- notes: accessibility --> **Buttons keep contrast under keyboard focus** (#1626, #1630).
+
+### Security
+
+- <!-- notes: security-reliability, highlight --> **Operator console verifies the signed assertion** (#1618).
+"""
+
+
+def _rendered(text=TAGGED):
+    _, body, _ = release_notes.extract(text, "9.9.9")
+    return release_notes.render(body)
+
+
+def test_render_orders_the_owner_sections_with_highlights_first():
+    notes = _rendered()
+    headings = [line for line in notes.splitlines() if line.startswith("## ")]
+    assert headings == ["## Highlights", "## Fixed", "## Security & Reliability", "## Accessibility", "## Internal Changes"]
+
+
+def test_render_lists_one_headline_per_entry_and_collapses_the_full_text():
+    notes = _rendered()
+    highlights = notes.split("## Highlights")[1].split("## Fixed")[0]
+    assert "- Delete Class works again (#1624)" in highlights
+    assert "- Operator console verifies the signed assertion (#1618)" in highlights
+    assert "A long paragraph of detail" not in highlights
+    fixed = notes.split("## Fixed")[1].split("## Security")[0]
+    assert "<details><summary>Full details</summary>" in fixed
+    assert "A long paragraph of detail" in fixed and "a sub-bullet that stays with its entry" in fixed
+
+
+def test_render_shows_only_the_prs_an_entry_cites_as_its_own():
+    notes = _rendered()
+    assert "- Dependencies\n" in notes            # #1380 is in the prose, not the headline's citation
+    assert "- Ledger type vocabulary is closed\n" in notes   # "Follows #1599" is context
+    assert "- Buttons keep contrast under keyboard focus (#1626, #1630)" in notes
+
+
+def test_render_hides_the_tags_and_links_the_deployment_record_last():
+    notes = _rendered()
+    assert "<!-- notes:" not in notes
+    assert notes.startswith("Released 2026-10-22 at 04:38 UTC. Migration `a1b2c3d4`.")
+    tail = notes.split("\n---\n")[1]
+    assert "Deployment record: [DEPLOY_2026-10-22_abc1234.md](https://github.com/" in tail
+    assert "Release run: [123](" in tail and "Includes `def5678`." in tail
+
+
+@pytest.mark.parametrize(
+    "mutate, reason",
+    [
+        (lambda s: s.replace("- <!-- notes: accessibility --> ", "- "), "no '<!-- notes"),
+        (lambda s: s.replace("notes: accessibility", "notes: a11y"), "unknown notes section"),
+    ],
+)
+def test_render_refuses_an_entry_without_a_known_section(mutate, reason):
+    with pytest.raises(ValueError, match=reason):
+        _rendered(mutate(TAGGED))
+
+
+def test_title_mode_works_for_a_release_from_before_the_notes_tags():
+    # Review on #1633: --title rendered the body first, so an untagged historical release (v2.2.4) failed.
+    import subprocess, sys
+    root = Path(__file__).resolve().parents[1]
+    result = subprocess.run([sys.executable, "scripts/release_notes.py", "2.2.4", "--title"],
+                            cwd=root, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.startswith("v2.2.4 — ")

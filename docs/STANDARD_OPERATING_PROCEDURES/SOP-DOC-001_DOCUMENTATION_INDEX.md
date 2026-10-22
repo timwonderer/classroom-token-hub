@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.36 | 2026-10-22 | 3.35 | Normative |
+| SOP-DOC-001 | 3.37 | 2026-10-22 | 3.36 | Normative |
 
 ---
 
@@ -279,6 +279,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.37 (2026-10-22):**
+- Register SOP-DEP-002 v1.14: CHANGELOG entries carry a release-notes section tag; release notes are rendered as Highlights, Fixed, Security & Reliability, Accessibility and Internal Changes.
 
 **Version 3.36 (2026-10-22):**
 - Register SOP-DEP-002 v1.13: §VII.A step 7 closes the pre-release SSH tunnel to production (`prerelease.sh restore`, or `close-tunnel` for an abandoned run).
