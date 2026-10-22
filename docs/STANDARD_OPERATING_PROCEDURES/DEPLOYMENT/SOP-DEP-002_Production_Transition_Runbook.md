@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-002 | 1.13 | 2026-10-22 | 1.12 | Normative |
+| SOP-DEP-002 | 1.14 | 2026-10-22 | 1.13 | Normative |
 
 > [!IMPORTANT]
 > **v1.11 (2026-10-14), documentation modernization.** §VIII and §X's verification checklist cited verification routes by `join_code`: `/admin/export-students?join_code=<owned-join-code>` and `POST /student/switch-class/<join_code>`. Checked against the live routes — `/admin/export-students` takes no query parameter at all (the class comes from the admin's session/sidebar context via `_resolve_admin_class_context`), and `/student/switch-class/<class_id>` takes `class_id` as its path parameter, not `join_code`. Corrected both to match, bringing this document in line with `SOP-DEP-001` §XI, which already states the canonical route takes `class_id` and that `join_code` there is the retired alias form.
@@ -111,7 +111,9 @@ advisory and are recorded as such, never as the independent verifier.
    every PR merged since the previous tag has an entry (`git log --merges vPREV..origin/main`) and that every entry
    in the section belongs to a PR in that range (`git merge-base --is-ancestor <merge> vPREV` is false). Subsections
    appear only from this list, in this order, each once: Added, Changed, Deprecated, Removed, Fixed, Security,
-   Investigated, no code change. Required checks green and review threads resolved; merge. The merge commit, now
+   Investigated, no code change. Each entry also names its release-notes section in an invisible tag after its
+   bullet, `- <!-- notes: fixed|security-reliability|accessibility|internal[, highlight] --> **Headline** ...`
+   (step 13). Required checks green and review threads resolved; merge. The merge commit, now
    the tip of `main`, is the release SHA.
 2. **Full suite on the release SHA**, locally (about four hours; CI's run times out). It passes before dispatch.
    Exception: a security or data-integrity fix may be dispatched first and the suite run afterwards; the release
@@ -193,8 +195,12 @@ advisory and are recorded as such, never as the independent verifier.
     gh release create vX.Y.Z --verify-tag --title "$(python3 scripts/release_notes.py X.Y.Z --title)" --notes-file /tmp/notes.md
     ```
 
-    The script refuses a section out of shape (heading, `Released as` line, subsection names and order) and a tag
-    that does not point at the `Released as` SHA. Fix the CHANGELOG, not the notes.
+    The notes are grouped for readers: Highlights (entries tagged `highlight`), then Fixed, Security & Reliability,
+    Accessibility and Internal Changes, each listing one headline per entry with the full entries collapsed, and
+    the deployment record and release run linked at the end (owner, 2026-10-22). The script refuses a section out
+    of shape (heading, `Released as` line, subsection names and order), an entry without a known notes tag, and a
+    tag that does not point at the `Released as` SHA. Fix the CHANGELOG, not the notes. `--raw` prints the section
+    verbatim.
 
 Untagged hotfixes follow steps 3-12 and record any step they skip; they have no tag, so no step 13.
 
@@ -304,6 +310,8 @@ Record:
 
 ## XIII. Amendment
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.
+
+**Version 1.14 (2026-10-22):** §VII.A steps 1 and 13: each CHANGELOG entry carries an invisible release-notes tag (`fixed`, `security-reliability`, `accessibility`, `internal`, optionally `highlight`); `scripts/release_notes.py` renders Highlights, Fixed, Security & Reliability, Accessibility and Internal Changes with full entries collapsed and the deployment record linked last, and refuses an untagged entry. Owner, 2026-10-22: the verbatim notes were unreadable. Follows 1.13 (#1632).
 
 **Version 1.13 (2026-10-22):** §VII.A step 7: `prerelease.sh restore` also closes the SSH tunnel to production, and an abandoned run closes it with `prerelease.sh close-tunnel`. The tunnel had never been closed: the v2.2.4 one was still listening six days later and blocked the v2.3.0 backup.
 
