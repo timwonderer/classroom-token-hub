@@ -8,6 +8,10 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Changed
+
+- <!-- notes: internal --> **The README stops keeping its own copy of release state.** It re-stated each release four times (the production line, a tag-by-tag sentence, a narrative of untagged releases, and a "Known limits" snapshot frozen at v2.0.1), so it went stale with every release. It now names the release in production once and points to the release records, the GitHub releases and the CHANGELOG; known limits live in the current release record.
+
 ## [2.3.0] - 2026-10-22 — Accessible in-app dialogs, Delete Class and status page fixes, closed ledger type vocabulary
 
 Released as `339c775cd` on 2026-10-22 at 04:38 UTC by release run [39723426818](https://github.com/timwonderer/classroom-token-hub/actions/runs/39723426818). Migration `a4d7e9c2f1b6`. Record: [DEPLOY_2026-10-22_339c775cd.md](docs/ops/audits/DEPLOY_2026-10-22_339c775cd.md). Includes `03a6feed2`, released untagged on 2026-10-16 at 04:29 UTC by release run [38850886428](https://github.com/timwonderer/classroom-token-hub/actions/runs/38850886428) ([record](docs/ops/audits/DEPLOY_2026-10-16_03a6feed2.md)): #1592 (premium helper monthly rent).
