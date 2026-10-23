@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-002 | 1.14 | 2026-10-22 | 1.13 | Normative |
+| SOP-DEP-002 | 1.15 | 2026-10-22 | 1.14 | Normative |
 
 > [!IMPORTANT]
 > **v1.11 (2026-10-14), documentation modernization.** §VIII and §X's verification checklist cited verification routes by `join_code`: `/admin/export-students?join_code=<owned-join-code>` and `POST /student/switch-class/<join_code>`. Checked against the live routes — `/admin/export-students` takes no query parameter at all (the class comes from the admin's session/sidebar context via `_resolve_admin_class_context`), and `/student/switch-class/<class_id>` takes `class_id` as its path parameter, not `join_code`. Corrected both to match, bringing this document in line with `SOP-DEP-001` §XI, which already states the canonical route takes `class_id` and that `join_code` there is the retired alias form.
@@ -177,7 +177,9 @@ advisory and are recorded as such, never as the independent verifier.
 11. **Reopen** by changing the Access policy (§VI).
 12. **Release record PR.** `docs/ops/audits/DEPLOY_<UTC date>_<short SHA>.md`, in the shape of the previous one:
     identity table, contents, migrations, §VI checks (backup stem, `taken_at`, revision, `artifact_sha256`, both
-    restore results), baseline, release run, §VIII results, rollback, follow-ups. In the same PR, update the
+    restore results), baseline, release run, §VIII results, rollback, follow-ups. Each follow-up is an issue on the
+    [CTH Backlog](https://github.com/users/timwonderer/projects/6) project, opened before the record merges, and the record links it rather than
+    describing open work in prose. In the same PR, update the
     version in `README.md` and `DEVELOPMENT.md`, and make the first line of the CHANGELOG section exactly:
 
     ```text
@@ -303,13 +305,15 @@ Record:
 ## XII. Deferral Boundary
 
 - This runbook is limited to launch-critical transition steps and operator records.
-- Broader operational taxonomy changes and route-family cleanup are outside this runbook and are tracked in `docs/TRACKING/POST_LAUNCH_TRACKER_2026.md`.
+- Broader operational taxonomy changes and route-family cleanup are outside this runbook and are tracked as issues on the [CTH Backlog](https://github.com/users/timwonderer/projects/6) project.
 - Version 1.5 deferred them until after two documents. One, `SPECS/V2_ADMIN_ROUTE_REFACTOR.md`, was never written. The other, `MAP-CLASS-002` (archived 2026-09-28), described the `class_id`-first model that INV-ARC-019 and DOM-IDEN-001 now govern. Version 1.6 changes no procedure in this runbook.
 
 
 
 ## XIII. Amendment
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.
+
+**Version 1.15 (2026-10-22):** §VII.A step 12: each release-record follow-up is filed as an issue on the CTH Backlog project and linked from the record; §XII names the project instead of the archived post-launch tracker. Owner, 2026-10-22: the backlog moved to GitHub Issues.
 
 **Version 1.14 (2026-10-22):** §VII.A steps 1 and 13: each CHANGELOG entry carries an invisible release-notes tag (`fixed`, `security-reliability`, `accessibility`, `internal`, optionally `highlight`); `scripts/release_notes.py` renders Highlights, Fixed, Security & Reliability, Accessibility and Internal Changes with full entries collapsed and the deployment record linked last, and refuses an untagged entry. Owner, 2026-10-22: the verbatim notes were unreadable. Follows 1.13 (#1632).
 

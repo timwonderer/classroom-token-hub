@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SPEC-ECON-001    | 1.3     | 2026-09-30     | 1.2        | Normative       |
+| SPEC-ECON-001    | 1.4     | 2026-10-22     | 1.3        | Normative       |
 
 ---
 
@@ -490,6 +490,7 @@ Revisions to this document SHALL:
 
 ### Revision history
 
+- **1.4 (2026-10-22)** — Appendix A, KD-1: tracked in issue #1646; the post-launch tracker it named is archived. No rule changes.
 - **1.3 (2026-09-30)** — Operator ruling 2026-09-30: `policy_versions` / `policy_transitions` are retired. §14.1 item 4 reads banking terms from the `economic_engine` version in force; §14.2's transition-activation protocol is withdrawn; §9.2's rate for a day is the version in force by `effective_at`, so a rate dated for later never accrues early.
 - **1.2 (2026-09-30)** — Operator ruling 2026-09-30. §5.2 states the day-count convention
   explicitly: annual rate ÷ 365 in every year, leap years included, for runtime and forecast
@@ -520,6 +521,6 @@ and relaxes no rule; the sections it cites govern. An entry is removed when the 
 | Rule | §4.1: under simple interest, previously accrued **or previously paid** interest SHALL NOT participate in future accrual. |
 | Runtime | Accrued interest stays out of the earning base within a payout window, as §6.2 requires. Once a window is credited, the credit is part of the posted savings balance, and every later day's earning base is that posted balance (§9.2), for every calculation type. Under simple interest, credited interest therefore earns interest in later windows. |
 | Effect | A class set to simple interest earns slightly more than simple interest from the second payout window on. Over months the growth is close to compounding at the payout frequency. |
-| Status | Known, deferred (operator ruling 2026-09-30). The simple option stays available. Tracked in `docs/TRACKING/POST_LAUNCH_TRACKER_2026.md`. |
+| Status | Known, deferred (operator ruling 2026-09-30). The simple option stays available. Tracked in issue #1646. |
 | Disclosure | While KD-1 stands, the teacher banking settings and the user guides say that paid interest also earns under simple interest, and none describes simple interest as fully supported (operator ruling 2026-09-30). |
 

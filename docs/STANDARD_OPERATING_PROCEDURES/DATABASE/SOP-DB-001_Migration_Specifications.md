@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DB-001       | 1.7     | 2026-10-06     | 1.6 | Normative |
+| SOP-DB-001       | 1.8     | 2026-10-22     | 1.7 | Normative |
 
 > [!NOTE]
 > v1.1 (2026-09-14) adds §V.A, a named exception to Golden Rule 3. Rule 3 is not weakened:
@@ -21,6 +21,9 @@
 > v1.7 (2026-10-06): Phase 1 of the Schema Contraction Policy no longer says the application supports
 > both forms. Physical schema coexistence is permitted; dual-write, fallback and heuristic
 > interpretation are not (`SOP-DB-004` §VII, owner ruling 2026-10-06). No other rule changes.
+>
+> v1.8 (2026-10-22): the baseline reconstruction is tracked in issue #1649; the post-launch tracker
+> it named is archived. No rule changes.
 
 > [!IMPORTANT]
 > This is the **Single Source of Truth** for all database migration policies, best practices, and workflows in the Classroom Economy project. All contributors must adhere to these standards.
@@ -222,8 +225,8 @@ Proven by execution, not by argument, and reported with its exact command and sc
 The full remedy is a baseline that reconstructs the schema as it stood when the historical
 migrations were written, so each one executes against the schema it was written against. The
 freeze above stopped new drift; the reconstruction is still open, tracked as post-launch
-architectural debt in `docs/TRACKING/POST_LAUNCH_TRACKER_2026.md` §VI (carried from the pre-launch
-ship tracker, archived 2026-09-28). The bootstrap is itself a
+architectural debt in issue #1649 (carried from the post-launch tracker, archived 2026-10-22, and
+before it the pre-launch ship tracker, archived 2026-09-28). The bootstrap is itself a
 merged migration, so the remedy is a baseline replacement, not an edit under this section.
 
 #### Register of corrections

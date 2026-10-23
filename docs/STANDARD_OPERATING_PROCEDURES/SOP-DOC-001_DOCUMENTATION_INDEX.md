@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.37 | 2026-10-22 | 3.36 | Normative |
+| SOP-DOC-001 | 3.38 | 2026-10-22 | 3.37 | Normative |
 
 ---
 
@@ -279,6 +279,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.38 (2026-10-22):**
+- Register SPEC-ECON-001 v1.4, SOP-DB-001 v1.8 and SOP-DEP-002 v1.15: the backlog moved from the post-launch tracker (archived to `docs/archive/v2-tracking-2026/POST_LAUNCH_TRACKER_2026.md`) to GitHub Issues and the CTH Backlog project; release-record follow-ups are filed as issues.
 
 **Version 3.37 (2026-10-22):**
 - Register SOP-DEP-002 v1.14: CHANGELOG entries carry a release-notes section tag; release notes are rendered as Highlights, Fixed, Security & Reliability, Accessibility and Internal Changes.
