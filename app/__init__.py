@@ -633,10 +633,8 @@ def create_app():
         # nginx: it is a host-local caller such as the Prometheus /metrics
         # scrape or an operator's curl over Tailscale. It cannot have
         # bypassed Cloudflare, so there is nothing to warn about.
-        if request.remote_addr in ('127.0.0.1', '::1') and not any(
-            request.headers.get(h)
-            for h in ('X-CF-Edge-IP', 'X-Real-IP', 'X-Forwarded-For', 'CF-Connecting-IP')
-        ):
+        from app.utils.ip_handler import is_host_local_request
+        if is_host_local_request():
             return None
 
         # Only check in production
@@ -985,7 +983,8 @@ def create_app():
     def prometheus_metrics():
         # Exempt from the per-client default limits: only a local scraper can
         # reach it, and a one-minute scrape alone exceeds "500 per day".
-        if request.remote_addr not in {"127.0.0.1", "::1"}:
+        from app.utils.ip_handler import is_host_local_request
+        if not is_host_local_request():
             return "Not Found", 404
         return metrics_payload(), 200, {"Content-Type": "text/plain; version=0.0.4; charset=utf-8"}
 
