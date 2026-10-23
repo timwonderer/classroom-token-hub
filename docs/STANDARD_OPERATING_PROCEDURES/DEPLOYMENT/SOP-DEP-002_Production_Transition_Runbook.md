@@ -311,6 +311,7 @@ Record:
 
 
 ## XIII. Amendment
+
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.
 
 **Version 1.15 (2026-10-22):** §VII.A step 12: each release-record follow-up is filed as an issue on the CTH Backlog project and linked from the record; §XII names the project instead of the archived post-launch tracker. Owner, 2026-10-22: the backlog moved to GitHub Issues.

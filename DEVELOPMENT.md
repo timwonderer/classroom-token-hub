@@ -20,7 +20,7 @@
 > There is no tracker file. The pre-launch ship tracker (`PRODUCTION_READINESS_2026-09.md`) was archived
 > on 2026-09-28, and the post-launch tracker (`POST_LAUNCH_TRACKER_2026.md`) on 2026-10-22, both to
 > `docs/archive/v2-tracking-2026/`. They are history, not status. The post-launch tracker's open items
-> were re-verified against `main` and filed as issues #1635–#1659.
+> were re-verified against `main` and filed as issues #1635–#1659 (two folded into #1505 and #1507).
 
 ## Branch and Database Truth
 
