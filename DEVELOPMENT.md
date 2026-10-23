@@ -7,7 +7,7 @@
 
 ## Quick Links
 
-- **[Post-Launch Tracker](docs/TRACKING/POST_LAUNCH_TRACKER_2026.md)** - The tracker of record: operator follow-ups, surfaces not yet exercised in production, code hygiene, dependencies, deferred features
+- **[CTH Backlog](https://github.com/users/timwonderer/projects/6)** - The backlog: every open bug, operator follow-up, production check, dependency, cleanup and deferred feature is an issue on this project
 - **[CHANGELOG](CHANGELOG.md)** - What changed, by release
 - **[Core Invariants](docs/INVARIANT/CORE/INV-CORE-000_CORE_INVARIANTS.md)** - Non-negotiable system laws
 - **[Capability-Based Architecture and Authority Model](docs/INVARIANT/CORE/INV-CORE-001_CAPABILITY_BASED_ARCHITECTURE_AND_AUTHORITY_MODEL.md)** - System design, the `INV → DOM → FEAT` hierarchy, and where authority lives
@@ -17,10 +17,10 @@
 - **[Design Principles & Project History](docs/PRINCIPLES/PROJECT_PHILOSOPHY/PRN-PHL-001_Design_Principles_And_Project_History.md)** - Why the system is shaped the way it is
 
 > [!NOTE]
-> The pre-launch ship tracker (`PRODUCTION_READINESS_2026-09.md`) and the other launch-era working
-> documents were archived on 2026-09-28 to `docs/archive/v2-tracking-2026/`. They are history, not
-> status. Their open items were re-verified against the code and carried into the post-launch
-> tracker.
+> There is no tracker file. The pre-launch ship tracker (`PRODUCTION_READINESS_2026-09.md`) was archived
+> on 2026-09-28, and the post-launch tracker (`POST_LAUNCH_TRACKER_2026.md`) on 2026-10-22, both to
+> `docs/archive/v2-tracking-2026/`. They are history, not status. The post-launch tracker's open items
+> were re-verified against `main` and filed as issues #1635–#1659 (two folded into #1505 and #1507).
 
 ## Branch and Database Truth
 
@@ -119,21 +119,15 @@ on a custom database URL.
 
 ### Next
 
-The post-launch tracker is the working list. In priority order:
+The [CTH Backlog](https://github.com/users/timwonderer/projects/6) project is the working list; this section only names what is most pressing.
 
-1. **Operator follow-ups.** Record the 2026-09-29 releases contained in v2.1.0, apply the Grafana nginx
-   snippet, check the remaining public routes, and work through the follow-ups in the v2.1.1 record. The
-   student-setup Redis host settings were confirmed on 2026-10-04.
-2. **First real use.** Signed-in flows other than teacher passkeys, rent payment (its preview
-   window opens 2026-09-29), daylight-saving transitions and load have not yet run in production.
-3. **Dependencies.** Twelve open Dependabot PRs have been reviewed, with a suggested merge order. CI
-   on a pip bump does not run the application suite, so run it before merging.
-4. **Hygiene.** Dead imports and deprecated waiver helpers, the `Seat.block` shim, an unused
-   `app/utils/deletion.py`, and two rent-disablement tests still to confirm.
-5. **Architecture.** Reconstruct the historical migration baseline so the two `SOP-DB-001` §V.B
-   corrections are no longer load-bearing.
-6. **Deferred features.** The bug-hunter badge system (needs SPEC renumbering) and the
-   support-content registry (pairs with accessibility work).
+1. **Identity sessions against DOM-IDEN.** Logout must end the server-side session and no auth page may change
+   the session on GET (#1635); the teacher session is a 10-minute idle timeout where DOM-IDEN-003 requires a
+   fixed 60 minutes (#1636).
+2. **Production checks before they bite.** DST ends 2026-11-01 (#1657); off-host backups are still manual
+   (#1639).
+3. **Ledger correctness.** The settlement/FEAT lock-order deadlock and its effect on interest (#1640).
+4. **Architecture convergence.** The U-series issues (#1496–#1510).
 
 ## v2 Technical Direction
 
@@ -154,7 +148,8 @@ The post-launch tracker is the working list. In priority order:
 - Normative documents define the target state. When code and an `INV`/`DOM`/`FEAT` document
   disagree, the gap is a finding against the code.
 - Every production release gets a dated record in `docs/ops/audits/` and a CHANGELOG section.
-- Update the post-launch tracker in place and record each closure with its commit SHA. When a
-  document stops describing live work, archive it with a reason; don't delete it.
+- Open work is an issue on the CTH Backlog project, closed by the PR that resolves it. A release record
+  links its follow-up issues rather than describing open work in prose. When a document stops describing
+  live work, archive it with a reason; don't delete it.
 - Suite-green is not a launch signal on its own. The live-test campaign found defects in a real
   browser that no test was written to catch. Changes to user-facing flows get a browser pass.

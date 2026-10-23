@@ -2,10 +2,10 @@
 
 | Field | Value |
 |---|---|
-| Status | **ACTIVE — canonical tracker** |
+| Status | **ARCHIVED 2026-10-22.** Superseded by GitHub Issues and the [CTH Backlog](https://github.com/users/timwonderer/projects/6) project. Last brought up to date for v2.1.1 |
 | Opened | 2026-09-28, after the v2.0.1 release |
 | Baseline commit | `c42f882` (`main`) |
-| Production | v2.1.1 = `2bdfac65e`, deployed 2026-10-04 ([record](../ops/audits/DEPLOY_2026-10-04_2bdfac65e.md)). Latest tag `v2.1.1` |
+| Production | v2.1.1 = `2bdfac65e`, deployed 2026-10-04 ([record](../../ops/audits/DEPLOY_2026-10-04_2bdfac65e.md)). Latest tag `v2.1.1` |
 | Supersedes | `PRODUCTION_READINESS_2026-09.md`, the pre-launch ship tracker, archived at `docs/archive/v2-tracking-2026/` once launch closed its purpose |
 
 This file carries the open work that survived launch. Every item was checked against the code on
@@ -19,19 +19,19 @@ authority stays with `INV-*`, `DOM-*`, `FEAT-*`, `SPEC-*` and `SOP-*`.
 
 | Release | Commit | Date | Record |
 |---|---|---|---|
-| v2.0.0 | `26d1792b5` | 2026-09-26 | [TRANSITION_2026-09-26_26d1792b5.md](../ops/audits/TRANSITION_2026-09-26_26d1792b5.md) |
-| (untagged) | `4f9854fca` | 2026-09-27 | [DEPLOY_2026-09-27_4f9854fca.md](../ops/audits/DEPLOY_2026-09-27_4f9854fca.md) |
+| v2.0.0 | `26d1792b5` | 2026-09-26 | [TRANSITION_2026-09-26_26d1792b5.md](../../ops/audits/TRANSITION_2026-09-26_26d1792b5.md) |
+| (untagged) | `4f9854fca` | 2026-09-27 | [DEPLOY_2026-09-27_4f9854fca.md](../../ops/audits/DEPLOY_2026-09-27_4f9854fca.md) |
 | (untagged) | `efdf09eda` | 2026-09-27 | Covered by the v2.0.1 record |
-| v2.0.1 (security) | `ad64a473f` | 2026-09-28 | [DEPLOY_2026-09-28_ad64a473f.md](../ops/audits/DEPLOY_2026-09-28_ad64a473f.md) |
+| v2.0.1 (security) | `ad64a473f` | 2026-09-28 | [DEPLOY_2026-09-28_ad64a473f.md](../../ops/audits/DEPLOY_2026-09-28_ad64a473f.md) |
 | (untagged) | `bc5c07a2` (#1439) | 2026-09-29 | None yet |
 | (untagged) | `eaca2a7e` (#1440) | 2026-09-29 | None yet |
 | (untagged) | `29b99b14` (#1442) | 2026-09-29 | None yet |
 | (untagged) | `00166e56` (#1443) | 2026-09-29 | None yet |
-| (untagged) | `314158d53` (#1438, #1449, #1451) | 2026-09-30 | [DEPLOY_2026-09-30_314158d53.md](../ops/audits/DEPLOY_2026-09-30_314158d53.md) |
-| v2.1.0 | `5ac05ea6f` (#1464) | 2026-10-02 | [DEPLOY_2026-10-02_5ac05ea6f.md](../ops/audits/DEPLOY_2026-10-02_5ac05ea6f.md) |
-| (untagged) | `ad9574334` (#1470) | 2026-10-03 | [DEPLOY_2026-10-03_ad9574334.md](../ops/audits/DEPLOY_2026-10-03_ad9574334.md) |
+| (untagged) | `314158d53` (#1438, #1449, #1451) | 2026-09-30 | [DEPLOY_2026-09-30_314158d53.md](../../ops/audits/DEPLOY_2026-09-30_314158d53.md) |
+| v2.1.0 | `5ac05ea6f` (#1464) | 2026-10-02 | [DEPLOY_2026-10-02_5ac05ea6f.md](../../ops/audits/DEPLOY_2026-10-02_5ac05ea6f.md) |
+| (untagged) | `ad9574334` (#1470) | 2026-10-03 | [DEPLOY_2026-10-03_ad9574334.md](../../ops/audits/DEPLOY_2026-10-03_ad9574334.md) |
 | (untagged hotfix, off `main`) | `4c2fc4bc4` (#1476) | 2026-10-04 | Described in the v2.1.1 record |
-| v2.1.1 | `2bdfac65e` | 2026-10-04 | [DEPLOY_2026-10-04_2bdfac65e.md](../ops/audits/DEPLOY_2026-10-04_2bdfac65e.md); production runs this commit |
+| v2.1.1 | `2bdfac65e` | 2026-10-04 | [DEPLOY_2026-10-04_2bdfac65e.md](../../ops/audits/DEPLOY_2026-10-04_2bdfac65e.md); production runs this commit |
 
 ---
 
@@ -47,7 +47,7 @@ authority stays with `INV-*`, `DOM-*`, `FEAT-*`, `SPEC-*` and `SOP-*`.
 - [ ] **Check public routes** once the window lifts. They were not verified at release because the
   gate was in place. On 2026-10-04, after the v2.1.1 window, `/student/login` answered 200 from outside with no
   Access redirect; the other public routes are still unchecked.
-- [x] **Finish verifying the student-setup memory store.** Done 2026-10-04 in the v2.1.1 (`2bdfac65e`) window ([record](../ops/audits/DEPLOY_2026-10-04_2bdfac65e.md),
+- [x] **Finish verifying the student-setup memory store.** Done 2026-10-04 in the v2.1.1 (`2bdfac65e`) window ([record](../../ops/audits/DEPLOY_2026-10-04_2bdfac65e.md),
   §VI): no persistence, no slow log, no replicas, every listed command refused with `NOPERM`, and `LimitCORE=0` and
   `MemorySwapMax=0` on both units. The store is outside the backup design, which dumps only Postgres. Two follow-ups
   from that check are in the record: the host runs Redis 6.0.16 while the README says 7+, and the app runs as
@@ -329,7 +329,7 @@ against this tracker, the archived launch trackers and the live-test RESUME reco
   - The pre-release dump for #1449 is an interim measure. It is not the settled architecture.
   - **2026-10-04:** the v2.1.1 window took two manual points (A and B) with `infra/db-backup/cth_db_backup.py` from
     the operator's Mac; both restored and verified, the first dumps ever proven to restore. Nothing is scheduled yet.
-  - **Proposal (2026-10-04, not installed):** [DATABASE_BACKUP_PLAN.md](../ops/DATABASE_BACKUP_PLAN.md) and
+  - **Proposal (2026-10-04, not installed):** [DATABASE_BACKUP_PLAN.md](../../ops/DATABASE_BACKUP_PLAN.md) and
     `infra/db-backup/`. It implements the direction above for review and lists the failure-mode questions it raises
     (§8). It also covers a one-off pre-release backup and restore check from the operator's Mac (§6).
 - [ ] **Security and ops decisions taken 2026-09-30.**
@@ -392,7 +392,7 @@ these two cases:
   longer reach step 0. What remains is a baseline that reconstructs the schema each historical
   migration was written against. Until then, the two `SOP-DB-001` §V.B Bootstrap-Replay Corrections
   (`3a69db4907b4`, `8f1a2c3d4b5e`) are load-bearing. Evidence:
-  [BASELINE_FREEZE_2026-09-28.md](../ops/audits/BASELINE_FREEZE_2026-09-28.md).
+  [BASELINE_FREEZE_2026-09-28.md](../../ops/audits/BASELINE_FREEZE_2026-09-28.md).
 
 ---
 
