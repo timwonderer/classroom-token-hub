@@ -19,7 +19,6 @@ from types import SimpleNamespace
 
 from app.feats.prod import record_attendance_session
 from app.services.attendance_service import (
-    _current_evaluation_day_bounds,
     calculate_worked_attendance_seconds_today,
     get_class_attendance_status,
 )
@@ -53,7 +52,11 @@ def test_time_today_excludes_time_before_today(client):
 
     with app.app_context():
         eval_ctx = SimpleNamespace(class_id=classroom.class_id)
-        day_start_utc, _day_end_utc = _current_evaluation_day_bounds(eval_ctx)
+        day_start_utc = canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=eval_ctx,
+            primitive="evaluation_day_boundaries",
+        ).boundary_start_utc
         now = canonical_temporal_resolver(
             CLASS_LEVEL_EVALUATION,
             canonical_execution_context=eval_ctx,

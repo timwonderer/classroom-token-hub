@@ -33,7 +33,6 @@ from types import SimpleNamespace
 from app.models import AttendanceSession, PayrollEvent, Seat, Transaction
 from app.services.attendance_service import (
     CLOSED_SESSION_SETTLEMENT_RULE,
-    _day_end_utc,
     list_attendance_intervals,
 )
 from app.services.context_resolver import CanonicalContext
@@ -151,10 +150,10 @@ def _replayed_paid_seconds(ctx, rows, *, since_utc, run_at_utc) -> int:
         if row.status == "active":
             active_start = ts
         elif row.status == "inactive" and active_start is not None:
-            intervals.append((active_start, min(ts, _day_end_utc(ctx, active_start))))
+            intervals.append((active_start, min(ts, canonical_temporal_resolver(CLASS_LEVEL_EVALUATION, canonical_execution_context=ctx, primitive="evaluation_day_boundaries", reference_time_utc=active_start).boundary_end_utc)))
             active_start = None
     if active_start is not None:
-        intervals.append((active_start, min(run_at_utc, _day_end_utc(ctx, active_start))))
+        intervals.append((active_start, min(run_at_utc, canonical_temporal_resolver(CLASS_LEVEL_EVALUATION, canonical_execution_context=ctx, primitive="evaluation_day_boundaries", reference_time_utc=active_start).boundary_end_utc)))
     return _elapsed_seconds(ctx, intervals, run_at_utc)
 
 

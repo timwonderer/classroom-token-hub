@@ -7,9 +7,9 @@ from dataclasses import dataclass
 import uuid
 from app.extensions import db
 from app.models import PayrollEvent
-from app.services.attendance_service import list_attendance_interval_evidence, _day_end_utc
+from app.services.attendance_service import list_attendance_interval_evidence
 from app.services.historical_attendance_assessment import HistoricalAssessmentDenied, _scope, _setting_for
-from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
+from app.utils.canonical_temporal_resolver import CLASS_LEVEL_EVALUATION, SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 
 @dataclass(frozen=True)
@@ -126,10 +126,10 @@ def _legacy_segments(rows, *, ctx, previous, at):
         if row.status == 'active':
             opened = timestamp
         elif row.status == 'inactive' and opened is not None:
-            result.append((opened, min(timestamp, _day_end_utc(ctx, opened))))
+            result.append((opened, min(timestamp, canonical_temporal_resolver(CLASS_LEVEL_EVALUATION, canonical_execution_context=ctx, primitive="evaluation_day_boundaries", reference_time_utc=opened).boundary_end_utc)))
             opened = None
     if opened is not None:
-        result.append((opened, min(at, _day_end_utc(ctx, opened))))
+        result.append((opened, min(at, canonical_temporal_resolver(CLASS_LEVEL_EVALUATION, canonical_execution_context=ctx, primitive="evaluation_day_boundaries", reference_time_utc=opened).boundary_end_utc)))
     return tuple(result)
 
 
