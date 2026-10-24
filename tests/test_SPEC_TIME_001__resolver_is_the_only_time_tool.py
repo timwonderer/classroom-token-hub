@@ -38,6 +38,16 @@ def test_SPEC_TIME_001__no_time_logic_outside_the_resolver():
     "seconds = (end - start).total_seconds()\n",
     "from datetime import datetime, time\nmidnight = datetime.combine(day, time.min)\n",
     "day = row.created_at.date()\n",
+    # Shipped defects, verbatim, from the retired TEMPORAL_ARITHMETIC_OUTSIDE_RESOLVER
+    # rule: the rent grace deadline at 23:00 the previous class day after the
+    # November fall-back, and the payroll next pay date at 01:00 after March.
+    "grace_end = due_date + timedelta(days=grace_period_days) if due_date else None\n",
+    "candidate = first_pay + timedelta(days=freq_days * (periods_since_first + 1))\n",
+    # Every spelling of the constructor.
+    "from datetime import timedelta as _td\nend = start + _td(days=1)\n",
+    "import datetime as dt\nend = start + dt.timedelta(days=1)\n",
+    "import datetime\nend = start + datetime.timedelta(days=1)\n",
+    "from app.utils.canonical_temporal_resolver import utc_now as _clock\nx = _clock()\n",
 ])
 def test_mutation_proof_reports_each_prohibited_pattern(source):
     assert find_violations(source), source
@@ -51,6 +61,8 @@ def test_mutation_proof_reports_each_prohibited_pattern(source):
     "import time\nstarted = time.perf_counter()\n",
     "value = request.form.get('date')\n",
     "import pytz\nvalid = name in pytz.all_timezones_set\n",
+    '"""grace = due + timedelta(days=3) was the defect."""\nfrom datetime import timedelta\n'
+    "def span() -> timedelta:\n    return None\n",
 ])
 def test_resolver_calls_and_non_temporal_code_are_not_reported(source):
     assert not find_violations(source), source

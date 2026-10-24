@@ -65,6 +65,13 @@ def find_violations(source: str, path: str = "<source>") -> list[Hit]:
     """Every SPEC-TIME-001 §XII pattern in one module's source."""
     hits: list[Hit] = []
     tree = ast.parse(source)
+    # An alias is the near miss once a bare name is banned: `timedelta as _td`.
+    aliases: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                if alias.asname:
+                    aliases[alias.asname] = alias.name
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom) and node.module and node.module.endswith("canonical_temporal_resolver"):
             for alias in node.names:
@@ -75,6 +82,8 @@ def find_violations(source: str, path: str = "<source>") -> list[Hit]:
         name, base = _call_name(node.func)
         if name is None:
             continue
+        if isinstance(node.func, ast.Name):
+            name = aliases.get(name, name)
         if name in _CLOCK_READS and base in _CLOCK_BASES:
             hits.append(Hit(path, node.lineno, f"reads the clock: {base}.{name}()"))
         elif name in _RESOLVER_INTERNALS:

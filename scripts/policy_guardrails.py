@@ -551,112 +551,6 @@ def check_class_scoped_temporal_authority(path: pathlib.Path, tree: ast.AST) -> 
     return findings
 
 
-# ---------------------------------------------------------------------------
-# TEMPORAL_ARITHMETIC_OUTSIDE_RESOLVER
-#
-# INV-ARC-015 §VII / §XII and SPEC-TIME-001 §XII: calendar arithmetic, day
-# boundaries and "N days later" belong to canonical_temporal_resolver. A
-# ``timedelta`` added to a class-local midnight is N × 24 elapsed hours, which is
-# not N class days once a DST change falls in between: the student rent page
-# showed the grace deadline at 23:00 the previous day after the November
-# fall-back, and the payroll page's next pay date sat at 01:00 after the March
-# change. Both type-checked and passed every other guardrail.
-#
-# The rule is a bare ban on ``timedelta(...)`` calls in services, FEATs and
-# routes, whatever the spelling (``timedelta``, ``datetime.timedelta``, or an
-# alias). The baseline below freezes what existed when the rule landed; it only
-# shrinks. Entries are keyed by (file, source line) so they survive unrelated
-# edits but not being copied to another file.
-# ---------------------------------------------------------------------------
-
-TEMPORAL_ARITHMETIC_SCOPES = ("app/services/", "app/feats/", "app/routes/")
-
-# System-Level Evaluations (INV-ARC-015 §V): durations against UTC with no
-# class-calendar meaning — sessions, credential and recovery-code expiry,
-# account inactivity, observability windows.
-_SLE_DURATIONS = {
-    ("app/services/teacher_lifecycle.py", "return ensure_utc(user.last_signed_in_at) <= now - timedelta(days=180)"),
-    ("app/services/teacher_lifecycle.py", "return user.created_at is not None and ensure_utc(user.created_at) <= now - timedelta(days=30)"),
-    ("app/services/teacher_lifecycle.py", "db.or_(User.last_signed_in_at <= now - timedelta(days=180),"),
-    ("app/services/teacher_lifecycle.py", "db.and_(User.last_signed_in_at.is_(None), User.created_at <= now - timedelta(days=30))),"),
-    ("app/feats/teacher_signup_feat.py", "payload_encrypted=encrypt_totp(json.dumps(payload)), expires_at=utc_now()+timedelta(minutes=30)))"),
-    ("app/routes/student.py", "expiry_time = login_time + timedelta(minutes=SESSION_TIMEOUT_MINUTES)"),
-    ("app/routes/student.py", "user.current_session_expires_at = now + timedelta(minutes=SESSION_TIMEOUT_MINUTES)"),
-}
-
-# Class-calendar arithmetic that predates the rule. Debt, not permission: each
-# entry is removed when its site moves onto resolver primitives.
-_CLE_DEBT = {
-    ("app/feats/insurance_coverage_renewal_feat.py", "_INSTANT_RESOLUTION = timedelta(microseconds=1)"),
-    ("app/feats/insurance_coverage_renewal_feat.py", "evaluation_date=local_day + timedelta(days=days),"),
-    ("app/feats/insurance_claim_feat.py", "deadline_date = txn_date + timedelta(days=int(claim_window_days))"),
-    ("app/feats/insurance_claim_feat.py", "effective_date = start_date + timedelta(days=int(waiting_period_days))"),
-    ("app/feats/insurance_claim_feat.py", "return day - timedelta(days=day.weekday())"),
-    ("app/feats/insurance_claim_feat.py", "day = wk + timedelta(days=offset)"),
-    ("app/feats/insurance_claim_feat.py", "seat_id, class_id, wk + timedelta(days=offset), ctx=canonical_context"),
-    ("app/routes/student.py", "return timedelta(days=1)"),
-    ("app/routes/student.py", "return timedelta(weeks=1)"),
-    ("app/routes/student.py", "return timedelta(days=value)"),
-    ("app/routes/student.py", "return timedelta(weeks=value)"),
-    ("app/routes/api.py", "return timedelta(days=1)"),
-    ("app/routes/api.py", "return timedelta(weeks=1)"),
-    ("app/routes/api.py", "return timedelta(days=value)"),
-    ("app/routes/api.py", "return timedelta(weeks=value)"),
-    ("app/routes/api.py", "return timedelta(days=30)"),
-}
-
-TEMPORAL_ARITHMETIC_BASELINE = frozenset(_SLE_DURATIONS | _CLE_DEBT)
-
-
-def _repo_relative(path: pathlib.Path) -> str:
-    try:
-        return path.resolve().relative_to(ROOT).as_posix()
-    except ValueError:
-        return path.as_posix()
-
-
-def _timedelta_calls(tree: ast.AST) -> list[ast.Call]:
-    """Every call that constructs a ``datetime.timedelta``, however spelled."""
-    names = {"timedelta"}
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.module == "datetime":
-            names.update(alias.asname for alias in node.names if alias.name == "timedelta" and alias.asname)
-    calls = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
-        func = node.func
-        if (isinstance(func, ast.Name) and func.id in names) or (
-            isinstance(func, ast.Attribute) and func.attr == "timedelta"
-        ):
-            calls.append(node)
-    return calls
-
-
-def check_temporal_arithmetic_outside_resolver(path: pathlib.Path, tree: ast.AST, text: str) -> list[Finding]:
-    """INV-ARC-015 §VII: no calendar or duration arithmetic outside the resolver."""
-    relative = _repo_relative(path)
-    if not relative.startswith(TEMPORAL_ARITHMETIC_SCOPES):
-        return []
-    lines = text.splitlines()
-    findings: list[Finding] = []
-    for call in _timedelta_calls(tree):
-        source = lines[call.lineno - 1].strip() if call.lineno <= len(lines) else ""
-        if (relative, source) in TEMPORAL_ARITHMETIC_BASELINE:
-            continue
-        findings.append(Finding(
-            "TEMPORAL_ARITHMETIC_OUTSIDE_RESOLVER",
-            path,
-            call.lineno,
-            "`timedelta(...)` outside canonical_temporal_resolver. N days is not "
-            "N × 24h across a DST change (INV-ARC-015 §VII, SPEC-TIME-001 §XII): "
-            "derive class days and boundaries with resolver primitives "
-            "(evaluation_day_boundaries, anchored_recurrence_boundary, "
-            "shift_timestamp, obligations_service.last_class_day_before).",
-        ))
-    return findings
-
-
 def run_checks(no_waivers: bool, diff_base: str | None, diff_head: str) -> tuple[list[Finding], list[str]]:
     findings: list[Finding] = []
     warnings: list[str] = []
@@ -681,7 +575,6 @@ def run_checks(no_waivers: bool, diff_base: str | None, diff_head: str) -> tuple
         path_findings.extend(check_no_direct_lineage_token_assignment(path, text))
         path_findings.extend(check_no_unscoped_audit_emit(path, tree, text))
         path_findings.extend(check_class_scoped_temporal_authority(path, tree))
-        path_findings.extend(check_temporal_arithmetic_outside_resolver(path, tree, text))
 
         waivers = collect_waivers(path, text)
         if line_map is not None:

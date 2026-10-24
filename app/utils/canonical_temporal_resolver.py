@@ -31,14 +31,6 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def ensure_utc(dt: datetime | None) -> datetime | None:
-    """MIGRATION-ONLY: removed once no application caller remains (SPEC-TIME-001 1.3)."""
-    if dt is None:
-        return None
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
-
 
 def _get_class_timezone(class_id: str) -> pytz.BaseTzInfo:
     """Look up the IANA timezone for a class from ClassEconomy."""
@@ -75,6 +67,7 @@ _VALID_PRIMITIVES = frozenset({
     "current_time",
     "earlier_than",
     "later_than",
+    "same_instant",
     "between_boundaries",
     "time_since",
     "time_until",
@@ -114,6 +107,10 @@ class CanonicalTemporalEvaluation:
     @property
     def is_later(self) -> bool:
         return self.result.get("is_later")
+
+    @property
+    def is_same(self) -> bool:
+        return self.result.get("is_same")
 
     @property
     def is_between(self) -> bool:
@@ -278,6 +275,13 @@ def _later_than(reference_utc, tz, **kw):
     return {"is_later": c_local > r_local}
 
 
+def _same_instant(reference_utc, tz, **kw):
+    """SPEC-TIME-001 §IX.16: whether two timestamps are the same instant."""
+    candidate = _ensure_aware_utc(kw.get("candidate"), "candidate")
+    reference = _ensure_aware_utc(kw.get("reference"), "reference")
+    return {"is_same": _to_authority(candidate, tz) == _to_authority(reference, tz)}
+
+
 def _between_boundaries(reference_utc, tz, **kw):
     candidate = _ensure_aware_utc(kw.get("candidate"), "candidate")
     start_boundary = _ensure_aware_utc(kw.get("start_boundary"), "start_boundary")
@@ -383,10 +387,10 @@ def _elapsed_duration(reference_utc, tz, **kw):
         if normalized[i][0] < normalized[i - 1][1]:
             raise TemporalResolutionError("Overlapping intervals detected")
 
-    total = sum(
-        int((e - s).total_seconds()) for s, e in normalized
-    )
-    return {"elapsed_seconds": total}
+    # Sum the exact intervals first and truncate once (SPEC-TIME-001 1.3):
+    # truncating each interval would drop up to a second per interval.
+    total = sum(((e - s) for s, e in normalized), timedelta())
+    return {"elapsed_seconds": total // timedelta(seconds=1)}
 
 
 def _shift_timestamp(reference_utc, tz, **kw):
@@ -550,6 +554,7 @@ def _localize_timestamp(reference_utc, tz, **kw):
 _PRIMITIVE_DISPATCH = {
     "shift_calendar_days": _shift_calendar_days,
     "localize_timestamp": _localize_timestamp,
+    "same_instant": _same_instant,
     "anchored_recurrence_boundary": _anchored_recurrence_boundary,
     "minimum_period_duration": _minimum_period_duration,
     "current_time": _current_time,

@@ -696,3 +696,27 @@ def test_localize_timestamp_expresses_an_instant_in_the_class_timezone():
     with pytest.raises(TemporalResolutionError):
         canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp",
                                     timestamp=datetime(2026, 7, 21))
+
+
+# ---------------------------------------------------------------------------
+# §XIV-30..31: same_instant; elapsed_duration truncates once (SPEC-TIME-001 1.3)
+# ---------------------------------------------------------------------------
+
+def test_same_instant_compares_instants_not_offsets():
+    eastern = pytz.timezone(EASTERN).localize(datetime(2026, 7, 20, 14, 30))
+    ev = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="same_instant",
+                                     candidate=eastern, reference=REF)
+    assert ev.is_same is True
+    assert canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="same_instant",
+                                       candidate=REF, reference=REF + timedelta(microseconds=1)).is_same is False
+    with pytest.raises(TemporalResolutionError):
+        canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="same_instant",
+                                    candidate=datetime(2026, 7, 20, 18, 30), reference=REF)
+
+
+def test_elapsed_duration_sums_exactly_and_truncates_once():
+    """Three 0.6 s intervals are 1.8 s: 1 whole second, not 0 from truncating each."""
+    half = timedelta(milliseconds=600)
+    intervals = [(REF + i * timedelta(seconds=10), REF + i * timedelta(seconds=10) + half) for i in range(3)]
+    ev = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="elapsed_duration", intervals=intervals)
+    assert ev.elapsed_seconds == 1

@@ -181,6 +181,7 @@ Permitted primitive names:
 - `current_time`
 - `earlier_than`
 - `later_than`
+- `same_instant`
 - `between_boundaries`
 - `time_since`
 - `time_until`
@@ -409,6 +410,7 @@ Rules:
 - The caller selects which intervals have business meaning.
 - The resolver only validates and measures the intervals.
 - Each interval must have `end >= start`.
+- The intervals are summed exactly and the total is truncated to whole seconds once. Truncating each interval would drop up to a second per interval.
 - Empty interval lists fail closed unless a future spec amendment explicitly allows zero-duration evaluation.
 - Overlapping intervals fail closed in version 1.0 to prevent accidental double counting.
 - Adjacent intervals are allowed.
@@ -616,6 +618,26 @@ Rules:
 
 - This is the only sanctioned timezone conversion outside the resolver. Callers must not call `astimezone`, `localize`, `pytz.timezone` or `ZoneInfo`.
 
+
+### 16. `same_instant`
+
+Purpose:
+
+Determine whether two timestamps are the same instant.
+
+Accepts:
+
+| Input | Required | Notes |
+| --- | --- | --- |
+| `candidate` | Yes | Timestamp being evaluated |
+| `reference` | Yes | Timestamp being compared against |
+
+Returns:
+
+| Result Field | Meaning |
+|---|---|
+| `is_same` | `candidate` and `reference` are the same instant, whatever offsets they carry |
+
 ---
 
 ## X. Browser Timezone Contract
@@ -691,6 +713,7 @@ The following are prohibited outside `canonical_temporal_resolver`:
 - `datetime.now()`
 - `datetime.utcnow()`
 - raw `end - start` duration math
+- direct comparison of two timestamps to make a decision (`a < b`, `a == b`): use `earlier_than`, `later_than`, `between_boundaries` or `same_instant`. Ordering a collection by its timestamps (`sorted`, `min`, `max`) is not a decision and may compare directly (owner ruling 2026-10-24)
 - direct timezone conversion
 - raw `.date()` derivation for business logic
 - local day-boundary construction
@@ -728,7 +751,7 @@ No code outside `app/utils/canonical_temporal_resolver.py` may call `app/utils/t
 
 The resolver module's `utc_now()` is its own wall clock: the source of `current_time` when no `reference_time_utc` is supplied, and the single seam tests patch to pin time. Application code must not import or call it; it obtains "now" from the `current_time` primitive. The module exports no other temporal helper: `ensure_utc` and `advance_local_calendar_days` were removed in version 1.3 (the latter became `shift_calendar_days`).
 
-A SQLAlchemy column `default` / `onupdate` needs a callable; one private callable in `app/models.py` that returns `current_time`'s `canonical_now_utc` is the only permitted wrapper.
+A SQLAlchemy column `default` / `onupdate` needs a callable; one private callable in `app/models.py` that returns `current_time`'s `canonical_now_utc` is the only permitted wrapper. Every other temporal value is obtained by calling `canonical_temporal_resolver` at the point of use: a private function whose body only forwards to the resolver (`_now()`, `_is_later()`, `_class_local_date()`) is a wrapper and is not permitted. A function that applies a domain rule and uses the resolver to do it (a session idle timeout, "has this period begun") is domain logic, not a wrapper.
 
 Deprecated names include any prior temporal helper, temporal context, or temporal module name not routed through `canonical_temporal_resolver`.
 
@@ -769,6 +792,8 @@ Targeted tests must prove:
 27. `shift_calendar_days` takes the earlier instant in a fold and shifts forward out of a gap.
 28. `shift_calendar_days` fails closed on non-integer `days`, on both or neither source, and on naive or wrong-typed sources.
 29. `localize_timestamp` returns the instant in the resolved authority and its local date, and rejects a naive timestamp.
+30. `same_instant` compares instants regardless of offset and rejects a naive timestamp.
+31. `elapsed_duration` sums intervals exactly and truncates the total once.
 
 A structural guard enforces §XII and §XIII over `app/`: `tests/test_SPEC_TIME_001__resolver_is_the_only_time_tool.py`, with its detector in `tests/guards/temporal_resolver_conformance.py` and a mutation proof for each prohibited pattern. It must fail when it scans fewer files than `app/` holds; its predecessor scanned a path that no longer existed and passed while checking nothing.
 
@@ -811,7 +836,7 @@ When migrating existing code:
 
 ## XVII. Amendment
 
-**Version 1.3 (2026-10-24):** adds `shift_calendar_days` (§IX.14; owner ruling 2026-10-24) and `localize_timestamp` (§IX.15; proposed on the same ground, for owner confirmation). Moving a date by an arbitrary number of calendar days and expressing a timestamp in the authority had no primitive, so callers did it with `timedelta`, `astimezone` and `.date()`. §XIII names the resolver's `utc_now()` as its internal clock and test seam, removes `ensure_utc` and `advance_local_calendar_days` from the module's exports, and permits one private column-default callable in `app/models.py`. §XIV adds tests 25–29 and the structural guard. Found 2026-10-24: 464 prohibited operations in 72 application files, undetected because the previous guard scanned a non-existent directory.
+**Version 1.3 (2026-10-24):** adds `shift_calendar_days` (§IX.14; owner ruling 2026-10-24) `localize_timestamp` (§IX.15) and `same_instant` (§IX.16) (owner rulings 2026-10-24). Moving a date by an arbitrary number of calendar days and expressing a timestamp in the authority had no primitive, so callers did it with `timedelta`, `astimezone` and `.date()`. §XIII names the resolver's `utc_now()` as its internal clock and test seam, removes `ensure_utc` and `advance_local_calendar_days` from the module's exports, and permits one private column-default callable in `app/models.py`. §IX.9: `elapsed_duration` sums exactly and truncates once (owner ruling 2026-10-24). §XII: a decision may not compare two timestamps directly; ordering may (owner ruling 2026-10-24). §XIII: private helpers that only wrap a resolver call are not permitted in application code (owner ruling 2026-10-24). §XIV adds tests 25–31 and the structural guard. Found 2026-10-24: 464 prohibited operations in 72 application files, undetected because the previous guard scanned a non-existent directory.
 
 Revisions to this document must:
 
