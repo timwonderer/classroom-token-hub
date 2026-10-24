@@ -1,0 +1,6 @@
+{{- $url := urls.Parse .Destination -}}
+{{- $dest := .Destination -}}
+{{- if not $url.IsAbs -}}
+  {{- $dest = path.Join (path.Dir (.PageInner.Params.canonicalSource | default .PageInner.File.Path)) $url.Path | relURL -}}
+{{- end -}}
+<img src="{{ $dest | safeURL }}" alt="{{ .PlainText }}"{{ with .Title }} title="{{ . }}"{{ end }} loading="lazy">

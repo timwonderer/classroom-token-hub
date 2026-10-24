@@ -1,0 +1,45 @@
+baseURL: https://classroomtokenhub.com/docs/
+title: Classroom Token Hub Developer Docs
+locale: en
+theme: hextra
+disablePathToLower: true
+disableKinds: [taxonomy, term, RSS]
+enableRobotsTXT: false
+markup:
+  goldmark:
+    renderer:
+      unsafe: true
+    parser:
+      autoHeadingIDType: github
+  highlight:
+    noClasses: false
+params:
+  theme:
+    default: light
+    displayToggle: false
+  navbar:
+    displayLogo: false
+  footer:
+    displayCopyright: false
+    displayPoweredBy: false
+  search:
+    enable: true
+    type: flexsearch
+    flexsearch:
+      js: js/flexsearch.bundle.min.js
+      maxPageResults: 200
+      maxSectionResults: 2
+  editURL:
+    enable: false
+menu:
+  main:
+    - name: All documents
+      pageRef: /documents
+      weight: 1
+    - name: User guides ↗
+      url: https://app.classroomtokenhub.com/docs/
+      weight: 2
+    - name: Search
+      weight: 3
+      params:
+        type: search

@@ -1,0 +1,62 @@
+{{ define "main" }}
+<div class="cth-landing">
+  {{ partial "sidebar.html" (dict "context" . "disableSidebar" true) }}
+  <main id="content" class="cth-home">
+    {{ partial "cth-hero.html" . }}
+    <div class="landing-shell cth-start">
+      <section class="cth-start-intro" aria-labelledby="go-straight-there">
+        <div>
+          <h2 id="go-straight-there">What are you working on?</h2>
+          <p>Find the rules, implementation references, and procedures for your next change.</p>
+        </div>
+        <a class="cth-catalog-link" href="{{ "documents/" | relURL }}">Browse all documents <span aria-hidden="true">→</span></a>
+      </section>
+      <div class="cth-task-grid">
+        <section class="cth-task" aria-labelledby="understand-system">
+          <h3 id="understand-system">Understand the system</h3>
+          <p>Get familiar with the vocabulary and the contracts that govern behavior.</p>
+          <ul>
+            <li><a href="{{ "REFERENCE/REF-TERM-001_DEVELOPER_VOCABULARY/" | relURL }}">Developer glossary</a></li>
+            <li><a href="{{ "category/domain-authority/" | relURL }}">Domain contracts</a></li>
+            <li><a href="{{ "category/feature-execution/" | relURL }}">Feature execution contracts</a></li>
+          </ul>
+        </section>
+        <section class="cth-task" aria-labelledby="make-change">
+          <h3 id="make-change">Make a change</h3>
+          <p>Follow the implementation paths and checks for a well-scoped contribution.</p>
+          <ul>
+            <li><a href="{{ "STANDARD_OPERATING_PROCEDURES/TESTING/SOP-TEST-003_Test_Creation/" | relURL }}">Write a test</a></li>
+            <li><a href="{{ "STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-001_Migration_Specifications/" | relURL }}">Write a database migration</a></li>
+            <li><a href="{{ "MAP/MAP-UI-001_TEMPLATE_TO_FEAT_WIRING_MAP/" | relURL }}">Trace a template to its FEAT</a></li>
+          </ul>
+        </section>
+        <section class="cth-task" aria-labelledby="run-integrate">
+          <h3 id="run-integrate">Run and integrate</h3>
+          <p>Explore hosting guidance, the HTTP interface, and engineering notes.</p>
+          <ul>
+            <li><a href="{{ "self-hosting/" | relURL }}">Self-hosting</a></li>
+            <li><a href="{{ "REFERENCE/REF-API-001_HTTP_INTERFACE_REFERENCE/" | relURL }}">HTTP interface reference</a></li>
+            <li><a href="{{ "notes/" | relURL }}">Engineering notes</a></li>
+          </ul>
+        </section>
+      </div>
+      <section class="cth-authority" aria-labelledby="start-with-the-authority-hierarchy">
+        <div>
+          <h2 id="start-with-the-authority-hierarchy">Before you implement</h2>
+          <p>Read the governing contracts in order. Higher-level authority takes precedence.</p>
+        </div>
+        <ol>
+          <li><a href="{{ "category/invariants/" | relURL }}">Core &amp; architectural invariants</a><span>The system’s governing rules</span></li>
+          <li><a href="{{ "category/domain-authority/" | relURL }}">Domain contracts</a><span>Authority within each domain</span></li>
+          <li><a href="{{ "category/feature-execution/" | relURL }}">Feature execution contracts</a><span>How changes execute</span></li>
+        </ol>
+        <p class="cth-authority-note">Specifications bind implementations when incorporated by governing contracts. Maps, principles, and most references explain the system without defining runtime authority.</p>
+      </section>
+      <section class="cth-help" aria-labelledby="looking-for-help-using-the-app">
+        <h2 id="looking-for-help-using-the-app">Looking for help using the app?</h2>
+        <p>Teacher and student guides live in the <a href="https://app.classroomtokenhub.com/docs/">in-app help centre</a>.</p>
+      </section>
+    </div>
+  </main>
+</div>
+{{ end }}

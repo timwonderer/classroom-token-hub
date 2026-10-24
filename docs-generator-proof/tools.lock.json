@@ -1,0 +1,14 @@
+{
+  "hugo.pkg": {
+    "url": "https://github.com/gohugoio/hugo/releases/download/v0.168.0/hugo_extended_0.168.0_darwin-universal.pkg",
+    "sha256": "6e8c6a1e6db996bb9e71c8728461f372c78f12eb18135b709837227debf84940"
+  },
+  "hextra.tar.gz": {
+    "url": "https://api.github.com/repos/imfing/hextra/tarball/v0.13.0",
+    "sha256": "b1ea7893a46f70b922d5c6a5c4daf164d6d1a7d0be162ea8de7e3fc996d91446"
+  },
+  "flexsearch.bundle.min.js": {
+    "url": "https://cdn.jsdelivr.net/npm/flexsearch@0.8.143/dist/flexsearch.bundle.min.js",
+    "sha256": "433e941a8a573ebb9931fc16fc75266ab6b93f569ac2fb4f3dc66882e0416f4c"
+  }
+}
