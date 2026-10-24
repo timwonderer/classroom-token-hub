@@ -241,7 +241,7 @@ def test_edit_to_grant_only_accepts_the_browser_payload(app, client):
 def test_edit_keeps_the_delist_date(app, client):
     """Copilot C10: editing a scheduled product no longer erases its delist date."""
     from datetime import date
-    from app.routes.admin import _end_of_day_utc
+    from tests.helpers.temporal import class_day_bounds
 
     classroom = _store_teacher(app, client)
     # Seeded exactly as the form writes it: the exclusive end of the chosen
@@ -250,7 +250,7 @@ def test_edit_keeps_the_delist_date(app, client):
     with app.app_context():
         # The class is passed explicitly: this runs outside a request, and the
         # day boundary is a property of the class's timezone, not of `g`.
-        delist = _end_of_day_utc(date(2030, 6, 30), class_id=classroom.class_id)
+        delist = class_day_bounds(classroom.class_id, date(2030, 6, 30))[1]
     with FEATContext("FEAT-SETTINGS-001", idempotency_key=f"delist-edit:{classroom.class_id}"):
         item = publish_store_product(
             class_id=classroom.class_id,
@@ -283,10 +283,7 @@ def test_edit_keeps_the_delist_date(app, client):
         # Stored as the end of the chosen local day. Compare instants: the date
         # of that instant differs between a UTC and a local database session.
         from datetime import date
-        from app.routes.admin import _end_of_day_utc
-        assert current.auto_delist_date == _end_of_day_utc(
-            date(2030, 6, 30), class_id=classroom.class_id
-        )
+        assert current.auto_delist_date == class_day_bounds(classroom.class_id, date(2030, 6, 30))[1]
 
 
 @pytest.mark.parametrize("day, end_utc", [
@@ -301,11 +298,12 @@ def test_edit_keeps_the_delist_date(app, client):
 def test_INV_ARC_015__delist_day_round_trips_across_dst(app, day, end_utc):
     """INV-ARC-015 §VIII.1: the stored end is the next class midnight, and the
     form reads back the day the teacher chose."""
-    from app.routes.admin import _end_of_day_utc, _local_date_of_end_of_day
+    from app.routes.admin import _local_date_of_end_of_day
+    from tests.helpers.temporal import class_day_bounds
 
     classroom = initialize("chemistry_p1", app)  # America/Los_Angeles
     with app.app_context():
-        stored = _end_of_day_utc(day, class_id=classroom.class_id)
+        stored = class_day_bounds(classroom.class_id, day)[1]
         assert stored == end_utc
         assert _local_date_of_end_of_day(stored, class_id=classroom.class_id) == day
 

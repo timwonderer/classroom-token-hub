@@ -1335,7 +1335,19 @@ def _attendance_interval_page(intervals, *, seat_id, class_id, actor_public_id):
         (interval for interval in intervals if interval.closing_event_id is not None),
         key=interval_key, reverse=True,
     )
-    remaining = [interval for interval in completed if boundary is None or interval_key(interval) < boundary]
+    def before_cursor(interval):
+        # Lexicographic (closed_at, opening_event_id, closing_event_id) < boundary.
+        if canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="same_instant",
+            candidate=interval.closed_at, reference=boundary[0],
+        ).is_same:
+            return interval_key(interval)[1:] < boundary[1:]
+        return canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="earlier_than",
+            candidate=interval.closed_at, reference=boundary[0],
+        ).is_earlier
+
+    remaining = [interval for interval in completed if boundary is None or before_cursor(interval)]
     page = remaining[:50]
     nav = _issue_student_detail_nav_token(actor_public_id=actor_public_id, class_id=class_id)
     base_args = {"actor_public_id": actor_public_id, "nav": nav, "tab": "attendance"}
@@ -1482,16 +1494,16 @@ def _economy_analysis_schedule(snapshot=None, *, class_id, now_utc=None, frozen=
     if not class_id:
         return None
 
-    def _period(period):
-        return canonical_temporal_resolver(
+    week, month = (
+        canonical_temporal_resolver(
             CLASS_LEVEL_EVALUATION,
             canonical_execution_context=SimpleNamespace(class_id=class_id),
             primitive="evaluation_period_boundaries",
             period=period,
             reference_time_utc=now_utc,
         )
-
-    week, month = _period("week"), _period("month")
+        for period in ("week", "month")
+    )
     weekly_window_start, next_weekly_refresh = week.boundary_start_utc, week.boundary_end_utc
     monthly_window_start, next_monthly_refresh = month.boundary_start_utc, month.boundary_end_utc
     last_updated = canonical_temporal_resolver(
@@ -4236,47 +4248,6 @@ def delete_join_code():
         return jsonify({"status": "error", "message": "An error occurred while deleting the class. Please try again."}), 500
 
 
-def _class_local_date_start_utc(date_str):
-    """Resolve a teacher-entered calendar date to that class's local midnight, in UTC.
-
-    A date picked in a form is the teacher's *local* date: "the 2nd" means the
-    2nd where the class is, not the 2nd in UTC. Parsing it with
-    ``datetime.strptime(..., '%Y-%m-%d')`` yields a naive midnight that a
-    ``timezone=True`` column stores as midnight UTC, which for every timezone
-    west of Greenwich is the *previous* local day — so a payroll anchored on it
-    fired a day early for any US class.
-
-    Resolution goes through CLE, the only authority that knows
-    ``ClassEconomy.class_timezone``. SLE is hardcoded to UTC
-    (``canonical_temporal_resolver._resolve_authority``) and would reintroduce
-    the same defect while appearing timezone-aware.
-    """
-    if not date_str:
-        return None
-    parsed = date.fromisoformat(date_str)
-    bounds = canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=g.canonical_context,
-        primitive="evaluation_day_boundaries",
-        evaluation_date=parsed,
-    )
-    return bounds.boundary_start_utc
-
-
-def _class_day_bounds_utc(date_str, class_id):
-    """UTC ``[start, end)`` of the class day a ``YYYY-MM-DD`` filter names.
-
-    Raises ``ValueError`` on a malformed date, as ``strptime`` does.
-    """
-    bounds = canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=_cle_context(class_id),
-        primitive="evaluation_day_boundaries",
-        evaluation_date=date.fromisoformat(date_str),
-    )
-    return bounds.boundary_start_utc, bounds.boundary_end_utc
-
-
 def _cle_context(class_id=None):
     """Execution context for a CLE evaluation.
 
@@ -4289,18 +4260,6 @@ def _cle_context(class_id=None):
     if class_id:
         return SimpleNamespace(class_id=class_id)
     return g.canonical_context
-
-
-def _class_local_date_of(instant):
-    """The class-local calendar date an instant falls on."""
-    if instant is None:
-        return None
-    return canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=g.canonical_context,
-        primitive="localize_timestamp",
-        timestamp=instant,
-    ).evaluation_date
 
 
 def _rent_cycles(class_id):
@@ -4328,45 +4287,16 @@ def _next_rent_boundary_date(class_id):
     """Class-local date of the next rent coverage boundary, or ``None``."""
     current, upcoming = _rent_cycles(class_id)
     if upcoming is not None:
-        return _class_local_date_of(upcoming.cycle_boundary_at)
+        return canonical_temporal_resolver(CLASS_LEVEL_EVALUATION, canonical_execution_context=g.canonical_context, primitive="localize_timestamp", timestamp=upcoming.cycle_boundary_at).evaluation_date
     if current is not None and current.next_assessment_at is not None:
-        return _class_local_date_of(current.next_assessment_at)
+        return canonical_temporal_resolver(CLASS_LEVEL_EVALUATION, canonical_execution_context=g.canonical_context, primitive="localize_timestamp", timestamp=current.next_assessment_at).evaluation_date
     return None
-
-
-def _class_local_today():
-    """The class's current local date, for form validation of teacher-entered dates."""
-    return canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=g.canonical_context,
-        primitive="current_evaluation_day",
-    ).result["evaluation_date"]
 
 
 # -------------------- STORE MANAGEMENT --------------------
 
-def _end_of_day_utc(date_obj, class_id=None):
-    """Convert a teacher-entered local date to end-of-day UTC, in the class's timezone.
-
-    Previously resolved through SLE, which reads as timezone-aware but is
-    hardcoded to UTC (``canonical_temporal_resolver._resolve_authority`` returns
-    ``"UTC"`` for SLE unconditionally). A delist date of "the 2nd" therefore
-    expired at the end of the UTC 2nd — mid-afternoon of the intended last day
-    for a US class. CLE is the authority that knows ``class_timezone``.
-    """
-    if not date_obj:
-        return None
-    bounds = canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=_cle_context(class_id),
-        primitive="evaluation_day_boundaries",
-        evaluation_date=date_obj,
-    )
-    return bounds.boundary_end_utc
-
-
 def _local_date_of_end_of_day(instant, class_id=None):
-    """Recover the local date ``_end_of_day_utc`` was given.
+    """Recover the local date a stored end-of-class-day instant was written from.
 
     The day boundary's end is exclusive — the next local day's midnight — so the
     instant's day is the class day holding the period's last instant
@@ -4375,7 +4305,7 @@ def _local_date_of_end_of_day(instant, class_id=None):
     timezone, and on a UTC server shows the following day, which a save then
     persists: each edit moved the date a day later.
 
-    Resolved through CLE to match ``_end_of_day_utc``. The two must use the same
+    Resolved through CLE to match the writer's CLE ``evaluation_day_boundaries``. The two must use the same
     authority: a CLE writer paired with an SLE reader would shift the date every
     time a teacher opened and re-saved the form, which is the same class of bug
     the paragraph above describes.
@@ -4430,12 +4360,16 @@ def _store_definition_from_form(form) -> dict:
         ),
         # The start date is the teacher's local date. Combining it with UTC
         # midnight put the item on sale the previous local evening for any class
-        # west of Greenwich; `_end_of_day_utc` below is its CLE counterpart.
-        'activation_at': _class_local_date_start_utc(
-            form.activation_date.data.strftime('%Y-%m-%d') if form.activation_date.data else None
-        ),
+        # west of Greenwich; the delist date below is its CLE end-of-day counterpart.
+        'activation_at': canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION, canonical_execution_context=g.canonical_context,
+            primitive="evaluation_day_boundaries", evaluation_date=form.activation_date.data,
+        ).boundary_start_utc if form.activation_date.data else None,
         'auto_delist_date': (
-            _end_of_day_utc(form.auto_delist_date.data)
+            canonical_temporal_resolver(
+                CLASS_LEVEL_EVALUATION, canonical_execution_context=g.canonical_context,
+                primitive="evaluation_day_boundaries", evaluation_date=form.auto_delist_date.data,
+            ).boundary_end_utc
             if form.auto_delist_date.data and (not form.is_rent_linked.data or form.direct_purchase_allowed.data)
             else None
         ),
@@ -4452,7 +4386,11 @@ def _store_definition_from_form(form) -> dict:
         'collective_goal_type': form.collective_goal_type.data if is_collective else None,
         'collective_goal_target': form.collective_goal_target.data if is_collective else None,
         'collective_goal_expires_at': (
-            _end_of_day_utc(form.collective_goal_expires_at.data) if is_collective else None
+            canonical_temporal_resolver(
+                CLASS_LEVEL_EVALUATION, canonical_execution_context=g.canonical_context,
+                primitive="evaluation_day_boundaries", evaluation_date=form.collective_goal_expires_at.data,
+            ).boundary_end_utc
+            if is_collective and form.collective_goal_expires_at.data else None
         ),
         # Issued at publication. A future start date no longer hides the version
         # (activation_at gates sellability at read time), so nothing would ever
@@ -4536,7 +4474,11 @@ def _validate_rent_link_effective_date(form, class_id: str) -> None:
     # settings (DOM-OBL-001 §V.7).
     next_cycle_date = _next_rent_boundary_date(class_id)
     effective_date = form.activation_date.data
-    if effective_date < _class_local_today() or (next_cycle_date and effective_date > next_cycle_date):
+    local_today = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION, canonical_execution_context=g.canonical_context,
+        primitive="current_evaluation_day",
+    ).evaluation_date
+    if effective_date < local_today or (next_cycle_date and effective_date > next_cycle_date):
         raise ValueError('Rent-link effective date must be between today and the next rent-cycle start date.')
 
 
@@ -4574,7 +4516,10 @@ def store_management():
     if not selected_scope:
         abort(404)
     form = StoreItemForm()
-    form.local_today = _class_local_today()
+    form.local_today = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION, canonical_execution_context=g.canonical_context,
+        primitive="current_evaluation_day",
+    ).evaluation_date
     active_form_contract = resolve_store_form_contract(
         item_type=form.item_type.data or 'immediate',
         rent_linked=bool(form.is_rent_linked.data),
@@ -4865,7 +4810,10 @@ def edit_store_item(product_lineage_uuid):
     # as absent, not fall back to the stored value and be refused as an
     # inapplicable field.
     form = StoreItemForm(obj=item) if request.method == 'GET' else StoreItemForm()
-    form.local_today = _class_local_today()
+    form.local_today = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION, canonical_execution_context=g.canonical_context,
+        primitive="current_evaluation_day",
+    ).evaluation_date
 
     rent_link = _rent_link_for_lineage(selected_scope['class_id'], product_lineage_uuid)
 
@@ -4874,7 +4822,7 @@ def edit_store_item(product_lineage_uuid):
         # it back through CLE. Reading it in UTC (as this did) showed the previous
         # day for any class west of Greenwich, and a save then persisted that —
         # each edit walked the start date one day earlier.
-        form.activation_date.data = _class_local_date_of(item.activation_at)
+        form.activation_date.data = None if item.activation_at is None else canonical_temporal_resolver(CLASS_LEVEL_EVALUATION, canonical_execution_context=g.canonical_context, primitive="localize_timestamp", timestamp=item.activation_at).evaluation_date
         form.auto_delist_date.data = _local_date_of_end_of_day(item.auto_delist_date)
         form.inventory.data = item.inventory_total
         form.holding_limit.data = item.holding_limit
@@ -5292,7 +5240,10 @@ def rent_settings():
                 # the same obligation. SPEC-TIME-001 §CLE names "obligation due
                 # dates" explicitly; this was the third site of the same defect,
                 # after payroll's first_pay_date and the store's activation dates.
-                'first_rent_due_date': _class_local_date_start_utc(first_due_date_str),
+                'first_rent_due_date': canonical_temporal_resolver(
+                    CLASS_LEVEL_EVALUATION, canonical_execution_context=g.canonical_context,
+                    primitive="evaluation_day_boundaries", evaluation_date=date.fromisoformat(first_due_date_str),
+                ).boundary_start_utc if first_due_date_str else None,
                 'due_day_of_month': int(request.form.get('due_day_of_month', 1)),
                 'grace_period_days': int(request.form.get('grace_period_days', 3)),
                 'late_penalty_amount': _quantize_currency(request.form.get('late_penalty_amount', '10.0')),
@@ -5451,7 +5402,7 @@ def rent_settings():
     if settings:
         current_cycle, upcoming_cycle = _rent_cycles(class_id)
         if current_cycle is not None:
-            current_period_start = _class_local_date_of(current_cycle.cycle_boundary_at)
+            current_period_start = canonical_temporal_resolver(CLASS_LEVEL_EVALUATION, canonical_execution_context=g.canonical_context, primitive="localize_timestamp", timestamp=current_cycle.cycle_boundary_at).evaluation_date
             if current_cycle.next_assessment_at is not None:
                 current_period_end = obligations_service.last_class_day_before(
                     class_id, current_cycle.next_assessment_at
@@ -5512,7 +5463,7 @@ def rent_settings():
             # moment a non-US class used the app. The ISO form feeds the date input
             # the teacher re-saves from, so a UTC reading there would walk the date
             # backwards one day per edit.
-            _first_due_local = _class_local_date_of(settings.first_rent_due_date)
+            _first_due_local = canonical_temporal_resolver(CLASS_LEVEL_EVALUATION, canonical_execution_context=g.canonical_context, primitive="localize_timestamp", timestamp=settings.first_rent_due_date).evaluation_date
             display_first_rent_due_date = _first_due_local.strftime("%B %d, %Y")
             display_first_rent_due_date_iso = _first_due_local.strftime("%Y-%m-%d")
 
@@ -7319,7 +7270,7 @@ def _build_payroll_correction_view(proposal, class_label: str) -> dict:
     rows = []
     for row in proposal.rows:
         if row.status == CORRECTED:
-            local_date = _class_local_date_of(row.corrected_at)
+            local_date = None if row.corrected_at is None else canonical_temporal_resolver(CLASS_LEVEL_EVALUATION, canonical_execution_context=g.canonical_context, primitive="localize_timestamp", timestamp=row.corrected_at).evaluation_date
             status = f"Paid {local_date.strftime('%b %d')}" if local_date else "Paid"
         elif row.status == NEEDS_REVIEW:
             status = "Needs review: records do not match what was paid; use Manual Payment if pay is owed"
@@ -7567,7 +7518,10 @@ def payroll():
             continue
         if row["type"] == "payroll":
             previous = last_payroll_map.get(seat.id)
-            if previous is None or row["timestamp"] > previous:
+            if previous is None or canonical_temporal_resolver(
+                SYSTEM_LEVEL_EVALUATION, primitive="later_than",
+                candidate=row["timestamp"], reference=previous,
+            ).is_later:
                 last_payroll_map[seat.id] = row["timestamp"]
         earnings_map[seat.id] += Decimal(row["amount"] or 0)
 
@@ -7702,10 +7656,10 @@ def payroll():
     # dates, in the opposite direction.
     display_first_pay_date = ""
     if current_setting and current_setting.first_pay_date:
-        display_first_pay_date = _class_local_date_of(current_setting.first_pay_date).strftime("%m/%d/%Y")
+        display_first_pay_date = canonical_temporal_resolver(CLASS_LEVEL_EVALUATION, canonical_execution_context=g.canonical_context, primitive="localize_timestamp", timestamp=current_setting.first_pay_date).evaluation_date.strftime("%m/%d/%Y")
     display_first_pay_date_iso = ""
     if form_setting and form_setting.first_pay_date:
-        display_first_pay_date_iso = _class_local_date_of(form_setting.first_pay_date).strftime("%Y-%m-%d")
+        display_first_pay_date_iso = canonical_temporal_resolver(CLASS_LEVEL_EVALUATION, canonical_execution_context=g.canonical_context, primitive="localize_timestamp", timestamp=form_setting.first_pay_date).evaluation_date.strftime("%Y-%m-%d")
 
     return render_template(
         'admin_payroll.html',
@@ -7780,7 +7734,10 @@ def payroll_settings():
             frequency = request.form.get('simple_frequency', 'biweekly')
 
             first_pay_date_str = request.form.get('simple_first_pay_date')
-            first_pay_date = _class_local_date_start_utc(first_pay_date_str)
+            first_pay_date = canonical_temporal_resolver(
+                CLASS_LEVEL_EVALUATION, canonical_execution_context=g.canonical_context,
+                primitive="evaluation_day_boundaries", evaluation_date=date.fromisoformat(first_pay_date_str),
+            ).boundary_start_utc if first_pay_date_str else None
 
             # Daily time limit is entered as whole hours + whole minutes (minute is the
             # realistic minimum unit) and recombined into the decimal-hours the Float
@@ -7843,7 +7800,10 @@ def payroll_settings():
             pay_schedule = request.form.get('adv_pay_schedule', 'biweekly')
 
             first_pay_date_str = request.form.get('adv_first_pay_date')
-            first_pay_date = _class_local_date_start_utc(first_pay_date_str)
+            first_pay_date = canonical_temporal_resolver(
+                CLASS_LEVEL_EVALUATION, canonical_execution_context=g.canonical_context,
+                primitive="evaluation_day_boundaries", evaluation_date=date.fromisoformat(first_pay_date_str),
+            ).boundary_start_utc if first_pay_date_str else None
 
             # Only the legal payroll_settings columns are stored (DOM-POL-001A
             # §V.F): the entry unit is folded into pay_rate (per minute).
@@ -7883,16 +7843,23 @@ def payroll_settings():
         with FEATContext("FEAT-ADMN-001", idempotency_key=idempotency_key):
             saved = save_payroll_setting(class_id=class_id, settings_data=settings_data)
             effective_date = saved.effective_date
-            immediate = saved.effective_date <= saved.created_at
+            immediate = not canonical_temporal_resolver(
+                SYSTEM_LEVEL_EVALUATION, primitive="later_than",
+                candidate=saved.effective_date, reference=saved.created_at,
+            ).is_later
 
         # A change never reprices the open cycle (DOM-CLASS-003 §VII): say when
         # it takes effect, in the class's own calendar.
         if immediate:
             flash('Payroll settings saved. They are in effect now.', 'success')
         else:
+            effective_local_date = canonical_temporal_resolver(
+                CLASS_LEVEL_EVALUATION, canonical_execution_context=g.canonical_context,
+                primitive="localize_timestamp", timestamp=effective_date,
+            ).evaluation_date
             flash(
                 'Payroll settings saved. They take effect on the next payroll date, '
-                f'{_class_local_date_of(effective_date).strftime("%B %d, %Y")}. '
+                f'{effective_local_date.strftime("%B %d, %Y")}. '
                 'Work before then is paid at the current settings.',
                 'success',
             )
@@ -8786,14 +8753,24 @@ def banking():
     if start_date:
         try:
             query = query.filter(
-                Transaction.timestamp >= _class_day_bounds_utc(start_date, selected_class_id)[0]
+                Transaction.timestamp >= canonical_temporal_resolver(
+                    CLASS_LEVEL_EVALUATION,
+                    canonical_execution_context=_cle_context(selected_class_id),
+                    primitive="evaluation_day_boundaries",
+                    evaluation_date=date.fromisoformat(start_date),
+                ).boundary_start_utc
             )
         except ValueError:
             flash("Invalid start date format. Please use YYYY-MM-DD.", "danger")
     if end_date:
         try:
             query = query.filter(
-                Transaction.timestamp < _class_day_bounds_utc(end_date, selected_class_id)[1]
+                Transaction.timestamp < canonical_temporal_resolver(
+                    CLASS_LEVEL_EVALUATION,
+                    canonical_execution_context=_cle_context(selected_class_id),
+                    primitive="evaluation_day_boundaries",
+                    evaluation_date=date.fromisoformat(end_date),
+                ).boundary_end_utc
             )
         except ValueError:
             flash("Invalid end date format. Please use YYYY-MM-DD.", "danger")
@@ -9540,7 +9517,10 @@ def announcement_create():
                     is_active=form.is_active.data,
                     # The picked date is the last class day it shows; it
                     # expires at that day's end, not at midnight UTC.
-                    expires_at=_end_of_day_utc(form.expires_at.data, class_id=selected_class_id),
+                    expires_at=canonical_temporal_resolver(
+                        CLASS_LEVEL_EVALUATION, canonical_execution_context=_cle_context(selected_class_id),
+                        primitive="evaluation_day_boundaries", evaluation_date=form.expires_at.data,
+                    ).boundary_end_utc if form.expires_at.data else None,
                 )
             flash(f'Announcement "{form.title.data}" created successfully!', 'success')
 
@@ -9604,7 +9584,10 @@ def announcement_edit(announcement_id):
                     message=form.message.data,
                     priority=form.priority.data,
                     is_active=form.is_active.data,
-                    expires_at=_end_of_day_utc(form.expires_at.data, class_id=class_context["class_id"]),
+                    expires_at=canonical_temporal_resolver(
+                        CLASS_LEVEL_EVALUATION, canonical_execution_context=_cle_context(class_context["class_id"]),
+                        primitive="evaluation_day_boundaries", evaluation_date=form.expires_at.data,
+                    ).boundary_end_utc if form.expires_at.data else None,
                 )
 
             flash(f'Announcement "{announcement.title}" updated successfully!', 'success')

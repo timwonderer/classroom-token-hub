@@ -70,19 +70,11 @@ class UnsupportedRebalanceChange(ValueError):
     """A rebalance change has no owning command, or cannot run in the requested mode."""
 
 
-def _serialize_dt(value: datetime | None) -> str | None:
-    if value is None:
-        return None
-    return canonical_temporal_resolver(
-        SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp", timestamp=value
-    ).local_timestamp.isoformat()
-
-
 def _parse_dt(value: str | None) -> datetime | None:
     if not value:
         return None
     try:
-        # Only _serialize_dt writes this field, always with a UTC offset.
+        # Only prepare_scheduled_rebalance_changes writes this field, always with a UTC offset.
         return datetime.fromisoformat(value)
     except (TypeError, ValueError):
         return None
@@ -118,7 +110,9 @@ def prepare_scheduled_rebalance_changes(change_plan, *, rent_settings=None, refe
         if change.get("type") in {"rent", "rent_late_penalty"} and rent_settings is not None:
             effective_at = _get_rent_effective_at(rent_settings, reference_time)
 
-        enriched_change["effective_at"] = _serialize_dt(effective_at)
+        enriched_change["effective_at"] = None if effective_at is None else canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp", timestamp=effective_at
+        ).local_timestamp.isoformat()
         scheduled_changes.append(enriched_change)
 
     return scheduled_changes

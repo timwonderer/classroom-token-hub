@@ -154,15 +154,3 @@ def test_INV_ARC_015__economy_analysis_windows_are_class_calendar_periods(client
     assert (week_start.weekday(), week_start.hour, week_start.minute) == (0, 0, 0)
     assert (next_week.date() - week_start.date()).days == 7 and next_week.hour == 0
     assert (month_start.day, month_start.hour) == (1, 0)
-
-
-def test_class_day_bounds_are_the_class_days_own_midnights(app):
-    """The helper the banking filter uses, pinned directly."""
-    from app.routes.admin import _class_day_bounds_utc
-    from tests.helpers.classroom_initializer import initialize
-
-    classroom = initialize("tz_tokyo_p1", app)
-    with app.app_context():
-        assert _class_day_bounds_utc("2026-09-26", classroom.class_id) == (
-            _utc(2026, 9, 25, 15, 0), _utc(2026, 9, 26, 15, 0),
-        )
