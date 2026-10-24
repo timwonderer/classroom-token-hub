@@ -4,7 +4,7 @@ Tests for SPEC-TIME-001: Canonical Temporal Resolver.
 Covers the required assertions from §XIV of the spec.
 """
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time as wall_time, timedelta, timezone
 from unittest.mock import patch
 
 import pytest
@@ -662,7 +662,18 @@ def test_shift_calendar_days_takes_the_earlier_instant_in_a_fold_and_skips_a_gap
     assert (gap.shifted_timestamp.hour, gap.shifted_timestamp.minute) == (3, 30)
 
 
+def test_shift_calendar_days_places_a_local_wall_time_on_the_shifted_date():
+    nine = _shift(date=date(2026, 10, 31), days=1, time=wall_time(9, 0))
+    assert (nine.shifted_timestamp.hour, nine.shifted_timestamp_utc) == (9, _utc(2026, 11, 1, 14))
+    fold = _shift(date=date(2026, 11, 1), days=0, time=wall_time(1, 30))
+    assert fold.shifted_timestamp_utc == _utc(2026, 11, 1, 5, 30)  # the first 01:30, EDT
+    gap = _shift(date=date(2026, 3, 8), days=0, time=wall_time(2, 30))
+    assert (gap.shifted_timestamp.hour, gap.shifted_timestamp.minute) == (3, 30)
+
+
 @pytest.mark.parametrize("inputs", [
+    dict(date=date(2026, 1, 1), days=0, time=datetime(2026, 1, 1, 9)),
+    dict(timestamp=REF, days=0, time=wall_time(9)),
     dict(date=date(2026, 1, 1), days=1.0),
     dict(date=date(2026, 1, 1), days=True),
     dict(days=1),

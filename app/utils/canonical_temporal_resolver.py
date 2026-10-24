@@ -505,6 +505,8 @@ def _shift_calendar_days(reference_utc, tz, **kw):
     has_timestamp = kw.get("timestamp") is not None
     if has_date == has_timestamp:
         raise TemporalResolutionError("shift_calendar_days takes exactly one of date or timestamp")
+    if has_timestamp and kw.get("time") is not None:
+        raise TemporalResolutionError("time applies to a date source only")
 
     if has_date:
         source = kw["date"]
@@ -512,11 +514,18 @@ def _shift_calendar_days(reference_utc, tz, **kw):
             raise TemporalResolutionError("date must be a date, not datetime")
         shifted_date = source + timedelta(days=days)
         start_local = tz.localize(datetime.combine(shifted_date, time.min))
-        return {
+        result = {
             "shifted_date": shifted_date,
             "boundary_start": start_local,
             "boundary_start_utc": start_local.astimezone(timezone.utc),
         }
+        wall_time = kw.get("time")
+        if wall_time is not None:
+            if not isinstance(wall_time, time) or wall_time.tzinfo is not None:
+                raise TemporalResolutionError("time must be a naive local time of day")
+            at = _localize_wall_time(tz, datetime.combine(shifted_date, wall_time))
+            result.update(shifted_timestamp=at, shifted_timestamp_utc=at.astimezone(timezone.utc))
+        return result
 
     local = _to_authority(_ensure_aware_utc(kw["timestamp"], "timestamp"), tz)
     shifted_date = local.date() + timedelta(days=days)
