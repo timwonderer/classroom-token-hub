@@ -22,9 +22,9 @@ from app.feats.base import FEATContext
 from app.feats.class_configuration import configure_insurance_definition
 from app.feats.purchase_insurance_feat import execute_purchase_insurance
 from app.models import Announcement
-from app.routes.admin import _end_of_day_utc
 from app.services.announcement_service import create_class_announcement
 from app.services.context_resolver import CanonicalContext
+from tests.helpers.temporal import class_day_bounds
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
     SYSTEM_LEVEL_EVALUATION,
@@ -104,7 +104,7 @@ def test_INV_ARC_015__student_sees_the_chosen_last_day_of_an_announcement(client
         create_class_announcement(
             created_by_seat_id=classroom.teacher_seat.id, class_id=classroom.class_id,
             title="Field trip", message="Body", priority="normal", is_active=True,
-            expires_at=_end_of_day_utc(CHOSEN_DAY, class_id=classroom.class_id),
+            expires_at=class_day_bounds(classroom.class_id, CHOSEN_DAY)[1],
         )
     db.session.commit()
 
@@ -119,7 +119,7 @@ def test_INV_ARC_015__student_sees_the_chosen_last_day_of_an_announcement(client
 def test_INV_ARC_015__collective_goal_deadline_shows_the_chosen_day(client, app):
     classroom = initialize_as_teacher("tz_pacific_p1", client, app)
     enable_class_feature(class_id=classroom.class_id, feature="store")
-    deadline = _end_of_day_utc(CHOSEN_DAY, class_id=classroom.class_id)
+    deadline = class_day_bounds(classroom.class_id, CHOSEN_DAY)[1]
     assert deadline == END_OF_CHOSEN_DAY_PACIFIC
     with FEATContext("FEAT-TEST-SETUP", idempotency_key=f"goal:{uuid4().hex}"):
         publish_store_product(

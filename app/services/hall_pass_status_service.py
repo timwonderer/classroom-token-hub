@@ -29,6 +29,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.models import AttendanceReasonCode, AttendanceSession
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 HALL_PASS_STATUS_APPROVED = "approved"
 HALL_PASS_STATUS_LEFT = "left"
@@ -94,7 +95,10 @@ def resolve_hall_pass_lifecycle_status(
             row for row in attendance_rows
             if left_row is not None
             and row.status == "active"
-            and row.timestamp >= left_row.timestamp
+            and not canonical_temporal_resolver(
+                SYSTEM_LEVEL_EVALUATION, primitive="earlier_than",
+                candidate=row.timestamp, reference=left_row.timestamp,
+            ).is_earlier
         ),
         None,
     )

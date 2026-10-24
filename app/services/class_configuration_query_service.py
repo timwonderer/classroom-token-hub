@@ -39,24 +39,6 @@ _TIGHT_MODE_RATE_WARNING = 10
 _COMFORTABLE_MODE_RATE_WARNING = 5
 
 
-def _resolve_query_time(effective_at: Optional[datetime]) -> datetime:
-    """Resolve the query timestamp via the canonical temporal resolver (SPEC-TIME-001).
-
-    Args:
-        effective_at: Explicit timezone-aware UTC datetime, or None to use canonical now.
-
-    Returns:
-        Timezone-aware UTC datetime for query scoping.
-    """
-    if effective_at is not None:
-        return effective_at
-    result = canonical_temporal_resolver(
-        SYSTEM_LEVEL_EVALUATION,
-        primitive="current_time"
-    )
-    return result.canonical_now_utc
-
-
 # ============================================================================
 # 1. CLASS ENTITY QUERIES (1 function)
 # ============================================================================
@@ -125,7 +107,9 @@ def economic_engine_effective_at(class_id: str, instant: Optional[datetime]) -> 
     """
     if not class_id:
         return None
-    query_time = _resolve_query_time(instant)
+    query_time = instant if instant is not None else canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="current_time"
+    ).canonical_now_utc
     return _engine_newest_first(
         EconomicEngine.query.filter(
             EconomicEngine.class_id == class_id,
@@ -175,7 +159,9 @@ def pending_economic_engines(class_id: str, *, as_of: Optional[datetime] = None)
     """
     if not class_id:
         return []
-    query_time = _resolve_query_time(as_of)
+    query_time = as_of if as_of is not None else canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="current_time"
+    ).canonical_now_utc
     rows = (
         EconomicEngine.query.filter(
             EconomicEngine.class_id == class_id,
@@ -229,7 +215,9 @@ def get_class_features(
         if 'payroll' in features:
             print(f"Payroll enabled since {features['payroll'].effective_at}")
     """
-    query_time = _resolve_query_time(effective_at)
+    query_time = effective_at if effective_at is not None else canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="current_time"
+    ).canonical_now_utc
 
     # Query ALL ClassFeature rows for this class effective at query_time,
     # including disabled rows (economic_version_id IS NULL) so we can
