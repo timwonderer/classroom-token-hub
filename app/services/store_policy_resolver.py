@@ -22,7 +22,8 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 from app.extensions import db
-from app.models import StoreProduct, ClassEconomy, utc_now
+from app.models import StoreProduct, ClassEconomy
+from app.utils.canonical_temporal_resolver import utc_now  # g4: models no longer re-exports utc_now; g1 migrates this file
 
 
 class StorePolicyError(Exception):

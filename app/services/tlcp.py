@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 import random
 import uuid
-from datetime import timedelta
 
 import sqlalchemy as sa
 from flask import has_request_context, request, current_app
@@ -13,7 +12,7 @@ from flask import has_request_context, request, current_app
 from app.extensions import db
 from app.models import ActorRequestTrace, ClassEconomy, Seat
 from app.services.context_resolver import CanonicalContext
-from app.utils.canonical_temporal_resolver import utc_now
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 CORRELATION_VERSION = 1
 DEFAULT_TRACE_LIMIT = 20
@@ -472,8 +471,10 @@ def persist_request_trace(
 
     trace_limit = _int_env("TLCP_TRACE_LIMIT", DEFAULT_TRACE_LIMIT)
     ttl_days = _int_env("TLCP_TRACE_TTL_DAYS", DEFAULT_TRACE_TTL_DAYS)
-    now = utc_now()
-    ttl_cutoff = now - timedelta(days=ttl_days)
+    now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
+    ttl_cutoff = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="shift_timestamp",
+        timestamp=now, elapsed_seconds=-ttl_days * 86400,
+    ).shifted_timestamp_utc
 
     request_id = request_id or uuid.uuid4().hex
 
@@ -569,7 +570,7 @@ def save_error_event(
             "error_class": error_class,
             "error_message": _sanitize_error_message(error_message),
             "correlation_version": CORRELATION_VERSION,
-            "created_at": utc_now(),
+            "created_at": canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc,
         },
     )
 
@@ -584,7 +585,10 @@ def has_recent_error_for_actor(
     Degrades to False when the ``error_events`` table is absent.
     """
     minutes = recent_minutes or _int_env("TLCP_RECENT_ERROR_MINUTES", DEFAULT_RECENT_ERROR_MINUTES)
-    cutoff = utc_now() - timedelta(minutes=minutes)
+    now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
+    cutoff = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="shift_timestamp",
+        timestamp=now, elapsed_seconds=-minutes * 60,
+    ).shifted_timestamp_utc
     rows = _error_event_rows(
         """
         SELECT id FROM error_events
@@ -643,7 +647,9 @@ def create_ticket_correlation_pack(
         for row in ranked_rows
     ]
 
-    error_window_start = ticket_created_at - timedelta(hours=error_window_hours)
+    error_window_start = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="shift_timestamp",
+        timestamp=ticket_created_at, elapsed_seconds=-error_window_hours * 3600,
+    ).shifted_timestamp_utc
     error_rows = (
         _error_event_rows(
             """
@@ -670,7 +676,9 @@ def create_ticket_correlation_pack(
     )
 
     if include_recent_error and not error_rows:
-        ttl_cutoff = ticket_created_at - timedelta(days=ttl_days)
+        ttl_cutoff = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="shift_timestamp",
+            timestamp=ticket_created_at, elapsed_seconds=-ttl_days * 86400,
+        ).shifted_timestamp_utc
         error_rows = _error_event_rows(
             """
             SELECT request_id, endpoint, method, error_class, error_message,
@@ -713,5 +721,5 @@ def create_ticket_correlation_pack(
         "class_id": class_id,
         "request_trace_json": request_trace_json,
         "error_refs_json": error_refs_json,
-        "created_at": utc_now(),
+        "created_at": canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc,
     }

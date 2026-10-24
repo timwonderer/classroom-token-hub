@@ -6,7 +6,6 @@ from datetime import datetime
 import sqlalchemy as sa
 
 from app.extensions import db
-from app.utils.canonical_temporal_resolver import utc_now
 
 
 @dataclass

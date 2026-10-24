@@ -8,7 +8,7 @@ from datetime import datetime
 from app.extensions import db
 from app.models import PayrollEvent
 from app.services.attendance_service import list_attendance_interval_evidence, elapsed_attendance_seconds
-from app.utils.canonical_temporal_resolver import ensure_utc
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 
 class HistoricalAssessmentDenied(ValueError):
@@ -84,15 +84,16 @@ def _scope(ctx, class_id, target_seat_id):
 
 
 def _setting_for(settings, instant):
-    available = [s for s in settings if ensure_utc(s.effective_at) <= instant]
+    available = [s for s in settings if not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than",
+        candidate=s.effective_at, reference=instant).is_later]
     if not available:
         if not settings:
             return None
-        rank = (ensure_utc(settings[0].effective_at), ensure_utc(settings[0].created_at))
-        first = [s for s in settings if (ensure_utc(s.effective_at),ensure_utc(s.created_at)) == rank]
+        rank = (settings[0].effective_at, settings[0].created_at)
+        first = [s for s in settings if (s.effective_at, s.created_at) == rank]
         return first[0] if len(first)==1 else None
-    rank = max((ensure_utc(s.effective_at), ensure_utc(s.created_at)) for s in available)
-    winners = [s for s in available if (ensure_utc(s.effective_at), ensure_utc(s.created_at)) == rank]
+    rank = max((s.effective_at, s.created_at) for s in available)
+    winners = [s for s in available if (s.effective_at, s.created_at) == rank]
     return winners[0] if len(winners) == 1 else None
 
 
@@ -132,37 +133,44 @@ def get_historical_attendance_business_evidence(*, ctx, class_id, target_seat_id
     if requested is not None and not set(requested) <= known:
         raise HistoricalAssessmentDenied('UNAUTHORIZED_SCOPE')
     selected = [e for e in events if requested is None or e.id in requested]
-    settings = tuple(sorted(setting_inputs, key=lambda s: (ensure_utc(s.effective_at), ensure_utc(s.created_at))))
+    settings = tuple(sorted(setting_inputs, key=lambda s: (s.effective_at, s.created_at)))
     results = []
     for event in selected[:limit]:
         summary = event.summary_json if isinstance(event.summary_json, dict) else {}
         frozen = type(summary.get('allocation_version')) is int and summary.get('allocation_version') == 1
         rule = CURRENT_RULE if frozen else CLOSED_RULE if summary.get('settlement_rule') == 'closed_sessions' else LEGACY_RULE
-        at = ensure_utc(event.recorded_at)
-        prior = [e for e in events if e.payroll_event_type == 'payroll' and ensure_utc(e.recorded_at) < at]
-        tied = [e for e in events if e.payroll_event_type == 'payroll' and ensure_utc(e.recorded_at) == at]
-        cutoff = max((ensure_utc(e.recorded_at) for e in prior), default=None)
-        legacy = [ensure_utc(e.recorded_at) for e in prior if not isinstance(e.summary_json,dict) or e.summary_json.get('settlement_rule') != 'closed_sessions']
+        at = event.recorded_at
+        prior = [e for e in events if e.payroll_event_type == 'payroll' and canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than",
+            candidate=e.recorded_at, reference=at).is_earlier]
+        tied = [e for e in events if e.payroll_event_type == 'payroll' and e.recorded_at == at]
+        cutoff = max((e.recorded_at for e in prior), default=None)
+        legacy = [e.recorded_at for e in prior if not isinstance(e.summary_json,dict) or e.summary_json.get('settlement_rule') != 'closed_sessions']
         candidates = []
         groups = {}
         reasons = ['SOURCE_CREATION_VISIBILITY_UNAVAILABLE', 'ORIGINAL_WRITER_ATTRIBUTION_UNAVAILABLE']
         for interval in intervals:
-            if interval.closing_event_id is None or interval.closed_at > at or (cutoff and interval.closed_at <= cutoff):
+            if (interval.closing_event_id is None
+                    or canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=interval.closed_at, reference=at).is_later
+                    or (cutoff and not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than",
+                        candidate=interval.closed_at, reference=cutoff).is_later)):
                 continue
             start = interval.opened_at
-            clips = [t for t in legacy if start < t < interval.closed_at]
+            clips = [t for t in legacy
+                if canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=start, reference=t).is_earlier
+                and canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=t, reference=interval.closed_at).is_earlier]
             if clips:
                 start = max(clips)
                 reasons.append('LEGACY_FRAGMENT_REQUIRES_ATTRIBUTION')
             # Preserve canonical IDs but explicitly label any candidate clipped duration.
             seconds = elapsed_attendance_seconds(ctx, [(start, interval.closed_at)])
             candidates.append((interval.opening_event_id, interval.closing_event_id, seconds,
-                ensure_utc(start).isoformat(), ensure_utc(interval.closed_at).isoformat()))
-            setting = _setting_for(settings, ensure_utc(interval.closed_at))
+                canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp", timestamp=start).local_timestamp.isoformat(),
+                canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp", timestamp=interval.closed_at).local_timestamp.isoformat()))
+            setting = _setting_for(settings, interval.closed_at)
             if setting is None:
                 reasons.append('MISSING_OR_AMBIGUOUS_SETTING')
             else:
-                if ensure_utc(setting.created_at) > at:
+                if canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=setting.created_at, reference=at).is_later:
                     reasons.append('SETTING_NOT_VISIBLE_AT_PAYMENT')
                 key = (setting.policy_locator, setting.rate_per_minute)
                 groups[key] = groups.get(key, 0) + seconds
@@ -197,7 +205,9 @@ def get_historical_attendance_business_evidence(*, ctx, class_id, target_seat_id
                         if sum(source['credited_seconds'] for source in members) != share['seconds']:
                             consistency = 'MISMATCH'; reasons.append('RECORDED_SHARE_MEMBERSHIP_MISMATCH')
                         for source in members:
-                            closed = ensure_utc(datetime.fromisoformat(source['closing_timestamp']))
+                            closed = datetime.fromisoformat(source['closing_timestamp'])
+                            if closed.tzinfo is None:  # as_evidence() always writes an offset
+                                raise ValueError('Naive closing_timestamp')
                             governed = _setting_for(settings, closed)
                             if governed is None or governed.policy_locator != share['policy_uuid']:
                                 consistency = 'MISMATCH'; reasons.append('RECORDED_SHARE_MEMBERSHIP_MISMATCH')

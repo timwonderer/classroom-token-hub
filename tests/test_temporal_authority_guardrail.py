@@ -205,8 +205,13 @@ def test_detects_every_spelling_of_timedelta(shipped):
 
 def test_a_baseline_entry_does_not_travel_to_another_file():
     """The baseline freezes a line where it stood, not the construction."""
-    frozen = "user.reset_code_expires_at = now + timedelta(minutes=10)\n"
-    assert _arithmetic_findings(frozen, "app/services/student_recovery.py") == []
+    # Any surviving single-statement entry will do; a fixed line leaves the baseline.
+    path, line = min(
+        (p, l) for p, l in guardrails.TEMPORAL_ARITHMETIC_BASELINE
+        if l.count("timedelta(") == 1 and l.count("(") == l.count(")") and not l.endswith(",")
+    )
+    frozen = line + "\n"
+    assert _arithmetic_findings(frozen, path) == []
     assert len(_arithmetic_findings(frozen, "app/services/obligation_view_model.py")) == 1
 
 
