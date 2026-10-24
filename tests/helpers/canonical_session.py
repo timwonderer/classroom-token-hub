@@ -17,7 +17,6 @@ would make resolve_canonical_context() fail — so we must write the nonce too.
 """
 
 import secrets
-from datetime import datetime, timezone
 
 from app.extensions import db
 from app.feats.base import FEATContext
@@ -43,7 +42,9 @@ def set_canonical_context(
     Returns the nonce that was written, so callers can use it consistently.
     """
     resolved_nonce = nonce or secrets.token_urlsafe(32)
-    now_iso = datetime.now(timezone.utc).isoformat()
+    # Production time (SPEC-TEST-001 §X), so a pinned clock and the session agree.
+    from tests.helpers import temporal
+    now_iso = temporal.now().isoformat()
     sess["user_id"] = user_id
     sess["current_session_nonce"] = resolved_nonce
     sess["login_time"] = now_iso
