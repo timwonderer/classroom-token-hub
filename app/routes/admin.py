@@ -21,10 +21,8 @@ import hashlib
 from types import SimpleNamespace, MappingProxyType
 from calendar import monthrange
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import date, datetime
 from app.utils.canonical_temporal_resolver import (
-    utc_now,
-    ensure_utc,
     canonical_temporal_resolver,
     SYSTEM_LEVEL_EVALUATION,
     CLASS_LEVEL_EVALUATION,
@@ -640,45 +638,6 @@ def before_request():
 
 # -------------------- HELPER FUNCTIONS --------------------
 
-def parse_dob_input(dob_str):
-    """
-    Parse date of birth input and return the DOB sum (month + day + year).
-
-    Attempts to parse in multiple formats:
-    1. YYYY-MM-DD (from date input)
-    2. MM/DD/YYYY (fallback format)
-
-    Args:
-        dob_str: String representation of date of birth
-
-    Returns:
-        int: DOB sum (month + day + year)
-
-    Raises:
-        ValueError: If date string cannot be parsed in any supported format
-    """
-    if not dob_str:
-        raise ValueError("Date of birth is required")
-
-    dob_str = dob_str.strip()
-
-    # Try YYYY-MM-DD format first (native date input)
-    try:
-        dob_input = datetime.strptime(dob_str, "%Y-%m-%d").date()
-        return dob_input.month + dob_input.day + dob_input.year
-    except ValueError:
-        pass
-
-    # Try MM/DD/YYYY format as fallback
-    try:
-        dob_input = datetime.strptime(dob_str, "%m/%d/%Y").date()
-        return dob_input.month + dob_input.day + dob_input.year
-    except ValueError:
-        pass
-
-    # If both formats fail, raise error
-    raise ValueError("Invalid date format. Please use the date picker.")
-
 
 def _get_admin_feature_name_for_path(path: str) -> str | None:
     for prefix, feature_name in ADMIN_FEATURE_PATH_PREFIXES.items():
@@ -799,21 +758,6 @@ def require_admin_feature_scope(
     return scope
 
 
-def _parse_dob_date(dob_str):
-    """Parse DOB input and return a date object."""
-    if not dob_str:
-        raise ValueError("Date of birth is required")
-
-    dob_str = dob_str.strip()
-    for fmt in ("%Y-%m-%d", "%m/%d/%Y"):
-        try:
-            return datetime.strptime(dob_str, fmt).date()
-        except ValueError:
-            continue
-
-    raise ValueError("Invalid date format. Please use the date picker.")
-
-
 def _find_admin_by_auth_username(username: str):
     """Lookup the canonical admin record by hashed auth username."""
     normalized = normalize_auth_username(username)
@@ -866,28 +810,6 @@ def _get_teacher_seat_for_class(class_id: str):
         return resolve_teacher_seat_for_class(class_id)
     except ValueError:
         return None
-
-
-def _count_rent_waiver_periods(settings, waiver) -> int:
-    """Return how many rent periods a canonical waiver covers."""
-    from app.routes.student import _add_rent_period, _get_rent_period_delta
-
-    if not settings or not waiver or not waiver.coverage_start_time or not waiver.coverage_end_time:
-        return 0
-
-    delta = _get_rent_period_delta(settings)
-    current = ensure_utc(waiver.coverage_start_time)
-    end = ensure_utc(waiver.coverage_end_time)
-    count = 0
-
-    while current and end and current <= end:
-        count += 1
-        next_date = _add_rent_period(current, delta)
-        if next_date <= current:
-            break
-        current = next_date
-
-    return count
 
 
 # NOTE: _populate_policy_from_form was removed. It was dead v1 ORM code (no callers)
@@ -965,7 +887,7 @@ def _build_payroll_preview_state(students):
         anchor_by_class_id[class_id] = anchor
         summary_by_class_id[class_id] = summary
         if anchor is not None:
-            updated_at_by_class_id[class_id] = ensure_utc(anchor)
+            updated_at_by_class_id[class_id] = anchor
         for seat_id, amount in summary.items():
             total_summary[seat_id] += Decimal(str(amount))
 
@@ -1402,12 +1324,12 @@ def _attendance_interval_page(intervals, *, seat_id, class_id, actor_public_id):
             key = payload.get("before")
             if not isinstance(key, list) or len(key) != 3:
                 abort(404)
-            boundary = (ensure_utc(datetime.fromisoformat(key[0])), int(key[1]), int(key[2]))
+            boundary = (datetime.fromisoformat(key[0]), int(key[1]), int(key[2]))
         except (BadSignature, SignatureExpired, ValueError, TypeError, OverflowError):
             abort(404)
 
     def interval_key(interval):
-        return (ensure_utc(interval.closed_at), interval.opening_event_id, interval.closing_event_id)
+        return (interval.closed_at, interval.opening_event_id, interval.closing_event_id)
 
     completed = sorted(
         (interval for interval in intervals if interval.closing_event_id is not None),
@@ -1572,7 +1494,9 @@ def _economy_analysis_schedule(snapshot=None, *, class_id, now_utc=None, frozen=
     week, month = _period("week"), _period("month")
     weekly_window_start, next_weekly_refresh = week.boundary_start_utc, week.boundary_end_utc
     monthly_window_start, next_monthly_refresh = month.boundary_start_utc, month.boundary_end_utc
-    last_updated = ensure_utc(snapshot.effective_at) if snapshot and snapshot.effective_at else week.canonical_now_utc
+    last_updated = canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp", timestamp=snapshot.effective_at,
+    ).local_timestamp if snapshot and snapshot.effective_at else week.canonical_now_utc
     return {
         'frozen': frozen,
         'last_updated_at': last_updated.isoformat(),
@@ -2254,7 +2178,9 @@ def _apply_teacher_class_selection(ctx, raw_options):
             class_selection_view=class_selection_view,
         ), 400
 
-    session["last_activity"] = utc_now().isoformat()
+    session["last_activity"] = canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="current_time",
+    ).canonical_now_utc.isoformat()
     user = db.session.get(User, ctx.user_id)
     if user:
         # Move BOTH canonical pointers together. Updating last_active_class_id
@@ -2414,7 +2340,7 @@ def dashboard():
 
     recent_redemptions = sorted(
         pending_redemptions + pending_acknowledgements,
-        key=lambda view: ensure_utc(view.submitted_at) if view.submitted_at else datetime.min.replace(tzinfo=timezone.utc),
+        key=lambda view: (view.submitted_at is not None, view.submitted_at),
     )[:5]
 
     # Recent transactions (limited to 5 for display)
@@ -2429,10 +2355,12 @@ def dashboard():
         .limit(5)
         .all()
     )
-    _day_bounds = canonical_temporal_resolver(
-        SYSTEM_LEVEL_EVALUATION, primitive="evaluation_day_boundaries",
-    )
-    today_start_db = ensure_utc(_day_bounds.boundary_start_utc)
+    # "Today" is the class-local day (INV-ARC-015 §VIII.1), not the UTC day.
+    today_start_db = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=SimpleNamespace(class_id=active_class_id),
+        primitive="evaluation_day_boundaries",
+    ).boundary_start_utc
     total_transactions_today = (
         Transaction.query
         .filter(Transaction.class_id == active_class_id)
@@ -2630,8 +2558,11 @@ def login():
                         establish_teacher_session(user)
                         session["current_session_nonce"] = nonce
                         user.current_session_nonce = nonce
-                        session["login_time"] = utc_now().isoformat()
-                        session["last_activity"] = utc_now().isoformat()
+                        login_at = canonical_temporal_resolver(
+                            SYSTEM_LEVEL_EVALUATION, primitive="current_time",
+                        ).canonical_now_utc.isoformat()
+                        session["login_time"] = login_at
+                        session["last_activity"] = login_at
                         session["admin_auth_username"] = username
                         _login_display = user.get_display_username()
                         if user.last_active_seat_id:
@@ -2978,7 +2909,13 @@ def reset_credentials():
         return redirect(url_for('admin.recover'))
 
     recovery_request = get_recovery_request_by_id(recovery_request_id)
-    if not recovery_request or recovery_request.status != 'pending' or ensure_utc(recovery_request.expires_at) <= utc_now():
+    if not recovery_request or recovery_request.status != 'pending' or not canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="later_than",
+        candidate=recovery_request.expires_at,
+        reference=canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="current_time",
+        ).canonical_now_utc,
+    ).is_later:
         flash("Invalid or expired recovery request.", "error")
         return redirect(url_for('admin.recover'))
 
@@ -3726,7 +3663,13 @@ def student_detail_public(actor_public_id):
         _student_user
         and _student_user.reset_code
         and _student_user.reset_code_expires_at
-        and ensure_utc(_student_user.reset_code_expires_at) >= utc_now()
+        and not canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="earlier_than",
+            candidate=_student_user.reset_code_expires_at,
+            reference=canonical_temporal_resolver(
+                SYSTEM_LEVEL_EVALUATION, primitive="current_time",
+            ).canonical_now_utc,
+        ).is_earlier
     )
     # Phase 6-7: identity fields sourced from view model (not raw ORM attributes)
     student_has_completed_setup = bool(_student_user and _student_user.username_hash)
@@ -4310,7 +4253,7 @@ def _class_local_date_start_utc(date_str):
     """
     if not date_str:
         return None
-    parsed = datetime.strptime(date_str, '%Y-%m-%d').date()
+    parsed = date.fromisoformat(date_str)
     bounds = canonical_temporal_resolver(
         CLASS_LEVEL_EVALUATION,
         canonical_execution_context=g.canonical_context,
@@ -4329,7 +4272,7 @@ def _class_day_bounds_utc(date_str, class_id):
         CLASS_LEVEL_EVALUATION,
         canonical_execution_context=_cle_context(class_id),
         primitive="evaluation_day_boundaries",
-        evaluation_date=datetime.strptime(date_str, '%Y-%m-%d').date(),
+        evaluation_date=date.fromisoformat(date_str),
     )
     return bounds.boundary_start_utc, bounds.boundary_end_utc
 
@@ -4355,9 +4298,9 @@ def _class_local_date_of(instant):
     return canonical_temporal_resolver(
         CLASS_LEVEL_EVALUATION,
         canonical_execution_context=g.canonical_context,
-        primitive="current_evaluation_day",
-        reference_time_utc=ensure_utc(instant),
-    ).result["evaluation_date"]
+        primitive="localize_timestamp",
+        timestamp=instant,
+    ).evaluation_date
 
 
 def _rent_cycles(class_id):
@@ -5231,9 +5174,9 @@ def _resolve_rent_policy_deferral(class_id, pending_settings):
         takes_effect_on = canonical_temporal_resolver(
             CLASS_LEVEL_EVALUATION,
             canonical_execution_context=_cle_context(class_id),
-            primitive="current_evaluation_day",
-            reference_time_utc=ensure_utc(cycle.next_assessment_at),
-        ).result["evaluation_date"]
+            primitive="localize_timestamp",
+            timestamp=cycle.next_assessment_at,
+        ).evaluation_date
 
     def _terms(policy):
         return {
@@ -6639,7 +6582,9 @@ def update_economy_policy():
     ):
         settings_row = get_feature_settings_row_for_class(class_id, create=True)
         if settings_row:
-            settings_row.economy_policy_updated_at = utc_now()
+            settings_row.economy_policy_updated_at = canonical_temporal_resolver(
+                SYSTEM_LEVEL_EVALUATION, primitive="current_time",
+            ).canonical_now_utc
 
     current_app.logger.info(
         "Economy policy mode changed teacher=%s class_id=%s mode=%s",
@@ -7215,7 +7160,7 @@ def payroll_history():
     query = PayrollEvent.query.filter(PayrollEvent.class_id == ctx.class_id)
 
     if start_date_str:
-        start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+        start_date = date.fromisoformat(start_date_str)
         start_bounds = canonical_temporal_resolver(
             CLASS_LEVEL_EVALUATION,
             canonical_execution_context=ctx,
@@ -7225,7 +7170,7 @@ def payroll_history():
         query = query.filter(PayrollEvent.recorded_at >= start_bounds.boundary_start_utc)
 
     if end_date_str:
-        end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+        end_date = date.fromisoformat(end_date_str)
         end_bounds = canonical_temporal_resolver(
             CLASS_LEVEL_EVALUATION,
             canonical_execution_context=ctx,
@@ -8102,7 +8047,9 @@ def payroll_manual_payment():
                     ]).encode()
                 ).hexdigest()[:24]
 
-            current_bucket = int(utc_now().timestamp() // 300)
+            current_bucket = int(canonical_temporal_resolver(
+                SYSTEM_LEVEL_EVALUATION, primitive="current_time",
+            ).canonical_now_utc.timestamp() // 300)
             request_nonce = _manual_credit_nonce(current_bucket)
             previous_nonce = _manual_credit_nonce(current_bucket - 1)
             for actor_public_id in student_ids:
@@ -8403,7 +8350,10 @@ def export_students():
 
     # Prepare response
     output.seek(0)
-    filename = f"students_export_{utc_now().strftime('%Y%m%d_%H%M%S')}.csv"
+    exported_at = canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="current_time",
+    ).canonical_now_utc
+    filename = f"students_export_{exported_at.strftime('%Y%m%d_%H%M%S')}.csv"
 
     return Response(
         output.getvalue(),
@@ -10369,7 +10319,9 @@ def passkey_auth_finish():
         except passkey_service.PasskeyError as e:
             current_app.logger.warning("Passkey sign-in refused: %s", e)
             return jsonify({"error": "Authentication failed"}), 401
-        now = utc_now()
+        now = canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="current_time",
+        ).canonical_now_utc
 
         from app.services.teacher_lifecycle import record_teacher_sign_in
         user = record_teacher_sign_in(user.id)
@@ -10871,7 +10823,9 @@ def resolve_issue(issue_ref):
 
         # Move to teacher/admin final review; closure is a separate explicit action.
         update_issue_status(issue, Issue.STATUS_TEACHER_FINAL_REVIEW, 'teacher', teacher_public_id, notes=resolution_notes)
-        issue.teacher_resolved_at = utc_now()
+        issue.teacher_resolved_at = canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="current_time",
+        ).canonical_now_utc
         issue.teacher_notes = resolution_notes
 
         flash("Issue moved to final review. Close it after confirming classroom state.", "success")
@@ -10936,7 +10890,9 @@ def escalate_issue(issue_ref):
         from app.services.support_disclosure import permissions_from_form
         issue.support_permissions = permissions_from_form(request.form)
         issue.share_class_name_with_sysadmin = share_class_name
-        issue.escalated_at = utc_now()
+        issue.escalated_at = canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="current_time",
+        ).canonical_now_utc
         # Record who escalated. `reviewer_public_id` had no writer anywhere in the
         # codebase, so the sysadmin surface had no lawful source for the reviewing
         # teacher at all — which is why the crashing view reached for a
@@ -11007,7 +10963,9 @@ def close_issue(issue_ref):
             issue.teacher_notes = f"{issue.teacher_notes}\n\nClosure Summary: {resolution_summary}"
         else:
             issue.teacher_notes = resolution_summary
-        issue.closed_at = utc_now()
+        issue.closed_at = canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="current_time",
+        ).canonical_now_utc
         issue.closed_by_type = 'teacher'
         update_issue_status(issue, Issue.STATUS_CLOSED, 'teacher', teacher_public_id, notes=resolution_summary)
         flash("Issue closed.", "success")

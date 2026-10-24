@@ -32,7 +32,6 @@ from app.services.payroll.settings import (
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
     canonical_temporal_resolver,
-    ensure_utc,
 )
 
 CENT = Decimal("0.01")
@@ -135,7 +134,7 @@ def _price_intervals(class_id: str, ctx, intervals, *, estimate: bool = False) -
             policy_uuid=policy_uuid,
             pay_rate_per_minute=rates[policy_uuid],
             seconds=int(seconds),
-            last_closed_at=max(ensure_utc(end) for _start, end in grouped),
+            last_closed_at=max(end for _start, end in grouped),
             intervals=tuple(i for i in grouped if hasattr(i, "as_evidence")),
         ))
     shares.sort(key=lambda share: share.last_closed_at)
