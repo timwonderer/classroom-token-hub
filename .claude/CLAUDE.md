@@ -93,6 +93,7 @@ Every query involving student/seat data MUST be scoped by `class_id`. `join_code
 ### Key Services
 
 - `app/services/context_resolver.py` — `resolve_canonical_context()`, the sole legal way to get identity in routes
+- `app/utils/canonical_temporal_resolver.py` — `canonical_temporal_resolver()`, the only place that reads the clock, converts timezones, derives days/periods or does date and duration arithmetic (SPEC-TIME-001). No `datetime.now()`, `timedelta`, `astimezone`, `.date()` or direct timestamp comparisons for decisions anywhere else; `tests/test_SPEC_TIME_001__resolver_is_the_only_time_tool.py` fails CI on them
 - `app/services/ledger_balance_query_service.py` — balance reads, `get_available_balance(seat_id, class_id, account_type)`
 - `app/services/identity_service.py` — identity resolution helpers
 - `app/auth.py` — decorators (`login_required` for students, `admin_required` for teachers, `system_admin_required` for sysadmins), session utilities
@@ -120,6 +121,7 @@ Per SPEC-TEST-001, tests provision a whole classroom rather than assembling rows
 7. **`class_id` is canonical, `join_code` is alias.** New domain queries must use `class_id`. `join_code` is only for ClassEconomy boundary lookups and user-facing display.
 8. **`seat_id` is the activity anchor.** All activity records (transactions, attendance, hall passes) key off `seat_id`, not `student_id`.
 9. **No GET side effects.** GET handlers must not write to the database.
+10. **Time goes through the resolver.** Every clock read, timezone conversion, day/period boundary, date or duration shift, and timestamp comparison that makes a decision is a `canonical_temporal_resolver(...)` primitive call at the point of use — no private wrappers. Tests use `tests/helpers/temporal.py`. Read SPEC-TIME-001 before touching time.
 
 ## Documentation Hierarchy
 

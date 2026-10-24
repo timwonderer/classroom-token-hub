@@ -283,6 +283,7 @@ Their surviving content lives at:
 **Version 3.40 (2026-10-24):**
 - Register SPEC-TIME-001 v1.3: `shift_calendar_days`, `localize_timestamp` and `same_instant` primitives; `elapsed_duration` truncates once; a decision may not compare timestamps directly; no private resolver wrappers; the resolver's `utc_now` is its internal clock and test seam (owner rulings 2026-10-24).
 - Register SPEC-TEST-001 v1.1: tests take time from `tests/helpers/temporal.py`, thin wrappers over the production resolver.
+- Register REF-TERM-001 v1.3: *Canonical Temporal Resolver* added; *Canonical Class Time* and *Class Day* follow SPEC-TIME-001 1.3.
 
 **Version 3.39 (2026-10-23):**
 - Register DOM-OPS-001 v2.14, SPEC-OPS-006 v1.6, SOP-DEP-001 v2.11 and SOP-DEP-002 v1.16: health endpoints are public and need no credential; while the Access gate is closed the status collector reads nothing from the application (owner ruling 2026-10-23).
