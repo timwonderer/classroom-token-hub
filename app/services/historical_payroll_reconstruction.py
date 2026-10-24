@@ -93,17 +93,23 @@ def _weights(segments, intervals):
     grouped = {}
     seen = {}
     for start, end in segments:
-        if end < start:
+        if canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=end, reference=start).is_earlier:
             _deny('CONFLICTING_SELECTION')
-        matches = [i for i in intervals if i.opened_at <= start and end <= i.closed_at]
-        if end == start:
-            exact = [i for i in matches if i.opened_at == start and i.closed_at == end]
+        matches = [i for i in intervals
+            if not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=i.opened_at, reference=start).is_later
+            and not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=end, reference=i.closed_at).is_later]
+        if canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="same_instant", candidate=end, reference=start).is_same:
+            exact = [i for i in matches
+                if canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="same_instant", candidate=i.opened_at, reference=start).is_same
+                and canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="same_instant", candidate=i.closed_at, reference=end).is_same]
             if exact: matches = exact
         if len(matches) != 1 or matches[0].closing_event_id is None:
             _deny('INCOMPLETE_CANONICAL_PAIR')
         pair = matches[0]
         key = (pair.opening_event_id, pair.closing_event_id)
-        if any(start < b and a < end for a, b in seen.get(key, ())):
+        if any(canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=start, reference=b).is_earlier
+                and canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=a, reference=end).is_earlier
+                for a, b in seen.get(key, ())):
             _deny('CONFLICTING_SELECTION')
         seen.setdefault(key, []).append((start, end))
         grouped[key] = grouped.get(key, 0) + _microseconds(start, end)
@@ -145,16 +151,19 @@ def _difference(worked, paid):
     """Exact nonoverlapping temporal set difference, never scalar subtraction."""
     result = list(worked)
     for start,end in paid:
-        containing = [(a,b) for a,b in worked if a <= start and end <= b]
-        if end < start or len(containing) != 1:
+        containing = [(a,b) for a,b in worked
+            if not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=a, reference=start).is_later
+            and not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=end, reference=b).is_later]
+        if canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=end, reference=start).is_earlier or len(containing) != 1:
             _deny('PAID_OUTSIDE_WORKED')
         next_result = []
         for a,b in result:
-            if end <= a or start >= b:
+            if (not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=end, reference=a).is_later
+                    or not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=start, reference=b).is_earlier):
                 next_result.append((a,b))
             else:
-                if a < start: next_result.append((a,start))
-                if end < b: next_result.append((end,b))
+                if canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=a, reference=start).is_earlier: next_result.append((a,start))
+                if canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=end, reference=b).is_earlier: next_result.append((end,b))
         result = next_result
     return tuple(result)
 
@@ -167,7 +176,8 @@ def _share(settings, instant, segments, intervals, window, *, paid=None, legacy=
     rate = setting.legacy_rate_per_minute if legacy else setting.rate_per_minute
     if not isinstance(rate,str): _deny('MISSING_OR_AMBIGUOUS_SETTING')
     return HistoricalReconstructedShare(setting.policy_locator,rate,
-        sum(_microseconds(a,b) for a,b in segments)//1000000,weights,window,paid,tuple((a.isoformat(),b.isoformat()) for a,b in segments))
+        (canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="elapsed_duration",
+            intervals=list(segments)).elapsed_seconds if segments else 0),weights,window,paid,tuple((a.isoformat(),b.isoformat()) for a,b in segments))
 
 
 def _event(event, shares, rule, references=(), candidates=()):
@@ -205,7 +215,9 @@ def reconstruct_historical_payroll_snapshot(*,ctx,target_seat_id,rows,intervals,
     if any(s.class_id != ctx.class_id for s in settings): _deny('UNAUTHORIZED_SCOPE')
     ordered = sorted(events,key=lambda e:(e.recorded_at,e.id))
     payroll = [e for e in ordered if e.payroll_event_type == 'payroll']
-    if len({e.recorded_at for e in payroll}) != len(payroll):
+    if any(canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="same_instant",
+            candidate=a.recorded_at, reference=b.recorded_at).is_same
+            for a, b in zip(payroll, payroll[1:])):
         _deny('TIED_PAYROLL_BOUNDARY')
     result, window_facts, previous, legacy_times = [], {}, None, []
     for event in payroll:
@@ -315,8 +327,10 @@ def reconstruct_historical_payroll_snapshot(*,ctx,target_seat_id,rows,intervals,
                 if not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than",
                         candidate=original.recorded_at, reference=event.recorded_at).is_earlier:
                     continue
-                paid_seconds = sum(_microseconds(a,b) for a,b in paid)//1000000
-                worked_seconds = sum(_microseconds(a,b) for a,b in worked)//1000000
+                paid_seconds = (canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="elapsed_duration",
+            intervals=list(paid)).elapsed_seconds if paid else 0)
+                worked_seconds = (canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="elapsed_duration",
+            intervals=list(worked)).elapsed_seconds if worked else 0)
                 if worked_seconds <= paid_seconds:
                     continue
                 _weights(paid,intervals)

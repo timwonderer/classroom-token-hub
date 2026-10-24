@@ -33,6 +33,7 @@ from app.extensions import db
 
 from app.models import EntitlementEvent, PendingAction, Seat, Transaction
 from app.services import store_service
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 REDEMPTION_FEAT = "FEAT-STOR-002"
 
@@ -158,7 +159,10 @@ def _grants_by_entitlement(class_id: str, entitlement_ids: set[str]) -> dict[str
     latest: dict[str, EntitlementEvent] = {}
     for grant in grants:
         held = latest.get(grant.entitlement_id)
-        if held is None or grant.timestamp > held.timestamp:
+        if held is None or canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="later_than",
+            candidate=grant.timestamp, reference=held.timestamp,
+        ).is_later:
             latest[grant.entitlement_id] = grant
     return latest
 

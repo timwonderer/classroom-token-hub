@@ -100,16 +100,6 @@ def _class_ctx(class_id: str):
     return SimpleNamespace(class_id=class_id)
 
 
-def _anchor_date(class_id: str, first_pay_date) -> date:
-    """The class-local calendar date of ``first_pay_date``."""
-    return canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=_class_ctx(class_id),
-        primitive="current_evaluation_day",
-        reference_time_utc=first_pay_date,
-    ).evaluation_date
-
-
 def schedule_boundary(class_id: str, anchor: date, cadence: PayCadence, n: int) -> datetime:
     """Payday ``n`` (``n >= 0``) of the schedule: class-local midnight, in UTC.
 
@@ -180,7 +170,12 @@ def derive_next_payroll_date(
     input, so it cannot move the date.
     """
     cadence = pay_cadence(pay_schedule_type)
-    anchor = _anchor_date(class_id, first_pay_date)
+    anchor = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=_class_ctx(class_id),
+        primitive="current_evaluation_day",
+        reference_time_utc=first_pay_date,
+    ).evaluation_date
     if last_system_occurrence is None:
         return schedule_boundary(class_id, anchor, cadence, 0)
     return first_boundary_after(class_id, anchor, cadence, last_system_occurrence)
@@ -195,7 +190,12 @@ def pay_period_containing(class_id: str, instant) -> tuple[datetime, datetime] |
     if setting is None:
         return None
     cadence = pay_cadence(setting.pay_schedule_type)
-    anchor = _anchor_date(class_id, setting.first_pay_date)
+    anchor = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=_class_ctx(class_id),
+        primitive="current_evaluation_day",
+        reference_time_utc=setting.first_pay_date,
+    ).evaluation_date
     n = max(1, _first_index_after(class_id, anchor, cadence, instant))
     return (
         schedule_boundary(class_id, anchor, cadence, n - 1),
@@ -271,7 +271,12 @@ def next_payroll_boundary_after(class_id: str, instant) -> datetime | None:
         return boundary
     setting = current_payroll_setting(class_id, as_of=instant)
     cadence = pay_cadence(setting.pay_schedule_type)
-    anchor = _anchor_date(class_id, setting.first_pay_date)
+    anchor = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=_class_ctx(class_id),
+        primitive="current_evaluation_day",
+        reference_time_utc=setting.first_pay_date,
+    ).evaluation_date
     return first_boundary_after(class_id, anchor, cadence, instant)
 
 

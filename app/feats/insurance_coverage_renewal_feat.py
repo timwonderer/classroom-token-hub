@@ -75,6 +75,7 @@ from app.services.policy_reference_service import (
 )
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
+    SYSTEM_LEVEL_EVALUATION,
     canonical_temporal_resolver,
 )
 
@@ -121,27 +122,6 @@ def _ctx(class_id: str) -> SimpleNamespace:
     return SimpleNamespace(class_id=class_id)
 
 
-def _reference_now(class_id: str, reference_time_utc: datetime | None) -> datetime:
-    return canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=_ctx(class_id),
-        primitive="current_time",
-        reference_time_utc=reference_time_utc,
-    ).canonical_now_utc
-
-
-def _reached(class_id: str, instant: datetime, reference: datetime) -> bool:
-    """Whether ``instant`` is at or before ``reference`` (canonical evaluation)."""
-    return not canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=_ctx(class_id),
-        primitive="later_than",
-        reference_time_utc=reference,
-        candidate=instant,
-        reference=reference,
-    ).is_later
-
-
 def _lineage_premiums(class_id: str, internal_ref: str) -> list[ObligationAssessment]:
     """The lineage's premium assessments (one per period), oldest period first."""
     return (
@@ -178,7 +158,10 @@ def find_nonpayment_deadline(
     internal_ref = premium_lineage_ref(entitlement_id)
     for assessment in _lineage_premiums(class_id, internal_ref):
         due_at = obligations_service.resolve_assessment_due_at(assessment)
-        if due_at is None or not _reached(class_id, due_at, reference_time_utc):
+        if due_at is None or canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="later_than",
+            candidate=due_at, reference=reference_time_utc,
+        ).is_later:
             # Not yet due; later periods are later still.
             return None
         # The due instant moved cancel_after_days class-local calendar days, keeping its local time.
@@ -194,7 +177,10 @@ def find_nonpayment_deadline(
         )
         if state_at_deadline is None or not state_at_deadline.is_outstanding:
             continue  # satisfied (or withdrawn) before its deadline
-        if _reached(class_id, deadline, reference_time_utc):
+        if not canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="later_than",
+            candidate=deadline, reference=reference_time_utc,
+        ).is_later:
             return deadline
         return None  # the earliest outstanding premium's deadline is still ahead
     return None
@@ -377,7 +363,12 @@ def renew_insurance_coverage(
     Domain orchestration composed inside the caller's FEAT-STOR-007 context.
     """
     result = InsuranceRenewalResult(entitlement_id=entitlement_id)
-    reference = _reference_now(class_id, reference_time_utc)
+    reference = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=_ctx(class_id),
+        primitive="current_time",
+        reference_time_utc=reference_time_utc,
+    ).canonical_now_utc
 
     grant = get_insurance_grant(class_id, entitlement_id)
     if grant is None:
