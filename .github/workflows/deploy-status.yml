@@ -126,7 +126,6 @@ jobs:
           --command python
           --args=-m,status_service.collector
           --update-env-vars "FIRESTORE_DATABASE=cth-status-prod"
-          --update-secrets "CF_ACCESS_CLIENT_ID=cth-status-cf-access-client-id:latest,CF_ACCESS_CLIENT_SECRET=cth-status-cf-access-client-secret:latest"
           --quiet
       # Provision alongside the Job only after the operator enables this gate.
       # Scheduler remains pointed at the Job until the manual cutover in the runbook.
@@ -152,7 +151,6 @@ jobs:
           --min-instances 0
           --timeout 120s
           --update-env-vars "FIRESTORE_DATABASE=cth-status-prod"
-          --update-secrets "CF_ACCESS_CLIENT_ID=cth-status-cf-access-client-id:latest,CF_ACCESS_CLIENT_SECRET=cth-status-cf-access-client-secret:latest"
           --quiet
       # Inspects the services rather than requesting them. Both run with
       # restricted ingress, so their run.app URLs answer a GitHub runner with

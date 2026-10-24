@@ -70,8 +70,8 @@ def test_collector_job_uses_shared_image_scoped_identity_and_secret_references()
     assert "--command python" in command
     assert "--args=-m,status_service.collector" in command
     assert "FIRESTORE_DATABASE=cth-status-prod" in command
-    assert "CF_ACCESS_CLIENT_ID=cth-status-cf-access-client-id:latest" in command
-    assert "CF_ACCESS_CLIENT_SECRET=cth-status-cf-access-client-secret:latest" in command
+    # The collector carries no Cloudflare Access credential (SPEC-OPS-006 1.6).
+    assert "CF_ACCESS" not in command
     assert not any(flag in command for flag in REPLACING_FLAGS)
 
 
@@ -104,8 +104,8 @@ def test_collector_service_is_private_and_opt_in():
                  "--cpu-throttling", "--max 1", "--max-instances 1", "--min 0", "--min-instances 0", "--timeout 120s"):
         assert flag in command
     assert "FIRESTORE_DATABASE=cth-status-prod" in command
-    assert "CF_ACCESS_CLIENT_ID=cth-status-cf-access-client-id:latest" in command
-    assert "CF_ACCESS_CLIENT_SECRET=cth-status-cf-access-client-secret:latest" in command
+    # The collector carries no Cloudflare Access credential (SPEC-OPS-006 1.6).
+    assert "CF_ACCESS" not in command
     assert not any(flag in command for flag in REPLACING_FLAGS)
     assert _step("Verify private collector service")["if"] == step["if"]
     assert sum(

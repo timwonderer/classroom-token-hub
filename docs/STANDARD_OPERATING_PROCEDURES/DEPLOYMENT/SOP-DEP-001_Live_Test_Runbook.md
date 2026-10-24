@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-001      | 2.10    | 2026-10-22     | 2.9 | Normative |
+| SOP-DEP-001      | 2.11    | 2026-10-23     | 2.10 | Normative |
 
 ## I. Purpose
 
@@ -192,7 +192,8 @@ git status --porcelain  # must be empty
 Before a restricted work window, confirm an unauthenticated browser reaches Access,
 an unauthorized identity cannot enter, and an authorized operator can reach the
 normal application sign-in. Verify the origin cannot be reached around Cloudflare.
-Public health probes require authorized service-token headers; host-local probes
+Health endpoints are public and need no credential; while the gate is closed the status
+collector reads nothing from the application (SPEC-OPS-006 1.6). Host-local probes
 do not traverse Access. Never record tokens in logs or deployment evidence.
 
 At the end of the window, change the Access policy only when public access is
@@ -481,6 +482,7 @@ revision; where they disagree, the code wins and this document is corrected.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.11 | 2026-10-23 | §VI Access gate verification: health endpoints are public and need no credential; the status collector reads nothing from the application while the gate is closed (DOM-OPS-001 2.14, SPEC-OPS-006 1.6). Owner ruling, 2026-10-23. |
 | 2.10 | 2026-10-22 | §XI's checklist is extracted into two templates with separate mechanisms: `SOP-DEP-001A` (initial deployment: every item evidenced before the gate opens) and `SOP-DEP-001B` (release: scope from the diff, covering directly changed, connected and known-problem features; out-of-scope features need no row). Both allow results recorded after the checks from contemporaneous evidence. §XI.A stays here. §XIII, §XV and §XVI cite the templates; §XIII drops the before-go/no-go ordering for known risks. Owner rulings, 2026-10-22 (v2.3.0). |
 | 2.9 | 2026-10-16 | §XI: one result set for every line (*evidenced*, *in part*, *failed*, *blocked*, *not exercised*), replacing pass/fail/blocked; a line is evidenced when the exercised features ran through it and behaved as asserted; a per-line results table, recorded during the checks and complete before go/no-go. §XI.A: no deliberate cross-scope attempt on a host serving live classes; the negative half of a "cannot" line is evidenced by the release suite, the positive half by normal use. Both owner rulings of 2026-10-16, after the v2.2.4 record had to reconstruct §XI from logs. |
 | 2.8 | 2026-10-06 | §XIV: the forward-only list is `migrations/forward_only_register.txt`, enforced against the chain by a test; the prose list was incomplete. Dependencies: `SOP-DB-009` (archived) replaced by `SOP-DB-004`. |

@@ -66,7 +66,8 @@ def home():
 
 
 @main_bp.route('/health')
-@limiter.exempt
+# Per visitor, replacing the daily defaults the once-a-minute status collector exhausted (2026-10-20).
+@limiter.limit("30 per minute")
 def health_check():
     """Simple health check endpoint for uptime monitoring."""
     try:
@@ -78,7 +79,7 @@ def health_check():
 
 
 @main_bp.route('/health/status')
-@limiter.exempt
+@limiter.limit("30 per minute")
 def health_status():
     """Return bounded capability and platform signals for status publication.
 
