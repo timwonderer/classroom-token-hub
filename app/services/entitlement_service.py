@@ -24,13 +24,6 @@ from app.utils.canonical_temporal_resolver import (
 )
 
 
-def _current_utc():
-    return canonical_temporal_resolver(
-        SYSTEM_LEVEL_EVALUATION,
-        primitive="current_time",
-    ).canonical_now_utc
-
-
 def get_hall_pass_balance(seat_id: int, class_id: str) -> int:
     """Return the derived hall pass balance for a seat in a class."""
     return get_entitlement_balance(
@@ -213,7 +206,7 @@ def grant_hall_passes(
         grant_quantity=grant_quantity,
     )
 
-    now = _current_utc()
+    now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
     grant_correlation_id = correlation_id or generate_correlation_id()
     resolved_actor = actor_seat_id if actor_seat_id is not None else seat.id
     for index in range(grant_quantity):
@@ -288,7 +281,7 @@ def grant_store_entitlements(
         grant_quantity=grant_quantity,
     )
 
-    now = _current_utc()
+    now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
     grant_correlation_id = correlation_id or generate_correlation_id()
     resolved_actor = actor_seat_id if actor_seat_id is not None else seat.id
 
@@ -387,7 +380,7 @@ def grant_insurance_entitlement(
             "policy_uuid": policy_uuid,
             **({"continues_entitlement_id": continues_entitlement_id} if continues_entitlement_id else {}),
         },
-        timestamp=granted_at or _current_utc(),
+        timestamp=granted_at or canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc,
     )
     db.session.add(event)
     db.session.flush()
@@ -430,7 +423,7 @@ def remove_hall_passes(
             payload={
                 "source": "remove_hall_passes",
             },
-            timestamp=_current_utc(),
+            timestamp=canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc,
         )
         db.session.add(event)
         db.session.flush()
@@ -518,7 +511,7 @@ def consume_entitlement(
     if hall_pass_use_log(entitlement_id, class_id) is not None:
         raise ValueError(f"Entitlement {entitlement_id} is a hall pass already used")
 
-    now = _current_utc()
+    now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
     event = EntitlementEvent(
         class_id=class_id,
         target_seat_id=target_seat_id,
@@ -585,7 +578,7 @@ def expire_entitlement(
     if hall_pass_use_log(entitlement_id, class_id) is not None:
         raise ValueError(f"Entitlement {entitlement_id} is a hall pass already used")
 
-    now = effective_at or _current_utc()
+    now = effective_at or canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
     event = EntitlementEvent(
         class_id=class_id,
         target_seat_id=target_seat_id,
@@ -646,7 +639,7 @@ def revoke_entitlement(
         event_type="REVOKED",
         correlation_id=correlation_id,
         payload=payload,
-        timestamp=_current_utc(),
+        timestamp=canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc,
     )
     db.session.add(event)
     db.session.flush()
@@ -733,7 +726,7 @@ def expire_rent_perks(
         .all()
     )
 
-    now = _current_utc()
+    now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
     expired_count = 0
     ids = [grant.entitlement_id for grant in grants]
     # A used pass is already spent, and a pass with a request waiting cannot be

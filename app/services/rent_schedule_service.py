@@ -85,29 +85,6 @@ def start_of_local_date_utc(context, local_date: date) -> datetime:
 # Calendar arithmetic on class-local dates (resolver-backed).
 # --------------------------------------------------------------------------- #
 
-def _shift_days(context, d: date, days: int) -> date:
-    return canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=context,
-        primitive="shift_calendar_days",
-        date=d,
-        days=days,
-    ).shifted_date
-
-
-def _add_calendar_months(context, d: date, months: int) -> date:
-    """``months`` calendar months after ``d``, the day clamped to the target month end."""
-    return canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=context,
-        primitive="anchored_recurrence_boundary",
-        anchor_date=d,
-        cadence="month",
-        index=months,
-        overflow="clamp",
-    ).boundary_date
-
-
 def _clamp_day_of_month(year: int, month: int, day: int) -> date:
     last_day = calendar.monthrange(year, month)[1]
     return date(year, month, min(day, last_day))
@@ -125,11 +102,31 @@ def advance_due_date(settings, due_local_date: date, *, context) -> date:
     frequency = (settings.frequency_type or "monthly").strip().lower()
 
     if frequency == "daily":
-        return _shift_days(context, due_local_date, 1)
+        return canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=context,
+            primitive="shift_calendar_days",
+            date=due_local_date,
+            days=1,
+        ).shifted_date
     if frequency == "weekly":
-        return _shift_days(context, due_local_date, 7)
+        return canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=context,
+            primitive="shift_calendar_days",
+            date=due_local_date,
+            days=7,
+        ).shifted_date
     if frequency == "monthly":
-        nxt = _add_calendar_months(context, due_local_date, 1)
+        nxt = canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=context,
+            primitive="anchored_recurrence_boundary",
+            anchor_date=due_local_date,
+            cadence="month",
+            index=1,
+            overflow="clamp",
+        ).boundary_date
         # Re-anchor to the configured due day (clamped to the month end) so a
         # month-end clamp in one cycle does not permanently drift the day.
         anchor_day = settings.due_day_of_month or due_local_date.day
@@ -140,11 +137,31 @@ def advance_due_date(settings, due_local_date: date, *, context) -> date:
         if not value or value <= 0:
             raise ValueError("custom frequency requires a positive custom_frequency_value")
         if unit == "days":
-            return _shift_days(context, due_local_date, value)
+            return canonical_temporal_resolver(
+                CLASS_LEVEL_EVALUATION,
+                canonical_execution_context=context,
+                primitive="shift_calendar_days",
+                date=due_local_date,
+                days=value,
+            ).shifted_date
         if unit == "weeks":
-            return _shift_days(context, due_local_date, 7 * value)
+            return canonical_temporal_resolver(
+                CLASS_LEVEL_EVALUATION,
+                canonical_execution_context=context,
+                primitive="shift_calendar_days",
+                date=due_local_date,
+                days=7 * value,
+            ).shifted_date
         if unit == "months":
-            return _add_calendar_months(context, due_local_date, value)
+            return canonical_temporal_resolver(
+                CLASS_LEVEL_EVALUATION,
+                canonical_execution_context=context,
+                primitive="anchored_recurrence_boundary",
+                anchor_date=due_local_date,
+                cadence="month",
+                index=value,
+                overflow="clamp",
+            ).boundary_date
         raise ValueError(f"unsupported custom_frequency_unit: {settings.custom_frequency_unit!r}")
 
     raise ValueError(f"unsupported frequency_type: {settings.frequency_type!r}")
@@ -189,7 +206,13 @@ def resolve_cycle_schedule(settings, *, due_local_date: date, context) -> Resolv
     if grace_days is None or grace_days < 0:
         grace_boundary_at = None
     else:
-        grace_local_date = _shift_days(context, due_local_date, grace_days)
+        grace_local_date = canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=context,
+            primitive="shift_calendar_days",
+            date=due_local_date,
+            days=grace_days,
+        ).shifted_date
         grace_boundary_at = start_of_local_date_utc(context, grace_local_date)
 
     return ResolvedCycleSchedule(

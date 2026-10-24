@@ -240,19 +240,6 @@ def run_rent_reconciliation_job():
     )
 
 
-def _advance_local_calendar_days(occurrence_utc, days: int, ctx):
-    """Advance an occurrence by `days` *local calendar* days, keeping the local clock."""
-    from app.utils.canonical_temporal_resolver import CLASS_LEVEL_EVALUATION, canonical_temporal_resolver
-
-    return canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=ctx,
-        primitive="shift_calendar_days",
-        timestamp=occurrence_utc,
-        days=days,
-    ).shifted_timestamp_utc
-
-
 def run_automatic_payroll_job():
     """Automatic payroll: fire the canonical completion FEAT for every due class.
 
