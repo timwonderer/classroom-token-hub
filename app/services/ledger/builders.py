@@ -227,10 +227,9 @@ def build_transaction_summary_view(
             total_outflow += abs(amount)
 
         if txn.timestamp:
-            if earliest is None or txn.timestamp < earliest:
-                earliest = txn.timestamp
-            if latest is None or txn.timestamp > latest:
-                latest = txn.timestamp
+            # Ordering, not a decision (SPEC-TIME-001): min/max keep the first on ties.
+            earliest = txn.timestamp if earliest is None else min(earliest, txn.timestamp)
+            latest = txn.timestamp if latest is None else max(latest, txn.timestamp)
 
     net_activity = total_inflow - total_outflow
 

@@ -19,7 +19,7 @@ from app.models import (
     ObligationAssessment, BillCycle, LedgerMechanism, ObligationCommandReservation, Transaction,
 )
 from app.utils.canonical_temporal_resolver import (
-    CLASS_LEVEL_EVALUATION, canonical_temporal_resolver,
+    CLASS_LEVEL_EVALUATION, SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver,
 )
 
 
@@ -415,8 +415,21 @@ def get_paid_magnitude_through_event(
     total = Decimal('0.00')
     for event in get_satisfaction_events(correlation_id):
         if event.event_type == 'PAYMENT' and (
-            event.timestamp < boundary_event.timestamp
-            or (event.timestamp == boundary_event.timestamp and event.id <= boundary_event.id)
+            canonical_temporal_resolver(
+                SYSTEM_LEVEL_EVALUATION,
+                primitive="earlier_than",
+                candidate=event.timestamp,
+                reference=boundary_event.timestamp,
+            ).is_earlier
+            or (
+                canonical_temporal_resolver(
+                    SYSTEM_LEVEL_EVALUATION,
+                    primitive="same_instant",
+                    candidate=event.timestamp,
+                    reference=boundary_event.timestamp,
+                ).is_same
+                and event.id <= boundary_event.id
+            )
         ) and event.ledger_transaction_id:
             from app.models import Transaction
             txn = db.session.get(Transaction, event.ledger_transaction_id)
@@ -466,7 +479,13 @@ def get_obligation_state(
     is_waived = False
     cutoff = as_of
     for event in get_satisfaction_events(correlation_id):
-        if cutoff is not None and _is_later(assessment.class_id, event.timestamp, cutoff):
+        if cutoff is not None and canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=_class_ctx(assessment.class_id),
+            primitive="later_than",
+            candidate=event.timestamp,
+            reference=cutoff,
+        ).is_later:
             continue
         if event.event_type == "PAYMENT":
             satisfied_amount += payment_event_magnitude(event)
@@ -476,7 +495,13 @@ def get_obligation_state(
     assessed_amount = resolve_assessment_amount(assessment)
     withdrawal = get_withdrawal_event(correlation_id)
     is_withdrawn = withdrawal is not None and (
-        cutoff is None or not _is_later(assessment.class_id, withdrawal.timestamp, cutoff)
+        cutoff is None or not canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=_class_ctx(assessment.class_id),
+            primitive="later_than",
+            candidate=withdrawal.timestamp,
+            reference=cutoff,
+        ).is_later
     )
     if is_withdrawn:
         # Never became owed (DOM-OBL-001 §V.8). Deliberately NOT satisfied: a
@@ -524,18 +549,14 @@ def is_obligation_past_due(
         canonical_execution_context=SimpleNamespace(class_id=state.class_id),
         primitive="later_than",
         reference_time_utc=reference_time_utc,
-        candidate=_current_reference(state.class_id, reference_time_utc),
+        candidate=canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=SimpleNamespace(class_id=state.class_id),
+            primitive="current_time",
+            reference_time_utc=reference_time_utc,
+        ).canonical_now_utc,
         reference=state.due_at,
     ).is_later
-
-
-def _current_reference(class_id: str, reference_time_utc: datetime | None) -> datetime:
-    return canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=SimpleNamespace(class_id=class_id),
-        primitive="current_time",
-        reference_time_utc=reference_time_utc,
-    ).canonical_now_utc
 
 
 def get_assessment_events_for_seat_class(
@@ -674,26 +695,6 @@ def _class_ctx(class_id: str) -> SimpleNamespace:
     return SimpleNamespace(class_id=class_id)
 
 
-def _reference_now(class_id: str, reference_time_utc: datetime | None) -> datetime:
-    return canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=_class_ctx(class_id),
-        primitive="current_time",
-        reference_time_utc=reference_time_utc,
-    ).canonical_now_utc
-
-
-def _is_later(class_id: str, candidate: datetime, reference: datetime) -> bool:
-    return canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=_class_ctx(class_id),
-        primitive="later_than",
-        reference_time_utc=reference,
-        candidate=candidate,
-        reference=reference,
-    ).is_later
-
-
 def get_assessment_point(cycle: BillCycle) -> datetime | None:
     """When the successor of ``cycle`` is assessed (DOM-OBL-001 §V.7).
 
@@ -779,8 +780,19 @@ def get_succession_eligibility(
         return SuccessionEligibility.EMPTY, None
     if latest.next_assessment_at is None:
         return SuccessionEligibility.TERMINAL, latest
-    reference = _reference_now(class_id, reference_time_utc)
-    not_yet = _is_later(class_id, get_assessment_point(latest), reference)
+    reference = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=_class_ctx(class_id),
+        primitive="current_time",
+        reference_time_utc=reference_time_utc,
+    ).canonical_now_utc
+    not_yet = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=_class_ctx(class_id),
+        primitive="later_than",
+        candidate=get_assessment_point(latest),
+        reference=reference,
+    ).is_later
     return (SuccessionEligibility.NOT_DUE if not_yet else SuccessionEligibility.DUE), latest
 
 
@@ -836,9 +848,20 @@ def get_current_bill_cycle(
     routinely an upcoming cycle whose period has not begun. A scheduled cycle
     that begins at or after the termination instant never becomes current.
     """
-    reference = _reference_now(class_id, reference_time_utc)
+    reference = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=_class_ctx(class_id),
+        primitive="current_time",
+        reference_time_utc=reference_time_utc,
+    ).canonical_now_utc
     instant = get_termination_instant(class_id, internal_ref)
-    if instant is not None and not _is_later(class_id, instant, reference):
+    if instant is not None and not canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=_class_ctx(class_id),
+        primitive="later_than",
+        candidate=instant,
+        reference=reference,
+    ).is_later:
         return None
     cycles = (
         db.session.query(BillCycle)
@@ -879,7 +902,12 @@ def are_required_obligations_satisfied(
     WITHDRAWN assessments are not required. Product-blind; consumers MUST NOT
     reconstruct this from obligation tables.
     """
-    reference = _reference_now(class_id, reference_time_utc)
+    reference = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=_class_ctx(class_id),
+        primitive="current_time",
+        reference_time_utc=reference_time_utc,
+    ).canonical_now_utc
     cycle_ids = [
         row.id
         for row in db.session.query(BillCycle.id).filter_by(
@@ -901,7 +929,13 @@ def are_required_obligations_satisfied(
         state = get_obligation_state(assessment.correlation_id, as_of=reference)
         if state is None or state.is_withdrawn or state.due_at is None:
             continue
-        if _is_later(class_id, state.due_at, reference):
+        if canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=_class_ctx(class_id),
+            primitive="later_than",
+            candidate=state.due_at,
+            reference=reference,
+        ).is_later:
             continue  # not due yet
         if not state.is_satisfied:
             return False
@@ -955,7 +989,12 @@ def seat_has_surviving_obligations(
     Disabling the creation of new obligations never makes such state
     unreachable (DOM-OBL-001 §IX.16).
     """
-    reference = _reference_now(class_id, reference_time_utc)
+    reference = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=_class_ctx(class_id),
+        primitive="current_time",
+        reference_time_utc=reference_time_utc,
+    ).canonical_now_utc
     assessments = (
         db.session.query(ObligationAssessment)
         .filter(
@@ -973,9 +1012,13 @@ def seat_has_surviving_obligations(
         if state.is_outstanding:
             return True
         cycle = db.session.get(BillCycle, assessment.bill_cycle_id) if assessment.bill_cycle_id else None
-        if cycle is not None and cycle.next_assessment_at is not None and _is_later(
-            class_id, cycle.next_assessment_at, reference
-        ):
+        if cycle is not None and cycle.next_assessment_at is not None and canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=_class_ctx(class_id),
+            primitive="later_than",
+            candidate=cycle.next_assessment_at,
+            reference=reference,
+        ).is_later:
             return True
     return False
 
