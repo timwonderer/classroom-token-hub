@@ -1,5 +1,4 @@
 """User-owned recovery coordination and explicitly class-scoped challenges."""
-from datetime import timedelta
 from hashlib import sha256
 import hmac
 import secrets
@@ -13,7 +12,7 @@ from app.hash_utils import _get_pepper, verify_password, hash_username_lookup
 from app.models import User, Seat, ClassEconomy, PasskeyCredential
 from app.services.recovery_service import _tables
 from app.utils.auth_username import build_hashed_username_fields, normalize_auth_username
-from app.utils.canonical_temporal_resolver import utc_now, ensure_utc
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 from app.utils.encryption import encrypt_totp, decrypt_totp
 
 
@@ -48,7 +47,8 @@ def _lock(request_id):
 
 
 def _active(user, row):
-    return bool(user and row and row.status == 'pending' and row.completed_at is None and ensure_utc(row.expires_at) > utc_now())
+    return bool(user and row and row.status == 'pending' and row.completed_at is None
+                and canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=row.expires_at, reference=canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc).is_later)
 
 
 def _access(row, nonce):
@@ -141,8 +141,9 @@ def begin_attempt(*, pairs, current_request_id=None, attempt_nonce=None, correla
     if not user:
         return None
     requests, _ = _tables()
+    now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
     existing = db.session.execute(sa.select(requests).where(requests.c.user_id == user.id,
-        requests.c.status == 'pending', requests.c.expires_at > utc_now(),
+        requests.c.status == 'pending', requests.c.expires_at > now,
         requests.c.selection_started_at.isnot(None))).first()
     if existing:
         return dict(id=existing.id, nonce=attempt_nonce, existing=True) if existing.id == current_request_id and _access(existing, attempt_nonce) else None
@@ -152,9 +153,9 @@ def begin_attempt(*, pairs, current_request_id=None, attempt_nonce=None, correla
         return None
     nonce = secrets.token_urlsafe(32)
     request_id = db.session.execute(sa.insert(requests).values(user_id=user.id, status='pending',
-        expires_at=utc_now()+timedelta(days=5), required_class_ids=owned,
+        expires_at=canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="shift_timestamp",
+            timestamp=now, elapsed_seconds=5 * 86400).shifted_timestamp_utc, required_class_ids=owned,
         attempt_nonce_hash=_attempt_digest(nonce)).returning(requests.c.id)).scalar_one()
-    now = utc_now()
     db.session.execute(sa.insert(_challenges()), [
         dict(recovery_request_id=request_id, class_id=class_id, proof_verified_at=now) for class_id in owned])
     return dict(id=request_id, nonce=nonce, existing=False,
@@ -172,9 +173,10 @@ def select_class_recipients(*, request_id, attempt_nonce, class_id, correlation_
     if challenge.selected_at:
         return True
     requests, codes = _tables()
+    now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
     # Freeze one ceremony per principal; failed proof staging cannot reserve/reroll it.
     other = db.session.execute(sa.select(requests.c.id).where(requests.c.user_id == user.id,
-        requests.c.id != row.id, requests.c.status == 'pending', requests.c.expires_at > utc_now(),
+        requests.c.id != row.id, requests.c.status == 'pending', requests.c.expires_at > now,
         requests.c.selection_started_at.isnot(None))).first()
     if other:
         return False
@@ -186,8 +188,8 @@ def select_class_recipients(*, request_id, attempt_nonce, class_id, correlation_
     db.session.execute(sa.insert(codes), [dict(recovery_request_id=row.id, class_id=class_id, seat_id=s) for s in selected])
     table = _challenges()
     db.session.execute(sa.update(table).where(table.c.recovery_request_id == row.id, table.c.class_id == class_id).values(
-        selected_at=utc_now(), selected_count=len(selected)))
-    db.session.execute(sa.update(requests).where(requests.c.id == row.id).values(selection_started_at=row.selection_started_at or utc_now()))
+        selected_at=now, selected_count=len(selected)))
+    db.session.execute(sa.update(requests).where(requests.c.id == row.id).values(selection_started_at=row.selection_started_at or now))
     return True
 
 
@@ -207,9 +209,12 @@ def issue_confirmation(*, request_id, class_id, code_id, seat_id, principal_id, 
     if not selected or not seat or not seat.claimed_at or not principal or not verify_password(passphrase, principal.passphrase_hash):
         return None
     value = f'{secrets.randbelow(1000000):06d}'
+    now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
+    code_ttl_end = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="shift_timestamp",
+        timestamp=now, elapsed_seconds=30 * 60).shifted_timestamp_utc
     db.session.execute(sa.update(codes).where(codes.c.id == code_id, codes.c.class_id == class_id).values(
-        code_hash=code_digest(value, row.id, class_id), verified_at=utc_now(), issued_round=row.submission_round,
-        code_expires_at=min(utc_now()+timedelta(minutes=30), ensure_utc(row.expires_at)), dismissed=False))
+        code_hash=code_digest(value, row.id, class_id), verified_at=now, issued_round=row.submission_round,
+        code_expires_at=min(code_ttl_end, row.expires_at), dismissed=False))
     return value
 
 
@@ -231,13 +236,14 @@ def confirm_class(*, request_id, attempt_nonce, class_id, code, correlation_id, 
         return True
     _, codes = _tables()
     digest = code_digest(code, row.id, class_id)
+    now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
     candidates = db.session.execute(sa.select(codes).where(codes.c.recovery_request_id == row.id,
         codes.c.class_id == class_id, codes.c.code_hash == digest, codes.c.issued_round==row.submission_round,
-        codes.c.code_expires_at > utc_now()).with_for_update()).all()
+        codes.c.code_expires_at > now).with_for_update()).all()
     if any(Seat.query.filter_by(id=c.seat_id, class_id=class_id, role='student').filter(
         Seat.user_id.isnot(None), Seat.claimed_at.isnot(None)).first() for c in candidates):
         db.session.execute(sa.update(table).where(table.c.recovery_request_id == row.id, table.c.class_id == class_id).values(
-            satisfied_at=utc_now(), satisfied_round=row.submission_round))
+            satisfied_at=now, satisfied_round=row.submission_round))
         db.session.execute(sa.update(codes).where(codes.c.recovery_request_id == row.id, codes.c.class_id == class_id).values(code_hash=None, code_expires_at=None))
     return True
 
@@ -284,7 +290,7 @@ def complete_setup(*, request_id, nonce, totp_code, correlation_id, idempotency_
         user.totp_secret_encrypted = row.setup_totp_encrypted
         user.current_session_nonce = secrets.token_hex(32)
         PasskeyCredential.query.filter_by(user_id=user.id).delete(synchronize_session=False)
-        _clear(row.id, status='verified', completed_at=utc_now(), attempt_nonce_hash=None)
+        _clear(row.id, status='verified', completed_at=canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc, attempt_nonce_hash=None)
         db.session.flush()
         savepoint.commit()
     except IntegrityError:
@@ -298,7 +304,8 @@ def read_setup(request_id, nonce):
     """Pure read for re-displaying an authorized enrollment form."""
     requests, _ = _tables()
     row = db.session.execute(sa.select(requests).where(requests.c.id == request_id)).first()
-    if (not row or row.status != 'pending' or row.completed_at is not None or ensure_utc(row.expires_at) <= utc_now()
+    if (not row or row.status != 'pending' or row.completed_at is not None
+            or not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=row.expires_at, reference=canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc).is_later
             or not isinstance(nonce, str) or not row.setup_nonce_hash
             or not hmac.compare_digest(row.setup_nonce_hash, _nonce_digest(nonce))):
         return None
@@ -331,7 +338,7 @@ def save_progress(*, request_id, attempt_nonce, username='', correlation_id, ide
 @requires_feat_context('FEAT-IDEN-105')
 def resume_attempt(*, pin, correlation_id, idempotency_key):
     from app.services.recovery_service import find_recovery_request_by_resume_pin
-    found = find_recovery_request_by_resume_pin(resume_digest(pin), utc_now())
+    found = find_recovery_request_by_resume_pin(resume_digest(pin), canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc)
     if not found:
         return None
     user, row = _lock(found.id)
@@ -347,7 +354,8 @@ def resume_attempt(*, pin, correlation_id, idempotency_key):
 def attempt_status(request_id, nonce):
     requests, _ = _tables()
     row = db.session.execute(sa.select(requests).where(requests.c.id==request_id)).first()
-    if not row or not _access(row, nonce) or row.status!='pending' or ensure_utc(row.expires_at)<=utc_now():
+    if (not row or not _access(row, nonce) or row.status!='pending'
+            or not canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=row.expires_at, reference=canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc).is_later):
         return None
     table = _challenges()
     proofs = {p.class_id:p for p in db.session.execute(sa.select(table).where(table.c.recovery_request_id==row.id))}
