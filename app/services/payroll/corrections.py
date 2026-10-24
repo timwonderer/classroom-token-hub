@@ -40,9 +40,8 @@ from app.services.context_resolver import CanonicalContext
 from app.services.payroll.settings import pay_rate_per_second, payroll_setting_governing_work
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
+    SYSTEM_LEVEL_EVALUATION,
     canonical_temporal_resolver,
-    ensure_utc,
-    utc_now,
 )
 
 CENT = Decimal("0.01")
@@ -110,7 +109,11 @@ def correction_correlation_id(key: str) -> str:
 
 
 def incident_is_open(incident: PayrollIncident, *, now_utc=None) -> bool:
-    return ensure_utc(now_utc or utc_now()) < incident.expires_at
+    if now_utc is None:
+        now_utc = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
+    return canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=now_utc, reference=incident.expires_at,
+    ).is_earlier
 
 
 def _elapsed_seconds(ctx, intervals, reference_time_utc) -> int:
@@ -134,10 +137,16 @@ def _replayed_paid_seconds(ctx, rows, *, since_utc, run_at_utc) -> int:
     intervals = []
     active_start = None
     for row in rows:
-        ts = ensure_utc(row.timestamp)
-        if ts > run_at_utc:
+        ts = row.timestamp
+        if canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION, canonical_execution_context=ctx,
+            primitive="later_than", candidate=ts, reference=run_at_utc,
+        ).is_later:
             break
-        if since_utc is not None and ts < since_utc:
+        if since_utc is not None and canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION, canonical_execution_context=ctx,
+            primitive="earlier_than", candidate=ts, reference=since_utc,
+        ).is_earlier:
             continue
         if row.status == "active":
             active_start = ts
@@ -161,9 +170,15 @@ def _worked_seconds_in_window(ctx, rows, *, since_utc, run_at_utc) -> int:
         ctx=ctx, as_of_utc=run_at_utc)
     intervals = []
     for start, end in sessions:
-        if since_utc is not None and start < since_utc:
+        if since_utc is not None and canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION, canonical_execution_context=ctx,
+            primitive="earlier_than", candidate=start, reference=since_utc,
+        ).is_earlier:
             start = since_utc
-        if end > start:
+        if canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION, canonical_execution_context=ctx,
+            primitive="later_than", candidate=end, reference=start,
+        ).is_later:
             intervals.append((start, end))
     return _elapsed_seconds(ctx, intervals, run_at_utc)
 
@@ -219,7 +234,7 @@ def build_class_correction_proposal(
                 amount=Decimal(str(summary.get("amount", "0.00"))),
                 status=CORRECTED,
                 corrected_event_ids=tuple(summary.get("corrected_payroll_event_ids", ())),
-                corrected_at=ensure_utc(existing.recorded_at),
+                corrected_at=existing.recorded_at,
             ))
             continue
         if not any(_is_legacy(event) for event in events):
@@ -239,7 +254,7 @@ def build_class_correction_proposal(
         consistent = True
         previous_at = None
         for event in events:
-            run_at = ensure_utc(event.recorded_at)
+            run_at = event.recorded_at
             if _is_legacy(event):
                 # The earlier rule priced a run at the setting in force when it
                 # ran, so that setting reproduces what it paid.
@@ -360,7 +375,7 @@ def plan_class_corrections(
     class_id = ctx.class_id
     proposal = build_class_correction_proposal(class_id, incident=incident)
     corrected_run_times = {
-        event.id: ensure_utc(event.recorded_at)
+        event.id: event.recorded_at
         for event in PayrollEvent.query.filter_by(class_id=class_id, payroll_event_type="payroll").all()
     }
     postings: list[CorrectionPosting] = []

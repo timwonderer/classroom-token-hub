@@ -16,7 +16,7 @@ from dataclasses import dataclass
 import sqlalchemy as sa
 
 from app.extensions import db
-from app.utils.canonical_temporal_resolver import utc_now
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 logger = logging.getLogger(__name__)
 
@@ -67,8 +67,6 @@ LEDGER_FIELDS_BY_VERSION = {
 # Result types (re-exported from audit_service for convenience)
 # ---------------------------------------------------------------------------
 
-from datetime import timezone as _UTC
-
 from app.services.audit_service import (
     LineageState,
     VerificationResult,
@@ -83,17 +81,15 @@ def _utc_isoformat(dt) -> str:
     """Return an ISO-8601 string normalized to UTC ("+00:00" suffix).
 
     The emit path computes event_hash using `now_utc.isoformat()` where
-    now_utc is always UTC (from the centralized `utc_now()` helper). SQLAlchemy may
-    return stored datetimes in the local session timezone. Normalizing here
+    now_utc is the resolver's UTC `current_time`. SQLAlchemy may return stored
+    (timezone-aware) datetimes in the session timezone. Normalizing here
     ensures the verifier recomputes the same string used at emit time.
     """
     if dt is None:
         return ""
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=_UTC.utc)
-    else:
-        dt = dt.astimezone(_UTC.utc)
-    return dt.isoformat()
+    return canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp", timestamp=dt
+    ).local_timestamp.isoformat()
 
 
 # ---------------------------------------------------------------------------

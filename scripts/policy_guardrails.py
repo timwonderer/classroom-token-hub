@@ -585,8 +585,6 @@ _SLE_DURATIONS = {
     ("app/services/tlcp.py", "ttl_cutoff = ticket_created_at - timedelta(days=ttl_days)"),
     ("app/services/student_recovery.py", "user.reset_code_expires_at = now + timedelta(minutes=10)"),
     ("app/feats/teacher_signup_feat.py", "payload_encrypted=encrypt_totp(json.dumps(payload)), expires_at=utc_now()+timedelta(minutes=30)))"),
-    ("app/feats/teacher_recovery_feat.py", "expires_at=utc_now()+timedelta(days=5), required_class_ids=owned,"),
-    ("app/feats/teacher_recovery_feat.py", "code_expires_at=min(utc_now()+timedelta(minutes=30), ensure_utc(row.expires_at)), dismissed=False))"),
     ("app/routes/student.py", "expiry_time = login_time + timedelta(minutes=SESSION_TIMEOUT_MINUTES)"),
     ("app/routes/student.py", "user.current_session_expires_at = now + timedelta(minutes=SESSION_TIMEOUT_MINUTES)"),
 }

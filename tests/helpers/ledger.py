@@ -172,7 +172,6 @@ def record_ledger_fixture(*, seat_id, class_id, amount, account_type="checking",
         if timestamp is not None:
             instant = ensure_utc(timestamp)
             clocks.enter_context(patch("app.utils.canonical_temporal_resolver.utc_now", return_value=instant))
-            clocks.enter_context(patch("app.services.ledger_settlement_service.utc_now", return_value=instant))
         transaction = create_pending_transaction(
             seat_id=seat_id, class_id=class_id, amount=amount, account_type=account_type,
             type=type, description=description, target_seat_id=target_seat_id or seat_id,

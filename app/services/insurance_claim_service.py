@@ -34,7 +34,7 @@ from app.models import (
     InsuranceClaim,
     InsuranceClaimProductivityDate,
 )
-from app.utils.canonical_temporal_resolver import utc_now
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 
 # Canonical claim lifecycle states.
@@ -188,7 +188,9 @@ def create_claim(
         status=SUBMITTED,
         correlation_id=correlation_id,
         claim_basis=claim_basis,
-        submitted_at=submitted_at or utc_now(),
+        submitted_at=submitted_at or canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="current_time"
+        ).canonical_now_utc,
     )
     db.session.add(claim)
     db.session.flush()
@@ -273,7 +275,9 @@ def decide_claim(
 
     claim.status = APPROVED if approved else REJECTED
     claim.decided_by_seat_id = decided_by_seat_id
-    claim.decided_at = decided_at or utc_now()
+    claim.decided_at = decided_at or canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="current_time"
+    ).canonical_now_utc
     claim.decision_note = decision_note
     if filing_window_override_reason:
         claim.filing_window_override_reason = filing_window_override_reason

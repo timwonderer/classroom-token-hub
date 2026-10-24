@@ -21,7 +21,7 @@ from typing import Any
 import sqlalchemy as sa
 
 from app.extensions import db
-from app.utils.canonical_temporal_resolver import ensure_utc, utc_now
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 logger = logging.getLogger(__name__)
 
@@ -136,8 +136,10 @@ def _canonical_payload(
     """
     def _normalize(v: Any) -> Any:
         if isinstance(v, datetime):
-            normalized = ensure_utc(v)
-            return normalized.isoformat() if normalized else None
+            # Persisted timestamps are aware; a naive one is rejected rather than assumed UTC.
+            return canonical_temporal_resolver(
+                SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp", timestamp=v
+            ).local_timestamp.isoformat()
         if hasattr(v, "__str__") and type(v).__name__ == "Decimal":
             return str(v)
         return v
@@ -258,7 +260,7 @@ def emit_audit_event(
         feat_id = feat_id or get_active_feat_name()
 
     chain_scope = _resolve_scope(class_id)
-    now_utc = utc_now()
+    now_utc = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
     row_pk_str = str(row_pk)
 
     # Acquire chain head with row-level lock
