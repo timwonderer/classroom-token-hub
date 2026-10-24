@@ -78,15 +78,6 @@ class ScheduleNextBillCycleRequest:
     reference_time_utc: datetime | None = None  # Defaults to the canonical current time
 
 
-def _iso(value: datetime | None) -> str | None:
-    # Fingerprinted in UTC so the same instant digests identically whatever offset it arrives in.
-    if value is None:
-        return None
-    return canonical_temporal_resolver(
-        SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp", timestamp=value,
-    ).local_timestamp.isoformat()
-
-
 def _fingerprint(request: ScheduleNextBillCycleRequest, version: int) -> str:
     """Digest of caller intent only: no derived cycle number, ids, or execution time."""
     if version not in SUPPORTED_FINGERPRINT_VERSIONS:
@@ -95,10 +86,13 @@ def _fingerprint(request: ScheduleNextBillCycleRequest, version: int) -> str:
         "internal_ref": request.internal_ref,
         "policy_uuid": request.policy_uuid,
         "source_version_id": request.source_version_id,
-        "cycle_boundary_at": _iso(request.cycle_boundary_at),
-        "next_assessment_at": _iso(request.next_assessment_at),
-        "grace_boundary_at": _iso(request.grace_boundary_at),
     }
+    # Fingerprinted in UTC so the same instant digests identically whatever offset it arrives in.
+    for field in ("cycle_boundary_at", "next_assessment_at", "grace_boundary_at"):
+        value = getattr(request, field)
+        representation[field] = None if value is None else canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp", timestamp=value,
+        ).local_timestamp.isoformat()
     encoded = json.dumps(representation, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
 
@@ -114,17 +108,6 @@ def _replay(reservation: ObligationCommandReservation, request: ScheduleNextBill
             f"with different terms; refusing to replay or re-execute."
         )
     return db.session.get(BillCycle, reservation.bill_cycle_id)
-
-
-def _later_than(ctx, reference_time_utc: datetime, candidate: datetime, reference: datetime) -> bool:
-    return canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=ctx,
-        primitive="later_than",
-        reference_time_utc=reference_time_utc,
-        candidate=candidate,
-        reference=reference,
-    ).is_later
 
 
 def _validate_identity(request: ScheduleNextBillCycleRequest) -> None:
@@ -173,7 +156,14 @@ def schedule_next_bill_cycle(
 
     if request.cycle_boundary_at is None or request.next_assessment_at is None:
         raise ValueError(f"{COMMAND_NAME} requires cycle_boundary_at and next_assessment_at.")
-    if not _later_than(ctx, reference_time_utc, request.next_assessment_at, request.cycle_boundary_at):
+    if not canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=ctx,
+        primitive="later_than",
+        reference_time_utc=reference_time_utc,
+        candidate=request.next_assessment_at,
+        reference=request.cycle_boundary_at,
+    ).is_later:
         raise ValueError(
             f"next_assessment_at must be strictly after cycle_boundary_at "
             f"({request.next_assessment_at} <= {request.cycle_boundary_at})"

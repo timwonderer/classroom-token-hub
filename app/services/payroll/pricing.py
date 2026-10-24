@@ -149,19 +149,14 @@ def price_payable_attendance(seat_id: int, class_id: str, *, ctx, as_of_utc) -> 
     return _price_intervals(class_id, ctx, intervals.payable)
 
 
-def _now(ctx, as_of_utc):
-    if as_of_utc is not None:
-        return as_of_utc
-    return canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=ctx,
-        primitive="current_time",
-    ).canonical_now_utc
-
-
 def estimate_payable_amount(seat_id: int, class_id: str, *, ctx, as_of_utc=None) -> Decimal:
     """What a payroll run now would pay the seat (the teacher's estimate)."""
-    as_of_utc = _now(ctx, as_of_utc)
+    if as_of_utc is None:
+        as_of_utc = canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=ctx,
+            primitive="current_time",
+        ).canonical_now_utc
     intervals = calculate_seat_payroll_intervals(seat_id, class_id, ctx=ctx, as_of_utc=as_of_utc)
     return _price_intervals(class_id, ctx, intervals.payable, estimate=True).amount
 
@@ -172,7 +167,12 @@ def estimate_unpaid_amount(seat_id: int, class_id: str, *, ctx, as_of_utc=None) 
     An estimate, not a settlement: the open session is paid by the first run
     after it closes, at the setting in force then.
     """
-    as_of_utc = _now(ctx, as_of_utc)
+    if as_of_utc is None:
+        as_of_utc = canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=ctx,
+            primitive="current_time",
+        ).canonical_now_utc
     intervals = calculate_seat_payroll_intervals(seat_id, class_id, ctx=ctx, as_of_utc=as_of_utc)
     return _price_intervals(
         class_id, ctx, intervals.payable + intervals.in_progress, estimate=True
