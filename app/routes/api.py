@@ -1271,13 +1271,12 @@ def hall_pass_history():
         offset = (page - 1) * page_size
         records = query.offset(offset).limit(page_size).all()
 
-        from app.utils.temporal_display import format_timestamp as _fmt_display, resolve_display_timezone as _resolve_tz
-        _display_tz = _resolve_tz(context)
+        from app.utils.temporal_display import format_timestamp as _fmt_display
 
         def format_timestamp(dt):
             if not dt:
                 return None
-            return _fmt_display(dt, _display_tz)
+            return _fmt_display(context, dt)
 
         # Format records for response
         records_data = []
@@ -1649,8 +1648,8 @@ def attendance_history():
             formatted_ts = None
             if record.timestamp:
                 timestamp_str = ensure_utc(record.timestamp).isoformat().replace('+00:00', 'Z')
-                from app.utils.temporal_display import format_timestamp as _format_ts, resolve_display_timezone as _resolve_tz
-                formatted_ts = _format_ts(record.timestamp, _resolve_tz(context))
+                from app.utils.temporal_display import format_timestamp as _format_ts
+                formatted_ts = _format_ts(context, record.timestamp)
 
             records_data.append({
                 "id": record.id,

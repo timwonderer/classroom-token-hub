@@ -46,8 +46,8 @@ from app.services.obligations_service import (
 from app.feats.base import requires_feat_context, FEATContext
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
+    SYSTEM_LEVEL_EVALUATION,
     canonical_temporal_resolver,
-    ensure_utc,
 )
 
 
@@ -79,7 +79,12 @@ class ScheduleNextBillCycleRequest:
 
 
 def _iso(value: datetime | None) -> str | None:
-    return ensure_utc(value).isoformat() if value is not None else None
+    # Fingerprinted in UTC so the same instant digests identically whatever offset it arrives in.
+    if value is None:
+        return None
+    return canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp", timestamp=value,
+    ).local_timestamp.isoformat()
 
 
 def _fingerprint(request: ScheduleNextBillCycleRequest, version: int) -> str:

@@ -1,16 +1,22 @@
 """
 SPEC-TIME-001 / MAP-UI-002 compliant display formatting for timestamps.
 
-Display timezone authority comes from the Temporal Context layer:
-  - In templates: injected as `display_timezone` by the context processor
-  - In API routes: resolved via `resolve_display_timezone(ctx)`
+Every timestamp is localized through ``canonical_temporal_resolver``'s
+``localize_timestamp`` primitive: CLE in the class timezone when a class
+context is at hand, SLE (UTC) when there is none.
+
+The ``ctx`` argument is either a context object carrying ``class_id``
+(``CanonicalContext``, ``SimpleNamespace(class_id=...)``), ``None`` (SLE), or the
+Jinja template context the filters receive. For a template context the class
+comes from an explicit ``temporal_context`` template variable (a display lens,
+e.g. the sysadmin ticket view's "class time" toggle), else from the request's
+``g.canonical_context``.
 
 Core functions (plain Python, usable anywhere):
     format_timestamp  — "Dec 3, 2025, 2:30 PM PST"
     format_date       — "Dec 3, 2025"
     format_compact_date — "Dec 3"
     format_time       — "2:30 PM PST"
-    resolve_display_timezone — resolve from CanonicalContext
 
 Jinja filters (registered via register_temporal_filters):
     fmt_timestamp, fmt_date, fmt_compact_date, fmt_time
@@ -18,32 +24,48 @@ Jinja filters (registered via register_temporal_filters):
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 
-import pytz
+from flask import g, has_app_context
 from jinja2 import pass_context
+from jinja2.runtime import Context
 from markupsafe import Markup
+
+from app.utils.canonical_temporal_resolver import (
+    CLASS_LEVEL_EVALUATION,
+    SYSTEM_LEVEL_EVALUATION,
+    canonical_temporal_resolver,
+)
 
 
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _ensure_aware(dt: datetime) -> datetime:
+def _execution_context(ctx):
+    """The class context to localize under, or None for SLE."""
+    if isinstance(ctx, Context):
+        ctx = ctx.get("temporal_context") or (
+            getattr(g, "canonical_context", None) if has_app_context() else None
+        )
+    # BoundaryContext raises AttributeError on class_id; getattr's default covers it.
+    return ctx if getattr(ctx, "class_id", None) else None
+
+
+def _localize(ctx, dt) -> datetime:
     if isinstance(dt, str):
         # TLCP correlation packs (DOM-OPS-001) freeze request-trace timestamps
         # as ISO strings inside a JSON column (app/services/tlcp.py:
         # row.created_at.isoformat()) -- callers pass those straight through
-        # this filter, never a datetime.
+        # this filter, never a datetime. The ISO string carries its offset.
         dt = datetime.fromisoformat(dt)
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
-
-
-def _localize(dt: datetime, tz_name: str) -> datetime:
-    tz = pytz.timezone(tz_name)
-    return _ensure_aware(dt).astimezone(tz)
+    execution_context = _execution_context(ctx)
+    return canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION if execution_context else SYSTEM_LEVEL_EVALUATION,
+        canonical_execution_context=execution_context,
+        primitive="localize_timestamp",
+        timestamp=dt,
+    ).local_timestamp
 
 
 def _tz_abbrev(dt_local: datetime) -> str:
@@ -60,88 +82,71 @@ def _format_clock_time(dt_local: datetime) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Temporal Context resolver (for API routes)
+# Core formatting functions
 # ---------------------------------------------------------------------------
 
-def resolve_display_timezone(ctx) -> str:
-    """Resolve display timezone from a CanonicalContext. Returns IANA tz name or 'UTC'."""
-    class_id = getattr(ctx, "class_id", None) if ctx else None
-    if not class_id:
-        return "UTC"
-    from app.models import ClassEconomy
-    from app.extensions import db
-    economy = db.session.get(ClassEconomy, class_id)
-    if economy and economy.class_timezone:
-        return economy.class_timezone
-    return "UTC"
-
-
-# ---------------------------------------------------------------------------
-# Core formatting functions (plain Python, no Jinja dependency)
-# ---------------------------------------------------------------------------
-
-def format_timestamp(dt, tz_name: str = "UTC") -> str:
+def format_timestamp(ctx, dt) -> str:
     if not dt:
         return "—"
-    local = _localize(dt, tz_name)
+    local = _localize(ctx, dt)
     formatted = f"{_format_month_day(local)}, {local.year}, {_format_clock_time(local)}"
     abbrev = _tz_abbrev(local)
     return f"{formatted} {abbrev}".strip()
 
 
-def format_date(dt, tz_name: str = "UTC") -> str:
+def format_date(ctx, dt) -> str:
     if not dt:
         return "—"
-    local = _localize(dt, tz_name)
+    local = _localize(ctx, dt)
     return f"{_format_month_day(local)}, {local.year}"
 
 
-def format_compact_date(dt, tz_name: str = "UTC") -> str:
+def format_compact_date(ctx, dt) -> str:
     if not dt:
         return "—"
-    local = _localize(dt, tz_name)
+    local = _localize(ctx, dt)
     return _format_month_day(local)
 
 
-def format_time(dt, tz_name: str = "UTC") -> str:
+def format_time(ctx, dt) -> str:
     if not dt:
         return "—"
-    local = _localize(dt, tz_name)
+    local = _localize(ctx, dt)
     formatted = _format_clock_time(local)
     abbrev = _tz_abbrev(local)
     return f"{formatted} {abbrev}".strip()
 
 
 # ---------------------------------------------------------------------------
-# Jinja2 filters (delegate to core functions, read tz from template context)
+# Jinja2 filters (delegate to core functions with the template context)
 # ---------------------------------------------------------------------------
 
 @pass_context
 def fmt_timestamp(ctx, dt):
     if not dt:
         return Markup("&mdash;")
-    return format_timestamp(dt, ctx.get("display_timezone", "UTC"))
+    return format_timestamp(ctx, dt)
 
 
 @pass_context
 def fmt_date(ctx, dt):
     if not dt:
         return Markup("&mdash;")
-    return format_date(dt, ctx.get("display_timezone", "UTC"))
+    return format_date(ctx, dt)
 
 
 @pass_context
 def fmt_compact_date(ctx, dt):
     if not dt:
         return Markup("&mdash;")
-    return format_compact_date(dt, ctx.get("display_timezone", "UTC"))
+    return format_compact_date(ctx, dt)
 
 
 @pass_context
 def fmt_time(ctx, dt):
     if not dt:
         return Markup("&mdash;")
-    return format_time(dt, ctx.get("display_timezone", "UTC"))
+    return format_time(ctx, dt)
 
 
 def register_temporal_filters(app):

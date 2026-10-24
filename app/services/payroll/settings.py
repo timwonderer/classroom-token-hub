@@ -26,7 +26,7 @@ from decimal import Decimal
 
 from app.extensions import db
 from app.models import PayrollSettings
-from app.utils.canonical_temporal_resolver import ensure_utc, utc_now
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 # The rate a class with no payroll setting is shown and, for an insurance
 # lost-time claim, paid at. A payroll run never uses it: settlement refuses a
@@ -52,7 +52,6 @@ def _newest_first(query):
 
 def payroll_setting_effective_at(class_id: str, instant) -> PayrollSettings | None:
     """The setting in force for ``class_id`` at ``instant``, or None before the first."""
-    instant = ensure_utc(instant)
     return _newest_first(
         _for_class(class_id).filter(PayrollSettings.effective_date <= instant)
     ).first()
@@ -65,7 +64,6 @@ def payroll_setting_in_force_before(class_id: str, instant) -> PayrollSettings |
     the setting that governed the cycle closing there is the one in force just
     before it (DOM-ITR-001 §IX reference configuration).
     """
-    instant = ensure_utc(instant)
     return _newest_first(
         _for_class(class_id).filter(PayrollSettings.effective_date < instant)
     ).first()
@@ -89,7 +87,9 @@ def payroll_setting_governing_work(class_id: str, closed_at) -> PayrollSettings 
 
 def current_payroll_setting(class_id: str, *, as_of=None) -> PayrollSettings | None:
     """The setting in force now (or at ``as_of``)."""
-    return payroll_setting_effective_at(class_id, as_of or utc_now())
+    return payroll_setting_effective_at(class_id, as_of or canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="current_time",
+    ).canonical_now_utc)
 
 
 def pending_payroll_settings(class_id: str, *, as_of=None) -> list[PayrollSettings]:
@@ -99,7 +99,7 @@ def pending_payroll_settings(class_id: str, *, as_of=None) -> list[PayrollSettin
     date is returned (the latest save wins, DOM-CLASS-003 §VII); a pending row
     superseded before its date stays in history but is not a pending change.
     """
-    as_of = ensure_utc(as_of or utc_now())
+    as_of = as_of or canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
     rows = (
         _for_class(class_id)
         .filter(PayrollSettings.effective_date > as_of)
@@ -108,7 +108,7 @@ def pending_payroll_settings(class_id: str, *, as_of=None) -> list[PayrollSettin
     )
     winners: dict[datetime, PayrollSettings] = {}
     for row in rows:
-        winners.setdefault(ensure_utc(row.effective_date), row)
+        winners.setdefault(row.effective_date, row)
     return list(winners.values())
 
 
@@ -184,9 +184,10 @@ def append_payroll_setting(
         raise ValueError("A payroll setting needs a first pay date: it anchors the schedule.")
     if settings_data.get('pay_schedule_type') not in PayrollSettings.PAY_SCHEDULE_TYPES:
         raise ValueError("A payroll schedule is weekly, biweekly or monthly.")
-    created_at = ensure_utc(created_at)
-    effective_date = ensure_utc(effective_date)
-    if effective_date < created_at:
+    if canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="earlier_than",
+        candidate=effective_date, reference=created_at,
+    ).is_earlier:
         raise ValueError("A payroll setting cannot take effect before it was recorded.")
     row = PayrollSettings(
         class_id=class_id,
@@ -211,7 +212,7 @@ def save_payroll_setting(*, class_id: str, settings_data: dict, recorded_at=None
     """
     from app.services.payroll.schedule import effective_date_for_new_setting
 
-    recorded_at = ensure_utc(recorded_at or utc_now())
+    recorded_at = recorded_at or canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
     effective_date = effective_date_for_new_setting(class_id, recorded_at)
     predecessor = payroll_setting_effective_at(class_id, effective_date)
     data = {}
@@ -266,5 +267,5 @@ def get_historical_payroll_setting_inputs(*, ctx, class_id, limit=500):
     if len(rows) > limit:
         raise ValueError('EVIDENCE_LIMIT_EXCEEDED')
     return tuple(HistoricalPayrollSettingInput(row.class_id,row.policy_uuid,
-        ensure_utc(row.effective_date),ensure_utc(row.created_at),str(row.pay_rate),
+        row.effective_date,row.created_at,str(row.pay_rate),
         str(row.pay_rate or Decimal('0.25'))) for row in rows)

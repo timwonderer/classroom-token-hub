@@ -213,8 +213,14 @@ def _cent_payment(app,seconds):
     classroom=initialize('chemistry_p1',app);ctx=CanonicalContext(classroom.teacher_user.id,classroom.class_id,classroom.teacher_seat.id,'teacher');target=classroom.students[0].seat.id
     from unittest.mock import patch
     base=datetime.now(timezone.utc)-timedelta(days=3)
+    # The provisioned setting is recorded at the real now, after the pinned
+    # instant, so carry its terms explicitly rather than looking them up there.
+    from app.models import PayrollSettings
+    from app.services.payroll.settings import current_payroll_setting
+    provisioned=current_payroll_setting(ctx.class_id)
+    carried={field:getattr(provisioned,field) for field in PayrollSettings.SETTING_FIELDS}
     with patch('app.utils.canonical_temporal_resolver.utc_now',return_value=base-timedelta(days=1)):
-        put_payroll_setting_in_force(ctx.class_id,pay_rate=Decimal('0.01'))
+        put_payroll_setting_in_force(ctx.class_id,**{**carried,'pay_rate':Decimal('0.01')})
     pairs=[]
     for index,duration in enumerate(seconds):
         start=base+timedelta(days=index)

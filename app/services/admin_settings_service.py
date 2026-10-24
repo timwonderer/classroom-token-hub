@@ -12,7 +12,7 @@ from __future__ import annotations
 from app.extensions import db
 from app.models import RentSettings
 from app.services.class_configuration_query_service import get_rent_settings
-from app.utils.canonical_temporal_resolver import ensure_utc, utc_now
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 
 def create_rent_settings(*, class_id: str) -> RentSettings:
@@ -62,13 +62,15 @@ def supersede_rent_settings(*, class_id: str, updates: dict, effective_at=None) 
     carried.update(updates)
 
     successor = RentSettings(class_id=class_id, **carried)
-    successor.rent_configured_at = utc_now()
+    successor.rent_configured_at = canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="current_time",
+    ).canonical_now_utc
     # The successor is selected for new work the moment it is recorded, because
     # its predecessor is retired in the same flush; the first new work is the
     # next period to be issued. A period already issued keeps the policy_uuid it
     # froze, so nothing already billed changes (DOM-CLASS-003 §VII).
     successor.rent_effective_at = (
-        ensure_utc(effective_at) if effective_at is not None else successor.rent_configured_at
+        effective_at if effective_at is not None else successor.rent_configured_at
     )
     successor.availability_state = 'IN_USE'
     db.session.add(successor)
