@@ -131,12 +131,14 @@ def test_malformed_stamp_falls_back_instead_of_raising(app):
     assert abs((got - expected).total_seconds()) < 5
 
 
-def test_naive_stamp_is_treated_as_utc(app):
-    """Postgres can hand back a naive datetime; comparing it naively would raise."""
+def test_naive_stamp_is_treated_as_unusable(app):
+    """The login writer always stamps an aware UTC instant; a naive stamp is not
+    one of its values, so it falls through to the role table like a malformed one."""
     naive = (datetime.now(timezone.utc) + timedelta(minutes=7)).replace(tzinfo=None)
     got = _expiry(app, role="student", **{SESSION_EXPIRES_AT_KEY: naive.isoformat()})
+    expected = datetime.now(timezone.utc) + timedelta(minutes=SESSION_TIMEOUT_MINUTES)
     assert got.tzinfo is not None
-    assert got == naive.replace(tzinfo=timezone.utc)
+    assert abs((got - expected).total_seconds()) < 5
 
 
 def _set_cookie_expiry(response):

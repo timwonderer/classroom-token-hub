@@ -33,10 +33,11 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 
 from app.extensions import db
 from app.models import PendingAction
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 KIND = "hall_pass_request"
 AUTHORITATIVE_FEAT = "FEAT-PROD-002"
@@ -61,13 +62,6 @@ def new_request_id() -> str:
     return str(uuid.uuid4())
 
 
-def _aware_utc(value: datetime) -> datetime:
-    if value.tzinfo is None:
-        # The column is timestamptz; a naive value here can only be UTC.
-        return value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc)
-
-
 def _hall_pass_rows(class_id: str):
     return PendingAction.query.filter(
         PendingAction.class_id == class_id,
@@ -83,7 +77,10 @@ def _to_request(row: PendingAction) -> PendingHallPassRequest:
         class_id=row.class_id,
         requested_by_seat_id=int(payload.get("requested_by_seat_id", row.seat_id)),
         destination=str(payload.get("destination") or ""),
-        requested_at_utc=_aware_utc(row.submitted_at),
+        # submitted_at is timestamptz (always aware); express it in UTC for the field's name.
+        requested_at_utc=canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp", timestamp=row.submitted_at,
+        ).local_timestamp,
         entitlement_id=row.entitlement_id,
     )
 
@@ -133,7 +130,7 @@ def enqueue_hall_pass_request(
             "requested_by_seat_id": int(request.requested_by_seat_id),
             "destination": request.destination,
         },
-        submitted_at=_aware_utc(requested_at),
+        submitted_at=requested_at,
     ))
     db.session.flush()
     return request

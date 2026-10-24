@@ -5,8 +5,7 @@ Provides utilities for creating issues, managing status changes, and ensuring
 proper data minimization for sysadmin review.
 """
 
-from datetime import datetime, timezone
-from app.utils.canonical_temporal_resolver import utc_now
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 from decimal import Decimal
 from flask import request, current_app
 import hashlib
@@ -65,7 +64,7 @@ def create_context_snapshot(actor, class_id, related_transaction_id=None, relate
         dict: Context snapshot with ledger state, amounts, timestamps, etc.
     """
     snapshot = {
-        'timestamp': utc_now().isoformat(),
+        'timestamp': canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc.isoformat(),
         'page_url': request.url if request else None,
         'user_agent': request.headers.get('User-Agent') if request else None,
         'ip_address': get_real_ip() if request else None,
@@ -171,7 +170,7 @@ def create_issue(actor, user_id, class_id, category_id, explanation, expected_ou
         actor, class_id, related_transaction_id, related_record_type, related_record_id
     )
 
-    now_utc = utc_now()
+    now_utc = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
 
     # Create the issue
     issue = Issue(
@@ -234,7 +233,7 @@ def record_status_change(issue, previous_status, new_status, changed_by_type, ch
         changed_by_type=changed_by_type,
         changed_by_public_id=changed_by_public_id,
         notes=notes,
-        changed_at=utc_now()
+        changed_at=canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
     )
 
     db.session.add(history)
@@ -268,7 +267,7 @@ def record_resolution_action(issue, action_type, performed_by_type, performed_by
         amount_changed=amount_changed,
         before_value=before_value,
         after_value=after_value,
-        created_at=utc_now()
+        created_at=canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
     )
 
     db.session.add(action)
@@ -287,6 +286,6 @@ def update_issue_status(issue, new_status, changed_by_type, changed_by_public_id
     """
     previous_status = issue.status
     issue.status = new_status
-    issue.updated_at = utc_now()
+    issue.updated_at = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
 
     record_status_change(issue, previous_status, new_status, changed_by_type, changed_by_public_id, notes)

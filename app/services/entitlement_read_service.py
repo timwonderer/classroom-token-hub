@@ -30,7 +30,6 @@ import sqlalchemy as sa
 
 from app.extensions import db
 from app.models import EntitlementEvent, HallPassLog
-from app.utils.canonical_temporal_resolver import ensure_utc
 
 
 def get_seat_ids_with_purchase_grants(
@@ -54,8 +53,8 @@ def get_seat_ids_with_purchase_grants(
             EntitlementEvent.class_id == class_id,
             EntitlementEvent.acquisition_type == "PURCHASE",
             EntitlementEvent.event_type == "GRANTED",
-            EntitlementEvent.timestamp >= ensure_utc(window_start),
-            EntitlementEvent.timestamp < ensure_utc(window_end),
+            EntitlementEvent.timestamp >= window_start,
+            EntitlementEvent.timestamp < window_end,
         )
         .distinct()
         .all()
