@@ -35,7 +35,7 @@ def source(*, failed=False, checked_at=NOW):
 @pytest.mark.parametrize("failed,expected", [(False, "PASS"), (True, "FAIL")])
 def test_only_real_database_evidence_is_persisted(failed, expected):
     store = Store()
-    result = collect_platform(store, client_id="id", client_secret="secret", now=NOW, fetch_gate=OPEN,
+    result = collect_platform(store, now=NOW, fetch_gate=OPEN,
                               fetch=lambda *_: json.dumps(source(failed=failed)).encode())
     assert result["checks"][0]["outcome"] == "PASS"
     assert result["checks"][1]["outcome"] == expected
@@ -48,7 +48,7 @@ def test_only_real_database_evidence_is_persisted(failed, expected):
 def test_http_failure_never_invents_database_failure(code, endpoint):
     def fetch(*_):
         raise HTTPError("private", code, "private", {}, None)
-    result = collect_platform(Store(), client_id="id", client_secret="secret", now=NOW, fetch_gate=OPEN, fetch=fetch)
+    result = collect_platform(Store(), now=NOW, fetch_gate=OPEN, fetch=fetch)
     assert result["checks"][0]["outcome"] == endpoint
     assert result["checks"][1]["outcome"] == "UNKNOWN"
     assert result["checks"][1]["checked_at"] is None
@@ -58,7 +58,7 @@ def test_http_failure_never_invents_database_failure(code, endpoint):
 def test_server_error_is_an_endpoint_failure(code):
     def fetch(*_):
         raise HTTPError("private", code, "private", {}, None)
-    result = collect_platform(Store(), client_id="id", client_secret="secret", now=NOW, fetch_gate=OPEN, fetch=fetch)
+    result = collect_platform(Store(), now=NOW, fetch_gate=OPEN, fetch=fetch)
     assert result["checks"][0] == {"key": "endpoint", "outcome": "FAIL", "checked_at": NOW.isoformat(), "diagnostic": "HTTP_UNAVAILABLE"}
 
 
@@ -67,7 +67,7 @@ def test_refused_request_is_unknown_never_failure(code):
     """SPEC-OPS-006 1.5: a refusal observed no health, so it is UNKNOWN, not FAIL."""
     def fetch(*_):
         raise HTTPError("private", code, "private", {}, None)
-    result = collect_platform(Store(), client_id="id", client_secret="secret", now=NOW, fetch_gate=OPEN, fetch=fetch)
+    result = collect_platform(Store(), now=NOW, fetch_gate=OPEN, fetch=fetch)
     endpoint, database = result["checks"][:2]
     assert endpoint == {"key": "endpoint", "outcome": "UNKNOWN", "checked_at": None, "diagnostic": "HTTP_REFUSED"}
     assert database == {"key": "database", "outcome": "UNKNOWN", "checked_at": None, "diagnostic": "HTTP_REFUSED"}
@@ -78,10 +78,10 @@ def test_refused_request_is_unknown_never_failure(code):
 
 def test_platform_outage_does_not_discard_request_telemetry():
     store = Store()
-    collect(store, client_id="id", client_secret="secret", now=NOW, fetch=lambda *_: json.dumps(snapshot()).encode())
+    collect(store, now=NOW, fetch=lambda *_: json.dumps(snapshot()).encode())
     def fetch(*_):
         raise OSError("private")
-    collect_platform(store, client_id="id", client_secret="secret", now=NOW, fetch_gate=OPEN, fetch=fetch)
+    collect_platform(store, now=NOW, fetch_gate=OPEN, fetch=fetch)
     assert store.telemetry == snapshot()
     assert all(check["outcome"] == "UNKNOWN" for check in store.platform["checks"] if check["key"] != "gate")
 
@@ -98,17 +98,17 @@ def test_platform_outage_does_not_discard_request_telemetry():
 def test_invalid_database_payload_preserves_http_response_only(change):
     data = source()
     change(data)
-    result = collect_platform(Store(), client_id="id", client_secret="secret", now=NOW, fetch_gate=OPEN, fetch=lambda *_: json.dumps(data).encode())
+    result = collect_platform(Store(), now=NOW, fetch_gate=OPEN, fetch=lambda *_: json.dumps(data).encode())
     assert result["checks"][0]["outcome"] == "PASS"
     assert result["checks"][1]["diagnostic"] == "INVALID_RESPONSE"
     assert "private" not in json.dumps(result)
 
 
 def test_stale_check_cannot_become_fresh_at_receipt_and_later_render():
-    result = collect_platform(Store(), client_id="id", client_secret="secret", now=NOW, fetch_gate=OPEN,
+    result = collect_platform(Store(), now=NOW, fetch_gate=OPEN,
                               fetch=lambda *_: json.dumps(source(checked_at=NOW - timedelta(seconds=301))).encode())
     assert result["checks"][1]["diagnostic"] == "STALE_SOURCE"
-    fresh = collect_platform(Store(), client_id="id", client_secret="secret", now=NOW, fetch_gate=OPEN,
+    fresh = collect_platform(Store(), now=NOW, fetch_gate=OPEN,
                              fetch=lambda *_: json.dumps(source()).encode())
     assert all(row["state"] == "STALE" for row in platform_rows(fresh, now=NOW + timedelta(seconds=301)))
     assert all(row["state"] == "UNKNOWN" for row in platform_rows(None, now=NOW))
@@ -124,7 +124,7 @@ ACCESS_LOGIN = "https://cth.cloudflareaccess.com/cdn-cgi/access/login/app.classr
 
 
 def gate_result(fetch_gate, fetch=lambda *_: json.dumps(source()).encode()):
-    record = collect_platform(Store(), client_id="id", client_secret="secret", now=NOW,
+    record = collect_platform(Store(), now=NOW,
                               fetch=fetch, fetch_gate=fetch_gate)
     assert record["schema_version"] == "platform-check-v2"
     return next(check for check in record["checks"] if check["key"] == "gate"), record
@@ -135,8 +135,54 @@ def test_access_login_redirect_is_a_closed_gate(code):
     gate, record = gate_result(lambda: (code, ACCESS_LOGIN))
     assert (gate["outcome"], gate["diagnostic"]) == ("FAIL", "GATE_CLOSED")
     assert gate["checked_at"] == NOW.isoformat()
-    # An access restriction never becomes an application or database failure.
-    assert [c["outcome"] for c in record["checks"] if c["key"] != "gate"] == ["PASS", "PASS"]
+    # An access restriction never becomes an application or database failure, and
+    # nothing is read from the application behind it (SPEC-OPS-006 1.6).
+    assert [(c["outcome"], c["diagnostic"], c["checked_at"]) for c in record["checks"] if c["key"] != "gate"] == [
+        ("UNKNOWN", "NOT_COLLECTED", None), ("UNKNOWN", "NOT_COLLECTED", None)]
+
+
+def test_closed_gate_reads_nothing_from_the_application():
+    def must_not_fetch(*_):
+        raise AssertionError("the collector read the application while the gate was closed")
+    gate, _ = gate_result(lambda: (302, ACCESS_LOGIN), fetch=must_not_fetch)
+    assert gate["diagnostic"] == "GATE_CLOSED"
+
+
+def test_closed_gate_collects_no_request_telemetry(monkeypatch):
+    import status_service.collector as module
+    store = Store()
+    monkeypatch.setattr(module, "fetch_gate", lambda: (302, ACCESS_LOGIN))
+    monkeypatch.setattr(module, "collect_platform",
+                        lambda store: collect_platform(store, now=NOW, fetch_gate=lambda: (302, ACCESS_LOGIN)))
+    monkeypatch.setattr(module, "collect", lambda store: pytest.fail("telemetry collected while the gate was closed"))
+    assert module.run(store) == "Gate closed for maintenance: stored the gate check only"
+    assert store.platform["checks"][2]["diagnostic"] == "GATE_CLOSED"
+
+
+def test_open_gate_collects_platform_then_telemetry(monkeypatch):
+    import status_service.collector as module
+    calls = []
+    monkeypatch.setattr(module, "collect_platform", lambda store: calls.append("platform") or
+                        {"checks": [{"diagnostic": "HTTP_OK"}, {"diagnostic": "DATABASE_REACHABLE"}, {"diagnostic": "GATE_OPEN"}]})
+    monkeypatch.setattr(module, "collect", lambda store: calls.append("telemetry") or {})
+    module.run(Store())
+    assert calls == ["platform", "telemetry"]
+
+
+def test_health_reads_send_no_credential(monkeypatch):
+    import status_service.collector as module
+    seen = []
+
+    class Opener:
+        def open(self, request, timeout):
+            seen.append({key.lower() for key in request.headers})
+            raise OSError("stop")
+
+    monkeypatch.setattr(module, "build_opener", lambda *handlers: Opener())
+    for fetch in (module.fetch_platform, module.fetch_telemetry):
+        with pytest.raises(OSError):
+            fetch()
+    assert seen and not any(h.startswith("cf-access") or h == "authorization" for headers in seen for h in headers)
 
 
 @pytest.mark.parametrize("code,location", [
@@ -165,7 +211,7 @@ def test_gate_transport_failure_is_unknown():
     assert "private" not in json.dumps(record)
 
 
-def test_lapsed_service_token_never_reads_as_a_closed_gate():
+def test_redirected_health_read_never_reads_as_a_closed_gate():
     def denied(*_):
         raise HTTPError("private", 302, "private", {"Location": ACCESS_LOGIN}, None)
     gate, record = gate_result(lambda: (200, None), fetch=denied)
@@ -216,7 +262,7 @@ def test_malformed_gate_response_keeps_the_minute_of_platform_evidence():
 
     def broken():
         raise BadStatusLine("private proxy garbage")
-    record = collect_platform(store, client_id="id", client_secret="secret", now=NOW,
+    record = collect_platform(store, now=NOW,
                               fetch=lambda *_: json.dumps(source()).encode(), fetch_gate=broken)
     gate = record["checks"][2]
     assert (gate["outcome"], gate["diagnostic"]) == ("UNKNOWN", "TRANSPORT_UNAVAILABLE")
@@ -230,6 +276,6 @@ def test_malformed_health_response_is_transport_failure_not_a_lost_record():
 
     def broken(*_):
         raise IncompleteRead(b"partial")
-    record = collect_platform(store, client_id="id", client_secret="secret", now=NOW, fetch=broken, fetch_gate=OPEN)
+    record = collect_platform(store, now=NOW, fetch=broken, fetch_gate=OPEN)
     assert [c["diagnostic"] for c in record["checks"][:2]] == ["TRANSPORT_UNAVAILABLE", "TRANSPORT_UNAVAILABLE"]
     assert store.platform == record

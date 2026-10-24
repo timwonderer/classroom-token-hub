@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-001 | 3.38 | 2026-10-22 | 3.37 | Normative |
+| SOP-DOC-001 | 3.39 | 2026-10-23 | 3.38 | Normative |
 
 ---
 
@@ -279,6 +279,9 @@ Their surviving content lives at:
 ---
 
 ## VIII. Change Notes
+
+**Version 3.39 (2026-10-23):**
+- Register DOM-OPS-001 v2.14, SPEC-OPS-006 v1.6, SOP-DEP-001 v2.11 and SOP-DEP-002 v1.16: health endpoints are public and need no credential; while the Access gate is closed the status collector reads nothing from the application (owner ruling 2026-10-23).
 
 **Version 3.38 (2026-10-22):**
 - Register SPEC-ECON-001 v1.4, SOP-DB-001 v1.8 and SOP-DEP-002 v1.15: the backlog moved from the post-launch tracker (archived to `docs/archive/v2-tracking-2026/POST_LAUNCH_TRACKER_2026.md`) to GitHub Issues and the CTH Backlog project; release-record follow-ups are filed as issues.
