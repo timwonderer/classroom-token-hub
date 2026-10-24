@@ -22,7 +22,7 @@ from datetime import timedelta
 from app import db
 from app.models import Seat, IdentityProfile, User, UserRole, Transaction
 from app.utils.money_guard import check_financial_cooldown
-from app.utils.canonical_temporal_resolver import ensure_utc, utc_now
+from tests.helpers import temporal
 from app.feats.base import FEATContext
 from app.hash_utils import hash_username_lookup, hash_claim_name
 from tests.helpers.canonical_session import set_canonical_context
@@ -85,7 +85,7 @@ def test_DOM_IDEN_002__teacher_generates_reset_code(client, recovery_data):
     assert linked_user is not None
     assert linked_user.reset_code is not None
     assert len(linked_user.reset_code) == 8
-    assert ensure_utc(linked_user.reset_code_expires_at) > utc_now()
+    assert linked_user.reset_code_expires_at > temporal.now()
 
 
 def test_DOM_IDEN_002__multiple_resets_invalidate_prior_codes(client, recovery_data):
@@ -118,8 +118,8 @@ def test_DOM_IDEN_002__student_lookup_success(client, recovery_data):
     user = recovery_data["user"]
 
     user.reset_code = "RESET123"
-    user.reset_code_generated_at = utc_now()
-    user.reset_code_expires_at = utc_now() + timedelta(minutes=10)
+    user.reset_code_generated_at = temporal.now()
+    user.reset_code_expires_at = temporal.now() + timedelta(minutes=10)
     with FEATContext("FEAT-IDEN-002", idempotency_key="recovery:test_student_lookup_success"):
         db.session.flush()
 
@@ -146,8 +146,8 @@ def test_DOM_IDEN_002__student_lookup_expired_code(client, recovery_data):
     user = recovery_data["user"]
 
     user.reset_code = "RESET123"
-    user.reset_code_generated_at = utc_now() - timedelta(minutes=20)
-    user.reset_code_expires_at = utc_now() - timedelta(minutes=10)
+    user.reset_code_generated_at = temporal.now() - timedelta(minutes=20)
+    user.reset_code_expires_at = temporal.now() - timedelta(minutes=10)
     with FEATContext("FEAT-IDEN-002", idempotency_key="recovery:test_student_lookup_expired_code"):
         db.session.flush()
 
@@ -169,8 +169,8 @@ def test_DOM_IDEN_002__recovery_does_not_create_new_user_row(client, recovery_da
     original_user_count = User.query.filter_by(user_role=UserRole.STUDENT).count()
 
     user.reset_code = "ROWTEST1"
-    user.reset_code_generated_at = utc_now()
-    user.reset_code_expires_at = utc_now() + timedelta(minutes=10)
+    user.reset_code_generated_at = temporal.now()
+    user.reset_code_expires_at = temporal.now() + timedelta(minutes=10)
     with FEATContext("FEAT-IDEN-002", idempotency_key="recovery:test_does_not_create_new_user_row"):
         db.session.flush()
 
@@ -185,8 +185,8 @@ def test_DOM_IDEN_002__recovery_preserves_seat_binding(client, recovery_data):
     seat = recovery_data["seat"]
 
     user.reset_code = "KEEPCLM1"
-    user.reset_code_generated_at = utc_now()
-    user.reset_code_expires_at = utc_now() + timedelta(minutes=10)
+    user.reset_code_generated_at = temporal.now()
+    user.reset_code_expires_at = temporal.now() + timedelta(minutes=10)
     with FEATContext("FEAT-IDEN-002", idempotency_key="recovery:test_preserves_seat_binding"):
         db.session.flush()
 
@@ -203,8 +203,8 @@ def test_DOM_IDEN_002__recovery_preserves_identity(client, recovery_data):
     seat = recovery_data["seat"]
 
     user.reset_code = "IDTEST01"
-    user.reset_code_generated_at = utc_now()
-    user.reset_code_expires_at = utc_now() + timedelta(minutes=10)
+    user.reset_code_generated_at = temporal.now()
+    user.reset_code_expires_at = temporal.now() + timedelta(minutes=10)
     with FEATContext("FEAT-IDEN-002", idempotency_key="recovery:test_preserves_identity"):
         db.session.flush()
 
@@ -239,8 +239,8 @@ def test_DOM_IDEN_002__recovery_preserves_balance_and_transactions(client, recov
 
     with FEATContext("FEAT-IDEN-002", idempotency_key="recovery:reset_code_preserve"):
         user.reset_code = "PRESRV01"
-        user.reset_code_generated_at = utc_now()
-        user.reset_code_expires_at = utc_now() + timedelta(minutes=10)
+        user.reset_code_generated_at = temporal.now()
+        user.reset_code_expires_at = temporal.now() + timedelta(minutes=10)
         db.session.flush()
 
     student_lookup_recovery_code(client, "PRESRV01")
@@ -259,8 +259,8 @@ def test_DOM_IDEN_002__reset_code_invalid_after_credential_setup(client, recover
     join_code = recovery_data["join_code"]
 
     user.reset_code = "ONETIME1"
-    user.reset_code_generated_at = utc_now()
-    user.reset_code_expires_at = utc_now() + timedelta(minutes=10)
+    user.reset_code_generated_at = temporal.now()
+    user.reset_code_expires_at = temporal.now() + timedelta(minutes=10)
     with FEATContext("FEAT-IDEN-002", idempotency_key="recovery:test_reset_code_invalid_after_setup"):
         db.session.flush()
 
@@ -318,8 +318,8 @@ def test_DOM_IDEN_002__interrupting_reclaim_after_lookup(client, recovery_data):
 
     with FEATContext("FEAT-IDEN-002", idempotency_key="recovery:midflow_guard"):
         user.reset_code = "MIDFLOW1"
-        user.reset_code_generated_at = utc_now()
-        user.reset_code_expires_at = utc_now() + timedelta(minutes=10)
+        user.reset_code_generated_at = temporal.now()
+        user.reset_code_expires_at = temporal.now() + timedelta(minutes=10)
         db.session.flush()
 
     resp = student_lookup_recovery_code(client, "MIDFLOW1", follow_redirects=False)
@@ -345,8 +345,8 @@ def test_DOM_IDEN_002__recovery_username_uses_random_segment(client, recovery_da
     seat = recovery_data["seat"]
 
     user.reset_code = "RAND4001"
-    user.reset_code_generated_at = utc_now()
-    user.reset_code_expires_at = utc_now() + timedelta(minutes=10)
+    user.reset_code_generated_at = temporal.now()
+    user.reset_code_expires_at = temporal.now() + timedelta(minutes=10)
     with FEATContext("FEAT-IDEN-002", idempotency_key="recovery:test_username_random_segment"):
         db.session.flush()
 
@@ -433,8 +433,8 @@ def test_DOM_IDEN_002__recovery_never_queries_participation(client, recovery_dat
               seat.claim_last_name_hash, seat.roster_fingerprint, seat.dedupe_code)
     with FEATContext("FEAT-IDEN-002", idempotency_key="recovery:principal-only"):
         user.reset_code = "SCOPE001"
-        user.reset_code_generated_at = utc_now()
-        user.reset_code_expires_at = utc_now() + timedelta(minutes=10)
+        user.reset_code_generated_at = temporal.now()
+        user.reset_code_expires_at = temporal.now() + timedelta(minutes=10)
         db.session.flush()
     with client.session_transaction() as sess:
         sess["onboarding_seat_ref"] = seat.id
@@ -500,8 +500,8 @@ def _authorize_recovery(user):
     from app.feats.identity_feat import validate_recovery_code
     with FEATContext("FEAT-IDEN-003", idempotency_key="recovery:atomic:seed"):
         user.reset_code = "ATOMIC01"
-        user.reset_code_generated_at = utc_now()
-        user.reset_code_expires_at = utc_now() + timedelta(minutes=10)
+        user.reset_code_generated_at = temporal.now()
+        user.reset_code_expires_at = temporal.now() + timedelta(minutes=10)
         db.session.flush()
     result = validate_recovery_code(
         reset_code="ATOMIC01", correlation_id="corr_recovery_validate",
@@ -560,7 +560,7 @@ def test_recovery_completion_rechecks_authorization(client, recovery_data, monke
     user = recovery_data["user"]
     authorization = _authorize_recovery(user)
     if reason == "expired":
-        deadline = ensure_utc(user.recovery_setup_expires_at)
+        deadline = user.recovery_setup_expires_at
         monkeypatch.setattr("app.utils.canonical_temporal_resolver.utc_now", lambda: deadline)
     elif reason == "reissued":
         from app.feats.identity_feat import generate_teacher_reset_code
@@ -644,8 +644,8 @@ def test_recovery_duplicate_code_fails_closed(client, recovery_data):
     other = User.query.filter(User.user_role == "student", User.id != user.id).first()
     with FEATContext("FEAT-IDEN-003", idempotency_key="recovery:ambiguous"):
         user.reset_code = other.reset_code = "ATOMIC01"
-        user.reset_code_generated_at = other.reset_code_generated_at = utc_now()
-        user.reset_code_expires_at = other.reset_code_expires_at = utc_now() + timedelta(minutes=10)
+        user.reset_code_generated_at = other.reset_code_generated_at = temporal.now()
+        user.reset_code_expires_at = other.reset_code_expires_at = temporal.now() + timedelta(minutes=10)
         db.session.flush()
     result = validate_recovery_code(
         reset_code="ATOMIC01", correlation_id="corr_recovery_ambiguous",
@@ -659,8 +659,8 @@ def test_recovery_new_session_cannot_use_consumed_code(client, recovery_data):
     user = recovery_data["user"]
     with FEATContext("FEAT-IDEN-003", idempotency_key="recovery:session:seed"):
         user.reset_code = "SESSION1"
-        user.reset_code_generated_at = utc_now()
-        user.reset_code_expires_at = utc_now() + timedelta(minutes=10)
+        user.reset_code_generated_at = temporal.now()
+        user.reset_code_expires_at = temporal.now() + timedelta(minutes=10)
         db.session.flush()
     before_credentials = _credential_state(user)[:5]
     student_lookup_recovery_code(client, "SESSION1", follow_redirects=False)
@@ -697,8 +697,8 @@ def test_recovery_concurrent_acceptance_has_one_session_winner(client, recovery_
     user = recovery_data["user"]
     with FEATContext("FEAT-IDEN-003", idempotency_key="recovery:race:seed"):
         user.reset_code = "RACECODE"
-        user.reset_code_generated_at = utc_now()
-        user.reset_code_expires_at = utc_now() + timedelta(minutes=10)
+        user.reset_code_generated_at = temporal.now()
+        user.reset_code_expires_at = temporal.now() + timedelta(minutes=10)
         db.session.flush()
     user_id = user.id
     before = _credential_state(user)[:5]

@@ -167,11 +167,9 @@ def record_ledger_fixture(*, seat_id, class_id, amount, account_type="checking",
     """
     from contextlib import ExitStack
     from unittest.mock import patch
-    from app.utils.canonical_temporal_resolver import ensure_utc
     with ExitStack() as clocks:
         if timestamp is not None:
-            instant = ensure_utc(timestamp)
-            clocks.enter_context(patch("app.utils.canonical_temporal_resolver.utc_now", return_value=instant))
+            clocks.enter_context(patch("app.utils.canonical_temporal_resolver.utc_now", return_value=timestamp))
         transaction = create_pending_transaction(
             seat_id=seat_id, class_id=class_id, amount=amount, account_type=account_type,
             type=type, description=description, target_seat_id=target_seat_id or seat_id,
