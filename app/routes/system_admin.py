@@ -12,8 +12,8 @@ import secrets
 from urllib.parse import urlparse
 import requests
 from types import SimpleNamespace
-from datetime import datetime, timedelta, timezone
-from app.utils.canonical_temporal_resolver import utc_now, ensure_utc
+from datetime import datetime
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 from decimal import Decimal, InvalidOperation
 
 from flask import Blueprint, render_template, redirect, url_for, flash, request, session, current_app, jsonify, Response, abort
@@ -183,7 +183,7 @@ def _complete_sysadmin_login(form):
                 session["current_session_nonce"] = nonce
                 user.current_session_nonce = nonce
                 session["sysadmin_auth_username"] = username
-                session['last_activity'] = utc_now().isoformat()
+                session['last_activity'] = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc.isoformat()
                 flash("System admin login successful.")
                 next_url = request.args.get("next")
                 redirect_target = None
@@ -368,7 +368,7 @@ def passkey_auth_finish():
         except passkey_service.PasskeyError as e:
             current_app.logger.warning("Passkey sign-in refused: %s", e)
             return jsonify({"error": "Authentication failed"}), 401
-        now = utc_now()
+        now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
 
         # Create session — canonical keys only
         establish_sysadmin_session(user)
@@ -826,7 +826,7 @@ def update_issue(issue_ref):
             notes=admin_notes or None,
         )
         issue.sysadmin_notes = admin_notes or None
-        issue.sysadmin_reviewed_at = utc_now()
+        issue.sysadmin_reviewed_at = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
         # FEATContext.__exit__ owns the commit (INV-ARC FEAT atomicity). A direct
         # commit here trips enforce_feat_context_on_commit and rolls the update back.
         flash(f"Ticket #{issue.id} updated successfully.", "success")
@@ -862,14 +862,14 @@ def grafana_auth_check():
     # Check session timeout
     last_activity_str = session.get("last_activity")
     if last_activity_str:
+        # Written below and at sign-in as an offset-bearing ISO string, so it parses aware.
         last_activity = datetime.fromisoformat(last_activity_str)
-        last_activity = ensure_utc(last_activity)
         if _system_admin_timeout_expired(last_activity):
             _expire_system_admin_session()
             return Response('Unauthorized: Session expired', 401)
 
     # Update activity to keep session alive
-    session["last_activity"] = utc_now().isoformat()
+    session["last_activity"] = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc.isoformat()
 
     # Sanitize username for header (prevent response splitting)
     raw_username = session.get("sysadmin_auth_username") or f"sysadmin_{ctx.user_id}"
@@ -1151,7 +1151,7 @@ def resolve_escalated_issue(issue_ref):
 
         old_status = issue.status
         issue.status = Issue.STATUS_DEV_RESOLVED
-        issue.sysadmin_resolved_at = utc_now()
+        issue.sysadmin_resolved_at = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
         issue.sysadmin_notes = resolution_note
         issue.eligible_for_reward = eligible_for_reward
 

@@ -16,8 +16,8 @@ from app.models import (
 from app.services.hall_pass_request_queue import list_pending_hall_pass_requests_for_class
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
+    SYSTEM_LEVEL_EVALUATION,
     canonical_temporal_resolver,
-    ensure_utc,
 )
 
 
@@ -141,8 +141,8 @@ def get_attendance_session_counts_by_seat(
         )
         .filter(
             AttendanceSession.class_id == class_id,
-            AttendanceSession.timestamp >= ensure_utc(window_start),
-            AttendanceSession.timestamp < ensure_utc(window_end),
+            AttendanceSession.timestamp >= window_start,
+            AttendanceSession.timestamp < window_end,
         )
         .group_by(AttendanceSession.target_seat_id)
         .all()
@@ -344,8 +344,11 @@ class AttendanceInterval:
             raise ValueError("Settlement requires a persisted closing event.")
         return {"opening_event_id": self.opening_event_id,
                 "closing_event_id": self.closing_event_id,
-                "opening_timestamp": ensure_utc(self.opened_at).isoformat(),
-                "closing_timestamp": ensure_utc(self.closed_at).isoformat(),
+                # Frozen into payroll evidence and compared as text: always UTC.
+                "opening_timestamp": canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION,
+                    primitive="localize_timestamp", timestamp=self.opened_at).local_timestamp.isoformat(),
+                "closing_timestamp": canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION,
+                    primitive="localize_timestamp", timestamp=self.closed_at).local_timestamp.isoformat(),
                 "credited_seconds": self.credited_seconds}
 
 
@@ -356,7 +359,9 @@ def list_attendance_interval_evidence(seat_id, class_id, *, ctx, as_of_utc=None,
     if as_of_utc is None:
         as_of_utc = canonical_temporal_resolver(CLASS_LEVEL_EVALUATION,
             canonical_execution_context=ctx, primitive="current_time").canonical_now_utc
-    as_of_utc = ensure_utc(as_of_utc)
+    # Interval endpoints are carried in UTC whatever offset the driver returns.
+    as_of_utc = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION,
+        primitive="localize_timestamp", timestamp=as_of_utc).local_timestamp
     if source_limit is None:
         # The unbounded case is the one every other reader in this module also
         # runs; share the memoized fetch (audit O4) instead of a fresh query.
@@ -373,34 +378,35 @@ def list_attendance_interval_evidence(seat_id, class_id, *, ctx, as_of_utc=None,
             rows = query.all()
         if len(rows) > source_limit:
             raise ValueError("EVIDENCE_LIMIT_EXCEEDED")
-    intervals, opening = [], None
+    intervals, opening, opening_at = [], None, None
     consumed_closings = set()
     for row in rows:
         if row.id in consumed_closings:
             continue
-        timestamp = ensure_utc(row.timestamp)
+        timestamp = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION,
+            primitive="localize_timestamp", timestamp=row.timestamp).local_timestamp
         if timestamp > as_of_utc:
             break
         if row.status == "active":
             if opening is None:
-                opening = row
+                opening, opening_at = row, timestamp
             elif timestamp >= _day_end_utc(ctx, opening.timestamp):
                 # An unrecorded day-end remains unproven; do not invent an ID.
                 end = _day_end_utc(ctx, opening.timestamp)
                 boundary_close = next((candidate for candidate in rows
                     if candidate.id not in consumed_closings and candidate.status == "inactive"
-                    and ensure_utc(candidate.timestamp) == end
+                    and candidate.timestamp == end
                     and candidate.mechanism == "system"
                     and candidate.reason_code == AttendanceReasonCode.DONE_FOR_DAY.value), None)
                 intervals.append(AttendanceInterval(opening.id, boundary_close.id if boundary_close else None,
-                    ensure_utc(opening.timestamp), end,
-                    _elapsed_seconds(ctx, [(ensure_utc(opening.timestamp), end)]), opening.mechanism,
+                    opening_at, end,
+                    _elapsed_seconds(ctx, [(opening_at, end)]), opening.mechanism,
                     boundary_close.mechanism if boundary_close else None, bounded_at_day_end=True))
                 if boundary_close is not None:
                     consumed_closings.add(boundary_close.id)
-                opening = row
+                opening, opening_at = row, timestamp
         elif row.status == "inactive" and opening is not None:
-            start = ensure_utc(opening.timestamp)
+            start = opening_at
             if timestamp < start or timestamp > _day_end_utc(ctx, start):
                 end = _day_end_utc(ctx, start)
                 intervals.append(AttendanceInterval(opening.id, None, start, end,
@@ -412,7 +418,7 @@ def list_attendance_interval_evidence(seat_id, class_id, *, ctx, as_of_utc=None,
                 _elapsed_seconds(ctx, [(start, timestamp)]), opening.mechanism, row.mechanism))
             opening = None
     if opening is not None:
-        start = ensure_utc(opening.timestamp)
+        start = opening_at
         end = min(as_of_utc, _day_end_utc(ctx, start))
         intervals.append(AttendanceInterval(opening.id, None, start, end,
             _elapsed_seconds(ctx, [(start, end)]), opening.mechanism, None,
@@ -438,7 +444,7 @@ def close_due_attendance_intervals(*, ctx, seat_id, as_of_utc):
     from app.services.attendance_writer_service import record_attendance_session_command
     from app.services.payroll.settings import current_daily_limit_seconds
     lock_attendance_seat(seat_id, ctx.class_id)
-    now = ensure_utc(as_of_utc)
+    now = as_of_utc
     intervals = list_attendance_intervals(seat_id, ctx.class_id, ctx=ctx, as_of_utc=now)
     created = []
     for interval in intervals:
@@ -504,7 +510,6 @@ def calculate_seat_payroll_intervals(
             canonical_execution_context=ctx,
             primitive="current_time",
         ).canonical_now_utc
-    as_of_utc = ensure_utc(as_of_utc)
 
     identified = list_attendance_intervals(seat_id, class_id, ctx=ctx, as_of_utc=as_of_utc)
     closed = [i for i in identified if i.closing_event_id is not None]
@@ -532,7 +537,7 @@ def calculate_seat_payroll_intervals(
         if type(summary.get("allocation_version")) is not int or summary.get("allocation_version") != 1:
             historical.append(event)
             if summary.get("settlement_rule") != CLOSED_SESSION_SETTLEMENT_RULE:
-                legacy_times.append(ensure_utc(event.recorded_at))
+                legacy_times.append(event.recorded_at)
             continue
         try:
             shares = summary["pricing"]
@@ -549,7 +554,7 @@ def calculate_seat_payroll_intervals(
                     settled_pairs.add(key)
         except (KeyError, TypeError, ValueError, AttributeError):
             invalid_evidence = True
-    paid_through = max((ensure_utc(e.recorded_at) for e in historical), default=None)
+    paid_through = max((e.recorded_at for e in historical), default=None)
     if invalid_evidence:
         return SeatPayrollIntervals(payable=(), in_progress=(), unprovable=tuple(identified))
 
@@ -684,7 +689,7 @@ def is_done_for_day(seat_id: int, class_id: str, *, ctx, reference_time_utc=None
     ).all()
     if not rows:
         return False
-    if any(ensure_utc(row.timestamp) != day_start_utc for row in rows):
+    if any(row.timestamp != day_start_utc for row in rows):
         return True
     # The prior day's exact end is today's start. Its persisted closing event
     # belongs to the originating pair, not today's terminal state (§XV.7).
