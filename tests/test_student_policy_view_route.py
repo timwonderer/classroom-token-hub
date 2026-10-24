@@ -138,7 +138,7 @@ def test_purchase_date_is_the_grant_date_not_now(app, client):
     ``format_date`` the template uses, so this also pins SPEC-TIME-001 rendering
     rather than asserting a UTC instant.
     """
-    from app.utils.temporal_display import format_date, resolve_display_timezone
+    from app.utils.temporal_display import format_date
 
     with app.app_context():
         classroom = provision_classroom("chemistry_p1")
@@ -162,10 +162,7 @@ def test_purchase_date_is_the_grant_date_not_now(app, client):
         )
         db.session.commit()
 
-        expected = format_date(
-            purchased_at,
-            resolve_display_timezone(_student_ctx(classroom, student)),
-        )
+        expected = format_date(_student_ctx(classroom, student), purchased_at)
         login_student(client, student)
 
     resp = client.get(f"/student/insurance/policy/{policy_uuid}")

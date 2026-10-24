@@ -12,7 +12,7 @@ import re
 import uuid
 from collections import defaultdict
 from calendar import monthrange
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urlparse
 from types import SimpleNamespace
@@ -22,7 +22,6 @@ from sqlalchemy import or_, func, select, and_
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from app.hash_utils import hash_password, verify_password
 import pytz
-from dateutil.relativedelta import relativedelta
 
 from app.extensions import db, limiter, student_login_identity_limit_key
 from app.services import student_setup
@@ -120,13 +119,10 @@ from app.feats.insurance_claim_feat import (
 )
 from app.services.payroll.settings import current_pay_rate_per_second
 from app.utils.join_code import get_display_join_code
-from app.utils.canonical_temporal_resolver import utc_now, ensure_utc
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
     SYSTEM_LEVEL_EVALUATION,
     canonical_temporal_resolver,
-    ensure_utc,
-    utc_now,
 )
 from app.utils.seat_scope import transaction_scope_filter, seat_scoped_filter
 # TODO (Phase 4): insurance_eligibility deleted; use canonical tools + FEAT-STOR-003
@@ -531,7 +527,17 @@ def _stage_username_setup(seat, user):
     owner, binding = student_setup.scope(seat, user, recovery_authorization=session.get('recovery_setup_authorization'))
     ttl = student_setup.TTL_SECONDS
     if user is not None:
-        ttl = min(ttl, int((ensure_utc(user.recovery_setup_expires_at) - utc_now()).total_seconds()))
+        now_utc = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
+        expires_at = user.recovery_setup_expires_at
+        if canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=expires_at, reference=now_utc,
+        ).is_later:
+            ttl = min(ttl, canonical_temporal_resolver(
+                SYSTEM_LEVEL_EVALUATION, primitive="time_until",
+                reference_time_utc=now_utc, target=expires_at,
+            ).remaining_seconds)
+        else:
+            ttl = 0
     if ttl <= 0:
         raise student_setup.SetupExpired('Setup expired.')
     session['student_setup_token'] = student_setup.begin(owner, binding, ttl)
@@ -1268,9 +1274,18 @@ def dashboard():
 
     # --- Calculate remaining session time for frontend timer ---
     sle_now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
-    login_time = datetime.fromisoformat(session['login_time'])
-    expiry_time = login_time + timedelta(minutes=SESSION_TIMEOUT_MINUTES)
-    session_remaining_seconds = max(0, int((expiry_time - sle_now).total_seconds()))
+    login_time = datetime.fromisoformat(session['login_time'])  # written aware (isoformat of a UTC instant)
+    expiry_time = canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="shift_timestamp",
+        timestamp=login_time, elapsed_seconds=SESSION_TIMEOUT_MINUTES * 60,
+    ).shifted_timestamp_utc
+    session_remaining_seconds = 0
+    if canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=expiry_time, reference=sle_now,
+    ).is_later:
+        session_remaining_seconds = canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="time_until", reference_time_utc=sle_now, target=expiry_time,
+        ).remaining_seconds
 
     # --- Get feature settings for this student ---
     feature_settings = get_feature_settings_for_student()
@@ -1387,7 +1402,7 @@ def dashboard():
         Announcement.is_active.is_(True),
         or_(
             Announcement.expires_at.is_(None),
-            Announcement.expires_at > utc_now()
+            Announcement.expires_at > now_utc
         ),
         Announcement.class_id == scope.class_id,
     ).order_by(Announcement.created_at.desc()).all()
@@ -1768,6 +1783,9 @@ def insurance_marketplace():
 
     class_id = context.class_id
     seat_id = context.seat_id
+    now_utc = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION, canonical_execution_context=context, primitive="current_time",
+    ).canonical_now_utc
 
     # Available coverage: IN_USE immutable insurance_policies for this class.
     definitions = insurance_defs.list_insurance_definitions(
@@ -1835,7 +1853,10 @@ def insurance_marketplace():
         last_covered_day = _last_covered_day(class_id, grant.entitlement_id)
         starts_on = (
             insurance_coverage.class_local_date(class_id, grant.timestamp)
-            if ensure_utc(grant.timestamp) > utc_now() else None
+            if canonical_temporal_resolver(
+                CLASS_LEVEL_EVALUATION, canonical_execution_context=context,
+                primitive="later_than", candidate=grant.timestamp, reference=now_utc,
+            ).is_later else None
         )
         owned_coverage.append(
             SimpleNamespace(
@@ -1902,7 +1923,7 @@ def insurance_marketplace():
         insurance_for_sale=insurance_for_sale,
         marketing_badges=MARKETING_BADGES,
         my_claims=[_claim_display_row(claim) for claim in _list_insurance_claims(class_id=class_id, target_seat_id=seat_id)],
-        now=utc_now(),
+        now=now_utc,
     )
 
 
@@ -2058,7 +2079,7 @@ def _coverage_card_dates(context, grant, definition):
     wait = waiting_period_days(definition, grant)  # none for a continuation
     if wait > 0:
         open_date, open_utc = coverage_effective_start_utc(
-            context, ensure_utc(grant.timestamp), wait
+            context, grant.timestamp, wait
         )
         ctx = SimpleNamespace(class_id=context.class_id)
         now = canonical_temporal_resolver(
@@ -2432,7 +2453,7 @@ def view_policy(policy_uuid):
             # the coverage boundary (FEAT-STOR-007 terminology).
             from app.services import obligations_service as _obl
             covered_through = _obl.last_class_day_before(context.class_id, next_payment_due)
-        purchase_date = ensure_utc(entitlement.timestamp)
+        purchase_date = entitlement.timestamp
         _, coverage_start_date = coverage_effective_start_utc(
             context,
             purchase_date,
@@ -2480,7 +2501,9 @@ def view_policy(policy_uuid):
                 entitlement_id=getattr(entitlement, "entitlement_id", None),
             )
         ],
-        now=utc_now(),
+        now=canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION, canonical_execution_context=context, primitive="current_time",
+        ).canonical_now_utc,
     )
 
 
@@ -2508,8 +2531,9 @@ def shop():
     if not class_id:
         class_id = context.class_id
 
-    now = utc_now()
-    now_db = ensure_utc(now)
+    now_db = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION, canonical_execution_context=context, primitive="current_time",
+    ).canonical_now_utc
     # Only IN_USE versions are sellable, and the partial unique index
     # guarantees at most one per lineage — so this cannot show a student two
     # prices for the same product. A grant-only product is not purchasable
@@ -2693,32 +2717,6 @@ def shop():
 # -------------------- RENT --------------------
 
 
-def _get_rent_period_delta(settings):
-    """Return a timedelta/relativedelta representing one rent period."""
-    if settings.frequency_type == 'daily':
-        return timedelta(days=1)
-    if settings.frequency_type == 'weekly':
-        return timedelta(weeks=1)
-    if settings.frequency_type == 'monthly':
-        return relativedelta(months=1)
-    if settings.frequency_type == 'custom':
-        unit = getattr(settings, 'custom_frequency_unit', None)
-        value = getattr(settings, 'custom_frequency_value', None) or 1
-        if unit == 'days':
-            return timedelta(days=value)
-        if unit == 'weeks':
-            return timedelta(weeks=value)
-        if unit == 'months':
-            return relativedelta(months=value)
-    # Fallback to monthly behavior
-    return relativedelta(months=1)
-
-
-def _add_rent_period(dt, delta):
-    """Add a timedelta or relativedelta to dt."""
-    return dt + delta
-
-
 @student_bp.route('/rent')
 @login_required
 def rent():
@@ -2779,18 +2777,16 @@ def rent():
         # the class's rent terms and the first due date still ahead, not zeros.
         upcoming_due = None
         if settings is not None and settings.first_rent_due_date is not None:
-            from app.utils.canonical_temporal_resolver import (
-                CLASS_LEVEL_EVALUATION as _CLE,
-                canonical_temporal_resolver as _resolve,
-            )
-
-            first_due = ensure_utc(settings.first_rent_due_date)
-            if _resolve(
-                _CLE,
-                canonical_execution_context=SimpleNamespace(class_id=class_id),
+            rent_ctx = SimpleNamespace(class_id=class_id)
+            first_due = settings.first_rent_due_date
+            if canonical_temporal_resolver(
+                CLASS_LEVEL_EVALUATION,
+                canonical_execution_context=rent_ctx,
                 primitive="later_than",
                 candidate=first_due,
-                reference=utc_now(),
+                reference=canonical_temporal_resolver(
+                    CLASS_LEVEL_EVALUATION, canonical_execution_context=rent_ctx, primitive="current_time",
+                ).canonical_now_utc,
             ).is_later:
                 upcoming_due = first_due
         view = build_empty_student_obligation_view(
@@ -2805,11 +2801,6 @@ def rent():
     checking_balance, savings_balance = get_available_balances(seat_id, class_id)
 
     # Get temporal context for display
-    from app.utils.canonical_temporal_resolver import (
-        canonical_temporal_resolver,
-        CLASS_LEVEL_EVALUATION,
-    )
-
     class _TemporalContext:
         def __init__(self, class_id: str):
             self.class_id = class_id
@@ -3082,7 +3073,10 @@ def _complete_student_login(form):
 
     from app.auth import SESSION_TIMEOUT_MINUTES
     user.current_session_started_at = now
-    user.current_session_expires_at = now + timedelta(minutes=SESSION_TIMEOUT_MINUTES)
+    user.current_session_expires_at = canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="shift_timestamp",
+        timestamp=now, elapsed_seconds=SESSION_TIMEOUT_MINUTES * 60,
+    ).shifted_timestamp_utc
 
     # Mirror the authoritative expiry onto the cookie so the browser evicts
     # it at the same instant login_required stops honoring it. Without this
@@ -3537,11 +3531,13 @@ def verify_recovery(code_id):
         flash("Invalid recovery request.", "error")
         return redirect(url_for('student.dashboard'))
 
-    # Check if expired
-    # Handle timezone naive/aware comparison for SQLite/Test
-    expires_at = ensure_utc(recovery_code.recovery_request.expires_at)
-
-    if expires_at < utc_now():
+    # Check if expired: a recovery deadline is platform time (SLE).
+    if canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION,
+        primitive="earlier_than",
+        candidate=recovery_code.recovery_request.expires_at,
+        reference=canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc,
+    ).is_earlier:
         flash("This recovery request has expired.", "error")
         return redirect(url_for('student.dashboard'))
 

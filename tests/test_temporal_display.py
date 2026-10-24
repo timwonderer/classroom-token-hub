@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 from jinja2 import Environment
 
@@ -13,28 +14,48 @@ from app.utils.temporal_display import (
     format_timestamp,
 )
 
+from tests.helpers.canonical_classroom import provision_classroom
+
 TEMPLATE_ROOT = Path(__file__).resolve().parents[1] / "templates"
 
 
-def test_temporal_formatters_are_portable_and_timezone_aware():
-    """Display formatting avoids platform-specific strftime directives."""
+def test_temporal_formatters_are_portable_and_timezone_aware(app):
+    """Display formatting avoids platform-specific strftime directives and
+    localizes through the resolver: CLE in the class timezone, SLE in UTC."""
     value = datetime(2026, 1, 3, 18, 5, tzinfo=timezone.utc)
 
-    assert format_timestamp(value, "America/New_York") == "Jan 3, 2026, 1:05 PM EST"
-    assert format_date(value, "America/New_York") == "Jan 3, 2026"
-    assert format_compact_date(value, "America/New_York") == "Jan 3"
-    assert format_time(value, "America/New_York") == "1:05 PM EST"
+    with app.app_context():
+        ctx = SimpleNamespace(class_id=provision_classroom("chemistry_p1").class_id)  # America/Los_Angeles
+        assert format_timestamp(ctx, value) == "Jan 3, 2026, 10:05 AM PST"
+        assert format_date(ctx, value) == "Jan 3, 2026"
+        assert format_compact_date(ctx, value) == "Jan 3"
+        assert format_time(ctx, value) == "10:05 AM PST"
+
+    assert format_timestamp(None, value) == "Jan 3, 2026, 6:05 PM UTC"
 
 
-def test_template_timestamps_follow_display_timezone():
-    """The Jinja filter reads the class timezone from context rather than a fixed default."""
+def test_class_local_date_differs_from_utc_date(app):
+    """A late-evening class-local instant is already the next day in UTC; the
+    date shown is the class's, not UTC's."""
+    value = datetime(2026, 1, 4, 3, 0, tzinfo=timezone.utc)  # Jan 3, 7 PM in Los Angeles
+
+    with app.app_context():
+        ctx = SimpleNamespace(class_id=provision_classroom("chemistry_p1").class_id)
+        assert format_date(ctx, value) == "Jan 3, 2026"
+    assert format_date(None, value) == "Jan 4, 2026"
+
+
+def test_template_timestamps_follow_class_context(app):
+    """The Jinja filter localizes under the template's class context rather than a fixed default."""
     env = Environment(autoescape=True)
     env.filters["fmt_timestamp"] = fmt_timestamp
     template = env.from_string("{{ value | fmt_timestamp }}")
     value = datetime(2026, 1, 3, 18, 5, tzinfo=timezone.utc)
 
-    assert template.render(value=value, display_timezone="America/New_York") == "Jan 3, 2026, 1:05 PM EST"
-    assert template.render(value=value, display_timezone="Pacific/Honolulu") == "Jan 3, 2026, 8:05 AM HST"
+    with app.app_context():
+        class_id = provision_classroom("chemistry_p1").class_id
+        assert template.render(value=value, temporal_context=SimpleNamespace(class_id=class_id)) == "Jan 3, 2026, 10:05 AM PST"
+    assert template.render(value=value) == "Jan 3, 2026, 6:05 PM UTC"
 
 
 def test_hall_pass_template_uses_canonical_temporal_filters():
@@ -54,4 +75,4 @@ def test_fmt_timestamp_accepts_iso_string_from_correlation_pack():
     """
     iso_value = "2026-09-22T05:56:18.924000+00:00"
 
-    assert format_timestamp(iso_value, "America/New_York") == "Sep 22, 2026, 1:56 AM EDT"
+    assert format_timestamp(None, iso_value) == "Sep 22, 2026, 5:56 AM UTC"

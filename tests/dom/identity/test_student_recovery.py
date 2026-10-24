@@ -561,7 +561,7 @@ def test_recovery_completion_rechecks_authorization(client, recovery_data, monke
     authorization = _authorize_recovery(user)
     if reason == "expired":
         deadline = ensure_utc(user.recovery_setup_expires_at)
-        monkeypatch.setattr(identity_feat, "utc_now", lambda: deadline)
+        monkeypatch.setattr("app.utils.canonical_temporal_resolver.utc_now", lambda: deadline)
     elif reason == "reissued":
         from app.feats.identity_feat import generate_teacher_reset_code
         from app.services.context_resolver import CanonicalContext

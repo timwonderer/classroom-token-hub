@@ -763,6 +763,8 @@ def view_issue(issue_ref):
         tz_mode=tz_mode,
         class_timezone=class_timezone,
         display_timezone=display_timezone,
+        # Display lens for the fmt_* filters (app/utils/temporal_display.py), not class context.
+        temporal_context=SimpleNamespace(class_id=class_row.class_id) if tz_mode == 'class' else None,
         format_utc_iso=format_utc_iso,
     )
 

@@ -18,7 +18,6 @@ from __future__ import annotations
 from typing import NamedTuple
 
 from app.models import PayrollEvent
-from app.utils.canonical_temporal_resolver import ensure_utc
 
 
 class PayrollCorrelationSets(NamedTuple):
@@ -55,8 +54,8 @@ def get_payroll_correlation_sets(
         .with_entities(PayrollEvent.correlation_id, PayrollEvent.payroll_event_type)
         .filter(
             PayrollEvent.class_id == class_id,
-            PayrollEvent.recorded_at >= ensure_utc(window_start),
-            PayrollEvent.recorded_at < ensure_utc(window_end),
+            PayrollEvent.recorded_at >= window_start,
+            PayrollEvent.recorded_at < window_end,
         )
         .all()
     )
