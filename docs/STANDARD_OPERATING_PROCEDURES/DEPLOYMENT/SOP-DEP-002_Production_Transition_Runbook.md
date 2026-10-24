@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-002 | 1.15 | 2026-10-22 | 1.14 | Normative |
+| SOP-DEP-002 | 1.16 | 2026-10-23 | 1.15 | Normative |
 
 > [!IMPORTANT]
 > **v1.11 (2026-10-14), documentation modernization.** §VIII and §X's verification checklist cited verification routes by `join_code`: `/admin/export-students?join_code=<owned-join-code>` and `POST /student/switch-class/<join_code>`. Checked against the live routes — `/admin/export-students` takes no query parameter at all (the class comes from the admin's session/sidebar context via `_resolve_admin_class_context`), and `/student/switch-class/<class_id>` takes `class_id` as its path parameter, not `join_code`. Corrected both to match, bringing this document in line with `SOP-DEP-001` §XI, which already states the canonical route takes `class_id` and that `join_code` there is the retired alias form.
@@ -78,7 +78,8 @@ name or moving branch tip is not itself a release artifact.
 Before a restricted work window, confirm an unauthenticated browser reaches Access,
 an unauthorized identity cannot enter, and an authorized operator can reach the
 normal application sign-in. Verify the origin cannot be reached around Cloudflare.
-Public health probes require authorized service-token headers; host-local probes
+Health endpoints are public and need no credential; while the gate is closed the status
+collector reads nothing from the application (SPEC-OPS-006 1.6). Host-local probes
 do not traverse Access. Never record tokens in logs or deployment evidence.
 
 At the end of the window, change the Access policy only when public access is
@@ -313,6 +314,8 @@ Record:
 ## XIII. Amendment
 
 Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.
+
+**Version 1.16 (2026-10-23):** §VI Cloudflare Access gate verification: health endpoints are public and need no credential; the status collector reads nothing from the application while the gate is closed (DOM-OPS-001 2.14, SPEC-OPS-006 1.6). Owner ruling, 2026-10-23.
 
 **Version 1.15 (2026-10-22):** §VII.A step 12: each release-record follow-up is filed as an issue on the CTH Backlog project and linked from the record; §XII names the project instead of the archived post-launch tracker. Owner, 2026-10-22: the backlog moved to GitHub Issues.
 
