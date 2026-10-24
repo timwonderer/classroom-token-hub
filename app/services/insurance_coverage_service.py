@@ -33,7 +33,6 @@ from app.services.policy_reference_service import (
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
     canonical_temporal_resolver,
-    ensure_utc,
 )
 
 
@@ -70,7 +69,7 @@ def class_local_date(class_id: str, instant_utc: datetime) -> date:
         CLASS_LEVEL_EVALUATION,
         canonical_execution_context=_ctx(class_id),
         primitive="current_evaluation_day",
-        reference_time_utc=ensure_utc(instant_utc),
+        reference_time_utc=instant_utc,
     ).evaluation_date
 
 
@@ -154,8 +153,8 @@ def get_coverage_period(
     return CoveragePeriod(
         bill_cycle_id=cycle.id,
         cycle_number=cycle.cycle_number,
-        start_utc=ensure_utc(cycle.cycle_boundary_at),
-        end_utc=ensure_utc(cycle.next_assessment_at),
+        start_utc=cycle.cycle_boundary_at,
+        end_utc=cycle.next_assessment_at,
     )
 
 

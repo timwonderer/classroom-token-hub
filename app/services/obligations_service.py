@@ -12,14 +12,14 @@ from datetime import datetime
 from dataclasses import dataclass
 from decimal import Decimal
 from types import SimpleNamespace
-from typing import NamedTuple, Optional
+from typing import NamedTuple
 
 from app.extensions import db
 from app.models import (
     ObligationAssessment, BillCycle, LedgerMechanism, ObligationCommandReservation, Transaction,
 )
 from app.utils.canonical_temporal_resolver import (
-    CLASS_LEVEL_EVALUATION, canonical_temporal_resolver, ensure_utc,
+    CLASS_LEVEL_EVALUATION, canonical_temporal_resolver,
 )
 
 
@@ -71,8 +71,8 @@ def get_seat_ids_with_self_payments(class_id: str, window_start, window_end) -> 
         .filter(
             ObligationAssessment.class_id == class_id,
             ObligationAssessment.event_type == "PAYMENT",
-            ObligationAssessment.timestamp >= ensure_utc(window_start),
-            ObligationAssessment.timestamp < ensure_utc(window_end),
+            ObligationAssessment.timestamp >= window_start,
+            ObligationAssessment.timestamp < window_end,
             Transaction.mechanism == LedgerMechanism.SELF,
         )
         .distinct()
@@ -127,8 +127,8 @@ def get_obligation_events_for_window(
     """
     if not class_id or window_start is None or window_end is None:
         return []
-    start = ensure_utc(window_start)
-    end = ensure_utc(window_end)
+    start = window_start
+    end = window_end
 
     assessments = (
         db.session.query(ObligationAssessment)
@@ -464,9 +464,9 @@ def get_obligation_state(
 
     satisfied_amount = Decimal("0.00")
     is_waived = False
-    cutoff = ensure_utc(as_of) if as_of is not None else None
+    cutoff = as_of
     for event in get_satisfaction_events(correlation_id):
-        if cutoff is not None and ensure_utc(event.timestamp) > cutoff:
+        if cutoff is not None and _is_later(assessment.class_id, event.timestamp, cutoff):
             continue
         if event.event_type == "PAYMENT":
             satisfied_amount += payment_event_magnitude(event)
@@ -476,7 +476,7 @@ def get_obligation_state(
     assessed_amount = resolve_assessment_amount(assessment)
     withdrawal = get_withdrawal_event(correlation_id)
     is_withdrawn = withdrawal is not None and (
-        cutoff is None or ensure_utc(withdrawal.timestamp) <= cutoff
+        cutoff is None or not _is_later(assessment.class_id, withdrawal.timestamp, cutoff)
     )
     if is_withdrawn:
         # Never became owed (DOM-OBL-001 §V.8). Deliberately NOT satisfied: a
@@ -737,7 +737,7 @@ def _start_of_class_day_before(class_id: str, instant_utc: datetime, days: int) 
         CLASS_LEVEL_EVALUATION,
         canonical_execution_context=ctx,
         primitive="evaluation_day_boundaries",
-        reference_time_utc=ensure_utc(instant_utc),
+        reference_time_utc=instant_utc,
     ).boundary_start_utc
     midday = canonical_temporal_resolver(
         CLASS_LEVEL_EVALUATION,
@@ -796,7 +796,7 @@ def last_class_day_before(class_id: str, exclusive_end_utc: datetime):
         CLASS_LEVEL_EVALUATION,
         canonical_execution_context=ctx,
         primitive="shift_timestamp",
-        timestamp=ensure_utc(exclusive_end_utc),
+        timestamp=exclusive_end_utc,
         elapsed_seconds=-1,
     ).shifted_timestamp_utc
     return canonical_temporal_resolver(
@@ -998,7 +998,7 @@ def get_default_payment_target(class_id: str, internal_ref: str) -> ObligationSt
     ]
     if not outstanding:
         return None
-    return min(outstanding, key=lambda st: (ensure_utc(st.due_at), st.correlation_id))
+    return min(outstanding, key=lambda st: (st.due_at, st.correlation_id))
 
 
 def get_obligation_command_reservation(
@@ -1266,62 +1266,6 @@ def get_rent_waivers_for_seat(
         .order_by(ObligationAssessment.timestamp.desc())
         .all()
     )
-
-
-@dataclass(frozen=True)
-class RentWaiverView:
-    """Derived projection of a rent WAIVED event with its coverage window.
-
-    Per DOM-OBL-001 §VII, assessment events do not store coverage windows.
-    The window is derived from the linked bill_cycle
-    (cycle_boundary_at, next_assessment_at). This projection resolves the
-    derivation once so callers work with a stable shape.
-    """
-    id: int
-    seat_id: int
-    correlation_id: str
-    timestamp: datetime  # When the waiver was granted (event canonical timestamp)
-    coverage_start_time: Optional[datetime]  # Derived from bill_cycle.cycle_boundary_at
-    coverage_end_time: Optional[datetime]  # Derived from bill_cycle.next_assessment_at
-
-
-def get_active_rent_waivers_for_class(
-    class_id: str,
-    coverage_date: datetime | None = None,
-) -> list[RentWaiverView]:
-    """DEPRECATED — "active waiver" is not a lawful concept.
-
-    Per DOM-OBL-001 §V.6, a waiver is a one-time immutable satisfaction
-    of a specific already-assessed liability. It does not create an
-    ongoing state and does not affect later assessments. Any UI that
-    presents waivers as "currently active" or as a lifecycle object
-    encodes the wrong domain semantics.
-
-    This helper is retained temporarily so existing callers do not
-    crash; it returns the WAIVED-event history with the actual bill-cycle
-    coverage bounds. New callers should use `get_rent_waiver_history_for_class`
-    directly.
-
-    TODO: remove after all callers migrate.
-    """
-    waivers = get_rent_waiver_history_for_class(class_id)
-    if coverage_date is not None:
-        waivers = [
-            w for w in waivers
-            if w['coverage_start_time'] and w['coverage_end_time']
-            and w['coverage_start_time'] <= coverage_date < w['coverage_end_time']
-        ]
-    return [
-        RentWaiverView(
-            id=w['id'],
-            seat_id=w['seat_id'],
-            correlation_id=w['correlation_id'],
-            timestamp=w['waived_at'],
-            coverage_start_time=w['coverage_start_time'],
-            coverage_end_time=w['coverage_end_time'],
-        )
-        for w in waivers
-    ]
 
 
 def get_rent_waiver_history_for_class(

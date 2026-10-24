@@ -594,11 +594,6 @@ _SLE_DURATIONS = {
 # Class-calendar arithmetic that predates the rule. Debt, not permission: each
 # entry is removed when its site moves onto resolver primitives.
 _CLE_DEBT = {
-    ("app/services/rent_schedule_service.py", "return due_local_date + timedelta(days=1)"),
-    ("app/services/rent_schedule_service.py", "return due_local_date + timedelta(weeks=1)"),
-    ("app/services/rent_schedule_service.py", "return due_local_date + timedelta(days=value)"),
-    ("app/services/rent_schedule_service.py", "return due_local_date + timedelta(weeks=value)"),
-    ("app/services/rent_schedule_service.py", "grace_local_date = due_local_date + timedelta(days=grace_days)"),
     ("app/feats/insurance_coverage_renewal_feat.py", "_INSTANT_RESOLUTION = timedelta(microseconds=1)"),
     ("app/feats/insurance_coverage_renewal_feat.py", "evaluation_date=local_day + timedelta(days=days),"),
     ("app/feats/insurance_claim_feat.py", "deadline_date = txn_date + timedelta(days=int(claim_window_days))"),
