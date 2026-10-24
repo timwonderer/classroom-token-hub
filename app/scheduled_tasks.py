@@ -286,14 +286,16 @@ def run_automatic_payroll_job():
     from app.services.payroll.schedule import due_payroll_occurrences
     from app.utils.canonical_temporal_resolver import (
         CLASS_LEVEL_EVALUATION,
+        SYSTEM_LEVEL_EVALUATION,
         canonical_temporal_resolver,
-        utc_now,
     )
 
     logger = logging.getLogger('scheduled_tasks')
     logger.info("Starting scheduled automatic-payroll job")
 
-    now = utc_now()
+    now = canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="current_time"
+    ).canonical_now_utc
     try:
         due = due_payroll_occurrences(now=now)
     except Exception:
@@ -423,12 +425,17 @@ def run_insurance_expiry_job():
         get_insurance_grant,
         get_terminal_event,
     )
-    from app.utils.canonical_temporal_resolver import ensure_utc, utc_now
+    from app.utils.canonical_temporal_resolver import (
+        SYSTEM_LEVEL_EVALUATION,
+        canonical_temporal_resolver,
+    )
 
     logger = logging.getLogger('scheduled_tasks')
     logger.info("Starting scheduled insurance boundary-expiry job")
 
-    now = utc_now()
+    now = canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="current_time"
+    ).canonical_now_utc
     try:
         terminal_cycles = (
             BillCycle.query
@@ -466,7 +473,12 @@ def run_insurance_expiry_job():
 
             # EXPIRED takes effect at the termination instant (the end of the last
             # committed period, DOM-OBL-001 §V.7), not when this job happened to run.
-            boundary = ensure_utc(cycle.cycle_boundary_at)
+            # In UTC, so the idempotency key is the same whatever offset the driver returns.
+            boundary = canonical_temporal_resolver(
+                SYSTEM_LEVEL_EVALUATION,
+                primitive="localize_timestamp",
+                timestamp=cycle.cycle_boundary_at,
+            ).local_timestamp
             idempotency_key = (
                 f"insurance-expiry:{grant.entitlement_id}:{boundary.isoformat()}"
             )
@@ -578,12 +590,17 @@ def run_collective_goal_expiry_job():
     from app.services import store_service
     from app.services.identity_service import resolve_teacher_seat_for_class
     from app.services.store import collective_goals
-    from app.utils.canonical_temporal_resolver import utc_now
+    from app.utils.canonical_temporal_resolver import (
+        SYSTEM_LEVEL_EVALUATION,
+        canonical_temporal_resolver,
+    )
 
     logger = logging.getLogger('scheduled_tasks')
     logger.info("Starting scheduled collective-goal expiry job")
 
-    now = utc_now()
+    now = canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="current_time"
+    ).canonical_now_utc
     try:
         lapsed_products = (
             StoreProduct.query
@@ -686,7 +703,10 @@ def run_savings_interest_job():
     from app.models import Seat
     from app.services.ledger_interest_service import apply_savings_interest
     from app.services.ledger_recovery_service import lock_ledger_seats
-    from app.utils.canonical_temporal_resolver import utc_now
+    from app.utils.canonical_temporal_resolver import (
+        SYSTEM_LEVEL_EVALUATION,
+        canonical_temporal_resolver,
+    )
 
     # Interest accrues on posted balances only (SPEC-ECON-001 §9.2), so an
     # unsettled ledger presents a zero base and this job underpays silently
@@ -699,7 +719,9 @@ def run_savings_interest_job():
     class_ids = [row[0] for row in db.session.query(Seat.class_id).distinct().all()]
     posted = 0
     failed = 0
-    run_key = utc_now().strftime("%Y-%m-%dT%H")
+    run_key = canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="current_time"
+    ).canonical_now_utc.strftime("%Y-%m-%dT%H")
     for class_id in class_ids:
         # Claimed student seats only (DOM-IDEN-005 §VII-VIII: participation is
         # lawful only once a Seat is bound to a User). This read carried neither

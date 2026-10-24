@@ -23,7 +23,7 @@ Everything here is a pure read and safe from a GET handler (INV-ARC-007).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from decimal import Decimal
 
 import sqlalchemy as sa
@@ -33,7 +33,6 @@ from app.extensions import db
 
 from app.models import EntitlementEvent, PendingAction, Seat, Transaction
 from app.services import store_service
-from app.utils.canonical_temporal_resolver import ensure_utc
 
 REDEMPTION_FEAT = "FEAT-STOR-002"
 
@@ -168,9 +167,10 @@ def _parse_instant(value) -> datetime | None:
     if not value:
         return None
     if isinstance(value, datetime):
-        return ensure_utc(value)
+        return value
+    # Payload instants are written as offset-bearing ISO strings, so they parse aware.
     try:
-        return ensure_utc(datetime.fromisoformat(str(value).replace("Z", "+00:00")))
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
     except ValueError:
         return None
 
@@ -302,8 +302,8 @@ def list_resolved_redemptions(class_id: str, *, limit: int = 100) -> list[Redemp
             **_base_fields(grants.get(row.entitlement_id), names=names, seat_id=row.seat_id, context=context),
         ))
 
-    _earliest = datetime.min.replace(tzinfo=timezone.utc)
-    views.sort(key=lambda view: ensure_utc(view.decided_at) if view.decided_at else _earliest, reverse=True)
+    # Undecided views sort last.
+    views.sort(key=lambda view: (view.decided_at is not None, view.decided_at), reverse=True)
     return views[:limit]
 
 

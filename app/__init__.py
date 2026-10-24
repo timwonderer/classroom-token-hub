@@ -183,7 +183,7 @@ def register_error_handlers(app):
             # then persist the TLCP error event in a fresh, independent transaction.
             db.session.rollback()
             with db.engine.begin() as conn:
-                from app.utils.canonical_temporal_resolver import utc_now
+                from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
                 if context.get("actor_type") and context.get("actor_public_id"):
                     from app.services.tlcp import _sanitize_error_message
                     inspector = sa.inspect(conn)
@@ -211,7 +211,9 @@ def register_error_handlers(app):
                                 "error_class": e.__class__.__name__,
                                 "error_message": _sanitize_error_message(sanitized_message),
                                 "correlation_version": CORRELATION_VERSION,
-                                "created_at": utc_now(),
+                                "created_at": canonical_temporal_resolver(
+                                    SYSTEM_LEVEL_EVALUATION, primitive="current_time"
+                                ).canonical_now_utc,
                             },
                         )
         except Exception:

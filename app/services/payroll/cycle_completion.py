@@ -24,7 +24,7 @@ from typing import NamedTuple
 
 from app.extensions import db
 from app.models import ClassEconomy, PayrollCycleCompletion, PayrollEvent
-from app.utils.canonical_temporal_resolver import ensure_utc
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 
 class PayrollCycleCompletionConflict(Exception):
@@ -61,7 +61,9 @@ def get_completed_cycle_window(class_id: str, *, boundary_utc):
     """
     if not class_id or boundary_utc is None:
         raise ValueError("class_id and boundary_utc are required to resolve a cycle window")
-    boundary = ensure_utc(boundary_utc)
+    boundary = canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp", timestamp=boundary_utc
+    ).local_timestamp
     last_payroll_at = (
         db.session.query(db.func.max(PayrollEvent.recorded_at))
         .filter(
