@@ -624,3 +624,64 @@ def test_minimum_period_duration_is_the_true_monthly_minimum():
         for n in range(12)
     )
     assert shortest == 28
+
+
+# ---------------------------------------------------------------------------
+# §XIV-25..29: shift_calendar_days / localize_timestamp (SPEC-TIME-001 1.3)
+# ---------------------------------------------------------------------------
+
+def _shift(**inputs):
+    return canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION, canonical_execution_context=FakeContext("cls-1"),
+        primitive="shift_calendar_days", reference_time_utc=REF, **inputs,
+    )
+
+
+def test_shift_calendar_days_moves_a_date_by_calendar_days_to_local_midnight():
+    """US DST ends 2026-11-01: Oct 31 + 2 days is Nov 2 at 00:00 EST, 49 hours later."""
+    start = _shift(date=date(2026, 10, 31), days=0)
+    later = _shift(date=date(2026, 10, 31), days=2)
+    assert later.shifted_date == date(2026, 11, 2)
+    assert later.boundary_start.hour == 0
+    assert later.boundary_start_utc == _utc(2026, 11, 2, 5)
+    assert later.boundary_start_utc - start.boundary_start_utc == timedelta(hours=49)
+    assert _shift(date=date(2026, 3, 1), days=-1).shifted_date == date(2026, 2, 28)
+
+
+def test_shift_calendar_days_keeps_a_timestamps_local_wall_clock_across_dst():
+    before = _utc(2026, 10, 30, 11)  # 07:00 EDT
+    after = _shift(timestamp=before, days=7)
+    assert after.shifted_date == date(2026, 11, 6)
+    assert (after.shifted_timestamp.hour, after.shifted_timestamp_utc) == (7, _utc(2026, 11, 6, 12))
+
+
+def test_shift_calendar_days_takes_the_earlier_instant_in_a_fold_and_skips_a_gap_forward():
+    fold = _shift(timestamp=_utc(2026, 10, 31, 5, 30), days=1)  # 01:30 EDT → 01:30 on Nov 1, twice
+    assert fold.shifted_timestamp_utc == _utc(2026, 11, 1, 5, 30)
+    gap = _shift(timestamp=_utc(2026, 3, 7, 7, 30), days=1)  # 02:30 EST → 02:30 never happens on Mar 8
+    assert (gap.shifted_timestamp.hour, gap.shifted_timestamp.minute) == (3, 30)
+
+
+@pytest.mark.parametrize("inputs", [
+    dict(date=date(2026, 1, 1), days=1.0),
+    dict(date=date(2026, 1, 1), days=True),
+    dict(days=1),
+    dict(date=date(2026, 1, 1), timestamp=REF, days=1),
+    dict(date=datetime(2026, 1, 1, tzinfo=timezone.utc), days=1),
+    dict(timestamp=datetime(2026, 1, 1), days=1),
+])
+def test_shift_calendar_days_fails_closed_on_bad_input(inputs):
+    with pytest.raises(TemporalResolutionError):
+        _shift(**inputs)
+
+
+def test_localize_timestamp_expresses_an_instant_in_the_class_timezone():
+    ev = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION, canonical_execution_context=FakeContext("cls-1"),
+        primitive="localize_timestamp", reference_time_utc=REF, timestamp=_utc(2026, 7, 21, 2, 15),
+    )
+    assert ev.local_timestamp == pytz.timezone(EASTERN).localize(datetime(2026, 7, 20, 22, 15))
+    assert ev.evaluation_date == date(2026, 7, 20)
+    with pytest.raises(TemporalResolutionError):
+        canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp",
+                                    timestamp=datetime(2026, 7, 21))
