@@ -90,10 +90,16 @@ def _setting_for(settings, instant):
         if not settings:
             return None
         rank = (settings[0].effective_at, settings[0].created_at)
-        first = [s for s in settings if (s.effective_at, s.created_at) == rank]
+        first = [s for s in settings if canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="same_instant",
+            candidate=s.effective_at, reference=rank[0]).is_same
+            and canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="same_instant",
+            candidate=s.created_at, reference=rank[1]).is_same]
         return first[0] if len(first)==1 else None
     rank = max((s.effective_at, s.created_at) for s in available)
-    winners = [s for s in available if (s.effective_at, s.created_at) == rank]
+    winners = [s for s in available if canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="same_instant",
+            candidate=s.effective_at, reference=rank[0]).is_same
+        and canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="same_instant",
+            candidate=s.created_at, reference=rank[1]).is_same]
     return winners[0] if len(winners) == 1 else None
 
 
@@ -142,7 +148,8 @@ def get_historical_attendance_business_evidence(*, ctx, class_id, target_seat_id
         at = event.recorded_at
         prior = [e for e in events if e.payroll_event_type == 'payroll' and canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="earlier_than",
             candidate=e.recorded_at, reference=at).is_earlier]
-        tied = [e for e in events if e.payroll_event_type == 'payroll' and e.recorded_at == at]
+        tied = [e for e in events if e.payroll_event_type == 'payroll' and canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="same_instant",
+            candidate=e.recorded_at, reference=at).is_same]
         cutoff = max((e.recorded_at for e in prior), default=None)
         legacy = [e.recorded_at for e in prior if not isinstance(e.summary_json,dict) or e.summary_json.get('settlement_rule') != 'closed_sessions']
         candidates = []

@@ -116,18 +116,6 @@ def incident_is_open(incident: PayrollIncident, *, now_utc=None) -> bool:
     ).is_earlier
 
 
-def _elapsed_seconds(ctx, intervals, reference_time_utc) -> int:
-    if not intervals:
-        return 0
-    return canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=ctx,
-        primitive="elapsed_duration",
-        reference_time_utc=reference_time_utc,
-        intervals=intervals,
-    ).elapsed_seconds
-
-
 def _replayed_paid_seconds(ctx, rows, *, since_utc, run_at_utc) -> int:
     """What the earlier rule computed for a run at ``run_at_utc``, reproduced exactly.
 
@@ -155,7 +143,15 @@ def _replayed_paid_seconds(ctx, rows, *, since_utc, run_at_utc) -> int:
             active_start = None
     if active_start is not None:
         intervals.append((active_start, min(run_at_utc, _day_end_utc(ctx, active_start))))
-    return _elapsed_seconds(ctx, intervals, run_at_utc)
+    if not intervals:
+        return 0
+    return canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=ctx,
+        primitive="elapsed_duration",
+        reference_time_utc=run_at_utc,
+        intervals=intervals,
+    ).elapsed_seconds
 
 
 def _worked_seconds_in_window(ctx, rows, *, since_utc, run_at_utc) -> int:
@@ -180,7 +176,15 @@ def _worked_seconds_in_window(ctx, rows, *, since_utc, run_at_utc) -> int:
             primitive="later_than", candidate=end, reference=start,
         ).is_later:
             intervals.append((start, end))
-    return _elapsed_seconds(ctx, intervals, run_at_utc)
+    if not intervals:
+        return 0
+    return canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=ctx,
+        primitive="elapsed_duration",
+        reference_time_utc=run_at_utc,
+        intervals=intervals,
+    ).elapsed_seconds
 
 
 def _is_legacy(event: PayrollEvent) -> bool:

@@ -159,17 +159,6 @@ def _period_for_claim(claim) -> "insurance_coverage.CoveragePeriod":
     return period
 
 
-def _class_local_date(canonical_context: CanonicalContext, ts_utc: datetime) -> date:
-    """Class-local (CLE) calendar date of a UTC instant."""
-    evaluation = canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=canonical_context,
-        primitive="current_evaluation_day",
-        reference_time_utc=ts_utc,
-    )
-    return evaluation.evaluation_date
-
-
 def _filing_deadline_end_utc(
     canonical_context: CanonicalContext,
     transaction_ts_utc: datetime,
@@ -182,7 +171,12 @@ def _filing_deadline_end_utc(
     NOT 7×24h). The returned instant is the exclusive upper bound: a submission is
     timely iff ``submitted_at < deadline_end_utc``.
     """
-    txn_date = _class_local_date(canonical_context, transaction_ts_utc)
+    txn_date = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=canonical_context,
+        primitive="current_evaluation_day",
+        reference_time_utc=transaction_ts_utc,
+    ).evaluation_date
     deadline_date = canonical_temporal_resolver(
         CLASS_LEVEL_EVALUATION,
         canonical_execution_context=canonical_context,
@@ -216,8 +210,18 @@ def _coverage_week_equivalent(
     """
     freq = (policy_terms.charge_frequency or "WEEKLY").strip().upper()
     if freq == "MONTHLY":
-        start_date = _class_local_date(canonical_context, period.start_utc)
-        end_date = _class_local_date(canonical_context, period.end_utc)
+        start_date = canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=canonical_context,
+            primitive="current_evaluation_day",
+            reference_time_utc=period.start_utc,
+        ).evaluation_date
+        end_date = canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=canonical_context,
+            primitive="current_evaluation_day",
+            reference_time_utc=period.end_utc,
+        ).evaluation_date
         covered_days = (end_date - start_date).days
         return Decimal(covered_days) / Decimal("7")
     # Weekly coverage (and any fail-safe) is exactly one week-equivalent.
@@ -321,7 +325,12 @@ def coverage_effective_start_utc(
     day after purchase, not at 3pm on that day. ``N = 0`` returns the start of the
     purchase date, which is at or before the grant, so coverage is immediate.
     """
-    start_date = _class_local_date(canonical_context, coverage_start_utc)
+    start_date = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=canonical_context,
+        primitive="current_evaluation_day",
+        reference_time_utc=coverage_start_utc,
+    ).evaluation_date
     effective = canonical_temporal_resolver(
         CLASS_LEVEL_EVALUATION,
         canonical_execution_context=canonical_context,
@@ -688,8 +697,18 @@ def _parse_productivity_dates(
             error_message="additional_information must be a string when provided",
         )
 
-    coverage_start_date = _class_local_date(canonical_context, coverage_start_utc)
-    today_local = _class_local_date(canonical_context, submitted_at)
+    coverage_start_date = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=canonical_context,
+        primitive="current_evaluation_day",
+        reference_time_utc=coverage_start_utc,
+    ).evaluation_date
+    today_local = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=canonical_context,
+        primitive="current_evaluation_day",
+        reference_time_utc=submitted_at,
+    ).evaluation_date
 
     parsed: list[_ProductivityClaimedDate] = []
     seen: set[date] = set()
