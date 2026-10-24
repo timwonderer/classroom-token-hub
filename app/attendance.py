@@ -10,16 +10,6 @@ from app.utils.canonical_temporal_resolver import (
 )
 
 
-def _ensure_utc_timestamp(timestamp):
-    if timestamp is None:
-        return None
-    evaluation = canonical_temporal_resolver(
-        SYSTEM_LEVEL_EVALUATION,
-        primitive="current_time",
-        reference_time_utc=timestamp,
-    )
-    return evaluation.canonical_now_utc
-
 def get_last_payroll_time(*, seat_id: int, class_id: str):
     """Return the latest payroll settlement anchor for one canonical seat/class scope."""
     if not seat_id or not class_id:
@@ -33,7 +23,13 @@ def get_last_payroll_time(*, seat_id: int, class_id: str):
         .order_by(PayrollEvent.recorded_at.desc(), PayrollEvent.id.desc())
         .first()
     )
-    return _ensure_utc_timestamp(last_payroll.recorded_at) if last_payroll else None
+    if not last_payroll:
+        return None
+    return canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION,
+        primitive="localize_timestamp",
+        timestamp=last_payroll.recorded_at,
+    ).local_timestamp
 
 
 
@@ -68,21 +64,36 @@ def _calculate_active_seconds_for_range(*, seat_id, class_id, start_utc, end_utc
     intervals = []
     active_start = None
     for row in rows:
-        timestamp = _ensure_utc_timestamp(row.timestamp)
+        timestamp = row.timestamp
         if row.status == "active":
             active_start = timestamp
             continue
         if row.status == "inactive" and active_start is not None:
             interval_start = max(active_start, start_utc)
             interval_end = min(timestamp, end_utc)
-            if interval_end >= interval_start:
+            if not canonical_temporal_resolver(
+                SYSTEM_LEVEL_EVALUATION,
+                primitive="earlier_than",
+                candidate=interval_end,
+                reference=interval_start,
+            ).is_earlier:
                 intervals.append((interval_start, interval_end))
             active_start = None
 
-    if active_start is not None and now_utc >= start_utc:
+    if active_start is not None and not canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION,
+        primitive="earlier_than",
+        candidate=now_utc,
+        reference=start_utc,
+    ).is_earlier:
         interval_start = max(active_start, start_utc)
         interval_end = min(now_utc, end_utc)
-        if interval_end >= interval_start:
+        if not canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION,
+            primitive="earlier_than",
+            candidate=interval_end,
+            reference=interval_start,
+        ).is_earlier:
             intervals.append((interval_start, interval_end))
 
     if not intervals:
@@ -142,8 +153,12 @@ def calculate_period_attendance_utc_range(seat_id, class_id, start_utc, end_utc)
     return _calculate_active_seconds_for_range(
         seat_id=seat_id,
         class_id=class_id,
-        start_utc=_ensure_utc_timestamp(start_utc),
-        end_utc=_ensure_utc_timestamp(end_utc),
+        start_utc=canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp", timestamp=start_utc
+        ).local_timestamp,
+        end_utc=canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp", timestamp=end_utc
+        ).local_timestamp,
     )
 
 

@@ -134,16 +134,6 @@ def _canonical_payload(
     - None values represented as JSON null.
     - Float/Decimal values converted to canonical string representation.
     """
-    def _normalize(v: Any) -> Any:
-        if isinstance(v, datetime):
-            # Persisted timestamps are aware; a naive one is rejected rather than assumed UTC.
-            return canonical_temporal_resolver(
-                SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp", timestamp=v
-            ).local_timestamp.isoformat()
-        if hasattr(v, "__str__") and type(v).__name__ == "Decimal":
-            return str(v)
-        return v
-
     canonical: dict[str, Any] = {
         "__table__": table_name,
         "__pk__": str(row_pk),
@@ -151,7 +141,15 @@ def _canonical_payload(
         "__class_id__": class_id,
     }
     for k in sorted(fields.keys()):
-        canonical[k] = _normalize(fields[k])
+        v = fields[k]
+        if isinstance(v, datetime):
+            # Persisted timestamps are aware; a naive one is rejected rather than assumed UTC.
+            v = canonical_temporal_resolver(
+                SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp", timestamp=v
+            ).local_timestamp.isoformat()
+        elif hasattr(v, "__str__") and type(v).__name__ == "Decimal":
+            v = str(v)
+        canonical[k] = v
 
     return json.dumps(canonical, sort_keys=True, separators=(",", ":"), default=str)
 
