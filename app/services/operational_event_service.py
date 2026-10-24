@@ -8,7 +8,7 @@ import sqlalchemy as sa
 from flask import current_app, g, has_request_context, request, session
 
 from app.extensions import db
-from app.utils.canonical_temporal_resolver import utc_now
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 # Severity levels considered surface-worthy for operator error dashboards.
 _ERROR_LEVELS = ("ERROR", "CRITICAL")
@@ -100,7 +100,7 @@ def record(
                 ),
                 {
                     "id": str(uuid.uuid4()),
-                    "created_at": utc_now(),
+                    "created_at": canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc,
                     "correlation_id": correlation_id,
                     "domain": domain,
                     "level": level,

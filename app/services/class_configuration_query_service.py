@@ -24,7 +24,6 @@ from app.models import (
     RentSettings,
 )
 from app.utils.canonical_temporal_resolver import (
-    ensure_utc,
     SYSTEM_LEVEL_EVALUATION,
     canonical_temporal_resolver,
 )
@@ -152,10 +151,10 @@ class EconomicEngineTimeline:
         # Oldest governing first; among equal effective_at the latest created
         # sorts last, so it wins the bisect exactly as it wins the resolver.
         self.versions = list(reversed(versions))
-        self._starts = [ensure_utc(version.effective_at) for version in self.versions]
+        self._starts = [version.effective_at for version in self.versions]
 
     def at(self, instant: datetime) -> Optional[EconomicEngine]:
-        index = bisect_right(self._starts, ensure_utc(instant)) - 1
+        index = bisect_right(self._starts, instant) - 1
         return self.versions[index] if index >= 0 else None
 
 

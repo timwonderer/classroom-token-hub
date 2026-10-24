@@ -1,7 +1,7 @@
 """Pure PROD original membership proof (DOM-PROD-001, SPEC-PROD-001 §VI)."""
 from app.models import PayrollEvent
 from app.services.attendance_service import list_attendance_intervals
-from app.utils.canonical_temporal_resolver import ensure_utc
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 
 def payroll_interval_memberships(seat_id, class_id, *, ctx, as_of_utc=None):
@@ -16,8 +16,14 @@ def payroll_interval_memberships(seat_id, class_id, *, ctx, as_of_utc=None):
         if type(summary.get("allocation_version")) is not int or summary.get("allocation_version") != 1:
             for key, interval in pairs.items():
                 closed_rule = summary.get('settlement_rule') == 'closed_sessions'
-                potentially_selected = (interval.closed_at <= ensure_utc(event.recorded_at) if closed_rule
-                    else interval.opened_at < ensure_utc(event.recorded_at))
+                if closed_rule:  # closed_at <= recorded_at
+                    potentially_selected = not canonical_temporal_resolver(
+                        SYSTEM_LEVEL_EVALUATION, primitive="later_than",
+                        candidate=interval.closed_at, reference=event.recorded_at).is_later
+                else:  # opened_at < recorded_at
+                    potentially_selected = canonical_temporal_resolver(
+                        SYSTEM_LEVEL_EVALUATION, primitive="earlier_than",
+                        candidate=interval.opened_at, reference=event.recorded_at).is_earlier
                 if potentially_selected:
                     historical_candidates.add(key)
                     result[key] = {"status": "historical_unavailable", "event": None, "pricing": None}
@@ -44,7 +50,9 @@ def payroll_interval_memberships(seat_id, class_id, *, ctx, as_of_utc=None):
             valid = False
         if not valid:
             for key, interval in pairs.items():
-                if key in mentioned or interval.opened_at <= ensure_utc(event.recorded_at):
+                if key in mentioned or not canonical_temporal_resolver(
+                        SYSTEM_LEVEL_EVALUATION, primitive="later_than",
+                        candidate=interval.opened_at, reference=event.recorded_at).is_later:
                     result[key] = {"status": "provenance_unavailable", "event": None, "pricing": None}
             continue
         for key in mentioned:
