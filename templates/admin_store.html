@@ -17,17 +17,17 @@
   <dt class="col-sm-4 text-muted fw-normal">How they got it</dt>
   <dd class="col-sm-8">
     {% if req.acquisition_type == 'GRANT' %}Given by you{% elif req.acquisition_type == 'PERK' %}Came with rent{% else %}Bought{% endif %}
-    {%- if req.purchased_at %} {{ req.purchased_at|fmt_timestamp }}{% endif %}
+    {%- if req.purchased_at_display %} {{ req.purchased_at_display }}{% endif %}
     {%- if req.acquisition_type == 'PURCHASE' and req.price_paid is not none %}
       {%- if req.units_in_purchase > 1 %}, {{ req.units_in_purchase }} bought together for ${{ "%.2f"|format(req.price_paid) }} total
       {%- else %} for ${{ "%.2f"|format(req.price_paid) }}{% endif %}
     {%- endif %}
   </dd>
   <dt class="col-sm-4 text-muted fw-normal">Requested</dt>
-  <dd class="col-sm-8">{{ req.submitted_at|fmt_timestamp if req.submitted_at else 'Not recorded' }}</dd>
+  <dd class="col-sm-8">{{ req.submitted_at_display }}</dd>
   {% if not req.is_pending %}
   <dt class="col-sm-4 text-muted fw-normal">Decided</dt>
-  <dd class="col-sm-8">{{ req.decided_at|fmt_timestamp if req.decided_at else 'Not recorded' }}</dd>
+  <dd class="col-sm-8">{{ req.decided_at_display }}</dd>
   {% endif %}
 </dl>
 
@@ -264,7 +264,7 @@
                 <td>{{ entitlement.student_name }}</td>
                 <td>{{ entitlement.store_item.name }}</td>
                 <td>{% if entitlement.store_item.price is not none %}${{ "%.2f"|format(entitlement.store_item.price) }}{% else %}Grant only{% endif %}</td>
-                <td><small class="text-muted">{{ entitlement.purchased_at|fmt_timestamp if entitlement.purchased_at else 'N/A' }}</small></td>
+                <td><small class="text-muted">{{ entitlement.purchased_at_display }}</small></td>
                 <td>
                   {% if entitlement.status == 'purchased' %}
                     <span class="badge bg-success">Purchased</span>
@@ -370,10 +370,10 @@
                 {% else %}
                   <div class="small text-muted">No class progress yet.</div>
                 {% endif %}
-                {% if item.collective_goal_last_day %}
+                {% if item.collective_goal_last_day_display %}
                 <div class="small text-muted mt-1">
                   <span class="material-symbols-outlined icon-2xs icon-middle" aria-hidden="true">schedule</span>
-                  <strong>Deadline:</strong> {{ item.collective_goal_last_day.strftime('%b %d, %Y') }}
+                  <strong>Deadline:</strong> {{ item.collective_goal_last_day_display }}
                 </div>
                 {% endif %}
               </div>
@@ -473,11 +473,7 @@
                     <td>{{ entitlement.student_name }}</td>
                     <td>{{ item.name }}</td>
                     <td>
-                        {% if entitlement.purchased_at %}
-                            {{ entitlement.purchased_at|fmt_timestamp }}
-                        {% else %}
-                            N/A
-                        {% endif %}
+                        {{ entitlement.purchased_at_display }}
                     </td>
                     <td><span class="badge bg-{{ 'success' if entitlement.status in ('redeemed', 'completed') else 'warning' }}">{{ entitlement.status|title }}</span></td>
                     <td>{{ entitlement.quantity }}</td>
@@ -510,7 +506,7 @@
           data-redemption-id="{{ req.request_id }}" aria-haspopup="dialog">
           <div class="overflow-hidden">
             <div><span class="fw-semibold">{{ req.student_name }}</span> <span class="text-muted">· {{ req.item_name }}</span></div>
-            <div class="small text-muted">Requested {{ req.submitted_at|fmt_timestamp }}</div>
+            <div class="small text-muted">Requested {{ req.submitted_at_display }}</div>
             {% if req.student_note %}<div class="small text-body-secondary text-truncate">“{{ req.student_note }}”</div>{% endif %}
           </div>
           <span class="d-flex align-items-center gap-1 text-primary small flex-shrink-0">Review<span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></span>
@@ -539,7 +535,7 @@
         <li class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-3 py-3">
           <div class="overflow-hidden">
             <div><span class="fw-semibold">{{ ack.student_name }}</span> <span class="text-muted">· {{ ack.item_name }}</span></div>
-            <div class="small text-muted">Bought {{ ack.submitted_at|fmt_timestamp }}{% if ack.price_paid is not none %} for ${{ "%.2f"|format(ack.price_paid) }}{% endif %}</div>
+            <div class="small text-muted">Bought {{ ack.submitted_at_display }}{% if ack.price_paid is not none %} for ${{ "%.2f"|format(ack.price_paid) }}{% endif %}</div>
           </div>
           <button type="button" class="btn btn-sm btn-outline-success flex-shrink-0" data-complete-immediate="{{ ack.request_id }}"
             aria-label="Mark {{ ack.item_name }} for {{ ack.student_name }} as complete">
@@ -563,7 +559,7 @@
           data-redemption-id="{{ req.request_id }}" aria-haspopup="dialog">
           <div class="overflow-hidden">
             <div><span class="fw-semibold">{{ req.student_name }}</span> <span class="text-muted">· {{ req.item_name }}</span></div>
-            <div class="small text-muted">Decided {{ req.decided_at|fmt_timestamp if req.decided_at else '—' }}</div>
+            <div class="small text-muted">Decided {{ req.decided_at_display }}</div>
           </div>
           <span class="d-flex align-items-center gap-2 flex-shrink-0">
             {% if req.outcome == 'APPROVED' %}
