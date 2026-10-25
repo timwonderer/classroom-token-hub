@@ -22,6 +22,7 @@ from types import SimpleNamespace
 
 from app.extensions import db
 from app.models import ObligationAssessment, Transaction, BillCycle, Seat, ClassEconomy, IdentityProfile, RentSettings
+from app.utils.temporal_display import format_date
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
     SYSTEM_LEVEL_EVALUATION,
@@ -1094,6 +1095,37 @@ def add_display_formatting_to_student_obligation_view(
         display_total_due=display_total_due,
         display_amount_paid=display_amount_paid,
         display_remaining_amount=display_remaining,
+    )
+
+
+def build_student_rent_page_view(view: StudentObligationView) -> StudentObligationView:
+    """The student rent page's view: each date also as class-time display text.
+
+    Adds ``due_date_display`` / ``grace_last_day_display`` to ``current_period``,
+    ``due_date_display`` to each late-fee row and ``date_display`` to each
+    payment-history row. Rows are copied; the source view is left as built.
+    """
+    ctx = SimpleNamespace(class_id=view.class_id)
+
+    def fee_row(row):
+        return {**row, "due_date_display": format_date(ctx, row.get("due_date"))}
+
+    current = view.current_period
+    if current is not None:
+        grace_last_day = current.get("grace_last_day")
+        current = {
+            **current,
+            "due_date_display": format_date(ctx, current.get("due_date")),
+            # 'Jan 5': a class-local date, no platform-specific %-d.
+            "grace_last_day_display": f"{grace_last_day:%b} {grace_last_day.day}" if grace_last_day else None,
+        }
+        if "late_fees" in current:
+            current["late_fees"] = [fee_row(r) for r in current["late_fees"]]
+    return replace(
+        view,
+        current_period=current,
+        late_fees=[fee_row(r) for r in view.late_fees],
+        payment_history=[{**p, "date_display": format_date(ctx, p.get("date"))} for p in view.payment_history],
     )
 
 

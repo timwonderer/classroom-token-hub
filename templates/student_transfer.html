@@ -333,7 +333,7 @@
                             <tr>
                                 <td>
                                     {% if tx.timestamp %}
-                                    {{ tx.timestamp|fmt_timestamp }}
+                                    {{ timestamp_displays[tx.id] }}
                                     {% else %}
                                     N/A
                                     {% endif %}
@@ -390,7 +390,7 @@
                             <tr>
                                 <td>
                                     {% if tx.timestamp %}
-                                    {{ tx.timestamp|fmt_timestamp }}
+                                    {{ timestamp_displays[tx.id] }}
                                     {% else %}
                                     N/A
                                     {% endif %}

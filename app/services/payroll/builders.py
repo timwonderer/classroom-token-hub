@@ -14,10 +14,10 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from datetime import datetime
 from typing import Any
-
 from app.extensions import db
 from app.models import PayrollSettings, Transaction, Seat, IdentityProfile
 from app.utils.temporal_display import format_compact_date, format_timestamp
+from app.utils.temporal_display import format_compact_date, format_date, format_time
 
 
 @dataclass(frozen=True)
@@ -265,6 +265,7 @@ SECONDS_PER_TIME_UNIT = {
     'days': 86400,
 }
 
+
 _SECONDS_PER_MINUTE = Decimal('60')
 
 
@@ -284,8 +285,14 @@ def rate_unit_to_per_minute(rate_in_unit, time_unit: str) -> Decimal:
 
 #: The order units are tried in when a rate is shown or pre-filled.
 _DISPLAY_UNIT_PREFERENCE = ('minutes', 'hours', 'days', 'seconds')
+
+
 _SINGULAR = {'seconds': 'second', 'minutes': 'minute', 'hours': 'hour', 'days': 'day'}
+
+
 _CENT = Decimal('0.01')
+
+
 # pay_rate is NUMERIC(18,8) (DOM-CORE-002 §11).
 _STORED = Decimal('0.00000001')
 
@@ -417,11 +424,6 @@ def build_payroll_settings_display(settings: PayrollSettings | None) -> dict[str
     }
 
 
-# ---------------------------------------------------------------------------
-# Time display (INV-ARC-022 §V.8, SPEC-UI-001 §VII): every time reaches the
-# template as text, localized through the resolver under ``ctx``.
-# ---------------------------------------------------------------------------
-
 def add_payroll_event_time_displays(ctx, rows: list[dict]) -> list[dict]:
     """Add ``timestamp_display`` to payroll event display rows."""
     for row in rows:
@@ -471,3 +473,21 @@ def add_hall_pass_time_displays(ctx, rows) -> list:
             if hasattr(row, name):
                 setattr(row, f"{name}_display", format_timestamp(ctx, getattr(row, name)))
     return rows
+
+
+def build_student_payroll_time_displays(ctx, attendance_events, last_payroll_event) -> dict:
+    """Class-time display text for the student payroll page.
+
+    ``events`` maps each attendance event id to its {"date", "time"} text;
+    ``last_payroll`` is the last payroll's date, or None.
+    """
+    return {
+        "events": {
+            event.id: {
+                "date": format_compact_date(ctx, event.timestamp),
+                "time": format_time(ctx, event.timestamp),
+            }
+            for event in attendance_events
+        },
+        "last_payroll": format_date(ctx, last_payroll_event.recorded_at) if last_payroll_event else None,
+    }

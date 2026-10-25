@@ -14,7 +14,6 @@ from dataclasses import dataclass
 from decimal import Decimal
 from datetime import datetime
 from typing import Any
-
 from app.extensions import db
 from app.models import Transaction, Seat, ClassEconomy
 from app.services.ledger_balance_query_service import project_posting_states
@@ -254,4 +253,9 @@ def build_transaction_summary_view(
 
 def build_transaction_time_displays(ctx, transactions) -> dict[int, str]:
     """Transaction id -> its timestamp as text, localized through the resolver (INV-ARC-022 §V.8)."""
+    return {tx.id: format_timestamp(ctx, tx.timestamp) for tx in transactions}
+
+
+def build_transaction_timestamp_displays(ctx, transactions) -> dict[int, str]:
+    """Each transaction's timestamp as class-time display text, keyed by transaction id."""
     return {tx.id: format_timestamp(ctx, tx.timestamp) for tx in transactions}

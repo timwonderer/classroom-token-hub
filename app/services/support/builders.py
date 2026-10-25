@@ -9,6 +9,7 @@ presentation-ready text, localized through the canonical temporal resolver
 from __future__ import annotations
 
 from app.utils.temporal_display import format_timestamp
+from app.services import obligations_service
 
 
 def build_teacher_issue_view(ctx, issue, student_display_name, class_label):
@@ -112,3 +113,20 @@ def build_announcement_rows(ctx, announcements):
             expires_on.strftime("%b %d, %Y") if announcement.expires_at and expires_on else None
         )
     return announcements
+
+
+def build_issue_submitted_displays(ctx, issues) -> dict[int, str]:
+    """Each issue's submission time as display text, keyed by issue id."""
+    return {issue.id: format_timestamp(ctx, issue.submitted_at) for issue in issues}
+
+
+def build_announcement_expiry_displays(class_id: str, announcements) -> dict[int, str]:
+    """'Jan 05, 2030': the last class day each expiring announcement shows, keyed by id.
+
+    ``expires_at`` is stored as that day's exclusive end.
+    """
+    return {
+        a.id: obligations_service.last_class_day_before(class_id, a.expires_at).strftime("%b %d, %Y")
+        for a in announcements
+        if a.expires_at
+    }

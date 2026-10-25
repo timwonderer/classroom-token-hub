@@ -33,7 +33,8 @@ def _verify_recovery(*, error: bool = False, verified: bool = False):
         if error:
             flash("Incorrect passphrase. Please try again.", "error")
         ctx = {**student_layout(current_page="verify-recovery"),
-               "recovery_code": _recovery_code(), "student": _STUDENT}
+               "recovery_code": _recovery_code(), "recovery_expires_display": "Jan 15, 2030, 4:30 AM PST",
+               "student": _STUDENT}
         if verified:
             ctx.update(generated_code="482916", verified=True)
         return ctx
@@ -58,8 +59,10 @@ def _claim_policy(insurance_type: str, **overrides):
 
 
 _PRIOR_CLAIMS = [
-    SimpleNamespace(status="approved", filed_date=_NOW - timedelta(days=9), approved_amount=4.0),
-    SimpleNamespace(status="pending", filed_date=_NOW - timedelta(days=2), approved_amount=None),
+    SimpleNamespace(status="approved", filed_date=_NOW - timedelta(days=9), filed_date_display="Jan 6, 2030",
+                    approved_amount=4.0),
+    SimpleNamespace(status="pending", filed_date=_NOW - timedelta(days=2), filed_date_display="Jan 13, 2030",
+                    approved_amount=None),
 ]
 
 
@@ -80,7 +83,7 @@ def _file_claim(insurance_type: str, *, claimable: bool = True, prior=()):
             "is_productivity_type": insurance_type == "PRODUCTIVITY",
             "claimable": claimable,
             "prior_claims": list(prior),
-            "class_today": date(2030, 1, 15),
+            "claim_date_max": "2030-01-15",
         }
     return build
 
@@ -101,6 +104,7 @@ def _claim_row(claim_id: int, status: str, **extra):
         status=status, approved_amount=None, claim_amount=4.5, rejection_reason=None,
         description="Lunch was lost on the bus.", teacher_notes=None,
         incident_date=_NOW - timedelta(days=5), filed_date=_NOW - timedelta(days=4),
+        incident_date_display="Jan 10, 2030", filed_date_display="Jan 11, 2030",
     )
     values.update(extra)
     return SimpleNamespace(**values)
@@ -119,6 +123,9 @@ def _policy_enrollment(*, premiums_current: bool):
         coverage_start_date=_NOW - timedelta(days=17) if premiums_current else _NOW + timedelta(days=3),
         premiums_current=premiums_current, status="active",
         next_payment_due=_NOW + timedelta(days=4), covered_through=date(2030, 1, 19),
+        purchase_date_display="Dec 26, 2029",
+        coverage_start_date_display="Dec 29, 2029" if premiums_current else "Jan 18, 2030",
+        covered_through_display="Jan 19, 2030",
         contract_claim_time_limit_days=14, contract_period_payout_cap=15.0,
         contract_max_claims_count=2, contract_allowance_unit="claims",
     )

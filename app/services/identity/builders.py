@@ -21,17 +21,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Optional
-
 from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 from app.utils.temporal_display import format_time
-
-
 from app.utils.temporal_display import format_date, format_timestamp
-
-
-# ---------------------------------------------------------------------------
-# View model definitions (frozen dataclasses — SPEC-UI-001 § VI)
-# ---------------------------------------------------------------------------
+from app.utils.temporal_display import format_timestamp
 
 
 @dataclass(frozen=True)
@@ -454,11 +447,6 @@ class StudentClassSelectionView:
     """
 
 
-# ---------------------------------------------------------------------------
-# Builder functions
-# ---------------------------------------------------------------------------
-
-
 def build_admin_layout_context_view(
     admin_display_name: Optional[str],
     class_context: Optional[dict],
@@ -780,3 +768,10 @@ def build_passkey_credential_views(ctx, credentials) -> list[PasskeyCredentialVi
 def build_account_created_on(ctx, user) -> str:
     """The account's creation date as text, localized through the resolver under ``ctx``."""
     return format_date(ctx, user.created_at)
+
+
+def build_recovery_code_expiry_display(ctx, recovery_code) -> str | None:
+    """A teacher-recovery code's expiry as display text, or None without a code."""
+    if recovery_code is None:
+        return None
+    return format_timestamp(ctx, recovery_code.recovery_request.expires_at)
