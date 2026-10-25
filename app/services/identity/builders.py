@@ -26,6 +26,9 @@ from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canon
 from app.utils.temporal_display import format_time
 
 
+from app.utils.temporal_display import format_date, format_timestamp
+
+
 # ---------------------------------------------------------------------------
 # View model definitions (frozen dataclasses — SPEC-UI-001 § VI)
 # ---------------------------------------------------------------------------
@@ -750,3 +753,30 @@ def build_recovery_saved_view(ctx, recovery_request) -> dict:
 
     expires_at = recovery_request.expires_at if recovery_request else None
     return {"expires_at_display": format_timestamp(ctx, expires_at)}
+
+
+@dataclass(frozen=True)
+class PasskeyCredentialView:
+    """One registered passkey, with its times ready to print."""
+    id: int
+    authenticator_name: Optional[str]
+    registered_display: str
+    last_used_display: Optional[str]  # None: never used
+
+
+def build_passkey_credential_views(ctx, credentials) -> list[PasskeyCredentialView]:
+    """Format each credential's times through the resolver under ``ctx``."""
+    return [
+        PasskeyCredentialView(
+            id=cred.id,
+            authenticator_name=cred.authenticator_name,
+            registered_display=format_timestamp(ctx, cred.created_at) if cred.created_at else "Unknown",
+            last_used_display=format_timestamp(ctx, cred.last_used) if cred.last_used else None,
+        )
+        for cred in credentials
+    ]
+
+
+def build_account_created_on(ctx, user) -> str:
+    """The account's creation date as text, localized through the resolver under ``ctx``."""
+    return format_date(ctx, user.created_at)

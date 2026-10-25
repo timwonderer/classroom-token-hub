@@ -168,6 +168,7 @@ from app.services.class_configuration_query_service import (
     has_personalized_class,
 )
 from app.services.class_configuration_view_models import (
+    build_economic_policy_dates_view,
     build_feature_settings_page_view,
 )
 from app.services.identity_service import resolve_teacher_seat_for_class
@@ -3121,9 +3122,11 @@ def customizations():
     # GET: Show settings form (scoped to current class)
     current_class = db.session.get(ClassEconomy, ctx.class_id) if ctx.class_id else None
 
+    from app.services.identity.builders import build_account_created_on
     return render_template(
         'admin_customizations.html',
         admin=admin,
+        account_created_on=build_account_created_on(ctx, admin),
         teacher_profile=teacher_profile,
         teacher_public_id=teacher_seat.public_id if teacher_seat else None,
         current_class=current_class,
@@ -4796,6 +4799,7 @@ def store_management():
             collective_goal_band=MappingProxyType(collective_goal_band),
             rent_prevents_purchase_when_late=bool(_rent_settings and _rent_settings.prevent_purchase_when_late),
         ),
+        temporal_context=g.canonical_context,
     )
 
     return render_template(
@@ -6916,7 +6920,11 @@ def economic_engine():
         analysis_schedule=analysis_schedule,
         policy_modes=POLICY_MODES,
         policy_summary=policy_summary,
-        pending_rebalance_effective_at=pending_rebalance_effective_at,
+        policy_dates=build_economic_policy_dates_view(
+            g.canonical_context,
+            policy_updated_at=policy_summary['updated_at'],
+            pending_rebalance_effective_at=pending_rebalance_effective_at,
+        ),
         rebalance_preview=rebalance_preview,
         show_rebalance_review=show_rebalance_review,
         feature_links=feature_links,
@@ -9535,9 +9543,10 @@ def announcements():
             announcement.expires_at, class_id=selected_class_id
         )
 
+    from app.services.support.builders import build_announcement_rows
     return render_template(
         'admin_announcements.html',
-        announcements=announcements_list,
+        announcements=build_announcement_rows(g.canonical_context, announcements_list),
         active_class_label=class_context['display_name'],
     )
 
@@ -10423,7 +10432,8 @@ def passkey_settings():
     """Passkey management page."""
     user_id = g.canonical_context.user_id
     admin = db.get_or_404(User, user_id)
-    credentials = list_admin_credentials(user_id)
+    from app.services.identity.builders import build_passkey_credential_views
+    credentials = build_passkey_credential_views(g.canonical_context, list_admin_credentials(user_id))
 
     return render_template('admin_passkey_settings.html',
                          admin=admin,

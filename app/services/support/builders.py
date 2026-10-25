@@ -1,9 +1,9 @@
-"""Support domain view model builders (SPEC-UI-001 §VII, §IX).
+"""Support domain view-model builders (SPEC-UI-001 §VII, §IX).
 
-Turn Issue rows into plain presentation dicts for the teacher's issue queue,
-issue detail and support-ticket pages. Every timestamp leaves here as
+Turn Issue rows and related support records into presentation objects for the
+teacher and sysadmin support pages. Every timestamp leaves here as
 presentation-ready text, localized through the canonical temporal resolver
-(``app.utils.temporal_display``); templates only print it.
+(``app.utils.temporal_display``, SPEC-TIME-001); templates only print it.
 """
 
 from __future__ import annotations
@@ -95,3 +95,20 @@ def build_teacher_support_report_views(ctx, issues):
         'issue_category': issue.category.name if issue.category else 'Unknown',
         'clean_description': issue.student_explanation or '',
     } for issue in issues]
+
+
+def build_announcement_rows(ctx, announcements):
+    """Attach display times and the expired flag to each announcement for the teacher's list.
+
+    ``expires_on`` is the class-local last day the caller already resolved from
+    the stored exclusive end (a date, so no timezone is left to apply).
+    """
+    for announcement in announcements:
+        # Evaluated here, not in the template: it asks the resolver for the class's now.
+        announcement.has_expired = announcement.is_expired()
+        announcement.created_at_display = format_timestamp(ctx, announcement.created_at)
+        expires_on = getattr(announcement, "expires_on", None)
+        announcement.expires_on_display = (
+            expires_on.strftime("%b %d, %Y") if announcement.expires_at and expires_on else None
+        )
+    return announcements

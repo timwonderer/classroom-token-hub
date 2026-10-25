@@ -32,6 +32,9 @@ def _announcement(announcement_id: int, title: str, priority: str, **extra) -> A
         expires_at=extra.pop("expires_at", None),
     )
     row.expires_on = extra.pop("expires_on", None)
+    row.created_at_display = "Jan 14, 2030, 4:00 AM PST"
+    row.expires_on_display = extra.pop("expires_on_display", None)
+    row.has_expired = extra.pop("has_expired", False)
     return row
 
 
@@ -41,9 +44,10 @@ register("admin_announcements.html", "populated", lambda: {
     "announcements": [
         _announcement(1, "Quiz tomorrow", "urgent"),
         _announcement(2, "Lab goggles", "high"),
-        _announcement(3, "Welcome back", "normal", expires_at=_NOW + timedelta(days=3), expires_on=date(2030, 1, 18)),
+        _announcement(3, "Welcome back", "normal", expires_at=_NOW + timedelta(days=3), expires_on=date(2030, 1, 18),
+                      expires_on_display="Jan 18, 2030"),
         _announcement(4, "Old reminder", "low", is_active=False, expires_at=_NOW - timedelta(days=2),
-                      expires_on=date(2030, 1, 13)),
+                      expires_on=date(2030, 1, 13), expires_on_display="Jan 13, 2030", has_expired=True),
     ],
 }, path="/admin/announcements", actor="teacher")
 
