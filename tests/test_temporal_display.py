@@ -58,12 +58,25 @@ def test_template_timestamps_follow_class_context(app):
     assert template.render(value=value) == "Jan 3, 2026, 6:05 PM UTC"
 
 
-def test_hall_pass_template_uses_canonical_temporal_filters():
-    """Hall pass times render in the class timezone; a Pacific-defaulting filter would misreport them."""
-    source = (TEMPLATE_ROOT / "admin_hall_pass.html").read_text()
+def test_hall_pass_times_arrive_formatted_in_class_time(app):
+    """Hall pass times are built in the class timezone and the template only prints them
+    (INV-ARC-022 §V.8); a Pacific-defaulting or template-side formatter would misreport them."""
+    from app.services.payroll.builders import add_hall_pass_time_displays
 
-    assert "format_datetime" not in source
-    assert source.count("| fmt_timestamp }}") == 3
+    source = (TEMPLATE_ROOT / "admin_hall_pass.html").read_text()
+    assert "format_datetime" not in source and "fmt_" not in source
+    for field in ("request_time", "decision_time", "left_time"):
+        assert f"{{{{ req.{field}_display }}}}" in source
+
+    value = datetime(2026, 1, 3, 18, 5, tzinfo=timezone.utc)
+    with app.app_context():
+        ctx = SimpleNamespace(class_id=provision_classroom("chemistry_p1").class_id)
+        pending, issued = SimpleNamespace(request_time=value), SimpleNamespace(decision_time=value, left_time=None)
+        add_hall_pass_time_displays(ctx, [pending, issued])
+    assert pending.request_time_display == "Jan 3, 2026, 10:05 AM PST"
+    assert issued.decision_time_display == "Jan 3, 2026, 10:05 AM PST"
+    assert issued.left_time_display == "—"
+    assert not hasattr(pending, "left_time_display")
 
 
 def test_fmt_timestamp_accepts_iso_string_from_correlation_pack():

@@ -279,11 +279,15 @@ def _detail_context(*, populated: bool = True) -> dict:
         settlement_label="Paid", amount=6.0, eligibility_label="Eligible", credited_seconds=3600,
         evidence_message="Matches payroll record.", opening_event_id=101, closing_event_id=102,
         original_payroll_records=[SimpleNamespace(event_id=9, recorded_at=_NOW - timedelta(hours=1))],
+        opened_at_display="Jan 15, 2030, 1:00 AM PST", closed_at_display="Jan 15, 2030, 2:00 AM PST",
+        original_payroll_record_displays=[{"event_id": 9, "recorded_at_display": "Jan 15, 2030, 3:00 AM PST"}],
+        payroll_recorded_at_display="—",
         payroll_event_id=None, payroll_history_url=None, pricing_inputs=None, source_events=scans,
         correction_url="/admin/student/1/attendance-correction/101/102",
     )
     open_interval = SimpleNamespace(
-        opened_at=_NOW - timedelta(hours=1), duration_label="1h 0m", bounded_at_day_end=False, source_events=scans[:1],
+        opened_at=_NOW - timedelta(hours=1), opened_at_display="Jan 15, 2030, 3:00 AM PST", duration_label="1h 0m",
+        bounded_at_day_end=False, source_events=scans[:1],
     )
     base = {
         **admin_layout(current_page="students"),
@@ -291,7 +295,8 @@ def _detail_context(*, populated: bool = True) -> dict:
         "student": SimpleNamespace(id=1), "identity_view": SimpleNamespace(
             first_name="Sam", last_name="Student", full_name="Sam Student", notes="Sits near the window."),
         "student_has_completed_setup": True,
-        "reset_code": None, "reset_code_expires_at": None, "reset_code_is_active": False,
+        "reset_code": None, "reset_code_expires_display": "—", "reset_code_expires_iso": "",
+        "reset_code_is_active": False,
         "join_codes": {CLASS_NAME: "A11YTEST"},
         "scoped_checking_balance": 20.0, "scoped_savings_balance": 5.0, "scoped_total_earnings": 120.5,
         "hall_pass_balance": 3, "active_insurance": SimpleNamespace(
@@ -304,13 +309,17 @@ def _detail_context(*, populated: bool = True) -> dict:
         ],
         # The purchase keeps its Reverse control so the button stays under audit.
         "reversible_transaction_ids": frozenset({7}),
+        "transaction_time_displays": {7: "Jan 14, 2030, 4:00 AM PST", 6: "Jan 13, 2030, 4:00 AM PST"},
         "entitlements": [
-            SimpleNamespace(purchase_date=_NOW - timedelta(days=3), status="purchased", redemption_details=None,
+            SimpleNamespace(id="ent-a11y-1", purchase_date=_NOW - timedelta(days=3), status="purchased", redemption_details=None,
                             store_item=SimpleNamespace(name="Homework pass", item_type="delayed")),
-            SimpleNamespace(purchase_date=_NOW - timedelta(days=9), status="redeemed", redemption_details="Used in lab",
+            SimpleNamespace(id="ent-a11y-2", purchase_date=_NOW - timedelta(days=9), status="redeemed", redemption_details="Used in lab",
                             store_item=SimpleNamespace(name="Snack", item_type="immediate")),
         ],
-        "latest_attendance_event": SimpleNamespace(period="a", reason="Late arrival", status="active",
+        "entitlement_time_displays": {"ent-a11y-1": "Jan 12, 2030, 4:00 AM PST",
+                                      "ent-a11y-2": "Jan 6, 2030, 4:00 AM PST"},
+        "attendance_time_displays": {101: "Jan 15, 2030, 1:00 AM PST", 102: "Jan 15, 2030, 2:00 AM PST"},
+        "latest_attendance_event": SimpleNamespace(id=102, period="a", reason="Late arrival", status="active",
                                                    timestamp=_NOW - timedelta(hours=1)),
         "attendance_events": scans, "attendance_intervals": [interval], "attendance_open_intervals": [open_interval],
         "attendance_unpaired_events": scans[:1], "attendance_completed_count": 1,
@@ -318,9 +327,9 @@ def _detail_context(*, populated: bool = True) -> dict:
         "attendance_historical_evidence_limited": True, "attendance_estimate_incomplete": True,
         "payroll_event_history": [
             {"payroll_event_id": 9, "timestamp": _NOW - timedelta(days=2), "type": "payroll", "amount": 10.0,
-             "display_amount": "$10.00", "notes": "Weekly payroll"},
+             "display_amount": "$10.00", "notes": "Weekly payroll", "timestamp_display": "Jan 13, 2030, 4:00 AM PST"},
             {"payroll_event_id": 8, "timestamp": None, "type": None, "amount": None, "display_amount": "—",
-             "notes": None},
+             "notes": None, "timestamp_display": "—"},
         ],
         "rent_enabled": True,
         "rent_privileges": [SimpleNamespace(name="Window seat", description="Choose a seat by the window.",
@@ -340,7 +349,8 @@ def _detail_context(*, populated: bool = True) -> dict:
             payroll_event_history=[], active_insurance=None, rent_enabled=False, rent_privileges=[],
             rent_view=None, join_codes={}, scoped_total_earnings=None, hall_pass_balance=0,
             student_has_completed_setup=False,
-            reset_code="482916", reset_code_expires_at=_NOW + timedelta(minutes=10), reset_code_is_active=True,
+            reset_code="482916", reset_code_expires_display="4:10 AM PST",
+            reset_code_expires_iso="2030-01-15T12:10:00+00:00", reset_code_is_active=True,
         )
     return base
 

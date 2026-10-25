@@ -59,7 +59,7 @@
         <caption>Original attendance records</caption>
         <thead><tr><th scope="col">Time</th><th scope="col">Action</th><th scope="col">Recorded by</th><th scope="col">Reason</th></tr></thead>
         <tbody>{% for event in events %}<tr>
-            <td>{{ event.timestamp|fmt_timestamp }}</td>
+            <td>{{ attendance_time_displays[event.id] }}</td>
             <td>{{ 'Start work' if event.status == 'active' else 'Stop work' }} <span class="small">(#{{ event.id }})</span></td>
             <td>{{ event.mechanism|replace('_', ' ')|title }}</td>
             <td>{{ event.reason_code|replace('_', ' ')|title if event.reason_code else '—' }}</td>
@@ -293,8 +293,8 @@
                                         <div class="small text-muted fst-italic">
                                             <span class="material-symbols-outlined me-1" aria-hidden="true">schedule</span>Code expires at
                                             <span class="utc-timestamp"
-                                                data-utc="{{ reset_code_expires_at.isoformat() if reset_code_expires_at else '' }}">
-                                                {{ reset_code_expires_at | fmt_time }}
+                                                data-utc="{{ reset_code_expires_iso }}">
+                                                {{ reset_code_expires_display }}
                                             </span>.
                                             Student must go to the login page and click <strong>"I can't log into my
                                                 account"</strong>.
@@ -362,7 +362,7 @@
                                 <td class="fw-bold">Last Activity:</td>
                                 <td>
                                     {% if latest_attendance_event.timestamp %}
-                                    {{ latest_attendance_event.timestamp|fmt_timestamp }}
+                                    {{ attendance_time_displays[latest_attendance_event.id] }}
                                     {% else %}
                                     <span class="text-muted">N/A</span>
                                     {% endif %}
@@ -428,7 +428,7 @@
                             <tr>
                                 <td>
                                     {% if tx.timestamp %}
-                                    {{ tx.timestamp|fmt_timestamp }}
+                                    {{ transaction_time_displays[tx.id] }}
                                     {% else %}
                                     <span class="text-muted">N/A</span>
                                     {% endif %}
@@ -493,7 +493,7 @@
                                 </td>
                                 <td>
                                     {% if ent.purchase_date %}
-                                    {{ ent.purchase_date|fmt_timestamp }}
+                                    {{ entitlement_time_displays[ent.id] }}
                                     {% else %}
                                     <span class="text-muted">N/A</span>
                                     {% endif %}
@@ -553,7 +553,7 @@
                 <h3 class="h6">Work without a recorded closing event</h3>
                 {% for interval in attendance_open_intervals %}
                 <details class="attendance-interval border rounded p-3 mb-3">
-                    <summary>Started {{ interval.opened_at|fmt_timestamp }} · {{ interval.duration_label }} observed · {% if interval.bounded_at_day_end %}Bounded at class day end{% else %}Work still open{% endif %}</summary>
+                    <summary>Started {{ interval.opened_at_display }} · {{ interval.duration_label }} observed · {% if interval.bounded_at_day_end %}Bounded at class day end{% else %}Work still open{% endif %}</summary>
                     <p class="mt-3">This interval has no recorded closing event. {% if interval.bounded_at_day_end %}Its observed duration ends at the class day boundary; it is not a completed canonical pair and cannot be invalidated.{% else %}Work is still open and cannot be invalidated until a closing event is recorded.{% endif %} Opening this page does not close work or create payroll.</p>
                     {{ attendance_scans(interval.source_events) }}
 
@@ -564,15 +564,15 @@
                 <h3 class="h6">Completed work · {{ attendance_completed_count }} intervals</h3>
                 {% for interval in attendance_intervals %}
                 <details class="attendance-interval border rounded p-3 mb-3" id="attendance-interval-{{ interval.opening_event_id }}-{{ interval.closing_event_id }}">
-                    <summary>{{ interval.opened_at|fmt_timestamp }} – {{ interval.closed_at|fmt_timestamp }} · {{ interval.duration_label }} · {{ interval.settlement_label }}{% if interval.amount is not none %} · ${{ "%.2f"|format(interval.amount) }}{% endif %}</summary>
+                    <summary>{{ interval.opened_at_display }} – {{ interval.closed_at_display }} · {{ interval.duration_label }} · {{ interval.settlement_label }}{% if interval.amount is not none %} · ${{ "%.2f"|format(interval.amount) }}{% endif %}</summary>
                     <dl class="row mt-3 mb-2">
                         <dt class="col-sm-4">Compensation eligibility</dt><dd class="col-sm-8">{{ interval.eligibility_label }}</dd>
                         <dt class="col-sm-4">Credited duration</dt><dd class="col-sm-8">{{ interval.credited_seconds }} seconds</dd>
                         <dt class="col-sm-4">Payroll evidence</dt><dd class="col-sm-8">{{ interval.evidence_message }}</dd>
-                        {% if interval.original_payroll_records %}
-                        <dt class="col-sm-4">Original payroll records</dt><dd class="col-sm-8">{% for original in interval.original_payroll_records %}<div>Payroll #{{ original.event_id }} · {{ original.recorded_at|fmt_timestamp }}</div>{% endfor %}</dd>
+                        {% if interval.original_payroll_record_displays %}
+                        <dt class="col-sm-4">Original payroll records</dt><dd class="col-sm-8">{% for original in interval.original_payroll_record_displays %}<div>Payroll #{{ original.event_id }} · {{ original.recorded_at_display }}</div>{% endfor %}</dd>
                         {% elif interval.payroll_event_id %}
-                        <dt class="col-sm-4">Original payroll record</dt><dd class="col-sm-8">{% if interval.payroll_history_url %}<a href="{{ interval.payroll_history_url }}">Payroll #{{ interval.payroll_event_id }}</a>{% else %}Payroll #{{ interval.payroll_event_id }}{% endif %} · {{ interval.payroll_recorded_at|fmt_timestamp }}</dd>
+                        <dt class="col-sm-4">Original payroll record</dt><dd class="col-sm-8">{% if interval.payroll_history_url %}<a href="{{ interval.payroll_history_url }}">Payroll #{{ interval.payroll_event_id }}</a>{% else %}Payroll #{{ interval.payroll_event_id }}{% endif %} · {{ interval.payroll_recorded_at_display }}</dd>
                         {% endif %}
                     </dl>
                     {% if interval.pricing_inputs %}
@@ -703,7 +703,7 @@
                             <tr id="payroll-event-{{ event.payroll_event_id }}">
                                 <td>
                                     {% if event.timestamp %}
-                                    {{ event.timestamp|fmt_timestamp }}
+                                    {{ event.timestamp_display }}
                                     {% else %}
                                     <span class="text-muted">N/A</span>
                                     {% endif %}

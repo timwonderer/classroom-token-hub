@@ -22,6 +22,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
+from app.utils.temporal_display import format_time
+
 
 # ---------------------------------------------------------------------------
 # View model definitions (frozen dataclasses — SPEC-UI-001 § VI)
@@ -716,3 +719,16 @@ def build_student_class_selection_view(
         current_class_id=current_class_id,
         has_any_classes=len(class_options) > 0,
     )
+
+
+def build_reset_code_expiry_display(ctx, expires_at) -> dict[str, str]:
+    """A student reset code's expiry as text (class time) and as an ISO instant (SLE).
+
+    INV-ARC-022 §V.8: the template prints both; it formats neither.
+    """
+    return {
+        "reset_code_expires_display": format_time(ctx, expires_at),
+        "reset_code_expires_iso": canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp", timestamp=expires_at,
+        ).local_timestamp.isoformat() if expires_at else "",
+    }

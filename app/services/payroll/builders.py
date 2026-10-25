@@ -17,6 +17,7 @@ from typing import Any
 
 from app.extensions import db
 from app.models import PayrollSettings, Transaction, Seat, IdentityProfile
+from app.utils.temporal_display import format_compact_date, format_timestamp
 
 
 @dataclass(frozen=True)
@@ -414,3 +415,59 @@ def build_payroll_settings_display(settings: PayrollSettings | None) -> dict[str
         'display_rate_unit': singular,
         'display_rate_with_unit': with_unit,
     }
+
+
+# ---------------------------------------------------------------------------
+# Time display (INV-ARC-022 §V.8, SPEC-UI-001 §VII): every time reaches the
+# template as text, localized through the resolver under ``ctx``.
+# ---------------------------------------------------------------------------
+
+def add_payroll_event_time_displays(ctx, rows: list[dict]) -> list[dict]:
+    """Add ``timestamp_display`` to payroll event display rows."""
+    for row in rows:
+        row["timestamp_display"] = format_timestamp(ctx, row["timestamp"])
+    return rows
+
+
+def build_payroll_schedule_time_displays(
+    ctx, *, next_payroll_date, payroll_updated_at, next_change_effective=None, pending_settings=(),
+) -> dict[str, str]:
+    """Payroll schedule times for the payroll page and dashboard cards.
+
+    Adds ``effective_date_display`` to each pending-setting row.
+    """
+    for pending in pending_settings:
+        pending["effective_date_display"] = format_timestamp(ctx, pending["effective_date"])
+    return {
+        "next_payroll_date_display": format_timestamp(ctx, next_payroll_date),
+        "next_payroll_compact_display": format_compact_date(ctx, next_payroll_date),
+        "payroll_updated_at_display": format_timestamp(ctx, payroll_updated_at),
+        "next_change_effective_display": format_timestamp(ctx, next_change_effective),
+    }
+
+
+def build_attendance_time_displays(ctx, events) -> dict[int, str]:
+    """Attendance record id -> its timestamp as text."""
+    return {event.id: format_timestamp(ctx, event.timestamp) for event in events}
+
+
+def add_attendance_interval_time_displays(ctx, intervals) -> list:
+    """Add opened/closed/payroll display fields to attendance interval rows."""
+    for interval in intervals:
+        interval.opened_at_display = format_timestamp(ctx, interval.opened_at)
+        interval.closed_at_display = format_timestamp(ctx, getattr(interval, "closed_at", None))
+        interval.payroll_recorded_at_display = format_timestamp(ctx, getattr(interval, "payroll_recorded_at", None))
+        interval.original_payroll_record_displays = [
+            {"event_id": original.event_id, "recorded_at_display": format_timestamp(ctx, original.recorded_at)}
+            for original in getattr(interval, "original_payroll_records", None) or ()
+        ]
+    return intervals
+
+
+def add_hall_pass_time_displays(ctx, rows) -> list:
+    """Add ``<field>_display`` for each hall-pass time the row carries."""
+    for row in rows:
+        for name in ("request_time", "decision_time", "left_time"):
+            if hasattr(row, name):
+                setattr(row, f"{name}_display", format_timestamp(ctx, getattr(row, name)))
+    return rows
