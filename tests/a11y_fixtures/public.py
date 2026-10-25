@@ -15,7 +15,6 @@ register("error_500.html", "with-error-id", lambda: {"error_id": "ERR-A11Y-0001"
 register("error_503.html", "default", lambda: {})
 
 import base64
-from datetime import datetime, timezone
 
 import pytz
 from flask import flash
@@ -36,7 +35,7 @@ _PIXEL_PNG_B64 = base64.b64encode(bytes.fromhex(
     "0000000d49444154789c6360606060000000050001a5f645400000000049454e44ae426082"
 )).decode("ascii")
 _TOTP_SECRET = "JBSWY3DPEHPK3PXP"  # the RFC example secret, not a credential
-_EXPIRES = datetime(2030, 1, 1, 12, 0, tzinfo=timezone.utc)
+_EXPIRES_DISPLAY = "Jan 1, 2030, 12:00 PM UTC"
 _PAGE_TOKEN = "a11y-fixture-page-token"
 _MISMATCH = "That doesn't match your username. Check the copy you saved and try again."
 
@@ -74,7 +73,7 @@ register("admin_create_class.html", "error", lambda: (
 ), path="/admin/create-class")
 register("admin_recovery_prepare.html", "default", lambda: {"class_refs": ["class-ref-1", "class-ref-2"]}, path="/admin/recover")
 register("admin_recovery_status.html", "waiting", lambda: {"status": {
-    "expires_at": _EXPIRES,
+    "expires_at_display": _EXPIRES_DISPLAY,
     "classes": [
         {"class_ref": "class-ref-1", "number": 1, "label": "Chemistry Period 1", "received": False, "selected": True},
         {"class_ref": "class-ref-2", "number": 2, "label": "Period 3", "received": True, "selected": True},
@@ -82,7 +81,7 @@ register("admin_recovery_status.html", "waiting", lambda: {"status": {
 }}, path="/admin/recovery-status")
 register("admin_recovery_saved.html", "default", lambda: {
     "resume_pin": "482916", "codes_saved": 0,
-    "recovery_request": type("RecoveryRequestView", (), {"expires_at": _EXPIRES})(),
+    "recovery": {"expires_at_display": _EXPIRES_DISPLAY},
 }, path="/admin/reset-credentials")
 register("admin_reset_credentials.html", "default", lambda: {
     "form": AdminResetCredentialsForm(), "show_qr": True, "qr_b64": _PIXEL_PNG_B64,

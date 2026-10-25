@@ -732,3 +732,21 @@ def build_reset_code_expiry_display(ctx, expires_at) -> dict[str, str]:
             SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp", timestamp=expires_at,
         ).local_timestamp.isoformat() if expires_at else "",
     }
+
+
+def build_recovery_status_view(ctx, status: dict) -> dict:
+    """Teacher recovery attempt status, its expiry as presentation text."""
+    from app.utils.temporal_display import format_timestamp
+
+    return {
+        "expires_at_display": format_timestamp(ctx, status["expires_at"]),
+        "classes": status["classes"],
+    }
+
+
+def build_recovery_saved_view(ctx, recovery_request) -> dict:
+    """Saved-progress page: when the resume PIN (and the attempt) expires."""
+    from app.utils.temporal_display import format_timestamp
+
+    expires_at = recovery_request.expires_at if recovery_request else None
+    return {"expires_at_display": format_timestamp(ctx, expires_at)}

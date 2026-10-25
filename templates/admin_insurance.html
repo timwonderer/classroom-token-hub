@@ -66,7 +66,7 @@
         <span>
           <strong>Claim #{{ claim.claim_id }}</strong>
           <span class="badge bg-light text-dark border ms-2">Insurance claim</span>
-          <small class="d-block text-muted">Submitted {% if claim.submitted_at %}{{ claim.submitted_at|fmt_timestamp }}{% else %}N/A{% endif %}</small>
+          <small class="d-block text-muted">Submitted {{ claim.submitted_at_display }}</small>
         </span>
         <span class="badge bg-secondary">{{ claim.status }}</span>
       </a>

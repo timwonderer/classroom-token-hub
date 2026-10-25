@@ -103,7 +103,7 @@
                             <h6 class="text-muted mb-2">Submitted</h6>
                             <p class="mb-0">
                                 <span class="material-symbols-outlined me-2" aria-hidden="true">schedule</span>
-                                {{ issue.submitted_at|fmt_timestamp }}
+                                {{ issue.submitted_at_display }}
                             </p>
                         </div>
                         {% if issue.teacher_reviewed_at %}
@@ -111,7 +111,7 @@
                             <h6 class="text-muted mb-2">First Reviewed</h6>
                             <p class="mb-0">
                                 <span class="material-symbols-outlined me-2" aria-hidden="true">visibility</span>
-                                {{ issue.teacher_reviewed_at|fmt_timestamp }}
+                                {{ issue.teacher_reviewed_at_display }}
                             </p>
                         </div>
                         {% endif %}
@@ -250,7 +250,7 @@
                                     {% endif %}
                                     <small class="text-muted">
                                         By {{ action.performed_by_type|title }} at
-                                        {{ action.created_at|fmt_timestamp }}
+                                        {{ action.created_at_display }}
                                     </small>
                                 </div>
                             </div>
@@ -376,9 +376,9 @@
                     </div>
                     {% endif %}
                     <p class="text-muted small mb-0 mt-2">
-                        Escalated {{ issue.escalated_at|fmt_timestamp }}
+                        Escalated {{ issue.escalated_at_display }}
                         {% if issue.sysadmin_resolved_at %}
-                        • Resolved {{ issue.sysadmin_resolved_at|fmt_timestamp }}
+                        • Resolved {{ issue.sysadmin_resolved_at_display }}
                         {% endif %}
                     </p>
                 </div>
@@ -399,7 +399,7 @@
                     </div>
                     {% endif %}
                     <p class="text-muted small mb-0 mt-2">
-                        Escalated {{ issue.escalated_at|fmt_timestamp }}
+                        Escalated {{ issue.escalated_at_display }}
                     </p>
                 </div>
             </div>
@@ -417,7 +417,7 @@
                     </div>
                     {% if issue.closed_at %}
                     <p class="text-muted small mb-0 mt-2">
-                        Closed {{ issue.closed_at|fmt_timestamp }}
+                        Closed {{ issue.closed_at_display }}
                     </p>
                     {% endif %}
                 </div>
@@ -443,7 +443,7 @@
                                     <div class="fw-bold">{{ history.new_status|replace('_', ' ')|title }}</div>
                                     <small class="text-muted">
                                         By {{ history.changed_by_type|title }} •
-                                        {{ history.changed_at|fmt_timestamp }}
+                                        {{ history.changed_at_display }}
                                     </small>
                                     {% if history.notes %}
                                     <p class="mb-0 small text-muted mt-1">{{ history.notes }}</p>
