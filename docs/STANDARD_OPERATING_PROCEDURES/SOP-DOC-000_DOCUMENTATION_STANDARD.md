@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-000      | 3.5     | 2026-10-14     | SOP-DOC-000 v3.4 | Normative |
+| SOP-DOC-000      | 3.6     | 2026-10-24     | SOP-DOC-000 v3.5 | Normative |
 
 > [!IMPORTANT]
 > **v3.5 (2026-10-14), review correction.** The header and §III labelled this document "Foundational (Tier 0)," but its own §V places `docs/STANDARD_OPERATING_PROCEDURES/` (Prefix `SOP-*`) in Tier 2, and §VI's Directory Taxonomy says so explicitly for this document by name: "plus the documentation SOPs at its root (Tier 2)." This document never carved itself out as an exception to the scheme it defines — it is a `SOP-*` document at that root, and its own rule places it in Tier 2 like any other. Corrected the header and §III to agree with §V/§VI. No change to the tier definitions themselves, the directory taxonomy, or any other document's classification.
@@ -182,17 +182,19 @@ application serves or indexes in its search.
 
 ### The technical site serves everything else
 
-The technical site is built from `docs-site/` (Docusaurus) and published at
+The technical site is built from `docs-generator-proof/` (Hugo + Hextra) and published at
 `classroomtokenhub.com/docs/`. It includes `docs/INVARIANT`, `docs/DOMAIN`,
 `docs/FEATURE-EXECUTION`, `docs/SPEC`, `docs/STANDARD_OPERATING_PROCEDURES`,
 `docs/MAP`, `docs/PRINCIPLES`, `docs/REFERENCE`, `docs/self-hosting`, and two
 durable files from `docs/TRACKING`: the documentation roadmap and the domain plan
-template. It excludes `docs/user-guides` (owned by the application),
-`docs/archive`, `docs/assets`, `docs/ops`, and the rest of `docs/TRACKING`, which
-is working state. The exclude list in `docs-site/docusaurus.config.js` is the
-layer that governs this, and `tests/test_docs_site_publishes_no_working_state.py`
-fails closed on a new TRACKING or ops file that is neither excluded nor
-deliberately published.
+template. It leaves out `docs/user-guides` (owned by the application),
+`docs/archive`, `docs/assets` (apart from the illustrations a published document
+embeds), `docs/ops`, the rest of `docs/TRACKING`, which is working state, and
+engineering notes, which are not published. The publication allowlist in
+`docs-generator-proof/build.py` is the layer that governs this: a new document
+outside it is not published until someone decides it should be, and
+`tests/test_docs_site_publishes_no_working_state.py` pins that default for
+`TRACKING` and `ops`.
 
 The application does not render these documents. A request for one is forwarded
 to the technical site when its base URL is configured; otherwise the path is absent.
@@ -237,11 +239,18 @@ The following checks enforce this; run them before merging a relocation:
 - `md-dead-link-check --config pyproject.toml`: Markdown links, including web links on `main`
 - `tests/test_docs_archive_citations.py`: live relative links resolve, and every citation of archived material is labelled
 - `tests/dom/docs/test_documentation_index_complete.py`: SOP-DOC-001 lists every registered document and no missing one
-- `npm run build` in `docs-site/`: the technical site fails on a broken link or anchor
+- `docs-generator-proof/check.py` (run by `.github/workflows/github-pages.yml` before every deploy): the technical site fails on a broken link, anchor or asset, a page outside the allowlist, or a document missing from search
 
 ---
 
 ## XII. Change Notes
+
+**Version 3.6 (2026-10-24):**
+- §X: the technical site is built with Hugo + Hextra from `docs-generator-proof/`, replacing the
+  Docusaurus build in `docs-site/`. Publication is governed by an allowlist in
+  `docs-generator-proof/build.py`, which fails closed, instead of an exclude list, which failed open.
+  Engineering notes are no longer published.
+- §XI: the generator's link check is `docs-generator-proof/check.py`, which gates the Pages deploy.
 
 **Version 3.4 (2026-09-28):**
 - Assigned `docs/REFERENCE/` by operator ruling: `REF-TERM-001` (developer vocabulary) is Tier 2

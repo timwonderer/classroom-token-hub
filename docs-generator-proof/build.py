@@ -19,7 +19,7 @@ ROOT = HERE.parent
 DOCS = ROOT / 'docs'
 CACHE = HERE / '.cache'
 SITE = CACHE / 'hugo'
-HUGO = CACHE / 'tools/hugo-extracted/Payload/hugo'
+HUGO = CACHE / 'tools/bin/hugo'  # installed by bootstrap.py for this platform
 EDIT_URL = 'https://github.com/timwonderer/classroom-token-hub/edit/main/docs/'
 
 # Publication allowlist (SOP-DOC-000 §X): each root, its catalog title and its catalog description.

@@ -2,8 +2,8 @@
 
 The public site and status service each publish their own directory, so they cannot
 link the application's file and carry a copy instead. A copy nobody checks drifts on
-the next icon change. (The Hugo docs proof copies the source at build time and checks
-it in docs-generator-proof/test_proof.py.)
+the next icon change. (The Hugo docs site copies the source at build time and checks it
+in docs-generator-proof/test_proof.py.)
 """
 from pathlib import Path
 

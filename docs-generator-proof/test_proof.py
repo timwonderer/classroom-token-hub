@@ -89,6 +89,15 @@ def test_document_missing_from_search_is_rejected(tmp_path):
     assert check(site, expected, ['#home', 'SPEC/x/'], ['SPEC/x.md'])['failures'] == []
 
 
+def test_heading_defects_warn_on_source_documents_and_fail_on_generated_pages(tmp_path):
+    site = artifact(tmp_path)
+    (site / 'SPEC/x').mkdir(parents=True)
+    (site / 'SPEC/x/index.html').write_text(f'<h1 id="a">A</h1><h1 id="b">B</h1><a href="{EDIT_URL}SPEC/x.md">Edit</a>')
+    (site / 'index.html').write_text('<h1 id="home">Home</h1><h3 id="skip">Skip</h3>')
+    result = check(site, {'index.html', 'SPEC/x/index.html'}, ['#home', 'SPEC/x/'], ['SPEC/x.md'])
+    assert result['warnings'] == ['SPEC/x/index.html: expected one h1, got 2']
+    assert result['failures'] == ['index.html: heading level skip']
+
 def test_missing_self_hosted_font_is_rejected(tmp_path):
     site = artifact(tmp_path)
     (site / 'fonts.css').write_text('@font-face {src: url(missing.woff2)}')

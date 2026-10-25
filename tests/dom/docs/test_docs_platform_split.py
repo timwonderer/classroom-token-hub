@@ -129,67 +129,61 @@ def test_the_route_map_never_forwards_the_help_centre(app):
     ]
 
 
-def _docs_site_config_source():
+def _docs_site_build():
+    """The Hugo developer-site build, which owns the publication allowlist."""
+    import importlib.util
     from pathlib import Path
 
-    return (
-        Path(__file__).resolve().parents[3] / "docs-site" / "docusaurus.config.js"
-    ).read_text(encoding="utf-8")
+    spec = importlib.util.spec_from_file_location(
+        "docs_site_build",
+        Path(__file__).resolve().parents[3] / "docs-generator-proof" / "build.py",
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
-def excluded_trees(config_source):
-    """Directories the Docusaurus docs plugin is told not to publish.
+def app_owned_trees_published(public_roots):
+    """App-owned or retired trees a site's publication allowlist would publish.
 
-    Pure over the config text so the detector itself can be tested against a
+    Pure over the allowlist so the detector itself can be tested against a
     synthetic violation rather than only against a compliant repository.
     """
-    import re
-
-    match = re.search(r"exclude:\s*\[(.*?)\]", config_source, re.DOTALL)
-    if not match:
-        return frozenset()
-    return frozenset(
-        entry.removesuffix("/**")
-        for entry in re.findall(r'"([^"]+)"', match.group(1))
-    )
+    return frozenset(public_roots) & {USER_GUIDES_DIR, "archive"}
 
 
-def test_excluded_trees_reports_a_site_that_would_publish_the_help_centre():
-    """Mutation proof: the detector must fail a config that drops the exclusion.
+def test_detector_reports_a_site_that_would_publish_the_help_centre():
+    """Mutation proof: the detector must fail an allowlist that adds the help centre.
 
-    The near miss a future edit would really produce is an exclude list that
-    still excludes the archive but no longer excludes user-guides.
+    The near miss a future edit would really produce is an allowlist that still
+    leaves out the archive but has gained user-guides.
     """
-    mutated = '''
-      docs: {
-        path: "../docs",
-        exclude: ["archive/**", "assets/**", "README.md"],
-      }
-    '''
+    mutated = {"INVARIANT", "DOMAIN", USER_GUIDES_DIR}
 
-    assert USER_GUIDES_DIR not in excluded_trees(mutated)
-    assert "archive" in excluded_trees(mutated)
+    assert app_owned_trees_published(mutated) == {USER_GUIDES_DIR}
+    assert not app_owned_trees_published({"INVARIANT", "DOMAIN"})
 
 
 def test_the_docs_site_excludes_every_tree_the_app_serves():
-    """The generator's exclude list and the app's boundary must agree."""
-    excluded = excluded_trees(_docs_site_config_source())
+    """The generator's allowlist and the app's boundary must agree."""
+    build = _docs_site_build()
 
-    assert USER_GUIDES_DIR in excluded
-    assert "archive" in excluded
+    assert not app_owned_trees_published(build.PUBLIC_ROOTS)
+    assert not [
+        p for p in build.published_documents(build.DOCS)
+        if p.parts[0] in (USER_GUIDES_DIR, "archive")
+    ]
 
 
 def test_the_docs_site_publishes_the_developer_tree():
     """The site reads the repository tree; it never keeps a copy of its own."""
     from pathlib import Path
 
+    build = _docs_site_build()
     root = Path(__file__).resolve().parents[3]
 
-    assert 'path: "../docs"' in _docs_site_config_source()
-    assert not (root / "docs-site" / "docs").exists()
-
-    published = {"INVARIANT", "DOMAIN", "FEATURE-EXECUTION", "SPEC", "MAP"}
-    assert not published & excluded_trees(_docs_site_config_source())
+    assert build.DOCS == root / "docs"
+    assert {"INVARIANT", "DOMAIN", "FEATURE-EXECUTION", "SPEC", "MAP"} <= build.PUBLIC_ROOTS
 
 
 def test_redirect_target_cannot_leave_the_configured_docs_origin(app, monkeypatch):
