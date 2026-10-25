@@ -16,8 +16,7 @@ from datetime import datetime
 from typing import Any
 from app.extensions import db
 from app.models import PayrollSettings, Transaction, Seat, IdentityProfile
-from app.utils.temporal_display import format_compact_date, format_timestamp
-from app.utils.temporal_display import format_compact_date, format_date, format_time
+from app.utils.temporal_display import format_compact_date, format_date, format_time, format_timestamp
 
 
 @dataclass(frozen=True)
@@ -490,4 +489,18 @@ def build_student_payroll_time_displays(ctx, attendance_events, last_payroll_eve
             for event in attendance_events
         },
         "last_payroll": format_date(ctx, last_payroll_event.recorded_at) if last_payroll_event else None,
+    }
+
+
+def build_hall_pass_verification_result(result: dict, temporal_context) -> dict:
+    """Hall-pass verification result with ``time_out_display`` / ``return_time_display``.
+
+    Each is presentation-ready text, or None when the pass has no such time.
+    """
+    return {
+        **result,
+        "time_out_display": format_timestamp(temporal_context, result["time_out"]) if result.get("time_out") else None,
+        "return_time_display": (
+            format_timestamp(temporal_context, result["return_time"]) if result.get("return_time") else None
+        ),
     }

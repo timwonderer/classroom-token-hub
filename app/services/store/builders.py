@@ -18,7 +18,6 @@ from types import SimpleNamespace
 from typing import Any
 from app.extensions import db
 from app.models import StoreProduct, EntitlementEvent, RentSettings, ClassEconomy
-from app.utils.temporal_display import format_timestamp
 from app.utils.temporal_display import format_date, format_timestamp
 from app.utils.canonical_temporal_resolver import CLASS_LEVEL_EVALUATION, canonical_temporal_resolver
 

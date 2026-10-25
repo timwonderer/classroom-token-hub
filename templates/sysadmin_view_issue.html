@@ -137,7 +137,7 @@
                             <h6 class="text-muted mb-2">Submitted</h6>
                             <p class="mb-0">
                                 <span class="material-symbols-outlined me-2" aria-hidden="true">schedule</span>
-                                {{ issue.submitted_at|fmt_timestamp }}
+                                {{ issue.submitted_at_display }}
                             </p>
                         </div>
                         {% if issue.escalated_at %}
@@ -145,7 +145,7 @@
                             <h6 class="text-muted mb-2">Escalated</h6>
                             <p class="mb-0">
                                 <span class="material-symbols-outlined me-2" aria-hidden="true">arrow_circle_up</span>
-                                {{ issue.escalated_at|fmt_timestamp }}
+                                {{ issue.escalated_at_display }}
                             </p>
                         </div>
                         {% endif %}
@@ -154,7 +154,7 @@
                             <h6 class="text-muted mb-2">Reviewed</h6>
                             <p class="mb-0">
                                 <span class="material-symbols-outlined me-2" aria-hidden="true">visibility</span>
-                                {{ issue.sysadmin_reviewed_at|fmt_timestamp }}
+                                {{ issue.sysadmin_reviewed_at_display }}
                             </p>
                         </div>
                         {% endif %}
@@ -163,7 +163,7 @@
                             <h6 class="text-muted mb-2">Resolved</h6>
                             <p class="mb-0">
                                 <span class="material-symbols-outlined me-2" aria-hidden="true">check_circle</span>
-                                {{ issue.sysadmin_resolved_at|fmt_timestamp }}
+                                {{ issue.sysadmin_resolved_at_display }}
                             </p>
                         </div>
                         {% endif %}
@@ -290,7 +290,7 @@
                                 <tbody>
                                     {% for trace in correlation_pack.request_trace_json %}
                                     <tr>
-                                        <td>{{ trace.timestamp|fmt_timestamp }}</td>
+                                        <td>{{ trace.timestamp_display }}</td>
                                         <td><code>{{ trace.method }}</code></td>
                                         <td><code>{{ trace.endpoint }}</code></td>
                                         <td>
@@ -315,7 +315,7 @@
                             <div class="list-group-item">
                                 <div class="d-flex justify-content-between">
                                     <strong>{{ error_ref.error_class }}</strong>
-                                    <small>{{ error_ref.timestamp|fmt_timestamp }}</small>
+                                    <small>{{ error_ref.timestamp_display }}</small>
                                 </div>
                                 <div class="small mt-1">
                                     <code>{{ error_ref.endpoint }}</code>
@@ -455,7 +455,7 @@
                                     </small>
                                 </div>
                                 <small class="text-muted">
-                                    {{ entry.changed_at|fmt_timestamp }}
+                                    {{ entry.changed_at_display }}
                                 </small>
                             </div>
                         </div>

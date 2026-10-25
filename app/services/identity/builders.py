@@ -22,9 +22,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
-from app.utils.temporal_display import format_time
-from app.utils.temporal_display import format_date, format_timestamp
-from app.utils.temporal_display import format_timestamp
+from app.utils.temporal_display import format_date, format_time, format_timestamp
 
 
 @dataclass(frozen=True)
@@ -775,3 +773,28 @@ def build_recovery_code_expiry_display(ctx, recovery_code) -> str | None:
     if recovery_code is None:
         return None
     return format_timestamp(ctx, recovery_code.recovery_request.expires_at)
+
+
+@dataclass(frozen=True)
+class PasskeyCredentialRowView:
+    """One registered passkey, with its times as presentation-ready text."""
+
+    id: int
+    authenticator_name: Optional[str]
+    created_at_display: str
+    """Registration time, or "Unknown" when none was recorded."""
+    last_used_display: Optional[str]
+    """Last-use time, or None when the passkey has never been used."""
+
+
+def build_passkey_credential_rows(credentials, temporal_context=None) -> tuple[PasskeyCredentialRowView, ...]:
+    """Credential rows for display; ``temporal_context=None`` localizes under SLE (UTC)."""
+    return tuple(
+        PasskeyCredentialRowView(
+            id=cred.id,
+            authenticator_name=cred.authenticator_name,
+            created_at_display=format_timestamp(temporal_context, cred.created_at) if cred.created_at else "Unknown",
+            last_used_display=format_timestamp(temporal_context, cred.last_used) if cred.last_used else None,
+        )
+        for cred in credentials
+    )
