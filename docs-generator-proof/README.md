@@ -20,8 +20,9 @@ has been removed.
 
 ## Build locally (macOS, or Linux on x86-64)
 
-From the repository root, with Python 3.10+ and these standalone dependencies
-(not the application's full `requirements.txt`):
+From the repository root, with Python 3.10.12+, 3.11.4+ or 3.12+ (`bootstrap.py` uses
+`tarfile`'s `filter` argument) and these standalone dependencies, not the
+application's full `requirements.txt`:
 
 ```bash
 python3 -m venv /tmp/cth-docs-proof-venv
