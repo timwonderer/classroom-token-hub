@@ -22,6 +22,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
+from app.utils.temporal_display import format_timestamp
+
 
 # ---------------------------------------------------------------------------
 # View model definitions (frozen dataclasses — SPEC-UI-001 § VI)
@@ -716,3 +718,10 @@ def build_student_class_selection_view(
         current_class_id=current_class_id,
         has_any_classes=len(class_options) > 0,
     )
+
+
+def build_recovery_code_expiry_display(ctx, recovery_code) -> str | None:
+    """A teacher-recovery code's expiry as display text, or None without a code."""
+    if recovery_code is None:
+        return None
+    return format_timestamp(ctx, recovery_code.recovery_request.expires_at)

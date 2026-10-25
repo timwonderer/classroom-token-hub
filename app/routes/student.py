@@ -102,7 +102,15 @@ from app.services.store.builders import (
     build_store_item_card_view,
     build_entitlement_card_view,
     build_collective_progress_view,
+    build_claim_date_max,
+    build_coverage_card_dates_display,
+    build_insurance_claim_rows,
+    build_policy_enrollment_dates_display,
 )
+from app.services.identity.builders import build_recovery_code_expiry_display
+from app.services.ledger.builders import build_transaction_timestamp_displays
+from app.services.payroll.builders import build_student_payroll_time_displays
+from app.services.support.builders import build_announcement_expiry_displays, build_issue_submitted_displays
 from app.services.recovery_service import (
     get_pending_recovery_code_for_seat,
     get_recovery_code_for_seat,
@@ -1396,7 +1404,6 @@ def dashboard():
 
     # Get active announcements for this student
     from app.models import Announcement
-    from app.services import obligations_service
 
     announcements = Announcement.query.filter(
         Announcement.is_active.is_(True),
@@ -1406,12 +1413,6 @@ def dashboard():
         ),
         Announcement.class_id == scope.class_id,
     ).order_by(Announcement.created_at.desc()).all()
-    for announcement in announcements:
-        # The last class day it shows (it is stored as that day's exclusive end).
-        announcement.expires_on = (
-            obligations_service.last_class_day_before(scope.class_id, announcement.expires_at)
-            if announcement.expires_at else None
-        )
 
     return render_template(
         'student_dashboard.html',
@@ -1423,6 +1424,7 @@ def dashboard():
         savings_transactions=savings_transactions,
         entitlements=entitlements,
         recent_transactions=transactions[:5],  # Most recent 5 transactions
+        timestamp_displays=build_transaction_timestamp_displays(scope, transactions[:5]),
         now=local_now,
         forecast_interest=float(forecast_interest),
         posted_savings_balance=float(posted_savings_balance),
@@ -1439,6 +1441,7 @@ def dashboard():
         savings_balance=float(savings_balance),
         # user_id is resolved from class context.
         pending_recovery_code=pending_recovery_code,
+        pending_recovery_expires_display=build_recovery_code_expiry_display(scope, pending_recovery_code),
         # Weekly/monthly analytics
         unique_days_tapped=unique_days_tapped,
         total_minutes_this_week=int(total_minutes_this_week),
@@ -1447,6 +1450,7 @@ def dashboard():
         spending_this_week=float(round(spending_this_week, 2)),
         spending_this_month=float(round(spending_this_month, 2)),
         announcements=announcements,
+        announcement_expiry_displays=build_announcement_expiry_displays(scope.class_id, announcements),
         current_class_id=class_id,
         scoped_total_earnings=_get_total_earnings_for_seat(student.id, class_id=class_id),
         hall_pass_balance=get_hall_pass_balance(student.id, class_id),
@@ -1541,6 +1545,7 @@ def payroll():
         ],
         scoped_total_earnings=_get_total_earnings_for_seat(student.id, class_id=effective_class_id),
         last_payroll_event=last_payroll_event,
+        time_displays=build_student_payroll_time_displays(context, attendance_events[:20], last_payroll_event),
         days_since_last_payroll=days_since_last_payroll,
         feature_settings=get_feature_settings_for_student(),
     )
@@ -1748,6 +1753,9 @@ def transfer():
                          transactions=transactions,
                          checking_transactions=checking_transactions,
                          savings_transactions=savings_transactions,
+                         timestamp_displays=build_transaction_timestamp_displays(
+                             context, checking_transactions[:50] + savings_transactions[:50]
+                         ),
                          checking_balance=checking_balance,
                          savings_balance=savings_balance,
                          posted_savings_balance=posted_savings_balance,
@@ -1851,6 +1859,10 @@ def insurance_marketplace():
             continue
         claims_open_on, renews_on = _coverage_card_dates(context, grant, d)
         last_covered_day = _last_covered_day(class_id, grant.entitlement_id)
+        change = _coverage_change(class_id, grant, d, renews_on, last_covered_day)
+        cancel_covers_through = (
+            None if last_covered_day else _cancel_covers_through(class_id, grant.entitlement_id)
+        )
         starts_on = (
             insurance_coverage.class_local_date(class_id, grant.timestamp)
             if canonical_temporal_resolver(
@@ -1886,30 +1898,23 @@ def insurance_marketplace():
                 # A continuation granted ahead of its boundary: the day it begins.
                 starts_on=starts_on,
                 # What happens at the boundary (FEAT-STOR-007 §V.A), else None.
-                change=_coverage_change(class_id, grant, d, renews_on, last_covered_day),
+                change=change,
                 # If cancelled now: the last day it would still cover. Same
                 # derivation the cancel command uses (DOM-OBL-001 §V.7).
-                cancel_covers_through=(
-                    None if last_covered_day else _cancel_covers_through(class_id, grant.entitlement_id)
+                cancel_covers_through=cancel_covers_through,
+                **build_coverage_card_dates_display(
+                    context,
+                    purchased_at=grant.timestamp,
+                    starts_on=starts_on,
+                    claims_open_on=claims_open_on,
+                    renews_on=renews_on,
+                    last_covered_day=last_covered_day,
+                    change=change,
+                    cancel_covers_through=cancel_covers_through,
                 ),
             )
         )
 
-    def _claim_display_row(claim):
-        incident_dt = claim.incident_at or claim.submitted_at
-        return SimpleNamespace(
-            id=claim.id,
-            claim_id=claim.claim_id,
-            policy=getattr(claim, "policy", SimpleNamespace(title="Insurance")),
-            status=getattr(claim.status, "value", claim.status),
-            approved_amount=getattr(claim, "approved_amount", None),
-            claim_amount=getattr(claim, "claim_amount", None),
-            rejection_reason=getattr(claim, "rejection_reason", None),
-            description=getattr(claim, "description", ""),
-            teacher_notes=getattr(claim, "teacher_notes", None),
-            incident_date=incident_dt,
-            filed_date=claim.submitted_at,
-        )
     return render_template(
         'student_insurance_marketplace.html',
         student=(
@@ -1922,7 +1927,9 @@ def insurance_marketplace():
         owned_coverage=owned_coverage,
         insurance_for_sale=insurance_for_sale,
         marketing_badges=MARKETING_BADGES,
-        my_claims=[_claim_display_row(claim) for claim in _list_insurance_claims(class_id=class_id, target_seat_id=seat_id)],
+        my_claims=build_insurance_claim_rows(
+            context, _list_insurance_claims(class_id=class_id, target_seat_id=seat_id)
+        ),
         now=now_utc,
     )
 
@@ -2349,16 +2356,10 @@ def file_claim(policy_uuid):
         payout_multiple=policy.payout_multiple,
         claim_window_days=policy.claim_window_days,
     )
-    prior_claims = [
-        SimpleNamespace(
-            status=getattr(claim.status, "value", claim.status),
-            filed_date=claim.submitted_at,
-            approved_amount=getattr(claim, "approved_amount", None),
-        )
-        for claim in _list_insurance_claims(
-            class_id=class_id, target_seat_id=seat_id, entitlement_id=entitlement_id
-        )
-    ]
+    prior_claims = build_insurance_claim_rows(
+        context,
+        _list_insurance_claims(class_id=class_id, target_seat_id=seat_id, entitlement_id=entitlement_id),
+    )
     return render_template(
         'student_file_claim.html',
         student=student_name,
@@ -2368,13 +2369,7 @@ def file_claim(policy_uuid):
         is_productivity_type=is_productivity_type,
         claimable=claimable,
         prior_claims=prior_claims,
-        # The class's today, the latest day a claim may name: the UTC date is
-        # yesterday there all morning in any class east of Greenwich.
-        class_today=canonical_temporal_resolver(
-            CLASS_LEVEL_EVALUATION,
-            canonical_execution_context=context,
-            primitive="current_evaluation_day",
-        ).evaluation_date,
+        claim_date_max=build_claim_date_max(context),
     )
 
 
@@ -2404,21 +2399,6 @@ def view_policy(policy_uuid):
     entitlement = active_entitlements[0] if active_entitlements else None
     if entitlement is None:
         flash("You do not have an active insurance entitlement for this policy.", "warning")
-    def _claim_display_row(claim):
-        incident_dt = claim.incident_at or claim.submitted_at
-        return SimpleNamespace(
-            id=claim.id,
-            claim_id=claim.claim_id,
-            policy=getattr(claim, "policy", SimpleNamespace(title="Insurance")),
-            status=getattr(claim.status, "value", claim.status),
-            approved_amount=getattr(claim, "approved_amount", None),
-            claim_amount=getattr(claim, "claim_amount", None),
-            rejection_reason=getattr(claim, "rejection_reason", None),
-            description=getattr(claim, "description", ""),
-            teacher_notes=getattr(claim, "teacher_notes", None),
-            incident_date=incident_dt,
-            filed_date=claim.submitted_at,
-        )
     placeholder_policy = SimpleNamespace(
         id=policy.policy_uuid,
         title=policy.title or "Insurance policy",
@@ -2470,6 +2450,12 @@ def view_policy(policy_uuid):
         status="active" if entitlement is not None else "inactive",
         next_payment_due=next_payment_due,
         covered_through=covered_through,
+        **build_policy_enrollment_dates_display(
+            context,
+            purchase_date=purchase_date,
+            coverage_start_date=coverage_start_date,
+            covered_through=covered_through,
+        ),
         # None when the product has no filing deadline (productivity, non-monetary).
         contract_claim_time_limit_days=(
             int(policy.claim_window_days) if policy.claim_window_days is not None else None
@@ -2493,14 +2479,14 @@ def view_policy(policy_uuid):
         'student_view_policy.html',
         student=student_name,
         enrollment=enrollment,
-        claims=[
-            _claim_display_row(claim)
-            for claim in _list_insurance_claims(
+        claims=build_insurance_claim_rows(
+            context,
+            _list_insurance_claims(
                 class_id=context.class_id,
                 target_seat_id=context.seat_id,
                 entitlement_id=getattr(entitlement, "entitlement_id", None),
-            )
-        ],
+            ),
+        ),
         now=canonical_temporal_resolver(
             CLASS_LEVEL_EVALUATION, canonical_execution_context=context, primitive="current_time",
         ).canonical_now_utc,
@@ -2764,6 +2750,7 @@ def rent():
     from app.services.obligation_view_model import (
         build_empty_student_obligation_view,
         build_student_obligation_view,
+        build_student_rent_page_view,
     )
 
     view = build_student_obligation_view(
@@ -2827,7 +2814,7 @@ def rent():
     # values last).
     return render_template(
         'student_rent.html',
-        view=view,
+        view=build_student_rent_page_view(view),
         checking_balance=checking_balance,
         savings_balance=savings_balance,
         payment_nonce=payment_nonce,
@@ -3324,6 +3311,7 @@ def help_support():
                          current_page='help',
                          page_title='Help & Support',
                          my_issues=my_issues,
+                         submitted_displays=build_issue_submitted_displays(class_context, my_issues),
                          help_content=HELP_ARTICLES['student'],
                          format_utc_iso=format_utc_iso)
 
@@ -3445,6 +3433,9 @@ def report_transaction_issue(transaction_id):
                          form=form,
                          issue_type='transaction',
                          transaction=transaction,
+                         transaction_timestamp_display=build_transaction_timestamp_displays(
+                             class_context, [transaction]
+                         )[transaction.id],
                          show_recent_error_option=show_recent_error_option)
 
 
@@ -3540,6 +3531,7 @@ def verify_recovery(code_id):
     ).is_earlier:
         flash("This recovery request has expired.", "error")
         return redirect(url_for('student.dashboard'))
+    recovery_expires_display = build_recovery_code_expiry_display(context, recovery_code)
 
     if request.method == 'POST':
         passphrase = request.form.get('passphrase', '').strip()
@@ -3548,6 +3540,7 @@ def verify_recovery(code_id):
             flash("Please enter your passphrase.", "error")
             return render_template('student_verify_recovery.html',
                                  recovery_code=recovery_code,
+                                 recovery_expires_display=recovery_expires_display,
                                  student=student)
 
         # Verify passphrase
@@ -3557,6 +3550,7 @@ def verify_recovery(code_id):
             flash("Incorrect passphrase. Please try again.", "error")
             return render_template('student_verify_recovery.html',
                                  recovery_code=recovery_code,
+                                 recovery_expires_display=recovery_expires_display,
                                  student=student)
 
         from app.feats.teacher_recovery_feat import issue_confirmation
@@ -3571,10 +3565,12 @@ def verify_recovery(code_id):
 
         return render_template('student_verify_recovery.html',
                              recovery_code=recovery_code,
+                             recovery_expires_display=recovery_expires_display,
                              student=student,
                              generated_code=code,
                              verified=True)
 
     return render_template('student_verify_recovery.html',
                          recovery_code=recovery_code,
+                         recovery_expires_display=recovery_expires_display,
                          student=student)

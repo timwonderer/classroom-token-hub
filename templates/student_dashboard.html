@@ -92,7 +92,7 @@
     <p class="mb-2">CTH randomly selected you to help with teacher account recovery. Give a code in person only if your teacher is currently with your class.</p>
     <p class="mb-3 small text-muted">
         <span class="material-symbols-outlined fs-6 align-text-bottom" aria-hidden="true">schedule</span>
-        Expires on {{ pending_recovery_code.recovery_request.expires_at | fmt_timestamp }}
+        Expires on {{ pending_recovery_expires_display }}
     </p>
     <div class="d-flex gap-2">
         <a href="{{ url_for('student.verify_recovery', code_id=pending_recovery_code.id) }}"
@@ -118,7 +118,7 @@
     {% if announcement.expires_at %}
     <small class="text-muted d-block mt-2">
         <span class="material-symbols-outlined fs-6 align-text-bottom" aria-hidden="true">schedule</span>
-        Expires {{ announcement.expires_on.strftime('%b %d, %Y') }}
+        Expires {{ announcement_expiry_displays[announcement.id] }}
     </small>
     {% endif %}
 {% endcall %}
@@ -368,7 +368,7 @@
                         </div>
                         <div>
                             <div class="fw-semibold text-dark">{{ t.description }}</div>
-                            <div class="small text-muted">{{ t.timestamp|fmt_timestamp }}</div>
+                            <div class="small text-muted">{{ timestamp_displays[t.id] }}</div>
                         </div>
                     </div>
                     <div class="d-flex align-items-center gap-2">

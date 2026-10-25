@@ -53,15 +53,15 @@
                         </p>
                     </div>
                     <div class="col-md-6">
-                        <p><strong>Purchase Date:</strong> {{ enrollment.purchase_date | fmt_date }}</p>
+                        <p><strong>Purchase Date:</strong> {{ enrollment.purchase_date_display }}</p>
                         <p><strong>Coverage Start:</strong>
                             {% if not enrollment.coverage_start_date %}
                             &mdash;
                             {% elif enrollment.coverage_start_date > now %}
-                            <span class="text-warning">{{ enrollment.coverage_start_date | fmt_date }} (after {{
+                            <span class="text-warning">{{ enrollment.coverage_start_date_display }} (after {{
                                 enrollment.policy.waiting_period_days }}-day waiting period)</span>
                             {% else %}
-                            {{ enrollment.coverage_start_date | fmt_date }}
+                            {{ enrollment.coverage_start_date_display }}
                             {% endif %}
                         </p>
                         <p><strong>Payment Status:</strong>
@@ -116,7 +116,7 @@
                             <li>Frequency: {{ enrollment.policy.charge_frequency|title }}</li>
                             <li>Autopay: {{ 'Yes' if enrollment.policy.autopay else 'No' }}</li>
                             {% if enrollment.covered_through %}
-                            <li>Current period covers you through {{ enrollment.covered_through.strftime('%b %d, %Y') }}</li>
+                            <li>Current period covers you through {{ enrollment.covered_through_display }}</li>
                             {% endif %}
                             {% if enrollment.policy.auto_cancel_nonpay_days %}
                             <li>Auto-cancel after {{ enrollment.policy.auto_cancel_nonpay_days }} days of non-payment
@@ -152,8 +152,8 @@
                         <tbody>
                             {% for claim in claims %}
                             <tr>
-                                <td>{{ claim.incident_date | fmt_date }}</td>
-                                <td>{{ claim.filed_date | fmt_date }}</td>
+                                <td>{{ claim.incident_date_display }}</td>
+                                <td>{{ claim.filed_date_display }}</td>
                                 <td>
                                     {% if claim.approved_amount %}
                                     ${{ "%.2f"|format(claim.approved_amount) }}
@@ -190,7 +190,7 @@
                                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close claim details"></button>
                                         </div>
                                         <div class="modal-body">
-                                            <p><strong>Incident Date:</strong> {{ claim.incident_date | fmt_date }}</p>
+                                            <p><strong>Incident Date:</strong> {{ claim.incident_date_display }}</p>
                                             <p><strong>Description:</strong></p>
                                             <p class="bg-light p-3 rounded">{{ claim.description }}</p>
 

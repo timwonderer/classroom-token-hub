@@ -17,6 +17,7 @@ from typing import Any
 
 from app.extensions import db
 from app.models import PayrollSettings, Transaction, Seat, IdentityProfile
+from app.utils.temporal_display import format_compact_date, format_date, format_time
 
 
 @dataclass(frozen=True)
@@ -413,4 +414,22 @@ def build_payroll_settings_display(settings: PayrollSettings | None) -> dict[str
         'display_per_unit_rate_value': f"{amount}",
         'display_rate_unit': singular,
         'display_rate_with_unit': with_unit,
+    }
+
+
+def build_student_payroll_time_displays(ctx, attendance_events, last_payroll_event) -> dict:
+    """Class-time display text for the student payroll page.
+
+    ``events`` maps each attendance event id to its {"date", "time"} text;
+    ``last_payroll`` is the last payroll's date, or None.
+    """
+    return {
+        "events": {
+            event.id: {
+                "date": format_compact_date(ctx, event.timestamp),
+                "time": format_time(ctx, event.timestamp),
+            }
+            for event in attendance_events
+        },
+        "last_payroll": format_date(ctx, last_payroll_event.recorded_at) if last_payroll_event else None,
     }
