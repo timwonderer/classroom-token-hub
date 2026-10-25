@@ -2,6 +2,7 @@
 import hashlib
 import json
 from pathlib import Path
+import platform
 import subprocess
 import sys
 import tarfile
@@ -14,6 +15,9 @@ HUGO = TOOLS / 'bin/hugo'
 
 
 def main():
+    # The Linux pin is the x86-64 build (what GitHub's runners use); the macOS package is universal.
+    if sys.platform == 'linux' and platform.machine() not in ('x86_64', 'AMD64'):
+        raise SystemExit(f'No pinned Hugo build for Linux {platform.machine()}; only x86-64 is pinned')
     TOOLS.mkdir(parents=True, exist_ok=True)
     for name, entry in json.loads((HERE / 'tools.lock.json').read_text()).items():
         if entry.get('platform', sys.platform) != sys.platform:

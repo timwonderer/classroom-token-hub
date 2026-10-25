@@ -18,7 +18,7 @@ has been removed.
 - `SOP-DOC-000` §X: publication boundaries; §XI: link integrity.
 - No application domain mutation or FEAT contract changes are involved.
 
-## Build locally (macOS or Linux)
+## Build locally (macOS, or Linux on x86-64)
 
 From the repository root, with Python 3.10+ and these standalone dependencies
 (not the application's full `requirements.txt`):
@@ -48,7 +48,7 @@ deployment.
 ## What the build does
 
 `bootstrap.py` verifies the pinned downloads in `tools.lock.json` for the current
-platform (Hugo for macOS or Linux, Hextra and FlexSearch), installs Hugo to
+platform (Hugo for macOS, universal, or Linux x86-64; Hextra and FlexSearch), installs Hugo to
 `.cache/tools/bin/hugo` without a system package, and refuses anything whose checksum
 does not match. No Node build or theme CSS compilation is required; Hugo still ships
 browser JavaScript.
@@ -76,9 +76,10 @@ Reassess that limit as the corpus grows. Seventeen lines of UI JavaScript make h
 mobile navigation inert and wide tables keyboard-scrollable.
 
 `check.py` validates the built artifact: it contains exactly the staged pages, every
-internal link, anchor and CSS asset resolves, every page has one `h1` and no heading
-skips or duplicate IDs, every search entry points at a published page, every document
-is in the search index, and every document carries its canonical edit link.
+internal link, anchor and CSS asset resolves, no page has duplicate IDs, every search
+entry points at a published page, every document is in the search index, and every
+document carries its canonical edit link. Every generated page must have one `h1` and
+no heading skips; in canonical documents those defects are reported as warnings.
 
 Logs, the built site and fresh JSON reports live in `.cache/`, which is disposable;
 never author or amend contracts there. Screenshots go to
