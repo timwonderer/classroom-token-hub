@@ -1,7 +1,19 @@
 baseURL: https://classroomtokenhub.com/docs/
 title: Classroom Token Hub Developer Docs
 locale: en
-theme: hextra
+module:
+  imports:
+    - path: hextra
+      # Hextra's favicons and web manifest carry its own logo and name; publish none of them.
+      mounts:
+        - {source: layouts, target: layouts}
+        - {source: assets, target: assets}
+        - {source: i18n, target: i18n}
+        - {source: data, target: data}
+        - {source: archetypes, target: archetypes}
+        - source: static
+          target: static
+          files: ['! favicon*', '! apple-touch-icon.png', '! android-chrome-*', '! site.webmanifest', '! images/**']
 disablePathToLower: true
 disableKinds: [taxonomy, term, RSS]
 enableRobotsTXT: false

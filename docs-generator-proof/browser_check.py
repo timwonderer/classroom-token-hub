@@ -17,7 +17,7 @@ def run():
     screenshots.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
-        for name, site in [('hugo', CACHE / 'hugo/public'), ('zensical', CACHE / 'zensical/docs-site/build')]:
+        for name, site in [('hugo', CACHE / 'hugo/public')]:
             server = ThreadingHTTPServer(('127.0.0.1', 0), partial(Handler, directory=str(site)))
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
@@ -47,26 +47,25 @@ def run():
                     audit(f'{mode}:{label}')
                     if label in ('home', 'catalog', 'identity'):
                         page.screenshot(path=str(screenshots / f'{name}-{mode}-{label}.png'), full_page=label != 'catalog')
-                    if name == 'hugo':
-                        brand = page.evaluate("""() => {
-                            const token = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-                            const color = name => { const e = document.createElement('span'); e.style.color = `var(${name})`; document.body.append(e); const v = getComputedStyle(e).color; e.remove(); return v; };
-                            return {background: getComputedStyle(document.body).backgroundColor === color('--background'),
-                              headingWeight: getComputedStyle(document.querySelector('h1')).fontWeight === token(document.querySelector('.landing-welcome h1') ? '--weight-semibold' : '--weight-bold'),
-                              hero: !document.querySelector('.landing-welcome h1') || getComputedStyle(document.querySelector('.landing-welcome h1')).color === color('--secondary'),
-                              footer: getComputedStyle(document.querySelector('footer')).backgroundColor === color('--neutral-800')};
-                        }""")
-                        states[f'{mode}:{label}']['brand_tokens'] = brand
-                        assert all(brand.values()), (label, brand)
+                    brand = page.evaluate("""() => {
+                        const token = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+                        const color = name => { const e = document.createElement('span'); e.style.color = `var(${name})`; document.body.append(e); const v = getComputedStyle(e).color; e.remove(); return v; };
+                        return {background: getComputedStyle(document.body).backgroundColor === color('--background'),
+                          headingWeight: getComputedStyle(document.querySelector('h1')).fontWeight === token(document.querySelector('.landing-welcome h1') ? '--weight-semibold' : '--weight-bold'),
+                          hero: !document.querySelector('.landing-welcome h1') || getComputedStyle(document.querySelector('.landing-welcome h1')).color === color('--secondary'),
+                          footer: getComputedStyle(document.querySelector('footer')).backgroundColor === color('--neutral-800')};
+                    }""")
+                    states[f'{mode}:{label}']['brand_tokens'] = brand
+                    assert all(brand.values()), (label, brand)
                     if label == 'home':
                         states[f'{mode}:{label}']['fonts'] = page.evaluate("({body: getComputedStyle(document.body).fontFamily, h1: getComputedStyle(document.querySelector('h1')).fontFamily, fontsLoaded: document.fonts.check('16px Inter')})")
                 page.goto(base, wait_until='networkidle')
-                trigger = page.locator('[data-search-open]').first if name == 'hugo' else page.locator('.md-header label[for="__search"]' if mobile else '.md-search__button')
+                trigger = page.locator('[data-search-open]').first
                 trigger.focus()
                 page.keyboard.press('Enter')
-                search = page.locator('#hextra-search-dialog input') if name == 'hugo' else page.get_by_label('Search words or document ID')
+                search = page.locator('#hextra-search-dialog input')
                 search.fill('INV-CORE-000')
-                result = page.locator('#hextra-search-dialog a[href*="INV-CORE-000"]' if name == 'hugo' else '#cth-search-results a[href*="INV-CORE-000"]')
+                result = page.locator('#hextra-search-dialog a[href*="INV-CORE-000"]')
                 try:
                     result.first.wait_for(timeout=5000)
                     states[f'{mode}:search_found'] = True
@@ -74,20 +73,20 @@ def run():
                     states[f'{mode}:search_found'] = False
                     (CACHE / f'{name}-{mode}-search.html').write_text(page.content())
                 audit(f'{mode}:search')
-                states[f'{mode}:search']['first_result'] = page.locator('#hextra-search-results a' if name == 'hugo' else '#cth-search-results a').first.get_attribute('href')
+                states[f'{mode}:search']['first_result'] = page.locator('#hextra-search-results a').first.get_attribute('href')
                 page.screenshot(path=str(screenshots / f'{name}-{mode}-search.png'))
                 page.keyboard.press('Escape')
                 search.wait_for(state='hidden')
                 states[f'{mode}:search']['escape_restores_focus'] = trigger.evaluate('el => el === document.activeElement')
                 if mobile:
-                    menu = page.locator('.hextra-hamburger-menu' if name == 'hugo' else '.md-header label[for="__drawer"]')
+                    menu = page.locator('.hextra-hamburger-menu')
                     menu.focus()
                     page.keyboard.press('Enter')
                     states['mobile:menu_opened'] = menu.get_attribute('aria-expanded') == 'true'
                     audit('mobile:menu')
                     page.screenshot(path=str(screenshots / f'{name}-mobile-menu.png'))
                     page.keyboard.press('Escape')
-                    page.wait_for_function("selector => document.querySelector(selector).getAttribute('aria-expanded') === 'false'", arg='.hextra-hamburger-menu' if name == 'hugo' else '.md-header label[for="__drawer"]')
+                    page.wait_for_function("selector => document.querySelector(selector).getAttribute('aria-expanded') === 'false'", arg='.hextra-hamburger-menu')
                     states['mobile:menu_closed'] = menu.get_attribute('aria-expanded') == 'false'
                     states['mobile:menu_focus_restored'] = menu.evaluate('el => el === document.activeElement')
                 context.close()

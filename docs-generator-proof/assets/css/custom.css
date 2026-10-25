@@ -40,7 +40,8 @@ code, pre, kbd { font-family: var(--font-data); }
 :focus-visible { outline: var(--space-half) solid var(--primary); outline-offset: var(--space-half); }
 .hextra-nav-container-blur { background: var(--primary); box-shadow: none; border-bottom: var(--space-hairline) solid var(--primary-hover); }
 .hextra-nav-container nav, .hextra-nav-container nav a { color: var(--text-inverse); }
-.hextra-nav-container a:hover { color: var(--secondary); }
+/* Gold on --primary is 4.34:1, below AA for nav-size text; mark hover by underline instead (SPEC-DES-001 §IX). */
+.hextra-nav-container a:hover { color: var(--text-inverse); text-decoration: underline; }
 .hextra-nav-container :focus-visible { outline-color: var(--secondary); }
 .hextra-search-trigger { background: var(--primary-hover); color: var(--text-inverse); border-radius: var(--radius-sm); }
 .hextra-search-trigger:hover { color: var(--text-inverse); }
@@ -80,7 +81,7 @@ code, pre, kbd { font-family: var(--font-data); }
 .cth-catalog > ul { columns: 2; column-gap: var(--space-8); list-style: none; padding: 0; margin: var(--space-4) 0; }
 .cth-catalog > ul > li { break-inside: avoid; margin: 0 0 var(--space-2); font-size: var(--text-sm); line-height: var(--leading-snug); }
 .cth-source { margin-top: var(--space-8); font-size: var(--text-sm); color: var(--text-secondary); }
-.cth-source a { color: var(--primary); text-decoration: underline; }
+.cth-source a { color: var(--link-on-light); text-decoration: underline; }
 /* Shared hero/footer geometry comes directly from github-pages/style.css. */
 .landing-footer a:focus-visible { outline-color: var(--secondary); }
 .landing-footer-meta a { color: inherit; text-decoration: none; }

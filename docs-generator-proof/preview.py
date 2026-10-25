@@ -1,4 +1,4 @@
-"""Serve both unpublished artifacts on loopback only. Stop with Ctrl-C."""
+"""Serve the unpublished artifact on loopback only. Stop with Ctrl-C."""
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -17,8 +17,7 @@ if __name__ == '__main__':
     cache = Path(__file__).resolve().parent / '.cache'
     servers = []
     try:
-        for label, port, site in [('Hugo + Hextra', 8766, cache / 'hugo/public'),
-                                  ('Zensical', 8767, cache / 'zensical/docs-site/build')]:
+        for label, port, site in [('Hugo + Hextra', 8766, cache / 'hugo/public')]:
             if not (site / 'index.html').is_file():
                 raise SystemExit(f'Build {label} first')
             server = ThreadingHTTPServer(('127.0.0.1', port), partial(Handler, directory=str(site)))

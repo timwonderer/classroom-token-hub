@@ -1,5 +1,10 @@
 # Hugo + Hextra versus the Zensical prototype
 
+> **Historical record.** This is the October 23–24, 2026 comparison that selected Hugo + Hextra.
+> The Zensical harness that produced it (`compare.py`, the prototype staging code and its
+> checker) has since been removed; the proof now builds and checks Hugo on its own. The
+> commands and file references below describe that run and no longer reproduce it.
+
 **Hugo + Hextra is a viable next migration candidate.** It reproduces the current
 developer-doc corpus with native search and less custom browser
 behavior than the existing Zensical prototype. Both artifacts pass the shared local contract gate on the ab56 migration corpus.
