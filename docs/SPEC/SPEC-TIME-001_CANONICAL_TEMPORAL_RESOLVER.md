@@ -653,6 +653,13 @@ The browser may use the supplied timezone to render and continuously update visu
 
 The browser must not use its displayed clock to decide business truth.
 
+Server-rendered pages follow `INV-ARC-022` §V.8 and `SPEC-UI-001` §VI–§X, both of which govern this
+specification: a page's builder produces every displayed time as presentation-ready text, localizing
+through `localize_timestamp` (or the boundary primitives) with the page's context, and the template
+prints that text. A template never formats, converts or derives a time (no time filters, `strftime`,
+`isoformat` or `astimezone`), and nothing queries the database while a template renders.
+`tests/test_INV_ARC_022__templates_do_not_format_time.py` enforces this over `templates/`.
+
 Allowed:
 
 ```text
@@ -836,7 +843,7 @@ When migrating existing code:
 
 ## XVII. Amendment
 
-**Version 1.3 (2026-10-24):** adds `shift_calendar_days` (§IX.14; owner ruling 2026-10-24) `localize_timestamp` (§IX.15) and `same_instant` (§IX.16) (owner rulings 2026-10-24). Moving a date by an arbitrary number of calendar days and expressing a timestamp in the authority had no primitive, so callers did it with `timedelta`, `astimezone` and `.date()`. §XIII names the resolver's `utc_now()` as its internal clock and test seam, removes `ensure_utc` and `advance_local_calendar_days` from the module's exports, and permits one private column-default callable in `app/models.py`. §IX.9: `elapsed_duration` sums exactly and truncates once (owner ruling 2026-10-24). §XII: a decision may not compare two timestamps directly; ordering may (owner ruling 2026-10-24). §XIII: private helpers that only wrap a resolver call are not permitted in application code (owner ruling 2026-10-24). §XIV adds tests 25–31 and the structural guard. Found 2026-10-24: 464 prohibited operations in 72 application files, undetected because the previous guard scanned a non-existent directory.
+**Version 1.3 (2026-10-24):** adds `shift_calendar_days` (§IX.14; owner ruling 2026-10-24) `localize_timestamp` (§IX.15) and `same_instant` (§IX.16) (owner rulings 2026-10-24). Moving a date by an arbitrary number of calendar days and expressing a timestamp in the authority had no primitive, so callers did it with `timedelta`, `astimezone` and `.date()`. §XIII names the resolver's `utc_now()` as its internal clock and test seam, removes `ensure_utc` and `advance_local_calendar_days` from the module's exports, and permits one private column-default callable in `app/models.py`. §IX.9: `elapsed_duration` sums exactly and truncates once (owner ruling 2026-10-24). §XII: a decision may not compare two timestamps directly; ordering may (owner ruling 2026-10-24). §XIII: private helpers that only wrap a resolver call are not permitted in application code (owner ruling 2026-10-24). §X: server-rendered times are produced by page builders, never in templates (`INV-ARC-022` §V.8, `SPEC-UI-001`; owner ruling 2026-10-25 by authority). §XIV adds tests 25–31 and the structural guard. Found 2026-10-24: 464 prohibited operations in 72 application files, undetected because the previous guard scanned a non-existent directory.
 
 Revisions to this document must:
 
