@@ -15,12 +15,17 @@ def main():
     TOOLS.mkdir(parents=True, exist_ok=True)
     for name, entry in json.loads((HERE / 'tools.lock.json').read_text()).items():
         target = TOOLS / name
+        # A corrupt or partial cached file is discarded, never trusted or left to fail every run.
+        if target.exists() and hashlib.sha256(target.read_bytes()).hexdigest() != entry['sha256']:
+            target.unlink()
         if not target.exists():
+            partial = target.with_name(f'{name}.part')
             with urlopen(Request(entry['url'], headers={'User-Agent': 'CTH-local-docs-proof'}), timeout=60) as response:
-                target.write_bytes(response.read())
-        digest = hashlib.sha256(target.read_bytes()).hexdigest()
-        if digest != entry['sha256']:
-            raise SystemExit(f'Checksum mismatch: {name}; refusing to execute or extract')
+                partial.write_bytes(response.read())
+            if hashlib.sha256(partial.read_bytes()).hexdigest() != entry['sha256']:
+                partial.unlink()
+                raise SystemExit(f'Checksum mismatch: {name}; refusing to execute or extract')
+            partial.replace(target)
     if not (TOOLS / 'hugo-extracted').exists():
         subprocess.run(['pkgutil', '--expand-full', str(TOOLS / 'hugo.pkg'), str(TOOLS / 'hugo-extracted')], check=True)
     if not (CACHE / 'hextra').exists():

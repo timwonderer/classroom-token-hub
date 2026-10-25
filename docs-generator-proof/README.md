@@ -1,9 +1,10 @@
 # Hugo + Hextra developer-doc site (local proof)
 
-Hugo + Hextra was selected on October 24, 2026 to replace the Docusaurus developer
-site. This directory builds that site from `docs/` on its own. It does not switch the
-production build: it changes no application code, canonical document, user guide,
-Pages workflow or deployment configuration.
+Hugo + Hextra was selected on October 24, 2026 as the migration candidate for the
+Docusaurus developer site; it replaces Docusaurus only after the gates under "Before
+production" pass. This directory builds that site from `docs/` on its own. It does not
+switch the production build: it changes no application code, canonical document, user
+guide, Pages workflow or deployment configuration.
 
 [The comparison](COMPARISON.md) and [evidence/](evidence/) record why Hugo was chosen
 over the Zensical prototype. They are history: the Zensical harness that produced them
@@ -19,8 +20,8 @@ worktree.
 
 ## Reproduce on macOS
 
-From the repository root, with Python 3.10+ and the project's pinned
-`requirements.txt` (PyYAML, Jinja2, pytest and Playwright are all it needs):
+From the repository root, with Python 3.10+ and these standalone proof dependencies
+(not the application's full `requirements.txt`):
 
 ```bash
 python3 -m venv /tmp/cth-docs-proof-venv
@@ -74,8 +75,8 @@ mobile navigation inert and wide tables keyboard-scrollable.
 
 `check.py` validates the built artifact: it contains exactly the staged pages, every
 internal link, anchor and CSS asset resolves, every page has one `h1` and no heading
-skips or duplicate IDs, every search entry points at a published page, and every
-document carries its canonical edit link.
+skips or duplicate IDs, every search entry points at a published page, every document
+is in the search index, and every document carries its canonical edit link.
 
 Logs, the built site and fresh JSON reports live in `.cache/`, which is disposable;
 never author or amend contracts there. Screenshots go to

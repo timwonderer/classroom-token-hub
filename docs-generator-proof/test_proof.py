@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from check import check
-from build import CACHE, ROOT, catalog_label, published_documents
+from build import CACHE, EDIT_URL, ROOT, catalog_label, published_documents
 
 # The built site is opt-in: the repository's full suite runs `pytest` on Ubuntu without
 # bootstrapping Hugo (macOS-only), so these skip there and run after build.py locally.
@@ -78,6 +78,15 @@ def test_missing_canonical_edit_link_is_rejected(tmp_path):
     (site / 'SPEC/x/index.html').write_text('<h1 id="x">X</h1>')
     failures = check(site, {'index.html', 'SPEC/x/index.html'}, ['#home'], ['SPEC/x.md'])['failures']
     assert any('missing canonical edit link' in f for f in failures)
+
+
+def test_document_missing_from_search_is_rejected(tmp_path):
+    site = artifact(tmp_path)
+    (site / 'SPEC/x').mkdir(parents=True)
+    (site / 'SPEC/x/index.html').write_text(f'<h1 id="x">X</h1><a href="{EDIT_URL}SPEC/x.md">Edit</a>')
+    expected = {'index.html', 'SPEC/x/index.html'}
+    assert any('not in the search index' in f for f in check(site, expected, ['#home'], ['SPEC/x.md'])['failures'])
+    assert check(site, expected, ['#home', 'SPEC/x/'], ['SPEC/x.md'])['failures'] == []
 
 
 def test_missing_self_hosted_font_is_rejected(tmp_path):

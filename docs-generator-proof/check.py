@@ -77,14 +77,18 @@ def check(site, expected, search, documents=()):
                 failures.append(f'{path.relative_to(site)}: missing CSS asset {url or imported}')
     if not search:
         failures.append('Missing search entries')
+    indexed = set()
     for ref in search:
         target, fragment = resolve_reference(site, site / 'index.html', ref or './')
+        indexed.add(target)
         if target not in pages or (fragment and fragment not in pages[target].ids):
             failures.append(f'Search points outside published pages: {ref}')
     for source in documents:
         page = pages.get(site / output_path(source))
         if page and EDIT_URL + source not in page.references:
             failures.append(f'{output_path(source)}: missing canonical edit link')
+        if page and site / output_path(source) not in indexed:
+            failures.append(f'{output_path(source)}: not in the search index')
     return {'pages': len(pages), 'search_entries': len(search), 'failures': failures}
 
 
