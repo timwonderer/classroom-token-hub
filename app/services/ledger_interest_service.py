@@ -30,8 +30,8 @@ from app.services.ledger_balance_query_service import (
 from app.services.ledger_posting_service import create_pending_transaction_idempotent
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
+    SYSTEM_LEVEL_EVALUATION,
     canonical_temporal_resolver,
-    ensure_utc,
 )
 
 
@@ -97,43 +97,30 @@ def resolve_savings_policy(class_id):
     )
 
 
-def _resolve(class_id, primitive, **inputs):
-    return canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=SimpleNamespace(class_id=class_id),
-        primitive=primitive,
-        **inputs,
-    )
-
-
 def payout_window_containing(class_id, payout_frequency, instant_utc):
     """The class-local payout window of ``payout_frequency`` containing an instant."""
     cadence = (payout_frequency or "monthly").strip().lower()
     if cadence not in _WINDOW_PERIOD:
         raise ValueError(f"Unsupported payout_frequency: {payout_frequency!r}")
-    bounds = _resolve(
-        class_id,
-        "evaluation_period_boundaries",
+    bounds = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=SimpleNamespace(class_id=class_id),
+        primitive="evaluation_period_boundaries",
         period=_WINDOW_PERIOD[cadence],
-        reference_time_utc=ensure_utc(instant_utc),
+        reference_time_utc=instant_utc,
     ).result
-    local_start = bounds["boundary_start"].date()
+    local_start = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=SimpleNamespace(class_id=class_id),
+        primitive="localize_timestamp",
+        timestamp=bounds["boundary_start_utc"],
+    ).evaluation_date
     key = (
         f"weekly:{local_start.isoformat()}"
         if cadence == "weekly"
         else f"monthly:{local_start:%Y-%m}"
     )
     return PayoutWindow(cadence, key, bounds["boundary_start_utc"], bounds["boundary_end_utc"])
-
-
-def _class_local_midnight_utc(class_id, local_date):
-    return _resolve(
-        class_id,
-        "anchored_recurrence_boundary",
-        anchor_date=local_date,
-        cadence="week",
-        index=0,
-    ).boundary_start_utc
 
 
 @lru_cache(maxsize=4096)
@@ -147,18 +134,29 @@ def _window_day_plan(class_id, compounding_period, start_utc, end_utc):
     """
     plan = []
     day_start = start_utc
-    while day_start < end_utc:
-        day_end = _resolve(
-            class_id, "evaluation_day_boundaries", reference_time_utc=day_start
+    while canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="earlier_than", candidate=day_start, reference=end_utc
+    ).is_earlier:
+        day_end = canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=SimpleNamespace(class_id=class_id),
+            primitive="evaluation_day_boundaries",
+            reference_time_utc=day_start,
         ).boundary_end_utc
         capitalizes = False
         if compounding_period is not None:
-            capitalizes = _resolve(
-                class_id,
-                "evaluation_period_boundaries",
-                period=compounding_period,
-                reference_time_utc=day_start,
-            ).boundary_start_utc == day_start
+            capitalizes = canonical_temporal_resolver(
+                SYSTEM_LEVEL_EVALUATION,
+                primitive="same_instant",
+                candidate=canonical_temporal_resolver(
+                    CLASS_LEVEL_EVALUATION,
+                    canonical_execution_context=SimpleNamespace(class_id=class_id),
+                    primitive="evaluation_period_boundaries",
+                    period=compounding_period,
+                    reference_time_utc=day_start,
+                ).boundary_start_utc,
+                reference=day_start,
+            ).is_same
         plan.append((day_end, capitalizes))
         day_start = day_end
     return tuple(plan)
@@ -208,12 +206,26 @@ def _paid_window(class_id, payout_frequency, transaction, prefix):
     if match and match.group(1):
         local_start = date.fromisoformat(match.group(2))
         return payout_window_containing(
-            class_id, "weekly", _class_local_midnight_utc(class_id, local_start)
+            class_id, "weekly", canonical_temporal_resolver(
+                CLASS_LEVEL_EVALUATION,
+                canonical_execution_context=SimpleNamespace(class_id=class_id),
+                primitive="anchored_recurrence_boundary",
+                anchor_date=local_start,
+                cadence="week",
+                index=0,
+            ).boundary_start_utc
         )
     if match:
         local_start = date(int(match.group(4)), int(match.group(5)), 1)
         return payout_window_containing(
-            class_id, "monthly", _class_local_midnight_utc(class_id, local_start)
+            class_id, "monthly", canonical_temporal_resolver(
+                CLASS_LEVEL_EVALUATION,
+                canonical_execution_context=SimpleNamespace(class_id=class_id),
+                primitive="anchored_recurrence_boundary",
+                anchor_date=local_start,
+                cadence="week",
+                index=0,
+            ).boundary_start_utc
         )
     if _LEGACY_MONTH_SUFFIX.match(suffix):
         return payout_window_containing(class_id, payout_frequency, transaction.timestamp)
@@ -263,13 +275,18 @@ def _savings_ledger(seat_id, class_id, cadence):
             window = _paid_window(class_id, cadence, row, prefix)
         if window is not None:
             paid_keys.add(row.idempotency_key)
-            if paid_through is None or window.end_utc > paid_through:
+            if paid_through is None or canonical_temporal_resolver(
+                SYSTEM_LEVEL_EVALUATION,
+                primitive="later_than",
+                candidate=window.end_utc,
+                reference=paid_through,
+            ).is_later:
                 paid_through = window.end_utc
             history.append((window.end_utc, row.amount_cents))
         elif row.posted_at is not None and classify_posting_state(
             row.posting_sequence, cursors.get(posting_scope_of(row))
         ) == TransactionStatus.POSTED:
-            history.append((ensure_utc(row.posted_at), row.amount_cents))
+            history.append((row.posted_at, row.amount_cents))
     history.sort(key=lambda entry: entry[0])
     return _SavingsLedger(history, paid_keys, paid_through)
 
@@ -280,7 +297,12 @@ def _end_of_day_balances(history, day_ends):
     cents = 0
     index = 0
     for day_end in day_ends:
-        while index < len(history) and history[index][0] < day_end:
+        while index < len(history) and canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION,
+            primitive="earlier_than",
+            candidate=history[index][0],
+            reference=day_end,
+        ).is_earlier:
             cents += history[index][1]
             index += 1
         balances.append(Decimal(cents) / 100)
@@ -293,11 +315,18 @@ def _accrual_floor(class_id, ledger, claimed_at):
     Nothing accrues before the window-keyed start, before the seat's first
     savings effect, before the seat was claimed, or on a day already credited.
     """
-    floors = [_class_local_midnight_utc(class_id, WINDOW_KEYED_PAYOUT_START)]
+    floors = [canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=SimpleNamespace(class_id=class_id),
+        primitive="anchored_recurrence_boundary",
+        anchor_date=WINDOW_KEYED_PAYOUT_START,
+        cadence="week",
+        index=0,
+    ).boundary_start_utc]
     if ledger.history:
         floors.append(ledger.history[0][0])
     if claimed_at is not None:
-        floors.append(ensure_utc(claimed_at))
+        floors.append(claimed_at)
     if ledger.paid_through is not None:
         floors.append(ledger.paid_through)
     return max(floors)
@@ -314,7 +343,15 @@ def _window_days(class_id, policy, window, history, rate_at, accrue_after):
     )
     balances = _end_of_day_balances(history, [day_end for day_end, _ in plan])
     return plan, balances, [
-        rate_at(day_end) if day_end > accrue_after else None for day_end, _ in plan
+        rate_at(day_end)
+        if canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION,
+            primitive="later_than",
+            candidate=day_end,
+            reference=accrue_after,
+        ).is_later
+        else None
+        for day_end, _ in plan
     ]
 
 
@@ -358,8 +395,11 @@ def apply_savings_interest(seat, *, annual_rate=None, reference_time_utc=None):
         return []
 
     cadence = (policy.payout_frequency or "monthly").strip().lower()
-    now_utc = _resolve(
-        class_id, "current_time", reference_time_utc=reference_time_utc
+    now_utc = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=SimpleNamespace(class_id=class_id),
+        primitive="current_time",
+        reference_time_utc=reference_time_utc,
     ).canonical_now_utc
 
     ledger = _savings_ledger(seat.id, class_id, cadence)
@@ -370,7 +410,12 @@ def apply_savings_interest(seat, *, annual_rate=None, reference_time_utc=None):
 
     created = []
     window = payout_window_containing(class_id, cadence, accrue_after)
-    while window.end_utc <= now_utc:
+    while not canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION,
+        primitive="later_than",
+        candidate=window.end_utc,
+        reference=now_utc,
+    ).is_later:
         key = savings_interest_idempotency_key(class_id, seat.id, window)
         if key not in ledger.paid_keys:
             interest = _window_interest(class_id, policy, window, history, rate_at, accrue_after)
@@ -420,21 +465,36 @@ def forecast_savings(seat_id, class_id, *, months=12, reference_time_utc=None):
         )
 
     cadence = (policy.payout_frequency or "monthly").strip().lower()
-    now_utc = _resolve(
-        class_id, "current_time", reference_time_utc=reference_time_utc
+    now_utc = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=SimpleNamespace(class_id=class_id),
+        primitive="current_time",
+        reference_time_utc=reference_time_utc,
     ).canonical_now_utc
     ledger = _savings_ledger(seat_id, class_id, cadence)
     posted_now = _end_of_day_balances(ledger.history, [now_utc])[0]
     seat = Seat.query.filter_by(id=seat_id, class_id=class_id).one_or_none()
     accrue_after = _accrual_floor(class_id, ledger, seat.claimed_at if seat else None)
 
-    today = _resolve(class_id, "evaluation_day_boundaries", reference_time_utc=now_utc)
+    today = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=SimpleNamespace(class_id=class_id),
+        primitive="evaluation_day_boundaries",
+        reference_time_utc=now_utc,
+    )
     today_start = today.boundary_start_utc
+    today_date = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=SimpleNamespace(class_id=class_id),
+        primitive="localize_timestamp",
+        timestamp=today_start,
+    ).evaluation_date
     checkpoints_utc = [
-        _resolve(
-            class_id,
-            "anchored_recurrence_boundary",
-            anchor_date=today.boundary_start.date(),
+        canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=SimpleNamespace(class_id=class_id),
+            primitive="anchored_recurrence_boundary",
+            anchor_date=today_date,
             cadence="month",
             index=month,
             overflow="clamp",
@@ -446,14 +506,28 @@ def forecast_savings(seat_id, class_id, *, months=12, reference_time_utc=None):
     windows = []
     closes = []
     window = payout_window_containing(class_id, cadence, now_utc)
-    while not windows or (horizon is not None and window.end_utc <= horizon):
+    while not windows or (horizon is not None and not canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION,
+        primitive="later_than",
+        candidate=window.end_utc,
+        reference=horizon,
+    ).is_later):
         paid = savings_interest_idempotency_key(class_id, seat_id, window) in ledger.paid_keys
         plan, known, rates = _window_days(
             class_id, policy, window, ledger.history, rate_at, accrue_after
         )
         windows.append([
             ProjectedSavingsDay(
-                end_of_day_balance=balance if day_end <= today_start else None,
+                end_of_day_balance=(
+                    None
+                    if canonical_temporal_resolver(
+                        SYSTEM_LEVEL_EVALUATION,
+                        primitive="later_than",
+                        candidate=day_end,
+                        reference=today_start,
+                    ).is_later
+                    else balance
+                ),
                 annual_rate=None if paid else rate,
                 capitalizes=capitalizes,
             )
@@ -465,7 +539,18 @@ def forecast_savings(seat_id, class_id, *, months=12, reference_time_utc=None):
     series = project_savings_balances(
         posted_balance=posted_now,
         windows=windows,
-        checkpoints=[sum(1 for close in closes if close <= point) for point in checkpoints_utc],
+        checkpoints=[
+            sum(
+                1 for close in closes
+                if not canonical_temporal_resolver(
+                    SYSTEM_LEVEL_EVALUATION,
+                    primitive="later_than",
+                    candidate=close,
+                    reference=point,
+                ).is_later
+            )
+            for point in checkpoints_utc
+        ],
         calculation_type=policy.calculation_type,
         compound_frequency=policy.compound_frequency,
     )

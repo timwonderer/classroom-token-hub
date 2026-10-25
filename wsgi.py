@@ -95,7 +95,7 @@ from app.auth import (
 )
 
 # Utilities (Stage 5)
-from app.utils.helpers import format_utc_iso, is_safe_url
+from app.utils.helpers import is_safe_url
 from app.utils.encryption import PIIEncryptedType
 from app.utils.constants import THEME_PROMPTS
 

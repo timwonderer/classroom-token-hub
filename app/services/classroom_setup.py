@@ -23,7 +23,7 @@ import pytz
 from app.extensions import db
 from app.models import ClassEconomy, IdentityProfile, Seat, User, UserRole
 from app.utils.auth_username import build_hashed_username_fields
-from app.utils.canonical_temporal_resolver import utc_now
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 
 def canonicalize_class_timezone(class_timezone: str | None) -> str:
@@ -173,7 +173,6 @@ def create_student(
 
     Returns (user, seat, profile).
     """
-    from app.utils.canonical_temporal_resolver import utc_now
     from app.hash_utils import hash_password
 
     if username:
@@ -196,7 +195,9 @@ def create_student(
         user_id=student.id,
         class_id=class_id,
         role="student",
-        claimed_at=utc_now() if claimed else None,
+        claimed_at=canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="current_time"
+        ).canonical_now_utc if claimed else None,
     )
     db.session.add(seat)
     db.session.flush()
@@ -240,7 +241,9 @@ def create_student_user_for_seat(
     db.session.flush()
 
     seat.user_id = student.id
-    seat.claimed_at = seat.claimed_at or utc_now()
+    seat.claimed_at = seat.claimed_at or canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="current_time"
+    ).canonical_now_utc
     seat.claim_first_name_hash = None
     seat.claim_last_name_hash = None
     seat.roster_fingerprint = None

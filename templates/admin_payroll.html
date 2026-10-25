@@ -155,7 +155,7 @@
           <div class="col-6 col-md-3 mb-3">
             {% if next_payroll_date %}
             <h3 class="text-primary type-lg">
-              {{ next_payroll_date|fmt_timestamp }}
+              {{ next_payroll_date_display }}
             </h3>
             {% else %}
             <h3 class="text-muted type-lg">Not set</h3>
@@ -167,7 +167,7 @@
             <small class="text-muted">Estimated Payout</small>
             {% if payroll_updated_at %}
             <div class="text-muted small type-xs">
-              Updated: {{ payroll_updated_at|fmt_timestamp }}
+              Updated: {{ payroll_updated_at_display }}
             </div>
             {% endif %}
           </div>
@@ -208,7 +208,7 @@
               <tr>
                 <td>
                   {% if record.timestamp %}
-                  {{ record.timestamp|fmt_timestamp }}
+                  {{ record.timestamp_display }}
                   {% else %}
                   N/A
                   {% endif %}
@@ -262,7 +262,7 @@
                 class="{% if entry.is_reversal %}table-secondary text-muted{% endif %}">
                 <td>
                   {% if entry.timestamp %}
-                  {{ entry.timestamp|fmt_timestamp }}
+                  {{ entry.timestamp_display }}
                   {% else %}
                   —
                   {% endif %}
@@ -338,7 +338,7 @@
         {% call cards.alert_card('info', 'Changes take effect on the next payroll date', icon='info', role='alert', dismissible=True) %}
           {# DOM-CLASS-003 §VII: a change never reprices the open cycle. #}
           <p class="mb-0">Settings you save now take effect on
-          <strong>{% if next_change_effective %}{{ next_change_effective|fmt_timestamp }}{% else %}the next payroll date{% endif %}</strong>.
+          <strong>{% if next_change_effective %}{{ next_change_effective_display }}{% else %}the next payroll date{% endif %}</strong>.
           Work done before then is paid at the current settings.</p>
         {% endcall %}
       </div>
@@ -371,7 +371,7 @@
               </div>
               {% for pending in pending_settings %}
               <div class="mb-2" data-testid="pending-payroll-setting">
-                <strong>Takes effect {{ pending.effective_date|fmt_timestamp }}:</strong>
+                <strong>Takes effect {{ pending.effective_date_display }}:</strong>
                 {{ pending.display_rate_with_unit }},
                 {{- ' ' }}{{ pending.pay_schedule_type }}
               </div>

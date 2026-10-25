@@ -12,8 +12,8 @@ import secrets
 from urllib.parse import urlparse
 import requests
 from types import SimpleNamespace
-from datetime import datetime, timedelta, timezone
-from app.utils.canonical_temporal_resolver import utc_now, ensure_utc
+from datetime import datetime
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 from decimal import Decimal, InvalidOperation
 
 from flask import Blueprint, render_template, redirect, url_for, flash, request, session, current_app, jsonify, Response, abort
@@ -43,7 +43,7 @@ from app.auth import (
 from app.forms import SystemAdminLoginForm
 
 # Import utility functions
-from app.utils.helpers import is_safe_url, format_utc_iso
+from app.utils.helpers import is_safe_url
 from app.utils.encryption import decrypt_totp
 from app.hash_utils import hash_username_lookup
 from app.services.ledger_posting_service import create_pending_transaction
@@ -57,6 +57,13 @@ from app.services.admin_identity_service import (
     list_admin_credentials,
 )
 from app.services import passkey_service
+from app.services.identity.builders import build_passkey_credential_rows
+from app.services.support.builders import (
+    build_correlation_pack_view,
+    build_history_rows,
+    build_issue_view,
+    build_teacher_report_rows,
+)
 from app.utils.issue_helpers import record_resolution_action, update_issue_status
 from app.services.support_operator_access import (
     escalated_clause,
@@ -183,7 +190,7 @@ def _complete_sysadmin_login(form):
                 session["current_session_nonce"] = nonce
                 user.current_session_nonce = nonce
                 session["sysadmin_auth_username"] = username
-                session['last_activity'] = utc_now().isoformat()
+                session['last_activity'] = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc.isoformat()
                 flash("System admin login successful.")
                 next_url = request.args.get("next")
                 redirect_target = None
@@ -368,7 +375,7 @@ def passkey_auth_finish():
         except passkey_service.PasskeyError as e:
             current_app.logger.warning("Passkey sign-in refused: %s", e)
             return jsonify({"error": "Authentication failed"}), 401
-        now = utc_now()
+        now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
 
         # Create session — canonical keys only
         establish_sysadmin_session(user)
@@ -432,7 +439,8 @@ def passkey_settings():
     user = get_current_user()
     if not user or ctx.actor_role != 'sysadmin':
         abort(404)
-    credentials = list_admin_credentials(user.id)
+    # Operations surface: SLE (UTC); a sysadmin never holds class context.
+    credentials = build_passkey_credential_rows(list_admin_credentials(user.id))
 
     return render_template("system_admin_passkey_settings.html",
                          admin=user,
@@ -475,7 +483,8 @@ def dashboard():
     system_admins = [
         {
             'display_username': sa.get_display_username(),
-            'last_login': None,
+            # User records no login time, so there is nothing to format.
+            'last_login_display': None,
         }
         for sa in system_admins_query
     ]
@@ -635,7 +644,8 @@ def support_tickets():
     report_query = teacher_reports
     if status_filter != 'all':
         report_query = report_query.filter(Issue.status == status_filter.upper())
-    reports = [
+    # Operations surfaces render SLE (UTC): a sysadmin never holds class context.
+    reports = build_teacher_report_rows([
         SimpleNamespace(
             id=issue.id,
             status=issue.status,
@@ -648,7 +658,7 @@ def support_tickets():
             class_id=issue.class_public_id,
         )
         for issue in report_query.order_by(Issue.submitted_at.desc()).all()
-    ]
+    ])
 
     from sqlalchemy import func as sqlfunc
     status_counts = dict(
@@ -674,11 +684,11 @@ def support_tickets():
         ])
     ).order_by(Issue.escalated_at.desc()).all()
     issues_pending = [
-        _issue_to_view(i) for i in all_issues
+        build_issue_view(_issue_to_view(i)) for i in all_issues
         if i.status in [Issue.STATUS_ESCALATED_TO_DEV, 'elevated']
     ]
-    issues_in_review = [_issue_to_view(i) for i in all_issues if i.status == 'developer_review']
-    issues_resolved = [_issue_to_view(i) for i in all_issues if i.status in [Issue.STATUS_DEV_RESOLVED, 'developer_resolved']]
+    issues_in_review = [build_issue_view(_issue_to_view(i)) for i in all_issues if i.status == 'developer_review']
+    issues_resolved = [build_issue_view(_issue_to_view(i)) for i in all_issues if i.status in [Issue.STATUS_DEV_RESOLVED, 'developer_resolved']]
 
     return render_template(
         'sysadmin_support_tickets.html',
@@ -747,23 +757,26 @@ def view_issue(issue_ref):
     else:
         tz_mode = 'utc'
         display_timezone = 'UTC'
+    # Display lens for the page's times (SLE unless class time is chosen), not class context.
+    temporal_context = SimpleNamespace(class_id=class_row.class_id) if tz_mode == 'class' else None
 
     return render_template(
         'sysadmin_view_issue.html',
         current_page='support_tickets',
         page_title=f'Ticket #{issue.id}',
-        issue=_issue_to_view(issue),
+        issue=build_issue_view(_issue_to_view(issue), temporal_context),
         issue_ref=issue_ref,
         direct_lifecycle=is_sysadmin_direct_lifecycle(issue.id),
-        history=history,
-        correlation_pack=_correlation_pack_to_view(issue.correlation_pack),
+        history=build_history_rows(history, temporal_context),
+        correlation_pack=build_correlation_pack_view(
+            _correlation_pack_to_view(issue.correlation_pack), temporal_context,
+        ),
         reporter_ticket_count=sysadmin_visible_issues().filter(
             Issue.actor_public_id == issue.actor_public_id,
         ).count(),
         tz_mode=tz_mode,
         class_timezone=class_timezone,
         display_timezone=display_timezone,
-        format_utc_iso=format_utc_iso,
     )
 
 
@@ -824,7 +837,7 @@ def update_issue(issue_ref):
             notes=admin_notes or None,
         )
         issue.sysadmin_notes = admin_notes or None
-        issue.sysadmin_reviewed_at = utc_now()
+        issue.sysadmin_reviewed_at = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
         # FEATContext.__exit__ owns the commit (INV-ARC FEAT atomicity). A direct
         # commit here trips enforce_feat_context_on_commit and rolls the update back.
         flash(f"Ticket #{issue.id} updated successfully.", "success")
@@ -860,14 +873,14 @@ def grafana_auth_check():
     # Check session timeout
     last_activity_str = session.get("last_activity")
     if last_activity_str:
+        # Written below and at sign-in as an offset-bearing ISO string, so it parses aware.
         last_activity = datetime.fromisoformat(last_activity_str)
-        last_activity = ensure_utc(last_activity)
         if _system_admin_timeout_expired(last_activity):
             _expire_system_admin_session()
             return Response('Unauthorized: Session expired', 401)
 
     # Update activity to keep session alive
-    session["last_activity"] = utc_now().isoformat()
+    session["last_activity"] = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc.isoformat()
 
     # Sanitize username for header (prevent response splitting)
     raw_username = session.get("sysadmin_auth_username") or f"sysadmin_{ctx.user_id}"
@@ -1149,7 +1162,7 @@ def resolve_escalated_issue(issue_ref):
 
         old_status = issue.status
         issue.status = Issue.STATUS_DEV_RESOLVED
-        issue.sysadmin_resolved_at = utc_now()
+        issue.sysadmin_resolved_at = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
         issue.sysadmin_notes = resolution_note
         issue.eligible_for_reward = eligible_for_reward
 

@@ -16,7 +16,7 @@ from dataclasses import dataclass
 import sqlalchemy as sa
 
 from app.extensions import db
-from app.utils.canonical_temporal_resolver import utc_now
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 logger = logging.getLogger(__name__)
 
@@ -67,8 +67,6 @@ LEDGER_FIELDS_BY_VERSION = {
 # Result types (re-exported from audit_service for convenience)
 # ---------------------------------------------------------------------------
 
-from datetime import timezone as _UTC
-
 from app.services.audit_service import (
     LineageState,
     VerificationResult,
@@ -77,23 +75,6 @@ from app.services.audit_service import (
     _compute_payload_digest,
     _SIGNING_KEY,
 )
-
-
-def _utc_isoformat(dt) -> str:
-    """Return an ISO-8601 string normalized to UTC ("+00:00" suffix).
-
-    The emit path computes event_hash using `now_utc.isoformat()` where
-    now_utc is always UTC (from the centralized `utc_now()` helper). SQLAlchemy may
-    return stored datetimes in the local session timezone. Normalizing here
-    ensures the verifier recomputes the same string used at emit time.
-    """
-    if dt is None:
-        return ""
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=_UTC.utc)
-    else:
-        dt = dt.astimezone(_UTC.utc)
-    return dt.isoformat()
 
 
 # ---------------------------------------------------------------------------
@@ -196,7 +177,7 @@ def verify_chain(chain_scope: str, limit: int = 500) -> VerificationResult:
                 )
 
             # HMAC recomputation — normalize to UTC so isoformat matches emit path
-            created_at_str = _utc_isoformat(event.created_at_utc)
+            created_at_str = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp", timestamp=event.created_at_utc).local_timestamp.isoformat()
             actor_context_json = _rebuild_actor_context_json(event)
             expected_hash = _compute_event_hash(
                 _SIGNING_KEY,
@@ -612,7 +593,7 @@ def _creation_evidence_batch(items, class_id, required_fields, max_chain_events)
             expected = _compute_event_hash(
                 _SIGNING_KEY, previous, scope, item.sequence_number, item.table_name,
                 item.row_pk, item.operation, _rebuild_actor_context_json(item),
-                item.payload_digest, _utc_isoformat(item.created_at_utc),
+                item.payload_digest, canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp", timestamp=item.created_at_utc).local_timestamp.isoformat(),
             )
             if expected != item.event_hash:
                 failure = ("INVALID", "ENVELOPE_HMAC_MISMATCH")
@@ -781,7 +762,7 @@ def _diagnose_historical_audit_coverages(
                         expected = _compute_event_hash(
                             _SIGNING_KEY, previous, scope, position, item.table_name,
                             item.row_pk, item.operation, _rebuild_actor_context_json(item),
-                            item.payload_digest, _utc_isoformat(item.created_at_utc),
+                            item.payload_digest, canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp", timestamp=item.created_at_utc).local_timestamp.isoformat(),
                         )
                         if expected != item.event_hash or item.hmac_signature != item.event_hash:
                             chain_status, chain_reason = "INVALID", "ENVELOPE_HMAC_MISMATCH"

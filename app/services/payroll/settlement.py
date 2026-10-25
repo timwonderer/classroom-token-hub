@@ -38,7 +38,7 @@ from app.services.context_resolver import CanonicalContext
 from app.services.identity_service import resolve_teacher_seat_for_class
 from app.services.payroll.schedule import SCHEDULED_OCCURRENCE_KEY
 from app.services.payroll.settings import class_has_payroll_settings
-from app.utils.canonical_temporal_resolver import ensure_utc
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 # FEAT-PROD-004 §II.1: which path started the run. SYSTEM is the automatic
 # schedule, TEACHER the teacher's own run. Only SYSTEM runs anchor the next
@@ -180,7 +180,9 @@ def settle_class_payroll_cycle(
     if scheduled_occurrence is not None:
         # The occurrence, not the run's wall-clock time, anchors the next
         # payroll date, so a late run does not move later paydays (§XV.5).
-        summary[SCHEDULED_OCCURRENCE_KEY] = ensure_utc(scheduled_occurrence).isoformat()
+        summary[SCHEDULED_OCCURRENCE_KEY] = canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp", timestamp=scheduled_occurrence,
+        ).local_timestamp.isoformat()
 
     settled: list[int] = []
     skipped: list[int] = []

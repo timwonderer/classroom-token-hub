@@ -6,21 +6,23 @@ debug endpoints, and public hall pass verification.
 """
 
 from app.hash_utils import normalize_lookup_text
-from datetime import datetime, timezone
 from types import SimpleNamespace
 from flask import (
     Blueprint, redirect, url_for, jsonify, current_app,
-    request,
+    request, g,
 )
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.extensions import db, limiter
 from app.models import User, UserRole
+from app.services.payroll.builders import build_hall_pass_verification_result
 from app.utils.helpers import render_template_with_fallback as render_template
 from app.utils.ip_handler import get_real_ip
 from app.utils.turnstile import verify_turnstile_token
-from app.utils.canonical_temporal_resolver import CLASS_LEVEL_EVALUATION, canonical_temporal_resolver
+from app.utils.canonical_temporal_resolver import (
+    CLASS_LEVEL_EVALUATION, SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver,
+)
 
 # Create blueprint
 main_bp = Blueprint('main', __name__)
@@ -99,17 +101,20 @@ def health_status():
     errors, or internal diagnostics.
     """
     signals = []
+    observed_at = canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="current_time",
+    ).canonical_now_utc.isoformat()
 
     try:
         db.session.scalar(text('SELECT 1'))
-        signals.append({"key": "database", "layer": "platform", "outcome": "PASS", "epistemic_state": "KNOWN", "diagnostic_code": "DATABASE_REACHABLE", "checked_at": datetime.now(timezone.utc).isoformat()})
+        signals.append({"key": "database", "layer": "platform", "outcome": "PASS", "epistemic_state": "KNOWN", "diagnostic_code": "DATABASE_REACHABLE", "checked_at": observed_at})
     except SQLAlchemyError:
-        signals.append({"key": "database", "layer": "platform", "outcome": "FAIL", "epistemic_state": "UNAVAILABLE", "diagnostic_code": "DATABASE_UNAVAILABLE", "checked_at": datetime.now(timezone.utc).isoformat()})
+        signals.append({"key": "database", "layer": "platform", "outcome": "FAIL", "epistemic_state": "UNAVAILABLE", "diagnostic_code": "DATABASE_UNAVAILABLE", "checked_at": observed_at})
     for key in ("login", "attendance", "payroll", "roster", "classroom_economy"):
         signals.append({"key": key, "layer": "capability", "outcome": "UNKNOWN", "epistemic_state": "UNAVAILABLE", "diagnostic_code": "CHECK_NOT_REGISTERED", "checked_at": None})
     for key in ("background_jobs", "external_integrations", "monitoring_freshness", "invariant_verification"):
         signals.append({"key": key, "layer": "platform", "outcome": "UNKNOWN", "epistemic_state": "UNAVAILABLE", "diagnostic_code": "CHECK_NOT_REGISTERED", "checked_at": None})
-    return jsonify({"observed_at": datetime.now(timezone.utc).isoformat(), "signals": signals}), 200
+    return jsonify({"observed_at": observed_at, "signals": signals}), 200
 
 
 @main_bp.route('/privacy')
@@ -340,6 +345,9 @@ def verify_hall_pass(teacher_public_token):
             'elapsed_mins': elapsed_mins,
             'return_time': return_time_value,
         }
+        # The filter this replaces localized under the request's canonical context
+        # (SLE for an anonymous kiosk visitor); reproduced exactly.
+        result = build_hall_pass_verification_result(result, public_temporal_context)
 
     return render_template(
         'hall_pass_verify.html',

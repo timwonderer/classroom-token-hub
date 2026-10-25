@@ -65,15 +65,12 @@ def _bill_period_label(class_id: str, assessment) -> str | None:
     if cycle is None or cycle.cycle_boundary_at is None or cycle.next_assessment_at is None:
         return None
 
-    def local(instant):
-        return canonical_temporal_resolver(
-            CLASS_LEVEL_EVALUATION,
-            canonical_execution_context=SimpleNamespace(class_id=class_id),
-            primitive="current_evaluation_day",
-            reference_time_utc=instant,
-        ).evaluation_date
-
-    first = local(cycle.cycle_boundary_at)
+    first = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=SimpleNamespace(class_id=class_id),
+        primitive="current_evaluation_day",
+        reference_time_utc=cycle.cycle_boundary_at,
+    ).evaluation_date
     last = obligations_service.last_class_day_before(class_id, cycle.next_assessment_at)
     fmt = lambda d: d.strftime("%b %d").replace(" 0", " ")
     return f"{fmt(first)} – {fmt(last)}"

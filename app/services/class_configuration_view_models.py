@@ -20,6 +20,7 @@ from app.services.class_configuration_query_service import (
     get_policy_mode,
 )
 from app.services.economic_engine import CWI_DEPENDENT_FEATURES, resolve_base
+from app.utils.temporal_display import format_date
 
 # Essential features are core to the app and cannot be disabled once the class
 # exists. Their toggles render ON and frozen (see FEAT-CLASS-004 defense-in-depth
@@ -268,4 +269,21 @@ def build_feature_settings_page_view(class_id: str) -> FeatureSettingsPageView |
         features=toggles,
         payroll_ready=payroll_ready,
         engine_ready=engine_ready,
+    )
+
+
+@dataclass(frozen=True)
+class EconomicPolicyDatesView:
+    """Presentation-ready dates for the Economic Engine policy card."""
+    policy_updated_on: str | None
+    pending_rebalance_effective_on: str | None
+
+
+def build_economic_policy_dates_view(ctx, *, policy_updated_at, pending_rebalance_effective_at) -> EconomicPolicyDatesView:
+    """Format the policy card's dates through the resolver under ``ctx`` (CLE for the class)."""
+    return EconomicPolicyDatesView(
+        policy_updated_on=format_date(ctx, policy_updated_at) if policy_updated_at else None,
+        pending_rebalance_effective_on=(
+            format_date(ctx, pending_rebalance_effective_at) if pending_rebalance_effective_at else None
+        ),
     )

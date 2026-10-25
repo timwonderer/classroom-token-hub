@@ -29,7 +29,7 @@ from app.services.insurance_coverage_service import (
     premium_lineage_ref,
 )
 from app.services.insurance_definition_service import get_insurance_definition
-from app.utils.canonical_temporal_resolver import ensure_utc, utc_now
+from tests.helpers import temporal
 from tests.helpers.ledger import create_ledger_idempotent_transaction
 
 
@@ -50,8 +50,8 @@ def establish_paid_premium_lineage(
     """
     policy = get_insurance_definition(policy_uuid, class_id=class_id)
     premium = Decimal(str(policy.premium))
-    start = ensure_utc(start_utc)
-    through = ensure_utc(through_utc) if through_utc is not None else utc_now()
+    start = start_utc
+    through = through_utc if through_utc is not None else temporal.now()
     anchor = class_local_date(class_id, start)
     lineage = premium_lineage_ref(entitlement_id)
 

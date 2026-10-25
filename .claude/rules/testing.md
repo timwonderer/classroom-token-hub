@@ -193,7 +193,23 @@ def test_transfer_rejects_over_balance(client, app):
         db.session.rollback()
 ```
 
-### Pattern 6: Asserting a property, not a coincidence
+### Pattern 6: Time
+
+Tests never read the wall clock or do date arithmetic themselves (INV-ARC-015 §VII,
+SPEC-TEST-001 §X). `tests/helpers/temporal.py` wraps the production resolver:
+
+```python
+from tests.helpers import temporal
+
+with temporal.pinned_clock(instant):           # production code and the test see `instant` as now
+    ...
+nine_am = temporal.class_wall_time(class_id, date(2026, 11, 1), 9)
+next_week = temporal.calendar_days_later(nine_am, 7, class_id=class_id)
+```
+
+If the helper lacks what a test needs, add a function to it that calls the resolver.
+
+### Pattern 7: Asserting a property, not a coincidence
 
 A passing test is not evidence until you have watched it fail. Before trusting a
 regression test, remove the fix and confirm the test goes red. Locking is the classic

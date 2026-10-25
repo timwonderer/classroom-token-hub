@@ -32,6 +32,9 @@ def _announcement(announcement_id: int, title: str, priority: str, **extra) -> A
         expires_at=extra.pop("expires_at", None),
     )
     row.expires_on = extra.pop("expires_on", None)
+    row.created_at_display = "Jan 14, 2030, 4:00 AM PST"
+    row.expires_on_display = extra.pop("expires_on_display", None)
+    row.has_expired = extra.pop("has_expired", False)
     return row
 
 
@@ -41,9 +44,10 @@ register("admin_announcements.html", "populated", lambda: {
     "announcements": [
         _announcement(1, "Quiz tomorrow", "urgent"),
         _announcement(2, "Lab goggles", "high"),
-        _announcement(3, "Welcome back", "normal", expires_at=_NOW + timedelta(days=3), expires_on=date(2030, 1, 18)),
+        _announcement(3, "Welcome back", "normal", expires_at=_NOW + timedelta(days=3), expires_on=date(2030, 1, 18),
+                      expires_on_display="Jan 18, 2030"),
         _announcement(4, "Old reminder", "low", is_active=False, expires_at=_NOW - timedelta(days=2),
-                      expires_on=date(2030, 1, 13)),
+                      expires_on=date(2030, 1, 13), expires_on_display="Jan 13, 2030", has_expired=True),
     ],
 }, path="/admin/announcements", actor="teacher")
 
@@ -118,10 +122,18 @@ def _contract(**overrides):
     return SimpleNamespace(**values)
 
 
+def _claim_dates(*, decided=None, purchase=None, days=()):
+    return SimpleNamespace(
+        filed="Jan 13, 2030, 4:00 AM PST", decided=decided, purchase=purchase,
+        coverage_effective="Jan 03, 2030", coverage_bought="Dec 31, 2029",
+        period_first_day="Jan 05", period_last_day="Jan 18", period_resets_on="Jan 19, 2030",
+        days=list(days),
+    )
+
+
 def _claim(status: str, **overrides):
     values = dict(
-        id="claim-a11y-1", student_name="Sam Student", submitted_at=_NOW - timedelta(days=2),
-        decided_at=None, status=status, student_first_name="Sam", description="Lunch was lost on the bus.",
+        id="claim-a11y-1", student_name="Sam Student", status=status, student_first_name="Sam", description="Lunch was lost on the bus.",
         additional_information=None, filing_window_override_reason=None, decision_note=None,
     )
     values.update(overrides)
@@ -138,8 +150,7 @@ def _process_claim(*, claim_type: str, claim, **extra):
             "contract": extras.pop("contract", _contract()), "productivity": None, "hourly_rate": None,
             "reimbursement_percentage": 80.0, "source_transaction": None, "estimated_payout": None,
             "waiting_period_days": 3, "filing_window_exceeded": False,
-            "period_first_day": date(2030, 1, 5), "period_last_day": date(2030, 1, 18),
-            "period_resets_on": date(2030, 1, 19),
+            "claim_dates": extras.pop("claim_dates", _claim_dates()),
             "claims_stats": SimpleNamespace(submitted=1, approved=2, rejected=0), "form": form,
         }
         base.update(extras)
@@ -148,18 +159,20 @@ def _process_claim(*, claim_type: str, claim, **extra):
 
 
 _TRANSACTION = SimpleNamespace(description="Cafeteria lunch", timestamp=_NOW - timedelta(days=4), amount=Decimal("-4.50"))
+_PURCHASE_AT = "Jan 11, 2030, 4:00 AM PST"
 register("admin_process_claim.html", "transaction-awaiting-decision", _process_claim(
     claim_type="TRANSACTION", claim=_claim("SUBMITTED"), source_transaction=_TRANSACTION,
-    estimated_payout=Decimal("3.60")), path="/admin/insurance/claim/claim-a11y-1", actor="teacher")
+    estimated_payout=Decimal("3.60"), claim_dates=_claim_dates(purchase=_PURCHASE_AT)), path="/admin/insurance/claim/claim-a11y-1", actor="teacher")
 register("admin_process_claim.html", "transaction-filed-late", _process_claim(
     claim_type="TRANSACTION", claim=_claim("SUBMITTED"), source_transaction=_TRANSACTION,
     estimated_payout=Decimal("3.60"), filing_window_exceeded=True,
-    contract=_contract(filed_within_window=False)), path="/admin/insurance/claim/claim-a11y-1", actor="teacher")
+    contract=_contract(filed_within_window=False), claim_dates=_claim_dates(purchase=_PURCHASE_AT)), path="/admin/insurance/claim/claim-a11y-1", actor="teacher")
 register("admin_process_claim.html", "transaction-decided", _process_claim(
     claim_type="TRANSACTION",
-    claim=_claim("REJECTED", decided_at=_NOW - timedelta(days=1), decision_note="Receipt did not match.",
+    claim=_claim("REJECTED", decision_note="Receipt did not match.",
                  filing_window_override_reason="Teacher allowed a late filing."),
-    source_transaction=_TRANSACTION, estimated_payout=Decimal("3.60")), path="/admin/insurance/claim/claim-a11y-1", actor="teacher")
+    source_transaction=_TRANSACTION, estimated_payout=Decimal("3.60"),
+    claim_dates=_claim_dates(decided="Jan 14, 2030, 4:00 AM PST", purchase=_PURCHASE_AT)), path="/admin/insurance/claim/claim-a11y-1", actor="teacher")
 
 
 def _productivity():
@@ -176,14 +189,25 @@ def _productivity():
     )
 
 
-register("admin_process_claim.html", "productivity-awaiting-decision", _process_claim(
-    claim_type="PRODUCTIVITY", claim=_claim("SUBMITTED", additional_information="Was away at a meet."),
-    productivity=_productivity(), hourly_rate=Decimal("10.00"), estimated_payout=Decimal("28.00"),
-    contract=_contract(allowance_unit="date")), path="/admin/insurance/claim/claim-a11y-1", actor="teacher")
-register("admin_process_claim.html", "productivity-decided", _process_claim(
-    claim_type="PRODUCTIVITY", claim=_claim("APPROVED", decided_at=_NOW - timedelta(days=1)),
-    productivity=_productivity(), hourly_rate=Decimal("10.00"), estimated_payout=Decimal("28.00"),
-    contract=_contract(allowance_unit="date")), path="/admin/insurance/claim/claim-a11y-1", actor="teacher")
+def _claim_days(productivity):
+    labels = [("2030-01-08", "Tue, Jan 08, 2030", "Jan 08"), ("2030-01-09", "Wed, Jan 09, 2030", "Jan 09")]
+    return [SimpleNamespace(row=row, key=key, label=label, short_label=short)
+            for row, (key, label, short) in zip(productivity.dates, labels)]
+
+
+def _productivity_claim(status: str, *, decided=None, **claim_extra):
+    productivity = _productivity()
+    return _process_claim(
+        claim_type="PRODUCTIVITY", claim=_claim(status, **claim_extra),
+        productivity=productivity, hourly_rate=Decimal("10.00"), estimated_payout=Decimal("28.00"),
+        contract=_contract(allowance_unit="date"),
+        claim_dates=_claim_dates(decided=decided, days=_claim_days(productivity)))
+
+
+register("admin_process_claim.html", "productivity-awaiting-decision", _productivity_claim(
+    "SUBMITTED", additional_information="Was away at a meet."), path="/admin/insurance/claim/claim-a11y-1", actor="teacher")
+register("admin_process_claim.html", "productivity-decided", _productivity_claim(
+    "APPROVED", decided="Jan 14, 2030, 4:00 AM PST"), path="/admin/insurance/claim/claim-a11y-1", actor="teacher")
 
 
 # ---- admin_view_issue.html --------------------------------------------------
@@ -196,11 +220,12 @@ def _issue(status: str, **overrides) -> dict:
         "id": 42, "status": status, "student_display_name": "Sam Student", "class_label": CLASS_NAME,
         "category": {"name": "Store purchase"}, "issue_type": "transaction", "related_transaction_id": 7,
         "student_explanation": "I was charged twice for the same item.", "student_expected_outcome": "A refund.",
-        "submitted_at": _NOW - timedelta(days=3), "updated_at": _NOW - timedelta(days=1),
-        "created_at": _NOW - timedelta(days=3), "escalated_at": None, "escalation_reason": None,
-        "teacher_resolution": None, "teacher_reviewed_at": None, "teacher_notes": None,
-        "teacher_diagnostic_note": None, "sysadmin_notes": None, "sysadmin_resolved_at": None,
-        "closed_at": None, "closed_by_type": None,
+        "submitted_at_display": "Jan 12, 2030, 4:00 AM PST", "updated_at_display": "Jan 14, 2030, 4:00 AM PST",
+        "escalated_at_display": "—", "escalation_reason": None,
+        "teacher_resolution": None, "teacher_reviewed_at": None, "teacher_reviewed_at_display": "—",
+        "teacher_notes": None, "teacher_diagnostic_note": None, "sysadmin_notes": None,
+        "sysadmin_resolved_at": None, "sysadmin_resolved_at_display": "—",
+        "closed_at": None, "closed_at_display": "—", "closed_by_type": None,
         "context_snapshot": {
             "transaction": {"id": 7, "amount": -4.5, "description": "Cafeteria lunch", "account_type": "checking",
                             "posting_state": "posted"},
@@ -210,6 +235,10 @@ def _issue(status: str, **overrides) -> dict:
                 {"id": 6, "amount": 10.0, "description": "Payroll", "timestamp": "2030-01-10T09:00:00Z"},
             ],
         },
+        "recent_transactions": [
+            {"id": 7, "amount": -4.5, "description": "Cafeteria lunch", "date_display": "Jan 12, 2030"},
+            {"id": 6, "amount": 10.0, "description": "Payroll", "date_display": "Jan 10, 2030"},
+        ],
         "page_url": "/student/shop", "system_metadata": None, "eligible_for_reward": False,
         "share_class_name_with_sysadmin": False, "resolution_actions": [], "status_history": [],
         "_resolution_actions_count": 0,
@@ -223,18 +252,17 @@ def _view_issue(issue: dict, purchase_resolution=None):
         return {
             **admin_layout(current_page="issues"), "page_title": f"Issue #{issue['id']}", "issue": issue,
             "purchase_resolution": purchase_resolution, "issue_ref": "issue-ref-a11y-42",
-            "format_utc_iso": lambda dt: dt.isoformat().replace("+00:00", "Z") if dt else None,
         }
     return build
 
 
 _ACTION = {"action_type": "manual_credit", "action_description": "Credited $4.50", "performed_by_type": "teacher",
            "performed_by_public_id": "t-1", "related_transaction_id": 7, "amount_changed": 4.5,
-           "before_value": None, "after_value": None, "created_at": _NOW - timedelta(hours=5)}
+           "before_value": None, "after_value": None, "created_at_display": "Jan 15, 2030, 7:00 AM PST"}
 _HISTORY = [
-    {"previous_status": None, "new_status": "OPEN", "changed_at": _NOW - timedelta(days=3),
+    {"previous_status": None, "new_status": "OPEN", "changed_at_display": "Jan 12, 2030, 4:00 AM PST",
      "changed_by_type": "student", "changed_by_public_id": "s-1", "notes": None},
-    {"previous_status": "OPEN", "new_status": "CLOSED", "changed_at": _NOW - timedelta(hours=5),
+    {"previous_status": "OPEN", "new_status": "CLOSED", "changed_at_display": "Jan 15, 2030, 7:00 AM PST",
      "changed_by_type": "teacher", "changed_by_public_id": "t-1", "notes": "Refunded."},
 ]
 
@@ -244,15 +272,17 @@ register("admin_view_issue.html", "open-purchase-not-reversible", _view_issue(
     _issue("TEACHER_REVIEW"), PurchaseResolutionEligibility(False, "This transaction has already been reversed.")),
     path="/admin/issues/issue-ref-a11y-42", actor="teacher")
 register("admin_view_issue.html", "escalated-to-developer", _view_issue(_issue(
-    "ESCALATED_TO_DEV", escalated_at=_NOW - timedelta(days=1), escalation_reason="Needs developer investigation",
+    "ESCALATED_TO_DEV", escalated_at_display="Jan 14, 2030, 4:00 AM PST", escalation_reason="Needs developer investigation",
     teacher_diagnostic_note="Charge appears twice in the ledger.")), path="/admin/issues/issue-ref-a11y-42", actor="teacher")
 register("admin_view_issue.html", "developer-resolved", _view_issue(_issue(
-    "DEV_RESOLVED", escalated_at=_NOW - timedelta(days=2), escalation_reason="Needs developer investigation",
-    sysadmin_notes="Duplicate posting removed.", sysadmin_resolved_at=_NOW - timedelta(hours=8))),
+    "DEV_RESOLVED", escalated_at_display="Jan 13, 2030, 4:00 AM PST", escalation_reason="Needs developer investigation",
+    sysadmin_notes="Duplicate posting removed.", sysadmin_resolved_at=_NOW - timedelta(hours=8),
+    sysadmin_resolved_at_display="Jan 15, 2030, 4:00 AM PST")),
     path="/admin/issues/issue-ref-a11y-42", actor="teacher")
 register("admin_view_issue.html", "closed-with-history", _view_issue(_issue(
     "CLOSED", teacher_resolution="Refunded the duplicate charge.", teacher_notes="Verified with the receipt.",
-    teacher_reviewed_at=_NOW - timedelta(hours=6), closed_at=_NOW - timedelta(hours=5), closed_by_type="teacher",
+    teacher_reviewed_at=_NOW - timedelta(hours=6), teacher_reviewed_at_display="Jan 15, 2030, 6:00 AM PST",
+    closed_at=_NOW - timedelta(hours=5), closed_at_display="Jan 15, 2030, 7:00 AM PST", closed_by_type="teacher",
     resolution_actions=[_ACTION], _resolution_actions_count=1, status_history=_HISTORY)),
     path="/admin/issues/issue-ref-a11y-42", actor="teacher")
 
@@ -279,11 +309,15 @@ def _detail_context(*, populated: bool = True) -> dict:
         settlement_label="Paid", amount=6.0, eligibility_label="Eligible", credited_seconds=3600,
         evidence_message="Matches payroll record.", opening_event_id=101, closing_event_id=102,
         original_payroll_records=[SimpleNamespace(event_id=9, recorded_at=_NOW - timedelta(hours=1))],
+        opened_at_display="Jan 15, 2030, 1:00 AM PST", closed_at_display="Jan 15, 2030, 2:00 AM PST",
+        original_payroll_record_displays=[{"event_id": 9, "recorded_at_display": "Jan 15, 2030, 3:00 AM PST"}],
+        payroll_recorded_at_display="—",
         payroll_event_id=None, payroll_history_url=None, pricing_inputs=None, source_events=scans,
         correction_url="/admin/student/1/attendance-correction/101/102",
     )
     open_interval = SimpleNamespace(
-        opened_at=_NOW - timedelta(hours=1), duration_label="1h 0m", bounded_at_day_end=False, source_events=scans[:1],
+        opened_at=_NOW - timedelta(hours=1), opened_at_display="Jan 15, 2030, 3:00 AM PST", duration_label="1h 0m",
+        bounded_at_day_end=False, source_events=scans[:1],
     )
     base = {
         **admin_layout(current_page="students"),
@@ -291,7 +325,8 @@ def _detail_context(*, populated: bool = True) -> dict:
         "student": SimpleNamespace(id=1), "identity_view": SimpleNamespace(
             first_name="Sam", last_name="Student", full_name="Sam Student", notes="Sits near the window."),
         "student_has_completed_setup": True,
-        "reset_code": None, "reset_code_expires_at": None, "reset_code_is_active": False,
+        "reset_code": None, "reset_code_expires_display": "—", "reset_code_expires_iso": "",
+        "reset_code_is_active": False,
         "join_codes": {CLASS_NAME: "A11YTEST"},
         "scoped_checking_balance": 20.0, "scoped_savings_balance": 5.0, "scoped_total_earnings": 120.5,
         "hall_pass_balance": 3, "active_insurance": SimpleNamespace(
@@ -304,13 +339,17 @@ def _detail_context(*, populated: bool = True) -> dict:
         ],
         # The purchase keeps its Reverse control so the button stays under audit.
         "reversible_transaction_ids": frozenset({7}),
+        "transaction_time_displays": {7: "Jan 14, 2030, 4:00 AM PST", 6: "Jan 13, 2030, 4:00 AM PST"},
         "entitlements": [
-            SimpleNamespace(purchase_date=_NOW - timedelta(days=3), status="purchased", redemption_details=None,
+            SimpleNamespace(id="ent-a11y-1", purchase_date=_NOW - timedelta(days=3), status="purchased", redemption_details=None,
                             store_item=SimpleNamespace(name="Homework pass", item_type="delayed")),
-            SimpleNamespace(purchase_date=_NOW - timedelta(days=9), status="redeemed", redemption_details="Used in lab",
+            SimpleNamespace(id="ent-a11y-2", purchase_date=_NOW - timedelta(days=9), status="redeemed", redemption_details="Used in lab",
                             store_item=SimpleNamespace(name="Snack", item_type="immediate")),
         ],
-        "latest_attendance_event": SimpleNamespace(period="a", reason="Late arrival", status="active",
+        "entitlement_time_displays": {"ent-a11y-1": "Jan 12, 2030, 4:00 AM PST",
+                                      "ent-a11y-2": "Jan 6, 2030, 4:00 AM PST"},
+        "attendance_time_displays": {101: "Jan 15, 2030, 1:00 AM PST", 102: "Jan 15, 2030, 2:00 AM PST"},
+        "latest_attendance_event": SimpleNamespace(id=102, period="a", reason="Late arrival", status="active",
                                                    timestamp=_NOW - timedelta(hours=1)),
         "attendance_events": scans, "attendance_intervals": [interval], "attendance_open_intervals": [open_interval],
         "attendance_unpaired_events": scans[:1], "attendance_completed_count": 1,
@@ -318,9 +357,9 @@ def _detail_context(*, populated: bool = True) -> dict:
         "attendance_historical_evidence_limited": True, "attendance_estimate_incomplete": True,
         "payroll_event_history": [
             {"payroll_event_id": 9, "timestamp": _NOW - timedelta(days=2), "type": "payroll", "amount": 10.0,
-             "display_amount": "$10.00", "notes": "Weekly payroll"},
+             "display_amount": "$10.00", "notes": "Weekly payroll", "timestamp_display": "Jan 13, 2030, 4:00 AM PST"},
             {"payroll_event_id": 8, "timestamp": None, "type": None, "amount": None, "display_amount": "—",
-             "notes": None},
+             "notes": None, "timestamp_display": "—"},
         ],
         "rent_enabled": True,
         "rent_privileges": [SimpleNamespace(name="Window seat", description="Choose a seat by the window.",
@@ -340,7 +379,8 @@ def _detail_context(*, populated: bool = True) -> dict:
             payroll_event_history=[], active_insurance=None, rent_enabled=False, rent_privileges=[],
             rent_view=None, join_codes={}, scoped_total_earnings=None, hall_pass_balance=0,
             student_has_completed_setup=False,
-            reset_code="482916", reset_code_expires_at=_NOW + timedelta(minutes=10), reset_code_is_active=True,
+            reset_code="482916", reset_code_expires_display="4:10 AM PST",
+            reset_code_expires_iso="2030-01-15T12:10:00+00:00", reset_code_is_active=True,
         )
     return base
 

@@ -26,8 +26,9 @@ def event(pk,seconds,summary=None,kind='payroll'):
         correlation_id=str(uuid.uuid5(uuid.NAMESPACE_URL,key)) if topup else f'corr-{pk}',idempotency_key=key)
 
 def replay(monkeypatch,rows,pairs,events,settings=None):
-    import app.services.historical_payroll_reconstruction as prod
-    monkeypatch.setattr(prod,'_day_end_utc',lambda ctx,t:BASE+timedelta(hours=9))
+    # The fixture class has no row; a UTC class day ends at BASE+9h (00:00 UTC next day).
+    import pytz
+    monkeypatch.setattr('app.utils.canonical_temporal_resolver._get_class_timezone',lambda class_id:pytz.utc)
     settings=settings or (NS(class_id=CTX.class_id,policy_locator='setting',rate_per_minute='0.25',legacy_rate_per_minute='0.25',
         effective_at=BASE-timedelta(days=1),created_at=BASE-timedelta(days=1)),)
     return reconstruct(ctx=CTX,target_seat_id=20,rows=tuple(rows),intervals=tuple(pairs),events=tuple(events),setting_inputs=settings)

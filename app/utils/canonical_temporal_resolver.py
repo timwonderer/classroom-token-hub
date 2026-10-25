@@ -22,17 +22,14 @@ import pytz
 # ---------------------------------------------------------------------------
 
 def utc_now() -> datetime:
-    """Return current time in UTC as timezone-aware datetime."""
+    """The resolver's own wall clock (SPEC-TIME-001 §IX.1).
+
+    Internal: application code obtains "now" from the ``current_time``
+    primitive. Tests pin the clock by patching this function, or pass
+    ``reference_time_utc``.
+    """
     return datetime.now(timezone.utc)
 
-
-def ensure_utc(dt: datetime | None) -> datetime | None:
-    """Ensure datetime is in UTC. Naive datetimes are assumed UTC."""
-    if dt is None:
-        return None
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
 
 
 def _get_class_timezone(class_id: str) -> pytz.BaseTzInfo:
@@ -70,6 +67,7 @@ _VALID_PRIMITIVES = frozenset({
     "current_time",
     "earlier_than",
     "later_than",
+    "same_instant",
     "between_boundaries",
     "time_since",
     "time_until",
@@ -80,6 +78,8 @@ _VALID_PRIMITIVES = frozenset({
     "shift_timestamp",
     "anchored_recurrence_boundary",
     "minimum_period_duration",
+    "shift_calendar_days",
+    "localize_timestamp",
 })
 
 
@@ -107,6 +107,10 @@ class CanonicalTemporalEvaluation:
     @property
     def is_later(self) -> bool:
         return self.result.get("is_later")
+
+    @property
+    def is_same(self) -> bool:
+        return self.result.get("is_same")
 
     @property
     def is_between(self) -> bool:
@@ -163,6 +167,14 @@ class CanonicalTemporalEvaluation:
     @property
     def minimum_calendar_days(self) -> int:
         return self.result.get("minimum_calendar_days")
+
+    @property
+    def shifted_date(self) -> date:
+        return self.result.get("shifted_date")
+
+    @property
+    def local_timestamp(self) -> datetime:
+        return self.result.get("local_timestamp")
 
 
 # ---------------------------------------------------------------------------
@@ -261,6 +273,13 @@ def _later_than(reference_utc, tz, **kw):
     c_local = _to_authority(candidate, tz)
     r_local = _to_authority(reference, tz)
     return {"is_later": c_local > r_local}
+
+
+def _same_instant(reference_utc, tz, **kw):
+    """SPEC-TIME-001 §IX.16: whether two timestamps are the same instant."""
+    candidate = _ensure_aware_utc(kw.get("candidate"), "candidate")
+    reference = _ensure_aware_utc(kw.get("reference"), "reference")
+    return {"is_same": _to_authority(candidate, tz) == _to_authority(reference, tz)}
 
 
 def _between_boundaries(reference_utc, tz, **kw):
@@ -368,10 +387,10 @@ def _elapsed_duration(reference_utc, tz, **kw):
         if normalized[i][0] < normalized[i - 1][1]:
             raise TemporalResolutionError("Overlapping intervals detected")
 
-    total = sum(
-        int((e - s).total_seconds()) for s, e in normalized
-    )
-    return {"elapsed_seconds": total}
+    # Sum the exact intervals first and truncate once (SPEC-TIME-001 1.3):
+    # truncating each interval would drop up to a second per interval.
+    total = sum(((e - s) for s, e in normalized), timedelta())
+    return {"elapsed_seconds": total // timedelta(seconds=1)}
 
 
 def _shift_timestamp(reference_utc, tz, **kw):
@@ -447,7 +466,95 @@ def _minimum_period_duration(reference_utc, tz, **kw):
     return {"minimum_calendar_days": _MINIMUM_PERIOD_DAYS[cadence]}
 
 
+def _localize_wall_time(tz, target_naive: datetime) -> datetime:
+    """Localize a wall-clock time, deciding DST gaps and folds explicitly.
+
+    * **Ambiguous** (fall back — the clock reads 01:30 twice): take the
+      chronologically earlier instant, so an interval never silently lengthens.
+    * **Nonexistent** (spring forward — 02:30 never happens): take the smallest
+      forward shift onto a time that does exist, so 02:30 becomes 03:30.
+
+    Both are chosen by comparing candidate instants rather than by an ``is_dst``
+    flag: in Europe/Dublin the tz database models winter as *negative* DST, so
+    ``is_dst=True`` on an ambiguous Dublin time returns the **later** instant.
+    """
+    try:
+        return tz.localize(target_naive, is_dst=None)
+    except pytz.exceptions.AmbiguousTimeError:
+        return min(
+            (tz.localize(target_naive, is_dst=flag) for flag in (True, False)),
+            key=lambda candidate: candidate.astimezone(timezone.utc),
+        )
+    except pytz.exceptions.NonExistentTimeError:
+        candidates = [
+            tz.normalize(tz.localize(target_naive, is_dst=flag))
+            for flag in (False, True)
+        ]
+        return min(
+            candidates,
+            key=lambda candidate: (
+                candidate.replace(tzinfo=None) <= target_naive,
+                abs(candidate.replace(tzinfo=None) - target_naive),
+            ),
+        )
+
+
+def _shift_calendar_days(reference_utc, tz, **kw):
+    """SPEC-TIME-001 §IX.14: move a calendar date, or a timestamp's local date,
+    by whole calendar days in the resolved authority — never by N × 24 hours."""
+    days = kw.get("days")
+    if not isinstance(days, int) or isinstance(days, bool):
+        raise TemporalResolutionError("days must be an integer")
+    has_date = kw.get("date") is not None
+    has_timestamp = kw.get("timestamp") is not None
+    if has_date == has_timestamp:
+        raise TemporalResolutionError("shift_calendar_days takes exactly one of date or timestamp")
+    if has_timestamp and kw.get("time") is not None:
+        raise TemporalResolutionError("time applies to a date source only")
+
+    if has_date:
+        source = kw["date"]
+        if not isinstance(source, date) or isinstance(source, datetime):
+            raise TemporalResolutionError("date must be a date, not datetime")
+        shifted_date = source + timedelta(days=days)
+        start_local = tz.localize(datetime.combine(shifted_date, time.min))
+        result = {
+            "shifted_date": shifted_date,
+            "boundary_start": start_local,
+            "boundary_start_utc": start_local.astimezone(timezone.utc),
+        }
+        wall_time = kw.get("time")
+        if wall_time is not None:
+            if not isinstance(wall_time, time) or wall_time.tzinfo is not None:
+                raise TemporalResolutionError("time must be a naive local time of day")
+            at = _localize_wall_time(tz, datetime.combine(shifted_date, wall_time))
+            result.update(shifted_timestamp=at, shifted_timestamp_utc=at.astimezone(timezone.utc))
+        return result
+
+    local = _to_authority(_ensure_aware_utc(kw["timestamp"], "timestamp"), tz)
+    shifted_date = local.date() + timedelta(days=days)
+    # The local wall-clock time is kept, so 07:00 stays 07:00 across a DST change.
+    shifted = _localize_wall_time(tz, datetime.combine(shifted_date, local.time().replace(tzinfo=None)))
+    return {
+        "shifted_date": shifted_date,
+        "shifted_timestamp": shifted,
+        "shifted_timestamp_utc": shifted.astimezone(timezone.utc),
+    }
+
+
+def _localize_timestamp(reference_utc, tz, **kw):
+    """SPEC-TIME-001 §IX.15: express a supplied timestamp in the resolved authority."""
+    local = _to_authority(_ensure_aware_utc(kw.get("timestamp"), "timestamp"), tz)
+    return {
+        "local_timestamp": local,
+        "evaluation_date": local.date(),
+    }
+
+
 _PRIMITIVE_DISPATCH = {
+    "shift_calendar_days": _shift_calendar_days,
+    "localize_timestamp": _localize_timestamp,
+    "same_instant": _same_instant,
     "anchored_recurrence_boundary": _anchored_recurrence_boundary,
     "minimum_period_duration": _minimum_period_duration,
     "current_time": _current_time,
@@ -511,55 +618,3 @@ def canonical_temporal_resolver(
         tz=tz,
         result=result,
     )
-
-
-def advance_local_calendar_days(occurrence_utc, days: int, timezone_name: str) -> datetime:
-    """Move ``occurrence_utc`` forward ``days`` calendar days in ``timezone_name``.
-
-    Class-calendar arithmetic, so it lives with the resolver (the temporal
-    guardrail bans ``timedelta`` arithmetic in services, FEATs and routes). The
-    payroll schedule (DOM-PROD-001 §XV.5) and the automatic job use it.
-
-    The local wall-clock time is preserved, so an occurrence at 07:00 local stays
-    at 07:00 local across a DST change. Adding the elapsed UTC duration instead
-    lands on the wrong local date on a 23- or 25-hour day.
-
-    Ambiguous and nonexistent local times are decided explicitly:
-
-    * **Ambiguous** (fall back — the clock reads 01:30 twice): take the
-      chronologically earlier instant, so the interval never silently lengthens.
-    * **Nonexistent** (spring forward — 02:30 never happens): take the smallest
-      forward shift onto a time that does exist, so 02:30 becomes 03:30.
-
-    Both are chosen by comparing candidate instants rather than by an ``is_dst``
-    flag: in Europe/Dublin the tz database models winter as *negative* DST, so
-    ``is_dst=True`` on an ambiguous Dublin time returns the **later** instant.
-    """
-    tz = pytz.timezone(timezone_name)
-    local_occurrence = ensure_utc(occurrence_utc).astimezone(tz)
-    target_naive = datetime.combine(
-        local_occurrence.date() + timedelta(days=days),
-        local_occurrence.time(),
-    )
-
-    try:
-        target_local = tz.localize(target_naive, is_dst=None)
-    except pytz.exceptions.AmbiguousTimeError:
-        target_local = min(
-            (tz.localize(target_naive, is_dst=flag) for flag in (True, False)),
-            key=lambda candidate: candidate.astimezone(timezone.utc),
-        )
-    except pytz.exceptions.NonExistentTimeError:
-        candidates = [
-            tz.normalize(tz.localize(target_naive, is_dst=flag))
-            for flag in (False, True)
-        ]
-        target_local = min(
-            candidates,
-            key=lambda candidate: (
-                candidate.replace(tzinfo=None) <= target_naive,
-                abs(candidate.replace(tzinfo=None) - target_naive),
-            ),
-        )
-
-    return target_local.astimezone(timezone.utc)

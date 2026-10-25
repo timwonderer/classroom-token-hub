@@ -285,10 +285,6 @@ def _replay_result(ctx, row, receipt, digest, table):
         'disposition':receipt['original_settlement_disposition']}
 
 
-def _acceptance_time(ctx):
-    return canonical_temporal_resolver(CLASS_LEVEL_EVALUATION, canonical_execution_context=ctx, primitive='current_time').canonical_now_utc
-
-
 def invalidate_attendance_interval(*, ctx, target_seat_id, opening_event_id, closing_event_id,
                                    reason_code, idempotency_key, expected_preview_identity):
     _authorize(ctx, target_seat_id)
@@ -336,7 +332,7 @@ def invalidate_attendance_interval(*, ctx, target_seat_id, opening_event_id, clo
         receipt = {'expected_preview_identity':expected_preview_identity, 'fingerprint_version':1,
             'canonical_intent_digest':digest, 'original_settlement_disposition':preview.disposition,
             'opaque_outcome_locators':locators}
-        accepted_at = _acceptance_time(ctx)
+        accepted_at = canonical_temporal_resolver(CLASS_LEVEL_EVALUATION, canonical_execution_context=ctx, primitive='current_time').canonical_now_utc
         decision = record_interval_invalidation(ctx=ctx, target_seat_id=target_seat_id,
             opening_event_id=opening_event_id, closing_event_id=closing_event_id, reason_code=reason_code,
             idempotency_key=idempotency_key, recorded_at=accepted_at, receipt=receipt,
@@ -426,7 +422,7 @@ def recover_payroll_payment(*, ctx, payroll_event_id, idempotency_key, expected_
                 'ledger_effects':list(result['effect_locators']), 'ledger_origin':result['origin_locator'],
                 'correction_intent':intent}}
         event = record_payroll_business_recovery(ctx=ctx, original=original, recovery_kind=preview.plan.recovery_kind,
-            idempotency_key=idempotency_key, recorded_at=_acceptance_time(ctx), receipt=receipt,
+            idempotency_key=idempotency_key, recorded_at=canonical_temporal_resolver(CLASS_LEVEL_EVALUATION, canonical_execution_context=ctx, primitive='current_time').canonical_now_utc, receipt=receipt,
             correction_intent_locator=intent, ledger_result_locator=result['principal_locator'])
         audit_protected('payroll_event', event, 'INSERT', PROTECTED_FIELDS_BY_TABLE['payroll_event'])
         return {'status':'accepted', 'replayed':False, 'record_id':event.id,

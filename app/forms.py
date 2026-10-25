@@ -6,7 +6,6 @@ from wtforms.validators import Optional
 
 from wtforms import SubmitField
 from wtforms.csrf.core import CSRFTokenField
-from datetime import date
 from app.services.store.form_contract import resolve_store_form_contract
 
 
@@ -81,11 +80,11 @@ class StoreItemForm(FlaskForm):
                 valid = False
 
         # `local_today` is the class's current local date, set by the route from
-        # CLE. Falling back to `date.today()` reads the *server's* clock: on a
-        # UTC host, a teacher in the Americas creating an item after late
-        # afternoon was told their own current date was "before today", because
-        # UTC had already rolled over.
-        today = getattr(self, 'local_today', None) or date.today()
+        # CLE. There is no fallback: the form has no class context, and the
+        # server's clock is not the class's calendar (SPEC-TIME-001 §IV).
+        today = getattr(self, 'local_today', None)
+        if today is None:
+            raise RuntimeError("StoreItemForm.local_today must be set from the class-local (CLE) date before validate().")
         if self.activation_date.data and self.activation_date.data < today:
             self.activation_date.errors = list(self.activation_date.errors) + ['Start date cannot be before today.']
             valid = False

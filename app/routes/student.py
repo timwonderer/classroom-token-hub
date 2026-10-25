@@ -12,7 +12,7 @@ import re
 import uuid
 from collections import defaultdict
 from calendar import monthrange
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urlparse
 from types import SimpleNamespace
@@ -22,7 +22,6 @@ from sqlalchemy import or_, func, select, and_
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from app.hash_utils import hash_password, verify_password
 import pytz
-from dateutil.relativedelta import relativedelta
 
 from app.extensions import db, limiter, student_login_identity_limit_key
 from app.services import student_setup
@@ -52,7 +51,7 @@ from app.forms import (
 )
 
 # Import utility functions
-from app.utils.helpers import is_safe_url, format_utc_iso, render_template_with_fallback as render_template
+from app.utils.helpers import is_safe_url, render_template_with_fallback as render_template
 from app.utils.constants import THEME_PROMPTS
 from app.utils.turnstile import verify_turnstile_token
 from app.utils.ip_handler import get_real_ip
@@ -103,7 +102,15 @@ from app.services.store.builders import (
     build_store_item_card_view,
     build_entitlement_card_view,
     build_collective_progress_view,
+    build_claim_date_max,
+    build_coverage_card_dates_display,
+    build_insurance_claim_rows,
+    build_policy_enrollment_dates_display,
 )
+from app.services.identity.builders import build_recovery_code_expiry_display
+from app.services.ledger.builders import build_transaction_timestamp_displays
+from app.services.payroll.builders import build_student_payroll_time_displays
+from app.services.support.builders import build_announcement_expiry_displays, build_issue_submitted_displays
 from app.services.recovery_service import (
     get_pending_recovery_code_for_seat,
     get_recovery_code_for_seat,
@@ -120,13 +127,10 @@ from app.feats.insurance_claim_feat import (
 )
 from app.services.payroll.settings import current_pay_rate_per_second
 from app.utils.join_code import get_display_join_code
-from app.utils.canonical_temporal_resolver import utc_now, ensure_utc
 from app.utils.canonical_temporal_resolver import (
     CLASS_LEVEL_EVALUATION,
     SYSTEM_LEVEL_EVALUATION,
     canonical_temporal_resolver,
-    ensure_utc,
-    utc_now,
 )
 from app.utils.seat_scope import transaction_scope_filter, seat_scoped_filter
 # TODO (Phase 4): insurance_eligibility deleted; use canonical tools + FEAT-STOR-003
@@ -531,7 +535,17 @@ def _stage_username_setup(seat, user):
     owner, binding = student_setup.scope(seat, user, recovery_authorization=session.get('recovery_setup_authorization'))
     ttl = student_setup.TTL_SECONDS
     if user is not None:
-        ttl = min(ttl, int((ensure_utc(user.recovery_setup_expires_at) - utc_now()).total_seconds()))
+        now_utc = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
+        expires_at = user.recovery_setup_expires_at
+        if canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=expires_at, reference=now_utc,
+        ).is_later:
+            ttl = min(ttl, canonical_temporal_resolver(
+                SYSTEM_LEVEL_EVALUATION, primitive="time_until",
+                reference_time_utc=now_utc, target=expires_at,
+            ).remaining_seconds)
+        else:
+            ttl = 0
     if ttl <= 0:
         raise student_setup.SetupExpired('Setup expired.')
     session['student_setup_token'] = student_setup.begin(owner, binding, ttl)
@@ -1268,9 +1282,18 @@ def dashboard():
 
     # --- Calculate remaining session time for frontend timer ---
     sle_now = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
-    login_time = datetime.fromisoformat(session['login_time'])
-    expiry_time = login_time + timedelta(minutes=SESSION_TIMEOUT_MINUTES)
-    session_remaining_seconds = max(0, int((expiry_time - sle_now).total_seconds()))
+    login_time = datetime.fromisoformat(session['login_time'])  # written aware (isoformat of a UTC instant)
+    expiry_time = canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="shift_timestamp",
+        timestamp=login_time, elapsed_seconds=SESSION_TIMEOUT_MINUTES * 60,
+    ).shifted_timestamp_utc
+    session_remaining_seconds = 0
+    if canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="later_than", candidate=expiry_time, reference=sle_now,
+    ).is_later:
+        session_remaining_seconds = canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="time_until", reference_time_utc=sle_now, target=expiry_time,
+        ).remaining_seconds
 
     # --- Get feature settings for this student ---
     feature_settings = get_feature_settings_for_student()
@@ -1381,22 +1404,15 @@ def dashboard():
 
     # Get active announcements for this student
     from app.models import Announcement
-    from app.services import obligations_service
 
     announcements = Announcement.query.filter(
         Announcement.is_active.is_(True),
         or_(
             Announcement.expires_at.is_(None),
-            Announcement.expires_at > utc_now()
+            Announcement.expires_at > now_utc
         ),
         Announcement.class_id == scope.class_id,
     ).order_by(Announcement.created_at.desc()).all()
-    for announcement in announcements:
-        # The last class day it shows (it is stored as that day's exclusive end).
-        announcement.expires_on = (
-            obligations_service.last_class_day_before(scope.class_id, announcement.expires_at)
-            if announcement.expires_at else None
-        )
 
     return render_template(
         'student_dashboard.html',
@@ -1408,6 +1424,7 @@ def dashboard():
         savings_transactions=savings_transactions,
         entitlements=entitlements,
         recent_transactions=transactions[:5],  # Most recent 5 transactions
+        timestamp_displays=build_transaction_timestamp_displays(scope, transactions[:5]),
         now=local_now,
         forecast_interest=float(forecast_interest),
         posted_savings_balance=float(posted_savings_balance),
@@ -1424,6 +1441,7 @@ def dashboard():
         savings_balance=float(savings_balance),
         # user_id is resolved from class context.
         pending_recovery_code=pending_recovery_code,
+        pending_recovery_expires_display=build_recovery_code_expiry_display(scope, pending_recovery_code),
         # Weekly/monthly analytics
         unique_days_tapped=unique_days_tapped,
         total_minutes_this_week=int(total_minutes_this_week),
@@ -1432,6 +1450,7 @@ def dashboard():
         spending_this_week=float(round(spending_this_week, 2)),
         spending_this_month=float(round(spending_this_month, 2)),
         announcements=announcements,
+        announcement_expiry_displays=build_announcement_expiry_displays(scope.class_id, announcements),
         current_class_id=class_id,
         scoped_total_earnings=_get_total_earnings_for_seat(student.id, class_id=class_id),
         hall_pass_balance=get_hall_pass_balance(student.id, class_id),
@@ -1526,6 +1545,7 @@ def payroll():
         ],
         scoped_total_earnings=_get_total_earnings_for_seat(student.id, class_id=effective_class_id),
         last_payroll_event=last_payroll_event,
+        time_displays=build_student_payroll_time_displays(context, attendance_events[:20], last_payroll_event),
         days_since_last_payroll=days_since_last_payroll,
         feature_settings=get_feature_settings_for_student(),
     )
@@ -1733,6 +1753,9 @@ def transfer():
                          transactions=transactions,
                          checking_transactions=checking_transactions,
                          savings_transactions=savings_transactions,
+                         timestamp_displays=build_transaction_timestamp_displays(
+                             context, checking_transactions[:50] + savings_transactions[:50]
+                         ),
                          checking_balance=checking_balance,
                          savings_balance=savings_balance,
                          posted_savings_balance=posted_savings_balance,
@@ -1768,6 +1791,9 @@ def insurance_marketplace():
 
     class_id = context.class_id
     seat_id = context.seat_id
+    now_utc = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION, canonical_execution_context=context, primitive="current_time",
+    ).canonical_now_utc
 
     # Available coverage: IN_USE immutable insurance_policies for this class.
     definitions = insurance_defs.list_insurance_definitions(
@@ -1833,9 +1859,16 @@ def insurance_marketplace():
             continue
         claims_open_on, renews_on = _coverage_card_dates(context, grant, d)
         last_covered_day = _last_covered_day(class_id, grant.entitlement_id)
+        change = _coverage_change(class_id, grant, d, renews_on, last_covered_day)
+        cancel_covers_through = (
+            None if last_covered_day else _cancel_covers_through(class_id, grant.entitlement_id)
+        )
         starts_on = (
             insurance_coverage.class_local_date(class_id, grant.timestamp)
-            if ensure_utc(grant.timestamp) > utc_now() else None
+            if canonical_temporal_resolver(
+                CLASS_LEVEL_EVALUATION, canonical_execution_context=context,
+                primitive="later_than", candidate=grant.timestamp, reference=now_utc,
+            ).is_later else None
         )
         owned_coverage.append(
             SimpleNamespace(
@@ -1865,30 +1898,23 @@ def insurance_marketplace():
                 # A continuation granted ahead of its boundary: the day it begins.
                 starts_on=starts_on,
                 # What happens at the boundary (FEAT-STOR-007 §V.A), else None.
-                change=_coverage_change(class_id, grant, d, renews_on, last_covered_day),
+                change=change,
                 # If cancelled now: the last day it would still cover. Same
                 # derivation the cancel command uses (DOM-OBL-001 §V.7).
-                cancel_covers_through=(
-                    None if last_covered_day else _cancel_covers_through(class_id, grant.entitlement_id)
+                cancel_covers_through=cancel_covers_through,
+                **build_coverage_card_dates_display(
+                    context,
+                    purchased_at=grant.timestamp,
+                    starts_on=starts_on,
+                    claims_open_on=claims_open_on,
+                    renews_on=renews_on,
+                    last_covered_day=last_covered_day,
+                    change=change,
+                    cancel_covers_through=cancel_covers_through,
                 ),
             )
         )
 
-    def _claim_display_row(claim):
-        incident_dt = claim.incident_at or claim.submitted_at
-        return SimpleNamespace(
-            id=claim.id,
-            claim_id=claim.claim_id,
-            policy=getattr(claim, "policy", SimpleNamespace(title="Insurance")),
-            status=getattr(claim.status, "value", claim.status),
-            approved_amount=getattr(claim, "approved_amount", None),
-            claim_amount=getattr(claim, "claim_amount", None),
-            rejection_reason=getattr(claim, "rejection_reason", None),
-            description=getattr(claim, "description", ""),
-            teacher_notes=getattr(claim, "teacher_notes", None),
-            incident_date=incident_dt,
-            filed_date=claim.submitted_at,
-        )
     return render_template(
         'student_insurance_marketplace.html',
         student=(
@@ -1901,8 +1927,10 @@ def insurance_marketplace():
         owned_coverage=owned_coverage,
         insurance_for_sale=insurance_for_sale,
         marketing_badges=MARKETING_BADGES,
-        my_claims=[_claim_display_row(claim) for claim in _list_insurance_claims(class_id=class_id, target_seat_id=seat_id)],
-        now=utc_now(),
+        my_claims=build_insurance_claim_rows(
+            context, _list_insurance_claims(class_id=class_id, target_seat_id=seat_id)
+        ),
+        now=now_utc,
     )
 
 
@@ -2058,7 +2086,7 @@ def _coverage_card_dates(context, grant, definition):
     wait = waiting_period_days(definition, grant)  # none for a continuation
     if wait > 0:
         open_date, open_utc = coverage_effective_start_utc(
-            context, ensure_utc(grant.timestamp), wait
+            context, grant.timestamp, wait
         )
         ctx = SimpleNamespace(class_id=context.class_id)
         now = canonical_temporal_resolver(
@@ -2273,10 +2301,10 @@ def file_claim(policy_uuid):
     form = InsuranceClaimForm()
     if is_transaction_type:
         eligible = _eligible_claim_transactions(seat_id, class_id)
-        form.transaction_id.choices = [("", "Select a transaction…")] + [
-            (str(t.id), f"{t.timestamp:%b %d} · ${abs(t.amount):.2f} · {t.description or t.type}")
-            for t in eligible
-        ]
+        from app.services.store.builders import build_claim_transaction_choices
+        form.transaction_id.choices = [("", "Select a transaction…")] + build_claim_transaction_choices(
+            g.canonical_context, eligible,
+        )
     else:
         form.transaction_id.choices = []  # SelectField requires choices even when unused
 
@@ -2328,16 +2356,10 @@ def file_claim(policy_uuid):
         payout_multiple=policy.payout_multiple,
         claim_window_days=policy.claim_window_days,
     )
-    prior_claims = [
-        SimpleNamespace(
-            status=getattr(claim.status, "value", claim.status),
-            filed_date=claim.submitted_at,
-            approved_amount=getattr(claim, "approved_amount", None),
-        )
-        for claim in _list_insurance_claims(
-            class_id=class_id, target_seat_id=seat_id, entitlement_id=entitlement_id
-        )
-    ]
+    prior_claims = build_insurance_claim_rows(
+        context,
+        _list_insurance_claims(class_id=class_id, target_seat_id=seat_id, entitlement_id=entitlement_id),
+    )
     return render_template(
         'student_file_claim.html',
         student=student_name,
@@ -2347,13 +2369,7 @@ def file_claim(policy_uuid):
         is_productivity_type=is_productivity_type,
         claimable=claimable,
         prior_claims=prior_claims,
-        # The class's today, the latest day a claim may name: the UTC date is
-        # yesterday there all morning in any class east of Greenwich.
-        class_today=canonical_temporal_resolver(
-            CLASS_LEVEL_EVALUATION,
-            canonical_execution_context=context,
-            primitive="current_evaluation_day",
-        ).evaluation_date,
+        claim_date_max=build_claim_date_max(context),
     )
 
 
@@ -2383,21 +2399,6 @@ def view_policy(policy_uuid):
     entitlement = active_entitlements[0] if active_entitlements else None
     if entitlement is None:
         flash("You do not have an active insurance entitlement for this policy.", "warning")
-    def _claim_display_row(claim):
-        incident_dt = claim.incident_at or claim.submitted_at
-        return SimpleNamespace(
-            id=claim.id,
-            claim_id=claim.claim_id,
-            policy=getattr(claim, "policy", SimpleNamespace(title="Insurance")),
-            status=getattr(claim.status, "value", claim.status),
-            approved_amount=getattr(claim, "approved_amount", None),
-            claim_amount=getattr(claim, "claim_amount", None),
-            rejection_reason=getattr(claim, "rejection_reason", None),
-            description=getattr(claim, "description", ""),
-            teacher_notes=getattr(claim, "teacher_notes", None),
-            incident_date=incident_dt,
-            filed_date=claim.submitted_at,
-        )
     placeholder_policy = SimpleNamespace(
         id=policy.policy_uuid,
         title=policy.title or "Insurance policy",
@@ -2432,7 +2433,7 @@ def view_policy(policy_uuid):
             # the coverage boundary (FEAT-STOR-007 terminology).
             from app.services import obligations_service as _obl
             covered_through = _obl.last_class_day_before(context.class_id, next_payment_due)
-        purchase_date = ensure_utc(entitlement.timestamp)
+        purchase_date = entitlement.timestamp
         _, coverage_start_date = coverage_effective_start_utc(
             context,
             purchase_date,
@@ -2449,6 +2450,12 @@ def view_policy(policy_uuid):
         status="active" if entitlement is not None else "inactive",
         next_payment_due=next_payment_due,
         covered_through=covered_through,
+        **build_policy_enrollment_dates_display(
+            context,
+            purchase_date=purchase_date,
+            coverage_start_date=coverage_start_date,
+            covered_through=covered_through,
+        ),
         # None when the product has no filing deadline (productivity, non-monetary).
         contract_claim_time_limit_days=(
             int(policy.claim_window_days) if policy.claim_window_days is not None else None
@@ -2472,15 +2479,14 @@ def view_policy(policy_uuid):
         'student_view_policy.html',
         student=student_name,
         enrollment=enrollment,
-        claims=[
-            _claim_display_row(claim)
-            for claim in _list_insurance_claims(
+        claims=build_insurance_claim_rows(
+            context,
+            _list_insurance_claims(
                 class_id=context.class_id,
                 target_seat_id=context.seat_id,
                 entitlement_id=getattr(entitlement, "entitlement_id", None),
-            )
-        ],
-        now=utc_now(),
+            ),
+        ),
     )
 
 
@@ -2508,8 +2514,9 @@ def shop():
     if not class_id:
         class_id = context.class_id
 
-    now = utc_now()
-    now_db = ensure_utc(now)
+    now_db = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION, canonical_execution_context=context, primitive="current_time",
+    ).canonical_now_utc
     # Only IN_USE versions are sellable, and the partial unique index
     # guarantees at most one per lineage — so this cannot show a student two
     # prices for the same product. A grant-only product is not purchasable
@@ -2693,32 +2700,6 @@ def shop():
 # -------------------- RENT --------------------
 
 
-def _get_rent_period_delta(settings):
-    """Return a timedelta/relativedelta representing one rent period."""
-    if settings.frequency_type == 'daily':
-        return timedelta(days=1)
-    if settings.frequency_type == 'weekly':
-        return timedelta(weeks=1)
-    if settings.frequency_type == 'monthly':
-        return relativedelta(months=1)
-    if settings.frequency_type == 'custom':
-        unit = getattr(settings, 'custom_frequency_unit', None)
-        value = getattr(settings, 'custom_frequency_value', None) or 1
-        if unit == 'days':
-            return timedelta(days=value)
-        if unit == 'weeks':
-            return timedelta(weeks=value)
-        if unit == 'months':
-            return relativedelta(months=value)
-    # Fallback to monthly behavior
-    return relativedelta(months=1)
-
-
-def _add_rent_period(dt, delta):
-    """Add a timedelta or relativedelta to dt."""
-    return dt + delta
-
-
 @student_bp.route('/rent')
 @login_required
 def rent():
@@ -2766,6 +2747,7 @@ def rent():
     from app.services.obligation_view_model import (
         build_empty_student_obligation_view,
         build_student_obligation_view,
+        build_student_rent_page_view,
     )
 
     view = build_student_obligation_view(
@@ -2779,18 +2761,16 @@ def rent():
         # the class's rent terms and the first due date still ahead, not zeros.
         upcoming_due = None
         if settings is not None and settings.first_rent_due_date is not None:
-            from app.utils.canonical_temporal_resolver import (
-                CLASS_LEVEL_EVALUATION as _CLE,
-                canonical_temporal_resolver as _resolve,
-            )
-
-            first_due = ensure_utc(settings.first_rent_due_date)
-            if _resolve(
-                _CLE,
-                canonical_execution_context=SimpleNamespace(class_id=class_id),
+            rent_ctx = SimpleNamespace(class_id=class_id)
+            first_due = settings.first_rent_due_date
+            if canonical_temporal_resolver(
+                CLASS_LEVEL_EVALUATION,
+                canonical_execution_context=rent_ctx,
                 primitive="later_than",
                 candidate=first_due,
-                reference=utc_now(),
+                reference=canonical_temporal_resolver(
+                    CLASS_LEVEL_EVALUATION, canonical_execution_context=rent_ctx, primitive="current_time",
+                ).canonical_now_utc,
             ).is_later:
                 upcoming_due = first_due
         view = build_empty_student_obligation_view(
@@ -2805,11 +2785,6 @@ def rent():
     checking_balance, savings_balance = get_available_balances(seat_id, class_id)
 
     # Get temporal context for display
-    from app.utils.canonical_temporal_resolver import (
-        canonical_temporal_resolver,
-        CLASS_LEVEL_EVALUATION,
-    )
-
     class _TemporalContext:
         def __init__(self, class_id: str):
             self.class_id = class_id
@@ -2836,7 +2811,7 @@ def rent():
     # values last).
     return render_template(
         'student_rent.html',
-        view=view,
+        view=build_student_rent_page_view(view),
         checking_balance=checking_balance,
         savings_balance=savings_balance,
         payment_nonce=payment_nonce,
@@ -3082,7 +3057,10 @@ def _complete_student_login(form):
 
     from app.auth import SESSION_TIMEOUT_MINUTES
     user.current_session_started_at = now
-    user.current_session_expires_at = now + timedelta(minutes=SESSION_TIMEOUT_MINUTES)
+    user.current_session_expires_at = canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="shift_timestamp",
+        timestamp=now, elapsed_seconds=SESSION_TIMEOUT_MINUTES * 60,
+    ).shifted_timestamp_utc
 
     # Mirror the authoritative expiry onto the cookie so the browser evicts
     # it at the same instant login_required stops honoring it. Without this
@@ -3330,8 +3308,8 @@ def help_support():
                          current_page='help',
                          page_title='Help & Support',
                          my_issues=my_issues,
-                         help_content=HELP_ARTICLES['student'],
-                         format_utc_iso=format_utc_iso)
+                         submitted_displays=build_issue_submitted_displays(class_context, my_issues),
+                         help_content=HELP_ARTICLES['student'])
 
 
 @student_bp.route('/help-support/submit-issue', methods=['GET', 'POST'])
@@ -3451,6 +3429,9 @@ def report_transaction_issue(transaction_id):
                          form=form,
                          issue_type='transaction',
                          transaction=transaction,
+                         transaction_timestamp_display=build_transaction_timestamp_displays(
+                             class_context, [transaction]
+                         )[transaction.id],
                          show_recent_error_option=show_recent_error_option)
 
 
@@ -3537,13 +3518,16 @@ def verify_recovery(code_id):
         flash("Invalid recovery request.", "error")
         return redirect(url_for('student.dashboard'))
 
-    # Check if expired
-    # Handle timezone naive/aware comparison for SQLite/Test
-    expires_at = ensure_utc(recovery_code.recovery_request.expires_at)
-
-    if expires_at < utc_now():
+    # Check if expired: a recovery deadline is platform time (SLE).
+    if canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION,
+        primitive="earlier_than",
+        candidate=recovery_code.recovery_request.expires_at,
+        reference=canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc,
+    ).is_earlier:
         flash("This recovery request has expired.", "error")
         return redirect(url_for('student.dashboard'))
+    recovery_expires_display = build_recovery_code_expiry_display(context, recovery_code)
 
     if request.method == 'POST':
         passphrase = request.form.get('passphrase', '').strip()
@@ -3552,6 +3536,7 @@ def verify_recovery(code_id):
             flash("Please enter your passphrase.", "error")
             return render_template('student_verify_recovery.html',
                                  recovery_code=recovery_code,
+                                 recovery_expires_display=recovery_expires_display,
                                  student=student)
 
         # Verify passphrase
@@ -3561,6 +3546,7 @@ def verify_recovery(code_id):
             flash("Incorrect passphrase. Please try again.", "error")
             return render_template('student_verify_recovery.html',
                                  recovery_code=recovery_code,
+                                 recovery_expires_display=recovery_expires_display,
                                  student=student)
 
         from app.feats.teacher_recovery_feat import issue_confirmation
@@ -3575,10 +3561,12 @@ def verify_recovery(code_id):
 
         return render_template('student_verify_recovery.html',
                              recovery_code=recovery_code,
+                             recovery_expires_display=recovery_expires_display,
                              student=student,
                              generated_code=code,
                              verified=True)
 
     return render_template('student_verify_recovery.html',
                          recovery_code=recovery_code,
+                         recovery_expires_display=recovery_expires_display,
                          student=student)

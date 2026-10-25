@@ -782,9 +782,7 @@
                                     <label class="form-check-label mb-0"
                                            for="waive-{{ student.seat_id }}-{{ a.assessment_id }}">
                                       {% if a.due_at %}
-                                        <span class="local-timestamp"
-                                              data-timestamp="{{ format_utc_iso(a.due_at) }}"
-                                              data-format="date"></span>
+                                        <span data-timestamp="{{ a.due_at_iso }}">{{ a.due_on_display }}</span>
                                       {% else %}
                                         <span class="text-muted">—</span>
                                       {% endif %}
@@ -862,17 +860,14 @@
                     <tr>
                       <td>{{ w.student_name }}</td>
                       <td>
-                        {% if w.due_at %}
-                          <span class="local-timestamp"
-                                data-timestamp="{{ format_utc_iso(w.due_at) }}"
-                                data-format="date"></span>
+                        {% if w.due_on_display %}
+                          <span data-timestamp="{{ w.due_at_iso }}">{{ w.due_on_display }}</span>
                         {% else %}
                           <span class="text-muted">—</span>
                         {% endif %}
                       </td>
                       <td>
-                        <span class="local-timestamp"
-                              data-timestamp="{{ format_utc_iso(w.waived_at) }}"></span>
+                        <span data-timestamp="{{ w.waived_at_iso }}">{{ w.waived_at_display }}</span>
                       </td>
                       <td>
                         {% if w.notes %}

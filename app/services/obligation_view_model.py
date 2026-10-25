@@ -22,26 +22,14 @@ from types import SimpleNamespace
 
 from app.extensions import db
 from app.models import ObligationAssessment, Transaction, BillCycle, Seat, ClassEconomy, IdentityProfile, RentSettings
-from app.utils.canonical_temporal_resolver import CLASS_LEVEL_EVALUATION, canonical_temporal_resolver
-
-
-def _cle(class_id: str, primitive: str, **inputs):
-    """One Class-Level Evaluation (SPEC-TIME-001): every temporal read in this
-    module is class time, so the class is the only context it needs."""
-    return canonical_temporal_resolver(
-        CLASS_LEVEL_EVALUATION,
-        canonical_execution_context=SimpleNamespace(class_id=class_id),
-        primitive=primitive,
-        **inputs,
-    )
-
-
-def _is_later(class_id: str, candidate, reference) -> bool:
-    return _cle(class_id, "later_than", candidate=candidate, reference=reference).is_later
-
-
-def _class_date_of(class_id: str, instant):
-    return _cle(class_id, "current_evaluation_day", reference_time_utc=instant).evaluation_date
+from app.utils.temporal_display import format_date, format_local_date, format_timestamp
+from app.services import obligations_service
+from app.utils.economy_policy import frequency_label
+from app.utils.canonical_temporal_resolver import (
+    CLASS_LEVEL_EVALUATION,
+    SYSTEM_LEVEL_EVALUATION,
+    canonical_temporal_resolver,
+)
 
 
 def get_total_paid_for_obligation(
@@ -169,7 +157,13 @@ def build_rent_policy_projection(
     """
     amount_due = Decimal(str(settings.rent_amount)) if settings and settings.rent_amount is not None else Decimal('0.00')
     grace_end = grace_boundary_at
-    past_grace = bool(grace_end) and _is_later(class_id, now_utc, grace_end)
+    past_grace = bool(grace_end) and canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=SimpleNamespace(class_id=class_id),
+        primitive="later_than",
+        candidate=now_utc,
+        reference=grace_end,
+    ).is_later
     late_fee = Decimal('0.00')
     if past_grace and total_paid < amount_due:
         late_fee = Decimal(str(settings.late_penalty_amount)) if settings and settings.late_penalty_amount is not None else Decimal('0.00')
@@ -184,7 +178,13 @@ def build_rent_policy_projection(
     remaining_amount = max(Decimal('0.00'), amount_due - total_paid)
     is_satisfied = has_waiver or (total_paid >= amount_due)
     is_past_due = (not is_satisfied) and past_grace
-    is_preview = (not is_satisfied) and bool(due_date) and _is_later(class_id, due_date, now_utc)
+    is_preview = (not is_satisfied) and bool(due_date) and canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=SimpleNamespace(class_id=class_id),
+        primitive="later_than",
+        candidate=due_date,
+        reference=now_utc,
+    ).is_later
     return {
         'amount_due': amount_due,
         'grace_end': grace_end,
@@ -389,7 +389,12 @@ def build_student_obligation_view(
     # Canonical class-local "now" (SPEC-TIME-001). Resolved once and reused for
     # every temporal derivation below (projection, days-until-due, days-overdue)
     # so the view is internally consistent and free of raw datetime.now() reads.
-    now_utc = _cle(class_id, "current_time", reference_time_utc=reference_time_utc).canonical_now_utc
+    now_utc = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=SimpleNamespace(class_id=class_id),
+        primitive="current_time",
+        reference_time_utc=reference_time_utc,
+    ).canonical_now_utc
 
     # Step 2: Get all assessments for this (seat, class, obligation_type)
     assessments = obligations_service.get_assessment_events_for_seat_class(
@@ -515,14 +520,22 @@ def build_student_obligation_view(
         # already establish the sign, so neither measurement can go negative).
         days_until_due = None
         if is_preview and due_date:
-            days_until_due = _cle(
-                class_id, "time_until", reference_time_utc=now_utc, target=due_date
+            days_until_due = canonical_temporal_resolver(
+                CLASS_LEVEL_EVALUATION,
+                canonical_execution_context=SimpleNamespace(class_id=class_id),
+                primitive="time_until",
+                reference_time_utc=now_utc,
+                target=due_date,
             ).remaining_seconds // 86400
 
         days_overdue = None
         if is_past_due and grace_end:
-            days_overdue = _cle(
-                class_id, "time_since", reference_time_utc=now_utc, start=grace_end
+            days_overdue = canonical_temporal_resolver(
+                CLASS_LEVEL_EVALUATION,
+                canonical_execution_context=SimpleNamespace(class_id=class_id),
+                primitive="time_since",
+                reference_time_utc=now_utc,
+                start=grace_end,
             ).elapsed_seconds // 86400
 
         # The last class day a payment avoids the late fee: the fee is charged
@@ -568,7 +581,12 @@ def build_student_obligation_view(
             prior_obligations.append({
                 # Month of the class-local date, not of the UTC timestamp.
                 'period': (
-                    _class_date_of(class_id, assessment.timestamp).strftime('%B %Y')
+                    canonical_temporal_resolver(
+                        CLASS_LEVEL_EVALUATION,
+                        canonical_execution_context=SimpleNamespace(class_id=class_id),
+                        primitive="current_evaluation_day",
+                        reference_time_utc=assessment.timestamp,
+                    ).evaluation_date.strftime('%B %Y')
                     if assessment.timestamp else 'Unknown'
                 ),
                 'amount': amount_due,
@@ -746,7 +764,11 @@ def build_class_obligation_summary(
             'is_waived': current.get('is_waived', False),
         })
 
-    now_utc = _cle(class_id, "current_time").canonical_now_utc
+    now_utc = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION,
+        canonical_execution_context=SimpleNamespace(class_id=class_id),
+        primitive="current_time",
+    ).canonical_now_utc
 
     return ClassObligationSummary(
         class_id=class_id,
@@ -866,6 +888,8 @@ def get_outstanding_rent_by_seat(class_id: str) -> list[dict]:
                     'correlation_id': a.correlation_id,
                     'assessment_id': a.assessment_id,
                     'due_at': a.due_at,
+                    'due_at_iso': _utc_iso(a.due_at),
+                    'due_on_display': format_date(SimpleNamespace(class_id=class_id), a.due_at) if a.due_at else None,
                     'assessed_amount': a.assessed_amount,
                     'remaining_amount': a.assessed_amount - a.total_paid,
                     'is_past_due': a.is_past_due,
@@ -983,7 +1007,12 @@ def get_rent_status_projection(
     current_period_assessment = None
     if current_period_due_at:
         for a in assessments:
-            if a.due_at == current_period_due_at:
+            if a.due_at is not None and canonical_temporal_resolver(
+                SYSTEM_LEVEL_EVALUATION,
+                primitive="same_instant",
+                candidate=a.due_at,
+                reference=current_period_due_at,
+            ).is_same:
                 current_period_assessment = a
                 break
 
@@ -1035,7 +1064,12 @@ def add_display_formatting_to_student_obligation_view(
         if isinstance(due_date, datetime):
             # The class-local date: the UTC date of a class-midnight boundary is
             # the previous day in any class east of Greenwich.
-            display_due_date = _class_date_of(view.class_id, due_date).strftime("%B %d, %Y")
+            display_due_date = canonical_temporal_resolver(
+                CLASS_LEVEL_EVALUATION,
+                canonical_execution_context=SimpleNamespace(class_id=view.class_id),
+                primitive="current_evaluation_day",
+                reference_time_utc=due_date,
+            ).evaluation_date.strftime("%B %d, %Y")
 
     display_amount_due = "$0.00"
     if view.current_period and view.current_period.get('amount_due') is not None:
@@ -1065,6 +1099,37 @@ def add_display_formatting_to_student_obligation_view(
         display_total_due=display_total_due,
         display_amount_paid=display_amount_paid,
         display_remaining_amount=display_remaining,
+    )
+
+
+def build_student_rent_page_view(view: StudentObligationView) -> StudentObligationView:
+    """The student rent page's view: each date also as class-time display text.
+
+    Adds ``due_date_display`` / ``grace_last_day_display`` to ``current_period``,
+    ``due_date_display`` to each late-fee row and ``date_display`` to each
+    payment-history row. Rows are copied; the source view is left as built.
+    """
+    ctx = SimpleNamespace(class_id=view.class_id)
+
+    def fee_row(row):
+        return {**row, "due_date_display": format_date(ctx, row.get("due_date"))}
+
+    current = view.current_period
+    if current is not None:
+        grace_last_day = current.get("grace_last_day")
+        current = {
+            **current,
+            "due_date_display": format_date(ctx, current.get("due_date")),
+            # 'Jan 5': a class-local date, no platform-specific %-d.
+            "grace_last_day_display": f"{grace_last_day:%b} {grace_last_day.day}" if grace_last_day else None,
+        }
+        if "late_fees" in current:
+            current["late_fees"] = [fee_row(r) for r in current["late_fees"]]
+    return replace(
+        view,
+        current_period=current,
+        late_fees=[fee_row(r) for r in view.late_fees],
+        payment_history=[{**p, "date_display": format_date(ctx, p.get("date"))} for p in view.payment_history],
     )
 
 
@@ -1112,3 +1177,151 @@ def add_display_formatting_to_class_obligation_summary(
         current_student_count=current_student_count,
         behind_student_count=behind_student_count,
     )
+
+
+def build_rent_first_due_display(ctx, first_rent_due_date) -> dict:
+    """The rent page's first due date, read back in the class calendar it was written in.
+
+    Formatting the stored instant directly renders it in UTC, which shows the
+    previous local day for a class east of Greenwich; the ISO form feeds the date
+    input the teacher re-saves from, so a UTC reading would walk the date backwards
+    one day per edit.
+    """
+    local = canonical_temporal_resolver(
+        CLASS_LEVEL_EVALUATION, canonical_execution_context=ctx,
+        primitive="localize_timestamp", timestamp=first_rent_due_date,
+    ).evaluation_date
+    return {"display": format_local_date(local, "full"), "iso": format_local_date(local, "input")}
+
+
+def build_rent_period_dates_display(current_period_start, current_period_end, next_due_date) -> dict:
+    """Display text for the rent page's current period and next due date (class-local dates)."""
+    both = current_period_start and current_period_end
+    return {
+        "start": format_local_date(current_period_start, "medium") if both else "",
+        "end": format_local_date(current_period_end, "medium") if both else "",
+        "next_due": format_local_date(next_due_date, "full") or "",
+    }
+
+
+def resolve_rent_policy_deferral(class_id, pending_settings):
+    """Describe a saved rent policy that is not yet the one students are billed under.
+
+    ``rent_settings`` is append-only (DOM-POL-001 SS VI.1): a save inserts a new
+    immutable row and retires its predecessor. It does not reach into the open
+    rent cycle, which froze a ``policy_uuid`` when it was created and keeps
+    resolving that row (DOM-POL-001 SS VII). The terms a class is actually billed
+    under therefore do not move until ``reconcile_rent`` advances the cycle at
+    ``next_assessment_at`` and binds whatever policy is in force by then.
+
+    That deferral is the intended protection: a teacher cannot raise rent on a
+    period students are already living through. The page said nothing about it.
+    Both the "Current Rent Configuration" card and the settings form render the
+    newest ``IN_USE`` row, which after a mid-cycle save is the *pending* policy,
+    under a heading calling it current -- so a teacher who raised rent saw the
+    new figure echoed back with no indication that no student would be charged
+    it this cycle.
+
+    A period is bound to its policy when it is assessed, not when it begins
+    (DOM-OBL-001 §V.7 advance assessment), so a billed period that has not begun
+    is deferred past too; ``billed_period_started`` tells the page which wording
+    applies.
+
+    Returns ``None`` when nothing is deferred: no cycle has been established yet
+    (the first save is in force immediately) or the latest billed cycle already
+    carries the newest policy.
+    """
+    if not class_id or pending_settings is None:
+        return None
+
+    # The latest cycle is the latest period whose bills are ISSUED: a policy
+    # binds when a period is assessed (DOM-OBL-001 §V.7 advance assessment), so
+    # a save cannot reach a period that is already billed, even one that has not
+    # begun. The pending policy first binds to the period after it.
+    cycle = obligations_service.get_latest_bill_cycle(f"rent:{class_id}")
+    if cycle is None or not cycle.policy_uuid:
+        return None
+    if cycle.policy_uuid == pending_settings.policy_uuid:
+        return None
+    current = obligations_service.get_current_bill_cycle(class_id, f"rent:{class_id}")
+    period_started = current is not None and current.id == cycle.id
+    enforced = RentSettings.query.filter_by(policy_uuid=cycle.policy_uuid).first()
+    if enforced is None:
+        return None
+
+    # The instant the successor cycle is minted is the instant the pending policy
+    # binds, so it -- not ``cycle_boundary_at`` -- is the effective date to show.
+    # A terminal cycle (``next_assessment_at IS NULL``) mints no successor, so
+    # there is no boundary at which the pending policy could take effect at all.
+    takes_effect_on = None
+    if cycle.next_assessment_at is not None:
+        # Class timezone, not UTC: this is a class-scoped deadline the teacher
+        # reasons about locally, and SPEC-TIME-001 SS CLE is the only authority
+        # that knows ``ClassEconomy.class_timezone``.
+        takes_effect_on = canonical_temporal_resolver(
+            CLASS_LEVEL_EVALUATION,
+            canonical_execution_context=SimpleNamespace(class_id=class_id),
+            primitive="localize_timestamp",
+            timestamp=cycle.next_assessment_at,
+        ).evaluation_date
+
+    def _terms(policy):
+        return {
+            'amount': f"${policy.rent_amount:.2f}",
+            'cadence': frequency_label(
+                policy.frequency_type,
+                custom_frequency_value=policy.custom_frequency_value,
+                custom_frequency_unit=getattr(policy, 'custom_frequency_unit', None),
+            ),
+            'grace_period_days': policy.grace_period_days,
+            'late_penalty': f"${policy.late_penalty_amount:.2f}",
+        }
+
+    return {
+        'cycle_number': cycle.cycle_number,
+        'is_terminal': cycle.next_assessment_at is None,
+        'billed_period_started': period_started,
+        'takes_effect_on': takes_effect_on,
+        'display_takes_effect_on': (
+            format_local_date(takes_effect_on, "full") or ""
+        ),
+        'enforced': _terms(enforced),
+        'pending': _terms(pending_settings),
+        'amount_changed': enforced.rent_amount != pending_settings.rent_amount,
+    }
+
+
+def _utc_iso(instant):
+    """A UTC ISO-8601 string ('…Z') for sorting and machine-readable attributes."""
+    if not instant:
+        return None
+    return canonical_temporal_resolver(
+        SYSTEM_LEVEL_EVALUATION, primitive="localize_timestamp", timestamp=instant,
+    ).local_timestamp.isoformat().replace("+00:00", "Z")
+
+
+def build_rent_waiver_history_rows(class_id: str, waiver_history_raw) -> list[dict]:
+    """Rent waiver audit rows for the teacher's rent page, dates in class time.
+
+    Waiver-event amount is not persisted (DOM-OBL-001 §VII.1), so a row shows the
+    seat, when the waived assessment was due and when it was waived.
+    """
+    ctx = SimpleNamespace(class_id=class_id)
+    rows = []
+    for row in waiver_history_raw:
+        profile = (
+            IdentityProfile.query.filter_by(seat_id=row['seat_id'], class_id=class_id).first()
+            if row['seat_id'] else None
+        )
+        rows.append({
+            'correlation_id': row['correlation_id'],
+            'student_name': (
+                f"{profile.first_name} {profile.last_name}".strip() if profile else f"Seat {row['seat_id']}"
+            ),
+            'due_at_iso': _utc_iso(row['due_at']),
+            'due_on_display': format_date(ctx, row['due_at']) if row['due_at'] else None,
+            'waived_at_iso': _utc_iso(row['waived_at']),
+            'waived_at_display': format_timestamp(ctx, row['waived_at']),
+            'notes': row['notes'],
+        })
+    return rows

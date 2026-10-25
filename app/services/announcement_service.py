@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from app.extensions import db
 from app.models import Announcement, Seat
-from app.utils.canonical_temporal_resolver import utc_now
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 
 def _require_teacher_seat(seat_id: int, class_id: str) -> None:
@@ -56,7 +56,7 @@ def update_class_announcement(
     announcement.priority = priority
     announcement.is_active = is_active
     announcement.expires_at = expires_at
-    announcement.updated_at = utc_now()
+    announcement.updated_at = canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc
     db.session.flush()
     return announcement
 

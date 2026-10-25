@@ -3,7 +3,7 @@ from __future__ import annotations
 from app.extensions import db
 from app.models import HallPassSettings
 from app.feats.base import requires_feat_context
-from app.utils.canonical_temporal_resolver import ensure_utc, utc_now
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 
 
 def _current_hall_pass_settings(class_id: str) -> HallPassSettings | None:
@@ -105,7 +105,9 @@ def save_hall_pass_setup_config(
         availability_state='IN_USE',
         max_queue_limit=max_queue_limit,
         pass_type_payload=pass_type_payload,
-        effective_date=ensure_utc(updated_at or utc_now()),
+        effective_date=updated_at or canonical_temporal_resolver(
+            SYSTEM_LEVEL_EVALUATION, primitive="current_time"
+        ).canonical_now_utc,
     )
     db.session.add(settings)
     db.session.flush()

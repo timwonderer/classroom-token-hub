@@ -23,7 +23,7 @@ import sqlalchemy as sa
 
 from app.extensions import db
 from app.models import User
-from app.utils.canonical_temporal_resolver import utc_now
+from app.utils.canonical_temporal_resolver import SYSTEM_LEVEL_EVALUATION, canonical_temporal_resolver
 from app.utils.user_ids import parse_passkey_external_id, passkey_external_id
 
 logger = logging.getLogger(__name__)
@@ -141,7 +141,7 @@ def verify_sign_in(token: str, *, expected_role: str, expected_user_id: str | No
     result = db.session.execute(
         sa.update(credentials)
         .where(credentials.c.user_id == user.id, credentials.c.credential_id == credential_id)
-        .values(last_used=utc_now())
+        .values(last_used=canonical_temporal_resolver(SYSTEM_LEVEL_EVALUATION, primitive="current_time").canonical_now_utc)
     )
     if not result.rowcount:
         raise PasskeyError("credential is not recorded for this principal")
