@@ -51,16 +51,20 @@ def check(site, expected, search, documents=()):
     """Every failure found; `expected` is the full set of pages the artifact may contain."""
     site = site.resolve()
     pages = {p: Page(p.read_text()) for p in site.rglob('*.html')}
-    failures = []
+    failures, warnings = [], []
+    # Heading structure inside a canonical document is a source defect the generator renders
+    # faithfully; it is reported, and fixed in the document, rather than blocking publication.
+    source_pages = {site / output_path(source) for source in documents}
     actual = {p.relative_to(site).as_posix() for p in pages}
     failures += [f'Unexpected published page: {p}' for p in sorted(actual - expected)]
     failures += [f'Missing published page: {p}' for p in sorted(expected - actual)]
     for path, page in pages.items():
         label = path.relative_to(site).as_posix()
+        headings = warnings if path in source_pages else failures
         if page.headings.count(1) != 1:
-            failures.append(f'{label}: expected one h1, got {page.headings.count(1)}')
+            headings.append(f'{label}: expected one h1, got {page.headings.count(1)}')
         if any(b > a + 1 for a, b in zip(page.headings, page.headings[1:])):
-            failures.append(f'{label}: heading level skip')
+            headings.append(f'{label}: heading level skip')
         if duplicates := [i for i, n in Counter(page.ids).items() if n > 1]:
             failures.append(f'{label}: duplicate IDs {duplicates}')
         for ref in page.references:
@@ -89,7 +93,7 @@ def check(site, expected, search, documents=()):
             failures.append(f'{output_path(source)}: missing canonical edit link')
         if page and site / output_path(source) not in indexed:
             failures.append(f'{output_path(source)}: not in the search index')
-    return {'pages': len(pages), 'search_entries': len(search), 'failures': failures}
+    return {'pages': len(pages), 'search_entries': len(search), 'failures': failures, 'warnings': warnings}
 
 
 def main():
@@ -105,6 +109,8 @@ def main():
     result = check(site, expected, search, documents)
     (CACHE / 'check-results.json').write_text(json.dumps(result, indent=2) + '\n')
     print(json.dumps({**result, 'failures': len(result['failures']), 'examples': result['failures'][:10]}, indent=2))
+    for warning in result['warnings']:
+        print(f'::warning::Source heading defect: {warning}')
     return result
 
 

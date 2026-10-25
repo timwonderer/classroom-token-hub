@@ -2,7 +2,7 @@ no_progress = true
 
 # The public pages link to the developer documentation site root-relatively as
 # "/docs/", because that is where it sits in the GitHub Pages artifact:
-# github-pages/ is copied to / and docs-site/build/ to /docs/ (see
+# github-pages/ is copied to / and the Hugo build to /docs/ (see
 # .github/workflows/github-pages.yml). A root-relative link has no meaning
 # without a root, so an offline check over the repository cannot resolve it and
 # errors while building the URL — before any `exclude` pattern is consulted.
@@ -15,6 +15,9 @@ root_dir = "."
 exclude = ["^mailto:", "^tel:", "^\\$\\{\\{"]
 exclude_path = [
   "(^|/)templates/",
+  # Hugo layouts: their hrefs are Go template expressions, resolved at build time;
+  # docs-generator-proof/check.py validates every link in the built site instead.
+  "(^|/)docs-generator-proof/layouts/",
   "(^|/)\\.claude/",
   "(^|/)docs/archive/",
   "(^|/)status_service/static/",
