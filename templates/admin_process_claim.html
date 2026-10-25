@@ -57,7 +57,7 @@
       <h2 class="h4 mb-1">Claim from {{ claim.student_name }}</h2>
       <p class="mb-0 text-muted">
         {{ policy.title or 'Insurance policy' }} · {{ type_label.get(claim_type, claim_type|title) }}
-        · Filed {{ claim.submitted_at|fmt_timestamp }}
+        · Filed {{ claim_dates.filed }}
       </p>
     </div>
     <span class="badge {{ badge[0] }} fs-6 d-inline-flex align-items-center gap-1">
@@ -93,16 +93,17 @@
                 </tr>
               </thead>
               <tbody>
-                {% for row in productivity.dates %}
-                {% set key = row.claim_date.isoformat() %}
+                {% for day in claim_dates.days %}
+                {% set row = day.row %}
+                {% set key = day.key %}
                 <tr class="claim-day">
-                  <td>{{ row.claim_date.strftime('%a, %b %d, %Y') }}</td>
+                  <td>{{ day.label }}</td>
                   <td class="text-end">{{ '%g'|format(row.student_claimed_hours|float) }}</td>
                   <td class="text-end">{{ '%.2f'|format(row.already_worked_seconds / 3600) }}</td>
                   <td>{{ row.student_explanation }}</td>
                   {% if claim.status == 'SUBMITTED' %}
                   <td class="text-end claim-hours-cell">
-                    <label class="visually-hidden" for="approve_hours-{{ key }}">Hours to approve for {{ row.claim_date.strftime('%b %d') }}</label>
+                    <label class="visually-hidden" for="approve_hours-{{ key }}">Hours to approve for {{ day.short_label }}</label>
                     <input type="number" class="form-control form-control-sm text-end claim-hours" form="claim-decision"
                            id="approve_hours-{{ key }}" name="approve_hours-{{ key }}"
                            min="0" max="{{ row.student_claimed_hours }}" step="0.25"
@@ -116,7 +117,7 @@
                 {% if claim.status == 'SUBMITTED' %}
                 <tr class="claim-note-row" id="approve_note_row-{{ key }}" hidden>
                   <td colspan="5" class="pt-0">
-                    <label class="form-label small fw-semibold mb-1" for="approve_note-{{ key }}">Why {{ row.claim_date.strftime('%b %d') }} gets <span class="claim-note-hours"></span> instead of {{ '%g'|format(row.student_claimed_hours|float) }} <span class="text-muted fw-normal">(the student sees this)</span></label>
+                    <label class="form-label small fw-semibold mb-1" for="approve_note-{{ key }}">Why {{ day.short_label }} gets <span class="claim-note-hours"></span> instead of {{ '%g'|format(row.student_claimed_hours|float) }} <span class="text-muted fw-normal">(the student sees this)</span></label>
                     <textarea class="form-control form-control-sm" form="claim-decision" rows="2"
                               id="approve_note-{{ key }}" name="approve_note-{{ key }}"></textarea>
                   </td>
@@ -162,7 +163,7 @@
             <dt class="col-sm-4">Purchase</dt>
             <dd class="col-sm-8">{{ source_transaction.description or 'No description' }}</dd>
             <dt class="col-sm-4">Date</dt>
-            <dd class="col-sm-8">{{ source_transaction.timestamp|fmt_timestamp }}</dd>
+            <dd class="col-sm-8">{{ claim_dates.purchase }}</dd>
             <dt class="col-sm-4">Amount lost</dt>
             <dd class="col-sm-8">${{ '%.2f'|format(source_transaction.amount|abs) }} × {{ '%g'|format(reimbursement_percentage|float) }}% coverage{% if contract.remaining_period_cap is not none %}, up to the ${{ '%.2f'|format(contract.remaining_period_cap) }} of benefits remaining{% endif %}</dd>
             <dt class="col-sm-4">Filing window</dt>
@@ -205,7 +206,7 @@
       <div class="card-body">
         {% if claim.status != 'SUBMITTED' %}
           <p class="mb-0">
-            This claim was <strong>{{ claim.status|lower }}</strong>{% if claim.decided_at %} on {{ claim.decided_at|fmt_timestamp }}{% endif %}. Decisions are final.
+            This claim was <strong>{{ claim.status|lower }}</strong>{% if claim_dates.decided %} on {{ claim_dates.decided }}{% endif %}. Decisions are final.
           </p>
           {% if claim.decision_note %}
           <div class="bg-light p-3 rounded mt-3">{{ claim.decision_note | markdown }}</div>
@@ -273,7 +274,7 @@
           <dt>Type</dt>
           <dd>{{ type_label.get(claim_type, claim_type|title) }}</dd>
           <dt>Coverage started</dt>
-          <dd>{{ contract.coverage_effective_date.strftime('%b %d, %Y') }}{% if waiting_period_days %}<br><span class="small text-muted">Bought {{ contract.coverage_start_utc|fmt_date }}, then a {{ waiting_period_days }}-day waiting period. Losses before coverage started are not covered.</span>{% endif %}</dd>
+          <dd>{{ claim_dates.coverage_effective }}{% if waiting_period_days %}<br><span class="small text-muted">Bought {{ claim_dates.coverage_bought }}, then a {{ waiting_period_days }}-day waiting period. Losses before coverage started are not covered.</span>{% endif %}</dd>
           {% if reimbursement_percentage is not none %}
           <dt>Pays back</dt>
           <dd>{{ '%g'|format(reimbursement_percentage|float) }}% of the loss</dd>
@@ -284,11 +285,11 @@
           {% endif %}
           {% if contract.period_allowance is not none %}
           <dt>Claims used</dt>
-          <dd>{{ claim.student_first_name }} has used {{ contract.period_consumed }} of {{ contract.period_allowance }} {{ 'claimable days' if contract.allowance_unit == 'date' else 'claims' }} available this coverage period{% if period_first_day %} ({{ period_first_day.strftime('%b %d') }} – {{ period_last_day.strftime('%b %d') }}){% endif %}.{% if contract.allowance_per_week %}<br><span class="small text-muted">The policy allows {{ '%g'|format(contract.allowance_per_week|float) }} a week, counted across the whole period.</span>{% endif %}</dd>
+          <dd>{{ claim.student_first_name }} has used {{ contract.period_consumed }} of {{ contract.period_allowance }} {{ 'claimable days' if contract.allowance_unit == 'date' else 'claims' }} available this coverage period{% if claim_dates.period_first_day %} ({{ claim_dates.period_first_day }} – {{ claim_dates.period_last_day }}){% endif %}.{% if contract.allowance_per_week %}<br><span class="small text-muted">The policy allows {{ '%g'|format(contract.allowance_per_week|float) }} a week, counted across the whole period.</span>{% endif %}</dd>
           {% endif %}
           {% if contract.maximum_policy_payout %}
           <dt>Benefits remaining</dt>
-          <dd class="mb-0">${{ '%.2f'|format(contract.remaining_period_cap) }}{% if period_resets_on %} before {{ period_resets_on.strftime('%b %d, %Y') }}{% endif %}<br><span class="small text-muted">Resets to ${{ '%.2f'|format(contract.maximum_policy_payout) }} when a new coverage period starts.</span></dd>
+          <dd class="mb-0">${{ '%.2f'|format(contract.remaining_period_cap) }}{% if claim_dates.period_resets_on %} before {{ claim_dates.period_resets_on }}{% endif %}<br><span class="small text-muted">Resets to ${{ '%.2f'|format(contract.maximum_policy_payout) }} when a new coverage period starts.</span></dd>
           {% endif %}
         </dl>
       </div>

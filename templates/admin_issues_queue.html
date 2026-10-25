@@ -140,7 +140,7 @@
                                 </p>
                                 <small class="text-muted">
                                     <span class="material-symbols-outlined me-1" aria-hidden="true">schedule</span>
-                                    Submitted {{ issue.submitted_at|fmt_timestamp }}
+                                    Submitted {{ issue.submitted_at_display }}
                                     {% if issue.class_label %}
                                     | <span class="material-symbols-outlined me-1" aria-hidden="true">door_front</span>{{ issue.class_label }}
                                     {% endif %}
@@ -191,7 +191,7 @@
                                 </p>
                                 <small class="text-muted">
                                     <span class="material-symbols-outlined me-1" aria-hidden="true">fact_check</span>
-                                    Updated {{ issue.updated_at|fmt_timestamp }}
+                                    Updated {{ issue.updated_at_display }}
                                 </small>
                             </div>
                             <div class="text-end">
@@ -236,7 +236,7 @@
                                 </p>
                                 <small class="text-muted">
                                     <span class="material-symbols-outlined me-1" aria-hidden="true">arrow_circle_up</span>
-                                    Escalated {{ issue.escalated_at|fmt_timestamp }}
+                                    Escalated {{ issue.escalated_at_display }}
                                 </small>
                             </div>
                             <div class="text-end">

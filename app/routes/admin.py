@@ -146,7 +146,15 @@ from app.services.store_service import (
     units_sold_by_lineage,
     StoreServiceError,
 )
+from app.services.identity.builders import build_recovery_saved_view, build_recovery_status_view
+from app.services.support.builders import (
+    build_resolution_action_view,
+    build_status_history_view,
+    build_teacher_issue_view,
+    build_teacher_support_report_views,
+)
 from app.services.view_model_builders import build_identity_profile_view, build_store_management_view, StoreFormContract
+from app.services.store.builders import build_claim_review_dates, build_filed_claim_rows
 from app.services.store.form_contract import contract_payload, form_field_catalog, resolve_store_form_contract
 from app.services.class_configuration_economic_service import build_economic_view
 from app.services.class_configuration_query_service import (
@@ -2895,7 +2903,10 @@ def recovery_status():
     if status is None:
         flash('Recovery is unavailable. Resume or begin recovery again.', 'error')
         return redirect(url_for('admin.recover'))
-    return render_template('admin_recovery_status.html', status=status)
+    return render_template(
+        'admin_recovery_status.html',
+        status=build_recovery_status_view(getattr(g, 'canonical_context', None), status),
+    )
 
 
 def _render_teacher_recovery_setup(form, authorized):
@@ -2983,7 +2994,8 @@ def save_recovery_progress():
         flash('Recovery progress could not be saved.', 'error')
         return redirect(url_for('admin.recover'))
     return render_template('admin_recovery_saved.html', resume_pin=pin, codes_saved=0,
-        recovery_request=get_recovery_request_by_id(request_id))
+        recovery=build_recovery_saved_view(
+            getattr(g, 'canonical_context', None), get_recovery_request_by_id(request_id)))
 
 
 @admin_bp.route('/resume-credentials', methods=['GET', 'POST'])
@@ -5875,7 +5887,9 @@ def insurance_management():
         availability_states=[insurance_defs.IN_USE, insurance_defs.HIDDEN],
     )
     policies = [_insurance_definition_view(r) for r in rows]
-    claims = list_insurance_claims(class_id=selected_class_id)
+    claims = build_filed_claim_rows(
+        g.canonical_context, list_insurance_claims(class_id=selected_class_id)
+    )
 
     return render_template(
         'admin_insurance.html',
@@ -6230,8 +6244,6 @@ def process_claim(claim_id):
     claim_view = SimpleNamespace(
         id=claim.claim_id,
         student_name=student_name,
-        submitted_at=claim.submitted_at,
-        decided_at=claim.decided_at,
         status=status,
         student_first_name=(student_name.split(" ")[0] if student_name else "The student"),
         description=claim_basis.get("description") or "",
@@ -6245,16 +6257,24 @@ def process_claim(claim_id):
     if contract.period_start_utc is not None and contract.period_end_utc is not None:
         period_first_day = class_local_date(claim.class_id, contract.period_start_utc)
         period_resets_on = class_local_date(claim.class_id, contract.period_end_utc)
-    return render_template(
-        'admin_process_claim.html',
-        current_page='insurance',
-        claim=claim_view,
+    claim_dates = build_claim_review_dates(
+        g.canonical_context,
+        claim=claim,
+        contract=contract,
+        source_transaction=source_transaction,
+        productivity=productivity,
         period_first_day=period_first_day,
         period_last_day=(
             obligations_service.last_class_day_before(claim.class_id, contract.period_end_utc)
             if period_resets_on else None
         ),
         period_resets_on=period_resets_on,
+    )
+    return render_template(
+        'admin_process_claim.html',
+        current_page='insurance',
+        claim=claim_view,
+        claim_dates=claim_dates,
         claim_type=claim_type,
         policy=policy,
         contract=contract,
@@ -9122,19 +9142,7 @@ def help_support():
     actor_public_id = teacher_seat.public_id if teacher_seat else None
 
     def _support_report_views(issues):
-        """Display captured ticket context without refreshing its class metadata."""
-        return [{
-            'report': {
-                'title': issue.title or 'Support Ticket',
-                'status': issue.status,
-                'submitted_at': issue.submitted_at,
-                'report_type': issue.issue_type,
-            },
-            'class_label': issue.class_label,
-            'scope_class_id': issue.class_public_id,
-            'issue_category': issue.category.name if issue.category else 'Unknown',
-            'clean_description': issue.student_explanation or '',
-        } for issue in issues]
+        return build_teacher_support_report_views(canonical_context, issues)
 
     # Form topic -> the system IssueCategory it files under. The rows are seeded
     # by migration e1c7a4b9d2f3 (app/utils/issue_categories.py).
@@ -10409,69 +10417,6 @@ def _resolve_issue_identity(actor_public_id, class_public_id):
     return student_display_name, class_label
 
 
-def _issue_to_view(issue, student_display_name, class_label):
-    """Build a plain-dict view model from an Issue row + resolved identity fields."""
-    return {
-        'id': issue.id,
-        'status': issue.status,
-        'student_display_name': student_display_name,
-        'class_label': class_label,
-        'category': {'name': issue.category.name if issue.category else 'Unknown'},
-        'issue_type': issue.issue_type,
-        'related_transaction_id': issue.related_transaction_id,
-        'student_explanation': issue.student_explanation or '',
-        'student_expected_outcome': issue.student_expected_outcome,
-        'submitted_at': issue.submitted_at,
-        'updated_at': issue.updated_at,
-        'created_at': issue.created_at,
-        'escalated_at': issue.escalated_at,
-        'escalation_reason': issue.escalation_reason,
-        'teacher_resolution': issue.teacher_resolution,
-        'teacher_reviewed_at': issue.teacher_reviewed_at,
-        'teacher_notes': issue.teacher_notes,
-        'teacher_diagnostic_note': issue.teacher_diagnostic_note,
-        'sysadmin_notes': issue.sysadmin_notes,
-        'sysadmin_resolved_at': issue.sysadmin_resolved_at,
-        'closed_at': issue.closed_at,
-        'closed_by_type': issue.closed_by_type,
-        'context_snapshot': issue.context_snapshot,
-        'page_url': issue.page_url,
-        'system_metadata': issue.system_metadata,
-        'eligible_for_reward': issue.eligible_for_reward,
-        'share_class_name_with_sysadmin': issue.share_class_name_with_sysadmin,
-        # Relationships resolved to plain lists below when needed.
-        'resolution_actions': [],
-        'status_history': [],
-    }
-
-
-def _resolution_action_to_view(action):
-    """Build a plain-dict view model from an IssueResolutionAction row."""
-    return {
-        'action_type': action.action_type,
-        'action_description': action.action_description,
-        'performed_by_type': action.performed_by_type,
-        'performed_by_public_id': action.performed_by_public_id,
-        'related_transaction_id': action.related_transaction_id,
-        'amount_changed': action.amount_changed,
-        'before_value': action.before_value,
-        'after_value': action.after_value,
-        'created_at': action.created_at,
-    }
-
-
-def _status_history_to_view(history):
-    """Build a plain-dict view model from an IssueStatusHistory row."""
-    return {
-        'previous_status': history.previous_status,
-        'new_status': history.new_status,
-        'changed_at': history.changed_at,
-        'changed_by_type': history.changed_by_type,
-        'changed_by_public_id': history.changed_by_public_id,
-        'notes': history.notes,
-    }
-
-
 def _resolve_issue_id_from_ref(issue_ref: str) -> int | None:
     if issue_ref.isdigit():
         return int(issue_ref)
@@ -10562,7 +10507,7 @@ def issues_queue():
     def _to_queue_view(issue):
         name = actor_dict.get(issue.actor_public_id, issue.actor_public_id[:8] if issue.actor_public_id else 'Unknown')
         label = class_dict.get(issue.class_public_id)
-        return _issue_to_view(issue, name, label)
+        return build_teacher_issue_view(canonical_context, issue, name, label)
 
     pending_issues = [_to_queue_view(i) for i in pending_rows]
     resolved_issues = [_to_queue_view(i) for i in resolved_rows]
@@ -10600,12 +10545,12 @@ def view_issue(issue_ref):
     issue = issue_query.first_or_404()
 
     name, label = _resolve_issue_identity(issue.actor_public_id, issue.class_public_id)
-    issue_view = _issue_to_view(issue, name, label)
+    issue_view = build_teacher_issue_view(canonical_context, issue, name, label)
     issue_view['resolution_actions'] = [
-        _resolution_action_to_view(a) for a in issue.resolution_actions
+        build_resolution_action_view(canonical_context, a) for a in issue.resolution_actions
     ]
     issue_view['status_history'] = [
-        _status_history_to_view(h) for h in issue.status_history
+        build_status_history_view(canonical_context, h) for h in issue.status_history
     ]
     # Template checks resolution_actions count via len()
     issue_view['_resolution_actions_count'] = len(issue_view['resolution_actions'])

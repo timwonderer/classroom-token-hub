@@ -14,10 +14,12 @@ from collections.abc import Collection
 from dataclasses import dataclass, field
 from decimal import Decimal
 from datetime import datetime
+from types import SimpleNamespace
 from typing import Any
 
 from app.extensions import db
 from app.models import StoreProduct, EntitlementEvent, RentSettings, ClassEconomy
+from app.utils.temporal_display import format_date, format_timestamp
 
 
 @dataclass(frozen=True)
@@ -413,4 +415,62 @@ def build_collective_progress_view(
         is_complete=is_complete,
         goal_type=item.collective_goal_type or "fixed",
         display_expires_at=display_expires_at,
+    )
+
+
+def build_filed_claim_rows(ctx, claims) -> list[SimpleNamespace]:
+    """Insurance claims for the teacher's claim list, times as presentation text."""
+    return [
+        SimpleNamespace(
+            claim_id=claim.claim_id,
+            status=claim.status,
+            submitted_at_display=(
+                format_timestamp(ctx, claim.submitted_at) if claim.submitted_at else "N/A"
+            ),
+        )
+        for claim in claims
+    ]
+
+
+def build_claim_review_dates(
+    ctx,
+    *,
+    claim,
+    contract,
+    source_transaction,
+    productivity,
+    period_first_day,
+    period_last_day,
+    period_resets_on,
+) -> SimpleNamespace:
+    """Presentation text for every date and time on the claim review page.
+
+    Instants (filed, decided, purchase, coverage bought) localize through the
+    resolver under ``ctx``; the coverage and period dates and each claimed day
+    are already class-local calendar dates and are only formatted. ``days``
+    pairs each productivity row with its form key (ISO date) and labels.
+    """
+    def _short(day):
+        return day.strftime("%b %d") if day else None
+
+    return SimpleNamespace(
+        filed=format_timestamp(ctx, claim.submitted_at),
+        decided=format_timestamp(ctx, claim.decided_at) if claim.decided_at else None,
+        purchase=(
+            format_timestamp(ctx, source_transaction.timestamp) if source_transaction else None
+        ),
+        coverage_effective=contract.coverage_effective_date.strftime("%b %d, %Y"),
+        coverage_bought=format_date(ctx, contract.coverage_start_utc),
+        period_first_day=_short(period_first_day),
+        period_last_day=_short(period_last_day),
+        period_resets_on=period_resets_on.strftime("%b %d, %Y") if period_resets_on else None,
+        days=[
+            SimpleNamespace(
+                row=row,
+                key=row.claim_date.isoformat(),
+                label=row.claim_date.strftime("%a, %b %d, %Y"),
+                short_label=row.claim_date.strftime("%b %d"),
+            )
+            for row in (productivity.dates if productivity else [])
+        ],
     )
