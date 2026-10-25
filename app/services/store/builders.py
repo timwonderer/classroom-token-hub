@@ -18,6 +18,7 @@ from typing import Any
 
 from app.extensions import db
 from app.models import StoreProduct, EntitlementEvent, RentSettings, ClassEconomy
+from app.utils.temporal_display import format_timestamp
 
 
 @dataclass(frozen=True)
@@ -414,3 +415,20 @@ def build_collective_progress_view(
         goal_type=item.collective_goal_type or "fixed",
         display_expires_at=display_expires_at,
     )
+
+
+# Time display (INV-ARC-022 §V.8): id -> time as text, localized through the resolver.
+
+def build_redemption_time_displays(ctx, requests) -> dict[str, str]:
+    """Redemption request id -> its submission time."""
+    return {req.request_id: format_timestamp(ctx, req.submitted_at) for req in requests}
+
+
+def build_entitlement_time_displays(ctx, entitlements) -> dict:
+    """Entitlement id -> its purchase time."""
+    return {ent.id: format_timestamp(ctx, ent.purchase_date) for ent in entitlements}
+
+
+def build_insurance_claim_time_displays(ctx, claims) -> dict:
+    """Insurance claim id -> its filing time."""
+    return {claim.claim_id: format_timestamp(ctx, claim.filed_date) for claim in claims}

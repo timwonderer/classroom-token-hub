@@ -18,6 +18,7 @@ from typing import Any
 from app.extensions import db
 from app.models import Transaction, Seat, ClassEconomy
 from app.services.ledger_balance_query_service import project_posting_states
+from app.utils.temporal_display import format_timestamp
 
 
 @dataclass(frozen=True)
@@ -249,3 +250,8 @@ def build_transaction_summary_view(
         "total_outflow": f"${total_outflow:.2f}",
         "net_activity": net_activity_display,
     }
+
+
+def build_transaction_time_displays(ctx, transactions) -> dict[int, str]:
+    """Transaction id -> its timestamp as text, localized through the resolver (INV-ARC-022 §V.8)."""
+    return {tx.id: format_timestamp(ctx, tx.timestamp) for tx in transactions}

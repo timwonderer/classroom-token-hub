@@ -2409,6 +2409,7 @@ def dashboard():
     recent_logs = []
     for log, seat, profile, class_row in raw_logs:
         recent_logs.append({
+            'id': log.id,
             'seat_id': log.target_seat_id,
             'student_name': (profile.full_name if profile else 'Unknown'),
             'period': class_row.section or '',
@@ -2444,8 +2445,23 @@ def dashboard():
     # DOM-PROD-001 §XV.6: composed by the view model from the owning domains.
     unpaid_work_notice = build_unpaid_work_notice_view(active_class_id)
 
+    # INV-ARC-022 §V.8: every time reaches the template as text.
+    from app.services.ledger.builders import build_transaction_time_displays
+    from app.services.payroll.builders import (
+        add_hall_pass_time_displays, build_attendance_time_displays, build_payroll_schedule_time_displays,
+    )
+    from app.services.store.builders import build_insurance_claim_time_displays, build_redemption_time_displays
+    add_hall_pass_time_displays(ctx, recent_hall_passes)
+
     return render_template(
         'admin_dashboard.html',
+        **build_payroll_schedule_time_displays(
+            ctx, next_payroll_date=next_payroll_date, payroll_updated_at=payroll_updated_at,
+        ),
+        redemption_time_displays=build_redemption_time_displays(ctx, recent_redemptions),
+        insurance_claim_time_displays=build_insurance_claim_time_displays(ctx, recent_insurance_claims),
+        transaction_time_displays=build_transaction_time_displays(ctx, recent_transactions),
+        attendance_time_displays=build_attendance_time_displays(ctx, [log for log, *_ in raw_logs]),
         show_recovery_setup=show_recovery_setup,
         # Quick stats
         total_students=total_students,
@@ -3688,20 +3704,34 @@ def student_detail_public(actor_public_id):
     reset_code = _student_user.reset_code if _student_user else None
     reset_code_expires_at = _student_user.reset_code_expires_at if _student_user else None
 
+    # INV-ARC-022 §V.8: every time reaches the template as text.
+    from app.services.identity.builders import build_reset_code_expiry_display
+    from app.services.ledger.builders import build_transaction_time_displays
+    from app.services.payroll.builders import (
+        add_attendance_interval_time_displays, add_payroll_event_time_displays, build_attendance_time_displays,
+    )
+    from app.services.store.builders import build_entitlement_time_displays
+    detail_ctx = g.canonical_context
+    add_attendance_interval_time_displays(detail_ctx, attendance_intervals + attendance_open_intervals)
+    add_payroll_event_time_displays(detail_ctx, payroll_event_history)
+
     # Phase 6-7 VERIFIED: identity_view passes all name/notes fields via view model namespace
     return render_template('student_detail.html',
                          student=student,
                          identity_view=identity_view,
                          student_has_completed_setup=student_has_completed_setup,
                          reset_code=reset_code,
-                         reset_code_expires_at=reset_code_expires_at,
+                         **build_reset_code_expiry_display(detail_ctx, reset_code_expires_at),
                          reset_code_is_active=reset_code_is_active,
                          join_codes=join_codes,
                          transactions=transactions,
+                         transaction_time_displays=build_transaction_time_displays(detail_ctx, transactions),
                          reversible_transaction_ids=reversible_transaction_ids,
                          entitlements=store_purchases,
+                         entitlement_time_displays=build_entitlement_time_displays(detail_ctx, store_purchases),
                          latest_attendance_event=latest_attendance_event,
                          attendance_events=attendance_display_rows,
+                         attendance_time_displays=build_attendance_time_displays(detail_ctx, attendance_rows),
                          attendance_intervals=attendance_intervals,
                          attendance_open_intervals=attendance_open_intervals,
                          attendance_unpaired_events=attendance_unpaired_events,
@@ -6461,6 +6491,10 @@ def hall_pass():
             'data:image/png;base64,' + base64.b64encode(qr_buffer.getvalue()).decode('ascii')
         )
 
+    # INV-ARC-022 §V.8: every time reaches the template as text.
+    from app.services.payroll.builders import add_hall_pass_time_displays
+    add_hall_pass_time_displays(g.canonical_context, pending_requests + issued_passes + out_of_class)
+
     return render_template(
         'admin_hall_pass.html',
         pending_requests=pending_requests,
@@ -7132,7 +7166,10 @@ def payroll_history():
 
     payroll_events = query.order_by(desc(PayrollEvent.recorded_at), desc(PayrollEvent.id)).all()
     current_app.logger.info(f"Payroll events found: {len(payroll_events)}")
-    payroll_records = _build_payroll_event_display_rows(ctx=ctx, payroll_events=payroll_events)
+    from app.services.payroll.builders import add_payroll_event_time_displays
+    payroll_records = add_payroll_event_time_displays(
+        ctx, _build_payroll_event_display_rows(ctx=ctx, payroll_events=payroll_events),
+    )
 
     current_app.logger.info(f"Payroll records prepared: {len(payroll_records)}")
 
@@ -7661,8 +7698,18 @@ def payroll():
     if form_setting and form_setting.first_pay_date:
         display_first_pay_date_iso = canonical_temporal_resolver(CLASS_LEVEL_EVALUATION, canonical_execution_context=g.canonical_context, primitive="localize_timestamp", timestamp=form_setting.first_pay_date).evaluation_date.strftime("%Y-%m-%d")
 
+    # INV-ARC-022 §V.8: every time reaches the template as text.
+    from app.services.payroll.builders import add_payroll_event_time_displays, build_payroll_schedule_time_displays
+    add_payroll_event_time_displays(ctx, recent_payrolls)
+    add_payroll_event_time_displays(ctx, payroll_history)
+    payroll_time_displays = build_payroll_schedule_time_displays(
+        ctx, next_payroll_date=next_payroll_date, payroll_updated_at=payroll_updated_at,
+        next_change_effective=next_change_effective_utc, pending_settings=pending_setting_views,
+    )
+
     return render_template(
         'admin_payroll.html',
+        **payroll_time_displays,
         # Overview tab
         recent_payrolls=recent_payrolls,
         class_label=class_label,
@@ -8833,9 +8880,13 @@ def banking():
     total_deposits = total_checking + total_savings
     average_savings_balance = (total_savings / len(students)) if students else Decimal('0.00')
 
+    from app.services.ledger.builders import build_transaction_time_displays
+
     return render_template(
         'admin_banking.html',
         transactions=transactions,
+        # INV-ARC-022 §V.8: every time reaches the template as text.
+        transaction_time_displays=build_transaction_time_displays(g.canonical_context, [tx for tx, _seat in rows]),
         total_checking=total_checking,
         total_savings=total_savings,
         total_deposits=total_deposits,
