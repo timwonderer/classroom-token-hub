@@ -334,6 +334,14 @@ SURFACES = (
         ("docs-site/src/css/tokens.css", "docs-site/src/css/custom.css"),
         ("--ifm-", "--docusaurus-", "--doc-sidebar-"),
     ),
+    # The published developer docs (Hugo + Hextra): the public stylesheet and the
+    # docs token layer, plus its own sheet mapping Hextra's properties onto them.
+    Surface(
+        "developer-docs",
+        ("docs-site/src/css/tokens.css", "github-pages/style.css"),
+        ("docs-generator-proof/assets/css/custom.css",),
+        ("--hx-", "--hextra-"),
+    ),
 )
 
 # A stylesheet that must remain a byte-identical copy of another. The public

@@ -48,6 +48,14 @@ def test_SPEC_TIME_001__no_time_logic_outside_the_resolver():
     "import datetime as dt\nend = start + dt.timedelta(days=1)\n",
     "import datetime\nend = start + datetime.timedelta(days=1)\n",
     "from app.utils.canonical_temporal_resolver import utc_now as _clock\nx = _clock()\n",
+    "from datetime import datetime as Clock\nx = Clock.now()\n",
+    "from datetime import date as Day\nx = Day.today()\n",
+    "import datetime as chrono\nx = chrono.datetime.now()\n",
+    # Ruling 2a: decisions between instants go through the comparison primitives.
+    "if row.expires_at <= now:\n    deny()\n",
+    "if row.created_at == reference:\n    accept()\n",
+    "active = [p for p in passes if p.ends_at > now_utc]\n",
+    "return start_at < candidate < end_at\n",
 ])
 def test_mutation_proof_reports_each_prohibited_pattern(source):
     assert find_violations(source), source
@@ -63,6 +71,11 @@ def test_mutation_proof_reports_each_prohibited_pattern(source):
     "import pytz\nvalid = name in pytz.all_timezones_set\n",
     '"""grace = due + timedelta(days=3) was the defect."""\nfrom datetime import timedelta\n'
     "def span() -> timedelta:\n    return None\n",
+    # Ordering and SQL are not decisions; counts and None checks are not instants.
+    "rows = sorted(rows, key=lambda r: r.created_at)\nlatest = max(r.created_at for r in rows)\n",
+    "q = Model.query.filter(Model.expires_at <= now, or_(Model.ends_at > now, Model.ends_at == None))\n",
+    "if attempts >= limit:\n    deny()\n",
+    "if row.expires_at is None:\n    deny()\n",
 ])
 def test_resolver_calls_and_non_temporal_code_are_not_reported(source):
     assert not find_violations(source), source

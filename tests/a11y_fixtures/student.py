@@ -122,6 +122,7 @@ def _policy_enrollment(*, premiums_current: bool):
         purchase_date=_NOW - timedelta(days=20),
         coverage_start_date=_NOW - timedelta(days=17) if premiums_current else _NOW + timedelta(days=3),
         premiums_current=premiums_current, status="active",
+        coverage_not_started=not premiums_current, in_waiting_period=not premiums_current,
         next_payment_due=_NOW + timedelta(days=4), covered_through=date(2030, 1, 19),
         purchase_date_display="Dec 26, 2029",
         coverage_start_date_display="Dec 29, 2029" if premiums_current else "Jan 18, 2030",

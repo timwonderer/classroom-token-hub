@@ -40,6 +40,12 @@ _ARITHMETIC = frozenset({"timedelta", "relativedelta"})
 _CLOCK_BASES = frozenset({"datetime", "date", "dt", "_dt", "time"})
 _CLOCK_READS = frozenset({"now", "utcnow", "today", "time"})
 _DATETIME_CONSTRUCTORS = frozenset({"combine", "fromtimestamp", "utcfromtimestamp"})
+# Ruling 2a (SPEC-TIME-001 §XII): a decision between two instants goes through
+# earlier_than / later_than / same_instant / between_boundaries. Operands are
+# recognised by name, the convention the codebase uses for instants.
+_DECISION_OPS = (ast.Lt, ast.LtE, ast.Gt, ast.GtE, ast.Eq, ast.NotEq)
+_INSTANT_SUFFIXES = ("_at", "_utc", "_at_utc")
+_INSTANT_NAMES = frozenset({"now", "now_utc", "reference_time", "deadline", "expires", "expiry"})
 
 
 @dataclass(frozen=True)
@@ -61,18 +67,42 @@ def _call_name(func: ast.expr) -> tuple[str | None, str | None]:
     return None, None
 
 
+def _is_instant(node: ast.expr) -> bool:
+    name = node.id if isinstance(node, ast.Name) else node.attr if isinstance(node, ast.Attribute) else None
+    return bool(name) and (name in _INSTANT_NAMES or name.endswith(_INSTANT_SUFFIXES))
+
+
+def _is_sql_expression(node: ast.AST, parents: dict[ast.AST, ast.AST]) -> bool:
+    """A comparison handed to a call (``filter(Model.col <= t)``, ``and_(...)``) is SQL the database evaluates."""
+    parent = parents.get(node)
+    while isinstance(parent, (ast.BoolOp, ast.UnaryOp, ast.Tuple, ast.List)):
+        parent = parents.get(parent)
+    return isinstance(parent, ast.Call)
+
+
 def find_violations(source: str, path: str = "<source>") -> list[Hit]:
     """Every SPEC-TIME-001 §XII pattern in one module's source."""
     hits: list[Hit] = []
     tree = ast.parse(source)
     # An alias is the near miss once a bare name is banned: `timedelta as _td`.
     aliases: dict[str, str] = {}
+    parents: dict[ast.AST, ast.AST] = {}
     for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom):
+        for child in ast.iter_child_nodes(node):
+            parents[child] = node
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
             for alias in node.names:
                 if alias.asname:
-                    aliases[alias.asname] = alias.name
+                    aliases[alias.asname] = alias.name.rsplit(".", 1)[-1]
     for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Compare)
+            and any(isinstance(op, _DECISION_OPS) for op in node.ops)
+            and any(_is_instant(operand) for operand in [node.left, *node.comparators])
+            and not any(isinstance(operand, ast.Constant) for operand in [node.left, *node.comparators])
+            and not _is_sql_expression(node, parents)
+        ):
+            hits.append(Hit(path, node.lineno, "compares instants directly; use earlier_than/later_than/same_instant"))
         if isinstance(node, ast.ImportFrom) and node.module and node.module.endswith("canonical_temporal_resolver"):
             for alias in node.names:
                 if alias.name in _RESOLVER_INTERNALS:
@@ -84,6 +114,7 @@ def find_violations(source: str, path: str = "<source>") -> list[Hit]:
             continue
         if isinstance(node.func, ast.Name):
             name = aliases.get(name, name)
+        base = aliases.get(base, base)
         if name in _CLOCK_READS and base in _CLOCK_BASES:
             hits.append(Hit(path, node.lineno, f"reads the clock: {base}.{name}()"))
         elif name in _RESOLVER_INTERNALS:

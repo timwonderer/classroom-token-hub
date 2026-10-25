@@ -123,7 +123,7 @@ Route ──▶ FEAT (app/feats/) ──▶ Domain services (app/services/) ─�
 | --- | --- | --- |
 | Flask application | `app/`, `templates/`, `static/`, `wsgi.py` | Teacher, student and sysadmin surfaces; served by gunicorn behind nginx |
 | Status service | `status_service/`, `status/` | Public status page and an IAP-protected operator console; deployed by `deploy-status.yml` |
-| Developer docs site | `docs-site/` | Docusaurus build of the documentation tree |
+| Developer docs site | `docs-generator-proof/` | Hugo + Hextra build of the documentation tree (the former Docusaurus build in `docs-site/` is kept as a fallback) |
 | Public site | `github-pages/` | Marketing pages and the public timeline, published by `github-pages.yml` |
 
 The application doesn't serve the marketing site, and the marketing site doesn't serve the application.
@@ -275,7 +275,7 @@ INV-CORE → INV-ARC → DOM-* → FEAT-*
 
 Nothing under `.claude/` is authoritative. It helps agents find their way around the codebase, and it should never be cited to justify a design decision. Cite the INV, DOM, FEAT, SPEC or SOP document instead.
 
-The user guides in `docs/user-guides/` are served inside the app at `/docs`. The developer docs site at [classroomtokenhub.com/docs](https://classroomtokenhub.com/docs/), built from `docs-site/`, publishes the normative tree plus principles, references, maps and the self-hosting guide. It leaves out the user guides, dated release and audit records (`docs/ops/`), working-state tracking files, and [docs/archive/](docs/archive/), which holds superseded material kept for history.
+The user guides in `docs/user-guides/` are served inside the app at `/docs`. The developer docs site at [classroomtokenhub.com/docs](https://classroomtokenhub.com/docs/), built with Hugo from `docs-generator-proof/`, publishes the normative tree plus principles, references, maps and the self-hosting guide. It leaves out the user guides, dated release and audit records (`docs/ops/`), working-state tracking files, and [docs/archive/](docs/archive/), which holds superseded material kept for history.
 
 ---
 

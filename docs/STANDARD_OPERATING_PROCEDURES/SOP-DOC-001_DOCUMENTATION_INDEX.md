@@ -139,7 +139,7 @@ Archived material is deliberately absent; see §VI.
 - [FEAT-SUP-002 — Class Announcement Management](../FEATURE-EXECUTION/FEAT-SUP-002_CLASS_ANNOUNCEMENT_MANAGEMENT.md)
 
 ### Specifications (SPEC)
-- [SPEC-DES-001 — Design System and Visual Identity](../SPEC/SPEC-DES-001_DESIGN_SYSTEM_AND_VISUAL_IDENTITY.md) — v2.3: the status service carries the runtime token layer.
+- [SPEC-DES-001 — Design System and Visual Identity](../SPEC/SPEC-DES-001_DESIGN_SYSTEM_AND_VISUAL_IDENTITY.md) — v2.5: the Hugo developer-docs site is a brand surface subordinate to the token layers it loads.
 - [SPEC-DISPLAY-001 — Display Metadata Resolver](../SPEC/SPEC-DISPLAY-001_DISPLAY_IDENTITY_METADATA_RESOLVER.md)
 - [SPEC-IDEN-001 — Username Retention Verification](../SPEC/SPEC-IDEN-001_USERNAME_RETENTION_VERIFICATION.md) — incorporated by FEAT-IDEN-002; memory-only setup staging, retrieval verification and page-bound proof.
 - [SPEC-ECON-001 — Savings Interest Accrual and Disbursement Specification](../SPEC/SPEC-ECON-001_SAVINGS_INTEREST_ACCRUAL_AND_DISBURSEMENT_SPECIFICATION.md)
