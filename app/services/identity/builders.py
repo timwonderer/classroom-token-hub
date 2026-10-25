@@ -22,6 +22,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
+from app.utils.temporal_display import format_timestamp
+
 
 # ---------------------------------------------------------------------------
 # View model definitions (frozen dataclasses — SPEC-UI-001 § VI)
@@ -715,4 +717,34 @@ def build_student_class_selection_view(
         available_classes=class_options,
         current_class_id=current_class_id,
         has_any_classes=len(class_options) > 0,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Passkey credential rows (system_admin_passkey_settings.html)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class PasskeyCredentialRowView:
+    """One registered passkey, with its times as presentation-ready text."""
+
+    id: int
+    authenticator_name: Optional[str]
+    created_at_display: str
+    """Registration time, or "Unknown" when none was recorded."""
+    last_used_display: Optional[str]
+    """Last-use time, or None when the passkey has never been used."""
+
+
+def build_passkey_credential_rows(credentials, temporal_context=None) -> tuple[PasskeyCredentialRowView, ...]:
+    """Credential rows for display; ``temporal_context=None`` localizes under SLE (UTC)."""
+    return tuple(
+        PasskeyCredentialRowView(
+            id=cred.id,
+            authenticator_name=cred.authenticator_name,
+            created_at_display=format_timestamp(temporal_context, cred.created_at) if cred.created_at else "Unknown",
+            last_used_display=format_timestamp(temporal_context, cred.last_used) if cred.last_used else None,
+        )
+        for cred in credentials
     )

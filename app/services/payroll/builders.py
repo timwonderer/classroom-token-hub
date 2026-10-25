@@ -17,6 +17,7 @@ from typing import Any
 
 from app.extensions import db
 from app.models import PayrollSettings, Transaction, Seat, IdentityProfile
+from app.utils.temporal_display import format_timestamp
 
 
 @dataclass(frozen=True)
@@ -413,4 +414,18 @@ def build_payroll_settings_display(settings: PayrollSettings | None) -> dict[str
         'display_per_unit_rate_value': f"{amount}",
         'display_rate_unit': singular,
         'display_rate_with_unit': with_unit,
+    }
+
+
+def build_hall_pass_verification_result(result: dict, temporal_context) -> dict:
+    """Hall-pass verification result with ``time_out_display`` / ``return_time_display``.
+
+    Each is presentation-ready text, or None when the pass has no such time.
+    """
+    return {
+        **result,
+        "time_out_display": format_timestamp(temporal_context, result["time_out"]) if result.get("time_out") else None,
+        "return_time_display": (
+            format_timestamp(temporal_context, result["return_time"]) if result.get("return_time") else None
+        ),
     }

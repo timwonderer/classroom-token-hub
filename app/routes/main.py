@@ -9,13 +9,14 @@ from app.hash_utils import normalize_lookup_text
 from types import SimpleNamespace
 from flask import (
     Blueprint, redirect, url_for, jsonify, current_app,
-    request,
+    request, g,
 )
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.extensions import db, limiter
 from app.models import User, UserRole
+from app.services.payroll.builders import build_hall_pass_verification_result
 from app.utils.helpers import render_template_with_fallback as render_template
 from app.utils.ip_handler import get_real_ip
 from app.utils.turnstile import verify_turnstile_token
@@ -344,6 +345,9 @@ def verify_hall_pass(teacher_public_token):
             'elapsed_mins': elapsed_mins,
             'return_time': return_time_value,
         }
+        # The filter this replaces localized under the request's canonical context
+        # (SLE for an anonymous kiosk visitor); reproduced exactly.
+        result = build_hall_pass_verification_result(result, getattr(g, "canonical_context", None))
 
     return render_template(
         'hall_pass_verify.html',

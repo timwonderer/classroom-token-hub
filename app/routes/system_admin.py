@@ -57,6 +57,13 @@ from app.services.admin_identity_service import (
     list_admin_credentials,
 )
 from app.services import passkey_service
+from app.services.identity.builders import build_passkey_credential_rows
+from app.services.support.builders import (
+    build_correlation_pack_view,
+    build_history_rows,
+    build_issue_view,
+    build_teacher_report_rows,
+)
 from app.utils.issue_helpers import record_resolution_action, update_issue_status
 from app.services.support_operator_access import (
     escalated_clause,
@@ -432,7 +439,8 @@ def passkey_settings():
     user = get_current_user()
     if not user or ctx.actor_role != 'sysadmin':
         abort(404)
-    credentials = list_admin_credentials(user.id)
+    # Operations surface: SLE (UTC); a sysadmin never holds class context.
+    credentials = build_passkey_credential_rows(list_admin_credentials(user.id))
 
     return render_template("system_admin_passkey_settings.html",
                          admin=user,
@@ -475,7 +483,8 @@ def dashboard():
     system_admins = [
         {
             'display_username': sa.get_display_username(),
-            'last_login': None,
+            # User records no login time, so there is nothing to format.
+            'last_login_display': None,
         }
         for sa in system_admins_query
     ]
@@ -635,7 +644,8 @@ def support_tickets():
     report_query = teacher_reports
     if status_filter != 'all':
         report_query = report_query.filter(Issue.status == status_filter.upper())
-    reports = [
+    # Operations surfaces render SLE (UTC): a sysadmin never holds class context.
+    reports = build_teacher_report_rows([
         SimpleNamespace(
             id=issue.id,
             status=issue.status,
@@ -648,7 +658,7 @@ def support_tickets():
             class_id=issue.class_public_id,
         )
         for issue in report_query.order_by(Issue.submitted_at.desc()).all()
-    ]
+    ])
 
     from sqlalchemy import func as sqlfunc
     status_counts = dict(
@@ -674,11 +684,11 @@ def support_tickets():
         ])
     ).order_by(Issue.escalated_at.desc()).all()
     issues_pending = [
-        _issue_to_view(i) for i in all_issues
+        build_issue_view(_issue_to_view(i)) for i in all_issues
         if i.status in [Issue.STATUS_ESCALATED_TO_DEV, 'elevated']
     ]
-    issues_in_review = [_issue_to_view(i) for i in all_issues if i.status == 'developer_review']
-    issues_resolved = [_issue_to_view(i) for i in all_issues if i.status in [Issue.STATUS_DEV_RESOLVED, 'developer_resolved']]
+    issues_in_review = [build_issue_view(_issue_to_view(i)) for i in all_issues if i.status == 'developer_review']
+    issues_resolved = [build_issue_view(_issue_to_view(i)) for i in all_issues if i.status in [Issue.STATUS_DEV_RESOLVED, 'developer_resolved']]
 
     return render_template(
         'sysadmin_support_tickets.html',
@@ -747,24 +757,26 @@ def view_issue(issue_ref):
     else:
         tz_mode = 'utc'
         display_timezone = 'UTC'
+    # Display lens for the page's times (SLE unless class time is chosen), not class context.
+    temporal_context = SimpleNamespace(class_id=class_row.class_id) if tz_mode == 'class' else None
 
     return render_template(
         'sysadmin_view_issue.html',
         current_page='support_tickets',
         page_title=f'Ticket #{issue.id}',
-        issue=_issue_to_view(issue),
+        issue=build_issue_view(_issue_to_view(issue), temporal_context),
         issue_ref=issue_ref,
         direct_lifecycle=is_sysadmin_direct_lifecycle(issue.id),
-        history=history,
-        correlation_pack=_correlation_pack_to_view(issue.correlation_pack),
+        history=build_history_rows(history, temporal_context),
+        correlation_pack=build_correlation_pack_view(
+            _correlation_pack_to_view(issue.correlation_pack), temporal_context,
+        ),
         reporter_ticket_count=sysadmin_visible_issues().filter(
             Issue.actor_public_id == issue.actor_public_id,
         ).count(),
         tz_mode=tz_mode,
         class_timezone=class_timezone,
         display_timezone=display_timezone,
-        # Display lens for the fmt_* filters (app/utils/temporal_display.py), not class context.
-        temporal_context=SimpleNamespace(class_id=class_row.class_id) if tz_mode == 'class' else None,
         format_utc_iso=format_utc_iso,
     )
 
